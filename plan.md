@@ -12,45 +12,66 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [x] Add basic help and version commands
 - [x] Preserve existing functionality exactly
 
-### Step 1.2: Directory Initialization
+### Step 1.2: Directory Initialization ✅ Complete
 **Goal**: Basic PUDL workspace setup
-- [ ] Implement `pudl init` command
-- [ ] Create `~/.pudl/` directory structure:
+- [x] Implement `pudl init` command
+- [x] Create `~/.pudl/` directory structure:
   - `~/.pudl/schema/` (git repository)
   - `~/.pudl/data/` (data storage)
   - `~/.pudl/config.yaml` (basic configuration)
-- [ ] Initialize git repository in schema directory
-- [ ] Add auto-initialization check on first run
+- [x] Initialize git repository in schema directory
+- [x] Add auto-initialization check on first run
 
-### Step 1.3: Basic Configuration
+### Step 1.3: Basic Configuration ✅ Complete
 **Goal**: Simple configuration management
-- [ ] Define configuration structure (YAML)
-- [ ] Implement config loading/saving
-- [ ] Add `pudl config` command for viewing/editing config
-- [ ] Support basic settings (schema repo path, data path)
+- [x] Define configuration structure (YAML)
+- [x] Implement config loading/saving
+- [x] Add `pudl config` command for viewing/editing config
+- [x] Support basic settings (schema repo path, data path)
+- [x] Add `pudl config set <key> <value>` for editing configuration
+- [x] Add `pudl config reset` for restoring defaults
+- [x] Add path validation and error handling
 
 ## Phase 2: Data Storage Foundation
 
-### Step 2.1: Data Storage Architecture Discussion
+### Step 2.1: Data Storage Architecture Discussion ✅ Complete
 **Goal**: Clarify data storage approach before implementation
-- [ ] **DISCUSS**: Directory structure for data storage
-- [ ] **DISCUSS**: Metadata format for imported data
-- [ ] **DISCUSS**: File naming conventions and partitioning strategy
-- [ ] **DISCUSS**: Raw vs processed data organization
+- [x] **DECIDED**: Date-based partitioning with future indexing support
+- [x] **DECIDED**: CUE schema integration with package organization
+- [x] **DECIDED**: Field-level schema evolution and resource change tracking
+- [x] **DECIDED**: Zygomys rule engine for schema assignment (not generation)
+- [x] **DECIDED**: Never reject data - mark as outliers or unknown/catchall
+- [x] **DECIDED**: Timestamp + origin naming convention for raw data
 
-### Step 2.2: Basic Data Import
-**Goal**: Simple data ingestion without schema inference
-- [ ] Implement `pudl import --path <file>` command
-- [ ] Add format detection (JSON, YAML, CSV basic detection)
-- [ ] Store raw data with basic metadata (timestamp, source, format)
-- [ ] Create simple data inventory (list what's been imported)
+**Architecture Summary**:
+```
+~/.pudl/data/
+├── raw/YYYY/MM/DD/YYYYMMDD_HHMMSS_origin.ext
+├── metadata/YYYYMMDD_HHMMSS_origin.ext.meta (JSON with CUE schema info)
+├── catalog/inventory.json, schema_assignments.json, resource_tracking.json
+└── schemas/ -> ~/.pudl/schema/ (CUE packages: aws/, k8s/, unknown/)
+```
 
-### Step 2.3: Data Retrieval
+### Step 2.2: Basic Data Import ✅ Complete
+**Goal**: Simple data ingestion with CUE schema integration
+- [x] Implement `pudl import --path <file>` command
+- [x] Add format detection (JSON, YAML, CSV basic detection)
+- [x] Store raw data with timestamp + origin naming convention
+- [x] Create metadata structure with CUE schema assignment
+- [x] Implement basic rule-based schema assignment (simplified Zygomys for now)
+- [x] Create data inventory and schema assignment catalog
+- [x] Add catchall schema for unclassified data
+- [x] Auto-create basic CUE schemas (AWS, K8s, unknown)
+
+### Step 2.3: Data Retrieval ✅ Complete
 **Goal**: Basic data access and listing
-- [ ] Implement `pudl list` command (show imported data)
-- [ ] Add `pudl show <data-id>` command (display specific data)
-- [ ] Basic filtering by date, format, source
-- [ ] Simple data export functionality
+- [x] Implement `pudl list` command (show imported data)
+- [x] Add `pudl show <data-id>` command (display specific data)
+- [x] Advanced filtering by schema, origin, format
+- [x] Sorting and limiting options (`--sort-by`, `--reverse`, `--limit`)
+- [x] Verbose mode with summary statistics and file paths
+- [x] Pretty-printed metadata and raw data display
+- [x] Human-readable file size formatting
 
 ## Phase 3: Schema Management Basics
 
@@ -126,11 +147,16 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - ✅ Basic CUE processing with custom functions
 - ✅ Project structure and build system
 - ✅ Cobra CLI Migration with preserved functionality
-- 🔄 **NEXT**: Step 1.2 - Directory Initialization
+- ✅ Directory Initialization with auto-init and manual init
+- ✅ Basic Configuration with editing capabilities
+- ✅ Data Storage Architecture Discussion with CUE integration
+- ✅ Basic Data Import with schema assignment and catalog
+- ✅ Data Listing and Querying with filtering and detailed views
+- 🔄 **NEXT**: Step 3.1 - Schema Storage and Management
 
 ## Success Criteria for Each Phase
-- **Phase 1**: Can initialize PUDL workspace, import data, and manage basic configuration
-- **Phase 2**: Can store and retrieve data with metadata, basic format detection works
+- **Phase 1**: ✅ Can initialize PUDL workspace, import data, and manage basic configuration
+- **Phase 2**: ✅ Can store and retrieve data with metadata, basic format detection works
 - **Phase 3**: Can manually assign schemas to data and validate
 - **Phase 4**: Can automatically infer basic schemas and review them
 - **Phase 5**: Interactive workflows and basic outlier detection

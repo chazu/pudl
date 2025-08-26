@@ -1,0 +1,225 @@
+package config
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Config represents the PUDL configuration
+type Config struct {
+	SchemaPath string `yaml:"schema_path"`
+	DataPath   string `yaml:"data_path"`
+	Version    string `yaml:"version"`
+}
+
+// DefaultConfig returns the default configuration
+func DefaultConfig() *Config {
+	homeDir, _ := os.UserHomeDir()
+	pudlDir := filepath.Join(homeDir, ".pudl")
+	
+	return &Config{
+		SchemaPath: filepath.Join(pudlDir, "schema"),
+		DataPath:   filepath.Join(pudlDir, "data"),
+		Version:    "1.0",
+	}
+}
+
+// GetPudlDir returns the PUDL directory path
+func GetPudlDir() string {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		// Fallback to current directory if home dir is not available
+		return ".pudl"
+	}
+	return filepath.Join(homeDir, ".pudl")
+}
+
+// GetConfigPath returns the path to the config file
+func GetConfigPath() string {
+	return filepath.Join(GetPudlDir(), "config.yaml")
+}
+
+// Load loads the configuration from the config file
+func Load() (*Config, error) {
+	configPath := GetConfigPath()
+	
+	// If config doesn't exist, return default config
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return DefaultConfig(), nil
+	}
+	
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+	
+	var config Config
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	
+	return &config, nil
+}
+
+// Save saves the configuration to the config file
+func (c *Config) Save() error {
+	configPath := GetConfigPath()
+	
+	// Ensure the directory exists
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %w", err)
+	}
+	
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	
+	if err := os.WriteFile(configPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+	
+	return nil
+}
+
+// Exists checks if the PUDL workspace exists
+func Exists() bool {
+	pudlDir := GetPudlDir()
+	configPath := GetConfigPath()
+
+	// Check if both the directory and config file exist
+	if _, err := os.Stat(pudlDir); os.IsNotExist(err) {
+		return false
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+// ValidConfigKeys returns the list of valid configuration keys
+func ValidConfigKeys() []string {
+	return []string{"schema_path", "data_path", "version"}
+}
+
+// IsValidConfigKey checks if a key is a valid configuration key
+func IsValidConfigKey(key string) bool {
+	validKeys := ValidConfigKeys()
+	for _, validKey := range validKeys {
+		if key == validKey {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidatePath checks if a path is valid (can be created if it doesn't exist)
+func ValidatePath(path string) error {
+	// Expand ~ to home directory if present
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("cannot expand home directory: %w", err)
+		}
+		path = filepath.Join(homeDir, path[2:])
+	}
+
+	// Convert to absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+
+	// Check if path exists
+	if _, err := os.Stat(absPath); err == nil {
+		// Path exists, check if it's a directory
+		if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+			return fmt.Errorf("path exists but is not a directory: %s", absPath)
+		}
+		return nil
+	}
+
+	// Path doesn't exist, check if parent directory exists and is writable
+	parentDir := filepath.Dir(absPath)
+	if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+		return fmt.Errorf("parent directory does not exist: %s", parentDir)
+	}
+
+	// Check if we can write to parent directory by attempting to create a temp file
+	tempFile := filepath.Join(parentDir, ".pudl_temp_test")
+	if err := os.WriteFile(tempFile, []byte("test"), 0644); err != nil {
+		return fmt.Errorf("cannot write to parent directory: %s", parentDir)
+	}
+	os.Remove(tempFile) // Clean up
+
+	return nil
+}
+
+// SetConfigValue sets a configuration value and saves it
+func SetConfigValue(key, value string) error {
+	if !IsValidConfigKey(key) {
+		return fmt.Errorf("invalid configuration key: %s. Valid keys are: %s",
+			key, strings.Join(ValidConfigKeys(), ", "))
+	}
+
+	// Load current configuration
+	cfg, err := Load()
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Validate and set the value based on key
+	switch key {
+	case "schema_path":
+		if err := ValidatePath(value); err != nil {
+			return fmt.Errorf("invalid schema_path: %w", err)
+		}
+		// Expand ~ to absolute path
+		if strings.HasPrefix(value, "~/") {
+			homeDir, _ := os.UserHomeDir()
+			value = filepath.Join(homeDir, value[2:])
+		}
+		absPath, _ := filepath.Abs(value)
+		cfg.SchemaPath = absPath
+
+	case "data_path":
+		if err := ValidatePath(value); err != nil {
+			return fmt.Errorf("invalid data_path: %w", err)
+		}
+		// Expand ~ to absolute path
+		if strings.HasPrefix(value, "~/") {
+			homeDir, _ := os.UserHomeDir()
+			value = filepath.Join(homeDir, value[2:])
+		}
+		absPath, _ := filepath.Abs(value)
+		cfg.DataPath = absPath
+
+	case "version":
+		if strings.TrimSpace(value) == "" {
+			return fmt.Errorf("version cannot be empty")
+		}
+		cfg.Version = value
+	}
+
+	// Save the updated configuration
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	return nil
+}
+
+// ResetToDefaults resets the configuration to default values
+func ResetToDefaults() error {
+	defaultCfg := DefaultConfig()
+	if err := defaultCfg.Save(); err != nil {
+		return fmt.Errorf("failed to save default configuration: %w", err)
+	}
+	return nil
+}
