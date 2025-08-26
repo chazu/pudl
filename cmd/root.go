@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	pudlInit "pudl/internal/init"
 )
 
 var (
@@ -39,6 +41,18 @@ Key features:
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// Perform auto-initialization before executing any command
+	// Skip auto-init for help, version, and init commands
+	if len(os.Args) > 1 {
+		cmd := os.Args[1]
+		if cmd != "help" && cmd != "version" && cmd != "init" && cmd != "--help" && cmd != "-h" && cmd != "--version" && cmd != "-v" {
+			if err := pudlInit.AutoInitialize(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to auto-initialize PUDL workspace: %v\n", err)
+				fmt.Fprintf(os.Stderr, "You may need to run 'pudl init' manually.\n")
+			}
+		}
+	}
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
