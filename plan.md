@@ -75,12 +75,12 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 
 ## Phase 3: Schema Management Basics
 
-### Step 3.1: Schema Storage
+### Step 3.1: Schema Storage ✅ Complete
 **Goal**: Basic schema file management
-- [ ] Define schema file naming conventions
-- [ ] Implement `pudl schema list` command
-- [ ] Add `pudl schema add <name> <cue-file>` command
-- [ ] Basic schema validation (CUE syntax check)
+- [x] Define schema file naming conventions
+- [x] Implement `pudl schema list` command
+- [x] Add `pudl schema add <name> <cue-file>` command
+- [x] Basic schema validation (CUE syntax check)
 
 ### Step 3.2: Schema-Data Association
 **Goal**: Manual schema assignment to data
@@ -152,7 +152,8 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - ✅ Data Storage Architecture Discussion with CUE integration
 - ✅ Basic Data Import with schema assignment and catalog
 - ✅ Data Listing and Querying with filtering and detailed views
-- 🔄 **NEXT**: Step 3.1 - Schema Storage and Management
+- ✅ **Step 3.1**: Schema Storage and Management with comprehensive validation
+- 🔄 **NEXT**: Step 3.2 - Schema-Data Association
 
 ## Success Criteria for Each Phase
 - **Phase 1**: ✅ Can initialize PUDL workspace, import data, and manage basic configuration
