@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"pudl/internal/validator"
 )
 
 // Importer handles data import operations
@@ -17,22 +19,26 @@ type Importer struct {
 
 // ImportOptions contains options for importing data
 type ImportOptions struct {
-	SourcePath string
-	Origin     string // Optional origin override
+	SourcePath        string
+	Origin           string                      // Optional origin override
+	ManualSchema     string                      // Manual schema specification
+	CascadeValidator *validator.CascadeValidator // Validator for manual schema
 }
 
 // ImportResult contains the results of an import operation
 type ImportResult struct {
-	SourcePath       string  `json:"source_path"`
-	StoredPath       string  `json:"stored_path"`
-	MetadataPath     string  `json:"metadata_path"`
-	DetectedFormat   string  `json:"detected_format"`
-	DetectedOrigin   string  `json:"detected_origin"`
-	AssignedSchema   string  `json:"assigned_schema"`
-	SchemaConfidence float64 `json:"schema_confidence"`
-	RecordCount      int     `json:"record_count"`
-	SizeBytes        int64   `json:"size_bytes"`
-	ImportTimestamp  string  `json:"import_timestamp"`
+	ID               string                     `json:"id"`
+	SourcePath       string                     `json:"source_path"`
+	StoredPath       string                     `json:"stored_path"`
+	MetadataPath     string                     `json:"metadata_path"`
+	DetectedFormat   string                     `json:"detected_format"`
+	DetectedOrigin   string                     `json:"detected_origin"`
+	AssignedSchema   string                     `json:"assigned_schema"`
+	SchemaConfidence float64                    `json:"schema_confidence"`
+	RecordCount      int                        `json:"record_count"`
+	SizeBytes        int64                      `json:"size_bytes"`
+	ImportTimestamp  string                     `json:"import_timestamp"`
+	ValidationResult *validator.ValidationResult `json:"validation_result,omitempty"`
 }
 
 // New creates a new Importer instance
@@ -101,8 +107,24 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
 
-	// Assign schema using rule engine
-	schema, confidence := i.assignSchema(data, origin, format)
+	// Assign schema using cascading validation or rule engine
+	var schema string
+	var confidence float64
+	var validationResult *validator.ValidationResult
+
+	if opts.ManualSchema != "" && opts.CascadeValidator != nil {
+		// Use cascading validation for manual schema specification
+		vr, err := opts.CascadeValidator.ValidateWithCascade(data, opts.ManualSchema)
+		if err != nil {
+			return nil, fmt.Errorf("failed to perform cascading validation: %w", err)
+		}
+		validationResult = vr
+		schema = vr.AssignedSchema
+		confidence = 1.0 // High confidence for validated data
+	} else {
+		// Use legacy rule-based assignment
+		schema, confidence = i.assignSchema(data, origin, format)
+	}
 
 	// Create metadata
 	metadata := ImportMetadata{
@@ -123,7 +145,10 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 			CueDefinition:    schema,
 			SchemaFile:       "", // Will be populated when we have actual CUE files
 			SchemaVersion:    "v1.0",
-			ValidationStatus: "pending",
+			ValidationStatus: getValidationStatus(validationResult),
+			IntendedSchema:   getIntendedSchema(validationResult),
+			ComplianceStatus: getComplianceStatus(validationResult),
+			CascadeLevel:     getCascadeLevel(validationResult),
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: []string{}, // Will be extracted from CUE schema later
@@ -144,6 +169,7 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 
 	// Return result
 	return &ImportResult{
+		ID:               strings.TrimSuffix(filename, ext),
 		SourcePath:       opts.SourcePath,
 		StoredPath:       storedPath,
 		MetadataPath:     metadataPath,
@@ -154,6 +180,7 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		RecordCount:      recordCount,
 		SizeBytes:        fileInfo.Size(),
 		ImportTimestamp:  timestamp.Format(time.RFC3339),
+		ValidationResult: validationResult,
 	}, nil
 }
 
@@ -173,6 +200,39 @@ func (i *Importer) copyFile(src, dst string) error {
 
 	_, err = io.Copy(dstFile, srcFile)
 	return err
+}
+
+// Helper functions for validation result processing
+
+func getValidationStatus(vr *validator.ValidationResult) string {
+	if vr == nil {
+		return "auto-assigned"
+	}
+	if vr.Success {
+		return "validated"
+	}
+	return "failed"
+}
+
+func getIntendedSchema(vr *validator.ValidationResult) string {
+	if vr == nil {
+		return ""
+	}
+	return vr.IntendedSchema
+}
+
+func getComplianceStatus(vr *validator.ValidationResult) string {
+	if vr == nil {
+		return "unknown"
+	}
+	return vr.GetComplianceStatus()
+}
+
+func getCascadeLevel(vr *validator.ValidationResult) string {
+	if vr == nil {
+		return "auto"
+	}
+	return vr.CascadeLevel
 }
 
 // extractPackage extracts the package name from a schema definition
