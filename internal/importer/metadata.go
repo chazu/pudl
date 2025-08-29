@@ -39,6 +39,9 @@ type SchemaInfo struct {
 	SchemaVersion    string   `json:"schema_version"`
 	ValidationStatus string   `json:"validation_status"`
 	ValidationErrors []string `json:"validation_errors,omitempty"`
+	IntendedSchema   string   `json:"intended_schema,omitempty"`   // What user requested
+	ComplianceStatus string   `json:"compliance_status,omitempty"` // compliant, non-compliant, unknown
+	CascadeLevel     string   `json:"cascade_level,omitempty"`     // exact, fallback, catchall
 }
 
 // ResourceTracking contains information for tracking resource changes
