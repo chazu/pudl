@@ -104,24 +104,80 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [x] Schema change tracking
 - [x] **MAJOR**: Complete git integration with CLI commands matching documented functionality
 
+## Phase 3.5: Architecture Improvements (Critical for Phase 4/5)
+**Goal**: Address architectural blockers identified in code review before proceeding
+
+### Step 3.5.1: Error Handling Architecture Discussion ⚠️ **CRITICAL**
+**Goal**: Plan error handling strategy before implementation
+- [ ] **DISCUSS**: Error handling patterns for CLI vs TUI compatibility
+- [ ] **DISCUSS**: Error code taxonomy and recovery strategies
+- [ ] **DISCUSS**: Progress reporting and cancellation mechanisms
+- [ ] **DISCUSS**: Error context preservation and user guidance
+
+### Step 3.5.2: Error Handling Refactor ⚠️ **CRITICAL**
+**Goal**: Replace log.Fatal() calls to enable Bubble Tea integration
+- [ ] Replace `log.Fatalf()` with structured error returns in all CLI commands
+- [ ] Implement error codes and recovery suggestions
+- [ ] Add error handling middleware for CLI commands
+- [ ] **BLOCKER**: Required for Phase 5 Bubble Tea UI integration
+
+### Step 3.5.3: Memory & Performance Architecture Discussion ⚠️ **HIGH PRIORITY**
+**Goal**: Plan streaming and memory management strategy
+- [ ] **DISCUSS**: Streaming parser architecture and chunk size strategies
+- [ ] **DISCUSS**: Memory limit configuration and monitoring approach
+- [ ] **DISCUSS**: Progress reporting interface design
+- [ ] **DISCUSS**: Backward compatibility for existing data formats
+
+### Step 3.5.4: Memory & Performance Foundation ⚠️ **HIGH PRIORITY**
+**Goal**: Enable large file support and improve performance
+- [ ] Implement streaming parsers for JSON/YAML/CSV (replace full-memory loading)
+- [ ] Add progress reporting infrastructure for long operations
+- [ ] Create configurable memory limits and chunk sizes
+- [ ] **IMPACT**: Currently blocks handling of large datasets
+
+### Step 3.5.5: Catalog Architecture Discussion ⚠️ **HIGH PRIORITY**
+**Goal**: Plan catalog storage and indexing strategy
+- [ ] **DISCUSS**: SQLite vs other storage backends (DuckDB, embedded options)
+- [ ] **DISCUSS**: Index design for common query patterns
+- [ ] **DISCUSS**: Migration strategy from JSON catalog to new format
+- [ ] **DISCUSS**: Backup and recovery mechanisms for catalog data
+
+### Step 3.5.6: Catalog Scalability Implementation ⚠️ **HIGH PRIORITY**
+**Goal**: Replace linear search catalog with indexed system
+- [ ] Design SQLite-based catalog with proper indexing
+- [ ] Implement pagination for large result sets
+- [ ] Add indexes for schema, origin, and timestamp queries
+- [ ] Migrate existing JSON catalog to new format
+- [ ] **IMPACT**: Current O(n) search won't scale beyond thousands of entries
+
 ## Phase 4: Basic Schema Inference
 
-### Step 4.1: Zygomys Integration Architecture Discussion
-**Goal**: Plan rule engine integration before implementation
-- [ ] **DISCUSS**: Zygomys embedding approach
-- [ ] **DISCUSS**: Rule file organization and loading
-- [ ] **DISCUSS**: Rule execution model and error handling
-- [ ] **DISCUSS**: Built-in vs user-defined rules
+### Step 4.1: Rule Engine Architecture Discussion ⚠️ **ARCHITECTURE CHANGE**
+**Goal**: Plan rule engine integration strategy before implementation
+- [ ] **DISCUSS**: Zygomys embedding approach and performance implications
+- [ ] **DISCUSS**: Rule file organization and loading mechanisms
+- [ ] **DISCUSS**: Rule execution model and error handling strategies
+- [ ] **DISCUSS**: Built-in vs user-defined rules and extensibility
+- [ ] **DISCUSS**: Rule configuration format compatible with Zygomys
+- [ ] **DISCUSS**: Migration strategy from hard-coded rules
 
-### Step 4.2: Simple Schema Inference
-**Goal**: Basic automatic schema generation
-- [ ] Integrate Zygomys library
+### Step 4.2: Rule Engine Abstraction ⚠️ **ARCHITECTURE CHANGE**
+**Goal**: Prepare for Zygomys integration with proper abstraction
+- [ ] Create `RuleEngine` interface for pluggable rule systems
+- [ ] Abstract current hard-coded rules into configurable format
+- [ ] Design rule configuration format compatible with Zygomys
+- [ ] Implement rule engine registry for runtime switching
+- [ ] **REASON**: Current hard-coded rules block Zygomys integration
+
+### Step 4.3: Zygomys Integration
+**Goal**: Replace rule-based assignment with Zygomys rule engine
+- [ ] Integrate Zygomys library through RuleEngine interface
+- [ ] Migrate existing detection rules to Zygomys format
 - [ ] Implement basic JSON→CUE schema inference rules
 - [ ] Add `--infer-schema` flag to import command
-- [ ] Generate simple CUE schemas from data structure
 - [ ] Store inferred schemas as "unconfirmed"
 
-### Step 4.3: Schema Review Workflow
+### Step 4.4: Schema Review Workflow
 **Goal**: User confirmation of inferred schemas
 - [ ] Implement `pudl schema review` command
 - [ ] Show pending/unconfirmed schemas
@@ -130,26 +186,45 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 
 ## Phase 5: Enhanced Features
 
-### Step 5.1: Bubble Tea Integration
+### Step 5.1: Bubble Tea Architecture Discussion
+**Goal**: Plan interactive UI integration strategy
+- [ ] **DISCUSS**: TUI architecture and state management approach
+- [ ] **DISCUSS**: Command-line vs interactive mode coexistence
+- [ ] **DISCUSS**: Progress reporting and cancellation in TUI context
+- [ ] **DISCUSS**: Error handling and user feedback in interactive mode
+
+### Step 5.2: Bubble Tea Integration
 **Goal**: Improved interactive workflows
 - [ ] Add Bubble Tea dependency
 - [ ] Implement interactive schema review interface
 - [ ] Enhanced data browsing interface
 - [ ] Interactive import workflow
 
-### Step 5.2: Basic Outlier Detection
+### Step 5.3: Outlier Detection Architecture Discussion
+**Goal**: Plan policy compliance and outlier detection strategy
+- [ ] **DISCUSS**: Two-tier schema architecture (base vs policy schemas)
+- [ ] **DISCUSS**: Compliance scoring and threshold mechanisms
+- [ ] **DISCUSS**: Outlier reporting and visualization approaches
+- [ ] **DISCUSS**: Integration with existing validation pipeline
+
+### Step 5.4: Basic Outlier Detection
 **Goal**: Simple policy compliance checking
-- [ ] **DISCUSS**: Two-tier schema architecture
 - [ ] Implement basic policy schema concept
 - [ ] Add compliance checking during import
 - [ ] Simple outlier reporting
 
-### Step 5.3: Performance & Storage Optimization
+### Step 5.5: Performance & Storage Architecture Discussion
+**Goal**: Plan advanced storage and performance optimizations
+- [ ] **DISCUSS**: Parquet integration approach and benefits
+- [ ] **DISCUSS**: DuckDB integration strategy for analytics
+- [ ] **DISCUSS**: Data lake organization and partitioning strategies
+- [ ] **DISCUSS**: Query optimization and caching mechanisms
+
+### Step 5.6: Performance & Storage Optimization
 **Goal**: Handle larger datasets efficiently
-- [ ] **DISCUSS**: Parquet integration approach
-- [ ] **DISCUSS**: DuckDB integration strategy
 - [ ] Implement efficient data storage format
 - [ ] Add indexing for common queries
+- [ ] Integrate advanced analytics capabilities
 
 ## Current State (100% Complete - Core Features)
 - ✅ Basic CUE processing with custom functions
@@ -166,11 +241,20 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 
 ## Implementation Status
 - ✅ **Git Integration**: Complete with `pudl schema commit/status/log` commands
+- 🚨 **Error Handling**: log.Fatal() calls block Bubble Tea integration (Phase 3.5.1)
+- 🚨 **Memory Usage**: Full-file loading prevents large dataset support (Phase 3.5.2)
+- 🚨 **Catalog Performance**: Linear search won't scale (Phase 3.5.3)
+- 🚨 **Rule Engine**: Hard-coded rules block Zygomys integration (Phase 4.1)
 - ⚠️ **CUE Error Parsing**: Generic error messages instead of precise CUE validation details
 - ⚠️ **CSV Schema Inference**: Basic CSV support without proper type detection
 - ⚠️ **Metadata Extraction**: Only `_pudl` metadata extracted, missing legacy metadata
-- ⚠️ **Memory Optimization**: No streaming support for large files
-- ⚠️ **Error Recovery**: Basic error handling without recovery mechanisms
+
+## Critical Path (Based on Code Review)
+**Phase 3.5 must complete before Phase 4/5 to avoid architectural blockers**
+- 🚨 **Phase 3.5.1**: Error handling refactor (enables Phase 5)
+- 🚨 **Phase 3.5.2**: Memory optimization (enables large datasets)
+- 🚨 **Phase 3.5.3**: Catalog scalability (enables performance)
+- 🚨 **Phase 4.1**: Rule engine abstraction (enables Zygomys)
 
 ## Next Priority (Quality Improvements)
 - 🔄 **QUALITY**: Enhanced CUE error parsing for better user experience
@@ -181,11 +265,23 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - **Phase 1**: ✅ Can initialize PUDL workspace, import data, and manage basic configuration
 - **Phase 2**: ✅ Can store and retrieve data with metadata, basic format detection works
 - **Phase 3**: ✅ Can manually assign schemas to data, validate, and manage schema versions with git
-- **Phase 4**: Can automatically infer basic schemas and review them
-- **Phase 5**: Interactive workflows and basic outlier detection
+- **Phase 3.5**: Can handle large files, graceful errors, and scalable catalog operations
+- **Phase 4**: Can automatically infer basic schemas and review them with Zygomys
+- **Phase 5**: Interactive workflows and basic outlier detection with Bubble Tea UI
 
 ## Testing Approach
 - Unit tests for each component with mock data
 - Integration tests using generated test data (not committed)
+- Performance benchmarks for large datasets (Phase 3.5.2)
+- Error handling tests for all failure scenarios (Phase 3.5.1)
 - Avoid test data files in repository
 - Focus on testing logic, not data formats
+
+## Code Review Findings (2025-09-03)
+**Comprehensive review identified critical architectural blockers for Phase 4/5:**
+- **Error Handling**: log.Fatal() incompatible with Bubble Tea TUI
+- **Memory Usage**: Full-file loading prevents large dataset support
+- **Catalog Performance**: Linear search O(n) won't scale beyond thousands of entries
+- **Rule Engine**: Hard-coded rules require complete rewrite for Zygomys
+
+**See review.md for detailed analysis and recommendations**
