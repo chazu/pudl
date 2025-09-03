@@ -82,19 +82,27 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [x] Add `pudl schema add <name> <cue-file>` command
 - [x] Basic schema validation (CUE syntax check)
 
-### Step 3.2: Schema-Data Association
-**Goal**: Manual schema assignment to data
-- [ ] Add `--schema <name>` flag to import command
-- [ ] Implement basic data validation against schema
-- [ ] Store schema association metadata with data
-- [ ] Add validation reporting (pass/fail with basic error info)
+### Step 3.2: Schema-Data Association ✅ Complete
+**Goal**: Manual schema assignment to data with cascading validation
+- [x] Add `--schema <name>` flag to import command
+- [x] Implement cascading validation with CUE schema inheritance
+- [x] Store schema association metadata with validation results
+- [x] Add comprehensive validation reporting with compliance status
+- [x] Support policy-level schemas inheriting from base schemas
+- [x] Complete cascade chain: policy → base → generic → catchall
+- [x] **MAJOR**: Complete CUE schema inheritance and cross-reference support
+- [x] **MAJOR**: Fix CUE hidden field access for metadata extraction
+- [x] **MAJOR**: Implement proper CUE module loading with load package
+- [x] **MAJOR**: Enable policy schemas inheriting from base schemas
+- [x] **MAJOR**: Full compliance status reporting (COMPLIANT/NON-COMPLIANT/UNKNOWN)
 
-### Step 3.3: Git Integration for Schemas
+### Step 3.3: Git Integration for Schemas ✅ Complete
 **Goal**: Version control for schemas
-- [ ] Implement `pudl schema commit -m "message"` command
-- [ ] Add `pudl schema status` (show uncommitted changes)
-- [ ] Basic git operations wrapper (add, commit, log)
-- [ ] Schema change tracking
+- [x] Implement `pudl schema commit -m "message"` command
+- [x] Add `pudl schema status` (show uncommitted changes)
+- [x] Basic git operations wrapper (add, commit, log)
+- [x] Schema change tracking
+- [x] **MAJOR**: Complete git integration with CLI commands matching documented functionality
 
 ## Phase 4: Basic Schema Inference
 
@@ -143,7 +151,7 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [ ] Implement efficient data storage format
 - [ ] Add indexing for common queries
 
-## Current State
+## Current State (100% Complete - Core Features)
 - ✅ Basic CUE processing with custom functions
 - ✅ Project structure and build system
 - ✅ Cobra CLI Migration with preserved functionality
@@ -153,12 +161,26 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - ✅ Basic Data Import with schema assignment and catalog
 - ✅ Data Listing and Querying with filtering and detailed views
 - ✅ **Step 3.1**: Schema Storage and Management with comprehensive validation
-- 🔄 **NEXT**: Step 3.2 - Schema-Data Association
+- ✅ **Step 3.2**: Schema-Data Association with complete CUE inheritance and cascading validation
+- ✅ **Step 3.3**: Git Integration for Schemas with full CLI command support
+
+## Implementation Status
+- ✅ **Git Integration**: Complete with `pudl schema commit/status/log` commands
+- ⚠️ **CUE Error Parsing**: Generic error messages instead of precise CUE validation details
+- ⚠️ **CSV Schema Inference**: Basic CSV support without proper type detection
+- ⚠️ **Metadata Extraction**: Only `_pudl` metadata extracted, missing legacy metadata
+- ⚠️ **Memory Optimization**: No streaming support for large files
+- ⚠️ **Error Recovery**: Basic error handling without recovery mechanisms
+
+## Next Priority (Quality Improvements)
+- 🔄 **QUALITY**: Enhanced CUE error parsing for better user experience
+- 🔄 **ROBUSTNESS**: Complete metadata extraction and error recovery
+- 🔄 **PERFORMANCE**: CSV schema inference and memory optimization
 
 ## Success Criteria for Each Phase
 - **Phase 1**: ✅ Can initialize PUDL workspace, import data, and manage basic configuration
 - **Phase 2**: ✅ Can store and retrieve data with metadata, basic format detection works
-- **Phase 3**: Can manually assign schemas to data and validate
+- **Phase 3**: ✅ Can manually assign schemas to data, validate, and manage schema versions with git
 - **Phase 4**: Can automatically infer basic schemas and review them
 - **Phase 5**: Interactive workflows and basic outlier detection
 

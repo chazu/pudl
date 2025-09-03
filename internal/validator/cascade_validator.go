@@ -3,7 +3,6 @@ package validator
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,85 +11,60 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 )
 
-// CascadeValidator handles cascading schema validation
+// CascadeValidator handles cascading schema validation with full CUE module support
 type CascadeValidator struct {
-	ctx      *cue.Context
-	schemas  map[string]cue.Value
-	metadata map[string]SchemaMetadata
+	ctx        *cue.Context
+	loader     *CUEModuleLoader
+	modules    map[string]*LoadedModule
+	schemas    map[string]cue.Value      // Flattened schema map for quick access
+	metadata   map[string]SchemaMetadata // Flattened metadata map for quick access
+	schemaPath string
 }
 
-// NewCascadeValidator creates a new cascade validator
+// NewCascadeValidator creates a new cascade validator with full CUE module support
+//
+// This implementation uses CUE's official load package to properly handle:
+// - Cross-references between schemas within the same package
+// - Schema inheritance (e.g., CompliantEC2Instance inheriting from EC2Instance)
+// - Proper CUE module compilation with all dependencies resolved
+//
+// The loading process:
+// 1. Discovers all package directories in the schema path
+// 2. Uses CUE's load.Instances to load each package as a unified module
+// 3. Extracts all schema definitions and metadata from loaded modules
+// 4. Validates module integrity including cross-reference consistency
 func NewCascadeValidator(schemaPath string) (*CascadeValidator, error) {
 	ctx := cuecontext.New()
 
-	schemas := make(map[string]cue.Value)
-	metadata := make(map[string]SchemaMetadata)
+	// Create the CUE module loader for proper cross-reference handling
+	loader := NewCUEModuleLoader(schemaPath)
 
-	// For now, let's use a simpler approach and load individual files
-	// We'll skip the compliant schema that has cross-references for now
-	err := filepath.Walk(schemaPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if !strings.HasSuffix(info.Name(), ".cue") || info.IsDir() {
-			return nil
-		}
-
-		// Skip compliant schemas for now (they have cross-references)
-		// TODO: Fix cross-reference handling
-		if strings.Contains(info.Name(), "compliant") {
-			return nil
-		}
-
-		// Load and compile the CUE file
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", path, err)
-		}
-
-		value := ctx.CompileString(string(content), cue.Filename(path))
-		if value.Err() != nil {
-			return fmt.Errorf("failed to compile %s: %w", path, value.Err())
-		}
-
-		// Extract package name from the file
-		packageName := extractPackageFromPath(schemaPath, path)
-
-		// Extract schema definitions and metadata
-		iter, _ := value.Fields(cue.Definitions(true))
-		for iter.Next() {
-			label := iter.Label()
-			if !strings.HasPrefix(label, "#") {
-				continue
-			}
-
-			schemaValue := iter.Value()
-			schemaName := fmt.Sprintf("%s.%s", packageName, label)
-			schemas[schemaName] = schemaValue
-
-			// Extract PUDL metadata if present
-			if pudlMeta := schemaValue.LookupPath(cue.ParsePath("_pudl")); pudlMeta.Exists() {
-				var meta SchemaMetadata
-				if err := pudlMeta.Decode(&meta); err == nil {
-					metadata[schemaName] = meta
-				}
-			}
-		}
-
-		return nil
-	})
-
+	// Load all CUE modules with proper cross-reference support
+	// This replaces the previous individual file compilation approach
+	modules, err := loader.LoadAllModules()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load schemas: %w", err)
+		return nil, fmt.Errorf("failed to load CUE modules: %w", err)
 	}
+
+	// Validate module integrity (check cross-references, base schema existence, etc.)
+	if err := loader.ValidateModuleIntegrity(modules); err != nil {
+		return nil, fmt.Errorf("module integrity validation failed: %w", err)
+	}
+
+	// Create flattened maps for quick access during validation
+	// This maintains the same interface as before while supporting full module loading
+	schemas := loader.GetAllSchemas(modules)
+	metadata := loader.GetAllMetadata(modules)
 
 
 
 	return &CascadeValidator{
-		ctx:      ctx,
-		schemas:  schemas,
-		metadata: metadata,
+		ctx:        ctx,
+		loader:     loader,
+		modules:    modules,
+		schemas:    schemas,
+		metadata:   metadata,
+		schemaPath: schemaPath,
 	}, nil
 }
 
@@ -379,4 +353,33 @@ func contains(slice []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// GetLoadedModules returns the loaded CUE modules for inspection
+func (cv *CascadeValidator) GetLoadedModules() map[string]*LoadedModule {
+	return cv.modules
+}
+
+// GetModuleInfo returns information about a specific loaded module
+func (cv *CascadeValidator) GetModuleInfo(packageName string) (*LoadedModule, error) {
+	return cv.loader.GetModuleInfo(cv.modules, packageName)
+}
+
+// ReloadModules reloads all CUE modules (useful for development/testing)
+func (cv *CascadeValidator) ReloadModules() error {
+	modules, err := cv.loader.LoadAllModules()
+	if err != nil {
+		return fmt.Errorf("failed to reload CUE modules: %w", err)
+	}
+
+	if err := cv.loader.ValidateModuleIntegrity(modules); err != nil {
+		return fmt.Errorf("module integrity validation failed after reload: %w", err)
+	}
+
+	// Update the validator with reloaded modules
+	cv.modules = modules
+	cv.schemas = cv.loader.GetAllSchemas(modules)
+	cv.metadata = cv.loader.GetAllMetadata(modules)
+
+	return nil
 }
