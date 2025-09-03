@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"pudl/internal/errors"
 )
 
 // Repository represents a git repository
@@ -132,18 +134,20 @@ func (r *Repository) Add(files ...string) error {
 // Commit creates a new commit with the given message
 func (r *Repository) Commit(message string) error {
 	if !r.IsGitRepository() {
-		return fmt.Errorf("not a git repository: %s", r.Path)
+		return errors.NewGitError("not a git repository",
+			fmt.Errorf("directory %s is not a git repository", r.Path))
 	}
 
 	if message == "" {
-		return fmt.Errorf("commit message cannot be empty")
+		return errors.NewInputError("Commit message cannot be empty",
+			"Provide a commit message with -m flag")
 	}
 
 	cmd := exec.Command("git", "commit", "-m", message)
 	cmd.Dir = r.Path
-	
+
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to commit: %w", err)
+		return errors.NewGitError("failed to commit", err)
 	}
 
 	return nil
@@ -240,16 +244,18 @@ func (r *Repository) GetLastCommit() (*CommitInfo, error) {
 // ValidateRepository ensures the repository is in a valid state for operations
 func (r *Repository) ValidateRepository() error {
 	if !IsGitAvailable() {
-		return fmt.Errorf("git command not available")
+		return errors.NewGitError("git command not available",
+			fmt.Errorf("git is not installed or not in PATH"))
 	}
 
 	if !r.IsGitRepository() {
-		return fmt.Errorf("not a git repository: %s", r.Path)
+		return errors.NewGitError("not a git repository",
+			fmt.Errorf("directory %s is not a git repository", r.Path))
 	}
 
 	// Check if directory exists and is accessible
 	if _, err := os.Stat(r.Path); err != nil {
-		return fmt.Errorf("repository path not accessible: %w", err)
+		return errors.WrapError(errors.ErrCodeFileSystem, "Repository path not accessible", err)
 	}
 
 	return nil

@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/errors"
 )
 
 // configCmd represents the config command
@@ -29,32 +29,45 @@ Example usage:
     pudl config set <key> <value> # Set a configuration value
     pudl config reset            # Reset to default configuration`,
 	Run: func(cmd *cobra.Command, args []string) {
-		showPath, _ := cmd.Flags().GetBool("path")
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
 
-		if showPath {
-			fmt.Println(config.GetConfigPath())
-			return
-		}
-
-		// Load and display configuration
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
-		}
-
-		fmt.Println("PUDL Configuration:")
-		fmt.Printf("  Workspace: %s\n", config.GetPudlDir())
-		fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-		fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-		fmt.Printf("  Config File: %s\n", config.GetConfigPath())
-		fmt.Printf("  Version: %s\n", cfg.Version)
-
-		// Check if workspace exists
-		if !config.Exists() {
-			fmt.Println()
-			fmt.Println("⚠️  Workspace not initialized. Run 'pudl init' to set up.")
+		// Run the config command and handle any errors
+		if err := runConfigCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
 	},
+}
+
+// runConfigCommand contains the actual config logic with structured error handling
+func runConfigCommand(cmd *cobra.Command, args []string) error {
+	showPath, _ := cmd.Flags().GetBool("path")
+
+	if showPath {
+		fmt.Println(config.GetConfigPath())
+		return nil
+	}
+
+	// Load and display configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return err // Already a PUDLError from config.Load()
+	}
+
+	fmt.Println("PUDL Configuration:")
+	fmt.Printf("  Workspace: %s\n", config.GetPudlDir())
+	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
+	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
+	fmt.Printf("  Config File: %s\n", config.GetConfigPath())
+	fmt.Printf("  Version: %s\n", cfg.Version)
+
+	// Check if workspace exists
+	if !config.Exists() {
+		fmt.Println()
+		fmt.Println("⚠️  Workspace not initialized. Run 'pudl init' to set up.")
+	}
+
+	return nil
 }
 
 // configSetCmd represents the config set command
@@ -74,27 +87,39 @@ Example usage:
     pudl config set version 2.0`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		key := args[0]
-		value := args[1]
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
 
-		if err := config.SetConfigValue(key, value); err != nil {
-			log.Fatalf("Failed to set configuration: %v", err)
+		// Run the config set command and handle any errors
+		if err := runConfigSetCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
-
-		fmt.Printf("✅ Configuration updated: %s = %s\n", key, value)
-
-		// Show the updated configuration
-		fmt.Println()
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load updated configuration: %v", err)
-		}
-
-		fmt.Println("Updated PUDL Configuration:")
-		fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-		fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-		fmt.Printf("  Version: %s\n", cfg.Version)
 	},
+}
+
+// runConfigSetCommand contains the actual config set logic with structured error handling
+func runConfigSetCommand(cmd *cobra.Command, args []string) error {
+	key := args[0]
+	value := args[1]
+
+	if err := config.SetConfigValue(key, value); err != nil {
+		return err // Already a PUDLError from config.SetConfigValue()
+	}
+
+	fmt.Printf("✅ Configuration updated: %s = %s\n", key, value)
+
+	// Show the updated configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return err // Already a PUDLError from config.Load()
+	}
+
+	fmt.Println("Updated PUDL Configuration:")
+	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
+	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
+	fmt.Printf("  Version: %s\n", cfg.Version)
+
+	return nil
 }
 
 // configResetCmd represents the config reset command
@@ -111,24 +136,37 @@ This will restore:
 Example usage:
     pudl config reset`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := config.ResetToDefaults(); err != nil {
-			log.Fatalf("Failed to reset configuration: %v", err)
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
+
+		// Run the config reset command and handle any errors
+		if err := runConfigResetCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
-
-		fmt.Println("✅ Configuration reset to defaults")
-
-		// Show the reset configuration
-		fmt.Println()
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load reset configuration: %v", err)
-		}
-
-		fmt.Println("Reset PUDL Configuration:")
-		fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-		fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-		fmt.Printf("  Version: %s\n", cfg.Version)
 	},
+}
+
+// runConfigResetCommand contains the actual config reset logic with structured error handling
+func runConfigResetCommand(cmd *cobra.Command, args []string) error {
+	if err := config.ResetToDefaults(); err != nil {
+		return err // Already a PUDLError from config.ResetToDefaults()
+	}
+
+	fmt.Println("✅ Configuration reset to defaults")
+
+	// Show the reset configuration
+	fmt.Println()
+	cfg, err := config.Load()
+	if err != nil {
+		return err // Already a PUDLError from config.Load()
+	}
+
+	fmt.Println("Reset PUDL Configuration:")
+	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
+	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
+	fmt.Printf("  Version: %s\n", cfg.Version)
+
+	return nil
 }
 
 func init() {

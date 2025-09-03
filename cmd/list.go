@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/errors"
 	"pudl/internal/lister"
 )
 
@@ -50,41 +50,53 @@ Examples:
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Load configuration to get data directory
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
-		}
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
 
-		// Create lister
-		l := lister.New(cfg.DataPath)
-
-		// Set up filter options
-		filters := lister.FilterOptions{
-			Schema: listSchema,
-			Origin: listOrigin,
-			Format: listFormat,
+		// Run the list command and handle any errors
+		if err := runListCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
+	},
+}
 
-		// Set up display options
-		displayOpts := lister.DisplayOptions{
-			Verbose: listVerbose,
-			Limit:   listLimit,
-			SortBy:  listSortBy,
-			Reverse: listReverse,
-		}
+// runListCommand contains the actual list logic with structured error handling
+func runListCommand(cmd *cobra.Command, args []string) error {
+	// Load configuration to get data directory
+	cfg, err := config.Load()
+	if err != nil {
+		return err // Already a PUDLError from config.Load()
+	}
 
-		// List data
-		results, err := l.ListData(filters, displayOpts)
-		if err != nil {
-			log.Fatalf("Failed to list data: %v", err)
-		}
+	// Create lister
+	l := lister.New(cfg.DataPath)
 
-		// Display results
-		if len(results.Entries) == 0 {
-			fmt.Println("No data found matching the specified criteria.")
-			return
-		}
+	// Set up filter options
+	filters := lister.FilterOptions{
+		Schema: listSchema,
+		Origin: listOrigin,
+		Format: listFormat,
+	}
+
+	// Set up display options
+	displayOpts := lister.DisplayOptions{
+		Verbose: listVerbose,
+		Limit:   listLimit,
+		SortBy:  listSortBy,
+		Reverse: listReverse,
+	}
+
+	// List data
+	results, err := l.ListData(filters, displayOpts)
+	if err != nil {
+		return err // Already a PUDLError from lister
+	}
+
+	// Display results
+	if len(results.Entries) == 0 {
+		fmt.Println("No data found matching the specified criteria.")
+		return nil
+	}
 
 		// Display summary
 		fmt.Printf("Found %d entries", len(results.Entries))
@@ -114,16 +126,17 @@ Examples:
 			displayEntry(entry, listVerbose, i+1)
 		}
 
-		// Display summary statistics
-		if listVerbose {
-			fmt.Printf("\nSummary:\n")
-			fmt.Printf("  Total size: %s\n", formatBytes(results.TotalSize))
-			fmt.Printf("  Total records: %d\n", results.TotalRecords)
-			fmt.Printf("  Schemas: %s\n", strings.Join(results.UniqueSchemas, ", "))
-			fmt.Printf("  Origins: %s\n", strings.Join(results.UniqueOrigins, ", "))
-			fmt.Printf("  Formats: %s\n", strings.Join(results.UniqueFormats, ", "))
-		}
-	},
+	// Display summary statistics
+	if listVerbose {
+		fmt.Printf("\nSummary:\n")
+		fmt.Printf("  Total size: %s\n", formatBytes(results.TotalSize))
+		fmt.Printf("  Total records: %d\n", results.TotalRecords)
+		fmt.Printf("  Schemas: %s\n", strings.Join(results.UniqueSchemas, ", "))
+		fmt.Printf("  Origins: %s\n", strings.Join(results.UniqueOrigins, ", "))
+		fmt.Printf("  Formats: %s\n", strings.Join(results.UniqueFormats, ", "))
+	}
+
+	return nil
 }
 
 func init() {
