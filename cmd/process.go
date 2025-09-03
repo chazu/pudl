@@ -1,13 +1,13 @@
 package cmd
 
 import (
-	"log"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/cue"
+	"pudl/internal/errors"
 )
 
 // processCmd represents the process command
@@ -33,24 +33,37 @@ Example usage:
     pudl process simple_test.cue`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		filename := args[0]
-		
-		// Validate file extension
-		if !strings.HasSuffix(filename, ".cue") {
-			log.Fatal("File must have .cue extension")
-		}
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
 
-		// Check if file exists
-		if _, err := os.Stat(filename); os.IsNotExist(err) {
-			log.Fatalf("File %s does not exist", filename)
-		}
-
-		// Process the file
-		processor := cue.NewCUEProcessor()
-		if err := processor.ProcessFile(filename); err != nil {
-			log.Fatalf("Error processing file: %v", err)
+		// Run the process command and handle any errors
+		if err := runProcessCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
 	},
+}
+
+// runProcessCommand contains the actual process logic with structured error handling
+func runProcessCommand(cmd *cobra.Command, args []string) error {
+	filename := args[0]
+
+	// Validate file extension
+	if !strings.HasSuffix(filename, ".cue") {
+		return errors.NewInvalidFormatError("cue", []string{"cue"})
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return errors.NewFileNotFoundError(filename)
+	}
+
+	// Process the file
+	processor := cue.NewCUEProcessor()
+	if err := processor.ProcessFile(filename); err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Error processing CUE file", err)
+	}
+
+	return nil
 }
 
 func init() {

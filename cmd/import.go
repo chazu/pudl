@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/errors"
 	"pudl/internal/importer"
 	"pudl/internal/validator"
 )
@@ -46,70 +46,83 @@ Example usage:
     pudl import --path aws-instances.json --schema aws.compliant-ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Get the file path from --path flag
-		filePath, err := cmd.Flags().GetString("path")
-		if err != nil {
-			log.Fatalf("Error getting path flag: %v", err)
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
+
+		// Run the import command and handle any errors
+		if err := runImportCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
-
-		if filePath == "" {
-			log.Fatal("--path flag is required")
-		}
-
-		// Validate file exists
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			log.Fatalf("File %s does not exist", filePath)
-		}
-
-		// Get absolute path
-		absPath, err := filepath.Abs(filePath)
-		if err != nil {
-			log.Fatalf("Failed to get absolute path: %v", err)
-		}
-
-		// Load configuration to get data directory
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
-		}
-
-		// Create importer and validator
-		imp := importer.New(cfg.DataPath, cfg.SchemaPath)
-
-		var cascadeValidator *validator.CascadeValidator
-		if importSchema != "" {
-			// Create cascade validator for manual schema specification
-			cv, err := validator.NewCascadeValidator(cfg.SchemaPath)
-			if err != nil {
-				log.Fatalf("Failed to create cascade validator: %v", err)
-			}
-			cascadeValidator = cv
-
-			// Resolve schema name
-			resolvedSchema, err := cv.ResolveSchemaName(importSchema)
-			if err != nil {
-				log.Fatalf("Failed to resolve schema name '%s': %v", importSchema, err)
-			}
-			importSchema = resolvedSchema
-		}
-
-		// Set up import options
-		opts := importer.ImportOptions{
-			SourcePath:        absPath,
-			Origin:           importOrigin, // Will be auto-detected if empty
-			ManualSchema:     importSchema,
-			CascadeValidator: cascadeValidator,
-		}
-
-		// Perform the import
-		result, err := imp.ImportFile(opts)
-		if err != nil {
-			log.Fatalf("Failed to import file: %v", err)
-		}
-
-		// Display results
-		displayImportResults(result)
 	},
+
+}
+
+// runImportCommand contains the actual import logic with structured error handling
+func runImportCommand(cmd *cobra.Command, args []string) error {
+	// Get the file path from --path flag
+	filePath, err := cmd.Flags().GetString("path")
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeInvalidInput, "Error getting path flag", err)
+	}
+
+	if filePath == "" {
+		return errors.NewMissingRequiredError("path")
+	}
+
+	// Validate file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return errors.NewFileNotFoundError(filePath)
+	}
+
+	// Get absolute path
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to get absolute path", err)
+	}
+
+	// Load configuration to get data directory
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewConfigError("Failed to load configuration", err)
+	}
+
+	// Create importer and validator
+	imp := importer.New(cfg.DataPath, cfg.SchemaPath)
+
+	var cascadeValidator *validator.CascadeValidator
+	if importSchema != "" {
+		// Create cascade validator for manual schema specification
+		cv, err := validator.NewCascadeValidator(cfg.SchemaPath)
+		if err != nil {
+			return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create cascade validator", err)
+		}
+		cascadeValidator = cv
+
+		// Resolve schema name
+		resolvedSchema, err := cv.ResolveSchemaName(importSchema)
+		if err != nil {
+			return errors.NewSchemaNotFoundError(importSchema, nil)
+		}
+		importSchema = resolvedSchema
+	}
+
+	// Set up import options
+	opts := importer.ImportOptions{
+		SourcePath:        absPath,
+		Origin:           importOrigin, // Will be auto-detected if empty
+		ManualSchema:     importSchema,
+		CascadeValidator: cascadeValidator,
+	}
+
+	// Perform the import
+	result, err := imp.ImportFile(opts)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
+	}
+
+	// Display results
+	displayImportResults(result)
+	return nil
 }
 
 func init() {

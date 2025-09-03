@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"pudl/internal/errors"
 )
 
 // Lister handles data listing and querying operations
@@ -90,7 +92,7 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	// Load catalog
 	catalog, err := l.loadCatalog()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load catalog: %w", err)
+		return nil, err // Already a PUDLError from loadCatalog
 	}
 
 	// Convert catalog entries to list entries and apply filters
@@ -267,12 +269,12 @@ func (l *Lister) loadCatalog() (*Catalog, error) {
 
 	data, err := os.ReadFile(catalogPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read catalog file: %w", err)
+		return nil, errors.WrapError(errors.ErrCodeFileSystem, "Failed to read catalog file", err)
 	}
 
 	var catalog Catalog
 	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, fmt.Errorf("failed to parse catalog file: %w", err)
+		return nil, errors.WrapError(errors.ErrCodeParsingFailed, "Failed to parse catalog file - invalid JSON format", err)
 	}
 
 	return &catalog, nil
@@ -288,7 +290,7 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 	// Load catalog
 	catalog, err := l.loadCatalog()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load catalog: %w", err)
+		return nil, err // Already a PUDLError from loadCatalog
 	}
 
 	// Search for the entry
@@ -318,5 +320,9 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 		}
 	}
 
-	return nil, nil // Entry not found
+	// Entry not found - return a helpful error
+	return nil, errors.NewInputError(
+		fmt.Sprintf("Entry not found: %s", id),
+		"Check the entry ID with 'pudl list'",
+		"Ensure you're using the correct entry identifier")
 }

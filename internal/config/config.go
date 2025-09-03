@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"pudl/internal/errors"
 )
 
 // Config represents the PUDL configuration
@@ -46,43 +48,43 @@ func GetConfigPath() string {
 // Load loads the configuration from the config file
 func Load() (*Config, error) {
 	configPath := GetConfigPath()
-	
+
 	// If config doesn't exist, return default config
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return DefaultConfig(), nil
 	}
-	
+
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		return nil, errors.WrapError(errors.ErrCodeFileSystem, "Failed to read config file", err)
 	}
-	
+
 	var config Config
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+		return nil, errors.NewConfigError("Failed to parse config file - invalid YAML format", err)
 	}
-	
+
 	return &config, nil
 }
 
 // Save saves the configuration to the config file
 func (c *Config) Save() error {
 	configPath := GetConfigPath()
-	
+
 	// Ensure the directory exists
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
-		return fmt.Errorf("failed to create config directory: %w", err)
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to create config directory", err)
 	}
-	
+
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
+		return errors.WrapError(errors.ErrCodeConfigInvalid, "Failed to marshal config", err)
 	}
-	
+
 	if err := os.WriteFile(configPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to write config file", err)
 	}
-	
+
 	return nil
 }
 
@@ -164,21 +166,26 @@ func ValidatePath(path string) error {
 // SetConfigValue sets a configuration value and saves it
 func SetConfigValue(key, value string) error {
 	if !IsValidConfigKey(key) {
-		return fmt.Errorf("invalid configuration key: %s. Valid keys are: %s",
-			key, strings.Join(ValidConfigKeys(), ", "))
+		return errors.NewInputError(
+			fmt.Sprintf("Invalid configuration key: %s", key),
+			fmt.Sprintf("Valid keys are: %s", strings.Join(ValidConfigKeys(), ", ")),
+			"Use 'pudl config' to see current configuration")
 	}
 
 	// Load current configuration
 	cfg, err := Load()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return err // Already a PUDLError from Load()
 	}
 
 	// Validate and set the value based on key
 	switch key {
 	case "schema_path":
 		if err := ValidatePath(value); err != nil {
-			return fmt.Errorf("invalid schema_path: %w", err)
+			return errors.NewInputError(
+				fmt.Sprintf("Invalid schema_path: %s", value),
+				"Ensure the path is valid and accessible",
+				"Use an absolute path or ensure parent directories exist")
 		}
 		// Expand ~ to absolute path
 		if strings.HasPrefix(value, "~/") {
@@ -190,7 +197,10 @@ func SetConfigValue(key, value string) error {
 
 	case "data_path":
 		if err := ValidatePath(value); err != nil {
-			return fmt.Errorf("invalid data_path: %w", err)
+			return errors.NewInputError(
+				fmt.Sprintf("Invalid data_path: %s", value),
+				"Ensure the path is valid and accessible",
+				"Use an absolute path or ensure parent directories exist")
 		}
 		// Expand ~ to absolute path
 		if strings.HasPrefix(value, "~/") {
@@ -202,14 +212,14 @@ func SetConfigValue(key, value string) error {
 
 	case "version":
 		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("version cannot be empty")
+			return errors.NewInputError("Version cannot be empty", "Provide a valid version string")
 		}
 		cfg.Version = value
 	}
 
 	// Save the updated configuration
 	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
+		return err // Already a PUDLError from Save()
 	}
 
 	return nil
@@ -219,7 +229,7 @@ func SetConfigValue(key, value string) error {
 func ResetToDefaults() error {
 	defaultCfg := DefaultConfig()
 	if err := defaultCfg.Save(); err != nil {
-		return fmt.Errorf("failed to save default configuration: %w", err)
+		return err // Already a PUDLError from Save()
 	}
 	return nil
 }

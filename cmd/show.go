@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"pudl/internal/config"
+	"pudl/internal/errors"
 	"pudl/internal/lister"
 )
 
@@ -40,32 +40,45 @@ Examples:
     pudl show 20250825_222510_test-data --metadata --raw # Show everything`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		entryID := args[0]
+		// Create error handler for CLI context
+		errorHandler := errors.NewCLIErrorHandler(true)
 
-		// Load configuration to get data directory
-		cfg, err := config.Load()
-		if err != nil {
-			log.Fatalf("Failed to load configuration: %v", err)
+		// Run the show command and handle any errors
+		if err := runShowCommand(cmd, args); err != nil {
+			errorHandler.HandleError(err)
 		}
-
-		// Create lister to find the entry
-		l := lister.New(cfg.DataPath)
-
-		// Find the specific entry
-		entry, err := l.FindEntry(entryID)
-		if err != nil {
-			log.Fatalf("Failed to find entry: %v", err)
-		}
-
-		if entry == nil {
-			fmt.Printf("Entry with ID '%s' not found.\n", entryID)
-			fmt.Println("\nUse 'pudl list' to see available entries.")
-			return
-		}
-
-		// Display entry information
-		displayDetailedEntry(*entry, showMetadata, showRaw)
 	},
+}
+
+// runShowCommand contains the actual show logic with structured error handling
+func runShowCommand(cmd *cobra.Command, args []string) error {
+	entryID := args[0]
+
+	// Load configuration to get data directory
+	cfg, err := config.Load()
+	if err != nil {
+		return err // Already a PUDLError from config.Load()
+	}
+
+	// Create lister to find the entry
+	l := lister.New(cfg.DataPath)
+
+	// Find the specific entry
+	entry, err := l.FindEntry(entryID)
+	if err != nil {
+		return err // Already a PUDLError from lister.FindEntry()
+	}
+
+	if entry == nil {
+		return errors.NewInputError(
+			fmt.Sprintf("Entry with ID '%s' not found", entryID),
+			"Use 'pudl list' to see available entries",
+			"Check that the entry ID is correct")
+	}
+
+	// Display entry information
+	displayDetailedEntry(*entry, showMetadata, showRaw)
+	return nil
 }
 
 func init() {
@@ -161,5 +174,7 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 		}
 	}
 
-	fmt.Println()
+
 }
+
+
