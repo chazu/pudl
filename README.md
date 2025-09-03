@@ -111,6 +111,12 @@ pudl schema list --package k8s --verbose
 # Add a new schema
 pudl schema add aws.rds-instance my-rds-schema.cue
 pudl schema add custom.api-response api-schema.cue
+
+# Version control for schemas
+pudl schema status                          # Show uncommitted changes
+pudl schema commit -m "Add RDS schema"      # Commit schema changes
+pudl schema log                             # Show commit history
+pudl schema log --verbose                   # Detailed commit information
 ```
 
 **Schema Naming Convention:**
@@ -122,6 +128,12 @@ pudl schema add custom.api-response api-schema.cue
 - Valid CUE syntax
 - Package declaration matching target package
 - Recommended metadata fields: `_identity`, `_tracked`, `_version`
+
+**Git Integration:**
+- Schema repository is automatically version controlled
+- Use `pudl schema status` to see uncommitted changes
+- Use `pudl schema commit -m "message"` to commit changes
+- Use `pudl schema log` to view commit history
 
 ### 5. CUE Processing
 
@@ -195,11 +207,18 @@ pudl show 20250825_222545_aws-ec2-describe-instances --raw
 # Add it to PUDL
 pudl schema add custom.api-response my-api.cue
 
+# Check what changed
+pudl schema status
+
+# Commit the new schema
+pudl schema commit -m "Add custom API response schema"
+
 # Import data using the new schema
 pudl import --path api-data.json
 
-# Review the schema
+# Review the schema and commit history
 pudl schema list --package custom --verbose
+pudl schema log
 ```
 
 ### Data Discovery
