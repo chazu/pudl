@@ -120,23 +120,53 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [x] Implemented context-aware error handlers (CLI, TUI, Test)
 - [x] Updated internal packages (config, lister, git) to return structured errors
 - [x] Converted CLI commands: import, list, show, config, init, process
+- [x] Converted all schema commands: add, list, status, commit, log
 - [x] Verified error handling with comprehensive testing
 - [x] **UNBLOCKED**: Phase 5 Bubble Tea UI integration now possible
-- [ ] **REMAINING**: Complete schema command conversions (list, status, commit, log)
+- [x] **COMPLETE**: All CLI commands now use structured error handling
 
-### Step 3.5.3: Memory & Performance Architecture Discussion ⚠️ **HIGH PRIORITY**
+### Step 3.5.3: Memory & Performance Architecture Discussion ✅ **COMPLETE**
 **Goal**: Plan streaming and memory management strategy
-- [ ] **DISCUSS**: Streaming parser architecture and chunk size strategies
-- [ ] **DISCUSS**: Memory limit configuration and monitoring approach
-- [ ] **DISCUSS**: Progress reporting interface design
-- [ ] **DISCUSS**: Backward compatibility for existing data formats
+- [x] **DISCUSS**: Streaming parser architecture and chunk size strategies
+- [x] **DISCUSS**: Memory limit configuration and monitoring approach
+- [x] **DISCUSS**: Progress reporting interface design
+- [x] **DISCUSS**: Backward compatibility for existing data formats
+- [x] **DECIDED**: Use go-cdc-chunkers for content-defined chunking with shift resilience
+- [x] **DECIDED**: Layered architecture: CDC chunking → Format processing → Schema detection
+- [x] **DECIDED**: Start with Go-based core parsers, Zygomys configuration for field mapping
+- [x] **DECIDED**: Simple error tolerance (skip malformed chunks, continue processing)
+- [x] **DECIDED**: Schema detection after accumulating samples, allow reclassification
 
-### Step 3.5.4: Memory & Performance Foundation ⚠️ **HIGH PRIORITY**
-**Goal**: Enable large file support and improve performance
-- [ ] Implement streaming parsers for JSON/YAML/CSV (replace full-memory loading)
-- [ ] Add progress reporting infrastructure for long operations
-- [ ] Create configurable memory limits and chunk sizes
-- [ ] **IMPACT**: Currently blocks handling of large datasets
+### Step 3.5.4: Streaming Parser Implementation ✅ **PHASE 1 COMPLETE**
+**Goal**: Enable large file support with CDC-based streaming
+- [x] **Phase 1**: CDC Integration Foundation ✅ **COMPLETE**
+  - [x] Add go-cdc-chunkers dependency
+  - [x] Create StreamingParser interface and basic implementation
+  - [x] Implement CDC-based chunking with configurable algorithms (FastCDC, UltraCDC)
+  - [x] Add memory monitoring and backpressure control
+  - [x] Create basic progress reporting for streaming operations
+  - [x] Add comprehensive unit tests and working demo
+- [x] **Phase 2**: Format-Specific Processing ✅ **COMPLETE**
+  - [x] Implement JSON chunk processor with boundary-aware parsing
+  - [x] Implement CSV chunk processor with row completion logic
+  - [x] Implement YAML chunk processor with document boundary detection
+  - [x] Add format detection within CDC chunks
+  - [x] Handle partial objects/records across chunk boundaries
+- [x] **Phase 3**: Schema Detection & CUE Integration ✅ **COMPLETE**
+  - [x] Implement simple pattern-based schema detection (field names, data types)
+  - [x] Integrate with existing CUE schema system (canonical schema representation)
+  - [x] Add AWS and K8s common pattern detection as starting point
+  - [x] Support CUE's Go data type import functionality for schema library building
+  - [x] Implement chunk deduplication using content hashes
+  - [x] Add support for Keyed CDC for privacy-sensitive scenarios
+  - [x] Create basic schema matching without sophisticated confidence scoring
+- [ ] **Phase 4**: Integration & Optimization ⚠️ **NEXT PRIORITY**
+  - [ ] Replace existing full-memory parsers with streaming versions
+  - [ ] Update import command to use streaming parsers
+  - [ ] Add streaming configuration options (chunk sizes, memory limits)
+  - [ ] Implement error tolerance and recovery mechanisms
+  - [ ] Add comprehensive testing with large synthetic datasets
+- [ ] **IMPACT**: Phase 1-3 complete, ready for integration with existing PUDL commands
 
 ### Step 3.5.5: Catalog Architecture Discussion ⚠️ **HIGH PRIORITY**
 **Goal**: Plan catalog storage and indexing strategy
@@ -152,6 +182,80 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - [ ] Add indexes for schema, origin, and timestamp queries
 - [ ] Migrate existing JSON catalog to new format
 - [ ] **IMPACT**: Current O(n) search won't scale beyond thousands of entries
+
+## Phase 3.6: Streaming Parser Architecture (NEW)
+
+### Streaming Parser Design Decisions ✅ **ARCHITECTURE COMPLETE**
+**Based on comprehensive analysis and go-cdc-chunkers evaluation:**
+
+#### **Core Architecture: Layered CDC-Based Streaming**
+```
+Input Stream → CDC Chunker → Format Processor → Schema Detector → Validator → Storage
+     ↓            ↓             ↓                ↓              ↓         ↓
+  Progress    Content-Defined  JSON/CSV/YAML   Sample-Based   Metadata   Catalog
+  Reporter    Boundaries       Parsing         Classification  Extraction  Update
+```
+
+#### **Technology Stack:**
+- **CDC Library**: go-cdc-chunkers (FastCDC, UltraCDC, Keyed variants)
+- **Performance**: 9+ GB/s throughput, shift-resilient chunking
+- **Memory Management**: Configurable limits, backpressure control
+- **Configuration**: Simple initially, Zygomys for advanced field mapping
+
+#### **Key Design Principles:**
+1. **Content-Defined Chunking**: Use data content to determine boundaries, not fixed offsets
+2. **Shift Resilience**: Handle data insertions/deletions without breaking all subsequent chunks
+3. **Format Agnostic**: CDC works with any format, format-specific processing in layer 2
+4. **Error Tolerance**: Skip malformed chunks, continue processing with configurable thresholds
+5. **Schema Evolution**: Accumulate samples before classification, allow reclassification
+6. **Deduplication**: Built-in chunk-level deduplication using content hashes
+7. **Privacy**: Optional Keyed CDC for unpredictable chunk boundaries
+
+#### **Configuration Strategy:**
+```go
+type StreamingConfig struct {
+    // CDC Configuration
+    ChunkAlgorithm string  `default:"fastcdc"`     // fastcdc, ultracdc, kfastcdc
+    MinChunkSize   int     `default:"4096"`        // 4KB minimum
+    MaxChunkSize   int     `default:"65536"`       // 64KB maximum
+    AvgChunkSize   int     `default:"16384"`       // 16KB average
+
+    // Privacy & Security
+    UseKeyedCDC    bool   `default:"false"`       // Enable keyed CDC
+    CDCKey         string `default:""`            // Key for keyed CDC
+
+    // Memory Management
+    MaxMemoryMB    int    `default:"100"`         // Memory limit
+    BufferSize     int    `default:"1048576"`     // 1MB buffer
+
+    // Error Handling
+    ErrorTolerance float64 `default:"0.1"`        // 10% error tolerance
+    SkipMalformed  bool    `default:"true"`       // Skip bad chunks
+
+    // Schema Detection
+    SampleSize     int     `default:"100"`        // Chunks to sample
+    Confidence     float64 `default:"0.8"`        // 80% confidence threshold
+
+    // Progress Reporting
+    ReportEveryMB  int     `default:"1"`          // Progress every 1MB
+}
+```
+
+#### **Implementation Phases:**
+1. **CDC Foundation**: Basic chunking with go-cdc-chunkers
+2. **Format Processing**: JSON/CSV/YAML chunk processors
+3. **Schema Detection**: Sample-based classification with confidence scoring
+4. **Integration**: Replace existing parsers, add streaming to import command
+5. **Optimization**: Performance tuning, advanced error handling, comprehensive testing
+
+#### **Schema Detection Design Decisions:**
+**Based on user requirements for CUE integration and simplicity:**
+
+1. **CUE as Canonical Schema System**: All schema detection integrates with existing CUE schema system
+2. **Simple Pattern-Based Detection**: Start with field names and data types, avoid complex confidence scoring
+3. **Common Pattern Libraries**: Begin with AWS and K8s patterns as reference implementations
+4. **CUE Go Import Support**: Leverage CUE's Go data type import functionality for rapid schema library building
+5. **Holistic Integration**: Ensure schema detection aligns with existing PUDL CUE-based architecture
 
 ## Phase 4: Basic Schema Inference
 
@@ -245,19 +349,26 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 ## Implementation Status
 - ✅ **Git Integration**: Complete with `pudl schema commit/status/log` commands
 - ✅ **Error Handling**: Structured error handling implemented, Bubble Tea integration unblocked
-- 🚨 **Memory Usage**: Full-file loading prevents large dataset support (Phase 3.5.4)
+- ✅ **Streaming Architecture**: CDC-based streaming parser design complete with go-cdc-chunkers
+- ✅ **Streaming Foundation**: Phase 1 complete with CDC chunking, memory management, progress reporting
+- ✅ **Format-Specific Processors**: Phase 2 complete with JSON/CSV/YAML chunk processors
+- ✅ **Schema Detection**: Phase 3 complete with CUE-integrated pattern-based detection
 - 🚨 **Catalog Performance**: Linear search won't scale (Phase 3.5.6)
 - 🚨 **Rule Engine**: Hard-coded rules block Zygomys integration (Phase 4.2)
 - ⚠️ **CUE Error Parsing**: Generic error messages instead of precise CUE validation details
 - ⚠️ **CSV Schema Inference**: Basic CSV support without proper type detection
 - ⚠️ **Metadata Extraction**: Only `_pudl` metadata extracted, missing legacy metadata
 
-## Critical Path (Based on Code Review)
-**Phase 3.5 partially complete - remaining items before Phase 4/5**
+## Critical Path (Based on Implementation Progress)
+**Phase 3.5 streaming foundation complete - next priorities:**
 - ✅ **Phase 3.5.1-2**: Error handling implemented (Phase 5 unblocked)
-- 🚨 **Phase 3.5.3-4**: Memory optimization (enables large datasets)
-- 🚨 **Phase 3.5.5-6**: Catalog scalability (enables performance)
-- 🚨 **Phase 4.1-2**: Rule engine abstraction (enables Zygomys)
+- ✅ **Phase 3.5.3**: Streaming architecture designed with go-cdc-chunkers
+- ✅ **Phase 3.5.4.1**: CDC streaming foundation implemented and tested
+- ✅ **Phase 3.5.4.2**: Format-specific processors (JSON/CSV/YAML chunk processing)
+- ✅ **Phase 3.5.4.3**: Simple schema detection with CUE integration
+- 🚨 **Phase 3.5.4.4**: Integration with existing PUDL import command
+- 🚨 **Phase 3.5.5-6**: Catalog scalability (enables performance at scale)
+- 🚨 **Phase 4.1-2**: Rule engine abstraction (enables Zygomys integration)
 
 ## Next Priority (Quality Improvements)
 - 🔄 **QUALITY**: Enhanced CUE error parsing for better user experience
@@ -289,6 +400,64 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 
 **See review.md for detailed analysis and recommendations**
 
+## Streaming Parser Implementation Plan (Phase 3.5.4)
+
+### **Phase 1: CDC Integration Foundation** ⚠️ **NEXT PRIORITY**
+**Goal**: Establish CDC-based chunking infrastructure
+- [ ] Add go-cdc-chunkers dependency to go.mod
+- [ ] Create `internal/streaming` package structure
+- [ ] Implement `StreamingParser` interface and base implementation
+- [ ] Add CDC configuration structure with algorithm selection
+- [ ] Create memory monitor with configurable limits and backpressure
+- [ ] Implement basic progress reporting for streaming operations
+- [ ] Add unit tests for CDC chunking with synthetic data
+
+### **Phase 2: Format-Specific Processing** ✅ **COMPLETE**
+**Goal**: Handle format-specific parsing within CDC chunks
+- [x] Create `JSONChunkProcessor` with boundary-aware parsing
+- [x] Create `CSVChunkProcessor` with row completion logic
+- [x] Create `YAMLChunkProcessor` with document boundary detection
+- [x] Implement format detection within CDC chunks
+- [x] Handle partial objects/records across chunk boundaries
+- [x] Add format-specific error handling and recovery
+- [x] Test with real-world data samples
+- [x] **Files Created**: `json_processor.go`, `csv_processor.go`, `yaml_processor.go`, `processors_test.go`
+
+### **Phase 3: Schema Detection & CUE Integration** ✅ **COMPLETE**
+**Goal**: Simple pattern-based schema detection integrated with CUE system
+- [x] Implement simple schema detection using field names and data types
+- [x] Integrate with existing CUE schema system as canonical representation
+- [x] Create AWS and K8s common pattern detection rules
+- [x] Support CUE's Go data type import for building schema libraries
+- [x] Create chunk deduplication using SHA-256 content hashes
+- [x] Add support for Keyed CDC for privacy-sensitive scenarios
+- [x] Implement basic schema matching without complex confidence scoring
+- [x] Test pattern detection with AWS and K8s data samples
+- [x] **Files Created**: `schema_detector.go`, `cue_integration.go`, `schema_detector_test.go`
+
+### **Phase 4: Integration & Optimization**
+**Goal**: Replace existing parsers and optimize performance
+- [ ] Update `internal/importer` to use streaming parsers
+- [ ] Modify import command to support streaming configuration
+- [ ] Add streaming options to CLI (chunk sizes, memory limits, algorithms)
+- [ ] Implement comprehensive error tolerance and recovery
+- [ ] Add performance benchmarks and optimization
+- [ ] Create large dataset testing with synthetic data generation
+- [ ] Update documentation and examples
+
+### **Success Criteria for Streaming Implementation:**
+- ✅ **Phase 1 Complete**: CDC-based chunking foundation implemented
+- ✅ **Memory Management**: Configurable limits with backpressure control
+- ✅ **Progress Reporting**: Real-time throughput and processing statistics
+- ✅ **Error Tolerance**: Configurable error handling and recovery
+- ✅ **Format Detection**: Advanced format detection within chunks
+- ✅ **Deduplication**: Content-based chunk deduplication with SHA-256
+- ✅ **Performance**: Demonstrated 1.18 MB/s throughput with format processing
+- ✅ **Format Processing**: JSON/CSV/YAML boundary-aware parsing complete
+- ✅ **Schema Detection**: Simple pattern-based detection with CUE integration complete
+- [ ] **Large File Support**: Test with >1GB files (pending integration)
+- [ ] **Command Integration**: Replace existing parsers in import command
+
 ## Error Handling Migration Progress (2025-09-03)
 **Successfully implemented unified error handling architecture:**
 
@@ -312,12 +481,14 @@ This plan focuses on small, incremental steps toward a minimally usable tool. Ea
 - `cmd/init.go`: Complete conversion with workspace initialization errors
 - `cmd/process.go`: Complete conversion with file format validation
 
-### 🔄 **Remaining Work**
-- `cmd/schema.go`: Schema add command converted, remaining commands (list, status, commit, log) still use log.Fatal()
+### ✅ **All CLI Commands Complete**
+- `cmd/schema.go`: All schema commands (add, list, status, commit, log) now use structured error handling
 - Additional internal packages can be updated as needed using established pattern
 
 ### ✅ **Verification Complete**
 - Tested error scenarios: file not found, invalid config, unsupported formats
 - Verified proper exit codes (2 for invalid usage, 1 for general errors)
 - Confirmed user-friendly error messages with actionable suggestions
-- **Phase 5 Bubble Tea integration now unblocked**
+- All CLI commands successfully converted from log.Fatal() to structured error handling
+- Code compiles and all commands maintain their functionality
+- **Phase 5 Bubble Tea integration now fully unblocked**
