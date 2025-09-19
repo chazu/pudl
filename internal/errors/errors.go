@@ -35,6 +35,10 @@ const (
 	ErrCodeMemoryLimit   ErrorCode = "MEMORY_LIMIT"
 	ErrCodeTimeout       ErrorCode = "TIMEOUT"
 
+	// Database Errors
+	ErrCodeDatabaseError ErrorCode = "DATABASE_ERROR"
+	ErrCodeNotFound      ErrorCode = "NOT_FOUND"
+
 	// Git/Repository Errors
 	ErrCodeGitOperation ErrorCode = "GIT_OPERATION"
 	ErrCodeRepoNotFound ErrorCode = "REPO_NOT_FOUND"
@@ -274,6 +278,21 @@ func NewGitError(operation string, cause error) *PUDLError {
 		},
 		Cause:       cause,
 		Recoverable: true,
+	}
+}
+
+// NewSystemError creates an error for system-level failures
+func NewSystemError(message string, cause error) *PUDLError {
+	return &PUDLError{
+		Code:    ErrCodeFileSystem,
+		Message: message,
+		Suggestions: []string{
+			"Check system resources and permissions",
+			"Verify disk space is available",
+			"Ensure required dependencies are installed",
+		},
+		Cause:       cause,
+		Recoverable: false,
 	}
 }
 

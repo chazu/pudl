@@ -1,8 +1,11 @@
 package importer
 
 import (
+	"fmt"
 	"strings"
 	"time"
+
+	"pudl/internal/database"
 )
 
 // assignSchema assigns a schema to data using basic rule-based logic
@@ -93,18 +96,18 @@ func (i *Importer) hasFields(data map[string]interface{}, fields []string) bool 
 
 // updateCatalog updates the main data catalog with the new import
 func (i *Importer) updateCatalog(metadata ImportMetadata, storedPath, metadataPath string) error {
-	// Load existing catalog
-	catalog, err := i.loadCatalog()
+	// Parse timestamp
+	importTime, err := time.Parse(time.RFC3339, metadata.ImportMetadata.Timestamp)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse import timestamp: %w", err)
 	}
 
-	// Create new catalog entry
-	entry := CatalogEntry{
+	// Create new catalog entry for database
+	entry := database.CatalogEntry{
 		ID:              metadata.ID,
 		StoredPath:      storedPath,
 		MetadataPath:    metadataPath,
-		ImportTimestamp: metadata.ImportMetadata.Timestamp,
+		ImportTimestamp: importTime,
 		Format:          metadata.ImportMetadata.Format,
 		Origin:          metadata.SourceInfo.Origin,
 		Schema:          metadata.SchemaInfo.CueDefinition,
@@ -113,12 +116,8 @@ func (i *Importer) updateCatalog(metadata ImportMetadata, storedPath, metadataPa
 		SizeBytes:       metadata.ImportMetadata.SizeBytes,
 	}
 
-	// Add to catalog
-	catalog.Entries = append(catalog.Entries, entry)
-	catalog.LastUpdated = time.Now().Format(time.RFC3339)
-
-	// Save updated catalog
-	return i.saveCatalog(catalog)
+	// Add to database
+	return i.catalogDB.AddEntry(entry)
 }
 
 // Basic schema definitions for reference

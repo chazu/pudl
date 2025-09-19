@@ -69,7 +69,11 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create lister
-	l := lister.New(cfg.DataPath)
+	l, err := lister.New(cfg.DataPath)
+	if err != nil {
+		return errors.NewSystemError("Failed to initialize lister", err)
+	}
+	defer l.Close()
 
 	// Set up filter options
 	filters := lister.FilterOptions{

@@ -1,20 +1,17 @@
 package lister
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
+	"pudl/internal/database"
 	"pudl/internal/errors"
 )
 
 // Lister handles data listing and querying operations
 type Lister struct {
-	dataPath string
+	dataPath  string
+	catalogDB *database.CatalogDB
 }
 
 // FilterOptions contains filtering criteria for listing data
@@ -81,248 +78,171 @@ type Catalog struct {
 }
 
 // New creates a new Lister instance
-func New(dataPath string) *Lister {
-	return &Lister{
-		dataPath: dataPath,
+func New(dataPath string) (*Lister, error) {
+	// Initialize catalog database
+	catalogDB, err := database.NewCatalogDB(dataPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
+
+	lister := &Lister{
+		dataPath:  dataPath,
+		catalogDB: catalogDB,
+	}
+
+	// Check if migration is needed and perform it
+	if err := lister.performMigrationIfNeeded(); err != nil {
+		return nil, fmt.Errorf("failed to perform catalog migration: %w", err)
+	}
+
+	return lister, nil
+}
+
+// Close closes the lister and its database connections
+func (l *Lister) Close() error {
+	if l.catalogDB != nil {
+		return l.catalogDB.Close()
+	}
+	return nil
+}
+
+// performMigrationIfNeeded checks if migration is needed and performs it
+func (l *Lister) performMigrationIfNeeded() error {
+	needed, err := l.catalogDB.CheckMigrationNeeded()
+	if err != nil {
+		return fmt.Errorf("failed to check migration status: %w", err)
+	}
+
+	if needed {
+		fmt.Println("Migrating catalog from JSON to SQLite...")
+		result, err := l.catalogDB.MigrateFromJSON()
+		if err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+
+		fmt.Printf("Migration completed: %d entries migrated, %d skipped\n",
+			result.MigratedEntries, result.SkippedEntries)
+
+		if len(result.Errors) > 0 {
+			fmt.Printf("Migration warnings: %d\n", len(result.Errors))
+			for _, errMsg := range result.Errors {
+				fmt.Printf("  - %s\n", errMsg)
+			}
+		}
+	}
+
+	return nil
 }
 
 // ListData lists and filters data based on the provided criteria
 func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*ListResults, error) {
-	// Load catalog
-	catalog, err := l.loadCatalog()
+	// Convert display options to database query options
+	queryOpts := database.QueryOptions{
+		Limit:   displayOpts.Limit,
+		Offset:  0, // TODO: Add pagination support to DisplayOptions
+		SortBy:  displayOpts.SortBy,
+		Reverse: displayOpts.Reverse,
+	}
+
+	// Convert filters to database filters
+	dbFilters := database.FilterOptions{
+		Schema: filters.Schema,
+		Origin: filters.Origin,
+		Format: filters.Format,
+	}
+
+	// Query database
+	queryResult, err := l.catalogDB.QueryEntries(dbFilters, queryOpts)
 	if err != nil {
-		return nil, err // Already a PUDLError from loadCatalog
+		return nil, err // Already a PUDLError from database
 	}
 
-	// Convert catalog entries to list entries and apply filters
-	var filteredEntries []ListEntry
-	for _, entry := range catalog.Entries {
-		// Apply filters
-		if !l.matchesFilters(entry, filters) {
-			continue
-		}
-
-		// Parse timestamp for sorting
-		parsedTime, err := time.Parse(time.RFC3339, entry.ImportTimestamp)
-		if err != nil {
-			// If parsing fails, use zero time
-			parsedTime = time.Time{}
-		}
-
+	// Convert database entries to list entries
+	var listEntries []ListEntry
+	for _, dbEntry := range queryResult.Entries {
 		listEntry := ListEntry{
-			ID:              entry.ID,
-			StoredPath:      entry.StoredPath,
-			MetadataPath:    entry.MetadataPath,
-			ImportTimestamp: entry.ImportTimestamp,
-			ParsedTimestamp: parsedTime,
-			Format:          entry.Format,
-			Origin:          entry.Origin,
-			Schema:          entry.Schema,
-			Confidence:      entry.Confidence,
-			RecordCount:     entry.RecordCount,
-			SizeBytes:       entry.SizeBytes,
+			ID:              dbEntry.ID,
+			StoredPath:      dbEntry.StoredPath,
+			MetadataPath:    dbEntry.MetadataPath,
+			ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
+			ParsedTimestamp: dbEntry.ImportTimestamp,
+			Format:          dbEntry.Format,
+			Origin:          dbEntry.Origin,
+			Schema:          dbEntry.Schema,
+			Confidence:      dbEntry.Confidence,
+			RecordCount:     dbEntry.RecordCount,
+			SizeBytes:       dbEntry.SizeBytes,
 		}
-
-		filteredEntries = append(filteredEntries, listEntry)
+		listEntries = append(listEntries, listEntry)
 	}
 
-	// Sort entries
-	l.sortEntries(filteredEntries, displayOpts.SortBy, displayOpts.Reverse)
-
-	// Apply limit
-	totalEntries := len(filteredEntries)
-	if displayOpts.Limit > 0 && displayOpts.Limit < len(filteredEntries) {
-		filteredEntries = filteredEntries[:displayOpts.Limit]
+	// Create results
+	results := &ListResults{
+		Entries:      listEntries,
+		TotalEntries: queryResult.FilteredCount, // Use filtered count as total for display
 	}
 
 	// Calculate summary statistics
-	results := &ListResults{
-		Entries:      filteredEntries,
-		TotalEntries: totalEntries,
-	}
-
-	// Calculate totals and unique values from all filtered entries (not just limited ones)
-	allFilteredEntries := filteredEntries
-	if displayOpts.Limit > 0 && displayOpts.Limit < totalEntries {
-		// Reload all filtered entries for statistics
-		allFilteredEntries = []ListEntry{}
-		for _, entry := range catalog.Entries {
-			if l.matchesFilters(entry, filters) {
-				parsedTime, _ := time.Parse(time.RFC3339, entry.ImportTimestamp)
-				listEntry := ListEntry{
-					ID:              entry.ID,
-					StoredPath:      entry.StoredPath,
-					MetadataPath:    entry.MetadataPath,
-					ImportTimestamp: entry.ImportTimestamp,
-					ParsedTimestamp: parsedTime,
-					Format:          entry.Format,
-					Origin:          entry.Origin,
-					Schema:          entry.Schema,
-					Confidence:      entry.Confidence,
-					RecordCount:     entry.RecordCount,
-					SizeBytes:       entry.SizeBytes,
-				}
-				allFilteredEntries = append(allFilteredEntries, listEntry)
-			}
-		}
-	}
-
-	l.calculateSummaryStats(results, allFilteredEntries)
+	l.calculateSummaryStats(results, listEntries)
 
 	return results, nil
 }
 
-// matchesFilters checks if a catalog entry matches the given filters
-func (l *Lister) matchesFilters(entry CatalogEntry, filters FilterOptions) bool {
-	// Schema filter
-	if filters.Schema != "" && !strings.Contains(strings.ToLower(entry.Schema), strings.ToLower(filters.Schema)) {
-		return false
-	}
 
-	// Origin filter
-	if filters.Origin != "" && !strings.Contains(strings.ToLower(entry.Origin), strings.ToLower(filters.Origin)) {
-		return false
-	}
-
-	// Format filter
-	if filters.Format != "" && !strings.EqualFold(entry.Format, filters.Format) {
-		return false
-	}
-
-	return true
-}
-
-// sortEntries sorts the entries based on the specified field and order
-func (l *Lister) sortEntries(entries []ListEntry, sortBy string, reverse bool) {
-	sort.Slice(entries, func(i, j int) bool {
-		var less bool
-
-		switch sortBy {
-		case "timestamp":
-			less = entries[i].ParsedTimestamp.Before(entries[j].ParsedTimestamp)
-		case "size":
-			less = entries[i].SizeBytes < entries[j].SizeBytes
-		case "records":
-			less = entries[i].RecordCount < entries[j].RecordCount
-		case "schema":
-			less = strings.ToLower(entries[i].Schema) < strings.ToLower(entries[j].Schema)
-		case "origin":
-			less = strings.ToLower(entries[i].Origin) < strings.ToLower(entries[j].Origin)
-		case "format":
-			less = strings.ToLower(entries[i].Format) < strings.ToLower(entries[j].Format)
-		default:
-			// Default to timestamp
-			less = entries[i].ParsedTimestamp.Before(entries[j].ParsedTimestamp)
-		}
-
-		if reverse {
-			return !less
-		}
-		return less
-	})
-}
 
 // calculateSummaryStats calculates summary statistics for the results
 func (l *Lister) calculateSummaryStats(results *ListResults, entries []ListEntry) {
-	schemaSet := make(map[string]bool)
-	originSet := make(map[string]bool)
-	formatSet := make(map[string]bool)
-
+	// Calculate totals from the provided entries
 	for _, entry := range entries {
 		results.TotalSize += entry.SizeBytes
 		results.TotalRecords += entry.RecordCount
-
-		schemaSet[entry.Schema] = true
-		originSet[entry.Origin] = true
-		formatSet[entry.Format] = true
 	}
 
-	// Convert sets to sorted slices
-	for schema := range schemaSet {
-		results.UniqueSchemas = append(results.UniqueSchemas, schema)
+	// Get unique values from database (more efficient than from filtered results)
+	if schemas, err := l.catalogDB.GetUniqueValues("schema"); err == nil {
+		results.UniqueSchemas = schemas
 	}
-	sort.Strings(results.UniqueSchemas)
 
-	for origin := range originSet {
-		results.UniqueOrigins = append(results.UniqueOrigins, origin)
+	if origins, err := l.catalogDB.GetUniqueValues("origin"); err == nil {
+		results.UniqueOrigins = origins
 	}
-	sort.Strings(results.UniqueOrigins)
 
-	for format := range formatSet {
-		results.UniqueFormats = append(results.UniqueFormats, format)
+	if formats, err := l.catalogDB.GetUniqueValues("format"); err == nil {
+		results.UniqueFormats = formats
 	}
-	sort.Strings(results.UniqueFormats)
 }
 
-// loadCatalog loads the catalog from disk
-func (l *Lister) loadCatalog() (*Catalog, error) {
-	catalogPath := l.getCatalogPath()
 
-	// Check if catalog exists
-	if _, err := os.Stat(catalogPath); os.IsNotExist(err) {
-		return &Catalog{
-			Entries: []CatalogEntry{},
-			Version: "1.0",
-		}, nil
-	}
-
-	data, err := os.ReadFile(catalogPath)
-	if err != nil {
-		return nil, errors.WrapError(errors.ErrCodeFileSystem, "Failed to read catalog file", err)
-	}
-
-	var catalog Catalog
-	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, errors.WrapError(errors.ErrCodeParsingFailed, "Failed to parse catalog file - invalid JSON format", err)
-	}
-
-	return &catalog, nil
-}
-
-// getCatalogPath returns the path to the catalog file
-func (l *Lister) getCatalogPath() string {
-	return filepath.Join(l.dataPath, "catalog", "inventory.json")
-}
 
 // FindEntry finds a specific entry by ID
 func (l *Lister) FindEntry(id string) (*ListEntry, error) {
-	// Load catalog
-	catalog, err := l.loadCatalog()
+	// Query database for the specific entry
+	dbEntry, err := l.catalogDB.GetEntry(id)
 	if err != nil {
-		return nil, err // Already a PUDLError from loadCatalog
-	}
-
-	// Search for the entry
-	for _, entry := range catalog.Entries {
-		if entry.ID == id {
-			// Parse timestamp
-			parsedTime, err := time.Parse(time.RFC3339, entry.ImportTimestamp)
-			if err != nil {
-				parsedTime = time.Time{}
-			}
-
-			listEntry := &ListEntry{
-				ID:              entry.ID,
-				StoredPath:      entry.StoredPath,
-				MetadataPath:    entry.MetadataPath,
-				ImportTimestamp: entry.ImportTimestamp,
-				ParsedTimestamp: parsedTime,
-				Format:          entry.Format,
-				Origin:          entry.Origin,
-				Schema:          entry.Schema,
-				Confidence:      entry.Confidence,
-				RecordCount:     entry.RecordCount,
-				SizeBytes:       entry.SizeBytes,
-			}
-
-			return listEntry, nil
+		// Convert database error to user-friendly error
+		if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
+			return nil, errors.NewInputError(
+				fmt.Sprintf("Entry not found: %s", id),
+				"Check the entry ID with 'pudl list'",
+				"Ensure you're using the correct entry identifier")
 		}
+		return nil, err // Already a PUDLError from database
 	}
 
-	// Entry not found - return a helpful error
-	return nil, errors.NewInputError(
-		fmt.Sprintf("Entry not found: %s", id),
-		"Check the entry ID with 'pudl list'",
-		"Ensure you're using the correct entry identifier")
+	// Convert database entry to list entry
+	listEntry := &ListEntry{
+		ID:              dbEntry.ID,
+		StoredPath:      dbEntry.StoredPath,
+		MetadataPath:    dbEntry.MetadataPath,
+		ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
+		ParsedTimestamp: dbEntry.ImportTimestamp,
+		Format:          dbEntry.Format,
+		Origin:          dbEntry.Origin,
+		Schema:          dbEntry.Schema,
+		Confidence:      dbEntry.Confidence,
+		RecordCount:     dbEntry.RecordCount,
+		SizeBytes:       dbEntry.SizeBytes,
+	}
+
+	return listEntry, nil
 }

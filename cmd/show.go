@@ -61,7 +61,11 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create lister to find the entry
-	l := lister.New(cfg.DataPath)
+	l, err := lister.New(cfg.DataPath)
+	if err != nil {
+		return errors.NewSystemError("Failed to initialize lister", err)
+	}
+	defer l.Close()
 
 	// Find the specific entry
 	entry, err := l.FindEntry(entryID)

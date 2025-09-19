@@ -10,12 +10,16 @@ import (
 	"pudl/internal/config"
 	"pudl/internal/errors"
 	"pudl/internal/importer"
+	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
 
 var (
-	importSchema string
-	importOrigin string
+	importSchema      string
+	importOrigin      string
+	useStreaming      bool
+	streamingMemoryMB int
+	streamingChunkMB  float64
 )
 
 // importCmd represents the import command
@@ -41,10 +45,17 @@ Schema Assignment:
 - Cascading validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
 
+Streaming Support:
+- Use --streaming for large files (>100MB recommended)
+- Configure memory limits with --streaming-memory (default: 100MB)
+- Adjust chunk size with --streaming-chunk-size (default: 0.016MB)
+- Enables processing of files larger than available RAM
+
 Example usage:
     pudl import --path data.json
     pudl import --path aws-instances.json --schema aws.compliant-ec2
-    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods`,
+    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
+    pudl import --path large-dataset.json --streaming --streaming-memory 200`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
 		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
@@ -87,7 +98,11 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create importer and validator
-	imp := importer.New(cfg.DataPath, cfg.SchemaPath)
+	imp, err := importer.New(cfg.DataPath, cfg.SchemaPath)
+	if err != nil {
+		return errors.NewSystemError("Failed to initialize importer", err)
+	}
+	defer imp.Close()
 
 	var cascadeValidator *validator.CascadeValidator
 	if importSchema != "" {
@@ -106,12 +121,47 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		importSchema = resolvedSchema
 	}
 
+	// Configure streaming if enabled
+	var streamingConfig *streaming.StreamingConfig
+	if useStreaming {
+		streamingConfig = streaming.DefaultStreamingConfig()
+
+		// Apply user-specified memory limit
+		if streamingMemoryMB > 0 {
+			streamingConfig.MaxMemoryMB = streamingMemoryMB
+		}
+
+		// Check file size to determine appropriate chunk sizes
+		fileInfo, err := os.Stat(absPath)
+		if err != nil {
+			return fmt.Errorf("failed to get file info: %w", err)
+		}
+		fileSize := fileInfo.Size()
+
+		// For small files (< 10KB), use very small chunk sizes
+		// For larger files, use user-specified or default chunk sizes
+		if fileSize < 10*1024 {
+			// Small file: use tiny chunks to ensure proper chunking
+			streamingConfig.MinChunkSize = 64     // 64 bytes minimum
+			streamingConfig.AvgChunkSize = 256    // 256 bytes average
+			streamingConfig.MaxChunkSize = 1024   // 1KB maximum
+		} else {
+			// Large file: use user-specified or default chunk sizes
+			chunkBytes := int(streamingChunkMB * 1024 * 1024)
+			streamingConfig.AvgChunkSize = chunkBytes
+			streamingConfig.MinChunkSize = chunkBytes / 4  // 25% of avg
+			streamingConfig.MaxChunkSize = chunkBytes * 4  // 400% of avg
+		}
+	}
+
 	// Set up import options
 	opts := importer.ImportOptions{
 		SourcePath:        absPath,
 		Origin:           importOrigin, // Will be auto-detected if empty
 		ManualSchema:     importSchema,
 		CascadeValidator: cascadeValidator,
+		UseStreaming:     useStreaming,
+		StreamingConfig:  streamingConfig,
 	}
 
 	// Perform the import
@@ -132,6 +182,11 @@ func init() {
 	importCmd.Flags().StringP("path", "p", "", "Path to file to import (required)")
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
+
+	// Streaming options
+	importCmd.Flags().BoolVar(&useStreaming, "streaming", false, "Use streaming parser for large files")
+	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
+	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
 
 	// Mark path as required
 	importCmd.MarkFlagRequired("path")
