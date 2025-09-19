@@ -95,6 +95,8 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 		errors <- fmt.Errorf("failed to create chunker: %w", err)
 		return
 	}
+
+	// Chunker created successfully
 	
 	// Start progress reporting if available
 	if p.progressReporter != nil {
@@ -208,6 +210,8 @@ func (p *DefaultStreamingParser) createChunker(reader io.Reader) (*chunkers.Chun
 		MaxSize:    p.config.MaxChunkSize,
 		NormalSize: p.config.AvgChunkSize,
 	}
+
+	// Chunker options configured
 
 	// Add key for keyed CDC if configured
 	if p.config.UseKeyedCDC && p.config.CDCKey != "" {

@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"pudl/internal/database"
+	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
 
@@ -15,6 +18,7 @@ import (
 type Importer struct {
 	dataPath   string
 	schemaPath string
+	catalogDB  *database.CatalogDB
 }
 
 // ImportOptions contains options for importing data
@@ -23,6 +27,8 @@ type ImportOptions struct {
 	Origin           string                      // Optional origin override
 	ManualSchema     string                      // Manual schema specification
 	CascadeValidator *validator.CascadeValidator // Validator for manual schema
+	UseStreaming     bool                        // Whether to use streaming parser
+	StreamingConfig  *streaming.StreamingConfig  // Configuration for streaming parser
 }
 
 // ImportResult contains the results of an import operation
@@ -42,11 +48,26 @@ type ImportResult struct {
 }
 
 // New creates a new Importer instance
-func New(dataPath, schemaPath string) *Importer {
+func New(dataPath, schemaPath string) (*Importer, error) {
+	// Initialize catalog database
+	catalogDB, err := database.NewCatalogDB(dataPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
+	}
+
 	return &Importer{
 		dataPath:   dataPath,
 		schemaPath: schemaPath,
+		catalogDB:  catalogDB,
+	}, nil
+}
+
+// Close closes the importer and its database connections
+func (i *Importer) Close() error {
+	if i.catalogDB != nil {
+		return i.catalogDB.Close()
 	}
+	return nil
 }
 
 // ImportFile imports a single file into the data lake
@@ -95,16 +116,27 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
-	// Copy file to raw storage
+	// Read and analyze data for schema assignment BEFORE copying
+	// This ensures we can read the original file without any file handle conflicts
+	var data interface{}
+	var recordCount int
+
+	if opts.UseStreaming {
+		// Use streaming parser for large files - analyze original file
+		data, recordCount, err = i.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
+	} else {
+		// Use traditional memory-based analysis - analyze original file
+		data, recordCount, err = i.analyzeData(opts.SourcePath, format)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze data: %w", err)
+	}
+
+	// Copy file to raw storage AFTER analysis
 	storedPath := filepath.Join(rawDir, filename)
 	if err := i.copyFile(opts.SourcePath, storedPath); err != nil {
 		return nil, fmt.Errorf("failed to copy file: %w", err)
-	}
-
-	// Read and analyze data for schema assignment
-	data, recordCount, err := i.analyzeData(storedPath, format)
-	if err != nil {
-		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
 
 	// Assign schema using cascading validation or rule engine
@@ -244,4 +276,88 @@ func extractPackage(schema string) string {
 		}
 	}
 	return "unknown"
+}
+
+// analyzeDataStreaming analyzes data using the streaming parser for large files
+func (i *Importer) analyzeDataStreaming(filePath, format string, config *streaming.StreamingConfig) (interface{}, int, error) {
+	// Use default config if none provided
+	if config == nil {
+		config = streaming.DefaultStreamingConfig()
+	}
+
+	// Create streaming parser
+	parser, err := streaming.NewStreamingParser(config)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create streaming parser: %w", err)
+	}
+	defer parser.Close()
+
+	// Set up progress reporter for debugging
+	reporter := streaming.NewCLIProgressReporter(true) // Verbose mode
+	parser.SetProgressReporter(reporter)
+
+	// Set up schema detector (pass nil for now, would be schema manager in production)
+	err = parser.SetCUESchemaDetector(nil)
+	if err != nil {
+		// Log warning but continue - schema detection is optional
+		fmt.Printf("Warning: Failed to set schema detector: %v\n", err)
+	}
+
+	// Open file for streaming
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// File is ready for streaming
+
+	// Create context (use background context like the demo)
+	ctx := context.Background()
+
+	// Parse the file using streaming
+	chunks, errors := parser.Parse(ctx, file)
+
+	// Collect all objects and count records
+	var allObjects []interface{}
+	recordCount := 0
+
+	// Process chunks as they arrive (using demo's approach)
+	done := false
+	for !done {
+		select {
+		case chunk, ok := <-chunks:
+			if !ok {
+				done = true
+				break
+			}
+
+			// Process chunk data
+
+			// Add objects from this chunk
+			allObjects = append(allObjects, chunk.Objects...)
+			recordCount += len(chunk.Objects)
+
+		case err, ok := <-errors:
+			if !ok {
+				// Error channel closed
+				continue
+			}
+
+			// Log error but continue processing (error tolerance)
+			fmt.Printf("Warning: streaming parser error: %v\n", err)
+		}
+	}
+
+	// Streaming parse complete
+
+	// If we have multiple objects, return them as an array
+	// If we have a single object, return it directly (matches legacy behavior)
+	if len(allObjects) == 0 {
+		return map[string]interface{}{"format": format}, 0, nil
+	} else if len(allObjects) == 1 {
+		return allObjects[0], recordCount, nil
+	} else {
+		return allObjects, recordCount, nil
+	}
 }
