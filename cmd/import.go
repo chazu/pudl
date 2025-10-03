@@ -98,7 +98,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create importer and validator
-	imp, err := importer.New(cfg.DataPath, cfg.SchemaPath)
+	imp, err := importer.New(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize importer", err)
 	}
