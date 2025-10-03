@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"pudl/internal/database"
+	"pudl/internal/rules"
 	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
 
 // Importer handles data import operations
 type Importer struct {
-	dataPath   string
-	schemaPath string
-	catalogDB  *database.CatalogDB
+	dataPath    string
+	schemaPath  string
+	catalogDB   *database.CatalogDB
+	ruleManager *rules.Manager
 }
 
 // ImportOptions contains options for importing data
@@ -48,26 +50,56 @@ type ImportResult struct {
 }
 
 // New creates a new Importer instance
-func New(dataPath, schemaPath string) (*Importer, error) {
+func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 	// Initialize catalog database
 	catalogDB, err := database.NewCatalogDB(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
 
+	// Initialize rule engine manager
+	ruleManager := rules.NewManager(pudlHome)
+	if err := ruleManager.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize rule engine: %w", err)
+	}
+
 	return &Importer{
-		dataPath:   dataPath,
-		schemaPath: schemaPath,
-		catalogDB:  catalogDB,
+		dataPath:    dataPath,
+		schemaPath:  schemaPath,
+		catalogDB:   catalogDB,
+		ruleManager: ruleManager,
 	}, nil
 }
 
 // Close closes the importer and its database connections
 func (i *Importer) Close() error {
-	if i.catalogDB != nil {
-		return i.catalogDB.Close()
+	var err error
+
+	// Close rule manager
+	if i.ruleManager != nil {
+		if closeErr := i.ruleManager.Close(); closeErr != nil {
+			err = closeErr
+		}
 	}
-	return nil
+
+	// Close catalog database
+	if i.catalogDB != nil {
+		if closeErr := i.catalogDB.Close(); closeErr != nil {
+			if err == nil {
+				err = closeErr
+			}
+		}
+	}
+
+	return err
+}
+
+// GetRuleEngineInfo returns information about the current rule engine
+func (i *Importer) GetRuleEngineInfo() (*rules.EngineInfo, error) {
+	if i.ruleManager == nil {
+		return nil, fmt.Errorf("rule manager not initialized")
+	}
+	return i.ruleManager.GetEngineInfo()
 }
 
 // ImportFile imports a single file into the data lake
@@ -154,8 +186,12 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		schema = vr.AssignedSchema
 		confidence = 1.0 // High confidence for validated data
 	} else {
-		// Use legacy rule-based assignment
-		schema, confidence = i.assignSchema(data, origin, format)
+		// Use rule engine for schema assignment
+		var err error
+		schema, confidence, err = i.ruleManager.AssignSchema(data, origin, format)
+		if err != nil {
+			return nil, fmt.Errorf("failed to assign schema using rule engine: %w", err)
+		}
 	}
 
 	// Create metadata
