@@ -20,6 +20,7 @@ var (
 	useStreaming      bool
 	streamingMemoryMB int
 	streamingChunkMB  float64
+	useZygomys        bool
 )
 
 // importCmd represents the import command
@@ -45,6 +46,10 @@ Schema Assignment:
 - Cascading validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
 
+Rule Engine Options:
+- Default: Uses legacy hard-coded rules for schema assignment
+- --use-zygomys: Override to use Zygomys Lisp rule engine for this import
+
 Streaming Support:
 - Use --streaming for large files (>100MB recommended)
 - Configure memory limits with --streaming-memory (default: 100MB)
@@ -55,7 +60,8 @@ Example usage:
     pudl import --path data.json
     pudl import --path aws-instances.json --schema aws.compliant-ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
-    pudl import --path large-dataset.json --streaming --streaming-memory 200`,
+    pudl import --path large-dataset.json --streaming --streaming-memory 200
+    pudl import --path data.json --use-zygomys`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
 		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
@@ -103,6 +109,13 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewSystemError("Failed to initialize importer", err)
 	}
 	defer imp.Close()
+
+	// Override rule engine if --use-zygomys flag is set
+	if useZygomys {
+		if err := imp.OverrideRuleEngine("zygomys"); err != nil {
+			return errors.NewSystemError("Failed to override rule engine to Zygomys", err)
+		}
+	}
 
 	var cascadeValidator *validator.CascadeValidator
 	if importSchema != "" {
@@ -187,6 +200,9 @@ func init() {
 	importCmd.Flags().BoolVar(&useStreaming, "streaming", false, "Use streaming parser for large files")
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
 	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
+
+	// Rule engine options
+	importCmd.Flags().BoolVar(&useZygomys, "use-zygomys", false, "Use Zygomys Lisp rule engine instead of legacy rules")
 
 	// Mark path as required
 	importCmd.MarkFlagRequired("path")

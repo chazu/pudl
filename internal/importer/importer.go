@@ -102,6 +102,14 @@ func (i *Importer) GetRuleEngineInfo() (*rules.EngineInfo, error) {
 	return i.ruleManager.GetEngineInfo()
 }
 
+// OverrideRuleEngine temporarily switches to a different rule engine for this import session
+func (i *Importer) OverrideRuleEngine(engineType string) error {
+	if i.ruleManager == nil {
+		return fmt.Errorf("rule manager not initialized")
+	}
+	return i.ruleManager.SwitchEngine(engineType)
+}
+
 // ImportFile imports a single file into the data lake
 func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 	// Ensure basic schemas exist
