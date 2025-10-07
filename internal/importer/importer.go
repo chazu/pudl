@@ -449,23 +449,8 @@ func (i *Importer) createCollectionEntry(opts ImportOptions, timestamp time.Time
 	schema := "pudl.schemas/collections/collections:#Collection"
 	confidence := 0.8
 
-	// Try to detect specific collection type based on content
-	if items, ok := data.([]interface{}); ok && len(items) > 0 {
-		if firstItem, ok := items[0].(map[string]interface{}); ok {
-			// Check for cloud inventory patterns
-			if _, hasCloudPlatform := firstItem["cloudPlatform"]; hasCloudPlatform {
-				schema = "pudl.schemas/collections/collections:#CloudInventoryCollection"
-				confidence = 0.9
-			}
-			// Check for log patterns
-			if _, hasLevel := firstItem["level"]; hasLevel {
-				if _, hasTimestamp := firstItem["timestamp"]; hasTimestamp {
-					schema = "pudl.schemas/collections/collections:#LogCollection"
-					confidence = 0.9
-				}
-			}
-		}
-	}
+	// All collections use the generic collection schema now
+	// Content-specific metadata can be stored in the flexible collection_metadata field
 
 	// Create metadata for collection
 	metadata := &ImportMetadata{

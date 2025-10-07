@@ -139,7 +139,7 @@ PUDL processes these as:
 pudl import --path cloud-inventory.json
 # Output: Detected format: ndjson
 #         Created collection with 832 items
-#         Schema: collections.#CloudInventoryCollection
+#         Schema: collections.#Collection
 
 # Import with streaming for large NDJSON files
 pudl import --path large-logs.json --streaming
@@ -169,7 +169,7 @@ pudl list --schema aws.#BatchJobDefinition  # All batch jobs across collections
 Collections and items are visually distinguished:
 ```bash
 pudl list --limit 3
-# 1. my-cloud-inventory [collections.#CloudInventoryCollection] (2025-10-06) 📦
+# 1. my-cloud-inventory [collections.#Collection] (2025-10-06) 📦
 #    Origin: cloud-inventory | Format: ndjson | Records: 832 | Size: 890.9 KB
 #
 # 2. my-cloud-inventory_item_0 [aws.#BatchJobDefinition] (2025-10-06) 📄
@@ -184,15 +184,9 @@ pudl list --limit 3
 PUDL includes specialized collection schemas:
 
 **Generic Collections:**
-- `collections.#Collection` - Base collection schema
+- `collections.#Collection` - Flexible collection schema for any type of data collection
 - `collections.#CollectionItem` - Individual item schema
-
-**Specialized Collections:**
-- `collections.#CloudInventoryCollection` - Cloud resource inventories
-- `collections.#LogCollection` - Application/system logs
-- `collections.#APIResponseCollection` - API response collections
-- `collections.#MetricsCollection` - Monitoring data
-- `collections.#DatabaseCollection` - Database exports
+- `collections.#CatchAllCollection` - Minimal collection schema for unclassified collections
 
 **AWS Resource Schemas:**
 - `aws.batch.#BatchJobDefinition` - AWS Batch job definitions
@@ -558,7 +552,7 @@ pudl import --path cloud-inventory-2024.json
 
 # View the collection
 pudl list --collections-only
-# Shows: cloud-inventory-2024 [collections.#CloudInventoryCollection] 📦
+# Shows: cloud-inventory-2024 [collections.#Collection] 📦
 
 # Explore items in the collection
 pudl list --collection-id cloud-inventory-2024 --limit 5
