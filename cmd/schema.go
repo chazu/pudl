@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/database"
 	"pudl/internal/errors"
 	"pudl/internal/git"
+	"pudl/internal/review"
 	"pudl/internal/schema"
 )
 
@@ -18,6 +20,15 @@ var (
 	schemaPackage string
 	commitMessage string
 	logLimit      int
+
+	// Review command flags
+	reviewSchema      string
+	reviewOrigin      string
+	reviewFormat      string
+	reviewMaxItems    int
+	reviewOnlyUnknown bool
+	reviewSessionID   string
+	reviewListSessions bool
 )
 
 // schemaCmd represents the schema command
@@ -527,6 +538,43 @@ func runSchemaLogCommand() error {
 	return nil
 }
 
+// schemaReviewCmd represents the schema review command
+var schemaReviewCmd = &cobra.Command{
+	Use:   "review",
+	Short: "Interactively review and improve schema assignments",
+	Long: `Start an interactive review session to improve schema assignments for your data.
+
+This command provides a git rebase-like workflow for reviewing data items and their
+schema assignments. You can:
+
+- Accept current schema assignments
+- Reassign items to different existing schemas
+- Create new schemas from data patterns
+- Skip items for later review
+
+The review session is persistent and resumable - you can quit at any time and
+continue later. All changes are tracked and can be committed to version control.
+
+Examples:
+    # Review all items with unknown schemas
+    pudl schema review --only-unknown
+
+    # Review specific schema assignments
+    pudl schema review --schema unknown.#CatchAll
+
+    # Review items from specific origin
+    pudl schema review --origin aws-ec2
+
+    # Resume a previous session
+    pudl schema review --session review-1634567890
+
+    # List available sessions
+    pudl schema review --list`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSchemaReview()
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(schemaCmd)
 
@@ -536,6 +584,7 @@ func init() {
 	schemaCmd.AddCommand(schemaStatusCmd)
 	schemaCmd.AddCommand(schemaCommitCmd)
 	schemaCmd.AddCommand(schemaLogCmd)
+	schemaCmd.AddCommand(schemaReviewCmd)
 
 	// Add flags
 	schemaListCmd.Flags().BoolVarP(&schemaVerbose, "verbose", "v", false, "Show detailed information")
@@ -551,6 +600,15 @@ func init() {
 	// Log command flags
 	schemaLogCmd.Flags().IntVar(&logLimit, "limit", 10, "Number of commits to show")
 	schemaLogCmd.Flags().BoolVarP(&schemaVerbose, "verbose", "v", false, "Show detailed commit information")
+
+	// Review command flags
+	schemaReviewCmd.Flags().StringVar(&reviewSchema, "schema", "", "Review only items with this schema")
+	schemaReviewCmd.Flags().StringVar(&reviewOrigin, "origin", "", "Review only items from this origin")
+	schemaReviewCmd.Flags().StringVar(&reviewFormat, "format", "", "Review only items with this format")
+	schemaReviewCmd.Flags().IntVar(&reviewMaxItems, "max-items", 50, "Maximum number of items to review")
+	schemaReviewCmd.Flags().BoolVar(&reviewOnlyUnknown, "only-unknown", false, "Review only items with unknown schemas")
+	schemaReviewCmd.Flags().StringVar(&reviewSessionID, "session", "", "Resume a specific review session")
+	schemaReviewCmd.Flags().BoolVar(&reviewListSessions, "list", false, "List available review sessions")
 }
 
 // listAllSchemas lists all schemas organized by package
@@ -638,6 +696,225 @@ func listSchemasInPackage(manager *schema.Manager, packageName string) error {
 		fmt.Printf("\nTotal: %d schemas\n", len(schemas))
 	}
 	return nil
+}
+
+// runSchemaReview runs the interactive schema review workflow
+func runSchemaReview() error {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to load configuration", err)
+	}
+
+	fmt.Printf("🔍 Schema Review Workflow\n")
+	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
+
+	if reviewListSessions {
+		return listReviewSessions(cfg)
+	}
+
+	// Resume existing session if specified
+	if reviewSessionID != "" {
+		return resumeReviewSession(cfg, reviewSessionID)
+	}
+
+	// Start new review session
+	return startNewReviewSession(cfg)
+}
+
+// startNewReviewSession starts a new schema review session
+func startNewReviewSession(cfg *config.Config) error {
+	fmt.Printf("🚀 Starting new schema review session...\n\n")
+
+	// Initialize database connection
+	catalogDB, err := database.NewCatalogDB(cfg.DataPath)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
+	}
+	defer catalogDB.Close()
+
+	// Create session manager
+	sessionMgr := review.NewSessionManager(cfg.DataPath)
+
+	// Create review item fetcher
+	fetcher := review.NewReviewItemFetcher(catalogDB, cfg.DataPath)
+
+	// Build session filter from command line flags
+	filter := review.SessionFilter{
+		Schema:      reviewSchema,
+		Origin:      reviewOrigin,
+		Format:      reviewFormat,
+		MaxItems:    reviewMaxItems,
+		OnlyUnknown: reviewOnlyUnknown,
+	}
+
+	// Show preview of what will be reviewed
+	stats, err := fetcher.GetReviewStats(filter)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get review statistics", err)
+	}
+
+	fmt.Printf("📊 Review Preview:\n")
+	fmt.Printf("  Total items matching criteria: %d\n", stats.TotalItems)
+	if stats.UnknownItems > 0 {
+		fmt.Printf("  Items with unknown schemas: %d\n", stats.UnknownItems)
+	}
+	fmt.Printf("  Items to review (max): %d\n", min(stats.TotalItems, reviewMaxItems))
+
+	if len(stats.SchemaBreakdown) > 0 {
+		fmt.Printf("\n📋 Schema Breakdown:\n")
+		for schema, count := range stats.SchemaBreakdown {
+			fmt.Printf("  %s: %d items\n", schema, count)
+		}
+	}
+
+	if stats.TotalItems == 0 {
+		fmt.Printf("\n❌ No items found matching the specified criteria.\n")
+		fmt.Printf("💡 Try adjusting your filters or import more data.\n")
+		return nil
+	}
+
+	// Confirm before starting
+	fmt.Printf("\nProceed with review? [y/N]: ")
+	var response string
+	fmt.Scanln(&response)
+	if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+		fmt.Printf("Review cancelled.\n")
+		return nil
+	}
+
+	// Fetch items for review
+	fmt.Printf("\n📥 Fetching items for review...\n")
+	items, err := fetcher.FetchItemsForReview(filter)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to fetch items for review", err)
+	}
+
+	// Create review session
+	session, err := sessionMgr.CreateSession(items, filter)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to create review session", err)
+	}
+
+	fmt.Printf("✅ Created review session: %s\n", session.SessionID)
+	fmt.Printf("📝 %d items ready for review\n\n", len(items))
+
+	// Launch interactive reviewer
+	return launchInteractiveReviewer(cfg, session, sessionMgr, catalogDB)
+}
+
+// resumeReviewSession resumes an existing review session
+func resumeReviewSession(cfg *config.Config, sessionID string) error {
+	fmt.Printf("🔄 Resuming review session: %s\n\n", sessionID)
+
+	// Initialize database connection
+	catalogDB, err := database.NewCatalogDB(cfg.DataPath)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
+	}
+	defer catalogDB.Close()
+
+	// Create session manager
+	sessionMgr := review.NewSessionManager(cfg.DataPath)
+
+	// Load existing session
+	session, err := sessionMgr.LoadSession(sessionID)
+	if err != nil {
+		return err // Already wrapped by session manager
+	}
+
+	fmt.Printf("📊 Session Status:\n")
+	fmt.Printf("  Progress: %d/%d items (%.1f%%)\n",
+		session.CurrentIndex, len(session.Items), session.GetProgress())
+	fmt.Printf("  Changes made: %d\n", len(session.Changes))
+	fmt.Printf("  State: %s\n\n", session.State)
+
+	// Launch interactive reviewer
+	return launchInteractiveReviewer(cfg, session, sessionMgr, catalogDB)
+}
+
+// launchInteractiveReviewer launches the interactive review interface
+func launchInteractiveReviewer(cfg *config.Config, session *review.ReviewSession, sessionMgr *review.SessionManager, catalogDB *database.CatalogDB) error {
+	// Create schema manager
+	schemaMgr := schema.NewManager(cfg.SchemaPath)
+
+	// Create validator
+	validator := schema.NewValidator()
+
+	// Create catalog updater
+	catalogUpdater := review.NewCatalogUpdater(catalogDB)
+
+	// Create interactive reviewer
+	reviewer, err := review.NewInteractiveReviewer(session, sessionMgr, schemaMgr, validator, catalogUpdater, cfg.SchemaPath)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create interactive reviewer", err)
+	}
+
+	// Run the review workflow
+	return reviewer.RunReview()
+}
+
+// listReviewSessions lists available review sessions
+func listReviewSessions(cfg *config.Config) error {
+	fmt.Printf("📋 Available Review Sessions\n")
+	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
+
+	// Create session manager
+	sessionMgr := review.NewSessionManager(cfg.DataPath)
+
+	// List sessions
+	sessions, err := sessionMgr.ListSessions()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to list review sessions", err)
+	}
+
+	if len(sessions) == 0 {
+		fmt.Printf("No review sessions found.\n")
+		fmt.Printf("💡 Start a new session with: pudl schema review --only-unknown\n")
+		return nil
+	}
+
+	fmt.Printf("Found %d review sessions:\n\n", len(sessions))
+
+	for i, session := range sessions {
+		status := "🔄"
+		if session.State == review.SessionCompleted {
+			status = "✅"
+		} else if session.State == review.SessionAborted {
+			status = "❌"
+		}
+
+		fmt.Printf("%d. %s %s\n", i+1, status, session.SessionID)
+		fmt.Printf("   Progress: %d/%d items (%.1f%%)\n",
+			session.CurrentIndex, len(session.Items), session.GetProgress())
+		fmt.Printf("   Changes: %d | State: %s\n", len(session.Changes), session.State)
+		fmt.Printf("   Started: %s\n", session.StartTime.Format("2006-01-02 15:04:05"))
+
+		if session.EndTime != nil {
+			fmt.Printf("   Ended: %s\n", session.EndTime.Format("2006-01-02 15:04:05"))
+		}
+
+		fmt.Printf("   Filter: ")
+		if session.Filter.OnlyUnknown {
+			fmt.Printf("unknown schemas only")
+		} else if session.Filter.Schema != "" {
+			fmt.Printf("schema=%s", session.Filter.Schema)
+		} else {
+			fmt.Printf("all items")
+		}
+		fmt.Printf("\n\n")
+	}
+
+	fmt.Printf("💡 Resume a session with: pudl schema review --session <session-id>\n")
+	return nil
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 
