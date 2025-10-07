@@ -16,9 +16,12 @@ type Lister struct {
 
 // FilterOptions contains filtering criteria for listing data
 type FilterOptions struct {
-	Schema string // Filter by CUE schema
-	Origin string // Filter by data origin
-	Format string // Filter by file format
+	Schema         string // Filter by CUE schema
+	Origin         string // Filter by data origin
+	Format         string // Filter by file format
+	CollectionID   string // Filter by collection ID
+	CollectionType string // Filter by collection type ('collection', 'item')
+	ItemID         string // Filter by item ID
 }
 
 // DisplayOptions contains display preferences for listing data
@@ -42,6 +45,11 @@ type ListEntry struct {
 	Confidence      float64   `json:"confidence"`
 	RecordCount     int       `json:"record_count"`
 	SizeBytes       int64     `json:"size_bytes"`
+	// Collection fields
+	CollectionID   *string `json:"collection_id,omitempty"`
+	ItemIndex      *int    `json:"item_index,omitempty"`
+	CollectionType *string `json:"collection_type,omitempty"`
+	ItemID         *string `json:"item_id,omitempty"`
 }
 
 // ListResults contains the results of a list operation
@@ -146,9 +154,12 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 
 	// Convert filters to database filters
 	dbFilters := database.FilterOptions{
-		Schema: filters.Schema,
-		Origin: filters.Origin,
-		Format: filters.Format,
+		Schema:         filters.Schema,
+		Origin:         filters.Origin,
+		Format:         filters.Format,
+		CollectionID:   filters.CollectionID,
+		CollectionType: filters.CollectionType,
+		ItemID:         filters.ItemID,
 	}
 
 	// Query database
@@ -172,6 +183,10 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 			Confidence:      dbEntry.Confidence,
 			RecordCount:     dbEntry.RecordCount,
 			SizeBytes:       dbEntry.SizeBytes,
+			CollectionID:    dbEntry.CollectionID,
+			ItemIndex:       dbEntry.ItemIndex,
+			CollectionType:  dbEntry.CollectionType,
+			ItemID:          dbEntry.ItemID,
 		}
 		listEntries = append(listEntries, listEntry)
 	}

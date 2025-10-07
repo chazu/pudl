@@ -11,8 +11,9 @@ func (i *Importer) createBasicSchemas() error {
 	unknownDir := filepath.Join(i.schemaPath, "unknown")
 	awsDir := filepath.Join(i.schemaPath, "aws")
 	k8sDir := filepath.Join(i.schemaPath, "k8s")
+	collectionsDir := filepath.Join(i.schemaPath, "collections")
 
-	for _, dir := range []string{unknownDir, awsDir, k8sDir} {
+	for _, dir := range []string{unknownDir, awsDir, k8sDir, collectionsDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}
@@ -282,6 +283,163 @@ import "time"
 }
 `
 	if err := os.WriteFile(filepath.Join(k8sDir, "resources.cue"), []byte(k8sSchema), 0644); err != nil {
+		return err
+	}
+
+	// Create collections/collections.cue
+	collectionsSchema := `package collections
+
+// Collection represents a collection of related data items (e.g., NDJSON files)
+#Collection: {
+	// PUDL metadata for cascading validation
+	_pudl: {
+		schema_type: "collection"
+		resource_type: "generic.collection"
+		cascade_priority: 75
+		cascade_fallback: ["unknown.#CatchAll"]
+		identity_fields: ["collection_id"]
+		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
+		compliance_level: "permissive"
+	}
+
+	// Legacy metadata (for backward compatibility)
+	_identity: ["collection_id"]
+	_tracked: ["item_count", "item_schemas", "collection_metadata"]
+	_version: "v1.0"
+
+	// Core collection fields
+	collection_id: string & =~"^[a-zA-Z0-9_-]+$"
+	original_filename: string
+	format: "ndjson" | "json-array" | "csv-multi" | "yaml-multi"
+	item_count: int & >=0
+
+	// Schema distribution within collection
+	item_schemas: [...{
+		schema: string
+		count: int & >=0
+		confidence: number & >=0 & <=1
+	}]
+
+	// Collection-level metadata
+	collection_metadata: {
+		source_info: {
+			original_path: string
+			file_size_bytes: int & >=0
+			import_timestamp: string
+			origin: string
+		}
+		processing_info: {
+			parsing_method: "streaming" | "memory"
+			processing_time_ms?: int & >=0
+			errors_encountered?: int & >=0
+		}
+		content_summary?: {
+			data_types?: [...string]
+			date_range?: {
+				earliest?: string
+				latest?: string
+			}
+			common_fields?: [...string]
+		}
+	}
+
+	// Optional: First few items for preview (not stored for large collections)
+	sample_items?: [...#CollectionItem] & len(<=10)
+}
+
+// CollectionItem represents an individual item within a collection
+#CollectionItem: {
+	// PUDL metadata for collection items
+	_pudl: {
+		schema_type: "collection_item"
+		resource_type: "generic.collection_item"
+		cascade_priority: 60
+		identity_fields: ["item_id", "collection_id"]
+		tracked_fields: ["item_data"]
+		parent_collection?: string
+		item_index?: int
+	}
+
+	// Legacy metadata
+	_identity: ["item_id", "collection_id"]
+	_tracked: ["item_data"]
+	_version: "v1.0"
+
+	// Item identification
+	item_id: string
+	collection_id: string
+	item_index: int & >=0
+
+	// Item metadata
+	item_metadata: {
+		extracted_at: string
+		schema_assigned: string
+		schema_confidence: number & >=0 & <=1
+		size_bytes?: int & >=0
+		validation_status: "valid" | "invalid" | "warning" | "unknown"
+		validation_errors?: [...string]
+	}
+
+	// Flexible item data - actual content varies by item type
+	item_data: {...}
+}
+
+// CloudInventoryCollection - Specific schema for cloud resource inventories
+#CloudInventoryCollection: #Collection & {
+	_pudl: {
+		resource_type: "cloud.inventory_collection"
+		cascade_priority: 85
+	}
+
+	format: "ndjson"
+
+	// Enhanced metadata for cloud inventories
+	collection_metadata: {
+		cloud_info: {
+			cloud_provider?: "AWS" | "Azure" | "GCP" | "Multi-Cloud"
+			account_ids?: [...string]
+			regions?: [...string]
+			resource_types?: [...string]
+			collection_date?: string
+		}
+		statistics: {
+			total_resources: int & >=0
+			active_resources?: int & >=0
+			inactive_resources?: int & >=0
+			resource_type_breakdown?: {...}
+		}
+	}
+}
+
+// Generic collection catch-all for unclassified collections
+#CatchAllCollection: {
+	// PUDL metadata for cascading validation
+	_pudl: {
+		schema_type: "catchall_collection"
+		resource_type: "generic.catchall_collection"
+		cascade_priority: 5
+		cascade_fallback: ["unknown.#CatchAll"]
+		identity_fields: ["collection_id"]
+		tracked_fields: ["item_count", "format"]
+		compliance_level: "permissive"
+	}
+
+	// Legacy metadata
+	_identity: ["collection_id"]
+	_tracked: ["item_count", "format"]
+	_version: "v1.0"
+
+	// Minimal collection structure - accepts any collection-like data
+	collection_id: string
+	original_filename?: string
+	format?: string
+	item_count?: int & >=0
+
+	// Accept any additional collection metadata
+	...
+}
+`
+	if err := os.WriteFile(filepath.Join(collectionsDir, "collections.cue"), []byte(collectionsSchema), 0644); err != nil {
 		return err
 	}
 

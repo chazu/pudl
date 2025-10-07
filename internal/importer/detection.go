@@ -15,10 +15,14 @@ import (
 // detectFormat detects the format of a file based on extension and content
 func (i *Importer) detectFormat(filePath string) (string, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	// First try extension-based detection
 	switch ext {
 	case ".json":
+		// Check if it's NDJSON (newline-delimited JSON)
+		if isNDJSON, err := i.isNewlineDelimitedJSON(filePath); err == nil && isNDJSON {
+			return "ndjson", nil
+		}
 		return "json", nil
 	case ".yaml", ".yml":
 		return "yaml", nil
@@ -61,6 +65,51 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 
 	// Default to unknown
 	return "unknown", nil
+}
+
+// isNewlineDelimitedJSON checks if a file contains newline-delimited JSON
+func (i *Importer) isNewlineDelimitedJSON(filePath string) (bool, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return false, err
+	}
+	defer file.Close()
+
+	// Read first few KB to check format
+	buffer := make([]byte, 4096)
+	n, err := file.Read(buffer)
+	if err != nil && err != io.EOF {
+		return false, err
+	}
+
+	content := string(buffer[:n])
+	lines := strings.Split(content, "\n")
+
+	// Need at least 2 lines for NDJSON
+	if len(lines) < 2 {
+		return false, nil
+	}
+
+	jsonLines := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+
+		// Check if line looks like JSON object
+		if (strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}")) ||
+		   (strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]")) {
+			// Try to parse as JSON to confirm
+			var obj interface{}
+			if json.Unmarshal([]byte(line), &obj) == nil {
+				jsonLines++
+			}
+		}
+	}
+
+	// Consider it NDJSON if we have multiple valid JSON lines
+	return jsonLines >= 2, nil
 }
 
 // detectOrigin attempts to detect the origin/source of the data

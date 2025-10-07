@@ -4,13 +4,14 @@ PUDL is a CLI tool that helps SRE/platform engineers and software engineers mana
 
 ## Key Features
 
-- **Automatic Data Import**: Import JSON, YAML, and CSV files with intelligent format and schema detection
+- **Automatic Data Import**: Import JSON, YAML, CSV, and NDJSON files with intelligent format and schema detection
+- **Collection Support**: NDJSON files are automatically processed as collections with individual item tracking
 - **Streaming Support**: Process large files (>RAM size) using Content-Defined Chunking with configurable memory limits
-- **High-Performance Catalog**: SQLite-based catalog with O(log n) queries and automatic migration from JSON
-- **Schema Management**: CUE-based schemas with git version control and comprehensive validation
-- **Data Discovery**: Powerful filtering, sorting, and search capabilities across all imported data
-- **Metadata Tracking**: Complete provenance tracking with timestamps, origins, and schema assignments
-- **Package Organization**: Organize schemas by source type (AWS, Kubernetes, custom, etc.)
+- **High-Performance Catalog**: SQLite-based catalog with O(log n) queries and collection relationship tracking
+- **Schema Management**: CUE-based schemas with git version control, collection schemas, and comprehensive validation
+- **Data Discovery**: Powerful filtering, sorting, and search capabilities across collections and individual items
+- **Metadata Tracking**: Complete provenance tracking with timestamps, origins, schema assignments, and collection relationships
+- **Package Organization**: Organize schemas by source type (AWS, Kubernetes, collections, custom, etc.)
 - **Professional CLI**: Git-like command structure with comprehensive help and error handling
 
 ## Installation & Setup
@@ -69,6 +70,7 @@ pudl import --path massive-data.json --streaming --streaming-chunk-size 0.032
 
 **Supported Formats:**
 - JSON (`.json`)
+- NDJSON (`.json` with newline-delimited JSON objects) - **NEW!**
 - YAML (`.yaml`, `.yml`)
 - CSV (`.csv`)
 
@@ -80,10 +82,11 @@ pudl import --path massive-data.json --streaming --streaming-chunk-size 0.032
   - Maintains full schema detection and validation capabilities
 
 **Automatic Features:**
-- Format detection from file extension and content
+- Format detection from file extension and content (including NDJSON detection)
+- Collection processing for NDJSON files with individual item extraction
 - Origin inference from filename patterns (aws-ec2, k8s-pods, etc.)
-- Schema assignment using rule-based detection
-- Metadata tracking with timestamps and provenance
+- Schema assignment using rule-based detection (collections and individual items)
+- Metadata tracking with timestamps, provenance, and collection relationships
 - Smart chunk size selection based on file size
 
 ### 3. Data Discovery & Inspection
@@ -111,7 +114,119 @@ pudl show <entry-id> --metadata  # Show metadata
 pudl show <entry-id> --raw       # Show raw data
 ```
 
-### 4. Schema Management
+### 4. NDJSON Collections (NEW!)
+
+PUDL automatically detects and processes NDJSON (Newline-Delimited JSON) files as collections, creating both a collection entry and individual catalog entries for each JSON object.
+
+#### What are NDJSON Collections?
+
+NDJSON files contain multiple JSON objects separated by newlines:
+```json
+{"id": "item1", "type": "resource", "data": "..."}
+{"id": "item2", "type": "resource", "data": "..."}
+{"id": "item3", "type": "resource", "data": "..."}
+```
+
+PUDL processes these as:
+- **Collection Entry** 📦: Represents the original file with metadata
+- **Individual Items** 📄: Each JSON object gets its own catalog entry
+- **Relationships**: Full parent-child tracking with collection IDs and item indices
+
+#### Collection Import
+
+```bash
+# Import NDJSON file - automatic collection detection
+pudl import --path cloud-inventory.json
+# Output: Detected format: ndjson
+#         Created collection with 832 items
+#         Schema: collections.#CloudInventoryCollection
+
+# Import with streaming for large NDJSON files
+pudl import --path large-logs.json --streaming
+```
+
+#### Collection Discovery
+
+```bash
+# List all collections
+pudl list --collections-only
+
+# List individual items only
+pudl list --items-only
+
+# Show items from specific collection
+pudl list --collection-id my-collection-id
+
+# Filter items within a collection by schema
+pudl list --collection-id my-collection --schema aws.#SecurityGroup
+
+# Cross-collection queries
+pudl list --schema aws.#BatchJobDefinition  # All batch jobs across collections
+```
+
+#### Collection Display
+
+Collections and items are visually distinguished:
+```bash
+pudl list --limit 3
+# 1. my-cloud-inventory [collections.#CloudInventoryCollection] (2025-10-06) 📦
+#    Origin: cloud-inventory | Format: ndjson | Records: 832 | Size: 890.9 KB
+#
+# 2. my-cloud-inventory_item_0 [aws.#BatchJobDefinition] (2025-10-06) 📄
+#    Origin: my-cloud-inventory_item_0 | Format: json | Records: 1 | Size: 1.2 KB | Collection: my-cloud-inventory [#0]
+#
+# 3. my-cloud-inventory_item_1 [aws.#ComputeEnvironment] (2025-10-06) 📄
+#    Origin: my-cloud-inventory_item_1 | Format: json | Records: 1 | Size: 1.1 KB | Collection: my-cloud-inventory [#1]
+```
+
+#### Collection Schemas
+
+PUDL includes specialized collection schemas:
+
+**Generic Collections:**
+- `collections.#Collection` - Base collection schema
+- `collections.#CollectionItem` - Individual item schema
+
+**Specialized Collections:**
+- `collections.#CloudInventoryCollection` - Cloud resource inventories
+- `collections.#LogCollection` - Application/system logs
+- `collections.#APIResponseCollection` - API response collections
+- `collections.#MetricsCollection` - Monitoring data
+- `collections.#DatabaseCollection` - Database exports
+
+**AWS Resource Schemas:**
+- `aws.batch.#BatchJobDefinition` - AWS Batch job definitions
+- `aws.security.#SecurityGroup` - EC2 security groups
+- `aws.security.#Secret` - Secrets Manager secrets
+- `aws.security.#IAMPolicy` - IAM policies
+- `aws.ml.#SageMakerModel` - SageMaker models
+
+#### Advanced Collection Queries
+
+```bash
+# Find all security resources across collections
+pudl list --schema "aws.security" --limit 10
+
+# Show items from collection with specific schema
+pudl list --collection-id inventory-2024 --schema aws.#Secret
+
+# Filter collections by format
+pudl list --collections-only --format ndjson
+
+# Complex filtering: AWS Batch resources from specific collection
+pudl list --collection-id my-inventory --schema "aws.batch" --verbose
+```
+
+#### Collection Benefits
+
+- **Individual Access**: Query and show specific items from collections
+- **Relationship Tracking**: Maintain links between collections and items
+- **Schema Intelligence**: Automatic schema assignment for both collections and items
+- **Efficient Storage**: Original file preserved + individual item access
+- **Scalable Queries**: Database-optimized collection filtering
+- **Visual Clarity**: Clear distinction between collections (📦) and items (📄)
+
+### 5. Schema Management
 
 PUDL uses CUE schemas organized by packages for data validation and structure definition.
 
@@ -150,7 +265,7 @@ pudl schema log --verbose                   # Detailed commit information
 - Use `pudl schema commit -m "message"` to commit changes
 - Use `pudl schema log` to view commit history
 
-### 5. CUE Processing
+### 6. CUE Processing
 
 Process CUE files with custom functions (legacy feature):
 
@@ -182,10 +297,19 @@ pudl process example.cue
 - CUE-integrated schema detection with AWS/K8s patterns
 - Memory management, progress reporting, and error tolerance
 
-**🔄 Next: Phase 3.3** - Integration & Optimization
-- Replace existing parsers with streaming versions
-- Large file testing and performance optimization
-- Enhanced import workflow with streaming capabilities
+**✅ Phase 3.3: NDJSON Collection System** (Complete)
+- Automatic NDJSON detection and collection processing
+- Dual catalog architecture (collections + individual items)
+- Collection-specific schemas and AWS resource schemas
+- Enhanced database schema with collection relationship tracking
+- Advanced filtering and querying for collections and items
+- Visual distinction between collections (📦) and items (📄)
+
+**🔄 Next: Phase 4** - Advanced Features & Optimization
+- Collection analytics and insights
+- Bulk operations on collection items
+- Enhanced schema validation and compliance checking
+- Performance optimization for large-scale deployments
 
 ## Streaming Parser Architecture
 
@@ -206,7 +330,8 @@ Input Stream → CDC Chunker → Format Processor → Schema Detector → Valida
 
 **Key Features:**
 - **Content-Defined Chunking (CDC)**: Uses go-cdc-chunkers for shift-resilient data processing
-- **Format-Specific Processing**: Boundary-aware parsing for JSON, CSV, and YAML formats
+- **Format-Specific Processing**: Boundary-aware parsing for JSON, CSV, YAML, and NDJSON formats
+- **Collection Processing**: Automatic NDJSON detection with individual item extraction
 - **Schema Detection**: Pattern-based detection integrated with CUE schema system
 - **Memory Management**: Configurable limits with backpressure control
 - **Progress Reporting**: Real-time throughput and processing statistics
@@ -229,8 +354,13 @@ PUDL organizes your data in a structured workspace:
 ├── config.yaml              # PUDL configuration
 ├── schema/                   # Git repository for schemas
 │   ├── aws/                 # AWS resource schemas
+│   │   ├── batch.cue       # Batch job definitions, compute environments
+│   │   ├── security.cue    # Security groups, secrets, IAM policies
+│   │   ├── ml.cue          # SageMaker models, generic AWS resources
 │   │   ├── ec2.cue         # EC2 instance schema
 │   │   └── rds-instance.cue # RDS instance schema
+│   ├── collections/         # Collection schemas (NEW!)
+│   │   └── collections.cue  # Collection types and item schemas
 │   ├── k8s/                 # Kubernetes schemas
 │   │   └── resources.cue    # Pod, Service, etc.
 │   ├── custom/              # Custom schemas
@@ -259,12 +389,17 @@ catalog_entries (
     stored_path,           -- Path to raw data file
     metadata_path,         -- Path to metadata file
     import_timestamp,      -- When data was imported
-    format,               -- File format (json, yaml, csv)
+    format,               -- File format (json, yaml, csv, ndjson)
     origin,               -- Data source/origin
     schema,               -- Assigned CUE schema
     confidence,           -- Schema assignment confidence
     record_count,         -- Number of records in file
     size_bytes,           -- File size in bytes
+    -- Collection support fields (NEW!)
+    collection_id,        -- Parent collection ID (NULL for standalone items)
+    item_index,           -- Position in collection (NULL for collections)
+    collection_type,      -- 'collection', 'item', or NULL
+    item_id,              -- Unique identifier for collection items
     created_at,           -- Database entry creation time
     updated_at            -- Last update time
 )
@@ -275,7 +410,9 @@ catalog_entries (
 **Optimized Indexing**:
 - Schema-based queries: `pudl list --schema aws`
 - Origin filtering: `pudl list --origin k8s-pods`
-- Format filtering: `pudl list --format json`
+- Format filtering: `pudl list --format json` or `--format ndjson`
+- Collection queries: `pudl list --collection-id my-collection`
+- Collection type filtering: `pudl list --collections-only` or `--items-only`
 - Size-based sorting: `pudl list --sort-by size --reverse`
 - Timestamp queries: Fast chronological listing
 
@@ -323,6 +460,8 @@ pudl list
 # Fast filtering with database indexes
 pudl list --schema aws.#EC2Instance          # Find all EC2 instances
 pudl list --origin k8s --format yaml         # Kubernetes YAML files
+pudl list --collections-only                 # Show only collections
+pudl list --collection-id my-inventory       # Items from specific collection
 pudl list --sort-by size --reverse --limit 5 # 5 largest files
 
 # Performance scales with dataset size
@@ -402,6 +541,38 @@ pudl list --schema aws --verbose
 pudl show 20250825_222545_aws-ec2-describe-instances --raw
 ```
 
+### Work with NDJSON Collections
+```bash
+# Import cloud inventory NDJSON file
+pudl import --path cloud-inventory-2024.json
+# Output: Detected format: ndjson
+#         Created collection with 832 items
+
+# View the collection
+pudl list --collections-only
+# Shows: cloud-inventory-2024 [collections.#CloudInventoryCollection] 📦
+
+# Explore items in the collection
+pudl list --collection-id cloud-inventory-2024 --limit 5
+# Shows individual AWS resources with collection references
+
+# Find specific resource types within the collection
+pudl list --collection-id cloud-inventory-2024 --schema aws.#SecurityGroup
+# Shows: 16 security groups from the collection
+
+# Cross-collection analysis
+pudl list --schema aws.#BatchJobDefinition
+# Shows: All batch job definitions across all collections
+
+# Show individual item from collection
+pudl show cloud-inventory-2024_item_0
+# Shows: Detailed view of first item in collection
+
+# Import large NDJSON with streaming
+pudl import --path enterprise-logs.json --streaming
+# Efficiently processes large NDJSON files as collections
+```
+
 ### Manage Custom Schemas
 ```bash
 # Create a custom schema file (my-api.cue)
@@ -459,8 +630,14 @@ pudl list --schema aws.#EC2Instance          # All EC2 instances
 pudl list --origin k8s-pods --format yaml    # Kubernetes YAML files
 pudl list --schema aws --sort-by size        # AWS resources by size
 
+# Collection-specific queries
+pudl list --collections-only --format ndjson # All NDJSON collections
+pudl list --collection-id inventory-2024     # Items from specific collection
+pudl list --items-only --schema aws.#Secret  # All secrets across collections
+
 # Complex queries remain fast
 pudl list --schema aws --origin ec2 --sort-by timestamp --limit 10
+pudl list --collection-id my-logs --schema aws.#IAMPolicy --verbose
 
 # Instant response even with large catalogs
 pudl list                                    # All entries, any size catalog
