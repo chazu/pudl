@@ -9,6 +9,7 @@ import (
 	"pudl/internal/config"
 	"pudl/internal/errors"
 	"pudl/internal/lister"
+	"pudl/internal/ui"
 )
 
 var (
@@ -24,6 +25,7 @@ var (
 	listItemID        string
 	listCollectionsOnly bool
 	listItemsOnly     bool
+	listFancy         bool
 )
 
 // listCmd represents the list command
@@ -50,6 +52,7 @@ Display Options:
 - --limit: Limit number of results (default: 50)
 - --sort-by: Sort by field (timestamp, size, records, schema, origin)
 - --reverse: Reverse sort order
+- --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
 Examples:
     pudl list                                    # List all imported data
@@ -60,7 +63,8 @@ Examples:
     pudl list --items-only                      # Show only individual items
     pudl list --collection-id my-collection     # Show items from specific collection
     pudl list --sort-by size --reverse          # List by size, largest first
-    pudl list --limit 10                        # Show only first 10 entries`,
+    pudl list --limit 10                        # Show only first 10 entries
+    pudl list --fancy                           # Interactive list with filtering and detailed view`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
 		errorHandler := errors.NewCLIErrorHandler(true)
@@ -117,45 +121,51 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-		// Display summary
-		fmt.Printf("Found %d entries", len(results.Entries))
-		if results.TotalEntries > len(results.Entries) {
-			fmt.Printf(" (showing %d of %d total)", len(results.Entries), results.TotalEntries)
-		}
-		fmt.Println()
+	// Use fancy bubbletea UI if requested
+	if listFancy {
+		return ui.RunInteractiveList(results.Entries, listVerbose)
+	}
 
-		// Display filters if any are active
-		activeFilters := []string{}
-		if listSchema != "" {
-			activeFilters = append(activeFilters, fmt.Sprintf("schema=%s", listSchema))
-		}
-		if listOrigin != "" {
-			activeFilters = append(activeFilters, fmt.Sprintf("origin=%s", listOrigin))
-		}
-		if listFormat != "" {
-			activeFilters = append(activeFilters, fmt.Sprintf("format=%s", listFormat))
-		}
-		if listCollectionID != "" {
-			activeFilters = append(activeFilters, fmt.Sprintf("collection-id=%s", listCollectionID))
-		}
-		if listItemID != "" {
-			activeFilters = append(activeFilters, fmt.Sprintf("item-id=%s", listItemID))
-		}
-		if listCollectionsOnly {
-			activeFilters = append(activeFilters, "collections-only")
-		}
-		if listItemsOnly {
-			activeFilters = append(activeFilters, "items-only")
-		}
-		if len(activeFilters) > 0 {
-			fmt.Printf("Filters: %s\n", strings.Join(activeFilters, ", "))
-		}
-		fmt.Println()
+	// Traditional text output
+	// Display summary
+	fmt.Printf("Found %d entries", len(results.Entries))
+	if results.TotalEntries > len(results.Entries) {
+		fmt.Printf(" (showing %d of %d total)", len(results.Entries), results.TotalEntries)
+	}
+	fmt.Println()
 
-		// Display entries
-		for i, entry := range results.Entries {
-			displayEntry(entry, listVerbose, i+1)
-		}
+	// Display filters if any are active
+	activeFilters := []string{}
+	if listSchema != "" {
+		activeFilters = append(activeFilters, fmt.Sprintf("schema=%s", listSchema))
+	}
+	if listOrigin != "" {
+		activeFilters = append(activeFilters, fmt.Sprintf("origin=%s", listOrigin))
+	}
+	if listFormat != "" {
+		activeFilters = append(activeFilters, fmt.Sprintf("format=%s", listFormat))
+	}
+	if listCollectionID != "" {
+		activeFilters = append(activeFilters, fmt.Sprintf("collection-id=%s", listCollectionID))
+	}
+	if listItemID != "" {
+		activeFilters = append(activeFilters, fmt.Sprintf("item-id=%s", listItemID))
+	}
+	if listCollectionsOnly {
+		activeFilters = append(activeFilters, "collections-only")
+	}
+	if listItemsOnly {
+		activeFilters = append(activeFilters, "items-only")
+	}
+	if len(activeFilters) > 0 {
+		fmt.Printf("Filters: %s\n", strings.Join(activeFilters, ", "))
+	}
+	fmt.Println()
+
+	// Display entries
+	for i, entry := range results.Entries {
+		displayEntry(entry, listVerbose, i+1)
+	}
 
 	// Display summary statistics
 	if listVerbose {
@@ -198,6 +208,9 @@ func init() {
 	listCmd.Flags().StringVar(&listItemID, "item-id", "", "Filter by item ID")
 	listCmd.Flags().BoolVar(&listCollectionsOnly, "collections-only", false, "Show only collections")
 	listCmd.Flags().BoolVar(&listItemsOnly, "items-only", false, "Show only individual items")
+
+	// UI flags
+	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")
 
 	// Make collections-only and items-only mutually exclusive
 	listCmd.MarkFlagsMutuallyExclusive("collections-only", "items-only")

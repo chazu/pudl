@@ -112,9 +112,10 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 
 	// Show metadata if requested
 	if includeMetadata {
-		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+		separator := strings.Repeat("=", 60)
+		fmt.Printf("\n%s\n", separator)
 		fmt.Printf("METADATA\n")
-		fmt.Printf(strings.Repeat("=", 60) + "\n")
+		fmt.Printf("%s\n", separator)
 
 		metadataContent, err := os.ReadFile(entry.MetadataPath)
 		if err != nil {
@@ -138,9 +139,10 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 
 	// Show raw data if requested
 	if includeRaw {
-		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
+		separator := strings.Repeat("=", 60)
+		fmt.Printf("\n%s\n", separator)
 		fmt.Printf("RAW DATA\n")
-		fmt.Printf(strings.Repeat("=", 60) + "\n")
+		fmt.Printf("%s\n", separator)
 
 		rawContent, err := os.ReadFile(entry.StoredPath)
 		if err != nil {
