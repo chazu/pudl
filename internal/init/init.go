@@ -143,8 +143,8 @@ This directory contains CUE schema definitions for your PUDL data lake, organize
 
 This repository includes access to curated third-party schemas:
 
-- **cue.dev/x/k8s.io** - Kubernetes API schemas for all resource types
-- More modules can be added using ` + "`cue mod tidy`" + ` or PUDL module commands
+- **cue.dev/x/k8s.io** - Complete Kubernetes API schemas for all resource types (included by default)
+- Additional modules can be added using ` + "`pudl module add <module>`" + ` or ` + "`cue mod get <module>`" + `
 
 ## Usage
 
@@ -236,20 +236,19 @@ func initCUEModule(schemaDir string, verbose bool) error {
 		return nil
 	}
 
-	// Create module.cue file with proper structure (no dependencies initially)
+	// Create module.cue file with Kubernetes schemas dependency
 	moduleContent := `language: version: "v0.14.0"
 
 module: "pudl.schemas@v0"
 
-// Third-party dependencies can be added here
-// Example:
-// deps: {
-//     "cue.dev/x/k8s.io@v0": v: "v0.1.0"
-// }
+// Third-party dependencies for comprehensive schema support
+deps: {
+    "cue.dev/x/k8s.io@v0": v: "v0.1.0"
+}
 
 source: kind: "self"
 
-description: "PUDL Schema Repository - CUE schemas for data lake validation and processing"
+description: "PUDL Schema Repository - CUE schemas for data lake validation and processing with Kubernetes API support"
 `
 
 	if err := os.WriteFile(moduleCuePath, []byte(moduleContent), 0644); err != nil {
@@ -350,17 +349,47 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	}
 }
 
-// Example 3: How to use third-party modules (when available)
-// Uncomment and modify when third-party modules are added to deps:
-//
-// import apps "cue.dev/x/k8s.io/api/apps/v1"
-//
-// #ThirdPartyKubernetesResource: apps.#Deployment & {
-//     _pudl: {
-//         schema_type: "kubernetes"
-//         resource_type: "deployment"
-//     }
-// }
+// Example 3: Using official Kubernetes schemas from cue.dev/x/k8s.io
+import (
+    apps "cue.dev/x/k8s.io/api/apps/v1"
+    core "cue.dev/x/k8s.io/api/core/v1"
+)
+
+// Extend official Kubernetes Deployment with PUDL metadata
+#KubernetesDeployment: apps.#Deployment & {
+    _pudl: {
+        schema_type: "kubernetes"
+        resource_type: "k8s.apps.deployment"
+        cascade_priority: 95
+        identity_fields: ["metadata.name", "metadata.namespace"]
+        tracked_fields: ["spec.replicas", "status.readyReplicas"]
+        compliance_level: "strict"
+    }
+}
+
+// Extend official Kubernetes Pod with PUDL metadata
+#KubernetesPod: core.#Pod & {
+    _pudl: {
+        schema_type: "kubernetes"
+        resource_type: "k8s.core.pod"
+        cascade_priority: 95
+        identity_fields: ["metadata.name", "metadata.namespace"]
+        tracked_fields: ["status.phase", "spec.containers"]
+        compliance_level: "strict"
+    }
+}
+
+// Extend official Kubernetes Service with PUDL metadata
+#KubernetesService: core.#Service & {
+    _pudl: {
+        schema_type: "kubernetes"
+        resource_type: "k8s.core.service"
+        cascade_priority: 95
+        identity_fields: ["metadata.name", "metadata.namespace"]
+        tracked_fields: ["spec.type", "spec.ports", "spec.selector"]
+        compliance_level: "strict"
+    }
+}
 `
 
 	examplePath := filepath.Join(examplesDir, "kubernetes.cue")
@@ -370,9 +399,10 @@ exampleDeployment: #BasicKubernetesDeployment & {
 
 	if verbose {
 		fmt.Printf("✅ CUE module initialized in %s\n", schemaDir)
-		fmt.Println("   - Third-party dependencies: cue.dev/x/k8s.io")
-		fmt.Println("   - Local schemas: pudl/")
-		fmt.Println("   - Examples: examples/")
+		fmt.Println("   - Third-party dependencies: cue.dev/x/k8s.io (complete Kubernetes API schemas)")
+		fmt.Println("   - Local schemas: pudl/ (AWS, custom schemas)")
+		fmt.Println("   - Examples: examples/ (usage patterns and integrations)")
+		fmt.Println("   - Run 'pudl module tidy' to fetch dependencies")
 	}
 
 	return nil

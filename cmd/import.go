@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -25,7 +26,7 @@ var (
 
 // importCmd represents the import command
 var importCmd = &cobra.Command{
-	Use:   "import --path <file>",
+	Use:   "import --path <file-or-pattern>",
 	Short: "Import data into PUDL data lake",
 	Long: `Import data from files into the PUDL data lake with automatic format detection
 and schema assignment.
@@ -34,6 +35,10 @@ This command imports data from various formats (JSON, YAML, CSV) and stores it
 in the PUDL data lake with full metadata tracking. The data is stored in raw
 format with timestamp-based naming and metadata that includes schema assignment
 via the Zygomys rule engine.
+
+The --path flag supports both single files and wildcard patterns for batch imports:
+- Single file: --path data.json
+- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
 
 Data Storage:
 - Raw data: ~/.pudl/data/raw/YYYY/MM/DD/YYYYMMDD_HHMMSS_origin.ext
@@ -57,9 +62,17 @@ Streaming Support:
 - Enables processing of files larger than available RAM
 
 Example usage:
+    # Single file import
     pudl import --path data.json
     pudl import --path aws-instances.json --schema aws.compliant-ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
+
+    # Wildcard batch import
+    pudl import --path *.json
+    pudl import --path data/*.yaml
+    pudl import --path logs/2024-01-*.json --streaming
+
+    # Advanced options
     pudl import --path large-dataset.json --streaming --streaming-memory 200
     pudl import --path data.json --use-zygomys`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -86,16 +99,23 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewMissingRequiredError("path")
 	}
 
-	// Validate file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return errors.NewFileNotFoundError(filePath)
+	// Resolve file paths (handles both single files and wildcard patterns)
+	filePaths, err := resolveFilePaths(filePath)
+	if err != nil {
+		return err
 	}
 
-	// Get absolute path
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to get absolute path", err)
+	if len(filePaths) == 0 {
+		return errors.NewFileNotFoundError(filePath + " (no files matched pattern)")
 	}
+
+	// If multiple files, perform batch import
+	if len(filePaths) > 1 {
+		return runBatchImport(cmd, filePaths)
+	}
+
+	// Single file import (existing logic)
+	absPath := filePaths[0]
 
 	// Load configuration to get data directory
 	cfg, err := config.Load()
@@ -103,10 +123,10 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
-	// Create importer and validator
-	imp, err := importer.New(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	// Create enhanced importer with friendly ID support
+	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
 	if err != nil {
-		return errors.NewSystemError("Failed to initialize importer", err)
+		return errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
 	defer imp.Close()
 
@@ -177,8 +197,8 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		StreamingConfig:  streamingConfig,
 	}
 
-	// Perform the import
-	result, err := imp.ImportFile(opts)
+	// Perform the import with friendly IDs
+	result, err := imp.ImportFileWithFriendlyIDs(opts)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
 	}
@@ -192,7 +212,7 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 
 	// Add flags
-	importCmd.Flags().StringP("path", "p", "", "Path to file to import (required)")
+	importCmd.Flags().StringP("path", "p", "", "Path to file or wildcard pattern to import (required)")
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 
@@ -261,5 +281,181 @@ func displayImportResults(result *importer.ImportResult) {
 		fmt.Println("💡 Next steps:")
 		fmt.Println("   - Review compliance issues: pudl show " + result.ID + " --validation")
 		fmt.Println("   - List similar outliers: pudl list --schema " + result.ValidationResult.AssignedSchema + " --compliance non-compliant")
+	}
+}
+
+// resolveFilePaths resolves a file path that may contain wildcards to a list of actual file paths
+func resolveFilePaths(pathPattern string) ([]string, error) {
+	// Check if the path contains wildcard characters
+	if !containsWildcard(pathPattern) {
+		// Single file path - validate it exists
+		if _, err := os.Stat(pathPattern); os.IsNotExist(err) {
+			return nil, errors.NewFileNotFoundError(pathPattern)
+		}
+
+		// Get absolute path
+		absPath, err := filepath.Abs(pathPattern)
+		if err != nil {
+			return nil, errors.WrapError(errors.ErrCodeFileSystem, "Failed to get absolute path", err)
+		}
+
+		return []string{absPath}, nil
+	}
+
+	// Wildcard pattern - use filepath.Glob to resolve
+	matches, err := filepath.Glob(pathPattern)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "Invalid wildcard pattern", err)
+	}
+
+	// Convert to absolute paths and filter out directories
+	var filePaths []string
+	for _, match := range matches {
+		info, err := os.Stat(match)
+		if err != nil {
+			continue // Skip files that can't be accessed
+		}
+
+		// Only include regular files, not directories
+		if info.Mode().IsRegular() {
+			absPath, err := filepath.Abs(match)
+			if err != nil {
+				continue // Skip files where we can't get absolute path
+			}
+			filePaths = append(filePaths, absPath)
+		}
+	}
+
+	return filePaths, nil
+}
+
+// containsWildcard checks if a path contains wildcard characters
+func containsWildcard(path string) bool {
+	return strings.ContainsAny(path, "*?[]")
+}
+
+// runBatchImport handles importing multiple files and provides summary output
+func runBatchImport(cmd *cobra.Command, filePaths []string) error {
+	fmt.Printf("🔄 Importing %d files...\n\n", len(filePaths))
+
+	// Load configuration to get data directory
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewConfigError("Failed to load configuration", err)
+	}
+
+	// Create enhanced importer with friendly ID support
+	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	if err != nil {
+		return errors.NewSystemError("Failed to initialize enhanced importer", err)
+	}
+	defer imp.Close()
+
+	// Override rule engine if --use-zygomys flag is set
+	if useZygomys {
+		if err := imp.OverrideRuleEngine("zygomys"); err != nil {
+			return errors.NewSystemError("Failed to override rule engine to Zygomys", err)
+		}
+	}
+
+	// Set up cascade validator if schema is specified
+	var cascadeValidator *validator.CascadeValidator
+	if importSchema != "" {
+		cascadeValidator, err = validator.NewCascadeValidator(cfg.SchemaPath)
+		if err != nil {
+			return errors.NewSystemError("Failed to initialize cascade validator", err)
+		}
+	}
+
+	// Set up streaming configuration
+	streamingConfig := &streaming.StreamingConfig{
+		ChunkAlgorithm:   "fastcdc",
+		MinChunkSize:     4096,
+		MaxChunkSize:     65536,
+		AvgChunkSize:     int(streamingChunkMB * 1024 * 1024), // Convert MB to bytes
+		MaxMemoryMB:      streamingMemoryMB,
+		BufferSize:       1048576, // 1MB
+		ErrorTolerance:   0.1,
+		SkipMalformed:    true,
+		SampleSize:       100,
+		Confidence:       0.8,
+		ReportEveryMB:    1,
+		MaxConcurrency:   0,
+	}
+
+	// Track results and errors
+	var results []*importer.ImportResult
+	var importErrors []error
+	successCount := 0
+	totalRecords := 0
+	totalSize := int64(0)
+
+	// Import each file
+	for i, filePath := range filePaths {
+		fmt.Printf("📁 [%d/%d] Importing: %s\n", i+1, len(filePaths), filepath.Base(filePath))
+
+		// Set up import options for this file
+		opts := importer.ImportOptions{
+			SourcePath:        filePath,
+			Origin:           importOrigin, // Will be auto-detected if empty
+			ManualSchema:     importSchema,
+			CascadeValidator: cascadeValidator,
+			UseStreaming:     useStreaming,
+			StreamingConfig:  streamingConfig,
+		}
+
+		// Perform the import
+		result, err := imp.ImportFileWithFriendlyIDs(opts)
+		if err != nil {
+			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))
+			fmt.Printf("   ❌ Failed: %v\n", err)
+			continue
+		}
+
+		// Track successful import
+		results = append(results, result)
+		successCount++
+		totalRecords += result.RecordCount
+		totalSize += result.SizeBytes
+
+		fmt.Printf("   ✅ Success: %s (ID: %s, Records: %d)\n", result.DetectedFormat, result.ID, result.RecordCount)
+	}
+
+	// Display summary
+	displayBatchImportSummary(successCount, len(filePaths), totalRecords, totalSize, importErrors)
+
+	// If there were any errors, return the first one
+	if len(importErrors) > 0 {
+		return importErrors[0]
+	}
+
+	return nil
+}
+
+// displayBatchImportSummary shows a summary of batch import results
+func displayBatchImportSummary(successCount, totalCount, totalRecords int, totalSize int64, importErrors []error) {
+	fmt.Println()
+	fmt.Printf("📊 Batch Import Summary\n")
+	fmt.Printf("   Files processed: %d/%d\n", successCount, totalCount)
+	fmt.Printf("   Total records: %d\n", totalRecords)
+	fmt.Printf("   Total size: %d bytes\n", totalSize)
+
+	if len(importErrors) > 0 {
+		fmt.Printf("   Errors: %d\n", len(importErrors))
+		fmt.Println()
+		fmt.Println("❌ Import Errors:")
+		for _, err := range importErrors {
+			fmt.Printf("   - %v\n", err)
+		}
+	}
+
+	if successCount > 0 {
+		fmt.Println()
+		fmt.Println("✅ Batch import completed!")
+		if successCount < totalCount {
+			fmt.Printf("   %d files imported successfully, %d failed\n", successCount, totalCount-successCount)
+		} else {
+			fmt.Printf("   All %d files imported successfully\n", successCount)
+		}
 	}
 }

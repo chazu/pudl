@@ -20,7 +20,7 @@ func NewLegacyRuleEngine() RuleEngine {
 			Name:        "Legacy",
 			Version:     "1.0.0",
 			Description: "Hard-coded rule engine with AWS, K8s, and generic detection rules",
-			RuleCount:   7, // Number of hard-coded rule patterns
+			RuleCount:   15, // Updated count: AWS (EC2, S3, API), K8s (Pod + 8 specific types), Generic patterns
 		},
 	}
 }
@@ -127,14 +127,43 @@ func (e *LegacyRuleEngine) AssignSchema(ctx context.Context, data interface{}, o
 		}
 		
 		if kind, exists := dataMap["kind"].(string); exists {
+			// Map specific Kubernetes resources to their PUDL schemas
+			var schema string
+			var confidence float64
+			var ruleName string
+
+			switch kind {
+			case "Service":
+				schema, confidence, ruleName = "k8s.#Service", 0.95, "k8s-service"
+			case "Deployment":
+				schema, confidence, ruleName = "k8s.#Deployment", 0.95, "k8s-deployment"
+			case "StatefulSet":
+				schema, confidence, ruleName = "k8s.#StatefulSet", 0.95, "k8s-statefulset"
+			case "DaemonSet":
+				schema, confidence, ruleName = "k8s.#DaemonSet", 0.95, "k8s-daemonset"
+			case "ConfigMap":
+				schema, confidence, ruleName = "k8s.#ConfigMap", 0.95, "k8s-configmap"
+			case "Secret":
+				schema, confidence, ruleName = "k8s.#Secret", 0.95, "k8s-secret"
+			case "Ingress":
+				schema, confidence, ruleName = "k8s.#Ingress", 0.95, "k8s-ingress"
+			case "Job":
+				schema, confidence, ruleName = "k8s.#Job", 0.95, "k8s-job"
+			case "CronJob":
+				schema, confidence, ruleName = "k8s.#CronJob", 0.95, "k8s-cronjob"
+			default:
+				schema, confidence, ruleName = "k8s.#Resource", 0.8, "k8s-resource-by-kind"
+			}
+
 			return &Result{
-				Schema:     "k8s.#" + kind,
-				Confidence: 0.9,
-				RuleName:   "k8s-resource-by-kind",
+				Schema:     schema,
+				Confidence: confidence,
+				RuleName:   ruleName,
 				Duration:   time.Since(start),
 				Metadata: map[string]interface{}{
 					"detected_fields": []string{"kind", "apiVersion", "metadata"},
-					"kind":           kind,
+					"kind":            kind,
+					"apiVersion":      dataMap["apiVersion"],
 				},
 			}, nil
 		}

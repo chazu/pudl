@@ -1,10 +1,10 @@
 package importer
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"pudl/internal/config"
@@ -22,9 +22,9 @@ type EnhancedImporter struct {
 }
 
 // NewEnhancedImporter creates a new enhanced importer with friendly ID support
-func NewEnhancedImporter(dataPath, schemaPath, configDir string, catalogDB *database.CatalogDB) (*EnhancedImporter, error) {
+func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImporter, error) {
 	// Create base importer
-	baseImporter, err := NewImporter(dataPath, schemaPath, catalogDB)
+	baseImporter, err := New(dataPath, schemaPath, configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base importer: %w", err)
 	}
@@ -78,10 +78,23 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	}
 	
 	// Get ID configuration for this origin
+	// First try the configuration file, then fall back to smart detection
 	originConfig := idConfig.GetConfigForOrigin(origin)
-	
-	// Create ID manager for this specific import
-	idManager := idgen.NewImporterIDManager(originConfig)
+
+	// If we got the default config (no specific override), use smart detection
+	defaultConfig := idgen.IDConfig{
+		Format: idConfig.DefaultFormat,
+		Prefix: idConfig.GlobalPrefix,
+	}
+
+	var idManager *idgen.ImporterIDManager
+	if originConfig.Format == defaultConfig.Format && originConfig.Prefix == defaultConfig.Prefix {
+		// Use smart origin-based detection
+		idManager = idgen.NewImporterIDManagerFromOrigin(origin)
+	} else {
+		// Use configuration file override
+		idManager = idgen.NewImporterIDManager(originConfig)
+	}
 	
 	// Perform import with friendly IDs
 	return e.importWithFriendlyIDs(opts, idManager, origin)
@@ -155,7 +168,7 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 	}
 
 	// Assign schema
-	schema, confidence := e.assignSchema(data, opts)
+	schema, confidence := e.assignSchema(data, origin, format)
 
 	// Create metadata with friendly ID
 	metadata := ImportMetadata{
@@ -276,4 +289,181 @@ func (e *EnhancedImporter) UpdateIDConfiguration(config *config.IDGenerationConf
 // GetIDConfiguration returns the current ID generation configuration
 func (e *EnhancedImporter) GetIDConfiguration() *config.IDGenerationConfig {
 	return e.configManager.GetConfig()
+}
+
+// createCollectionEntryWithFriendlyIDs creates the main collection catalog entry with friendly IDs
+func (e *EnhancedImporter) createCollectionEntryWithFriendlyIDs(opts ImportOptions, idManager *idgen.ImporterIDManager, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
+	// Assign schema for collection - try collection-specific schemas first
+	schema := "pudl.schemas/collections/collections:#Collection"
+	confidence := 0.8
+
+	// Create metadata for collection
+	metadata := &ImportMetadata{
+		ID: collectionID,
+		SourceInfo: SourceInfo{
+			OriginalPath: opts.SourcePath,
+			Origin:       origin,
+			Confidence:   "high",
+		},
+		ImportMetadata: ImportMeta{
+			Format:      "ndjson",
+			RecordCount: recordCount,
+			SizeBytes:   fileInfo.Size(),
+			Timestamp:   timestamp.Format(time.RFC3339),
+		},
+		SchemaInfo: SchemaInfo{
+			CuePackage:       extractPackage(schema),
+			CueDefinition:    schema,
+			ValidationStatus: "auto-assigned",
+			CascadeLevel:     "auto",
+			ComplianceStatus: "unknown",
+			SchemaVersion:    "v1.0",
+		},
+		ResourceTracking: ResourceTracking{
+			IdentityFields: []string{"collection_id"},
+			TrackedFields:  []string{"item_count", "item_schemas"},
+		},
+	}
+
+	// Save collection metadata
+	metadataPath := filepath.Join(metadataDir, collectionID+".meta")
+	if err := e.saveMetadata(*metadata, metadataPath); err != nil {
+		return nil, fmt.Errorf("failed to save collection metadata: %w", err)
+	}
+
+	// Create collection catalog entry
+	collectionType := "collection"
+	entry := database.CatalogEntry{
+		ID:              metadata.ID,
+		StoredPath:      storedPath,
+		MetadataPath:    metadataPath,
+		ImportTimestamp: timestamp,
+		Format:          "ndjson",
+		Origin:          origin,
+		Schema:          schema,
+		Confidence:      confidence,
+		RecordCount:     recordCount,
+		SizeBytes:       fileInfo.Size(),
+		CollectionID:    nil, // Collections don't have parent collections
+		ItemIndex:       nil, // Collections don't have item index
+		CollectionType:  &collectionType,
+		ItemID:          nil, // Collections don't have item IDs
+	}
+
+	// Add to database
+	if err := e.catalogDB.AddEntry(entry); err != nil {
+		return nil, fmt.Errorf("failed to add collection to catalog: %w", err)
+	}
+
+	// Return result
+	return &ImportResult{
+		ID:               metadata.ID,
+		SourcePath:       opts.SourcePath,
+		StoredPath:       storedPath,
+		MetadataPath:     metadataPath,
+		DetectedFormat:   "ndjson",
+		DetectedOrigin:   origin,
+		AssignedSchema:   schema,
+		SchemaConfidence: confidence,
+		RecordCount:      recordCount,
+		SizeBytes:        fileInfo.Size(),
+		ImportTimestamp:  timestamp.Format(time.RFC3339),
+		ValidationResult: nil, // Collections don't have individual validation results
+	}, nil
+}
+
+// createCollectionItemsWithFriendlyIDs creates individual catalog entries for each item in the collection with friendly IDs
+func (e *EnhancedImporter) createCollectionItemsWithFriendlyIDs(collectionID string, data interface{}, idManager *idgen.ImporterIDManager, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+	items, ok := data.([]interface{})
+	if !ok {
+		return fmt.Errorf("expected array of items for collection, got %T", data)
+	}
+
+	for index, item := range items {
+		if err := e.createCollectionItemWithFriendlyIDs(collectionID, item, index, idManager, timestamp, rawDir, metadataDir, opts); err != nil {
+			// Log error but continue with other items
+			fmt.Printf("Warning: failed to create collection item %d: %v\n", index, err)
+		}
+	}
+
+	return nil
+}
+
+// createCollectionItemWithFriendlyIDs creates a single collection item entry with friendly IDs
+func (e *EnhancedImporter) createCollectionItemWithFriendlyIDs(collectionID string, itemData interface{}, index int, idManager *idgen.ImporterIDManager, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+	// Generate friendly item ID
+	itemID := idManager.GenerateItemID(collectionID, index, itemData)
+
+	// Create filename for individual item
+	itemFilename := fmt.Sprintf("%s_item_%d", collectionID, index)
+	itemPath := filepath.Join(rawDir, itemFilename+".json")
+
+	// Save individual item as JSON
+	itemJSON, err := json.MarshalIndent(itemData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal item data: %w", err)
+	}
+
+	if err := os.WriteFile(itemPath, itemJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write item file: %w", err)
+	}
+
+	// Assign schema to item
+	schema, confidence := e.assignItemSchema(itemData, opts)
+
+	// Create item metadata
+	itemMetadata := &ImportMetadata{
+		ID: itemID,
+		SourceInfo: SourceInfo{
+			OriginalPath: opts.SourcePath,
+			Origin:       fmt.Sprintf("%s_item_%d", collectionID, index),
+			Confidence:   "high",
+		},
+		ImportMetadata: ImportMeta{
+			Format:      "json",
+			RecordCount: 1,
+			SizeBytes:   int64(len(itemJSON)),
+			Timestamp:   timestamp.Format(time.RFC3339),
+		},
+		SchemaInfo: SchemaInfo{
+			CuePackage:       extractPackage(schema),
+			CueDefinition:    schema,
+			ValidationStatus: "auto-assigned",
+			CascadeLevel:     "auto",
+			ComplianceStatus: "unknown",
+			SchemaVersion:    "v1.0",
+		},
+		ResourceTracking: ResourceTracking{
+			IdentityFields: []string{"item_id"},
+			TrackedFields:  []string{"item_data"},
+		},
+	}
+
+	// Save item metadata
+	itemMetadataPath := filepath.Join(metadataDir, itemFilename+".meta")
+	if err := e.saveMetadata(*itemMetadata, itemMetadataPath); err != nil {
+		return fmt.Errorf("failed to save item metadata: %w", err)
+	}
+
+	// Create catalog entry for item
+	collectionType := "item"
+	entry := database.CatalogEntry{
+		ID:              itemID,
+		StoredPath:      itemPath,
+		MetadataPath:    itemMetadataPath,
+		ImportTimestamp: timestamp,
+		Format:          "json",
+		Origin:          fmt.Sprintf("%s_item_%d", collectionID, index),
+		Schema:          schema,
+		Confidence:      confidence,
+		RecordCount:     1,
+		SizeBytes:       int64(len(itemJSON)),
+		CollectionID:    &collectionID,
+		ItemIndex:       &index,
+		CollectionType:  &collectionType,
+		ItemID:          &itemID,
+	}
+
+	// Add to database
+	return e.catalogDB.AddEntry(entry)
 }
