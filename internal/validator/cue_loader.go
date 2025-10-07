@@ -34,16 +34,18 @@ type LoadedModule struct {
 
 // LoadAllModules loads all CUE modules from the schema directory
 // This method properly handles the new CUE module structure with hierarchical imports
+// and third-party dependencies
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
 	modules := make(map[string]*LoadedModule)
 
 	// Load the entire CUE module from the schema root
-	// This handles all packages and their cross-references automatically
+	// This handles all packages and their cross-references automatically,
+	// including third-party dependencies from the module cache
 	config := &load.Config{
 		Dir: loader.schemaPath,
 	}
 
-	// Load all packages in the module
+	// Load all packages in the module (including third-party dependencies)
 	instances := load.Instances([]string{"./..."}, config)
 	if len(instances) == 0 {
 		return nil, fmt.Errorf("no CUE instances found in schema module")

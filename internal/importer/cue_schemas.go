@@ -7,11 +7,12 @@ import (
 
 // createBasicSchemas creates basic CUE schema files in the schema directory
 func (i *Importer) createBasicSchemas() error {
-	// Create schema directories
-	unknownDir := filepath.Join(i.schemaPath, "unknown")
-	awsDir := filepath.Join(i.schemaPath, "aws")
-	k8sDir := filepath.Join(i.schemaPath, "k8s")
-	collectionsDir := filepath.Join(i.schemaPath, "collections")
+	// Create schema directories under pudl/ for local schemas
+	pudlDir := filepath.Join(i.schemaPath, "pudl")
+	unknownDir := filepath.Join(pudlDir, "unknown")
+	awsDir := filepath.Join(pudlDir, "aws")
+	k8sDir := filepath.Join(pudlDir, "k8s")
+	collectionsDir := filepath.Join(pudlDir, "collections")
 
 	for _, dir := range []string{unknownDir, awsDir, k8sDir, collectionsDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
