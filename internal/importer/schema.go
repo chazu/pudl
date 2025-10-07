@@ -48,15 +48,59 @@ func (i *Importer) assignSchema(data interface{}, origin, format string) (string
 		return "aws.#S3Bucket", 0.9
 	}
 
-	// Kubernetes Pod detection
+	// Kubernetes resource detection with enhanced schema mapping
 	if i.hasFields(dataMap, []string{"kind", "apiVersion", "metadata"}) {
-		if kind, exists := dataMap["kind"].(string); exists && kind == "Pod" {
-			return "k8s.#Pod", 0.95
-		}
 		if kind, exists := dataMap["kind"].(string); exists {
-			return "k8s.#" + kind, 0.9
+			// Map specific Kubernetes resources to their PUDL schemas
+			switch kind {
+			case "Pod":
+				return "k8s.#Pod", 0.95
+			case "Service":
+				return "k8s.#Service", 0.95
+			case "Deployment":
+				return "k8s.#Deployment", 0.95
+			case "StatefulSet":
+				return "k8s.#StatefulSet", 0.95
+			case "DaemonSet":
+				return "k8s.#DaemonSet", 0.95
+			case "ReplicaSet":
+				return "k8s.#ReplicaSet", 0.95
+			case "ConfigMap":
+				return "k8s.#ConfigMap", 0.95
+			case "Secret":
+				return "k8s.#Secret", 0.95
+			case "PersistentVolume":
+				return "k8s.#PersistentVolume", 0.95
+			case "PersistentVolumeClaim":
+				return "k8s.#PersistentVolumeClaim", 0.95
+			case "Ingress":
+				return "k8s.#Ingress", 0.95
+			case "NetworkPolicy":
+				return "k8s.#NetworkPolicy", 0.95
+			case "Role":
+				return "k8s.#Role", 0.95
+			case "ClusterRole":
+				return "k8s.#ClusterRole", 0.95
+			case "RoleBinding":
+				return "k8s.#RoleBinding", 0.95
+			case "ClusterRoleBinding":
+				return "k8s.#ClusterRoleBinding", 0.95
+			case "ServiceAccount":
+				return "k8s.#ServiceAccount", 0.95
+			case "Job":
+				return "k8s.#Job", 0.95
+			case "CronJob":
+				return "k8s.#CronJob", 0.95
+			case "HorizontalPodAutoscaler":
+				return "k8s.#HorizontalPodAutoscaler", 0.95
+			case "StorageClass":
+				return "k8s.#StorageClass", 0.95
+			default:
+				// Generic Kubernetes resource for unknown kinds
+				return "k8s.#Resource", 0.8
+			}
 		}
-		return "k8s.#Resource", 0.8
+		return "k8s.#Resource", 0.7
 	}
 
 	// AWS API Response pattern

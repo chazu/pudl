@@ -25,6 +25,8 @@ type Model struct {
 	height       int
 	showHelp     bool
 	verbose      bool
+	showingDetail bool
+	detailContent string
 }
 
 // NewModel creates a new list model
@@ -71,10 +73,12 @@ func NewModel(entries []lister.ListEntry, verbose bool) Model {
 	}
 
 	return Model{
-		list:     l,
-		entries:  entries,
-		verbose:  verbose,
-		showHelp: false,
+		list:          l,
+		entries:       entries,
+		verbose:       verbose,
+		showHelp:      false,
+		showingDetail: false,
+		detailContent: "",
 	}
 }
 
@@ -94,6 +98,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle detail view keys
+		if m.showingDetail {
+			switch msg.String() {
+			case "ctrl+c", "q":
+				m.quitting = true
+				return m, tea.Quit
+			default:
+				// Any other key returns to list view
+				m.showingDetail = false
+				m.detailContent = ""
+				return m, nil
+			}
+		}
+
+		// Handle list view keys
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
@@ -102,10 +121,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Show detailed view of selected item
 			if selectedItem, ok := m.list.SelectedItem().(ListItem); ok {
-				return m, tea.Sequence(
-					tea.Printf("%s", m.formatDetailedEntry(selectedItem.Entry)),
-					tea.Quit,
-				)
+				m.showingDetail = true
+				m.detailContent = m.formatDetailedEntry(selectedItem.Entry)
+				return m, nil
 			}
 
 		case "v":
@@ -143,6 +161,11 @@ func (m Model) View() string {
 
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
+	}
+
+	// Show detail view if in detail mode
+	if m.showingDetail {
+		return m.detailContent
 	}
 
 	// Main list view
