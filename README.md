@@ -201,6 +201,14 @@ PUDL includes specialized collection schemas:
 - `aws.security.#IAMPolicy` - IAM policies
 - `aws.ml.#SageMakerModel` - SageMaker models
 
+**Kubernetes Resource Schemas (Official API):**
+- `k8s.#Pod`, `k8s.#Service`, `k8s.#ConfigMap`, `k8s.#Secret` - Core resources
+- `k8s.#Deployment`, `k8s.#StatefulSet`, `k8s.#DaemonSet` - Workload resources
+- `k8s.#Ingress`, `k8s.#NetworkPolicy` - Networking resources
+- `k8s.#Role`, `k8s.#ClusterRole`, `k8s.#ServiceAccount` - RBAC resources
+- `k8s.#Job`, `k8s.#CronJob`, `k8s.#HorizontalPodAutoscaler` - Batch & scaling
+- All schemas extend official Kubernetes API definitions from `cue.dev/x/k8s.io`
+
 #### Advanced Collection Queries
 
 ```bash
