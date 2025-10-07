@@ -2,11 +2,10 @@ package validator
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/build"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
 )
@@ -34,106 +33,64 @@ type LoadedModule struct {
 }
 
 // LoadAllModules loads all CUE modules from the schema directory
-// This method properly handles cross-references within packages using CUE's load package
+// This method properly handles the new CUE module structure with hierarchical imports
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
 	modules := make(map[string]*LoadedModule)
 
-	// Discover all package directories
-	packageDirs, err := loader.discoverPackageDirectories()
-	if err != nil {
-		return nil, fmt.Errorf("failed to discover package directories: %w", err)
+	// Load the entire CUE module from the schema root
+	// This handles all packages and their cross-references automatically
+	config := &load.Config{
+		Dir: loader.schemaPath,
 	}
 
-	// Load each package as a CUE module
-	for packageName, packageDir := range packageDirs {
-		module, err := loader.loadPackageModule(packageName, packageDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load package %s: %w", packageName, err)
+	// Load all packages in the module
+	instances := load.Instances([]string{"./..."}, config)
+	if len(instances) == 0 {
+		return nil, fmt.Errorf("no CUE instances found in schema module")
+	}
+
+	// Process each loaded instance (package)
+	for _, inst := range instances {
+		if inst.Err != nil {
+			return nil, fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err)
 		}
-		modules[packageName] = module
+
+		// Build the CUE value from the loaded instance
+		value := loader.ctx.BuildInstance(inst)
+		if value.Err() != nil {
+			return nil, fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err())
+		}
+
+		// Create module from instance
+		module, err := loader.createModuleFromInstance(inst, value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err)
+		}
+
+		modules[inst.PkgName] = module
 	}
 
 	return modules, nil
 }
 
-// discoverPackageDirectories finds all package directories in the schema path
-func (loader *CUEModuleLoader) discoverPackageDirectories() (map[string]string, error) {
-	packageDirs := make(map[string]string)
+// Legacy methods removed - no longer needed with new CUE module structure
 
-	entries, err := os.ReadDir(loader.schemaPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read schema directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-			packagePath := filepath.Join(loader.schemaPath, entry.Name())
-			
-			// Check if directory contains CUE files
-			if hasCUEFiles, err := loader.hasCUEFiles(packagePath); err != nil {
-				return nil, fmt.Errorf("failed to check CUE files in %s: %w", packagePath, err)
-			} else if hasCUEFiles {
-				packageDirs[entry.Name()] = packagePath
-			}
-		}
-	}
-
-	return packageDirs, nil
-}
-
-// hasCUEFiles checks if a directory contains any .cue files
-func (loader *CUEModuleLoader) hasCUEFiles(dir string) (bool, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false, err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".cue") {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-// loadPackageModule loads a single package as a CUE module with cross-reference support
-func (loader *CUEModuleLoader) loadPackageModule(packageName, packageDir string) (*LoadedModule, error) {
-	// Use CUE's load package to properly handle module loading
-	// This automatically resolves cross-references within the package
-	config := &load.Config{
-		Dir: packageDir,
-	}
-
-	// Load all CUE files in the package directory
-	instances := load.Instances([]string{"."}, config)
-	if len(instances) == 0 {
-		return nil, fmt.Errorf("no CUE instances found in package %s", packageName)
-	}
-
-	// Check for load errors
-	for _, inst := range instances {
-		if inst.Err != nil {
-			return nil, fmt.Errorf("failed to load CUE instance in package %s: %w", packageName, inst.Err)
-		}
-	}
-
-	// Build the CUE value from the loaded instance
-	// For packages with multiple files, CUE automatically handles unification
-	inst := instances[0] // Packages should have one unified instance
-	value := loader.ctx.BuildInstance(inst)
-	if value.Err() != nil {
-		return nil, fmt.Errorf("failed to build CUE value for package %s: %w", packageName, value.Err())
-	}
-
-	// Extract schemas and metadata from the unified package value
+// createModuleFromInstance creates a LoadedModule from a CUE instance
+func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, value cue.Value) (*LoadedModule, error) {
 	schemas := make(map[string]cue.Value)
 	metadata := make(map[string]SchemaMetadata)
+
+	// Convert import path to module name (e.g., "pudl.schemas/aws/ec2" -> "aws/ec2")
+	moduleName := strings.TrimPrefix(inst.ImportPath, "pudl.schemas/")
+	if moduleName == inst.ImportPath {
+		// Fallback to package name if not using module structure
+		moduleName = inst.PkgName
+	}
 
 	// Iterate through all definitions in the package
 	iter, err := value.Fields(cue.Definitions(true))
 	if err != nil {
-		return nil, fmt.Errorf("failed to iterate definitions in package %s: %w", packageName, err)
+		return nil, fmt.Errorf("failed to iterate definitions in package %s: %w", inst.PkgName, err)
 	}
 
 	for iter.Next() {
@@ -143,12 +100,11 @@ func (loader *CUEModuleLoader) loadPackageModule(packageName, packageDir string)
 		}
 
 		schemaValue := iter.Value()
-		schemaName := fmt.Sprintf("%s.%s", packageName, label)
+		// Use module-aware schema naming: "pudl.schemas/aws/ec2:#Instance"
+		schemaName := fmt.Sprintf("pudl.schemas/%s:%s", moduleName, label)
 		schemas[schemaName] = schemaValue
 
 		// Extract PUDL metadata if present
-		// Access hidden fields by iterating through all fields including hidden ones
-		// This is necessary because CUE considers fields starting with _ as hidden
 		iter, err := schemaValue.Fields(cue.Hidden(true))
 		if err == nil {
 			for iter.Next() {
@@ -164,10 +120,10 @@ func (loader *CUEModuleLoader) loadPackageModule(packageName, packageDir string)
 	}
 
 	return &LoadedModule{
-		PackageName: packageName,
+		PackageName: moduleName,
 		Schemas:     schemas,
 		Metadata:    metadata,
-		LoadPath:    packageDir,
+		LoadPath:    inst.Dir,
 	}, nil
 }
 
