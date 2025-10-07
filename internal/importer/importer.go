@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -154,6 +155,11 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 	}
 	if err := os.MkdirAll(metadataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	// Handle NDJSON collections differently
+	if format == "ndjson" {
+		return i.importNDJSONCollection(opts, timestamp, timestampStr, origin, filename, rawDir, metadataDir, fileInfo)
 	}
 
 	// Read and analyze data for schema assignment BEFORE copying
@@ -404,4 +410,312 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 	} else {
 		return allObjects, recordCount, nil
 	}
+}
+
+// importNDJSONCollection handles importing NDJSON files as collections with individual items
+func (i *Importer) importNDJSONCollection(opts ImportOptions, timestamp time.Time, timestampStr, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo) (*ImportResult, error) {
+	// Parse NDJSON file using streaming to get individual objects
+	data, recordCount, err := i.analyzeDataStreaming(opts.SourcePath, "json", opts.StreamingConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze NDJSON data: %w", err)
+	}
+
+	// Copy original file to raw storage
+	storedPath := filepath.Join(rawDir, filename)
+	if err := i.copyFile(opts.SourcePath, storedPath); err != nil {
+		return nil, fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	// Generate collection ID (same as main entry ID)
+	collectionID := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	// Create collection entry
+	collectionResult, err := i.createCollectionEntry(opts, timestamp, timestampStr, origin, filename, storedPath, metadataDir, fileInfo, recordCount, data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create collection entry: %w", err)
+	}
+
+	// Create individual item entries
+	if err := i.createCollectionItems(collectionID, data, timestamp, rawDir, metadataDir, opts); err != nil {
+		return nil, fmt.Errorf("failed to create collection items: %w", err)
+	}
+
+	return collectionResult, nil
+}
+
+// createCollectionEntry creates the main collection catalog entry
+func (i *Importer) createCollectionEntry(opts ImportOptions, timestamp time.Time, timestampStr, origin, filename, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
+	// Assign schema for collection - try collection-specific schemas first
+	schema := "pudl.schemas/collections/collections:#Collection"
+	confidence := 0.8
+
+	// Try to detect specific collection type based on content
+	if items, ok := data.([]interface{}); ok && len(items) > 0 {
+		if firstItem, ok := items[0].(map[string]interface{}); ok {
+			// Check for cloud inventory patterns
+			if _, hasCloudPlatform := firstItem["cloudPlatform"]; hasCloudPlatform {
+				schema = "pudl.schemas/collections/collections:#CloudInventoryCollection"
+				confidence = 0.9
+			}
+			// Check for log patterns
+			if _, hasLevel := firstItem["level"]; hasLevel {
+				if _, hasTimestamp := firstItem["timestamp"]; hasTimestamp {
+					schema = "pudl.schemas/collections/collections:#LogCollection"
+					confidence = 0.9
+				}
+			}
+		}
+	}
+
+	// Create metadata for collection
+	metadata := &ImportMetadata{
+		ID: strings.TrimSuffix(filename, filepath.Ext(filename)),
+		SourceInfo: SourceInfo{
+			OriginalPath: opts.SourcePath,
+			Origin:       origin,
+			Confidence:   "high",
+		},
+		ImportMetadata: ImportMeta{
+			Format:      "ndjson",
+			RecordCount: recordCount,
+			SizeBytes:   fileInfo.Size(),
+			Timestamp:   timestamp.Format(time.RFC3339),
+		},
+		SchemaInfo: SchemaInfo{
+			CuePackage:       extractPackage(schema),
+			CueDefinition:    schema,
+			ValidationStatus: "auto-assigned",
+			CascadeLevel:     "auto",
+			ComplianceStatus: "unknown",
+			SchemaVersion:    "v1.0",
+		},
+		ResourceTracking: ResourceTracking{
+			IdentityFields: []string{"collection_id"},
+			TrackedFields:  []string{"item_count", "item_schemas"},
+		},
+	}
+
+	// Save metadata
+	metadataPath := filepath.Join(metadataDir, filename+".meta")
+	if err := i.saveMetadata(*metadata, metadataPath); err != nil {
+		return nil, fmt.Errorf("failed to save collection metadata: %w", err)
+	}
+
+	// Create collection catalog entry
+	collectionType := "collection"
+	entry := database.CatalogEntry{
+		ID:              metadata.ID,
+		StoredPath:      storedPath,
+		MetadataPath:    metadataPath,
+		ImportTimestamp: timestamp,
+		Format:          "ndjson",
+		Origin:          origin,
+		Schema:          schema,
+		Confidence:      confidence,
+		RecordCount:     recordCount,
+		SizeBytes:       fileInfo.Size(),
+		CollectionID:    nil, // Collections don't have parent collections
+		ItemIndex:       nil, // Collections don't have item index
+		CollectionType:  &collectionType,
+		ItemID:          nil, // Collections don't have item IDs
+	}
+
+	// Add to database
+	if err := i.catalogDB.AddEntry(entry); err != nil {
+		return nil, fmt.Errorf("failed to add collection to catalog: %w", err)
+	}
+
+	// Return result
+	return &ImportResult{
+		ID:               metadata.ID,
+		SourcePath:       opts.SourcePath,
+		StoredPath:       storedPath,
+		MetadataPath:     metadataPath,
+		DetectedFormat:   "ndjson",
+		DetectedOrigin:   origin,
+		AssignedSchema:   schema,
+		SchemaConfidence: confidence,
+		RecordCount:      recordCount,
+		SizeBytes:        fileInfo.Size(),
+		ImportTimestamp:  timestamp.Format(time.RFC3339),
+		ValidationResult: nil, // Collections don't have individual validation results
+	}, nil
+}
+
+// createCollectionItems creates individual catalog entries for each item in the collection
+func (i *Importer) createCollectionItems(collectionID string, data interface{}, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+	items, ok := data.([]interface{})
+	if !ok {
+		return fmt.Errorf("expected array of items for collection, got %T", data)
+	}
+
+	for index, item := range items {
+		if err := i.createCollectionItem(collectionID, item, index, timestamp, rawDir, metadataDir, opts); err != nil {
+			// Log error but continue with other items
+			fmt.Printf("Warning: failed to create collection item %d: %v\n", index, err)
+		}
+	}
+
+	return nil
+}
+
+// createCollectionItem creates a single collection item entry
+func (i *Importer) createCollectionItem(collectionID string, itemData interface{}, index int, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+	// Generate unique item ID
+	itemID := fmt.Sprintf("%s_item_%d", collectionID, index)
+
+	// Try to extract a more meaningful ID from the item data if possible
+	if itemMap, ok := itemData.(map[string]interface{}); ok {
+		if id, exists := itemMap["id"]; exists {
+			if idStr, ok := id.(string); ok && idStr != "" {
+				itemID = fmt.Sprintf("%s_%s", collectionID, idStr)
+			}
+		} else if externalID, exists := itemMap["externalId"]; exists {
+			if extIDStr, ok := externalID.(string); ok && extIDStr != "" {
+				// Use a hash of external ID to keep it manageable
+				itemID = fmt.Sprintf("%s_%x", collectionID, fmt.Sprintf("%x", extIDStr)[:8])
+			}
+		}
+	}
+
+	// Assign schema to individual item
+	schema, confidence := i.assignItemSchema(itemData, opts)
+
+	// Create item data file
+	itemFilename := fmt.Sprintf("%s.json", itemID)
+	itemPath := filepath.Join(rawDir, itemFilename)
+
+	// Save individual item as JSON file
+	itemJSON, err := json.MarshalIndent(itemData, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal item data: %w", err)
+	}
+
+	if err := os.WriteFile(itemPath, itemJSON, 0644); err != nil {
+		return fmt.Errorf("failed to write item file: %w", err)
+	}
+
+	// Create item metadata
+	itemMetadata := &ImportMetadata{
+		ID: itemID,
+		SourceInfo: SourceInfo{
+			OriginalPath: opts.SourcePath,
+			Origin:       fmt.Sprintf("%s_item_%d", collectionID, index),
+			Confidence:   "high",
+		},
+		ImportMetadata: ImportMeta{
+			Format:      "json",
+			RecordCount: 1,
+			SizeBytes:   int64(len(itemJSON)),
+			Timestamp:   timestamp.Format(time.RFC3339),
+		},
+		SchemaInfo: SchemaInfo{
+			CuePackage:       extractPackage(schema),
+			CueDefinition:    schema,
+			ValidationStatus: "auto-assigned",
+			CascadeLevel:     "auto",
+			ComplianceStatus: "unknown",
+			SchemaVersion:    "v1.0",
+		},
+		ResourceTracking: ResourceTracking{
+			IdentityFields: []string{"item_id"},
+			TrackedFields:  []string{"item_data"},
+		},
+	}
+
+	// Save item metadata
+	itemMetadataPath := filepath.Join(metadataDir, itemFilename+".meta")
+	if err := i.saveMetadata(*itemMetadata, itemMetadataPath); err != nil {
+		return fmt.Errorf("failed to save item metadata: %w", err)
+	}
+
+	// Create catalog entry for item
+	collectionType := "item"
+	entry := database.CatalogEntry{
+		ID:              itemID,
+		StoredPath:      itemPath,
+		MetadataPath:    itemMetadataPath,
+		ImportTimestamp: timestamp,
+		Format:          "json",
+		Origin:          fmt.Sprintf("%s_item_%d", collectionID, index),
+		Schema:          schema,
+		Confidence:      confidence,
+		RecordCount:     1,
+		SizeBytes:       int64(len(itemJSON)),
+		CollectionID:    &collectionID,
+		ItemIndex:       &index,
+		CollectionType:  &collectionType,
+		ItemID:          &itemID,
+	}
+
+	// Add to database
+	return i.catalogDB.AddEntry(entry)
+}
+
+// assignItemSchema assigns a schema to an individual collection item
+func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (string, float64) {
+	// If manual schema is specified, use it
+	if opts.ManualSchema != "" {
+		return opts.ManualSchema, 0.9
+	}
+
+	// Try to detect schema based on item content
+	if itemMap, ok := itemData.(map[string]interface{}); ok {
+		// AWS resource detection
+		if cloudPlatform, exists := itemMap["cloudPlatform"]; exists {
+			if platform, ok := cloudPlatform.(string); ok && platform == "AWS" {
+				// Check for specific AWS resource types
+				if nativeType, exists := itemMap["nativeType"]; exists {
+					if nType, ok := nativeType.(string); ok {
+						switch nType {
+						case "batch#jobdefinition":
+							return "pudl.schemas/aws/batch:#BatchJobDefinition", 0.90
+						case "batch#computeenvironment":
+							return "pudl.schemas/aws/batch:#ComputeEnvironment", 0.90
+						case "securityGroup":
+							return "pudl.schemas/aws/security:#SecurityGroup", 0.90
+						case "secret":
+							return "pudl.schemas/aws/security:#Secret", 0.90
+						case "sagemaker#model":
+							return "pudl.schemas/aws/ml:#SageMakerModel", 0.90
+						case "inlinePolicy", "assumeRolePolicy":
+							return "pudl.schemas/aws/security:#IAMPolicy", 0.90
+						}
+					}
+				}
+
+				// Generic AWS resource
+				return "pudl.schemas/aws/ml:#Resource", 0.7
+			}
+		}
+
+		// EC2 instance detection (legacy format)
+		if instanceID, exists := itemMap["InstanceId"]; exists {
+			if idStr, ok := instanceID.(string); ok && strings.HasPrefix(idStr, "i-") {
+				return "aws.#EC2Instance", 0.9
+			}
+		}
+
+		// Kubernetes resource detection
+		if apiVersion, exists := itemMap["apiVersion"]; exists {
+			if _, ok := apiVersion.(string); ok {
+				if kind, exists := itemMap["kind"]; exists {
+					if kindStr, ok := kind.(string); ok {
+						switch kindStr {
+						case "Pod":
+							return "k8s.#Pod", 0.9
+						case "Service":
+							return "k8s.#Service", 0.9
+						case "Deployment":
+							return "k8s.#Deployment", 0.9
+						}
+					}
+				}
+				return "k8s.#Resource", 0.7
+			}
+		}
+	}
+
+	// Default to collection item schema
+	return "pudl.schemas/collections/collections:#CollectionItem", 0.5
 }

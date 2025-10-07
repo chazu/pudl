@@ -30,15 +30,23 @@ type CatalogEntry struct {
 	Confidence      float64   `json:"confidence"`
 	RecordCount     int       `json:"record_count"`
 	SizeBytes       int64     `json:"size_bytes"`
+	// Collection support fields
+	CollectionID   *string `json:"collection_id,omitempty"`   // Parent collection ID
+	ItemIndex      *int    `json:"item_index,omitempty"`      // Position in collection
+	CollectionType *string `json:"collection_type,omitempty"` // 'collection', 'item', or nil
+	ItemID         *string `json:"item_id,omitempty"`         // Unique identifier for items
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // FilterOptions contains filtering criteria for catalog queries
 type FilterOptions struct {
-	Schema string // Filter by CUE schema
-	Origin string // Filter by data origin
-	Format string // Filter by file format
+	Schema         string // Filter by CUE schema
+	Origin         string // Filter by data origin
+	Format         string // Filter by file format
+	CollectionID   string // Filter by collection ID
+	CollectionType string // Filter by collection type ('collection', 'item')
+	ItemID         string // Filter by item ID
 }
 
 // QueryOptions contains query configuration
@@ -109,12 +117,31 @@ func (c *CatalogDB) createTables() error {
 		confidence REAL NOT NULL,
 		record_count INTEGER NOT NULL,
 		size_bytes INTEGER NOT NULL,
+		-- Collection support fields
+		collection_id TEXT,           -- Parent collection ID (NULL for non-collection items)
+		item_index INTEGER,           -- Position in collection (NULL for collections and standalone items)
+		collection_type TEXT,         -- 'collection', 'item', or NULL for standalone
+		item_id TEXT,                 -- Unique identifier for collection items
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`
 	
 	if _, err := c.db.Exec(createTableSQL); err != nil {
 		return fmt.Errorf("failed to create catalog_entries table: %w", err)
+	}
+
+	// Create indexes for collection queries
+	indexSQL := []string{
+		`CREATE INDEX IF NOT EXISTS idx_collection_id ON catalog_entries(collection_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_collection_type ON catalog_entries(collection_type);`,
+		`CREATE INDEX IF NOT EXISTS idx_item_index ON catalog_entries(collection_id, item_index);`,
+		`CREATE INDEX IF NOT EXISTS idx_item_id ON catalog_entries(item_id);`,
+	}
+
+	for _, sql := range indexSQL {
+		if _, err := c.db.Exec(sql); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
 	}
 	
 	// Create indexes for common query patterns
@@ -150,18 +177,20 @@ func (c *CatalogDB) Close() error {
 func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 	insertSQL := `
 	INSERT INTO catalog_entries (
-		id, stored_path, metadata_path, import_timestamp, format, origin, 
-		schema, confidence, record_count, size_bytes, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	
+		id, stored_path, metadata_path, import_timestamp, format, origin,
+		schema, confidence, record_count, size_bytes, collection_id, item_index,
+		collection_type, item_id, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
 	now := time.Now()
 	entry.CreatedAt = now
 	entry.UpdatedAt = now
-	
+
 	_, err := c.db.Exec(insertSQL,
 		entry.ID, entry.StoredPath, entry.MetadataPath, entry.ImportTimestamp,
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
-		entry.RecordCount, entry.SizeBytes, entry.CreatedAt, entry.UpdatedAt)
+		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
+		entry.CollectionType, entry.ItemID, entry.CreatedAt, entry.UpdatedAt)
 	
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
@@ -174,15 +203,17 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 	selectSQL := `
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, created_at, updated_at
-	FROM catalog_entries 
+		   schema, confidence, record_count, size_bytes, collection_id, item_index,
+		   collection_type, item_id, created_at, updated_at
+	FROM catalog_entries
 	WHERE id = ?`
-	
+
 	var entry CatalogEntry
 	err := c.db.QueryRow(selectSQL, id).Scan(
 		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
 		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
+		&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
 	
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
@@ -211,6 +242,18 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	if filters.Format != "" {
 		whereConditions = append(whereConditions, "format LIKE ?")
 		args = append(args, "%"+filters.Format+"%")
+	}
+	if filters.CollectionID != "" {
+		whereConditions = append(whereConditions, "collection_id = ?")
+		args = append(args, filters.CollectionID)
+	}
+	if filters.CollectionType != "" {
+		whereConditions = append(whereConditions, "collection_type = ?")
+		args = append(args, filters.CollectionType)
+	}
+	if filters.ItemID != "" {
+		whereConditions = append(whereConditions, "item_id = ?")
+		args = append(args, filters.ItemID)
 	}
 	
 	whereClause := ""
@@ -258,9 +301,10 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	// Build main query with LIMIT and OFFSET
 	selectSQL := fmt.Sprintf(`
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, created_at, updated_at
-	FROM catalog_entries 
-	%s 
+		   schema, confidence, record_count, size_bytes, collection_id, item_index,
+		   collection_type, item_id, created_at, updated_at
+	FROM catalog_entries
+	%s
 	ORDER BY %s`, whereClause, orderBy)
 	
 	if options.Limit > 0 {
@@ -284,7 +328,8 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 		err := rows.Scan(
 			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
 			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-			&entry.RecordCount, &entry.SizeBytes, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
+			&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan catalog entry", err)
 		}
@@ -337,6 +382,69 @@ func (c *CatalogDB) GetUniqueValues(field string) ([]string, error) {
 	}
 
 	return values, nil
+}
+
+// GetCollectionItems retrieves all items belonging to a collection
+func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, error) {
+	selectSQL := `
+	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
+		   schema, confidence, record_count, size_bytes, collection_id, item_index,
+		   collection_type, item_id, created_at, updated_at
+	FROM catalog_entries
+	WHERE collection_id = ? AND collection_type = 'item'
+	ORDER BY item_index ASC`
+
+	rows, err := c.db.Query(selectSQL, collectionID)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query collection items", err)
+	}
+	defer rows.Close()
+
+	var items []CatalogEntry
+	for rows.Next() {
+		var entry CatalogEntry
+		err := rows.Scan(
+			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
+			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
+			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
+			&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
+		if err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan collection item", err)
+		}
+		items = append(items, entry)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating collection items", err)
+	}
+
+	return items, nil
+}
+
+// GetCollectionByID retrieves a collection entry by ID
+func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error) {
+	selectSQL := `
+	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
+		   schema, confidence, record_count, size_bytes, collection_id, item_index,
+		   collection_type, item_id, created_at, updated_at
+	FROM catalog_entries
+	WHERE id = ? AND collection_type = 'collection'`
+
+	var entry CatalogEntry
+	err := c.db.QueryRow(selectSQL, collectionID).Scan(
+		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
+		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
+		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
+		&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Collection not found: %s", collectionID), nil)
+	}
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to retrieve collection", err)
+	}
+
+	return &entry, nil
 }
 
 // UpdateEntry updates an existing catalog entry

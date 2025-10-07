@@ -12,13 +12,18 @@ import (
 )
 
 var (
-	listSchema     string
-	listOrigin     string
-	listFormat     string
-	listVerbose    bool
-	listLimit      int
-	listSortBy     string
-	listReverse    bool
+	listSchema        string
+	listOrigin        string
+	listFormat        string
+	listVerbose       bool
+	listLimit         int
+	listSortBy        string
+	listReverse       bool
+	listCollectionID  string
+	listCollectionType string
+	listItemID        string
+	listCollectionsOnly bool
+	listItemsOnly     bool
 )
 
 // listCmd represents the list command
@@ -34,7 +39,11 @@ the results by various criteria and sort them in different ways.
 Filtering Options:
 - --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)
 - --origin: Filter by data origin (e.g., aws-ec2, k8s-pods)
-- --format: Filter by file format (json, yaml, csv)
+- --format: Filter by file format (json, yaml, csv, ndjson)
+- --collection-id: Filter by collection ID (show items from specific collection)
+- --collections-only: Show only collection entries (not individual items)
+- --items-only: Show only individual items (not collections)
+- --item-id: Filter by specific item ID
 
 Display Options:
 - --verbose: Show detailed information including file paths
@@ -46,7 +55,10 @@ Examples:
     pudl list                                    # List all imported data
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
     pudl list --origin k8s-pods                  # List Kubernetes pod data
-    pudl list --format yaml --verbose           # List YAML files with details
+    pudl list --format ndjson --verbose         # List NDJSON collections with details
+    pudl list --collections-only                # Show only collections
+    pudl list --items-only                      # Show only individual items
+    pudl list --collection-id my-collection     # Show items from specific collection
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -77,9 +89,12 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 
 	// Set up filter options
 	filters := lister.FilterOptions{
-		Schema: listSchema,
-		Origin: listOrigin,
-		Format: listFormat,
+		Schema:         listSchema,
+		Origin:         listOrigin,
+		Format:         listFormat,
+		CollectionID:   listCollectionID,
+		CollectionType: determineCollectionType(),
+		ItemID:         listItemID,
 	}
 
 	// Set up display options
@@ -120,6 +135,18 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		if listFormat != "" {
 			activeFilters = append(activeFilters, fmt.Sprintf("format=%s", listFormat))
 		}
+		if listCollectionID != "" {
+			activeFilters = append(activeFilters, fmt.Sprintf("collection-id=%s", listCollectionID))
+		}
+		if listItemID != "" {
+			activeFilters = append(activeFilters, fmt.Sprintf("item-id=%s", listItemID))
+		}
+		if listCollectionsOnly {
+			activeFilters = append(activeFilters, "collections-only")
+		}
+		if listItemsOnly {
+			activeFilters = append(activeFilters, "items-only")
+		}
 		if len(activeFilters) > 0 {
 			fmt.Printf("Filters: %s\n", strings.Join(activeFilters, ", "))
 		}
@@ -143,34 +170,75 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// determineCollectionType determines the collection type filter based on flags
+func determineCollectionType() string {
+	if listCollectionsOnly {
+		return "collection"
+	}
+	if listItemsOnly {
+		return "item"
+	}
+	return "" // No filter
+}
+
 func init() {
 	rootCmd.AddCommand(listCmd)
 
 	// Add flags
 	listCmd.Flags().StringVar(&listSchema, "schema", "", "Filter by CUE schema (e.g., aws.#EC2Instance)")
 	listCmd.Flags().StringVar(&listOrigin, "origin", "", "Filter by data origin (e.g., aws-ec2)")
-	listCmd.Flags().StringVar(&listFormat, "format", "", "Filter by file format (json, yaml, csv)")
+	listCmd.Flags().StringVar(&listFormat, "format", "", "Filter by file format (json, yaml, csv, ndjson)")
 	listCmd.Flags().BoolVarP(&listVerbose, "verbose", "v", false, "Show detailed information")
 	listCmd.Flags().IntVar(&listLimit, "limit", 50, "Limit number of results")
 	listCmd.Flags().StringVar(&listSortBy, "sort-by", "timestamp", "Sort by field (timestamp, size, records, schema, origin)")
 	listCmd.Flags().BoolVar(&listReverse, "reverse", false, "Reverse sort order")
+
+	// Collection-specific flags
+	listCmd.Flags().StringVar(&listCollectionID, "collection-id", "", "Filter by collection ID")
+	listCmd.Flags().StringVar(&listItemID, "item-id", "", "Filter by item ID")
+	listCmd.Flags().BoolVar(&listCollectionsOnly, "collections-only", false, "Show only collections")
+	listCmd.Flags().BoolVar(&listItemsOnly, "items-only", false, "Show only individual items")
+
+	// Make collections-only and items-only mutually exclusive
+	listCmd.MarkFlagsMutuallyExclusive("collections-only", "items-only")
 }
 
 // displayEntry displays a single catalog entry
 func displayEntry(entry lister.ListEntry, verbose bool, index int) {
-	// Basic info line
-	fmt.Printf("%d. %s [%s] (%s)\n", 
-		index, 
-		entry.ID, 
-		entry.Schema, 
-		entry.ImportTimestamp)
+	// Basic info line with collection indicator
+	collectionIndicator := ""
+	if entry.CollectionType != nil {
+		switch *entry.CollectionType {
+		case "collection":
+			collectionIndicator = " 📦"
+		case "item":
+			collectionIndicator = " 📄"
+		}
+	}
+
+	fmt.Printf("%d. %s [%s] (%s)%s\n",
+		index,
+		entry.ID,
+		entry.Schema,
+		entry.ImportTimestamp,
+		collectionIndicator)
 
 	// Additional details
-	fmt.Printf("   Origin: %s | Format: %s | Records: %d | Size: %s\n",
+	detailsLine := fmt.Sprintf("   Origin: %s | Format: %s | Records: %d | Size: %s",
 		entry.Origin,
 		entry.Format,
 		entry.RecordCount,
 		formatBytes(entry.SizeBytes))
+
+	// Add collection info if this is an item
+	if entry.CollectionType != nil && *entry.CollectionType == "item" && entry.CollectionID != nil {
+		detailsLine += fmt.Sprintf(" | Collection: %s", *entry.CollectionID)
+		if entry.ItemIndex != nil {
+			detailsLine += fmt.Sprintf(" [#%d]", *entry.ItemIndex)
+		}
+	}
+
+	fmt.Println(detailsLine)
 
 	// Verbose details
 	if verbose {
@@ -178,6 +246,15 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		fmt.Printf("   Metadata: %s\n", entry.MetadataPath)
 		if entry.Confidence < 0.8 {
 			fmt.Printf("   ⚠️  Low schema confidence (%.2f)\n", entry.Confidence)
+		}
+
+		// Show collection details
+		if entry.CollectionType != nil {
+			fmt.Printf("   Type: %s", *entry.CollectionType)
+			if *entry.CollectionType == "item" && entry.ItemID != nil {
+				fmt.Printf(" (Item ID: %s)", *entry.ItemID)
+			}
+			fmt.Println()
 		}
 	}
 
