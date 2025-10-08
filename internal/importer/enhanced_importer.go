@@ -15,7 +15,7 @@ import (
 // EnhancedImporter extends the base importer with human-friendly ID generation
 type EnhancedImporter struct {
 	*Importer // Embed the original importer
-	
+
 	configManager *config.ConfigManager
 	idManager     *idgen.ImporterIDManager
 	displayHelper *idgen.IDDisplayHelper
@@ -28,23 +28,23 @@ func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImpor
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base importer: %w", err)
 	}
-	
+
 	// Create config manager
 	configManager := config.NewConfigManager(configDir)
-	
+
 	// Load configuration
 	idConfig, err := configManager.LoadConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ID configuration: %w", err)
 	}
-	
+
 	// Create ID manager with default config
 	defaultIDConfig := idConfig.GetConfigForOrigin("default")
 	idManager := idgen.NewImporterIDManager(defaultIDConfig)
-	
+
 	// Create display helper
 	displayHelper := idgen.NewIDDisplayHelper()
-	
+
 	return &EnhancedImporter{
 		Importer:      baseImporter,
 		configManager: configManager,
@@ -60,13 +60,13 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ID configuration: %w", err)
 	}
-	
+
 	// Check if friendly IDs are enabled
 	if !idConfig.ShouldUseFriendlyIDs() {
 		// Fall back to legacy import
 		return e.Importer.ImportFile(opts)
 	}
-	
+
 	// Detect origin if not provided
 	origin := opts.Origin
 	if origin == "" {
@@ -76,7 +76,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		}
 		origin = e.detectOrigin(opts.SourcePath, format)
 	}
-	
+
 	// Get ID configuration for this origin
 	// First try the configuration file, then fall back to smart detection
 	originConfig := idConfig.GetConfigForOrigin(origin)
@@ -95,7 +95,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		// Use configuration file override
 		idManager = idgen.NewImporterIDManager(originConfig)
 	}
-	
+
 	// Perform import with friendly IDs
 	return e.importWithFriendlyIDs(opts, idManager, origin)
 }
@@ -124,7 +124,7 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 
 	// Generate friendly ID for main entry
 	mainID := idManager.GenerateMainID(opts.SourcePath, origin)
-	
+
 	// Create filename using friendly ID
 	ext := filepath.Ext(opts.SourcePath)
 	filename := fmt.Sprintf("%s%s", mainID, ext)
@@ -151,12 +151,8 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 	var data interface{}
 	var recordCount int
 
-	if opts.UseStreaming {
-		data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
-	} else {
-		data, recordCount, err = e.analyzeData(opts.SourcePath, format)
-	}
-
+	// Always use streaming parser for optimal performance and memory usage
+	data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}

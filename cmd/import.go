@@ -55,11 +55,11 @@ Rule Engine Options:
 - Default: Uses legacy hard-coded rules for schema assignment
 - --use-zygomys: Override to use Zygomys Lisp rule engine for this import
 
-Streaming Support:
-- Use --streaming for large files (>100MB recommended)
+Streaming Processing:
+- All imports use streaming for optimal performance and memory usage
 - Configure memory limits with --streaming-memory (default: 100MB)
 - Adjust chunk size with --streaming-chunk-size (default: 0.016MB)
-- Enables processing of files larger than available RAM
+- Handles files of any size efficiently
 
 Example usage:
     # Single file import
@@ -70,10 +70,10 @@ Example usage:
     # Wildcard batch import
     pudl import --path *.json
     pudl import --path data/*.yaml
-    pudl import --path logs/2024-01-*.json --streaming
+    pudl import --path logs/2024-01-*.json
 
     # Advanced options
-    pudl import --path large-dataset.json --streaming --streaming-memory 200
+    pudl import --path large-dataset.json --streaming-memory 200
     pudl import --path data.json --use-zygomys`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
@@ -84,7 +84,6 @@ Example usage:
 			errorHandler.HandleError(err)
 		}
 	},
-
 }
 
 // runImportCommand contains the actual import logic with structured error handling
@@ -154,46 +153,43 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		importSchema = resolvedSchema
 	}
 
-	// Configure streaming if enabled
-	var streamingConfig *streaming.StreamingConfig
-	if useStreaming {
-		streamingConfig = streaming.DefaultStreamingConfig()
+	// Configure streaming (always enabled for optimal performance)
+	streamingConfig := streaming.DefaultStreamingConfig()
 
-		// Apply user-specified memory limit
-		if streamingMemoryMB > 0 {
-			streamingConfig.MaxMemoryMB = streamingMemoryMB
-		}
+	// Apply user-specified memory limit
+	if streamingMemoryMB > 0 {
+		streamingConfig.MaxMemoryMB = streamingMemoryMB
+	}
 
-		// Check file size to determine appropriate chunk sizes
-		fileInfo, err := os.Stat(absPath)
-		if err != nil {
-			return fmt.Errorf("failed to get file info: %w", err)
-		}
-		fileSize := fileInfo.Size()
+	// Check file size to determine appropriate chunk sizes
+	fileInfo, err := os.Stat(absPath)
+	if err != nil {
+		return fmt.Errorf("failed to get file info: %w", err)
+	}
+	fileSize := fileInfo.Size()
 
-		// For small files (< 10KB), use very small chunk sizes
-		// For larger files, use user-specified or default chunk sizes
-		if fileSize < 10*1024 {
-			// Small file: use tiny chunks to ensure proper chunking
-			streamingConfig.MinChunkSize = 64     // 64 bytes minimum
-			streamingConfig.AvgChunkSize = 256    // 256 bytes average
-			streamingConfig.MaxChunkSize = 1024   // 1KB maximum
-		} else {
-			// Large file: use user-specified or default chunk sizes
-			chunkBytes := int(streamingChunkMB * 1024 * 1024)
-			streamingConfig.AvgChunkSize = chunkBytes
-			streamingConfig.MinChunkSize = chunkBytes / 4  // 25% of avg
-			streamingConfig.MaxChunkSize = chunkBytes * 4  // 400% of avg
-		}
+	// For small files (< 10KB), use very small chunk sizes
+	// For larger files, use user-specified or default chunk sizes
+	if fileSize < 10*1024 {
+		// Small file: use tiny chunks to ensure proper chunking
+		streamingConfig.MinChunkSize = 64   // 64 bytes minimum
+		streamingConfig.AvgChunkSize = 256  // 256 bytes average
+		streamingConfig.MaxChunkSize = 1024 // 1KB maximum
+	} else {
+		// Large file: use user-specified or default chunk sizes
+		chunkBytes := int(streamingChunkMB * 1024 * 1024)
+		streamingConfig.AvgChunkSize = chunkBytes
+		streamingConfig.MinChunkSize = chunkBytes / 4 // 25% of avg
+		streamingConfig.MaxChunkSize = chunkBytes * 4 // 400% of avg
 	}
 
 	// Set up import options
 	opts := importer.ImportOptions{
-		SourcePath:        absPath,
+		SourcePath:       absPath,
 		Origin:           importOrigin, // Will be auto-detected if empty
 		ManualSchema:     importSchema,
 		CascadeValidator: cascadeValidator,
-		UseStreaming:     useStreaming,
+		UseStreaming:     true, // Always use streaming for optimal performance
 		StreamingConfig:  streamingConfig,
 	}
 
@@ -216,8 +212,8 @@ func init() {
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 
-	// Streaming options
-	importCmd.Flags().BoolVar(&useStreaming, "streaming", false, "Use streaming parser for large files")
+	// Streaming options (streaming is always enabled, these flags configure behavior)
+	importCmd.Flags().BoolVar(&useStreaming, "streaming", true, "Streaming is always enabled (flag kept for compatibility)")
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
 	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
 
@@ -369,18 +365,18 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 	// Set up streaming configuration
 	streamingConfig := &streaming.StreamingConfig{
-		ChunkAlgorithm:   "fastcdc",
-		MinChunkSize:     4096,
-		MaxChunkSize:     65536,
-		AvgChunkSize:     int(streamingChunkMB * 1024 * 1024), // Convert MB to bytes
-		MaxMemoryMB:      streamingMemoryMB,
-		BufferSize:       1048576, // 1MB
-		ErrorTolerance:   0.1,
-		SkipMalformed:    true,
-		SampleSize:       100,
-		Confidence:       0.8,
-		ReportEveryMB:    1,
-		MaxConcurrency:   0,
+		ChunkAlgorithm: "fastcdc",
+		MinChunkSize:   4096,
+		MaxChunkSize:   65536,
+		AvgChunkSize:   int(streamingChunkMB * 1024 * 1024), // Convert MB to bytes
+		MaxMemoryMB:    streamingMemoryMB,
+		BufferSize:     1048576, // 1MB
+		ErrorTolerance: 0.1,
+		SkipMalformed:  true,
+		SampleSize:     100,
+		Confidence:     0.8,
+		ReportEveryMB:  1,
+		MaxConcurrency: 0,
 	}
 
 	// Track results and errors
@@ -396,11 +392,11 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 		// Set up import options for this file
 		opts := importer.ImportOptions{
-			SourcePath:        filePath,
+			SourcePath:       filePath,
 			Origin:           importOrigin, // Will be auto-detected if empty
 			ManualSchema:     importSchema,
 			CascadeValidator: cascadeValidator,
-			UseStreaming:     useStreaming,
+			UseStreaming:     true, // Always use streaming for optimal performance
 			StreamingConfig:  streamingConfig,
 		}
 

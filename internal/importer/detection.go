@@ -1,15 +1,11 @@
 package importer
 
 import (
-	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // detectFormat detects the format of a file based on extension and content
@@ -99,7 +95,7 @@ func (i *Importer) isNewlineDelimitedJSON(filePath string) (bool, error) {
 
 		// Check if line looks like JSON object
 		if (strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}")) ||
-		   (strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]")) {
+			(strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]")) {
 			// Try to parse as JSON to confirm
 			var obj interface{}
 			if json.Unmarshal([]byte(line), &obj) == nil {
@@ -115,12 +111,12 @@ func (i *Importer) isNewlineDelimitedJSON(filePath string) (bool, error) {
 // detectOrigin attempts to detect the origin/source of the data
 func (i *Importer) detectOrigin(filePath, format string) string {
 	filename := strings.ToLower(filepath.Base(filePath))
-	
+
 	// Remove extension for analysis
 	name := strings.TrimSuffix(filename, filepath.Ext(filename))
-	
+
 	// AWS patterns
-	if strings.Contains(name, "aws") || strings.Contains(name, "ec2") || 
+	if strings.Contains(name, "aws") || strings.Contains(name, "ec2") ||
 		strings.Contains(name, "s3") || strings.Contains(name, "rds") {
 		if strings.Contains(name, "ec2") && strings.Contains(name, "instance") {
 			return "aws-ec2-describe-instances"
@@ -132,7 +128,7 @@ func (i *Importer) detectOrigin(filePath, format string) string {
 	}
 
 	// Kubernetes patterns
-	if strings.Contains(name, "k8s") || strings.Contains(name, "kube") || 
+	if strings.Contains(name, "k8s") || strings.Contains(name, "kube") ||
 		strings.Contains(name, "pod") || strings.Contains(name, "service") {
 		if strings.Contains(name, "pod") {
 			return "k8s-get-pods"
@@ -163,96 +159,4 @@ func (i *Importer) detectOrigin(filePath, format string) string {
 	}
 
 	return "unknown-source"
-}
-
-// analyzeData reads and analyzes data to extract basic information
-func (i *Importer) analyzeData(filePath, format string) (interface{}, int, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer file.Close()
-
-	switch format {
-	case "json":
-		return i.analyzeJSON(file)
-	case "yaml":
-		return i.analyzeYAML(file)
-	case "csv":
-		return i.analyzeCSV(file)
-	default:
-		// For unknown formats, just return basic info
-		return map[string]interface{}{"format": "unknown"}, 1, nil
-	}
-}
-
-// analyzeJSON analyzes JSON data
-func (i *Importer) analyzeJSON(reader io.Reader) (interface{}, int, error) {
-	var data interface{}
-	decoder := json.NewDecoder(reader)
-	
-	if err := decoder.Decode(&data); err != nil {
-		return nil, 0, fmt.Errorf("failed to parse JSON: %w", err)
-	}
-
-	// Count records
-	recordCount := 1
-	if arr, ok := data.([]interface{}); ok {
-		recordCount = len(arr)
-	}
-
-	return data, recordCount, nil
-}
-
-// analyzeYAML analyzes YAML data
-func (i *Importer) analyzeYAML(reader io.Reader) (interface{}, int, error) {
-	var data interface{}
-	decoder := yaml.NewDecoder(reader)
-	
-	if err := decoder.Decode(&data); err != nil {
-		return nil, 0, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	// Count records
-	recordCount := 1
-	if arr, ok := data.([]interface{}); ok {
-		recordCount = len(arr)
-	}
-
-	return data, recordCount, nil
-}
-
-// analyzeCSV analyzes CSV data
-func (i *Importer) analyzeCSV(reader io.Reader) (interface{}, int, error) {
-	csvReader := csv.NewReader(reader)
-	
-	// Read all records
-	records, err := csvReader.ReadAll()
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to parse CSV: %w", err)
-	}
-
-	if len(records) == 0 {
-		return [][]string{}, 0, nil
-	}
-
-	// Convert to structured format with headers
-	if len(records) > 1 {
-		headers := records[0]
-		var data []map[string]string
-		
-		for _, record := range records[1:] {
-			row := make(map[string]string)
-			for i, value := range record {
-				if i < len(headers) {
-					row[headers[i]] = value
-				}
-			}
-			data = append(data, row)
-		}
-		
-		return data, len(data), nil
-	}
-
-	return records, len(records), nil
 }

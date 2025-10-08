@@ -26,7 +26,7 @@ type Importer struct {
 
 // ImportOptions contains options for importing data
 type ImportOptions struct {
-	SourcePath        string
+	SourcePath       string
 	Origin           string                      // Optional origin override
 	ManualSchema     string                      // Manual schema specification
 	CascadeValidator *validator.CascadeValidator // Validator for manual schema
@@ -36,17 +36,17 @@ type ImportOptions struct {
 
 // ImportResult contains the results of an import operation
 type ImportResult struct {
-	ID               string                     `json:"id"`
-	SourcePath       string                     `json:"source_path"`
-	StoredPath       string                     `json:"stored_path"`
-	MetadataPath     string                     `json:"metadata_path"`
-	DetectedFormat   string                     `json:"detected_format"`
-	DetectedOrigin   string                     `json:"detected_origin"`
-	AssignedSchema   string                     `json:"assigned_schema"`
-	SchemaConfidence float64                    `json:"schema_confidence"`
-	RecordCount      int                        `json:"record_count"`
-	SizeBytes        int64                      `json:"size_bytes"`
-	ImportTimestamp  string                     `json:"import_timestamp"`
+	ID               string                      `json:"id"`
+	SourcePath       string                      `json:"source_path"`
+	StoredPath       string                      `json:"stored_path"`
+	MetadataPath     string                      `json:"metadata_path"`
+	DetectedFormat   string                      `json:"detected_format"`
+	DetectedOrigin   string                      `json:"detected_origin"`
+	AssignedSchema   string                      `json:"assigned_schema"`
+	SchemaConfidence float64                     `json:"schema_confidence"`
+	RecordCount      int                         `json:"record_count"`
+	SizeBytes        int64                       `json:"size_bytes"`
+	ImportTimestamp  string                      `json:"import_timestamp"`
 	ValidationResult *validator.ValidationResult `json:"validation_result,omitempty"`
 }
 
@@ -167,14 +167,8 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 	var data interface{}
 	var recordCount int
 
-	if opts.UseStreaming {
-		// Use streaming parser for large files - analyze original file
-		data, recordCount, err = i.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
-	} else {
-		// Use traditional memory-based analysis - analyze original file
-		data, recordCount, err = i.analyzeData(opts.SourcePath, format)
-	}
-
+	// Always use streaming parser for optimal performance and memory usage
+	data, recordCount, err = i.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
@@ -370,6 +364,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 
 	// Collect all objects and count records
 	var allObjects []interface{}
+	var allErrors []error
 	recordCount := 0
 
 	// Process chunks as they arrive (using demo's approach)
@@ -386,6 +381,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 
 			// Add objects from this chunk
 			allObjects = append(allObjects, chunk.Objects...)
+			allErrors = append(allErrors, chunk.Errors...)
 			recordCount += len(chunk.Objects)
 
 		case err, ok := <-errors:
@@ -401,13 +397,67 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 
 	// Streaming parse complete
 
-	// If we have multiple objects, return them as an array
-	// If we have a single object, return it directly (matches legacy behavior)
+	// Handle error cases that should fail (for compatibility with legacy behavior)
 	if len(allObjects) == 0 {
+		// Check if this was supposed to be a structured format but failed to parse
+		if format == "json" {
+			// For JSON format, 0 objects usually means parsing failed
+			return nil, 0, fmt.Errorf("failed to parse JSON data")
+		}
+		if format == "unknown" {
+			// For unknown format, return a generic object
+			return map[string]interface{}{"format": format}, 1, nil
+		}
 		return map[string]interface{}{"format": format}, 0, nil
-	} else if len(allObjects) == 1 {
+	}
+
+	// Check for invalid structured data that was treated as text or has errors
+	if len(allObjects) == 1 {
+		if obj, ok := allObjects[0].(map[string]interface{}); ok {
+			// Check for raw_data (invalid structured data)
+			if rawData, hasRaw := obj["raw_data"]; hasRaw {
+				if (format == "json" || format == "yaml") && rawData != nil {
+					// This was supposed to be structured data but was treated as raw data
+					return nil, 0, fmt.Errorf("invalid %s format", format)
+				}
+			}
+
+			// Check for text content when we expected structured data (YAML/JSON parsing failed)
+			if content, hasContent := obj["content"]; hasContent {
+				if (format == "json" || format == "yaml") && content != nil {
+					// Check if there were parsing errors
+					if len(allErrors) > 0 {
+						return nil, 0, fmt.Errorf("invalid %s format: %v", format, allErrors[0])
+					}
+				}
+			}
+		}
+	}
+
+	// Handle return format based on data type and count
+	if len(allObjects) == 1 {
 		return allObjects[0], recordCount, nil
 	} else {
+		// For CSV format, convert to []map[string]string to match legacy behavior
+		if format == "csv" {
+			csvArray := make([]map[string]string, len(allObjects))
+			for i, obj := range allObjects {
+				if objMap, ok := obj.(map[string]interface{}); ok {
+					strMap := make(map[string]string)
+					for k, v := range objMap {
+						// Skip internal metadata fields
+						if k == "_column_count" || k == "_row_number" {
+							continue
+						}
+						strMap[k] = fmt.Sprintf("%v", v)
+					}
+					csvArray[i] = strMap
+				}
+			}
+			return csvArray, recordCount, nil
+		}
+
+		// For other formats, return as array
 		return allObjects, recordCount, nil
 	}
 }

@@ -17,6 +17,7 @@ PUDL is a CLI tool that helps SRE/platform engineers and software engineers mana
 ## Installation & Setup
 
 ### Prerequisites
+
 - Go 1.19+ (for building from source)
 - Git (for schema version control)
 
@@ -54,7 +55,7 @@ pudl config reset  # Reset to defaults
 Import data from various formats with automatic schema detection:
 
 ```bash
-# Import a single file (traditional mode)
+# Import a single file
 pudl import --path aws-ec2-instances.json
 pudl import --path k8s-pods.yaml
 pudl import --path metrics.csv
@@ -62,26 +63,28 @@ pudl import --path metrics.csv
 # Override origin detection
 pudl import --path data.json --origin my-custom-source
 
-# Streaming mode for large files (NEW!)
-pudl import --path large-dataset.json --streaming
-pudl import --path huge-logs.json --streaming --streaming-memory 200
-pudl import --path massive-data.json --streaming --streaming-chunk-size 0.032
+# Configure streaming behavior for large files
+pudl import --path large-dataset.json --streaming-memory 200
+pudl import --path huge-logs.json --streaming-chunk-size 0.032
 ```
 
 **Supported Formats:**
+
 - JSON (`.json`)
 - NDJSON (`.json` with newline-delimited JSON objects) - **NEW!**
 - YAML (`.yaml`, `.yml`)
 - CSV (`.csv`)
 
-**Import Modes:**
-- **Traditional Mode**: Loads entire file into memory (default, best for files < 100MB)
-- **Streaming Mode**: Processes files in chunks using Content-Defined Chunking (CDC)
-  - Handles files larger than available RAM
+**Processing:**
+
+- **Streaming Processing**: All imports use Content-Defined Chunking (CDC) for optimal performance
+  - Handles files of any size efficiently
   - Configurable memory limits and chunk sizes
   - Maintains full schema detection and validation capabilities
+  - Automatic optimization based on file size
 
 **Automatic Features:**
+
 - Format detection from file extension and content (including NDJSON detection)
 - Collection processing for NDJSON files with individual item extraction
 - Origin inference from filename patterns (aws-ec2, k8s-pods, etc.)
@@ -121,6 +124,7 @@ PUDL automatically detects and processes NDJSON (Newline-Delimited JSON) files a
 #### What are NDJSON Collections?
 
 NDJSON files contain multiple JSON objects separated by newlines:
+
 ```json
 {"id": "item1", "type": "resource", "data": "..."}
 {"id": "item2", "type": "resource", "data": "..."}
@@ -128,6 +132,7 @@ NDJSON files contain multiple JSON objects separated by newlines:
 ```
 
 PUDL processes these as:
+
 - **Collection Entry** 📦: Represents the original file with metadata
 - **Individual Items** 📄: Each JSON object gets its own catalog entry
 - **Relationships**: Full parent-child tracking with collection IDs and item indices
@@ -167,6 +172,7 @@ pudl list --schema aws.#BatchJobDefinition  # All batch jobs across collections
 #### Collection Display
 
 Collections and items are visually distinguished:
+
 ```bash
 pudl list --limit 3
 # 1. my-cloud-inventory [collections.#Collection] (2025-10-06) 📦
@@ -184,11 +190,13 @@ pudl list --limit 3
 PUDL includes specialized collection schemas:
 
 **Generic Collections:**
+
 - `collections.#Collection` - Flexible collection schema for any type of data collection
 - `collections.#CollectionItem` - Individual item schema
 - `collections.#CatchAllCollection` - Minimal collection schema for unclassified collections
 
 **AWS Resource Schemas:**
+
 - `aws.batch.#BatchJobDefinition` - AWS Batch job definitions
 - `aws.security.#SecurityGroup` - EC2 security groups
 - `aws.security.#Secret` - Secrets Manager secrets
@@ -196,6 +204,7 @@ PUDL includes specialized collection schemas:
 - `aws.ml.#SageMakerModel` - SageMaker models
 
 **Kubernetes Resource Schemas (Official API):**
+
 - `k8s.#Pod`, `k8s.#Service`, `k8s.#ConfigMap`, `k8s.#Secret` - Core resources
 - `k8s.#Deployment`, `k8s.#StatefulSet`, `k8s.#DaemonSet` - Workload resources
 - `k8s.#Ingress`, `k8s.#NetworkPolicy` - Networking resources
@@ -252,16 +261,19 @@ pudl schema log --verbose                   # Detailed commit information
 ```
 
 **Schema Naming Convention:**
+
 - Format: `package.name` (e.g., `aws.ec2-instance`, `k8s.deployment`)
 - Packages: `aws`, `k8s`, `custom`, `unknown`
 - Files stored in: `~/.pudl/schema/package/name.cue`
 
 **Schema Requirements:**
+
 - Valid CUE syntax
 - Package declaration matching target package
 - Recommended metadata fields: `_identity`, `_tracked`, `_version`
 
 **Git Integration:**
+
 - Schema repository is automatically version controlled
 - Use `pudl schema status` to see uncommitted changes
 - Use `pudl schema commit -m "message"` to commit changes
@@ -279,27 +291,32 @@ pudl process example.cue
 ## Current Implementation Status
 
 **✅ Phase 1: CLI Foundation** (Complete)
+
 - Professional Cobra CLI structure
 - Workspace initialization and configuration management
 - Auto-initialization for seamless user experience
 
 **✅ Phase 2: Data Storage Foundation** (Complete)
+
 - Data import with automatic format/schema detection
 - Date-partitioned storage with metadata tracking
 - Data discovery with filtering, sorting, and inspection
 
 **✅ Phase 3.1: Schema Storage** (Complete)
+
 - Schema management with package organization
 - CUE validation with comprehensive error checking
 - Git-based version control for schema repository
 
 **✅ Phase 3.2: Streaming Parser Architecture** (Complete)
+
 - CDC-based streaming parsers for large file support
 - Format-specific processing (JSON/CSV/YAML) with boundary detection
 - CUE-integrated schema detection with AWS/K8s patterns
 - Memory management, progress reporting, and error tolerance
 
 **✅ Phase 3.3: NDJSON Collection System** (Complete)
+
 - Automatic NDJSON detection and collection processing
 - Dual catalog architecture (collections + individual items)
 - Collection-specific schemas and AWS resource schemas
@@ -308,6 +325,7 @@ pudl process example.cue
 - Visual distinction between collections (📦) and items (📄)
 
 **🔄 Next: Phase 4** - Advanced Features & Optimization
+
 - Collection analytics and insights
 - Bulk operations on collection items
 - Enhanced schema validation and compliance checking
@@ -331,6 +349,7 @@ Input Stream → CDC Chunker → Format Processor → Schema Detector → Valida
 ```
 
 **Key Features:**
+
 - **Content-Defined Chunking (CDC)**: Uses go-cdc-chunkers for shift-resilient data processing
 - **Format-Specific Processing**: Boundary-aware parsing for JSON, CSV, YAML, and NDJSON formats
 - **Collection Processing**: Automatic NDJSON detection with individual item extraction
@@ -341,6 +360,7 @@ Input Stream → CDC Chunker → Format Processor → Schema Detector → Valida
 - **Deduplication**: Content-based chunk deduplication using SHA-256 hashes
 
 **Performance:**
+
 - Processes data at >1GB/s throughput
 - Constant memory usage regardless of input size
 - Handles files larger than available memory
@@ -410,6 +430,7 @@ catalog_entries (
 ### Performance Features
 
 **Optimized Indexing**:
+
 - Schema-based queries: `pudl list --schema aws`
 - Origin filtering: `pudl list --origin k8s-pods`
 - Format filtering: `pudl list --format json` or `--format ndjson`
@@ -419,6 +440,7 @@ catalog_entries (
 - Timestamp queries: Fast chronological listing
 
 **Query Performance**:
+
 - **O(log n)** indexed queries vs O(n) linear search
 - **Constant memory usage** regardless of catalog size
 - **Database-level filtering** with WHERE clauses
@@ -436,6 +458,7 @@ pudl list
 ```
 
 **Migration Process**:
+
 1. **Detection**: Checks for existing `inventory.json`
 2. **Backup**: Creates timestamped backup before migration
 3. **Migration**: Transfers all entries in single transaction
@@ -445,12 +468,14 @@ pudl list
 ### Catalog Configuration
 
 **Database Settings**:
+
 - **WAL Mode**: Write-Ahead Logging for better concurrency
 - **Cache Size**: 10,000 pages for optimal performance
 - **Connection Pooling**: Proper resource management
 - **Transaction Safety**: ACID compliance for data integrity
 
 **Backup Strategy**:
+
 - Automatic backup before migration
 - Timestamped backup files preserved
 - Original JSON catalog kept as `.migrated`
@@ -473,6 +498,7 @@ pudl list                                    # Instant even with 10,000+ entries
 ### Troubleshooting
 
 **Migration Issues**:
+
 ```bash
 # Check migration status
 ls -la ~/.pudl/data/catalog/
@@ -483,35 +509,35 @@ ls -la ~/.pudl/data/catalog/
 ```
 
 **Performance Monitoring**:
+
 - Database file size indicates catalog growth
 - Query response time should remain sub-second
 - Memory usage stays constant regardless of catalog size
 
-## Streaming Mode Usage
+## Streaming Configuration
 
-PUDL's streaming mode enables processing of large files that exceed available memory using Content-Defined Chunking (CDC).
+PUDL uses streaming processing for all imports, enabling efficient handling of files of any size using Content-Defined Chunking (CDC).
 
-### When to Use Streaming Mode
+### Streaming Benefits
 
-- **Large Files**: Files > 100MB or larger than available RAM
-- **Memory-Constrained Environments**: When running with limited memory
-- **Batch Processing**: Processing multiple large files sequentially
+- **Memory Efficient**: Handles files larger than available RAM
+- **Optimal Performance**: Automatic optimization based on file size
+- **Scalable**: Consistent performance regardless of file size
 
-### Streaming Configuration
+### Configuration Options
 
 ```bash
-# Basic streaming (automatic configuration)
-pudl import --path large-dataset.json --streaming
+# Default streaming (automatic configuration)
+pudl import --path large-dataset.json
 
 # Custom memory limit (MB)
-pudl import --path huge-file.json --streaming --streaming-memory 500
+pudl import --path huge-file.json --streaming-memory 500
 
 # Custom chunk size (MB) - affects memory usage and performance
-pudl import --path massive-data.json --streaming --streaming-chunk-size 0.064
+pudl import --path massive-data.json --streaming-chunk-size 0.064
 
 # Combined configuration for optimal performance
 pudl import --path enterprise-logs.json \
-  --streaming \
   --streaming-memory 1000 \
   --streaming-chunk-size 0.128
 ```
@@ -526,12 +552,14 @@ pudl import --path enterprise-logs.json \
 ### Automatic Optimization
 
 PUDL automatically optimizes streaming configuration based on file size:
+
 - **Small files** (< 10KB): Uses small chunks (64B-1KB) for optimal processing
 - **Large files** (≥ 10KB): Uses configurable chunks (default: 16KB average)
 
 ## Example Workflows
 
 ### Import and Analyze AWS Data
+
 ```bash
 # Import EC2 instance data
 pudl import --path aws-ec2-describe-instances.json
@@ -544,6 +572,7 @@ pudl show 20250825_222545_aws-ec2-describe-instances --raw
 ```
 
 ### Work with NDJSON Collections
+
 ```bash
 # Import cloud inventory NDJSON file
 pudl import --path cloud-inventory-2024.json
@@ -576,6 +605,7 @@ pudl import --path enterprise-logs.json --streaming
 ```
 
 ### Manage Custom Schemas
+
 ```bash
 # Create a custom schema file (my-api.cue)
 # Add it to PUDL
@@ -596,6 +626,7 @@ pudl schema log
 ```
 
 ### Process Large Datasets with Streaming
+
 ```bash
 # Import a large log file with streaming
 pudl import --path application-logs-2024.json --streaming
@@ -614,6 +645,7 @@ pudl list --sort-by size --reverse --limit 5
 ```
 
 ### Data Discovery
+
 ```bash
 # Find all YAML files imported in the last week
 pudl list --format yaml --sort-by timestamp --reverse
@@ -626,6 +658,7 @@ pudl list --verbose
 ```
 
 ### High-Performance Catalog Queries
+
 ```bash
 # Fast filtering with database indexes (scales to 100,000+ entries)
 pudl list --schema aws.#EC2Instance          # All EC2 instances
@@ -655,6 +688,7 @@ PUDL has a comprehensive test suite with 291 passing tests covering all core fun
 - **System Reliability**: Stress testing, concurrent operations, edge cases (100% coverage)
 
 **Performance Benchmarks:**
+
 - Database: 15,771 entries/sec insert, <1ms queries
 - Import: 15,932 records/sec processing
 - Concurrent: 10 workers, 1000 operations each, 0 errors

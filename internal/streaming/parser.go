@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PlakarKorp/go-cdc-chunkers"
+	chunkers "github.com/PlakarKorp/go-cdc-chunkers"
 	_ "github.com/PlakarKorp/go-cdc-chunkers/chunkers/fastcdc"
 	_ "github.com/PlakarKorp/go-cdc-chunkers/chunkers/ultracdc"
 )
@@ -37,17 +37,17 @@ func NewStreamingParser(config *StreamingConfig) (*DefaultStreamingParser, error
 	if config == nil {
 		config = DefaultStreamingConfig()
 	}
-	
+
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	// Create memory monitor
 	memMonitor := NewMemoryMonitor(config.MaxMemoryMB)
-	
+
 	// Create backpressure controller
 	backpressure := NewBackpressureController(memMonitor)
-	
+
 	parser := &DefaultStreamingParser{
 		config:             config,
 		memoryMonitor:      memMonitor,
@@ -58,7 +58,7 @@ func NewStreamingParser(config *StreamingConfig) (*DefaultStreamingParser, error
 			StartTime: time.Now(),
 		},
 	}
-	
+
 	return parser, nil
 }
 
@@ -66,9 +66,9 @@ func NewStreamingParser(config *StreamingConfig) (*DefaultStreamingParser, error
 func (p *DefaultStreamingParser) Parse(ctx context.Context, reader io.Reader) (<-chan ParsedChunk, <-chan error) {
 	resultChan := make(chan ParsedChunk, 100)
 	errorChan := make(chan error, 10)
-	
+
 	go p.parseStream(ctx, reader, resultChan, errorChan)
-	
+
 	return resultChan, errorChan
 }
 
@@ -76,19 +76,19 @@ func (p *DefaultStreamingParser) Parse(ctx context.Context, reader io.Reader) (<
 func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Reader, results chan<- ParsedChunk, errors chan<- error) {
 	defer close(results)
 	defer close(errors)
-	
+
 	p.mu.Lock()
 	p.running = true
 	p.stats.StartTime = time.Now()
 	p.mu.Unlock()
-	
+
 	defer func() {
 		p.mu.Lock()
 		p.running = false
 		p.stats.Duration = time.Since(p.stats.StartTime)
 		p.mu.Unlock()
 	}()
-	
+
 	// Create CDC chunker
 	chunker, err := p.createChunker(reader)
 	if err != nil {
@@ -97,27 +97,27 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 	}
 
 	// Chunker created successfully
-	
+
 	// Start progress reporting if available
 	if p.progressReporter != nil {
 		p.progressReporter.Start(0, "Streaming Parse") // Unknown total size
 	}
-	
+
 	sequence := 0
 	errorCount := int64(0)
-	
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 		}
-		
+
 		// Check for backpressure
 		if p.backpressure.ShouldPause() {
 			p.backpressure.WaitForResume()
 		}
-		
+
 		// Get next chunk from CDC
 		chunkData, err := chunker.Next()
 		if err == io.EOF {
@@ -146,13 +146,13 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 			Sequence: sequence,
 			Time:     time.Now(),
 		}
-		
+
 		// Check for deduplication
 		if p.isDuplicate(cdcChunk.Hash) {
 			p.updateStats(int64(cdcChunk.Size), 0, 0)
 			continue
 		}
-		
+
 		// Process the chunk
 		parsedChunk, err := p.processChunk(cdcChunk)
 		if err != nil {
@@ -168,25 +168,25 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 				return
 			}
 		}
-		
+
 		// Send result
 		select {
 		case results <- *parsedChunk:
 		case <-ctx.Done():
 			return
 		}
-		
+
 		// Update statistics
 		p.updateStats(int64(cdcChunk.Size), 1, int64(len(parsedChunk.Objects)))
-		
+
 		// Update progress
 		if p.progressReporter != nil {
 			p.progressReporter.Update(p.stats.BytesProcessed, "")
 		}
-		
+
 		sequence++
 	}
-	
+
 	// Finish progress reporting
 	if p.progressReporter != nil {
 		result := ProcessingResult{
@@ -240,15 +240,15 @@ func (p *DefaultStreamingParser) processChunk(chunk *CDCChunk) (*ParsedChunk, er
 
 	// Create parsed chunk
 	parsedChunk := &ParsedChunk{
-		Objects:    processed.Objects,
-		Metadata:   processed.Metadata,
-		Format:     processed.Format,
-		Offset:     chunk.Offset,
-		Size:       chunk.Size,
-		Hash:       chunk.Hash,
-		Sequence:   chunk.Sequence,
-		Time:       chunk.Time,
-		Errors:     processed.Errors,
+		Objects:  processed.Objects,
+		Metadata: processed.Metadata,
+		Format:   processed.Format,
+		Offset:   chunk.Offset,
+		Size:     chunk.Size,
+		Hash:     chunk.Hash,
+		Sequence: chunk.Sequence,
+		Time:     chunk.Time,
+		Errors:   processed.Errors,
 	}
 
 	// Add sample to schema detector if available
@@ -294,7 +294,7 @@ func (p *DefaultStreamingParser) shouldContinueOnError(errorCount int64) bool {
 	if p.stats.ChunksProcessed == 0 {
 		return true // Always continue for the first few chunks
 	}
-	
+
 	errorRate := float64(errorCount) / float64(p.stats.ChunksProcessed)
 	return errorRate <= p.config.ErrorTolerance
 }
@@ -303,16 +303,16 @@ func (p *DefaultStreamingParser) shouldContinueOnError(errorCount int64) bool {
 func (p *DefaultStreamingParser) updateStats(bytes, chunks, objects int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.stats.BytesProcessed += bytes
 	p.stats.ChunksProcessed += chunks
 	p.stats.ObjectsExtracted += objects
-	
+
 	// Update memory usage
 	if current, _, _ := p.memoryMonitor.CheckMemory(); current > 0 {
 		p.stats.MemoryUsage = current * 1024 * 1024 // Convert MB to bytes
 	}
-	
+
 	// Calculate throughput
 	duration := time.Since(p.stats.StartTime)
 	if duration.Seconds() > 0 {
@@ -325,17 +325,17 @@ func (p *DefaultStreamingParser) Configure(config *StreamingConfig) error {
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid configuration: %w", err)
 	}
-	
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.config = config
-	
+
 	// Update memory monitor
 	if err := p.memoryMonitor.SetLimit(config.MaxMemoryMB); err != nil {
 		return fmt.Errorf("failed to update memory limit: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -343,10 +343,10 @@ func (p *DefaultStreamingParser) Configure(config *StreamingConfig) error {
 func (p *DefaultStreamingParser) Stats() ParsingStats {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	stats := p.stats
 	stats.Duration = time.Since(p.stats.StartTime)
-	
+
 	return stats
 }
 
@@ -354,17 +354,17 @@ func (p *DefaultStreamingParser) Stats() ParsingStats {
 func (p *DefaultStreamingParser) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if p.closed {
 		return nil
 	}
-	
+
 	p.closed = true
 	p.running = false
-	
+
 	// Clear deduplication cache to free memory
 	p.deduplicationCache = make(map[string]bool)
-	
+
 	return nil
 }
 
