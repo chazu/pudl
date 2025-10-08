@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"gopkg.in/yaml.v3"
 )
 
 // GenericChunkProcessor handles chunks of unknown format
@@ -20,7 +22,7 @@ func NewGenericChunkProcessor() *GenericChunkProcessor {
 func (p *GenericChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, error) {
 	// Try to detect the format
 	format := p.detectFormat(chunk.Data)
-	
+
 	// Create basic processed chunk
 	processed := &ProcessedChunk{
 		Original:   chunk,
@@ -31,16 +33,18 @@ func (p *GenericChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, 
 		Partial:    false,
 		Boundaries: []int{},
 	}
-	
+
 	// Add basic metadata
 	processed.Metadata["size"] = chunk.Size
 	processed.Metadata["format"] = format
 	processed.Metadata["detected_at"] = chunk.Time
-	
+
 	// Try to extract some basic information based on format
 	switch format {
 	case "json":
 		return p.processJSONChunk(chunk, processed)
+	case "yaml":
+		return p.processYAMLChunk(chunk, processed)
 	case "text":
 		return p.processTextChunk(chunk, processed)
 	case "binary":
@@ -53,7 +57,7 @@ func (p *GenericChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, 
 			"format":   "unknown",
 		})
 	}
-	
+
 	return processed, nil
 }
 
@@ -73,33 +77,33 @@ func (p *GenericChunkProcessor) detectFormat(data []byte) string {
 	if len(data) == 0 {
 		return "empty"
 	}
-	
+
 	// Trim whitespace for analysis
 	trimmed := bytes.TrimSpace(data)
 	if len(trimmed) == 0 {
 		return "whitespace"
 	}
-	
+
 	// Check for JSON
 	if p.looksLikeJSON(trimmed) {
 		return "json"
 	}
-	
+
 	// Check for CSV
 	if p.looksLikeCSV(trimmed) {
 		return "csv"
 	}
-	
+
 	// Check for YAML
 	if p.looksLikeYAML(trimmed) {
 		return "yaml"
 	}
-	
+
 	// Check if it's mostly text
 	if p.isText(data) {
 		return "text"
 	}
-	
+
 	return "binary"
 }
 
@@ -108,7 +112,7 @@ func (p *GenericChunkProcessor) looksLikeJSON(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	// Check for JSON object or array start
 	first := data[0]
 	if first == '{' || first == '[' {
@@ -116,7 +120,7 @@ func (p *GenericChunkProcessor) looksLikeJSON(data []byte) bool {
 		var obj interface{}
 		return json.Unmarshal(data, &obj) == nil
 	}
-	
+
 	return false
 }
 
@@ -125,18 +129,18 @@ func (p *GenericChunkProcessor) looksLikeCSV(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	lines := bytes.Split(data, []byte("\n"))
 	if len(lines) < 2 {
 		return false
 	}
-	
+
 	// Check if first few lines have consistent comma count
 	firstLineCommas := bytes.Count(lines[0], []byte(","))
 	if firstLineCommas == 0 {
 		return false
 	}
-	
+
 	consistentLines := 0
 	for i := 1; i < len(lines) && i < 5; i++ {
 		if len(lines[i]) == 0 {
@@ -146,7 +150,7 @@ func (p *GenericChunkProcessor) looksLikeCSV(data []byte) bool {
 			consistentLines++
 		}
 	}
-	
+
 	return consistentLines >= 2
 }
 
@@ -155,24 +159,24 @@ func (p *GenericChunkProcessor) looksLikeYAML(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	lines := bytes.Split(data, []byte("\n"))
 	yamlIndicators := 0
-	
+
 	for _, line := range lines {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}
-		
+
 		// Look for YAML indicators
-		if bytes.Contains(line, []byte(": ")) || 
-		   bytes.HasPrefix(line, []byte("- ")) ||
-		   bytes.HasPrefix(line, []byte("---")) {
+		if bytes.Contains(line, []byte(": ")) ||
+			bytes.HasPrefix(line, []byte("- ")) ||
+			bytes.HasPrefix(line, []byte("---")) {
 			yamlIndicators++
 		}
 	}
-	
+
 	return yamlIndicators > 0
 }
 
@@ -181,14 +185,14 @@ func (p *GenericChunkProcessor) isText(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	textChars := 0
 	for _, b := range data {
 		if unicode.IsPrint(rune(b)) || unicode.IsSpace(rune(b)) {
 			textChars++
 		}
 	}
-	
+
 	// Consider it text if more than 80% of characters are printable
 	return float64(textChars)/float64(len(data)) > 0.8
 }
@@ -203,10 +207,34 @@ func (p *GenericChunkProcessor) processJSONChunk(chunk *CDCChunk, processed *Pro
 		processed.Errors = append(processed.Errors, fmt.Errorf("invalid JSON: %w", err))
 		return p.processTextChunk(chunk, processed)
 	}
-	
+
+	// Handle arrays by extracting individual elements (matches legacy behavior)
+	if arr, ok := obj.([]interface{}); ok {
+		processed.Objects = append(processed.Objects, arr...)
+		processed.Metadata["json_type"] = "array"
+		processed.Metadata["array_length"] = len(arr)
+	} else {
+		processed.Objects = append(processed.Objects, obj)
+		processed.Metadata["json_type"] = getJSONType(obj)
+	}
+
+	return processed, nil
+}
+
+// processYAMLChunk processes a chunk that looks like YAML
+func (p *GenericChunkProcessor) processYAMLChunk(chunk *CDCChunk, processed *ProcessedChunk) (*ProcessedChunk, error) {
+	// Try to parse as YAML using the standard library
+	var obj interface{}
+	if err := yaml.Unmarshal(chunk.Data, &obj); err != nil {
+		// Not valid YAML, treat as text
+		processed.Format = "text"
+		processed.Errors = append(processed.Errors, fmt.Errorf("invalid YAML: %w", err))
+		return p.processTextChunk(chunk, processed)
+	}
+
 	processed.Objects = append(processed.Objects, obj)
-	processed.Metadata["json_type"] = getJSONType(obj)
-	
+	processed.Metadata["yaml_type"] = getJSONType(obj) // YAML and JSON have similar types
+
 	return processed, nil
 }
 
@@ -214,7 +242,7 @@ func (p *GenericChunkProcessor) processJSONChunk(chunk *CDCChunk, processed *Pro
 func (p *GenericChunkProcessor) processTextChunk(chunk *CDCChunk, processed *ProcessedChunk) (*ProcessedChunk, error) {
 	text := string(chunk.Data)
 	lines := strings.Split(text, "\n")
-	
+
 	// Create a text object
 	textObj := map[string]interface{}{
 		"content":    text,
@@ -222,7 +250,7 @@ func (p *GenericChunkProcessor) processTextChunk(chunk *CDCChunk, processed *Pro
 		"char_count": len(text),
 		"byte_count": len(chunk.Data),
 	}
-	
+
 	// Add some basic text analysis
 	if len(lines) > 0 {
 		textObj["first_line"] = lines[0]
@@ -230,10 +258,10 @@ func (p *GenericChunkProcessor) processTextChunk(chunk *CDCChunk, processed *Pro
 			textObj["last_line"] = lines[len(lines)-1]
 		}
 	}
-	
+
 	processed.Objects = append(processed.Objects, textObj)
 	processed.Metadata["encoding"] = "utf-8" // Assume UTF-8 for now
-	
+
 	return processed, nil
 }
 
@@ -246,10 +274,10 @@ func (p *GenericChunkProcessor) processBinaryChunk(chunk *CDCChunk, processed *P
 		"hash":        chunk.Hash,
 		"first_bytes": getFirstBytes(chunk.Data, 16),
 	}
-	
+
 	processed.Objects = append(processed.Objects, binaryObj)
 	processed.Metadata["encoding"] = "binary"
-	
+
 	return processed, nil
 }
 
@@ -283,7 +311,7 @@ func getFirstBytes(data []byte, n int) string {
 	if n == 0 {
 		return ""
 	}
-	
+
 	return fmt.Sprintf("%x", data[:n])
 }
 
@@ -324,13 +352,26 @@ func (r *ProcessorRegistry) GetProcessor(format string) ChunkProcessor {
 
 // GetBestProcessor returns the best processor for the given data
 func (r *ProcessorRegistry) GetBestProcessor(data []byte) ChunkProcessor {
-	// Try each processor to see which one can handle the data
+	// For chunks < 2KB, prefer generic processor for JSON/YAML due to simpler, more reliable parsing
+	// but still allow specialized processors for formats that need them (like CSV)
+	if len(data) < 2048 {
+		// Try specialized processors first for formats that need them
+		for _, processor := range r.processors {
+			if processor.FormatName() == "csv" && processor.CanProcess(data) {
+				return processor
+			}
+		}
+		// For JSON/YAML, use generic processor which is more reliable for complete objects
+		return r.processors["generic"]
+	}
+
+	// For larger chunks, try specialized processors
 	for _, processor := range r.processors {
 		if processor.FormatName() != "generic" && processor.CanProcess(data) {
 			return processor
 		}
 	}
-	
+
 	// Fallback to generic processor
 	return r.processors["generic"]
 }

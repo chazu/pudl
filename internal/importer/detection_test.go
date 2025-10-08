@@ -146,10 +146,10 @@ func TestIsNewlineDelimitedJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name       string
-		content    string
-		isNDJSON   bool
-		shouldErr  bool
+		name      string
+		content   string
+		isNDJSON  bool
+		shouldErr bool
 	}{
 		{
 			name:      "valid NDJSON",
@@ -293,11 +293,11 @@ func TestAnalyzeData_JSON(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name            string
-		content         string
-		expectedCount   int
-		expectError     bool
-		validateData    func(t *testing.T, data interface{})
+		name          string
+		content       string
+		expectedCount int
+		expectError   bool
+		validateData  func(t *testing.T, data interface{})
 	}{
 		{
 			name:          "valid JSON object",
@@ -340,8 +340,8 @@ func TestAnalyzeData_JSON(t *testing.T) {
 			// Create test file
 			filePath := setup.WriteFile("test.json", tt.content)
 
-			// Test data analysis
-			data, count, err := importer.analyzeData(filePath, "json")
+			// Test data analysis using streaming
+			data, count, err := importer.analyzeDataStreaming(filePath, "json", nil)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -389,8 +389,8 @@ func TestAnalyzeData_YAML(t *testing.T) {
 			// Create test file
 			filePath := setup.WriteFile("test.yaml", tt.content)
 
-			// Test data analysis
-			data, count, err := importer.analyzeData(filePath, "yaml")
+			// Test data analysis using streaming
+			data, count, err := importer.analyzeDataStreaming(filePath, "yaml", nil)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -415,8 +415,8 @@ func TestAnalyzeData_CSV(t *testing.T) {
 	// Create test file
 	filePath := setup.WriteFile("test.csv", fixtures.CSVData())
 
-	// Test data analysis
-	data, count, err := importer.analyzeData(filePath, "csv")
+	// Test data analysis using streaming
+	data, count, err := importer.analyzeDataStreaming(filePath, "csv", nil)
 	require.NoError(t, err)
 
 	// CSV should return 3 records (excluding header)
@@ -440,8 +440,8 @@ func TestAnalyzeData_UnknownFormat(t *testing.T) {
 	// Create test file with unknown format
 	filePath := setup.WriteFile("test.bin", "binary data")
 
-	// Test data analysis
-	data, count, err := importer.analyzeData(filePath, "unknown")
+	// Test data analysis using streaming
+	data, count, err := importer.analyzeDataStreaming(filePath, "unknown", nil)
 	require.NoError(t, err)
 
 	// Unknown format should return basic info
