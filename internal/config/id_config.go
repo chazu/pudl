@@ -14,26 +14,22 @@ import (
 type IDGenerationConfig struct {
 	// Default format to use for new IDs
 	DefaultFormat idgen.IDFormat `json:"default_format"`
-	
-	// Whether to enable human-friendly IDs (vs legacy format)
+
+	// Whether to enable human-friendly IDs
 	EnableFriendlyIDs bool `json:"enable_friendly_ids"`
-	
+
 	// Format overrides for specific origins
 	OriginOverrides map[string]idgen.IDConfig `json:"origin_overrides,omitempty"`
-	
+
 	// Global prefix for all IDs (optional)
 	GlobalPrefix string `json:"global_prefix,omitempty"`
-	
-	// Whether to maintain backward compatibility with legacy IDs
-	LegacyCompatibility bool `json:"legacy_compatibility"`
 }
 
 // DefaultIDConfig returns sensible defaults for ID generation
 func DefaultIDConfig() *IDGenerationConfig {
 	return &IDGenerationConfig{
-		DefaultFormat:       idgen.FormatProquint,
-		EnableFriendlyIDs:   true,
-		LegacyCompatibility: true,
+		DefaultFormat:     idgen.FormatProquint,
+		EnableFriendlyIDs: true,
 		OriginOverrides: map[string]idgen.IDConfig{
 			"aws":        idgen.DefaultConfigs["aws"],
 			"kubernetes": idgen.DefaultConfigs["kubernetes"],
@@ -48,14 +44,14 @@ func (c *IDGenerationConfig) GetConfigForOrigin(origin string) idgen.IDConfig {
 	if config, exists := c.OriginOverrides[origin]; exists {
 		return config
 	}
-	
+
 	// Check for partial matches
 	for pattern, config := range c.OriginOverrides {
 		if containsIgnoreCase(origin, pattern) {
 			return config
 		}
 	}
-	
+
 	// Return default config
 	return idgen.IDConfig{
 		Format: c.DefaultFormat,
@@ -66,11 +62,6 @@ func (c *IDGenerationConfig) GetConfigForOrigin(origin string) idgen.IDConfig {
 // ShouldUseFriendlyIDs returns whether to use friendly IDs for new entries
 func (c *IDGenerationConfig) ShouldUseFriendlyIDs() bool {
 	return c.EnableFriendlyIDs
-}
-
-// ShouldMaintainLegacyCompatibility returns whether to maintain legacy ID support
-func (c *IDGenerationConfig) ShouldMaintainLegacyCompatibility() bool {
-	return c.LegacyCompatibility
 }
 
 // ConfigManager handles loading and saving ID configuration
@@ -93,7 +84,7 @@ func (m *ConfigManager) LoadConfig() (*IDGenerationConfig, error) {
 	if m.config != nil {
 		return m.config, nil
 	}
-	
+
 	// Check if config file exists
 	if _, err := os.Stat(m.configPath); os.IsNotExist(err) {
 		// Create default config
@@ -103,18 +94,18 @@ func (m *ConfigManager) LoadConfig() (*IDGenerationConfig, error) {
 		}
 		return m.config, nil
 	}
-	
+
 	// Load existing config
 	data, err := os.ReadFile(m.configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	var config IDGenerationConfig
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
-	
+
 	m.config = &config
 	return m.config, nil
 }
@@ -124,23 +115,23 @@ func (m *ConfigManager) SaveConfig() error {
 	if m.config == nil {
 		return fmt.Errorf("no config to save")
 	}
-	
+
 	// Ensure config directory exists
 	if err := os.MkdirAll(filepath.Dir(m.configPath), 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	// Marshal config to JSON
 	data, err := json.MarshalIndent(m.config, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
-	
+
 	// Write to file
 	if err := os.WriteFile(m.configPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -183,13 +174,6 @@ func (m *ConfigManager) EnableFriendlyIDs(enable bool) error {
 	return m.UpdateConfig(config)
 }
 
-// SetLegacyCompatibility enables or disables legacy ID compatibility
-func (m *ConfigManager) SetLegacyCompatibility(enable bool) error {
-	config := m.GetConfig()
-	config.LegacyCompatibility = enable
-	return m.UpdateConfig(config)
-}
-
 // ValidateConfig validates the configuration for consistency
 func (c *IDGenerationConfig) ValidateConfig() error {
 	// Validate default format
@@ -198,9 +182,9 @@ func (c *IDGenerationConfig) ValidateConfig() error {
 		idgen.FormatReadable,
 		idgen.FormatCompact,
 		idgen.FormatSequential,
-		idgen.FormatLegacy,
+		idgen.FormatProquint,
 	}
-	
+
 	valid := false
 	for _, format := range validFormats {
 		if c.DefaultFormat == format {
@@ -208,11 +192,11 @@ func (c *IDGenerationConfig) ValidateConfig() error {
 			break
 		}
 	}
-	
+
 	if !valid {
 		return fmt.Errorf("invalid default format: %s", c.DefaultFormat)
 	}
-	
+
 	// Validate origin overrides
 	for origin, config := range c.OriginOverrides {
 		valid = false
@@ -222,12 +206,12 @@ func (c *IDGenerationConfig) ValidateConfig() error {
 				break
 			}
 		}
-		
+
 		if !valid {
 			return fmt.Errorf("invalid format for origin %s: %s", origin, config.Format)
 		}
 	}
-	
+
 	return nil
 }
 

@@ -26,9 +26,6 @@ const (
 
 	// Proquints - pronounceable quintuplets (e.g., "lusab-babad", "gutih-tugad")
 	FormatProquint IDFormat = "proquint"
-
-	// Legacy format (current long format for compatibility)
-	FormatLegacy IDFormat = "legacy"
 )
 
 // IDGenerator provides configurable ID generation
@@ -62,8 +59,6 @@ func (g *IDGenerator) Generate(context ...string) string {
 		return g.generateSequential()
 	case FormatProquint:
 		return g.generateProquint()
-	case FormatLegacy:
-		return g.generateLegacy(context...)
 	default:
 		return g.generateShortCode() // Default fallback
 	}
@@ -73,13 +68,13 @@ func (g *IDGenerator) Generate(context ...string) string {
 func (g *IDGenerator) generateShortCode() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
 	const length = 6
-	
+
 	result := make([]byte, length)
 	for i := range result {
 		num, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 		result[i] = charset[num.Int64()]
 	}
-	
+
 	if g.prefix != "" {
 		return fmt.Sprintf("%s-%s", g.prefix, string(result))
 	}
@@ -92,20 +87,20 @@ func (g *IDGenerator) generateReadable() string {
 		"blue", "red", "green", "fast", "slow", "big", "small", "bright", "dark", "cool",
 		"warm", "fresh", "old", "new", "clean", "sharp", "soft", "hard", "light", "heavy",
 	}
-	
+
 	nouns := []string{
 		"cat", "dog", "tree", "rock", "star", "moon", "sun", "wave", "fire", "wind",
 		"bird", "fish", "bear", "lion", "wolf", "fox", "deer", "owl", "hawk", "dove",
 	}
-	
+
 	adjIdx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(adjectives))))
 	nounIdx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(nouns))))
 	num, _ := rand.Int(rand.Reader, big.NewInt(99))
-	
+
 	adj := adjectives[adjIdx.Int64()]
 	noun := nouns[nounIdx.Int64()]
 	number := num.Int64() + 1
-	
+
 	if g.prefix != "" {
 		return fmt.Sprintf("%s-%s-%s-%02d", g.prefix, adj, noun, number)
 	}
@@ -158,21 +153,6 @@ func (g *IDGenerator) generateProquint() string {
 	return proquint
 }
 
-// generateLegacy creates IDs in the current long format for compatibility
-func (g *IDGenerator) generateLegacy(context ...string) string {
-	timestamp := time.Now()
-	timestampStr := timestamp.Format("20060102_150405")
-	
-	if len(context) > 0 && context[0] != "" {
-		return fmt.Sprintf("%s_%s", timestampStr, context[0])
-	}
-	
-	if g.prefix != "" {
-		return fmt.Sprintf("%s_%s", timestampStr, g.prefix)
-	}
-	return timestampStr
-}
-
 // GenerateCollectionItemID creates IDs for collection items
 func (g *IDGenerator) GenerateCollectionItemID(collectionID string, index int, itemData map[string]interface{}) string {
 	switch g.format {
@@ -201,13 +181,6 @@ func (g *IDGenerator) GenerateCollectionItemID(collectionID string, index int, i
 		proquint := numberToProquint(uint32(index + 1000)) // Add offset to avoid very short proquints
 		return fmt.Sprintf("%s-%s", collectionID, proquint)
 
-	case FormatLegacy:
-		// Use existing logic for backward compatibility
-		if id := extractDataID(itemData); id != "" {
-			return fmt.Sprintf("%s_%s", collectionID, id)
-		}
-		return fmt.Sprintf("%s_item_%d", collectionID, index)
-
 	default:
 		return fmt.Sprintf("%s-%02d", collectionID, index)
 	}
@@ -217,7 +190,7 @@ func (g *IDGenerator) GenerateCollectionItemID(collectionID string, index int, i
 func extractDataID(itemData map[string]interface{}) string {
 	// Try common ID fields
 	idFields := []string{"id", "ID", "identifier", "name", "externalId", "external_id"}
-	
+
 	for _, field := range idFields {
 		if value, exists := itemData[field]; exists {
 			if str, ok := value.(string); ok && str != "" {
@@ -225,7 +198,7 @@ func extractDataID(itemData map[string]interface{}) string {
 			}
 		}
 	}
-	
+
 	return ""
 }
 
@@ -235,7 +208,7 @@ func sanitizeID(id string, maxLength int) string {
 	id = strings.ReplaceAll(id, " ", "-")
 	id = strings.ReplaceAll(id, "_", "-")
 	id = strings.ToLower(id)
-	
+
 	// Remove non-alphanumeric characters except hyphens
 	var result strings.Builder
 	for _, r := range id {
@@ -243,17 +216,17 @@ func sanitizeID(id string, maxLength int) string {
 			result.WriteRune(r)
 		}
 	}
-	
+
 	cleaned := result.String()
-	
+
 	// Truncate if too long
 	if len(cleaned) > maxLength {
 		cleaned = cleaned[:maxLength]
 	}
-	
+
 	// Remove trailing hyphens
 	cleaned = strings.TrimRight(cleaned, "-")
-	
+
 	return cleaned
 }
 
@@ -269,7 +242,6 @@ var DefaultConfigs = map[string]IDConfig{
 	"aws":         {Format: FormatCompact, Prefix: "aws"},
 	"kubernetes":  {Format: FormatCompact, Prefix: "k8s"},
 	"collections": {Format: FormatProquint, Prefix: "col"},
-	"legacy":      {Format: FormatLegacy, Prefix: ""},
 }
 
 // Proquint implementation - converts numbers to pronounceable quintuplets
@@ -304,11 +276,11 @@ func bytesToQuintuplet(high, low byte) string {
 	val := uint16(high)<<8 | uint16(low)
 
 	// Extract 5 components (4 bits each for consonants, 2 bits each for vowels)
-	c1 := (val >> 12) & 0x0F  // bits 15-12
-	v1 := (val >> 10) & 0x03  // bits 11-10
-	c2 := (val >> 6) & 0x0F   // bits 9-6
-	v2 := (val >> 4) & 0x03   // bits 5-4
-	c3 := val & 0x0F          // bits 3-0
+	c1 := (val >> 12) & 0x0F // bits 15-12
+	v1 := (val >> 10) & 0x03 // bits 11-10
+	c2 := (val >> 6) & 0x0F  // bits 9-6
+	v2 := (val >> 4) & 0x03  // bits 5-4
+	c3 := val & 0x0F         // bits 3-0
 
 	return string([]byte{
 		consonants[c1],

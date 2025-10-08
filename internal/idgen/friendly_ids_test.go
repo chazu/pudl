@@ -73,11 +73,11 @@ func TestIDGeneration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gen := NewIDGenerator(tt.format, tt.prefix)
 			id := gen.Generate()
-			
+
 			if !matchesPattern(id, tt.expected) {
 				t.Errorf("Generated ID %q doesn't match expected pattern %q", id, tt.expected)
 			}
-			
+
 			// Test that multiple generations are unique
 			id2 := gen.Generate()
 			if id == id2 && tt.format != FormatSequential {
@@ -89,35 +89,35 @@ func TestIDGeneration(t *testing.T) {
 
 func TestCollectionItemIDs(t *testing.T) {
 	tests := []struct {
-		name         string
-		format       IDFormat
-		collectionID string
-		index        int
-		itemData     map[string]interface{}
+		name            string
+		format          IDFormat
+		collectionID    string
+		index           int
+		itemData        map[string]interface{}
 		expectedPattern string
 	}{
 		{
-			name:         "short code with extracted ID",
-			format:       FormatShortCode,
-			collectionID: "abc123",
-			index:        0,
-			itemData:     map[string]interface{}{"id": "user-123"},
+			name:            "short code with extracted ID",
+			format:          FormatShortCode,
+			collectionID:    "abc123",
+			index:           0,
+			itemData:        map[string]interface{}{"id": "user-123"},
 			expectedPattern: "^abc123-user-123$",
 		},
 		{
-			name:         "readable format",
-			format:       FormatReadable,
-			collectionID: "blue-cat-42",
-			index:        5,
-			itemData:     map[string]interface{}{},
+			name:            "readable format",
+			format:          FormatReadable,
+			collectionID:    "blue-cat-42",
+			index:           5,
+			itemData:        map[string]interface{}{},
 			expectedPattern: "^blue-cat-42-item-05$",
 		},
 		{
-			name:         "compact format",
-			format:       FormatCompact,
-			collectionID: "1207-a1b",
-			index:        10,
-			itemData:     map[string]interface{}{},
+			name:            "compact format",
+			format:          FormatCompact,
+			collectionID:    "1207-a1b",
+			index:           10,
+			itemData:        map[string]interface{}{},
 			expectedPattern: "^1207-a1b-10$",
 		},
 	}
@@ -126,7 +126,7 @@ func TestCollectionItemIDs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			gen := NewIDGenerator(tt.format, "")
 			id := gen.GenerateCollectionItemID(tt.collectionID, tt.index, tt.itemData)
-			
+
 			if !matchesPattern(id, tt.expectedPattern) {
 				t.Errorf("Generated item ID %q doesn't match expected pattern %q", id, tt.expectedPattern)
 			}
@@ -178,8 +178,8 @@ func TestProquintConversion(t *testing.T) {
 		expected string
 	}{
 		{0x00000000, "babab-babab"},
-		{0x7F000001, "lurab-babad"},  // Corrected expected value
-		{0xFFFFFFFF, "vuvuv-vuvuv"},  // Corrected expected value
+		{0x7F000001, "lurab-babad"}, // Corrected expected value
+		{0xFFFFFFFF, "vuvuv-vuvuv"}, // Corrected expected value
 	}
 
 	for _, tt := range tests {
@@ -202,7 +202,7 @@ func TestProquintConversion(t *testing.T) {
 }
 
 func TestDefaultConfigs(t *testing.T) {
-	expectedConfigs := []string{"general", "aws", "kubernetes", "collections", "legacy"}
+	expectedConfigs := []string{"general", "aws", "kubernetes", "collections"}
 
 	for _, configName := range expectedConfigs {
 		config, exists := DefaultConfigs[configName]
@@ -226,15 +226,15 @@ func ExampleIDGenerator() {
 	// Short codes - great for general use
 	shortGen := NewIDGenerator(FormatShortCode, "")
 	fmt.Printf("Short: %s\n", shortGen.Generate())
-	
+
 	// Readable - easy to remember and communicate
 	readableGen := NewIDGenerator(FormatReadable, "")
 	fmt.Printf("Readable: %s\n", readableGen.Generate())
-	
+
 	// Compact - good balance of brevity and context
 	compactGen := NewIDGenerator(FormatCompact, "aws")
 	fmt.Printf("Compact: %s\n", compactGen.Generate())
-	
+
 	// Sequential - predictable and ordered
 	seqGen := NewIDGenerator(FormatSequential, "data")
 	fmt.Printf("Sequential: %s\n", seqGen.Generate())
@@ -243,12 +243,12 @@ func ExampleIDGenerator() {
 
 func BenchmarkIDGeneration(b *testing.B) {
 	formats := []IDFormat{FormatShortCode, FormatReadable, FormatCompact, FormatSequential}
-	
+
 	for _, format := range formats {
 		b.Run(string(format), func(b *testing.B) {
 			gen := NewIDGenerator(format, "test")
 			b.ResetTimer()
-			
+
 			for i := 0; i < b.N; i++ {
 				gen.Generate()
 			}
@@ -260,20 +260,20 @@ func BenchmarkIDGeneration(b *testing.B) {
 func matchesPattern(s, pattern string) bool {
 	// Simple pattern matching for test purposes
 	// In a real implementation, you'd use regexp package
-	
+
 	if pattern == "^[a-z0-9]{6}$" {
 		return len(s) == 6 && isAlphanumeric(s)
 	}
-	
+
 	if strings.HasPrefix(pattern, "^aws-") && strings.HasSuffix(pattern, "[a-z0-9]{6}$") {
 		return strings.HasPrefix(s, "aws-") && len(s) == 10 && isAlphanumeric(s[4:])
 	}
-	
+
 	if pattern == "^[a-z]+-[a-z]+-[0-9]{2}$" {
 		parts := strings.Split(s, "-")
 		return len(parts) == 3 && isAlpha(parts[0]) && isAlpha(parts[1]) && isNumeric(parts[2]) && len(parts[2]) == 2
 	}
-	
+
 	if strings.HasPrefix(pattern, "^col-") && strings.Contains(pattern, "[a-z]+-[a-z]+-[0-9]{2}$") {
 		if !strings.HasPrefix(s, "col-") {
 			return false
@@ -282,7 +282,7 @@ func matchesPattern(s, pattern string) bool {
 		parts := strings.Split(remainder, "-")
 		return len(parts) == 3 && isAlpha(parts[0]) && isAlpha(parts[1]) && isNumeric(parts[2]) && len(parts[2]) == 2
 	}
-	
+
 	// Add more pattern matching as needed
 	return true // Simplified for demo
 }
