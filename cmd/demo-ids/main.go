@@ -25,26 +25,15 @@ func main() {
 	demonstrateCollectionItems()
 	fmt.Println()
 
-	// Show migration capabilities
-	demonstrateMigration()
-	fmt.Println()
-
 	// Show display formatting
 	demonstrateDisplay()
 }
 
 func demonstrateFormats() {
-	fmt.Println("🎯 ID Format Comparison")
-	fmt.Println("----------------------")
+	fmt.Println("🎯 Human-Friendly ID Formats")
+	fmt.Println("----------------------------")
 
-	// Current legacy format
-	legacyGen := idgen.NewIDGenerator(idgen.FormatLegacy, "")
-	legacyID := legacyGen.Generate("aws-ec2-describe-instances")
-	fmt.Printf("Legacy (current):  %s\n", legacyID)
-	fmt.Printf("                   Length: %d characters\n", len(legacyID))
-	fmt.Println()
-
-	// New formats
+	// Human-friendly formats
 	formats := []struct {
 		name        string
 		format      idgen.IDFormat
@@ -109,49 +98,19 @@ func demonstrateCollectionItems() {
 
 	for _, format := range formats {
 		fmt.Printf("\n%s Format:\n", strings.Title(string(format)))
-		
+
 		manager := idgen.NewImporterIDManager(idgen.IDConfig{
 			Format: format,
 			Prefix: "col",
 		})
-		
+
 		collectionID := manager.GenerateCollectionID("/data/users.ndjson", "user-collection")
 		fmt.Printf("  Collection: %s\n", collectionID)
-		
+
 		for i, item := range sampleItems {
 			itemID := manager.GenerateItemID(collectionID, i, item)
 			fmt.Printf("  Item %d:     %s\n", i, itemID)
 		}
-	}
-}
-
-func demonstrateMigration() {
-	fmt.Println("🔄 ID Migration")
-	fmt.Println("---------------")
-
-	// Create some legacy IDs
-	legacyIDs := []string{
-		"20241207_143052_aws-ec2-describe-instances",
-		"20241207_143053_kubectl-get-pods",
-		"20241207_143054_unknown-data",
-	}
-
-	helper := idgen.NewIDMigrationHelper(idgen.IDConfig{
-		Format: idgen.FormatCompact,
-		Prefix: "",
-	})
-
-	fmt.Println("Legacy ID → New ID Migration:")
-	for _, legacyID := range legacyIDs {
-		isLegacy := helper.IsLegacyID(legacyID)
-		newID := helper.GenerateNewID(legacyID)
-		
-		fmt.Printf("  %s\n", legacyID)
-		fmt.Printf("  └─ Legacy: %v, New: %s\n", isLegacy, newID)
-		fmt.Printf("     Reduction: %d → %d chars (%.1f%% shorter)\n", 
-			len(legacyID), len(newID), 
-			float64(len(legacyID)-len(newID))/float64(len(legacyID))*100)
-		fmt.Println()
 	}
 }
 
