@@ -2,6 +2,7 @@ package importer
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -322,11 +323,96 @@ func extractPackage(schema string) string {
 	return "unknown"
 }
 
+// analyzeDataDirect analyzes small structured files directly without streaming
+func (i *Importer) analyzeDataDirect(filePath, format string) (interface{}, int, error) {
+	// Read the entire file
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Check for empty file
+	if len(data) == 0 {
+		if format == "json" {
+			return nil, 0, fmt.Errorf("failed to parse JSON data: empty file (EOF)")
+		}
+		if format == "yaml" {
+			return nil, 0, fmt.Errorf("failed to parse YAML data: empty file (EOF)")
+		}
+		return nil, 0, fmt.Errorf("empty file")
+	}
+
+	// Create processor registry and get the best processor
+	registry := streaming.NewProcessorRegistry()
+	processor := registry.GetBestProcessor(data)
+
+	// Create a single chunk with all the data
+	chunk := &streaming.CDCChunk{
+		Data:     data,
+		Offset:   0,
+		Size:     len(data),
+		Hash:     fmt.Sprintf("%x", sha256.Sum256(data)),
+		Sequence: 0,
+		Time:     time.Now(),
+	}
+
+	// Process the chunk
+	result, err := processor.ProcessChunk(chunk)
+	if err != nil {
+		if format == "json" {
+			return nil, 0, fmt.Errorf("failed to parse JSON data: %w", err)
+		}
+		if format == "yaml" {
+			return nil, 0, fmt.Errorf("failed to parse YAML data: %w", err)
+		}
+		return nil, 0, fmt.Errorf("failed to parse %s data: %w", format, err)
+	}
+
+	// Check if any objects were extracted
+	if len(result.Objects) == 0 {
+		if format == "json" {
+			return nil, 0, fmt.Errorf("failed to parse JSON data")
+		}
+		if format == "yaml" {
+			return nil, 0, fmt.Errorf("failed to parse YAML data")
+		}
+		return nil, 0, fmt.Errorf("failed to parse %s data", format)
+	}
+
+	// Return the first object if there's only one, otherwise return all objects
+	if len(result.Objects) == 1 {
+		return result.Objects[0], len(result.Objects), nil
+	}
+	return result.Objects, len(result.Objects), nil
+}
+
 // analyzeDataStreaming analyzes data using the streaming parser for large files
 func (i *Importer) analyzeDataStreaming(filePath, format string, config *streaming.StreamingConfig) (interface{}, int, error) {
 	// Use default config if none provided
 	if config == nil {
 		config = streaming.DefaultStreamingConfig()
+	}
+
+	// Check file size and adjust chunk sizes for small files
+	fileInfo, err := os.Stat(filePath)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	fileSize := fileInfo.Size()
+
+	// For small structured files (< 10KB), bypass streaming and process directly
+	// This avoids issues with CDC chunking splitting JSON/YAML objects
+	if fileSize < 10*1024 && (format == "json" || format == "yaml") {
+		return i.analyzeDataDirect(filePath, format)
+	}
+
+	// For larger files, use streaming with appropriate chunk sizes
+	if fileSize < 10*1024 {
+		// Small file: use tiny chunks to ensure proper chunking
+		config.MinChunkSize = 64   // 64 bytes minimum
+		config.AvgChunkSize = 256  // 256 bytes average
+		config.MaxChunkSize = 1024 // 1KB maximum
 	}
 
 	// Create streaming parser
@@ -401,8 +487,20 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 	if len(allObjects) == 0 {
 		// Check if this was supposed to be a structured format but failed to parse
 		if format == "json" {
+			// Check if file is empty
+			if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() == 0 {
+				return nil, 0, fmt.Errorf("failed to parse JSON data: empty file (EOF)")
+			}
 			// For JSON format, 0 objects usually means parsing failed
 			return nil, 0, fmt.Errorf("failed to parse JSON data")
+		}
+		if format == "yaml" {
+			// Check if file is empty
+			if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() == 0 {
+				return nil, 0, fmt.Errorf("failed to parse YAML data: empty file (EOF)")
+			}
+			// For YAML format, 0 objects usually means parsing failed
+			return nil, 0, fmt.Errorf("failed to parse YAML data")
 		}
 		if format == "unknown" {
 			// For unknown format, return a generic object
@@ -418,7 +516,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 			if rawData, hasRaw := obj["raw_data"]; hasRaw {
 				if (format == "json" || format == "yaml") && rawData != nil {
 					// This was supposed to be structured data but was treated as raw data
-					return nil, 0, fmt.Errorf("invalid %s format", format)
+					return nil, 0, fmt.Errorf("failed to parse %s format", format)
 				}
 			}
 
@@ -427,7 +525,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 				if (format == "json" || format == "yaml") && content != nil {
 					// Check if there were parsing errors
 					if len(allErrors) > 0 {
-						return nil, 0, fmt.Errorf("invalid %s format: %v", format, allErrors[0])
+						return nil, 0, fmt.Errorf("failed to parse %s format: %v", format, allErrors[0])
 					}
 				}
 			}
