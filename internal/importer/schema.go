@@ -43,7 +43,7 @@ func (i *Importer) assignSchema(data interface{}, origin, format string) (string
 	}
 
 	// AWS S3 Bucket detection
-	if i.hasFields(dataMap, []string{"Name", "CreationDate"}) && 
+	if i.hasFields(dataMap, []string{"Name", "CreationDate"}) &&
 		strings.Contains(strings.ToLower(origin), "s3") {
 		return "aws.#S3Bucket", 0.9
 	}
@@ -95,6 +95,8 @@ func (i *Importer) assignSchema(data interface{}, origin, format string) (string
 				return "k8s.#HorizontalPodAutoscaler", 0.95
 			case "StorageClass":
 				return "k8s.#StorageClass", 0.95
+			case "CustomResource":
+				return "k8s.#CustomResource", 0.95
 			default:
 				// Generic Kubernetes resource for unknown kinds
 				return "k8s.#Resource", 0.8
@@ -119,7 +121,7 @@ func (i *Importer) assignSchema(data interface{}, origin, format string) (string
 		return "aws.#Resource", 0.5
 	}
 
-	if strings.Contains(strings.ToLower(origin), "k8s") || 
+	if strings.Contains(strings.ToLower(origin), "k8s") ||
 		strings.Contains(strings.ToLower(origin), "kube") {
 		return "k8s.#Resource", 0.5
 	}

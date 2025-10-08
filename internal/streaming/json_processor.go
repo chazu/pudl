@@ -31,7 +31,7 @@ func (p *JSONChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, err
 
 	// Combine buffer with new chunk data
 	data := append(p.buffer, chunk.Data...)
-	
+
 	// Parse JSON objects from the combined data
 	objects, boundaries, remaining, err := p.parseJSONObjects(data)
 	if err != nil {
@@ -104,18 +104,21 @@ func (p *JSONChunkProcessor) isJSONArray(data []byte) bool {
 // isNewlineDelimitedJSON checks if data contains newline-delimited JSON
 func (p *JSONChunkProcessor) isNewlineDelimitedJSON(data []byte) bool {
 	lines := bytes.Split(data, []byte("\n"))
-	jsonLines := 0
-	
+	validJSONLines := 0
+
 	for _, line := range lines {
 		line = bytes.TrimSpace(line)
 		if len(line) > 0 {
-			if line[0] == '{' || line[0] == '[' {
-				jsonLines++
+			// Check if this line is a complete JSON object/array
+			var obj interface{}
+			if json.Unmarshal(line, &obj) == nil {
+				validJSONLines++
 			}
 		}
 	}
-	
-	return jsonLines > 1 || (jsonLines == 1 && len(lines) > 1)
+
+	// Only consider it NDJSON if there are multiple valid JSON objects on separate lines
+	return validJSONLines > 1
 }
 
 // parseJSONArray parses a JSON array, handling incomplete arrays
@@ -139,13 +142,13 @@ func (p *JSONChunkProcessor) parseJSONArray(data []byte) ([]interface{}, []int, 
 	for decoder.More() {
 		var obj interface{}
 		startPos := int(decoder.InputOffset())
-		
+
 		if err := decoder.Decode(&obj); err != nil {
 			// Incomplete object, return remaining data
 			remaining := data[startPos:]
 			return objects, boundaries, remaining, nil
 		}
-		
+
 		objects = append(objects, obj)
 		endPos := int(decoder.InputOffset())
 		boundaries = append(boundaries, endPos-offset)
@@ -166,7 +169,7 @@ func (p *JSONChunkProcessor) parseNewlineDelimitedJSON(data []byte) ([]interface
 
 	for i, line := range lines {
 		line = bytes.TrimSpace(line)
-		
+
 		// Skip empty lines
 		if len(line) == 0 {
 			currentPos += len(lines[i]) + 1 // +1 for newline
@@ -265,7 +268,7 @@ func (f *JSONBoundaryFinder) FindBoundary(data []byte) int {
 			}
 		}
 	}
-	
+
 	return -1 // No complete object found
 }
 

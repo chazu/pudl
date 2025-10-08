@@ -8,7 +8,7 @@ import (
 type StreamingConfig struct {
 	// CDC Configuration
 	ChunkAlgorithm string `json:"chunk_algorithm" yaml:"chunk_algorithm" default:"fastcdc"`
-	MinChunkSize   int    `json:"min_chunk_size" yaml:"min_chunk_size" default:"64"`    // 64B minimum
+	MinChunkSize   int    `json:"min_chunk_size" yaml:"min_chunk_size" default:"4096"`  // 4KB minimum
 	MaxChunkSize   int    `json:"max_chunk_size" yaml:"max_chunk_size" default:"65536"` // 64KB maximum
 	AvgChunkSize   int    `json:"avg_chunk_size" yaml:"avg_chunk_size" default:"16384"` // 16KB average
 
@@ -41,7 +41,7 @@ type StreamingConfig struct {
 func DefaultStreamingConfig() *StreamingConfig {
 	return &StreamingConfig{
 		ChunkAlgorithm:   "fastcdc",
-		MinChunkSize:     64,    // 64B
+		MinChunkSize:     4096,  // 4KB
 		MaxChunkSize:     65536, // 64KB
 		AvgChunkSize:     16384, // 16KB
 		UseKeyedCDC:      false,

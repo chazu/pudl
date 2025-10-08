@@ -352,23 +352,14 @@ func (r *ProcessorRegistry) GetProcessor(format string) ChunkProcessor {
 
 // GetBestProcessor returns the best processor for the given data
 func (r *ProcessorRegistry) GetBestProcessor(data []byte) ChunkProcessor {
-	// For chunks < 2KB, prefer generic processor for JSON/YAML due to simpler, more reliable parsing
-	// but still allow specialized processors for formats that need them (like CSV)
-	if len(data) < 2048 {
-		// Try specialized processors first for formats that need them
-		for _, processor := range r.processors {
-			if processor.FormatName() == "csv" && processor.CanProcess(data) {
+	// Try specialized processors in priority order
+	processorOrder := []string{"json", "csv", "yaml"}
+
+	for _, formatName := range processorOrder {
+		if processor, exists := r.processors[formatName]; exists {
+			if processor.CanProcess(data) {
 				return processor
 			}
-		}
-		// For JSON/YAML, use generic processor which is more reliable for complete objects
-		return r.processors["generic"]
-	}
-
-	// For larger chunks, try specialized processors
-	for _, processor := range r.processors {
-		if processor.FormatName() != "generic" && processor.CanProcess(data) {
-			return processor
 		}
 	}
 
