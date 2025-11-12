@@ -727,7 +727,7 @@ func startNewReviewSession(cfg *config.Config) error {
 	fmt.Printf("🚀 Starting new schema review session...\n\n")
 
 	// Initialize database connection
-	catalogDB, err := database.NewCatalogDB(cfg.DataPath)
+	catalogDB, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
 	}
@@ -808,7 +808,7 @@ func resumeReviewSession(cfg *config.Config, sessionID string) error {
 	fmt.Printf("🔄 Resuming review session: %s\n\n", sessionID)
 
 	// Initialize database connection
-	catalogDB, err := database.NewCatalogDB(cfg.DataPath)
+	catalogDB, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
 	}

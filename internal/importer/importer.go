@@ -54,7 +54,7 @@ type ImportResult struct {
 // New creates a new Importer instance
 func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 	// Initialize catalog database
-	catalogDB, err := database.NewCatalogDB(dataPath)
+	catalogDB, err := database.NewCatalogDB(pudlHome)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}

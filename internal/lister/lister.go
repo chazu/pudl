@@ -2,6 +2,7 @@ package lister
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"pudl/internal/database"
@@ -87,8 +88,11 @@ type Catalog struct {
 
 // New creates a new Lister instance
 func New(dataPath string) (*Lister, error) {
-	// Initialize catalog database
-	catalogDB, err := database.NewCatalogDB(dataPath)
+	// Initialize catalog database with config directory
+	// We need to derive the config directory from the data path
+	// dataPath is typically ~/.pudl/data, so config dir is ~/.pudl
+	configDir := filepath.Dir(dataPath)
+	catalogDB, err := database.NewCatalogDB(configDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}

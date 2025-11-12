@@ -47,7 +47,7 @@ func (c *CatalogDB) MigrateFromJSON() (*MigrationResult, error) {
 	}
 	
 	// Check if JSON catalog exists
-	jsonCatalogPath := filepath.Join(c.dataPath, "catalog", "inventory.json")
+	jsonCatalogPath := filepath.Join(c.configDir, "data", "catalog", "inventory.json")
 	if _, err := os.Stat(jsonCatalogPath); os.IsNotExist(err) {
 		// No JSON catalog to migrate
 		return result, nil
@@ -184,7 +184,7 @@ func (c *CatalogDB) createBackup(jsonPath string) (string, error) {
 // CheckMigrationNeeded checks if migration from JSON to SQLite is needed
 func (c *CatalogDB) CheckMigrationNeeded() (bool, error) {
 	// Check if JSON catalog exists
-	jsonCatalogPath := filepath.Join(c.dataPath, "catalog", "inventory.json")
+	jsonCatalogPath := filepath.Join(c.configDir, "data", "catalog", "inventory.json")
 	if _, err := os.Stat(jsonCatalogPath); os.IsNotExist(err) {
 		return false, nil // No JSON catalog exists
 	}
@@ -205,7 +205,7 @@ func (c *CatalogDB) GetMigrationStatus() (map[string]interface{}, error) {
 	status := make(map[string]interface{})
 	
 	// Check JSON catalog
-	jsonCatalogPath := filepath.Join(c.dataPath, "catalog", "inventory.json")
+	jsonCatalogPath := filepath.Join(c.configDir, "data", "catalog", "inventory.json")
 	jsonExists := false
 	jsonEntries := 0
 	
