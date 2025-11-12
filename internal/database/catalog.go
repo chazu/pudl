@@ -14,8 +14,8 @@ import (
 
 // CatalogDB handles SQLite database operations for the catalog
 type CatalogDB struct {
-	db       *sql.DB
-	dataPath string
+	db        *sql.DB
+	configDir string
 }
 
 // CatalogEntry represents an entry in the catalog database
@@ -65,40 +65,41 @@ type QueryResult struct {
 }
 
 // NewCatalogDB creates a new catalog database instance
-func NewCatalogDB(dataPath string) (*CatalogDB, error) {
+// configDir should be the PUDL config directory (e.g., ~/.pudl)
+func NewCatalogDB(configDir string) (*CatalogDB, error) {
 	db := &CatalogDB{
-		dataPath: dataPath,
+		configDir: configDir,
 	}
-	
+
 	if err := db.initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
-	
+
 	return db, nil
 }
 
 // initialize sets up the database connection and creates tables if needed
 func (c *CatalogDB) initialize() error {
-	// Ensure catalog directory exists
-	catalogDir := filepath.Join(c.dataPath, "catalog")
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
-		return fmt.Errorf("failed to create catalog directory: %w", err)
+	// Ensure sqlite directory exists under config/data/sqlite/
+	sqliteDir := filepath.Join(c.configDir, "data", "sqlite")
+	if err := os.MkdirAll(sqliteDir, 0755); err != nil {
+		return fmt.Errorf("failed to create sqlite directory: %w", err)
 	}
-	
+
 	// Open database connection
-	dbPath := filepath.Join(catalogDir, "catalog.db")
+	dbPath := filepath.Join(sqliteDir, "catalog.db")
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=10000")
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
-	
+
 	c.db = db
-	
+
 	// Create tables and indexes
 	if err := c.createTables(); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
-	
+
 	return nil
 }
 
