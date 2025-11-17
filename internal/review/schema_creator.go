@@ -131,13 +131,7 @@ func (sc *SchemaCreator) generateCUETemplate(data interface{}, suggestedName str
 	builder.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", sc.formatStringArray(trackedFields)))
 	builder.WriteString("\t\tcompliance_level: \"strict\"\n")
 	builder.WriteString("\t}\n\n")
-	
-	// Legacy metadata for backward compatibility
-	builder.WriteString("\t// Legacy metadata (for backward compatibility)\n")
-	builder.WriteString(fmt.Sprintf("\t_identity: %s\n", sc.formatStringArray(identityFields)))
-	builder.WriteString(fmt.Sprintf("\t_tracked: %s\n", sc.formatStringArray(trackedFields)))
-	builder.WriteString("\t_version: \"v1.0\"\n\n")
-	
+
 	// Generate field definitions
 	builder.WriteString("\t// Field definitions (customize as needed)\n")
 	sc.generateFieldDefinitions(&builder, dataMap, 1)

@@ -11,18 +11,16 @@ import (
 	"pudl/internal/errors"
 )
 
-// Config represents the PUDL configuration
 type Config struct {
 	SchemaPath string `yaml:"schema_path"`
 	DataPath   string `yaml:"data_path"`
 	Version    string `yaml:"version"`
 }
 
-// DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	pudlDir := filepath.Join(homeDir, ".pudl")
-	
+
 	return &Config{
 		SchemaPath: filepath.Join(pudlDir, "schema"),
 		DataPath:   filepath.Join(pudlDir, "data"),
@@ -30,7 +28,6 @@ func DefaultConfig() *Config {
 	}
 }
 
-// GetPudlDir returns the PUDL directory path
 func GetPudlDir() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -40,12 +37,10 @@ func GetPudlDir() string {
 	return filepath.Join(homeDir, ".pudl")
 }
 
-// GetConfigPath returns the path to the config file
 func GetConfigPath() string {
 	return filepath.Join(GetPudlDir(), "config.yaml")
 }
 
-// Load loads the configuration from the config file
 func Load() (*Config, error) {
 	configPath := GetConfigPath()
 
@@ -67,7 +62,6 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
-// Save saves the configuration to the config file
 func (c *Config) Save() error {
 	configPath := GetConfigPath()
 
@@ -105,12 +99,10 @@ func Exists() bool {
 	return true
 }
 
-// ValidConfigKeys returns the list of valid configuration keys
 func ValidConfigKeys() []string {
 	return []string{"schema_path", "data_path", "version"}
 }
 
-// IsValidConfigKey checks if a key is a valid configuration key
 func IsValidConfigKey(key string) bool {
 	validKeys := ValidConfigKeys()
 	for _, validKey := range validKeys {
@@ -121,7 +113,6 @@ func IsValidConfigKey(key string) bool {
 	return false
 }
 
-// ValidatePath checks if a path is valid (can be created if it doesn't exist)
 func ValidatePath(path string) error {
 	// Expand ~ to home directory if present
 	if strings.HasPrefix(path, "~/") {
@@ -163,7 +154,6 @@ func ValidatePath(path string) error {
 	return nil
 }
 
-// SetConfigValue sets a configuration value and saves it
 func SetConfigValue(key, value string) error {
 	if !IsValidConfigKey(key) {
 		return errors.NewInputError(
@@ -225,7 +215,6 @@ func SetConfigValue(key, value string) error {
 	return nil
 }
 
-// ResetToDefaults resets the configuration to default values
 func ResetToDefaults() error {
 	defaultCfg := DefaultConfig()
 	if err := defaultCfg.Save(); err != nil {

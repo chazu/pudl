@@ -18,7 +18,6 @@ import (
 var (
 	importSchema      string
 	importOrigin      string
-	useStreaming      bool
 	streamingMemoryMB int
 	streamingChunkMB  float64
 	useZygomys        bool
@@ -212,8 +211,7 @@ func init() {
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 
-	// Streaming options (streaming is always enabled, these flags configure behavior)
-	importCmd.Flags().BoolVar(&useStreaming, "streaming", true, "Streaming is always enabled (flag kept for compatibility)")
+	// Streaming options
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
 	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
 
@@ -261,7 +259,7 @@ func displayImportResults(result *importer.ImportResult) {
 				vr.GetErrorCount(), result.ID)
 		}
 	} else {
-		// Legacy display for auto-assigned schemas
+		// Display auto-assigned schema
 		fmt.Printf("   Schema: %s\n", result.AssignedSchema)
 		if result.SchemaConfidence < 0.8 {
 			fmt.Printf("   ⚠️  Low schema confidence (%.2f) - data assigned to catchall\n", result.SchemaConfidence)
