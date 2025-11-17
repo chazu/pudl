@@ -7,21 +7,16 @@ import (
 	"path/filepath"
 	"time"
 
-	"pudl/internal/config"
 	"pudl/internal/database"
 	"pudl/internal/idgen"
 )
 
-// EnhancedImporter extends the base importer with human-friendly ID generation
+// EnhancedImporter extends the base importer with content-based ID generation
 type EnhancedImporter struct {
 	*Importer // Embed the original importer
-
-	configManager *config.ConfigManager
-	idManager     *idgen.ImporterIDManager
-	displayHelper *idgen.IDDisplayHelper
 }
 
-// NewEnhancedImporter creates a new enhanced importer with friendly ID support
+// NewEnhancedImporter creates a new enhanced importer with content-based ID support
 func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImporter, error) {
 	// Create base importer
 	baseImporter, err := New(dataPath, schemaPath, configDir)
@@ -29,42 +24,16 @@ func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImpor
 		return nil, fmt.Errorf("failed to create base importer: %w", err)
 	}
 
-	// Create config manager
-	configManager := config.NewConfigManager(configDir)
-
-	// Load configuration
-	idConfig, err := configManager.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load ID configuration: %w", err)
-	}
-
-	// Create ID manager with default config
-	defaultIDConfig := idConfig.GetConfigForOrigin("default")
-	idManager := idgen.NewImporterIDManager(defaultIDConfig)
-
-	// Create display helper
-	displayHelper := idgen.NewIDDisplayHelper()
-
 	return &EnhancedImporter{
-		Importer:      baseImporter,
-		configManager: configManager,
-		idManager:     idManager,
-		displayHelper: displayHelper,
+		Importer: baseImporter,
 	}, nil
 }
 
-// ImportFileWithFriendlyIDs imports a file using the new ID generation system
+// ImportFileWithFriendlyIDs imports a file using content-based ID generation
 func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*ImportResult, error) {
-	// Load current configuration
-	idConfig, err := e.configManager.LoadConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load ID configuration: %w", err)
-	}
-
-	// Check if friendly IDs are enabled
-	if !idConfig.ShouldUseFriendlyIDs() {
-		// Fall back to legacy import
-		return e.Importer.ImportFile(opts)
+	// Ensure basic schemas exist
+	if err := e.ensureBasicSchemas(); err != nil {
+		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
 	}
 
 	// Detect origin if not provided
@@ -75,36 +44,6 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			return nil, fmt.Errorf("failed to detect format: %w", err)
 		}
 		origin = e.detectOrigin(opts.SourcePath, format)
-	}
-
-	// Get ID configuration for this origin
-	// First try the configuration file, then fall back to smart detection
-	originConfig := idConfig.GetConfigForOrigin(origin)
-
-	// If we got the default config (no specific override), use smart detection
-	defaultConfig := idgen.IDConfig{
-		Format: idConfig.DefaultFormat,
-		Prefix: idConfig.GlobalPrefix,
-	}
-
-	var idManager *idgen.ImporterIDManager
-	if originConfig.Format == defaultConfig.Format && originConfig.Prefix == defaultConfig.Prefix {
-		// Use smart origin-based detection
-		idManager = idgen.NewImporterIDManagerFromOrigin(origin)
-	} else {
-		// Use configuration file override
-		idManager = idgen.NewImporterIDManager(originConfig)
-	}
-
-	// Perform import with friendly IDs
-	return e.importWithFriendlyIDs(opts, idManager, origin)
-}
-
-// importWithFriendlyIDs performs the actual import using friendly ID generation
-func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *idgen.ImporterIDManager, origin string) (*ImportResult, error) {
-	// Ensure basic schemas exist
-	if err := e.ensureBasicSchemas(); err != nil {
-		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
 	}
 
 	// Get file info
@@ -122,12 +61,19 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 		return nil, fmt.Errorf("failed to detect format: %w", err)
 	}
 
-	// Generate friendly ID for main entry
-	mainID := idManager.GenerateMainID(opts.SourcePath, origin)
+	// Read file data to compute content hash
+	fileData, err := os.ReadFile(opts.SourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %w", err)
+	}
 
-	// Create filename using friendly ID
+	// Compute content-based ID (SHA256 hash)
+	mainID := idgen.ComputeContentID(fileData)
+
+	// Create filename using content hash (truncated for filesystem compatibility)
 	ext := filepath.Ext(opts.SourcePath)
-	filename := fmt.Sprintf("%s%s", mainID, ext)
+	// Use first 16 chars of hash for filename (still unique, more manageable)
+	filename := fmt.Sprintf("%s%s", mainID[:16], ext)
 
 	// Create date-based directory structure (keep this for organization)
 	dateDir := timestamp.Format("2006/01/02")
@@ -144,14 +90,14 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 
 	// Handle NDJSON collections differently
 	if format == "ndjson" {
-		return e.importNDJSONCollectionWithFriendlyIDs(opts, idManager, timestamp, origin, filename, rawDir, metadataDir, fileInfo)
+		return e.importNDJSONCollectionWithContentHash(opts, mainID, timestamp, origin, filename, rawDir, metadataDir, fileInfo, fileData)
 	}
 
-	// Read and analyze data for schema assignment
+	// Analyze data for schema assignment (parse the data we already read)
 	var data interface{}
 	var recordCount int
 
-	// Always use streaming parser for optimal performance and memory usage
+	// Use streaming parser for optimal performance
 	data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
@@ -236,8 +182,8 @@ func (e *EnhancedImporter) importWithFriendlyIDs(opts ImportOptions, idManager *
 	}, nil
 }
 
-// importNDJSONCollectionWithFriendlyIDs handles NDJSON collections with friendly IDs
-func (e *EnhancedImporter) importNDJSONCollectionWithFriendlyIDs(opts ImportOptions, idManager *idgen.ImporterIDManager, timestamp time.Time, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo) (*ImportResult, error) {
+// importNDJSONCollectionWithContentHash handles NDJSON collections with content-based IDs
+func (e *EnhancedImporter) importNDJSONCollectionWithContentHash(opts ImportOptions, collectionID string, timestamp time.Time, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo, fileData []byte) (*ImportResult, error) {
 	// Parse NDJSON file
 	data, recordCount, err := e.analyzeDataStreaming(opts.SourcePath, "json", opts.StreamingConfig)
 	if err != nil {
@@ -250,45 +196,27 @@ func (e *EnhancedImporter) importNDJSONCollectionWithFriendlyIDs(opts ImportOpti
 		return nil, fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	// Generate collection ID
-	collectionID := idManager.GenerateCollectionID(opts.SourcePath, origin)
-
-	// Create collection entry with friendly ID
-	collectionResult, err := e.createCollectionEntryWithFriendlyIDs(opts, idManager, timestamp, origin, collectionID, storedPath, metadataDir, fileInfo, recordCount, data)
+	// Create collection entry with content hash ID
+	collectionResult, err := e.createCollectionEntryWithContentHash(opts, timestamp, origin, collectionID, storedPath, metadataDir, fileInfo, recordCount, data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create collection entry: %w", err)
 	}
 
-	// Create individual item entries with friendly IDs
-	if err := e.createCollectionItemsWithFriendlyIDs(collectionID, data, idManager, timestamp, rawDir, metadataDir, opts); err != nil {
+	// Create individual item entries
+	if err := e.createCollectionItemsWithContentHash(collectionID, data, timestamp, rawDir, metadataDir, opts); err != nil {
 		return nil, fmt.Errorf("failed to create collection items: %w", err)
 	}
 
 	return collectionResult, nil
 }
 
-// GetIDDisplayFormat returns a user-friendly display format for an ID
+// GetIDDisplayFormat returns a proquint display format for a content hash ID
 func (e *EnhancedImporter) GetIDDisplayFormat(id string) string {
-	return e.displayHelper.FormatForDisplay(id)
+	return idgen.HashToProquint(id)
 }
 
-// GetIDType returns the type of an ID (legacy, short, readable, etc.)
-func (e *EnhancedImporter) GetIDType(id string) string {
-	return e.displayHelper.GetIDType(id)
-}
-
-// UpdateIDConfiguration updates the ID generation configuration
-func (e *EnhancedImporter) UpdateIDConfiguration(config *config.IDGenerationConfig) error {
-	return e.configManager.UpdateConfig(config)
-}
-
-// GetIDConfiguration returns the current ID generation configuration
-func (e *EnhancedImporter) GetIDConfiguration() *config.IDGenerationConfig {
-	return e.configManager.GetConfig()
-}
-
-// createCollectionEntryWithFriendlyIDs creates the main collection catalog entry with friendly IDs
-func (e *EnhancedImporter) createCollectionEntryWithFriendlyIDs(opts ImportOptions, idManager *idgen.ImporterIDManager, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
+// createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
+func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
 	// Assign schema for collection - try collection-specific schemas first
 	schema := "pudl.schemas/collections/collections:#Collection"
 	confidence := 0.8
@@ -368,15 +296,15 @@ func (e *EnhancedImporter) createCollectionEntryWithFriendlyIDs(opts ImportOptio
 	}, nil
 }
 
-// createCollectionItemsWithFriendlyIDs creates individual catalog entries for each item in the collection with friendly IDs
-func (e *EnhancedImporter) createCollectionItemsWithFriendlyIDs(collectionID string, data interface{}, idManager *idgen.ImporterIDManager, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+// createCollectionItemsWithContentHash creates individual catalog entries for each item in the collection with content hash IDs
+func (e *EnhancedImporter) createCollectionItemsWithContentHash(collectionID string, data interface{}, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
 	items, ok := data.([]interface{})
 	if !ok {
 		return fmt.Errorf("expected array of items for collection, got %T", data)
 	}
 
 	for index, item := range items {
-		if err := e.createCollectionItemWithFriendlyIDs(collectionID, item, index, idManager, timestamp, rawDir, metadataDir, opts); err != nil {
+		if err := e.createCollectionItemWithContentHash(collectionID, item, index, timestamp, rawDir, metadataDir, opts); err != nil {
 			// Log error but continue with other items
 			fmt.Printf("Warning: failed to create collection item %d: %v\n", index, err)
 		}
@@ -385,17 +313,21 @@ func (e *EnhancedImporter) createCollectionItemsWithFriendlyIDs(collectionID str
 	return nil
 }
 
-// createCollectionItemWithFriendlyIDs creates a single collection item entry with friendly IDs
-func (e *EnhancedImporter) createCollectionItemWithFriendlyIDs(collectionID string, itemData interface{}, index int, idManager *idgen.ImporterIDManager, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
-	// Generate friendly item ID
-	itemID := idManager.GenerateItemID(collectionID, index, itemData)
+// createCollectionItemWithContentHash creates a single collection item entry with content hash IDs
+func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID string, itemData interface{}, index int, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
+	// Generate item ID based on content hash of the item data
+	itemJSON, err := json.Marshal(itemData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal item data: %w", err)
+	}
+	itemID := idgen.ComputeContentID(itemJSON)
 
 	// Create filename for individual item
 	itemFilename := fmt.Sprintf("%s_item_%d", collectionID, index)
 	itemPath := filepath.Join(rawDir, itemFilename+".json")
 
-	// Save individual item as JSON
-	itemJSON, err := json.MarshalIndent(itemData, "", "  ")
+	// Save individual item as JSON (use indented format for storage)
+	itemJSON, err = json.MarshalIndent(itemData, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal item data: %w", err)
 	}

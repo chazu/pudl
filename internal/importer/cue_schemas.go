@@ -33,11 +33,6 @@ func (i *Importer) createBasicSchemas() error {
 		compliance_level: "permissive"
 	}
 
-	// Legacy metadata (for backward compatibility)
-	_identity: []
-	_tracked: []
-	_version: "v1.0"
-
 	// Accept any structure
 	...
 }
@@ -61,11 +56,6 @@ func (i *Importer) createBasicSchemas() error {
 		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
 		compliance_level: "permissive"
 	}
-
-	// Legacy metadata (for backward compatibility)
-	_identity: ["collection_id"]
-	_tracked: ["item_count", "item_schemas", "collection_metadata"]
-	_version: "v1.0"
 
 	// Core collection fields
 	collection_id: string & =~"^[a-zA-Z0-9_-]+$"
@@ -122,11 +112,6 @@ func (i *Importer) createBasicSchemas() error {
 		item_index?: int
 	}
 
-	// Legacy metadata
-	_identity: ["item_id", "collection_id"]
-	_tracked: ["item_data"]
-	_version: "v1.0"
-
 	// Item identification
 	item_id: string
 	collection_id: string
@@ -158,11 +143,6 @@ func (i *Importer) createBasicSchemas() error {
 		tracked_fields: ["item_count", "format"]
 		compliance_level: "permissive"
 	}
-
-	// Legacy metadata
-	_identity: ["collection_id"]
-	_tracked: ["item_count", "format"]
-	_version: "v1.0"
 
 	// Minimal collection structure - accepts any collection-like data
 	collection_id: string

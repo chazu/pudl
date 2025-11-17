@@ -208,7 +208,7 @@ func (p *GenericChunkProcessor) processJSONChunk(chunk *CDCChunk, processed *Pro
 		return p.processTextChunk(chunk, processed)
 	}
 
-	// Handle arrays by extracting individual elements (matches legacy behavior)
+	// Handle arrays by extracting individual elements
 	if arr, ok := obj.([]interface{}); ok {
 		processed.Objects = append(processed.Objects, arr...)
 		processed.Metadata["json_type"] = "array"

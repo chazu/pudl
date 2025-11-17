@@ -483,7 +483,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 
 	// Streaming parse complete
 
-	// Handle error cases that should fail (for compatibility with legacy behavior)
+	// Handle error cases that should fail
 	if len(allObjects) == 0 {
 		// Check if this was supposed to be a structured format but failed to parse
 		if format == "json" {
@@ -536,7 +536,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 	if len(allObjects) == 1 {
 		return allObjects[0], recordCount, nil
 	} else {
-		// For CSV format, convert to []map[string]string to match legacy behavior
+		// For CSV format, convert to []map[string]string
 		if format == "csv" {
 			csvArray := make([]map[string]string, len(allObjects))
 			for i, obj := range allObjects {

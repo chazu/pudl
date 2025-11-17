@@ -102,11 +102,6 @@ func New(dataPath string) (*Lister, error) {
 		catalogDB: catalogDB,
 	}
 
-	// Check if migration is needed and perform it
-	if err := lister.performMigrationIfNeeded(); err != nil {
-		return nil, fmt.Errorf("failed to perform catalog migration: %w", err)
-	}
-
 	return lister, nil
 }
 
@@ -115,34 +110,6 @@ func (l *Lister) Close() error {
 	if l.catalogDB != nil {
 		return l.catalogDB.Close()
 	}
-	return nil
-}
-
-// performMigrationIfNeeded checks if migration is needed and performs it
-func (l *Lister) performMigrationIfNeeded() error {
-	needed, err := l.catalogDB.CheckMigrationNeeded()
-	if err != nil {
-		return fmt.Errorf("failed to check migration status: %w", err)
-	}
-
-	if needed {
-		fmt.Println("Migrating catalog from JSON to SQLite...")
-		result, err := l.catalogDB.MigrateFromJSON()
-		if err != nil {
-			return fmt.Errorf("migration failed: %w", err)
-		}
-
-		fmt.Printf("Migration completed: %d entries migrated, %d skipped\n",
-			result.MigratedEntries, result.SkippedEntries)
-
-		if len(result.Errors) > 0 {
-			fmt.Printf("Migration warnings: %d\n", len(result.Errors))
-			for _, errMsg := range result.Errors {
-				fmt.Printf("  - %s\n", errMsg)
-			}
-		}
-	}
-
 	return nil
 }
 

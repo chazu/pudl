@@ -34,7 +34,7 @@ func TestNew(t *testing.T) {
 			dataPath:    "/nonexistent/path",
 			schemaPath:  workspace.SchemaDir,
 			pudlHome:    workspace.Root,
-			expectError: true,
+			expectError: false, // Directories are created as needed
 		},
 		{
 			name:        "empty schema path",
