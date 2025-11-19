@@ -66,6 +66,12 @@ config.local.*
 *.local.yml
 *.local.json
 
+# SQLite database files (should be in ~/.pudl, not in repo)
+**/data/sqlite/
+*.db
+*.db-shm
+*.db-wal
+
 # OS generated files
 .DS_Store
 .DS_Store?
