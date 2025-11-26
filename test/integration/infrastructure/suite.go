@@ -149,14 +149,19 @@ func (s *IntegrationTestSuite) Initialize() error {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
-	
+
+	// Create CUE module structure for schema directory
+	if err := s.initializeSchemaModule(); err != nil {
+		return fmt.Errorf("failed to initialize schema module: %w", err)
+	}
+
 	// Initialize database
 	db, err := database.NewCatalogDB(s.PUDLHome)
 	if err != nil {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 	s.Database = db
-	
+
 	// Initialize importer
 	imp, err := importer.New(s.DataDir, s.SchemaDir, s.PUDLHome)
 	if err != nil {
@@ -323,6 +328,50 @@ func (s *IntegrationTestSuite) forceCleanup() {
 	s.t = nil
 	s.Cleanup()
 	s.t = originalT
+}
+
+// initializeSchemaModule creates the CUE module structure with bootstrap schemas
+func (s *IntegrationTestSuite) initializeSchemaModule() error {
+	// Create cue.mod directory
+	cueModDir := filepath.Join(s.SchemaDir, "cue.mod")
+	if err := os.MkdirAll(cueModDir, 0755); err != nil {
+		return fmt.Errorf("failed to create cue.mod: %w", err)
+	}
+
+	// Create module.cue
+	moduleContent := `language: version: "v0.14.0"
+module: "pudl.schemas@v0"
+source: kind: "self"
+`
+	if err := os.WriteFile(filepath.Join(cueModDir, "module.cue"), []byte(moduleContent), 0644); err != nil {
+		return fmt.Errorf("failed to write module.cue: %w", err)
+	}
+
+	// Create unknown package with catchall schema
+	unknownDir := filepath.Join(s.SchemaDir, "pudl", "unknown")
+	if err := os.MkdirAll(unknownDir, 0755); err != nil {
+		return fmt.Errorf("failed to create unknown package: %w", err)
+	}
+
+	catchallContent := `package unknown
+
+#CatchAll: {
+	_pudl: {
+		schema_type:      "catchall"
+		resource_type:    "unknown"
+		cascade_priority: 0
+		identity_fields: []
+		tracked_fields: []
+		compliance_level: "permissive"
+	}
+	...
+}
+`
+	if err := os.WriteFile(filepath.Join(unknownDir, "catchall.cue"), []byte(catchallContent), 0644); err != nil {
+		return fmt.Errorf("failed to write catchall.cue: %w", err)
+	}
+
+	return nil
 }
 
 // LogInfo logs an informational message

@@ -288,65 +288,12 @@ func (d *SimpleSchemaDetector) getValueType(value interface{}) string {
 	}
 }
 
-// loadDefaultPatterns loads common patterns for AWS and K8s
+// loadDefaultPatterns initializes the pattern list.
+// Patterns should be loaded dynamically from CUE schemas using LoadPatternsFromCUE()
+// or added manually using AddPattern().
 func (d *SimpleSchemaDetector) loadDefaultPatterns() {
-	// AWS EC2 Instance pattern
-	d.patterns = append(d.patterns, SchemaPattern{
-		Name:        "aws.ec2-instance",
-		Description: "AWS EC2 Instance",
-		Fields: []FieldPattern{
-			{Name: "InstanceId", Type: "string", Required: true},
-			{Name: "State", Type: "object", Required: true},
-		},
-		Optional: []FieldPattern{
-			{Name: "InstanceType", Type: "string"},
-			{Name: "ImageId", Type: "string"},
-			{Name: "Tags", Type: "array"},
-			{Name: "SecurityGroups", Type: "array"},
-		},
-		Tags: map[string]string{
-			"provider": "aws",
-			"service":  "ec2",
-		},
-	})
-	
-	// Kubernetes Pod pattern
-	d.patterns = append(d.patterns, SchemaPattern{
-		Name:        "k8s.pod",
-		Description: "Kubernetes Pod",
-		Fields: []FieldPattern{
-			{Name: "apiVersion", Type: "string", Required: true},
-			{Name: "kind", Type: "string", Required: true, Values: []string{"Pod"}},
-			{Name: "metadata", Type: "object", Required: true},
-			{Name: "spec", Type: "object", Required: true},
-		},
-		Optional: []FieldPattern{
-			{Name: "status", Type: "object"},
-		},
-		Tags: map[string]string{
-			"provider": "kubernetes",
-			"resource": "pod",
-		},
-	})
-	
-	// AWS S3 Bucket pattern
-	d.patterns = append(d.patterns, SchemaPattern{
-		Name:        "aws.s3-bucket",
-		Description: "AWS S3 Bucket",
-		Fields: []FieldPattern{
-			{Name: "Name", Type: "string", Required: true},
-		},
-		Optional: []FieldPattern{
-			{Name: "CreationDate", Type: "string"},
-			{Name: "Region", Type: "string"},
-			{Name: "BucketPolicy", Type: "object"},
-			{Name: "Tags", Type: "array"},
-		},
-		Tags: map[string]string{
-			"provider": "aws",
-			"service":  "s3",
-		},
-	})
+	// No default patterns - patterns should come from CUE schemas
+	// Use CUESchemaDetector.LoadPatternsFromCUE() to populate patterns from schema repository
 }
 
 // AddPattern adds a custom schema pattern

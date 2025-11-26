@@ -95,25 +95,43 @@ func (s *TempDirSetup) CreatePUDLWorkspace() *PUDLWorkspace {
 		DataDir:    s.CreateSubDir("data"),
 		ConfigFile: filepath.Join(s.tempDir, "config.yaml"),
 	}
-	
+
 	// Create basic config file
 	configContent := `schema_path: ` + workspace.SchemaDir + `
 data_path: ` + workspace.DataDir + `
 `
 	s.WriteFile("config.yaml", configContent)
-	
+
 	// Create basic schema structure
 	s.CreateSubDir("schema/pudl")
 	s.CreateSubDir("schema/examples")
 	s.CreateSubDir("schema/cue.mod")
-	
+
 	// Create basic module.cue
 	moduleContent := `language: version: "v0.14.0"
 module: "pudl.schemas@v0"
 source: kind: "self"
 `
 	s.WriteFileInSubDir("schema/cue.mod", "module.cue", moduleContent)
-	
+
+	// Create unknown package with catchall schema
+	s.CreateSubDir("schema/pudl/unknown")
+	catchallContent := `package unknown
+
+#CatchAll: {
+	_pudl: {
+		schema_type:      "catchall"
+		resource_type:    "unknown"
+		cascade_priority: 0
+		identity_fields: []
+		tracked_fields: []
+		compliance_level: "permissive"
+	}
+	...
+}
+`
+	s.WriteFileInSubDir("schema/pudl/unknown", "catchall.cue", catchallContent)
+
 	return workspace
 }
 

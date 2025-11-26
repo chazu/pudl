@@ -20,7 +20,6 @@ var (
 	importOrigin      string
 	streamingMemoryMB int
 	streamingChunkMB  float64
-	useZygomys        bool
 )
 
 // importCmd represents the import command
@@ -32,8 +31,7 @@ and schema assignment.
 
 This command imports data from various formats (JSON, YAML, CSV) and stores it
 in the PUDL data lake with full metadata tracking. The data is stored in raw
-format with timestamp-based naming and metadata that includes schema assignment
-via the Zygomys rule engine.
+format with timestamp-based naming and metadata.
 
 The --path flag supports both single files and wildcard patterns for batch imports:
 - Single file: --path data.json
@@ -46,13 +44,9 @@ Data Storage:
 
 Schema Assignment:
 - Manual schema specification with --schema flag (cascading validation)
-- Automatic schema detection using rule engine (fallback)
+- Automatic schema inference from CUE schemas in the schema repository
 - Cascading validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
-
-Rule Engine Options:
-- Default: Uses legacy hard-coded rules for schema assignment
-- --use-zygomys: Override to use Zygomys Lisp rule engine for this import
 
 Streaming Processing:
 - All imports use streaming for optimal performance and memory usage
@@ -72,8 +66,7 @@ Example usage:
     pudl import --path logs/2024-01-*.json
 
     # Advanced options
-    pudl import --path large-dataset.json --streaming-memory 200
-    pudl import --path data.json --use-zygomys`,
+    pudl import --path large-dataset.json --streaming-memory 200`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
 		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
@@ -127,13 +120,6 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
 	defer imp.Close()
-
-	// Override rule engine if --use-zygomys flag is set
-	if useZygomys {
-		if err := imp.OverrideRuleEngine("zygomys"); err != nil {
-			return errors.NewSystemError("Failed to override rule engine to Zygomys", err)
-		}
-	}
 
 	var cascadeValidator *validator.CascadeValidator
 	if importSchema != "" {
@@ -214,9 +200,6 @@ func init() {
 	// Streaming options
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
 	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
-
-	// Rule engine options
-	importCmd.Flags().BoolVar(&useZygomys, "use-zygomys", false, "Use Zygomys Lisp rule engine instead of legacy rules")
 
 	// Mark path as required
 	importCmd.MarkFlagRequired("path")
@@ -344,13 +327,6 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 		return errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
 	defer imp.Close()
-
-	// Override rule engine if --use-zygomys flag is set
-	if useZygomys {
-		if err := imp.OverrideRuleEngine("zygomys"); err != nil {
-			return errors.NewSystemError("Failed to override rule engine to Zygomys", err)
-		}
-	}
 
 	// Set up cascade validator if schema is specified
 	var cascadeValidator *validator.CascadeValidator
