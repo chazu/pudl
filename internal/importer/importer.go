@@ -49,28 +49,43 @@ type ImportResult struct {
 	SizeBytes        int64                       `json:"size_bytes"`
 	ImportTimestamp  string                      `json:"import_timestamp"`
 	ValidationResult *validator.ValidationResult `json:"validation_result,omitempty"`
+	Skipped          bool                        `json:"skipped,omitempty"`
+	SkipReason       string                      `json:"skip_reason,omitempty"`
 }
 
 // New creates a new Importer instance
 func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
+	// Validate schema path is provided
+	if schemaPath == "" {
+		return nil, fmt.Errorf("schema path is required")
+	}
+
 	// Initialize catalog database
 	catalogDB, err := database.NewCatalogDB(pudlHome)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
 
-	// Initialize schema inferrer
+	// Create importer first (without inferrer)
+	imp := &Importer{
+		dataPath:   dataPath,
+		schemaPath: schemaPath,
+		catalogDB:  catalogDB,
+	}
+
+	// Ensure bootstrap schemas exist before loading the inferrer
+	if err := imp.ensureBasicSchemas(); err != nil {
+		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
+	}
+
+	// Initialize schema inferrer (now schemas should exist)
 	inferrer, err := inference.NewSchemaInferrer(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}
+	imp.inferrer = inferrer
 
-	return &Importer{
-		dataPath:   dataPath,
-		schemaPath: schemaPath,
-		catalogDB:  catalogDB,
-		inferrer:   inferrer,
-	}, nil
+	return imp, nil
 }
 
 // Close closes the importer and its database connections

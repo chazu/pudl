@@ -196,8 +196,18 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
 	}
-	
+
 	return nil
+}
+
+// EntryExists checks if a catalog entry with the given ID exists
+func (c *CatalogDB) EntryExists(id string) (bool, error) {
+	var count int
+	err := c.db.QueryRow("SELECT COUNT(*) FROM catalog_entries WHERE id = ?", id).Scan(&count)
+	if err != nil {
+		return false, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to check entry existence", err)
+	}
+	return count > 0, nil
 }
 
 // GetEntry retrieves a specific entry by ID

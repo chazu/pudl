@@ -14,6 +14,7 @@ import (
 type CUEModuleLoader struct {
 	ctx        *cue.Context
 	schemaPath string
+	verbose    bool
 }
 
 // NewCUEModuleLoader creates a new CUE module loader
@@ -21,6 +22,19 @@ func NewCUEModuleLoader(schemaPath string) *CUEModuleLoader {
 	return &CUEModuleLoader{
 		ctx:        cuecontext.New(),
 		schemaPath: schemaPath,
+		verbose:    false,
+	}
+}
+
+// SetVerbose enables or disables verbose logging
+func (loader *CUEModuleLoader) SetVerbose(verbose bool) {
+	loader.verbose = verbose
+}
+
+// log prints a message if verbose mode is enabled
+func (loader *CUEModuleLoader) log(format string, args ...interface{}) {
+	if loader.verbose {
+		fmt.Printf("[CUE Loader] "+format+"\n", args...)
 	}
 }
 
@@ -38,6 +52,8 @@ type LoadedModule struct {
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
 	modules := make(map[string]*LoadedModule)
 
+	loader.log("Loading CUE modules from: %s", loader.schemaPath)
+
 	// Load the entire CUE module from the schema root
 	// This handles all packages and their cross-references automatically,
 	// including third-party dependencies from the module cache
@@ -45,33 +61,49 @@ func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error
 		Dir: loader.schemaPath,
 	}
 
-	// Load all packages in the module (including third-party dependencies)
+	// Load all packages - we'll skip examples during processing
 	instances := load.Instances([]string{"./..."}, config)
+
 	if len(instances) == 0 {
 		return nil, fmt.Errorf("no CUE instances found in schema module")
 	}
 
+	loader.log("Found %d CUE instances to load", len(instances))
+
 	// Process each loaded instance (package)
 	for _, inst := range instances {
+		loader.log("Processing instance: %s (dir: %s)", inst.PkgName, inst.Dir)
+
+		// Skip examples directory - it may have unfetched third-party dependencies
+		if strings.Contains(inst.Dir, "/examples") || inst.PkgName == "examples" {
+			loader.log("Skipping examples directory: %s", inst.Dir)
+			continue
+		}
+
 		if inst.Err != nil {
+			loader.log("Error loading instance %s: %v", inst.PkgName, inst.Err)
 			return nil, fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err)
 		}
 
 		// Build the CUE value from the loaded instance
 		value := loader.ctx.BuildInstance(inst)
 		if value.Err() != nil {
+			loader.log("Error building CUE value for %s: %v", inst.PkgName, value.Err())
 			return nil, fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err())
 		}
 
 		// Create module from instance
 		module, err := loader.createModuleFromInstance(inst, value)
 		if err != nil {
+			loader.log("Error creating module from %s: %v", inst.PkgName, err)
 			return nil, fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err)
 		}
 
+		loader.log("Successfully loaded module %s with %d schemas", inst.PkgName, len(module.Schemas))
 		modules[inst.PkgName] = module
 	}
 
+	loader.log("Loaded %d modules total", len(modules))
 	return modules, nil
 }
 
