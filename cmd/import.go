@@ -117,6 +117,10 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	// Create enhanced importer with friendly ID support
 	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
 	if err != nil {
+		// Print detailed error for debugging
+		if os.Getenv("PUDL_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: Enhanced importer error: %+v\n", err)
+		}
 		return errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
 	defer imp.Close()
@@ -181,6 +185,10 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	// Perform the import with friendly IDs
 	result, err := imp.ImportFileWithFriendlyIDs(opts)
 	if err != nil {
+		// Print detailed error for debugging
+		if os.Getenv("PUDL_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: Import error: %+v\n", err)
+		}
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
 	}
 
@@ -207,6 +215,15 @@ func init() {
 
 // displayImportResults shows the results of data import with cascading validation info
 func displayImportResults(result *importer.ImportResult) {
+	// Check if import was skipped due to duplicate
+	if result.Skipped {
+		fmt.Printf("⏭️  Skipped: %s\n", result.SourcePath)
+		fmt.Printf("   Reason: %s\n", result.SkipReason)
+		fmt.Printf("   Existing ID: %s\n", result.ID)
+		fmt.Printf("   Stored at: %s\n", result.StoredPath)
+		return
+	}
+
 	fmt.Printf("✅ Successfully imported data!\n")
 	fmt.Printf("   Source: %s\n", result.SourcePath)
 	fmt.Printf("   Stored as: %s\n", result.StoredPath)
@@ -324,6 +341,10 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	// Create enhanced importer with friendly ID support
 	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
 	if err != nil {
+		// Print detailed error for debugging
+		if os.Getenv("PUDL_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: Enhanced importer error: %+v\n", err)
+		}
 		return errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
 	defer imp.Close()

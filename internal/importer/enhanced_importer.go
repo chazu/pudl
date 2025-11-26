@@ -71,6 +71,29 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	// Compute content-based ID (SHA256 hash)
 	mainID := idgen.ComputeContentID(fileData)
 
+	// Check if this content already exists in the catalog
+	exists, err := e.catalogDB.EntryExists(mainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for existing entry: %w", err)
+	}
+	if exists {
+		// Content already imported - return a result indicating it was skipped
+		existingEntry, _ := e.catalogDB.GetEntry(mainID)
+		return &ImportResult{
+			ID:             mainID,
+			SourcePath:     opts.SourcePath,
+			StoredPath:     existingEntry.StoredPath,
+			MetadataPath:   existingEntry.MetadataPath,
+			DetectedFormat: existingEntry.Format,
+			DetectedOrigin: existingEntry.Origin,
+			AssignedSchema: existingEntry.Schema,
+			RecordCount:    existingEntry.RecordCount,
+			SizeBytes:      existingEntry.SizeBytes,
+			Skipped:        true,
+			SkipReason:     "content already exists in catalog",
+		}, nil
+	}
+
 	// Create filename using content hash (truncated for filesystem compatibility)
 	ext := filepath.Ext(opts.SourcePath)
 	// Use first 16 chars of hash for filename (still unique, more manageable)

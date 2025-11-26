@@ -63,10 +63,32 @@ func (i *Importer) createBasicSchemas() error {
 
 // ensureBasicSchemas ensures that basic schema files exist
 func (i *Importer) ensureBasicSchemas() error {
+	// Ensure cue.mod/module.cue exists (required for CUE module loading)
+	modulePath := filepath.Join(i.schemaPath, "cue.mod", "module.cue")
+	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
+		if err := i.createCUEModule(); err != nil {
+			return err
+		}
+	}
+
 	// Check if catchall schema exists
 	catchallPath := filepath.Join(i.schemaPath, "pudl", "unknown", "catchall.cue")
 	if _, err := os.Stat(catchallPath); os.IsNotExist(err) {
 		return i.createBasicSchemas()
 	}
 	return nil
+}
+
+// createCUEModule creates the cue.mod/module.cue file
+func (i *Importer) createCUEModule() error {
+	cueModDir := filepath.Join(i.schemaPath, "cue.mod")
+	if err := os.MkdirAll(cueModDir, 0755); err != nil {
+		return err
+	}
+
+	moduleContent := `language: version: "v0.14.0"
+module: "pudl.schemas@v0"
+source: kind: "self"
+`
+	return os.WriteFile(filepath.Join(cueModDir, "module.cue"), []byte(moduleContent), 0644)
 }

@@ -41,7 +41,7 @@ func TestNew(t *testing.T) {
 			dataPath:    workspace.DataDir,
 			schemaPath:  "",
 			pudlHome:    workspace.Root,
-			expectError: false, // Empty schema path is allowed
+			expectError: true, // Schema path is required for inference
 		},
 	}
 
