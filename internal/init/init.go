@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"pudl/internal/config"
+	"pudl/internal/importer"
 )
 
 // InitOptions contains options for initialization
@@ -52,6 +53,14 @@ func Initialize(opts InitOptions) error {
 	// Initialize CUE module in schema directory
 	if err := initCUEModule(cfg.SchemaPath, opts.Verbose); err != nil {
 		return fmt.Errorf("failed to initialize CUE module: %w", err)
+	}
+
+	// Copy bootstrap schemas (catchall, collections)
+	if err := importer.CopyBootstrapSchemas(cfg.SchemaPath); err != nil {
+		return fmt.Errorf("failed to copy bootstrap schemas: %w", err)
+	}
+	if opts.Verbose {
+		fmt.Println("✅ Bootstrap schemas copied (catchall, collections)")
 	}
 
 	// Initialize git repository in schema directory

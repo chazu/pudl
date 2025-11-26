@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"pudl/internal/database"
-	"pudl/internal/rules"
+	"pudl/internal/inference"
 	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
 
 // Importer handles data import operations
 type Importer struct {
-	dataPath    string
-	schemaPath  string
-	catalogDB   *database.CatalogDB
-	ruleManager *rules.Manager
+	dataPath   string
+	schemaPath string
+	catalogDB  *database.CatalogDB
+	inferrer   *inference.SchemaInferrer
 }
 
 // ImportOptions contains options for importing data
@@ -59,57 +59,43 @@ func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
 
-	// Initialize rule engine manager
-	ruleManager := rules.NewManager(pudlHome)
-	if err := ruleManager.Initialize(); err != nil {
-		return nil, fmt.Errorf("failed to initialize rule engine: %w", err)
+	// Initialize schema inferrer
+	inferrer, err := inference.NewSchemaInferrer(schemaPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}
 
 	return &Importer{
-		dataPath:    dataPath,
-		schemaPath:  schemaPath,
-		catalogDB:   catalogDB,
-		ruleManager: ruleManager,
+		dataPath:   dataPath,
+		schemaPath: schemaPath,
+		catalogDB:  catalogDB,
+		inferrer:   inferrer,
 	}, nil
 }
 
 // Close closes the importer and its database connections
 func (i *Importer) Close() error {
-	var err error
-
-	// Close rule manager
-	if i.ruleManager != nil {
-		if closeErr := i.ruleManager.Close(); closeErr != nil {
-			err = closeErr
-		}
-	}
-
 	// Close catalog database
 	if i.catalogDB != nil {
-		if closeErr := i.catalogDB.Close(); closeErr != nil {
-			if err == nil {
-				err = closeErr
-			}
-		}
+		return i.catalogDB.Close()
 	}
-
-	return err
+	return nil
 }
 
-// GetRuleEngineInfo returns information about the current rule engine
-func (i *Importer) GetRuleEngineInfo() (*rules.EngineInfo, error) {
-	if i.ruleManager == nil {
-		return nil, fmt.Errorf("rule manager not initialized")
+// GetAvailableSchemas returns the names of all schemas available for inference
+func (i *Importer) GetAvailableSchemas() []string {
+	if i.inferrer == nil {
+		return nil
 	}
-	return i.ruleManager.GetEngineInfo()
+	return i.inferrer.GetAvailableSchemas()
 }
 
-// OverrideRuleEngine temporarily switches to a different rule engine for this import session
-func (i *Importer) OverrideRuleEngine(engineType string) error {
-	if i.ruleManager == nil {
-		return fmt.Errorf("rule manager not initialized")
+// ReloadSchemas reloads schemas from the schema repository
+func (i *Importer) ReloadSchemas() error {
+	if i.inferrer == nil {
+		return fmt.Errorf("schema inferrer not initialized")
 	}
-	return i.ruleManager.SwitchEngine(engineType)
+	return i.inferrer.Reload()
 }
 
 // ImportFile imports a single file into the data lake
@@ -180,7 +166,7 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	// Assign schema using cascading validation or rule engine
+	// Assign schema using cascading validation or inference
 	var schema string
 	var confidence float64
 	var validationResult *validator.ValidationResult
@@ -195,12 +181,16 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		schema = vr.AssignedSchema
 		confidence = 1.0 // High confidence for validated data
 	} else {
-		// Use rule engine for schema assignment
-		var err error
-		schema, confidence, err = i.ruleManager.AssignSchema(data, origin, format)
+		// Use schema inferrer for automatic schema assignment
+		result, err := i.inferrer.Infer(data, inference.InferenceHints{
+			Origin: origin,
+			Format: format,
+		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to assign schema using rule engine: %w", err)
+			return nil, fmt.Errorf("failed to infer schema: %w", err)
 		}
+		schema = result.Schema
+		confidence = result.Confidence
 	}
 
 	// Create metadata
@@ -785,70 +775,21 @@ func (i *Importer) createCollectionItem(collectionID string, itemData interface{
 	return i.catalogDB.AddEntry(entry)
 }
 
-// assignItemSchema assigns a schema to an individual collection item
+// assignItemSchema assigns a schema to an individual collection item using inference
 func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (string, float64) {
 	// If manual schema is specified, use it
 	if opts.ManualSchema != "" {
 		return opts.ManualSchema, 0.9
 	}
 
-	// Try to detect schema based on item content
-	if itemMap, ok := itemData.(map[string]interface{}); ok {
-		// AWS resource detection
-		if cloudPlatform, exists := itemMap["cloudPlatform"]; exists {
-			if platform, ok := cloudPlatform.(string); ok && platform == "AWS" {
-				// Check for specific AWS resource types
-				if nativeType, exists := itemMap["nativeType"]; exists {
-					if nType, ok := nativeType.(string); ok {
-						switch nType {
-						case "batch#jobdefinition":
-							return "pudl.schemas/aws/batch:#BatchJobDefinition", 0.90
-						case "batch#computeenvironment":
-							return "pudl.schemas/aws/batch:#ComputeEnvironment", 0.90
-						case "securityGroup":
-							return "pudl.schemas/aws/security:#SecurityGroup", 0.90
-						case "secret":
-							return "pudl.schemas/aws/security:#Secret", 0.90
-						case "sagemaker#model":
-							return "pudl.schemas/aws/ml:#SageMakerModel", 0.90
-						case "inlinePolicy", "assumeRolePolicy":
-							return "pudl.schemas/aws/security:#IAMPolicy", 0.90
-						}
-					}
-				}
-
-				// Generic AWS resource
-				return "pudl.schemas/aws/ml:#Resource", 0.7
-			}
-		}
-
-		// EC2 instance detection (legacy format)
-		if instanceID, exists := itemMap["InstanceId"]; exists {
-			if idStr, ok := instanceID.(string); ok && strings.HasPrefix(idStr, "i-") {
-				return "aws.#EC2Instance", 0.9
-			}
-		}
-
-		// Kubernetes resource detection
-		if apiVersion, exists := itemMap["apiVersion"]; exists {
-			if _, ok := apiVersion.(string); ok {
-				if kind, exists := itemMap["kind"]; exists {
-					if kindStr, ok := kind.(string); ok {
-						switch kindStr {
-						case "Pod":
-							return "k8s.#Pod", 0.9
-						case "Service":
-							return "k8s.#Service", 0.9
-						case "Deployment":
-							return "k8s.#Deployment", 0.9
-						}
-					}
-				}
-				return "k8s.#Resource", 0.7
-			}
-		}
+	// Use schema inferrer for automatic schema assignment
+	result, err := i.inferrer.Infer(itemData, inference.InferenceHints{
+		Format: "json",
+	})
+	if err != nil {
+		// Fall back to collection item schema on error
+		return "pudl.schemas/pudl/collections:#CollectionItem", 0.5
 	}
 
-	// Default to collection item schema
-	return "pudl.schemas/collections/collections:#CollectionItem", 0.5
+	return result.Schema, result.Confidence
 }

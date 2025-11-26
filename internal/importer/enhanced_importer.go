@@ -9,6 +9,7 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/idgen"
+	"pudl/internal/inference"
 )
 
 // EnhancedImporter extends the base importer with content-based ID generation
@@ -109,8 +110,16 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	// Assign schema
-	schema, confidence := e.assignSchema(data, origin, format)
+	// Assign schema using inference
+	result, err := e.inferrer.Infer(data, inference.InferenceHints{
+		Origin: origin,
+		Format: format,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to infer schema: %w", err)
+	}
+	schema := result.Schema
+	confidence := result.Confidence
 
 	// Create metadata with friendly ID
 	metadata := ImportMetadata{

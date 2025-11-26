@@ -7,7 +7,7 @@ import (
 func TestSimpleSchemaDetector(t *testing.T) {
 	detector := NewSimpleSchemaDetector(10)
 
-	// Test AWS EC2 instance data
+	// Test AWS EC2 instance data - without explicit patterns, should return "unknown"
 	ec2Data := map[string]interface{}{
 		"InstanceId":   "i-1234567890abcdef0",
 		"InstanceType": "t2.micro",
@@ -38,7 +38,63 @@ func TestSimpleSchemaDetector(t *testing.T) {
 		t.Errorf("Failed to add sample: %v", err)
 	}
 
-	// Detect schema
+	// Detect schema - without patterns, should return unknown
+	detection, err := detector.DetectSchema()
+	if err != nil {
+		t.Errorf("Failed to detect schema: %v", err)
+	}
+
+	if detection == nil {
+		t.Fatal("No schema detection returned")
+	}
+
+	// Without explicit patterns, unknown is returned
+	if detection.SchemaName != "unknown" {
+		t.Errorf("Expected schema 'unknown' without patterns, got '%s'", detection.SchemaName)
+	}
+}
+
+func TestSchemaDetectionWithPattern(t *testing.T) {
+	detector := NewSimpleSchemaDetector(10)
+
+	// Add AWS EC2 pattern explicitly
+	ec2Pattern := SchemaPattern{
+		Name:        "aws.ec2-instance",
+		Description: "AWS EC2 Instance",
+		Fields: []FieldPattern{
+			{Name: "InstanceId", Type: "string", Required: true},
+			{Name: "InstanceType", Type: "string", Required: true},
+		},
+		Optional: []FieldPattern{
+			{Name: "ImageId", Type: "string"},
+			{Name: "State", Type: "object"},
+		},
+	}
+	detector.AddPattern(ec2Pattern)
+
+	// Test AWS EC2 instance data
+	ec2Data := map[string]interface{}{
+		"InstanceId":   "i-1234567890abcdef0",
+		"InstanceType": "t2.micro",
+		"State": map[string]interface{}{
+			"Name": "running",
+			"Code": 16,
+		},
+	}
+
+	chunk := &ProcessedChunk{
+		Objects: []interface{}{ec2Data},
+		Format:  "json",
+		Metadata: map[string]interface{}{
+			"source": "aws-api",
+		},
+	}
+
+	err := detector.AddSample(chunk)
+	if err != nil {
+		t.Errorf("Failed to add sample: %v", err)
+	}
+
 	detection, err := detector.DetectSchema()
 	if err != nil {
 		t.Errorf("Failed to detect schema: %v", err)
@@ -59,6 +115,18 @@ func TestSimpleSchemaDetector(t *testing.T) {
 
 func TestKubernetesSchemaDetection(t *testing.T) {
 	detector := NewSimpleSchemaDetector(10)
+
+	// Add K8s Pod pattern
+	podPattern := SchemaPattern{
+		Name:        "k8s.pod",
+		Description: "Kubernetes Pod",
+		Fields: []FieldPattern{
+			{Name: "apiVersion", Type: "string", Required: true},
+			{Name: "kind", Type: "string", Required: true},
+			{Name: "metadata", Type: "object", Required: true},
+		},
+	}
+	detector.AddPattern(podPattern)
 
 	// Test Kubernetes Pod data
 	podData := map[string]interface{}{
@@ -89,13 +157,11 @@ func TestKubernetesSchemaDetection(t *testing.T) {
 		},
 	}
 
-	// Add sample
 	err := detector.AddSample(chunk)
 	if err != nil {
 		t.Errorf("Failed to add sample: %v", err)
 	}
 
-	// Detect schema
 	detection, err := detector.DetectSchema()
 	if err != nil {
 		t.Errorf("Failed to detect schema: %v", err)
@@ -112,6 +178,20 @@ func TestKubernetesSchemaDetection(t *testing.T) {
 
 func TestS3BucketSchemaDetection(t *testing.T) {
 	detector := NewSimpleSchemaDetector(10)
+
+	// Add S3 bucket pattern
+	s3Pattern := SchemaPattern{
+		Name:        "aws.s3-bucket",
+		Description: "AWS S3 Bucket",
+		Fields: []FieldPattern{
+			{Name: "Name", Type: "string", Required: true},
+		},
+		Optional: []FieldPattern{
+			{Name: "CreationDate", Type: "string"},
+			{Name: "Region", Type: "string"},
+		},
+	}
+	detector.AddPattern(s3Pattern)
 
 	// Test S3 Bucket data
 	bucketData := map[string]interface{}{
@@ -134,13 +214,11 @@ func TestS3BucketSchemaDetection(t *testing.T) {
 		},
 	}
 
-	// Add sample
 	err := detector.AddSample(chunk)
 	if err != nil {
 		t.Errorf("Failed to add sample: %v", err)
 	}
 
-	// Detect schema
 	detection, err := detector.DetectSchema()
 	if err != nil {
 		t.Errorf("Failed to detect schema: %v", err)
@@ -200,6 +278,17 @@ func TestUnknownSchemaDetection(t *testing.T) {
 
 func TestMultipleSamples(t *testing.T) {
 	detector := NewSimpleSchemaDetector(5)
+
+	// Add EC2 pattern first
+	ec2Pattern := SchemaPattern{
+		Name:        "aws.ec2-instance",
+		Description: "AWS EC2 Instance",
+		Fields: []FieldPattern{
+			{Name: "InstanceId", Type: "string", Required: true},
+			{Name: "InstanceType", Type: "string", Required: true},
+		},
+	}
+	detector.AddPattern(ec2Pattern)
 
 	// Add multiple EC2 instance samples
 	for i := 0; i < 3; i++ {
@@ -295,16 +384,23 @@ func TestCustomPattern(t *testing.T) {
 func TestReset(t *testing.T) {
 	detector := NewSimpleSchemaDetector(10)
 
-	// Add sample
-	ec2Data := map[string]interface{}{
-		"InstanceId": "i-1234567890abcdef0",
-		"State": map[string]interface{}{
-			"Name": "running",
+	// Add a custom pattern so we get a detection
+	pattern := SchemaPattern{
+		Name:        "test.pattern",
+		Description: "Test Pattern",
+		Fields: []FieldPattern{
+			{Name: "id", Type: "string", Required: true},
 		},
+	}
+	detector.AddPattern(pattern)
+
+	// Add sample
+	data := map[string]interface{}{
+		"id": "test-123",
 	}
 
 	chunk := &ProcessedChunk{
-		Objects:  []interface{}{ec2Data},
+		Objects:  []interface{}{data},
 		Format:   "json",
 		Metadata: map[string]interface{}{},
 	}

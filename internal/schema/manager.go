@@ -20,15 +20,14 @@ func NewManager(schemaPath string) *Manager {
 	}
 }
 
-// SchemaInfo represents information about a schema file
+// SchemaInfo represents information about a schema definition
 type SchemaInfo struct {
 	Package    string `json:"package"`
-	Name       string `json:"name"`
-	FullName   string `json:"full_name"`   // package.name format
-	FilePath   string `json:"file_path"`
+	Name       string `json:"name"`        // The #Definition name (e.g., "#CatchAll")
+	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/unknown.#CatchAll")
+	FilePath   string `json:"file_path"`   // Source file containing this definition
 	FileName   string `json:"file_name"`
-	Definition string `json:"definition"`  // The #Definition name from CUE
-	Size       int64  `json:"size"`
+	Size       int64  `json:"size"`        // Size of the source file
 }
 
 // ListSchemas returns all available schemas organized by package
@@ -39,6 +38,16 @@ func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
 	err := filepath.Walk(m.schemaPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		// Skip cue.mod directory entirely (module config, not schemas)
+		if info.IsDir() && info.Name() == "cue.mod" {
+			return filepath.SkipDir
+		}
+
+		// Skip examples directory (not actual schemas)
+		if info.IsDir() && info.Name() == "examples" {
+			return filepath.SkipDir
 		}
 
 		// Skip directories and non-CUE files
@@ -58,27 +67,27 @@ func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
 			packageName = "root"
 		}
 
-		// Extract schema name from filename (without .cue extension)
 		fileName := info.Name()
-		schemaName := strings.TrimSuffix(fileName, ".cue")
 
-		// Create schema info
-		schemaInfo := SchemaInfo{
-			Package:  packageName,
-			Name:     schemaName,
-			FullName: fmt.Sprintf("%s.%s", packageName, schemaName),
-			FilePath: path,
-			FileName: fileName,
-			Size:     info.Size(),
+		// Extract all definitions from the file
+		definitions, err := m.extractAllDefinitions(path)
+		if err != nil || len(definitions) == 0 {
+			// If we can't extract definitions, skip this file
+			return nil
 		}
 
-		// Try to extract the definition name from the file
-		if definition, err := m.extractDefinitionName(path); err == nil {
-			schemaInfo.Definition = definition
+		// Create a SchemaInfo for each definition in the file
+		for _, defName := range definitions {
+			schemaInfo := SchemaInfo{
+				Package:  packageName,
+				Name:     defName,
+				FullName: fmt.Sprintf("%s.%s", packageName, defName),
+				FilePath: path,
+				FileName: fileName,
+				Size:     info.Size(),
+			}
+			schemas[packageName] = append(schemas[packageName], schemaInfo)
 		}
-
-		// Add to package group
-		schemas[packageName] = append(schemas[packageName], schemaInfo)
 
 		return nil
 	})
@@ -131,33 +140,27 @@ func (m *Manager) AddSchema(packageName, schemaName, sourceFile string) error {
 	return nil
 }
 
-// GetSchema returns information about a specific schema
+// GetSchema returns information about a specific schema definition
+// schemaName should be the definition name (e.g., "#CatchAll" or "CatchAll")
 func (m *Manager) GetSchema(packageName, schemaName string) (*SchemaInfo, error) {
-	schemaFile := filepath.Join(m.schemaPath, packageName, schemaName+".cue")
-	
-	info, err := os.Stat(schemaFile)
-	if os.IsNotExist(err) {
-		return nil, fmt.Errorf("schema not found: %s.%s", packageName, schemaName)
+	// Normalize schema name to include # prefix if missing
+	if !strings.HasPrefix(schemaName, "#") {
+		schemaName = "#" + schemaName
 	}
+
+	// Search all files in the package for the definition
+	schemas, err := m.GetSchemasInPackage(packageName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to stat schema file: %w", err)
+		return nil, err
 	}
 
-	schemaInfo := &SchemaInfo{
-		Package:  packageName,
-		Name:     schemaName,
-		FullName: fmt.Sprintf("%s.%s", packageName, schemaName),
-		FilePath: schemaFile,
-		FileName: schemaName + ".cue",
-		Size:     info.Size(),
+	for _, schema := range schemas {
+		if schema.Name == schemaName {
+			return &schema, nil
+		}
 	}
 
-	// Try to extract the definition name
-	if definition, err := m.extractDefinitionName(schemaFile); err == nil {
-		schemaInfo.Definition = definition
-	}
-
-	return schemaInfo, nil
+	return nil, fmt.Errorf("schema not found: %s.%s", packageName, schemaName)
 }
 
 // validateNames validates package and schema names
@@ -213,26 +216,32 @@ func (m *Manager) copyFile(src, dst string) error {
 	return os.Chmod(dst, sourceInfo.Mode())
 }
 
-// extractDefinitionName attempts to extract the main definition name from a CUE file
-func (m *Manager) extractDefinitionName(filePath string) (string, error) {
+// extractAllDefinitions extracts all #Definition names from a CUE file
+func (m *Manager) extractAllDefinitions(filePath string) ([]string, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
+	var definitions []string
 	lines := strings.Split(string(content), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		// Look for lines that start with #DefinitionName:
+		// Look for lines that start with #DefinitionName: (top-level definitions)
+		// Must start at beginning of line (after trim) to avoid nested definitions
 		if strings.HasPrefix(line, "#") && strings.Contains(line, ":") {
 			parts := strings.SplitN(line, ":", 2)
 			if len(parts) == 2 {
-				return strings.TrimSpace(parts[0]), nil
+				defName := strings.TrimSpace(parts[0])
+				// Ensure it's a valid definition name (starts with # followed by uppercase)
+				if len(defName) > 1 && defName[0] == '#' && defName[1] >= 'A' && defName[1] <= 'Z' {
+					definitions = append(definitions, defName)
+				}
 			}
 		}
 	}
 
-	return "", fmt.Errorf("no definition found")
+	return definitions, nil
 }
 
 // SchemaExists checks if a schema already exists
@@ -261,7 +270,7 @@ func (m *Manager) GetPackages() ([]string, error) {
 	return packages, nil
 }
 
-// GetSchemasInPackage returns all schemas in a specific package
+// GetSchemasInPackage returns all schemas (definitions) in a specific package
 func (m *Manager) GetSchemasInPackage(packageName string) ([]SchemaInfo, error) {
 	packageDir := filepath.Join(m.schemaPath, packageName)
 
@@ -278,7 +287,6 @@ func (m *Manager) GetSchemasInPackage(packageName string) ([]SchemaInfo, error) 
 	var schemas []SchemaInfo
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".cue") {
-			schemaName := strings.TrimSuffix(entry.Name(), ".cue")
 			schemaPath := filepath.Join(packageDir, entry.Name())
 
 			info, err := entry.Info()
@@ -286,21 +294,24 @@ func (m *Manager) GetSchemasInPackage(packageName string) ([]SchemaInfo, error) 
 				continue
 			}
 
-			schemaInfo := SchemaInfo{
-				Package:  packageName,
-				Name:     schemaName,
-				FullName: fmt.Sprintf("%s.%s", packageName, schemaName),
-				FilePath: schemaPath,
-				FileName: entry.Name(),
-				Size:     info.Size(),
+			// Extract all definitions from the file
+			definitions, err := m.extractAllDefinitions(schemaPath)
+			if err != nil || len(definitions) == 0 {
+				continue
 			}
 
-			// Try to extract definition name
-			if definition, err := m.extractDefinitionName(schemaPath); err == nil {
-				schemaInfo.Definition = definition
+			// Create a SchemaInfo for each definition
+			for _, defName := range definitions {
+				schemaInfo := SchemaInfo{
+					Package:  packageName,
+					Name:     defName,
+					FullName: fmt.Sprintf("%s.%s", packageName, defName),
+					FilePath: schemaPath,
+					FileName: entry.Name(),
+					Size:     info.Size(),
+				}
+				schemas = append(schemas, schemaInfo)
 			}
-
-			schemas = append(schemas, schemaInfo)
 		}
 	}
 

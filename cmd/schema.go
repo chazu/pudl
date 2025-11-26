@@ -214,17 +214,10 @@ func runSchemaAddCommand(args []string) error {
 
 	fmt.Printf("✅ Schema added successfully: %s.%s\n", packageName, schemaName)
 
-	// Show schema information
-	if schemaInfo, err := manager.GetSchema(packageName, schemaName); err == nil {
-		fmt.Printf("   Package: %s\n", schemaInfo.Package)
-		fmt.Printf("   Name: %s\n", schemaInfo.Name)
-		fmt.Printf("   File: %s\n", schemaInfo.FilePath)
-		if schemaInfo.Definition != "" {
-			fmt.Printf("   Definition: %s\n", schemaInfo.Definition)
-		}
-		if len(result.Definitions) > 0 {
-			fmt.Printf("   Definitions: %s\n", strings.Join(result.Definitions, ", "))
-		}
+	// Show definitions found in the added file
+	if len(result.Definitions) > 0 {
+		fmt.Printf("   Package: %s\n", packageName)
+		fmt.Printf("   Definitions: %s\n", strings.Join(result.Definitions, ", "))
 	}
 
 	fmt.Println()
@@ -637,18 +630,12 @@ func listAllSchemas(manager *schema.Manager) error {
 			totalSchemas++
 			if schemaVerbose {
 				fmt.Printf("   ├─ %s\n", schemaInfo.Name)
+				fmt.Printf("   │  Full name: %s\n", schemaInfo.FullName)
 				fmt.Printf("   │  File: %s\n", schemaInfo.FilePath)
 				fmt.Printf("   │  Size: %s\n", formatBytes(schemaInfo.Size))
-				if schemaInfo.Definition != "" {
-					fmt.Printf("   │  Definition: %s\n", schemaInfo.Definition)
-				}
 				fmt.Printf("   │\n")
 			} else {
-				definitionInfo := ""
-				if schemaInfo.Definition != "" {
-					definitionInfo = fmt.Sprintf(" (%s)", schemaInfo.Definition)
-				}
-				fmt.Printf("   ├─ %s%s\n", schemaInfo.Name, definitionInfo)
+				fmt.Printf("   ├─ %s\n", schemaInfo.Name)
 			}
 		}
 		fmt.Println()
@@ -677,18 +664,12 @@ func listSchemasInPackage(manager *schema.Manager, packageName string) error {
 	for _, schemaInfo := range schemas {
 		if schemaVerbose {
 			fmt.Printf("📄 %s\n", schemaInfo.Name)
+			fmt.Printf("   Full name: %s\n", schemaInfo.FullName)
 			fmt.Printf("   File: %s\n", schemaInfo.FilePath)
 			fmt.Printf("   Size: %s\n", formatBytes(schemaInfo.Size))
-			if schemaInfo.Definition != "" {
-				fmt.Printf("   Definition: %s\n", schemaInfo.Definition)
-			}
 			fmt.Println()
 		} else {
-			definitionInfo := ""
-			if schemaInfo.Definition != "" {
-				definitionInfo = fmt.Sprintf(" (%s)", schemaInfo.Definition)
-			}
-			fmt.Printf("  %s%s\n", schemaInfo.Name, definitionInfo)
+			fmt.Printf("  %s\n", schemaInfo.Name)
 		}
 	}
 

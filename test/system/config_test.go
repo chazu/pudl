@@ -46,6 +46,45 @@ func (s *SystemTestSuite) InitializeDirectories() error {
 			return err
 		}
 	}
+
+	// Create CUE module structure for schema directory
+	cueModDir := filepath.Join(s.SchemaDir, "cue.mod")
+	if err := os.MkdirAll(cueModDir, 0755); err != nil {
+		return err
+	}
+
+	moduleContent := `language: version: "v0.14.0"
+module: "pudl.schemas@v0"
+source: kind: "self"
+`
+	if err := os.WriteFile(filepath.Join(cueModDir, "module.cue"), []byte(moduleContent), 0644); err != nil {
+		return err
+	}
+
+	// Create unknown package with catchall schema
+	unknownDir := filepath.Join(s.SchemaDir, "pudl", "unknown")
+	if err := os.MkdirAll(unknownDir, 0755); err != nil {
+		return err
+	}
+
+	catchallContent := `package unknown
+
+#CatchAll: {
+	_pudl: {
+		schema_type:      "catchall"
+		resource_type:    "unknown"
+		cascade_priority: 0
+		identity_fields: []
+		tracked_fields: []
+		compliance_level: "permissive"
+	}
+	...
+}
+`
+	if err := os.WriteFile(filepath.Join(unknownDir, "catchall.cue"), []byte(catchallContent), 0644); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -141,7 +180,7 @@ func TestSystemConfiguration(t *testing.T) {
 				dataDir:   "",
 				schemaDir: "",
 				pudelHome: "",
-				expectErr: false, // Importer accepts empty paths
+				expectErr: true, // Schema path required for inference
 			},
 		}
 

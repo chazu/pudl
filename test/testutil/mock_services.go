@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"pudl/internal/database"
-	"pudl/internal/rules"
+	"pudl/internal/inference"
 )
 
 // MockProgressReporter implements a mock progress reporter for testing
@@ -56,38 +56,37 @@ func (m *MockProgressReporter) GetProgress() []int {
 	return result
 }
 
-// MockRuleEngine implements a mock rule engine for testing schema assignment
-type MockRuleEngine struct {
-	rules map[string]*rules.Result
+// MockSchemaInferrer implements a mock schema inferrer for testing
+type MockSchemaInferrer struct {
+	results map[string]*inference.InferenceResult
 }
 
-// NewMockRuleEngine creates a new mock rule engine
-func NewMockRuleEngine() *MockRuleEngine {
-	return &MockRuleEngine{
-		rules: make(map[string]*rules.Result),
+// NewMockSchemaInferrer creates a new mock schema inferrer
+func NewMockSchemaInferrer() *MockSchemaInferrer {
+	return &MockSchemaInferrer{
+		results: make(map[string]*inference.InferenceResult),
 	}
 }
 
-// AddRule adds a mock rule for testing
-func (m *MockRuleEngine) AddRule(pattern string, result *rules.Result) {
-	m.rules[pattern] = result
+// AddResult adds a mock result for testing
+func (m *MockSchemaInferrer) AddResult(pattern string, result *inference.InferenceResult) {
+	m.results[pattern] = result
 }
 
-// AssignSchema returns a mock schema assignment based on registered rules
-func (m *MockRuleEngine) AssignSchema(filename string, data interface{}) *rules.Result {
+// Infer returns a mock schema assignment based on registered results
+func (m *MockSchemaInferrer) Infer(filename string, data interface{}) *inference.InferenceResult {
 	// Simple pattern matching for testing
-	for pattern, result := range m.rules {
+	for pattern, result := range m.results {
 		if contains(filename, pattern) {
 			return result
 		}
 	}
 
 	// Default assignment for unknown files
-	return &rules.Result{
+	return &inference.InferenceResult{
 		Schema:     "unknown.#CatchAll",
 		Confidence: 0.5,
-		RuleName:   "default_fallback",
-		Metadata:   map[string]interface{}{"reason": "No specific rule matched, using default schema"},
+		Reason:     "No specific pattern matched, using default schema",
 	}
 }
 
