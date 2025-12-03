@@ -1,0 +1,25 @@
+package {{.PackageName}}
+
+import "time"
+
+// {{.SchemaName}} defines the schema for {{.SuggestedName}} data
+#{{.SchemaName}}: {
+	// PUDL metadata for schema management
+	_pudl: {
+		schema_type: "base"
+		resource_type: "{{.PackageName}}.{{.SchemaNameLower}}"
+		cascade_priority: 100
+		cascade_fallback: ["unknown.#CatchAll"]
+		identity_fields: {{.IdentityFields}}
+		tracked_fields: {{.TrackedFields}}
+		compliance_level: "strict"
+	}
+
+	// Field definitions (customize as needed)
+{{.FieldDefinitions}}
+}
+
+/*
+Example data that matches this schema:
+{{.ExampleJSON}}
+*/
