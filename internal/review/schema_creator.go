@@ -1,6 +1,8 @@
 package review
 
 import (
+	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -10,10 +12,14 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"text/template"
 
 	"pudl/internal/errors"
 	"pudl/internal/schema"
 )
+
+//go:embed schema.cue.tmpl
+var schemaTemplate string
 
 // SchemaCreator handles creating new schemas from data
 type SchemaCreator struct {
@@ -86,6 +92,18 @@ func (sc *SchemaCreator) CreateSchemaFromData(data interface{}, suggestedName st
 	return fullSchemaName, nil
 }
 
+// schemaTemplateData holds data for the schema template
+type schemaTemplateData struct {
+	PackageName      string
+	SchemaName       string
+	SchemaNameLower  string
+	SuggestedName    string
+	IdentityFields   string
+	TrackedFields    string
+	FieldDefinitions string
+	ExampleJSON      string
+}
+
 // generateCUETemplate generates a CUE schema template from JSON data
 func (sc *SchemaCreator) generateCUETemplate(data interface{}, suggestedName string) (string, error) {
 	// Convert data to map for analysis
@@ -102,49 +120,36 @@ func (sc *SchemaCreator) generateCUETemplate(data interface{}, suggestedName str
 	// Generate schema name and package
 	packageName, schemaName := sc.generateSchemaNames(suggestedName, dataMap)
 
-	// Build CUE template
-	var builder strings.Builder
-	
-	// Package declaration
-	builder.WriteString(fmt.Sprintf("package %s\n\n", packageName))
-	
-	// Add imports if needed
-	builder.WriteString("import \"time\"\n\n")
-	
-	// Schema definition
-	builder.WriteString(fmt.Sprintf("// %s defines the schema for %s data\n", schemaName, suggestedName))
-	builder.WriteString(fmt.Sprintf("#%s: {\n", schemaName))
-	
-	// Add PUDL metadata
-	builder.WriteString("\t// PUDL metadata for schema management\n")
-	builder.WriteString("\t_pudl: {\n")
-	builder.WriteString("\t\tschema_type: \"base\"\n")
-	builder.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\"\n", packageName, strings.ToLower(schemaName)))
-	builder.WriteString("\t\tcascade_priority: 100\n")
-	builder.WriteString("\t\tcascade_fallback: [\"unknown.#CatchAll\"]\n")
-	
-	// Generate identity and tracked fields
-	identityFields := sc.generateIdentityFields(dataMap)
-	trackedFields := sc.generateTrackedFields(dataMap)
-	
-	builder.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", sc.formatStringArray(identityFields)))
-	builder.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", sc.formatStringArray(trackedFields)))
-	builder.WriteString("\t\tcompliance_level: \"strict\"\n")
-	builder.WriteString("\t}\n\n")
-
 	// Generate field definitions
-	builder.WriteString("\t// Field definitions (customize as needed)\n")
-	sc.generateFieldDefinitions(&builder, dataMap, 1)
+	fieldDefs := sc.generateFieldDefinitionsString(dataMap, 1)
 
-	builder.WriteString("}\n\n")
-
-	// Add example data as comments for reference
-	builder.WriteString("/*\nExample data that matches this schema:\n")
+	// Generate example JSON
 	exampleJSON, _ := json.MarshalIndent(dataMap, "", "  ")
-	builder.WriteString(string(exampleJSON))
-	builder.WriteString("\n*/\n")
-	
-	return builder.String(), nil
+
+	// Prepare template data
+	tmplData := schemaTemplateData{
+		PackageName:      packageName,
+		SchemaName:       schemaName,
+		SchemaNameLower:  strings.ToLower(schemaName),
+		SuggestedName:    suggestedName,
+		IdentityFields:   sc.formatStringArray(sc.generateIdentityFields(dataMap)),
+		TrackedFields:    sc.formatStringArray(sc.generateTrackedFields(dataMap)),
+		FieldDefinitions: fieldDefs,
+		ExampleJSON:      string(exampleJSON),
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("schema").Parse(schemaTemplate)
+	if err != nil {
+		return "", errors.NewSystemError("Failed to parse schema template", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, tmplData); err != nil {
+		return "", errors.NewSystemError("Failed to execute schema template", err)
+	}
+
+	return buf.String(), nil
 }
 
 // generateSchemaNames creates appropriate package and schema names
@@ -264,6 +269,13 @@ func (sc *SchemaCreator) hasNestedField(data map[string]interface{}, fieldPath s
 	}
 	
 	return true
+}
+
+// generateFieldDefinitionsString generates CUE field definitions and returns as a string
+func (sc *SchemaCreator) generateFieldDefinitionsString(data map[string]interface{}, indent int) string {
+	var builder strings.Builder
+	sc.generateFieldDefinitions(&builder, data, indent)
+	return builder.String()
 }
 
 // generateFieldDefinitions generates CUE field definitions from data
