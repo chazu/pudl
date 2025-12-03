@@ -367,16 +367,18 @@ func (ir *InteractiveReviewer) validateDataAgainstSchema(data interface{}, schem
 func (ir *InteractiveReviewer) createSchema(item *ReviewItem) error {
 	fmt.Printf("\n🎨 Creating new schema from data...\n")
 
-	// Prompt for schema name suggestion
-	fmt.Printf("Enter a name for this schema (or press Enter for auto-generated): ")
-	input, err := ir.reader.ReadString('\n')
-	if err != nil {
-		return errors.NewInputError("Failed to read schema name")
-	}
-
-	suggestedName := strings.TrimSpace(input)
-	if suggestedName == "" {
-		suggestedName = "CustomResource"
+	// Prompt for schema name (required)
+	var schemaName string
+	for schemaName == "" {
+		fmt.Printf("Enter a name for this schema: ")
+		input, err := ir.reader.ReadString('\n')
+		if err != nil {
+			return errors.NewInputError("Failed to read schema name")
+		}
+		schemaName = strings.TrimSpace(input)
+		if schemaName == "" {
+			fmt.Printf("❌ Schema name is required\n")
+		}
 	}
 
 	// Create schema using the schema creator
@@ -384,7 +386,7 @@ func (ir *InteractiveReviewer) createSchema(item *ReviewItem) error {
 	fmt.Printf("📝 Opening editor for customization...\n")
 	fmt.Printf("💡 Tip: The generated template includes field types inferred from your data\n\n")
 
-	newSchemaName, err := ir.schemaCreator.CreateSchemaFromData(item.Data, suggestedName)
+	newSchemaName, err := ir.schemaCreator.CreateSchemaFromData(item.Data, schemaName)
 	if err != nil {
 		return err
 	}
