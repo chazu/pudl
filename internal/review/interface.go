@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
@@ -132,6 +133,8 @@ func (ir *InteractiveReviewer) reviewItem(item *ReviewItem) error {
 			return nil
 		case "skip", "s":
 			return ir.skipItem(item)
+		case "view", "v":
+			ir.viewFullData(item)
 		case "back", "b":
 			return ir.goBack()
 		case "quit", "q":
@@ -177,6 +180,7 @@ func (ir *InteractiveReviewer) promptChoice() (string, error) {
 	fmt.Printf("  [r]eassign  - Assign to different schema\n")
 	fmt.Printf("  [c]reate    - Create new schema from this data\n")
 	fmt.Printf("  [s]kip      - Skip this item\n")
+	fmt.Printf("  [v]iew      - View full data in pager\n")
 	fmt.Printf("  [b]ack      - Go back to previous item\n")
 	fmt.Printf("  [q]uit      - Quit review session\n")
 	fmt.Printf("  [h]elp      - Show this help\n")
@@ -420,6 +424,36 @@ func (ir *InteractiveReviewer) skipItem(item *ReviewItem) error {
 	return nil
 }
 
+// viewFullData displays the full raw data in the system pager
+func (ir *InteractiveReviewer) viewFullData(item *ReviewItem) {
+	// Convert data to pretty-printed JSON
+	jsonData, err := json.MarshalIndent(item.Data, "", "  ")
+	if err != nil {
+		fmt.Printf("❌ Error formatting data: %v\n\n", err)
+		return
+	}
+
+	// Get the pager from environment, default to "less"
+	pager := os.Getenv("PAGER")
+	if pager == "" {
+		pager = "less"
+	}
+
+	// Create the pager command
+	cmd := exec.Command(pager)
+	cmd.Stdin = strings.NewReader(string(jsonData))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Run the pager
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("❌ Error running pager: %v\n\n", err)
+		return
+	}
+
+	fmt.Println()
+}
+
 // goBack goes back to the previous item
 func (ir *InteractiveReviewer) goBack() error {
 	if ir.session.PreviousItem() {
@@ -454,6 +488,7 @@ func (ir *InteractiveReviewer) showHelp() {
 	fmt.Printf("  reassign  - Choose a different existing schema\n")
 	fmt.Printf("  create    - Create a new schema based on this data\n")
 	fmt.Printf("  skip      - Skip this item (no changes)\n")
+	fmt.Printf("  view      - View full raw data in system pager ($PAGER or less)\n")
 	fmt.Printf("  back      - Go back to the previous item\n")
 	fmt.Printf("  quit      - Save progress and exit (resumable)\n")
 	fmt.Printf("  help      - Show this help message\n\n")
@@ -461,6 +496,7 @@ func (ir *InteractiveReviewer) showHelp() {
 	fmt.Printf("  • Use 'create' when you see a new data pattern\n")
 	fmt.Printf("  • Use 'reassign' when the current schema is wrong\n")
 	fmt.Printf("  • Use 'accept' when the schema is correct\n")
+	fmt.Printf("  • Use 'view' to see the complete data before deciding\n")
 	fmt.Printf("  • Sessions are automatically saved and resumable\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n\n")
 }
