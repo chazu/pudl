@@ -1,7 +1,5 @@
 package {{.PackageName}}
 
-import "time"
-
 // {{.SchemaName}} defines the schema for {{.SuggestedName}} data
 #{{.SchemaName}}: {
 	// PUDL metadata for schema management
@@ -19,7 +17,5 @@ import "time"
 {{.FieldDefinitions}}
 }
 
-/*
-Example data that matches this schema:
+// Example data that matches this schema:
 {{.ExampleJSON}}
-*/

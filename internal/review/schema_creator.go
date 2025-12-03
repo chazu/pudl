@@ -123,8 +123,13 @@ func (sc *SchemaCreator) generateCUETemplate(data interface{}, suggestedName str
 	// Generate field definitions
 	fieldDefs := sc.generateFieldDefinitionsString(dataMap, 1)
 
-	// Generate example JSON
+	// Generate example JSON as line comments
 	exampleJSON, _ := json.MarshalIndent(dataMap, "", "  ")
+	exampleLines := strings.Split(string(exampleJSON), "\n")
+	for i, line := range exampleLines {
+		exampleLines[i] = "// " + line
+	}
+	commentedExample := strings.Join(exampleLines, "\n")
 
 	// Prepare template data
 	tmplData := schemaTemplateData{
@@ -135,7 +140,7 @@ func (sc *SchemaCreator) generateCUETemplate(data interface{}, suggestedName str
 		IdentityFields:   sc.formatStringArray(sc.generateIdentityFields(dataMap)),
 		TrackedFields:    sc.formatStringArray(sc.generateTrackedFields(dataMap)),
 		FieldDefinitions: fieldDefs,
-		ExampleJSON:      string(exampleJSON),
+		ExampleJSON:      commentedExample,
 	}
 
 	// Parse and execute template
