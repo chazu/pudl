@@ -1,0 +1,45 @@
+{
+  "GroupId": "sg-0a1b2c3d4e5f6789",
+  "GroupName": "web-server-sg",
+  "Description": "Security group for web servers",
+  "VpcId": "vpc-0a1b2c3d4e5f6789",
+  "OwnerId": "123456789012",
+  "IpPermissions": [
+    {
+      "IpProtocol": "tcp",
+      "FromPort": 443,
+      "ToPort": 443,
+      "IpRanges": [
+        {"CidrIp": "0.0.0.0/0", "Description": "HTTPS from anywhere"}
+      ]
+    },
+    {
+      "IpProtocol": "tcp",
+      "FromPort": 80,
+      "ToPort": 80,
+      "IpRanges": [
+        {"CidrIp": "0.0.0.0/0", "Description": "HTTP from anywhere"}
+      ]
+    },
+    {
+      "IpProtocol": "tcp",
+      "FromPort": 22,
+      "ToPort": 22,
+      "IpRanges": [
+        {"CidrIp": "10.0.0.0/8", "Description": "SSH from internal"}
+      ]
+    }
+  ],
+  "IpPermissionsEgress": [
+    {
+      "IpProtocol": "-1",
+      "IpRanges": [
+        {"CidrIp": "0.0.0.0/0", "Description": "Allow all outbound"}
+      ]
+    }
+  ],
+  "Tags": [
+    {"Key": "Name", "Value": "web-server-sg"},
+    {"Key": "Environment", "Value": "production"}
+  ]
+}

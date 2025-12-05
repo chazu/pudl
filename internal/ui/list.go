@@ -226,7 +226,8 @@ func (m Model) formatDetailedEntry(entry lister.ListEntry) string {
 	var details strings.Builder
 
 	details.WriteString(fmt.Sprintf("\n=== Entry Details ===\n"))
-	details.WriteString(fmt.Sprintf("ID: %s\n", entry.ID))
+	details.WriteString(fmt.Sprintf("Entry: %s\n", entry.Proquint))
+	details.WriteString(fmt.Sprintf("Hash: %s\n", entry.ID))
 	details.WriteString(fmt.Sprintf("Schema: %s\n", entry.Schema))
 	details.WriteString(fmt.Sprintf("Origin: %s\n", entry.Origin))
 	details.WriteString(fmt.Sprintf("Format: %s\n", entry.Format))

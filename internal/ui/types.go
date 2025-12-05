@@ -13,9 +13,10 @@ type ListItem struct {
 // FilterValue returns the string to filter on
 func (i ListItem) FilterValue() string {
 	// Combine multiple fields for comprehensive filtering
-	return i.Entry.ID + " " + 
-		   i.Entry.Schema + " " + 
-		   i.Entry.Origin + " " + 
+	return i.Entry.Proquint + " " +
+		   i.Entry.ID + " " +
+		   i.Entry.Schema + " " +
+		   i.Entry.Origin + " " +
 		   i.Entry.Format
 }
 
@@ -30,8 +31,8 @@ func (i ListItem) Title() string {
 			collectionIndicator = " 📄"
 		}
 	}
-	
-	return i.Entry.ID + " [" + i.Entry.Schema + "]" + collectionIndicator
+
+	return i.Entry.Proquint + " [" + i.Entry.Schema + "]" + collectionIndicator
 }
 
 // Description returns the description for the list item

@@ -1,0 +1,72 @@
+[
+  {
+    "RoleName": "web-server-role",
+    "RoleId": "AROA0A1B2C3D4E5F6789",
+    "Arn": "arn:aws:iam::123456789012:role/web-server-role",
+    "Path": "/",
+    "CreateDate": "2024-01-15T10:00:00Z",
+    "Description": "Role for web server EC2 instances",
+    "MaxSessionDuration": 3600,
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]
+    },
+    "Tags": [{"Key": "Environment", "Value": "production"}]
+  },
+  {
+    "RoleName": "lambda-execution-role",
+    "RoleId": "AROA1B2C3D4E5F6789AB",
+    "Arn": "arn:aws:iam::123456789012:role/lambda-execution-role",
+    "Path": "/service-role/",
+    "CreateDate": "2024-02-20T14:30:00Z",
+    "Description": "Execution role for Lambda functions",
+    "MaxSessionDuration": 3600,
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]
+    },
+    "Tags": [{"Key": "Environment", "Value": "production"}]
+  },
+  {
+    "RoleName": "eks-node-role",
+    "RoleId": "AROA2C3D4E5F6789ABC",
+    "Arn": "arn:aws:iam::123456789012:role/eks-node-role",
+    "Path": "/",
+    "CreateDate": "2024-03-10T09:00:00Z",
+    "Description": "Role for EKS worker nodes",
+    "MaxSessionDuration": 3600,
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}]
+    },
+    "Tags": [{"Key": "kubernetes.io/cluster/main", "Value": "owned"}]
+  },
+  {
+    "RoleName": "github-actions-deploy",
+    "RoleId": "AROA3D4E5F6789ABCD",
+    "Arn": "arn:aws:iam::123456789012:role/github-actions-deploy",
+    "Path": "/ci-cd/",
+    "CreateDate": "2024-04-05T11:00:00Z",
+    "Description": "Role for GitHub Actions OIDC deployments",
+    "MaxSessionDuration": 3600,
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{"Effect": "Allow", "Principal": {"Federated": "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"}, "Action": "sts:AssumeRoleWithWebIdentity", "Condition": {"StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"}}}]
+    },
+    "Tags": [{"Key": "ManagedBy", "Value": "terraform"}]
+  },
+  {
+    "RoleName": "cross-account-readonly",
+    "RoleId": "AROA4E5F6789ABCDE",
+    "Arn": "arn:aws:iam::123456789012:role/cross-account-readonly",
+    "Path": "/",
+    "CreateDate": "2023-11-20T16:00:00Z",
+    "Description": "Read-only access for audit account",
+    "MaxSessionDuration": 7200,
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [{"Effect": "Allow", "Principal": {"AWS": "arn:aws:iam::987654321098:root"}, "Action": "sts:AssumeRole", "Condition": {"Bool": {"aws:MultiFactorAuthPresent": "true"}}}]
+    },
+    "Tags": [{"Key": "Purpose", "Value": "audit"}]
+  }
+]

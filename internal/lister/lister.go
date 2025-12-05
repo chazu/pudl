@@ -7,6 +7,7 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/errors"
+	"pudl/internal/idgen"
 )
 
 // Lister handles data listing and querying operations
@@ -36,6 +37,7 @@ type DisplayOptions struct {
 // ListEntry represents a single entry in the list results
 type ListEntry struct {
 	ID              string    `json:"id"`
+	Proquint        string    `json:"proquint"` // Human-friendly ID derived from content hash
 	StoredPath      string    `json:"stored_path"`
 	MetadataPath    string    `json:"metadata_path"`
 	ImportTimestamp string    `json:"import_timestamp"`
@@ -144,6 +146,7 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	for _, dbEntry := range queryResult.Entries {
 		listEntry := ListEntry{
 			ID:              dbEntry.ID,
+			Proquint:        idgen.HashToProquint(dbEntry.ID),
 			StoredPath:      dbEntry.StoredPath,
 			MetadataPath:    dbEntry.MetadataPath,
 			ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
@@ -200,24 +203,32 @@ func (l *Lister) calculateSummaryStats(results *ListResults, entries []ListEntry
 
 
 
-// FindEntry finds a specific entry by ID
+// FindEntry finds a specific entry by ID (full hash) or proquint
 func (l *Lister) FindEntry(id string) (*ListEntry, error) {
-	// Query database for the specific entry
+	// First try direct lookup by full ID
 	dbEntry, err := l.catalogDB.GetEntry(id)
 	if err != nil {
-		// Convert database error to user-friendly error
+		// If not found by full ID, try proquint lookup
 		if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
-			return nil, errors.NewInputError(
-				fmt.Sprintf("Entry not found: %s", id),
-				"Check the entry ID with 'pudl list'",
-				"Ensure you're using the correct entry identifier")
+			dbEntry, err = l.catalogDB.GetEntryByProquint(id)
+			if err != nil {
+				if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
+					return nil, errors.NewInputError(
+						fmt.Sprintf("Entry not found: %s", id),
+						"Check the entry ID with 'pudl list'",
+						"Ensure you're using the correct proquint identifier")
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err // Other database error
 		}
-		return nil, err // Already a PUDLError from database
 	}
 
 	// Convert database entry to list entry
 	listEntry := &ListEntry{
 		ID:              dbEntry.ID,
+		Proquint:        idgen.HashToProquint(dbEntry.ID),
 		StoredPath:      dbEntry.StoredPath,
 		MetadataPath:    dbEntry.MetadataPath,
 		ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
@@ -228,6 +239,10 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 		Confidence:      dbEntry.Confidence,
 		RecordCount:     dbEntry.RecordCount,
 		SizeBytes:       dbEntry.SizeBytes,
+		CollectionID:    dbEntry.CollectionID,
+		ItemIndex:       dbEntry.ItemIndex,
+		CollectionType:  dbEntry.CollectionType,
+		ItemID:          dbEntry.ItemID,
 	}
 
 	return listEntry, nil

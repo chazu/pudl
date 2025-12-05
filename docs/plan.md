@@ -677,3 +677,34 @@ pudl import --path huge-dataset.json --streaming --streaming-memory 200 --stream
 - Add proper data structure conversion (Go ↔ Lisp)
 - Create origin and field-based detection rules in Lisp format
 - Enable user-defined custom rules and rule composition
+
+## Proquint IDs and Validate Command (2025-12-04)
+
+### ✅ **Proquint ID System Complete**
+Implemented human-friendly proquint identifiers as the standard way to display entry IDs throughout the CLI:
+
+- **Proquint Display**: All CLI commands now show proquint IDs (e.g., `babod-fakak`) instead of 64-character hex hashes
+- **Dual Lookup**: Entries can be looked up by proquint OR full hash ID
+- **Database Support**: Added `GetEntryByProquint()` method with collision detection
+- **Verbose Mode**: Full hash shown as "Hash:" when verbose output is enabled
+
+### ✅ **Validate Command Complete**
+New command for validating catalog entries against their assigned schemas:
+
+```bash
+pudl validate --entry <proquint>  # Validate single entry
+pudl validate --all               # Validate all catalog entries
+```
+
+**Features**:
+- Uses CUE cascade validation system
+- Detailed validation reports with error breakdown
+- Summary statistics for batch validation
+- Exit codes indicate validation success/failure
+
+### ✅ **Files Modified**
+- `internal/lister/lister.go`: Proquint field in ListEntry, dual ID lookup
+- `internal/database/catalog.go`: GetEntryByProquint() method
+- `cmd/list.go`, `cmd/show.go`: Proquint display
+- `internal/ui/types.go`, `internal/ui/list.go`: UI proquint support
+- `cmd/validate.go`: New validate command

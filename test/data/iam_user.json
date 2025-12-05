@@ -1,0 +1,22 @@
+{
+  "UserName": "alice.smith",
+  "UserId": "AIDA0A1B2C3D4E5F6789A",
+  "Arn": "arn:aws:iam::123456789012:user/alice.smith",
+  "Path": "/",
+  "CreateDate": "2023-06-15T10:30:00Z",
+  "PasswordLastUsed": "2024-12-01T09:15:00Z",
+  "Tags": [
+    {"Key": "Department", "Value": "Engineering"},
+    {"Key": "Team", "Value": "Platform"},
+    {"Key": "CostCenter", "Value": "CC-1234"}
+  ],
+  "AttachedManagedPolicies": [
+    {
+      "PolicyName": "PowerUserAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/PowerUserAccess"
+    }
+  ],
+  "Groups": [
+    {"GroupName": "Developers", "GroupId": "AGPA0A1B2C3D4E5F6789"}
+  ]
+}

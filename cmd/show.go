@@ -95,7 +95,8 @@ func init() {
 
 // displayDetailedEntry displays detailed information about a single entry
 func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bool) {
-	fmt.Printf("Entry: %s\n", entry.ID)
+	fmt.Printf("Entry: %s\n", entry.Proquint)
+	fmt.Printf("Hash: %s\n", entry.ID)
 	fmt.Printf("Schema: %s\n", entry.Schema)
 	fmt.Printf("Origin: %s\n", entry.Origin)
 	fmt.Printf("Format: %s\n", entry.Format)
