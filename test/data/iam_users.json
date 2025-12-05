@@ -1,0 +1,60 @@
+[
+  {
+    "UserName": "alice.smith",
+    "UserId": "AIDA0A1B2C3D4E5F6789A",
+    "Arn": "arn:aws:iam::123456789012:user/alice.smith",
+    "Path": "/",
+    "CreateDate": "2023-06-15T10:30:00Z",
+    "PasswordLastUsed": "2024-12-01T09:15:00Z",
+    "Tags": [
+      {"Key": "Department", "Value": "Engineering"},
+      {"Key": "Team", "Value": "Platform"}
+    ]
+  },
+  {
+    "UserName": "bob.jones",
+    "UserId": "AIDA1B2C3D4E5F6789AB",
+    "Arn": "arn:aws:iam::123456789012:user/bob.jones",
+    "Path": "/",
+    "CreateDate": "2023-08-20T14:00:00Z",
+    "PasswordLastUsed": "2024-11-28T16:45:00Z",
+    "Tags": [
+      {"Key": "Department", "Value": "Engineering"},
+      {"Key": "Team", "Value": "Backend"}
+    ]
+  },
+  {
+    "UserName": "charlie.wu",
+    "UserId": "AIDA2C3D4E5F6789ABC",
+    "Arn": "arn:aws:iam::123456789012:user/charlie.wu",
+    "Path": "/",
+    "CreateDate": "2024-01-10T09:00:00Z",
+    "PasswordLastUsed": "2024-12-02T11:30:00Z",
+    "Tags": [
+      {"Key": "Department", "Value": "Security"},
+      {"Key": "Team", "Value": "SecOps"}
+    ]
+  },
+  {
+    "UserName": "deploy-bot",
+    "UserId": "AIDA3D4E5F6789ABCD",
+    "Arn": "arn:aws:iam::123456789012:user/deploy-bot",
+    "Path": "/service-accounts/",
+    "CreateDate": "2023-03-01T08:00:00Z",
+    "Tags": [
+      {"Key": "ServiceAccount", "Value": "true"},
+      {"Key": "ManagedBy", "Value": "terraform"}
+    ]
+  },
+  {
+    "UserName": "monitoring-svc",
+    "UserId": "AIDA4E5F6789ABCDE",
+    "Arn": "arn:aws:iam::123456789012:user/monitoring-svc",
+    "Path": "/service-accounts/",
+    "CreateDate": "2023-04-15T12:00:00Z",
+    "Tags": [
+      {"Key": "ServiceAccount", "Value": "true"},
+      {"Key": "ManagedBy", "Value": "terraform"}
+    ]
+  }
+]

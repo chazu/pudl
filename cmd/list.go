@@ -229,9 +229,10 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		}
 	}
 
+	// Display proquint as the primary ID
 	fmt.Printf("%d. %s [%s] (%s)%s\n",
 		index,
-		entry.ID,
+		entry.Proquint,
 		entry.Schema,
 		entry.ImportTimestamp,
 		collectionIndicator)
@@ -255,6 +256,7 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 
 	// Verbose details
 	if verbose {
+		fmt.Printf("   Hash: %s\n", entry.ID)
 		fmt.Printf("   Data: %s\n", entry.StoredPath)
 		fmt.Printf("   Metadata: %s\n", entry.MetadataPath)
 		if entry.Confidence < 0.8 {

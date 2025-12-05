@@ -1,0 +1,35 @@
+{
+  "RoleName": "web-server-role",
+  "RoleId": "AROA0A1B2C3D4E5F6789",
+  "Arn": "arn:aws:iam::123456789012:role/web-server-role",
+  "Path": "/",
+  "CreateDate": "2024-01-15T10:00:00Z",
+  "Description": "Role for web server EC2 instances",
+  "MaxSessionDuration": 3600,
+  "AssumeRolePolicyDocument": {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Principal": {
+          "Service": "ec2.amazonaws.com"
+        },
+        "Action": "sts:AssumeRole"
+      }
+    ]
+  },
+  "AttachedManagedPolicies": [
+    {
+      "PolicyName": "AmazonS3ReadOnlyAccess",
+      "PolicyArn": "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+    },
+    {
+      "PolicyName": "CloudWatchAgentServerPolicy",
+      "PolicyArn": "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+    }
+  ],
+  "Tags": [
+    {"Key": "Environment", "Value": "production"},
+    {"Key": "ManagedBy", "Value": "terraform"}
+  ]
+}

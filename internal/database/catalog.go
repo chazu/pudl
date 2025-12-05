@@ -10,6 +10,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"pudl/internal/errors"
+	"pudl/internal/idgen"
 )
 
 // CatalogDB handles SQLite database operations for the catalog
@@ -232,8 +233,65 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to retrieve catalog entry", err)
 	}
-	
+
 	return &entry, nil
+}
+
+// GetEntryByProquint retrieves an entry by its proquint identifier
+// Proquints are derived from the first 32 bits of the content hash
+func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
+	// Convert proquint to the hex prefix it represents
+	num, err := idgen.ProquintToNumber(proquint)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeInvalidInput, fmt.Sprintf("Invalid proquint: %s", proquint), err)
+	}
+
+	// Convert to 8-character hex prefix
+	hexPrefix := idgen.Uint32ToHash(num)
+
+	// Query for entries where ID starts with this prefix
+	selectSQL := `
+	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
+		   schema, confidence, record_count, size_bytes, collection_id, item_index,
+		   collection_type, item_id, created_at, updated_at
+	FROM catalog_entries
+	WHERE id LIKE ?
+	LIMIT 2`  // Limit 2 to detect ambiguous matches
+
+	rows, err := c.db.Query(selectSQL, hexPrefix+"%")
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query by proquint", err)
+	}
+	defer rows.Close()
+
+	var entries []CatalogEntry
+	for rows.Next() {
+		var entry CatalogEntry
+		err := rows.Scan(
+			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
+			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
+			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
+			&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
+		if err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
+		}
+		entries = append(entries, entry)
+	}
+
+	if len(entries) == 0 {
+		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("No entry found for proquint: %s", proquint), nil)
+	}
+
+	if len(entries) > 1 {
+		// Multiple entries share this proquint prefix (hash collision on first 32 bits)
+		// Return an error with guidance
+		return nil, errors.NewInputError(
+			fmt.Sprintf("Ambiguous proquint: %s matches multiple entries", proquint),
+			"Use the full hash ID to specify the exact entry",
+			fmt.Sprintf("Matching IDs: %s, %s", entries[0].ID[:16]+"...", entries[1].ID[:16]+"..."))
+	}
+
+	return &entries[0], nil
 }
 
 // QueryEntries queries catalog entries with filtering, sorting, and pagination

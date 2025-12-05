@@ -1,0 +1,86 @@
+[
+  {
+    "InstanceId": "i-0a1b2c3d4e5f67890",
+    "InstanceType": "t3.medium",
+    "ImageId": "ami-0abcdef1234567890",
+    "State": {"Code": 16, "Name": "running"},
+    "PrivateIpAddress": "10.0.1.42",
+    "PublicIpAddress": "54.123.45.67",
+    "VpcId": "vpc-0a1b2c3d4e5f6789",
+    "SubnetId": "subnet-0a1b2c3d4e5f6789",
+    "SecurityGroups": [{"GroupId": "sg-0a1b2c3d4e5f6789", "GroupName": "web-server-sg"}],
+    "Tags": [
+      {"Key": "Name", "Value": "web-server-01"},
+      {"Key": "Environment", "Value": "production"}
+    ],
+    "LaunchTime": "2024-11-15T08:30:00Z",
+    "Architecture": "x86_64"
+  },
+  {
+    "InstanceId": "i-1b2c3d4e5f6789012",
+    "InstanceType": "t3.large",
+    "ImageId": "ami-0abcdef1234567890",
+    "State": {"Code": 16, "Name": "running"},
+    "PrivateIpAddress": "10.0.1.43",
+    "PublicIpAddress": "54.123.45.68",
+    "VpcId": "vpc-0a1b2c3d4e5f6789",
+    "SubnetId": "subnet-0a1b2c3d4e5f6789",
+    "SecurityGroups": [{"GroupId": "sg-0a1b2c3d4e5f6789", "GroupName": "web-server-sg"}],
+    "Tags": [
+      {"Key": "Name", "Value": "web-server-02"},
+      {"Key": "Environment", "Value": "production"}
+    ],
+    "LaunchTime": "2024-11-15T08:35:00Z",
+    "Architecture": "x86_64"
+  },
+  {
+    "InstanceId": "i-2c3d4e5f67890123",
+    "InstanceType": "t3.micro",
+    "ImageId": "ami-0abcdef1234567890",
+    "State": {"Code": 80, "Name": "stopped"},
+    "PrivateIpAddress": "10.0.2.10",
+    "VpcId": "vpc-0a1b2c3d4e5f6789",
+    "SubnetId": "subnet-1b2c3d4e5f678901",
+    "SecurityGroups": [{"GroupId": "sg-1b2c3d4e5f678901", "GroupName": "dev-sg"}],
+    "Tags": [
+      {"Key": "Name", "Value": "dev-server-01"},
+      {"Key": "Environment", "Value": "development"}
+    ],
+    "LaunchTime": "2024-10-01T12:00:00Z",
+    "Architecture": "x86_64"
+  },
+  {
+    "InstanceId": "i-3d4e5f678901234",
+    "InstanceType": "m5.xlarge",
+    "ImageId": "ami-0fedcba9876543210",
+    "State": {"Code": 16, "Name": "running"},
+    "PrivateIpAddress": "10.0.3.100",
+    "VpcId": "vpc-0a1b2c3d4e5f6789",
+    "SubnetId": "subnet-2c3d4e5f67890123",
+    "SecurityGroups": [{"GroupId": "sg-2c3d4e5f67890123", "GroupName": "database-sg"}],
+    "Tags": [
+      {"Key": "Name", "Value": "db-primary"},
+      {"Key": "Environment", "Value": "production"},
+      {"Key": "Role", "Value": "database"}
+    ],
+    "LaunchTime": "2024-09-20T06:00:00Z",
+    "Architecture": "x86_64"
+  },
+  {
+    "InstanceId": "i-4e5f6789012345",
+    "InstanceType": "c5.2xlarge",
+    "ImageId": "ami-0fedcba9876543210",
+    "State": {"Code": 16, "Name": "running"},
+    "PrivateIpAddress": "10.0.4.50",
+    "VpcId": "vpc-0a1b2c3d4e5f6789",
+    "SubnetId": "subnet-3d4e5f6789012345",
+    "SecurityGroups": [{"GroupId": "sg-3d4e5f6789012345", "GroupName": "worker-sg"}],
+    "Tags": [
+      {"Key": "Name", "Value": "worker-01"},
+      {"Key": "Environment", "Value": "production"},
+      {"Key": "Role", "Value": "worker"}
+    ],
+    "LaunchTime": "2024-11-01T14:00:00Z",
+    "Architecture": "x86_64"
+  }
+]
