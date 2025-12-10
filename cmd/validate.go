@@ -167,6 +167,13 @@ func validateAllEntries(catalogDB *database.CatalogDB, vs *review.ValidationServ
 			validCount++
 		} else {
 			fmt.Printf("  %s [%s] - INVALID\n", proquint, entry.Schema)
+			// Show validation errors inline for immediate feedback
+			if result.ErrorMessage != "" {
+				fmt.Printf("      Reason: %s\n", result.ErrorMessage)
+			}
+			for _, e := range result.Errors {
+				fmt.Printf("      - %s\n", e)
+			}
 			invalidCount++
 			invalidEntries = append(invalidEntries, invalidEntry{
 				Proquint: proquint,
@@ -186,25 +193,12 @@ func validateAllEntries(catalogDB *database.CatalogDB, vs *review.ValidationServ
 	fmt.Printf("Invalid:       %d\n", invalidCount)
 	fmt.Printf("Errors:        %d\n", errorCount)
 
-	// Show details for invalid entries
+	// List invalid entry IDs for easy reference
 	if len(invalidEntries) > 0 {
 		fmt.Println()
-		fmt.Println("Invalid Entries:")
-		fmt.Println("───────────────────────────────────────────────────────────────")
+		fmt.Println("Invalid entry IDs:")
 		for _, inv := range invalidEntries {
-			fmt.Printf("\n%s [%s]\n", inv.Proquint, inv.Schema)
-			if inv.Result.ErrorMessage != "" {
-				fmt.Printf("  → %s\n", inv.Result.ErrorMessage)
-			}
-			// Show first few validation errors
-			maxErrors := 3
-			for i, e := range inv.Result.Errors {
-				if i >= maxErrors {
-					fmt.Printf("  → ... and %d more errors\n", len(inv.Result.Errors)-maxErrors)
-					break
-				}
-				fmt.Printf("  → %s\n", e)
-			}
+			fmt.Printf("  - %s\n", inv.Proquint)
 		}
 	}
 
