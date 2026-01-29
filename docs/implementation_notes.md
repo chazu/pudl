@@ -4,7 +4,7 @@ This document tracks the detailed implementation work completed for each step of
 
 ## Step 1.1: Cobra CLI Migration ✅ Complete
 
-**Date Completed**: August 24, 2025  
+**Date Completed**: August 24, 2025
 **Goal**: Replace current simple CLI with Cobra structure while preserving all existing functionality
 
 ### Changes Made
@@ -57,7 +57,7 @@ pudl/
 
 ## Step 1.2: Directory Initialization ✅ Complete
 
-**Date Completed**: August 24, 2025  
+**Date Completed**: August 24, 2025
 **Goal**: Basic PUDL workspace setup with automatic and manual initialization
 
 ### Changes Made
@@ -233,7 +233,6 @@ The implementation provides a solid foundation that balances ease of use (auto-i
 - **Date-based partitioning**: `~/.pudl/data/raw/YYYY/MM/DD/` with future indexing support
 - **CUE schema integration**: Package organization (aws/, k8s/, unknown/) with schema assignment
 - **Field-level tracking**: Schema evolution and resource change tracking at field level
-- **Zygomys rule engine**: For schema assignment (not generation) - simplified for initial implementation
 - **Never reject data**: Mark as outliers or assign to unknown/catchall schema
 - **Naming convention**: `YYYYMMDD_HHMMSS_origin.ext` for raw data files
 

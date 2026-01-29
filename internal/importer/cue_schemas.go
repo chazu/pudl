@@ -2,6 +2,7 @@ package importer
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -56,39 +57,20 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 	})
 }
 
-// createBasicSchemas copies bootstrap CUE schema files to the schema directory
-func (i *Importer) createBasicSchemas() error {
-	return copyBootstrapSchemasTo(i.schemaPath)
-}
-
-// ensureBasicSchemas ensures that basic schema files exist
+// ensureBasicSchemas verifies that required schema files exist.
+// Returns an error if the schema repository is not properly initialized.
+// Users should run 'pudl init' to set up the schema repository.
 func (i *Importer) ensureBasicSchemas() error {
-	// Ensure cue.mod/module.cue exists (required for CUE module loading)
+	// Check cue.mod/module.cue exists (required for CUE module loading)
 	modulePath := filepath.Join(i.schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
-		if err := i.createCUEModule(); err != nil {
-			return err
-		}
+		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
 	}
 
 	// Check if catchall schema exists
 	catchallPath := filepath.Join(i.schemaPath, "pudl", "unknown", "catchall.cue")
 	if _, err := os.Stat(catchallPath); os.IsNotExist(err) {
-		return i.createBasicSchemas()
+		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", catchallPath)
 	}
 	return nil
-}
-
-// createCUEModule creates the cue.mod/module.cue file
-func (i *Importer) createCUEModule() error {
-	cueModDir := filepath.Join(i.schemaPath, "cue.mod")
-	if err := os.MkdirAll(cueModDir, 0755); err != nil {
-		return err
-	}
-
-	moduleContent := `language: version: "v0.14.0"
-module: "pudl.schemas@v0"
-source: kind: "self"
-`
-	return os.WriteFile(filepath.Join(cueModDir, "module.cue"), []byte(moduleContent), 0644)
 }
