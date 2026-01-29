@@ -215,6 +215,8 @@ func TestDetectOrigin(t *testing.T) {
 	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
+	// detectOrigin now simply returns the filename without extension.
+	// Schema detection should be handled by CUE-based inference, not hardcoded patterns.
 	tests := []struct {
 		name           string
 		filename       string
@@ -222,52 +224,40 @@ func TestDetectOrigin(t *testing.T) {
 		expectedOrigin string
 	}{
 		{
-			name:           "AWS EC2 instances",
+			name:           "AWS EC2 instances file",
 			filename:       "aws-ec2-instances.json",
 			format:         "json",
-			expectedOrigin: "aws-ec2-describe-instances",
+			expectedOrigin: "aws-ec2-instances",
 		},
 		{
-			name:           "AWS S3 buckets",
+			name:           "AWS S3 buckets file",
 			filename:       "aws-s3-buckets.json",
 			format:         "json",
-			expectedOrigin: "aws-s3-list-buckets",
+			expectedOrigin: "aws-s3-buckets",
 		},
 		{
-			name:           "generic AWS file",
-			filename:       "aws-data.json",
-			format:         "json",
-			expectedOrigin: "aws-unknown",
-		},
-		{
-			name:           "Kubernetes pods",
+			name:           "Kubernetes pods file",
 			filename:       "k8s-pods.yaml",
 			format:         "yaml",
-			expectedOrigin: "k8s-get-pods",
+			expectedOrigin: "k8s-pods",
 		},
 		{
-			name:           "Kubernetes services",
-			filename:       "kube-services.yaml",
-			format:         "yaml",
-			expectedOrigin: "k8s-get-services",
-		},
-		{
-			name:           "generic Kubernetes file",
-			filename:       "kubernetes-data.yaml",
-			format:         "yaml",
-			expectedOrigin: "k8s-unknown",
-		},
-		{
-			name:           "Docker containers",
+			name:           "Docker containers file",
 			filename:       "docker-containers.json",
 			format:         "json",
 			expectedOrigin: "docker-containers",
 		},
 		{
-			name:           "generic file",
+			name:           "generic data file",
 			filename:       "data.json",
 			format:         "json",
 			expectedOrigin: "data",
+		},
+		{
+			name:           "uppercase filename normalized to lowercase",
+			filename:       "MyData.JSON",
+			format:         "json",
+			expectedOrigin: "mydata",
 		},
 	}
 

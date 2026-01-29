@@ -43,22 +43,7 @@ if i.hasFields(dataMap, []string{"kind", "apiVersion", "metadata"}) {
 
 **Impact**: This is the **primary entry point** for schema assignment during data import. All data classification flows through this hard-coded logic instead of reading patterns from CUE schemas.
 
-### 2. Legacy Rule Engine
-
-**Location**: `internal/rules/legacy.go` (Lines 38-254)
-**Current Approach**: Embedded Go rules with hard-coded field patterns
-**Should Be**: Rule engine that reads patterns from CUE schema metadata
-
-```go
-// HARD-CODED: AWS EC2 Instance detection
-if e.hasFields(dataMap, []string{"InstanceId", "State", "InstanceType"}) {
-    return &Result{Schema: "aws.#EC2Instance", Confidence: 0.9}
-}
-```
-
-**Impact**: The "legacy" rule engine is actually the **default and primary** rule engine, containing duplicate hard-coded logic that should be reading from CUE schemas.
-
-### 3. Streaming Schema Detection
+### 2. Streaming Schema Detection
 
 **Location**: `internal/streaming/schema_detector.go` (Lines 291-350)
 **Current Approach**: Hard-coded schema patterns in Go structs
@@ -104,9 +89,8 @@ pattern := SchemaPattern{
 ### Current Schema Assignment Flow
 
 1. **Data Import** → `internal/importer/importer.go`
-2. **Rule Manager** → `internal/rules/manager.go`
-3. **Legacy Rule Engine** → `internal/rules/legacy.go` (hard-coded patterns)
-4. **Schema Assignment** → Returns hard-coded schema names
+2. **Schema Detection** → `internal/importer/schema.go` (hard-coded patterns)
+3. **Schema Assignment** → Returns hard-coded schema names
 
 ### Intended Schema Assignment Flow
 
@@ -122,7 +106,6 @@ pattern := SchemaPattern{
 | File | Lines | Hard-Coded Patterns | Impact |
 |------|-------|-------------------|---------|
 | `internal/importer/schema.go` | 34-131 | AWS EC2, S3, K8s Pod/Service/Deployment, etc. | **HIGH** - Primary import path |
-| `internal/rules/legacy.go` | 76-254 | Duplicate AWS/K8s patterns | **HIGH** - Default rule engine |
 | `internal/streaming/schema_detector.go` | 291-350 | AWS EC2, K8s Pod, S3 patterns | **MEDIUM** - Streaming processing |
 
 ### B. Pattern Definitions (Medium Priority)
@@ -132,12 +115,14 @@ pattern := SchemaPattern{
 | `internal/streaming/schema_detector.go` | 18-34 | `SchemaPattern` and `FieldPattern` structs | **MEDIUM** - Pattern structure |
 | `internal/importer/cue_schemas.go` | 24-156 | CatchAll and Collection schemas | **LOW** - Fallback schemas |
 
-### C. Detection Utilities (Low Priority)
+### C. Detection Utilities (Cleaned Up)
 
-| File | Lines | Hard-Coded Elements | Impact |
-|------|-------|-------------------|---------|
-| `internal/importer/detection.go` | 111-128 | Origin-based AWS/K8s detection | **LOW** - Fallback detection |
+| File | Lines | Status | Impact |
+|------|-------|--------|---------|
+| `internal/importer/detection.go` | 111-125 | ✅ **CLEANED** - Now uses filename only | **LOW** - Simple origin detection |
 | `internal/streaming/cue_integration.go` | 154-180 | Schema name matching patterns | **LOW** - Name resolution |
+
+**Note**: As of 2026-01-29, the `detectOrigin()` function has been simplified to just return the filename without extension. Hardcoded AWS/K8s pattern matching has been removed.
 
 ## Working CUE Infrastructure
 
@@ -181,17 +166,12 @@ The **critical gap** is that while CUE schemas are loaded and can validate data,
    - Replace hard-coded logic with dynamic pattern matching
    - Maintain backward compatibility during transition
 
-### Phase 2: Rule Engine Integration (Medium Priority)
+### Phase 2: Streaming Integration (Medium Priority)
 
-1. **CUE-Based Rule Engine**
-   - Create new rule engine that reads from CUE schemas
-   - Replace `internal/rules/legacy.go` with CUE-driven implementation
-   - Support user-defined custom rules
-
-2. **Streaming Integration**
+1. **Streaming Pattern Loading**
    - Update `internal/streaming/schema_detector.go` to use CUE patterns
    - Remove hard-coded pattern definitions
-   - Enable dynamic pattern loading
+   - Enable dynamic pattern loading from CUE schemas
 
 ### Phase 3: Advanced Features (Low Priority)
 
@@ -225,10 +205,10 @@ The **critical gap** is that while CUE schemas are loaded and can validate data,
 The PUDL system has a **well-designed CUE infrastructure** that is currently **underutilized**. The primary issue is that schema detection/classification logic uses hard-coded Go patterns instead of reading from the user's CUE schema repository.
 
 **Key Findings:**
-- 🔴 **3 critical locations** with hard-coded schema detection logic
-- 🟡 **5 medium-priority locations** with embedded patterns
-- 🟢 **Functional CUE infrastructure** ready for integration
-- 📊 **~80% of schema detection** currently uses hard-coded logic
+- 🔴 **2 critical locations** with hard-coded schema detection logic (`internal/importer/schema.go`, `internal/streaming/schema_detector.go`)
+- 🟡 **Incomplete CUE integration** - framework exists but patterns not extracted
+- 🟢 **Functional CUE infrastructure** ready for integration (loader, validator)
+- ✅ **Detection utilities cleaned** - `detectOrigin()` simplified (2026-01-29)
 
 **Recommended Action:**
-Focus on **Phase 1** migration to replace the core detection logic in `internal/importer/schema.go` and `internal/rules/legacy.go` with CUE schema-driven pattern extraction. This will restore the system to its intended design and enable users to fully customize schema detection through their CUE schema repository.
+Focus on **Phase 1** migration to replace the core detection logic in `internal/importer/schema.go` with CUE schema-driven pattern extraction. This will restore the system to its intended design and enable users to fully customize schema detection through their CUE schema repository.

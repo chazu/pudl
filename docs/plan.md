@@ -1,174 +1,105 @@
-# PUDL Schema Inference Divergence Analysis - Implementation Plan
+# PUDL - Development Plan
 
 ## Project Overview
 
-This project addresses the divergence between PUDL's intended CUE-based schema detection design and its current hardcoded implementation. The goal is to restore the system to its original vision while providing a migration path and enhanced capabilities.
+PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to manage and analyze cloud infrastructure data. It creates a personal data lake for cloud resources, Kubernetes objects, logs, and metrics using CUE-based schema validation.
 
-## Phase Status
+## Current State
 
-### ✅ Phase 1: CUE-Based Schema Detection (COMPLETED)
-**Status:** COMPLETE  
-**Completion Date:** 2025-11-25  
-**Duration:** ~3 hours  
+### Core Functionality (Implemented)
+- **Data Import** - Supports JSON, YAML, CSV, and NDJSON with format detection
+- **Streaming Support** - Process large files using Content-Defined Chunking (CDC)
+- **SQLite Catalog** - High-performance catalog database
+- **CUE Schema Management** - Schema loading, validation, and git version control
+- **Bootstrap Schemas** - Base schemas (catchall, collections) embedded and copied on init
+- **User Repository** - Data lake at `~/.pudl/` with schema/, data/, config.yaml
 
-**Objectives:**
-- Replace hardcoded schema detection with CUE-based pattern extraction
-- Implement migration support for gradual adoption
-- Create comprehensive testing framework
-- Provide example schemas demonstrating the new system
+### Schema Infrastructure
+- `internal/importer/bootstrap/` - Embedded bootstrap CUE schemas
+- `internal/schema/manager.go` - Schema loading and management
+- `internal/validator/` - CUE validation and cascade validation
+- `internal/streaming/cue_integration.go` - CUE-based schema detection (framework)
 
-**Deliverables:**
-- [x] Enhanced CUE metadata structure with detection patterns
-- [x] CUE pattern extractor component
-- [x] CUE-based rule engine implementation
-- [x] Hybrid rule engine for migration support
-- [x] Feature flags and configuration enhancements
-- [x] Example AWS EC2, Kubernetes Pod, and S3 Bucket schemas
-- [x] Comprehensive unit and integration tests
-- [x] Implementation documentation
+### What Works
+- `pudl init` - Initializes user repository with CUE module and bootstrap schemas
+- `pudl import` - Imports data files to the data lake
+- `pudl schema list` - Lists available schemas
+- `pudl validate` - Validates data against schemas
+- Format detection (JSON, YAML, CSV, NDJSON)
+- Basic schema inference framework
 
-**Key Benefits Achieved:**
-- User-extensible schema detection through CUE files
-- Elimination of hardcoded detection logic duplication
-- Consistent pattern-based detection across all components
-- Safe migration path with fallback mechanisms
-- Foundation for advanced features in future phases
+## Technical Debt Addressed (2026-01-29 Cleanup)
 
-**Files Implemented:**
-- `internal/validator/pattern_extractor.go` - Pattern extraction from CUE
-- `internal/rules/cue_engine.go` - CUE-based rule engine
-- `internal/rules/hybrid_engine.go` - Migration support
-- `examples/aws_ec2_schema.cue` - AWS EC2 example
-- `examples/k8s_pod_schema.cue` - Kubernetes Pod example
-- `examples/aws_s3_schema.cue` - AWS S3 Bucket example
-- Comprehensive test suite and documentation
+### Completed
+- [x] Removed `internal/importer/cue.mod/` - Was incorrectly creating CUE module in project repo
+- [x] Removed `internal/importer/pudl/` - Duplicate of bootstrap/pudl directory
+- [x] Consolidated CUE module creation - Removed duplicate `createCUEModule()` from cue_schemas.go
+- [x] Simplified `detectOrigin()` - Removed hardcoded AWS/K8s pattern matching, now uses filename only
+- [x] Updated tests to reflect simplified detection
 
-### 🔄 Phase 2: Rule Engine Integration (PLANNED)
-**Status:** NOT STARTED
-**Estimated Duration:** 1-2 weeks
+### Design Decisions Made
+- **No rules package** - The previously planned `internal/rules/` with zygomys Lisp support is not being implemented
+- **Schema inference strategy TBD** - Strategic decisions about CUE-based schema inference deferred for later
+- **Origin detection simplified** - Origin is now just filename; schema matching should be handled by CUE patterns
 
-**Objectives:**
-- Create CUE-based rule engine to replace legacy implementation
-- Update streaming integration to use CUE patterns
-- Support user-defined custom rules
-- Enable dynamic pattern loading
+## Future Development (Prioritized)
 
-**Planned Deliverables:**
-- [ ] Replace `internal/rules/legacy.go` with CUE-driven implementation
-- [ ] Update `internal/streaming/schema_detector.go` to use CUE patterns
-- [ ] Remove hard-coded pattern definitions from streaming components
-- [ ] Support for user-defined custom rules
-- [ ] Dynamic pattern loading capabilities
+### High Priority
+1. **Complete CUE-based schema detection** - The `internal/streaming/cue_integration.go` has placeholder code that needs implementation
+2. **Improve error messages** - Better user-facing error messages for common issues
+3. **Schema review workflow** - Complete the TUI-based schema review flow
 
-### 🔄 Phase 3: Advanced Features (PLANNED)
-**Status:** NOT STARTED
-**Estimated Duration:** 1-2 weeks
+### Medium Priority
+1. **Schema pattern extraction** - Extract detection patterns from CUE schema `_pudl` metadata
+2. **User-defined schemas** - Support custom schemas in user's `~/.pudl/schema/`
+3. **Collection support** - Improve NDJSON/collection handling
 
-**Objectives:**
-- Support runtime schema updates and hot-reloading
-- Enhance user experience with debugging tools
-- Add pattern conflict detection and schema coverage analysis
-- Implement live schema repository monitoring
+### Low Priority
+1. **Hot-reloading** - Reload schemas without restart
+2. **Schema debugging tools** - Tools to help develop and test schemas
+3. **Pattern conflict detection** - Detect conflicting schema patterns
 
-**Planned Deliverables:**
-- [ ] Hot-reloading of schema changes
-- [ ] Dynamic pattern cache invalidation
-- [ ] Live schema repository monitoring
-- [ ] Enhanced schema debugging tools
-- [ ] Pattern conflict detection
-- [ ] Schema coverage analysis
+## Architecture Notes
 
-## Current Architecture
-
-### Core Components
-1. **CUE Pattern Extractor** - Extracts detection patterns from CUE schema metadata
-2. **CUE Rule Engine** - Performs schema detection using extracted patterns
-3. **Hybrid Rule Engine** - Provides migration support between legacy and CUE engines
-4. **Enhanced Configuration** - Feature flags and migration controls
-
-### Migration Strategy
-- **Gradual Migration:** Schema-based filtering for selective CUE adoption
-- **Comparison Mode:** Validate CUE results against legacy detection
-- **Fallback Support:** Automatic fallback to legacy engine when needed
-- **Feature Flags:** Fine-grained control over CUE engine adoption
-
-## Deployment Recommendations
-
-### Phase 1 Rollout (Ready for Production)
-1. **Week 1:** Deploy with `migration_mode: "disabled"` (legacy only)
-2. **Week 2:** Enable `comparison_mode: true` to validate CUE results
-3. **Week 3:** Switch to `migration_mode: "gradual"` with selected schemas
-4. **Week 4:** Expand to `migration_mode: "full"` for complete CUE adoption
-
-### Configuration Examples
-
-#### Conservative Rollout
-```yaml
-type: "hybrid"
-migration_mode: "gradual"
-fallback_engine: "legacy"
-comparison_mode: true
-enabled_schemas: ["aws.ec2"]
-confidence_threshold: 0.7
+### User Repository (`~/.pudl/`)
+```
+~/.pudl/
+├── config.yaml           # Configuration file
+├── data/                  # Imported data files
+├── schema/
+│   ├── cue.mod/
+│   │   └── module.cue    # CUE module with k8s deps
+│   ├── pudl/
+│   │   ├── unknown/
+│   │   │   └── catchall.cue
+│   │   └── collections/
+│   │       └── collections.cue
+│   └── examples/         # Usage examples
+└── catalog.db            # SQLite catalog
 ```
 
-#### Full CUE Adoption
-```yaml
-type: "cue"
-migration_mode: "full"
-fallback_engine: "legacy"
-confidence_threshold: 0.3
-```
+### Bootstrap Flow
+1. `pudl init` calls `internal/init/initCUEModule()` to create `cue.mod/module.cue`
+2. `pudl init` calls `importer.CopyBootstrapSchemas()` to copy embedded schemas
+3. `cue mod tidy` is run to fetch k8s dependencies (if cue is available)
 
-## Success Metrics
+### Import Flow
+1. `ensureBasicSchemas()` verifies schema repo is initialized (errors if not)
+2. `detectFormat()` determines file format
+3. `detectOrigin()` returns filename without extension
+4. Schema inference assigns appropriate schema (currently simplified)
+5. Data stored in catalog with metadata
 
-### Phase 1 Success Criteria (✅ ACHIEVED)
-- [x] CUE-based detection matches or exceeds legacy accuracy
-- [x] Zero breaking changes to existing API
-- [x] Migration path provides safe fallback mechanisms
-- [x] Performance impact < 10% compared to legacy system
-- [x] User-extensible schema detection capability
+## Files Reference
 
-### Future Phase Success Criteria
-- [ ] Phase 2: Complete replacement of legacy rule engine with CUE-based implementation
-- [ ] Phase 2: Dynamic pattern loading reduces schema deployment complexity
-- [ ] Phase 3: Hot-reloading enables real-time schema updates without restarts
-- [ ] Phase 3: Debugging tools reduce schema development time by 50%
+### Core Packages
+- `internal/importer/` - Data import logic
+- `internal/schema/` - Schema management
+- `internal/validator/` - CUE validation
+- `internal/streaming/` - Large file processing
+- `internal/init/` - Repository initialization
+- `internal/database/` - SQLite catalog
 
-## Risk Mitigation
-
-### Completed Mitigations (Phase 1)
-- ✅ **Backward Compatibility:** Hybrid engine maintains legacy support
-- ✅ **Performance:** Comprehensive testing validates acceptable performance
-- ✅ **Reliability:** Fallback mechanisms prevent system failures
-- ✅ **Validation:** Comparison mode ensures result accuracy
-
-### Future Risk Considerations
-- **Legacy Replacement:** Ensure complete compatibility when replacing legacy rule engine
-- **Dynamic Loading:** Validate that runtime pattern updates don't impact performance
-- **Schema Conflicts:** Handle conflicts between user-defined and system schemas
-- **Hot-reloading:** Ensure schema updates don't cause detection inconsistencies
-
-## Technical Debt Addressed
-
-### Phase 1 Debt Resolution
-- ✅ **Eliminated Hardcoded Logic:** Removed duplicate detection patterns
-- ✅ **Restored Design Intent:** System now uses CUE as originally designed
-- ✅ **Improved Testability:** Comprehensive test coverage for all components
-- ✅ **Enhanced Maintainability:** Single source of truth for detection patterns
-
-## Next Actions
-
-1. **Deploy Phase 1:** Begin gradual rollout of CUE-based detection
-2. **Monitor Performance:** Track detection accuracy and system performance
-3. **Gather Feedback:** Collect user feedback on new schema extensibility
-4. **Plan Phase 2:** Begin design work for complete rule engine integration
-5. **Documentation:** Update user guides for new CUE schema creation
-
-## Contact and Support
-
-For questions about this implementation or future phases:
-- Implementation Log: `implog/phase1_cue_schema_detection.md`
-- Test Coverage: `internal/rules/*_test.go`
-- Example Schemas: `examples/*.cue`
-- Configuration Reference: `internal/rules/interfaces.go`
+### Configuration
+- `internal/config/config.go` - Configuration loading
+- `cmd/*.go` - CLI commands
