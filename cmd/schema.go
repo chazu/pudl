@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,6 +16,7 @@ import (
 	"pudl/internal/git"
 	"pudl/internal/review"
 	"pudl/internal/schema"
+	"pudl/internal/schemagen"
 )
 
 var (
@@ -29,6 +33,12 @@ var (
 	reviewOnlyUnknown bool
 	reviewSessionID   string
 	reviewListSessions bool
+
+	// New command flags
+	schemaNewFrom       string
+	schemaNewPath       string
+	schemaNewCollection bool
+	schemaNewInfer      []string
 )
 
 // schemaCmd represents the schema command
@@ -568,6 +578,57 @@ Examples:
 	},
 }
 
+// schemaNewCmd represents the schema new command
+var schemaNewCmd = &cobra.Command{
+	Use:   "new",
+	Short: "Generate a new schema from imported data",
+	Long: `Generate a new CUE schema by analyzing data from a previously imported entry.
+
+This command creates a new schema file based on the structure of imported data,
+inferring field types, identifying likely identity fields, and generating
+appropriate CUE type definitions.
+
+The --from flag specifies the proquint ID of the imported data to analyze.
+The --path flag specifies where to create the schema (package path and definition name).
+
+If the path contains a # character, everything after it is used as the definition name.
+Otherwise, the last path component is capitalized and used as the definition name.
+
+When --from points to a collection entry:
+- Without --collection: analyzes individual items to create an item schema
+- With --collection: creates a schema for the collection structure itself
+
+The --infer flag allows specifying type hints for specific fields, such as
+marking a field as an enum type.
+
+Examples:
+    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance
+    pudl schema new --from govim-nupab --path aws/ec2:#Instance  # from collection
+    pudl schema new --from govim-nupab --path aws/ec2:#InstanceCollection --collection
+    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance --infer State=enum`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSchemaNewCommand()
+	},
+}
+
+// schemaEditCmd represents the schema edit command
+var schemaEditCmd = &cobra.Command{
+	Use:   "edit <path>",
+	Short: "Open a schema file in your editor",
+	Long: `Open a schema file in your configured editor.
+
+The path can optionally include a definition name to position the cursor at that
+definition (supported for vim/nvim editors).
+
+Examples:
+    pudl schema edit aws/ec2:#Instance    # Opens the file and positions at #Instance if possible
+    pudl schema edit aws/ec2              # Opens the aws/ec2.cue file`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSchemaEditCommand(args[0])
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(schemaCmd)
 
@@ -578,6 +639,8 @@ func init() {
 	schemaCmd.AddCommand(schemaCommitCmd)
 	schemaCmd.AddCommand(schemaLogCmd)
 	schemaCmd.AddCommand(schemaReviewCmd)
+	schemaCmd.AddCommand(schemaNewCmd)
+	schemaCmd.AddCommand(schemaEditCmd)
 
 	// Add flags
 	schemaListCmd.Flags().BoolVarP(&schemaVerbose, "verbose", "v", false, "Show detailed information")
@@ -602,6 +665,14 @@ func init() {
 	schemaReviewCmd.Flags().BoolVar(&reviewOnlyUnknown, "only-unknown", false, "Review only items with unknown schemas")
 	schemaReviewCmd.Flags().StringVar(&reviewSessionID, "session", "", "Resume a specific review session")
 	schemaReviewCmd.Flags().BoolVar(&reviewListSessions, "list", false, "List available review sessions")
+
+	// New command flags
+	schemaNewCmd.Flags().StringVar(&schemaNewFrom, "from", "", "Proquint ID of the imported data to generate schema from (required)")
+	schemaNewCmd.Flags().StringVar(&schemaNewPath, "path", "", "Schema path in format 'package/path:#Definition' (required)")
+	schemaNewCmd.Flags().BoolVar(&schemaNewCollection, "collection", false, "Create a collection schema instead of item schema")
+	schemaNewCmd.Flags().StringArrayVar(&schemaNewInfer, "infer", []string{}, "Field inference hints (e.g., State=enum)")
+	schemaNewCmd.MarkFlagRequired("from")
+	schemaNewCmd.MarkFlagRequired("path")
 }
 
 // listAllSchemas lists all schemas organized by package
@@ -898,4 +969,266 @@ func min(a, b int) int {
 	return b
 }
 
+// runSchemaNewCommand runs the schema new command
+func runSchemaNewCommand() error {
+	// Parse the --path flag to extract package path and definition name
+	packagePath, definitionName := parseSchemaPath(schemaNewPath)
 
+	// Parse --infer flags into map
+	inferHints := parseInferHints(schemaNewInfer)
+
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewConfigError("Failed to load configuration", err)
+	}
+
+	// Initialize database connection
+	catalogDB, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
+	}
+	defer catalogDB.Close()
+
+	// Look up the entry by proquint ID
+	entry, err := catalogDB.GetEntryByProquint(schemaNewFrom)
+	if err != nil {
+		return err
+	}
+
+	// Load data based on entry type and --collection flag
+	var data interface{}
+	if entry.CollectionType != nil && *entry.CollectionType == "collection" && !schemaNewCollection {
+		// It's a collection and --collection is NOT set: get all items and merge their data
+		items, err := catalogDB.GetCollectionItems(entry.ID)
+		if err != nil {
+			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get collection items", err)
+		}
+
+		if len(items) == 0 {
+			return errors.NewInputError("Collection has no items",
+				"Use --collection flag to create a schema for the collection itself")
+		}
+
+		// Load data from each item and create an array for the generator
+		var itemsData []interface{}
+		for _, item := range items {
+			itemData, err := loadJSONFile(item.StoredPath)
+			if err != nil {
+				return errors.WrapError(errors.ErrCodeFileSystem,
+					fmt.Sprintf("Failed to load item data from %s", item.StoredPath), err)
+			}
+			itemsData = append(itemsData, itemData)
+		}
+		data = itemsData
+	} else {
+		// Either it's a single item, or it's a collection with --collection set
+		data, err = loadJSONFile(entry.StoredPath)
+		if err != nil {
+			return errors.WrapError(errors.ErrCodeFileSystem,
+				fmt.Sprintf("Failed to load data from %s", entry.StoredPath), err)
+		}
+	}
+
+	// Create the generator
+	generator := schemagen.NewGenerator(cfg.SchemaPath)
+
+	// Build generation options
+	opts := schemagen.GenerateOptions{
+		FromID:         entry.ID,
+		PackagePath:    packagePath,
+		DefinitionName: definitionName,
+		IsCollection:   schemaNewCollection,
+		InferHints:     inferHints,
+	}
+
+	// Generate the schema
+	result, err := generator.Generate(data, opts)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to generate schema", err)
+	}
+
+	// Write the schema file
+	if err := generator.WriteSchema(result, result.Content); err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to write schema file", err)
+	}
+
+	// Print results
+	fmt.Println("✅ Schema generated successfully!")
+	fmt.Println()
+	fmt.Printf("📄 File created: %s\n", result.FilePath)
+	fmt.Printf("📦 Package: %s\n", result.PackageName)
+	fmt.Printf("📋 Definition: #%s\n", result.DefinitionName)
+	fmt.Printf("🔢 Fields: %d\n", result.FieldCount)
+
+	if len(result.InferredIdentityFields) > 0 {
+		fmt.Printf("🔑 Inferred identity fields: %s\n", strings.Join(result.InferredIdentityFields, ", "))
+	}
+
+	fmt.Println()
+	fmt.Println("💡 Next steps:")
+	fmt.Printf("   - Edit the schema: pudl schema edit %s:#%s\n", packagePath, result.DefinitionName)
+	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", result.DefinitionName)
+
+	return nil
+}
+
+// parseSchemaPath parses the --path flag into package path and definition name
+// e.g., "aws/ec2:#Instance" → ("aws/ec2", "Instance")
+// e.g., "aws/ec2" → ("aws/ec2", "Ec2")
+func parseSchemaPath(path string) (packagePath, definitionName string) {
+	// Check if path contains # for explicit definition name
+	if idx := strings.Index(path, ":#"); idx != -1 {
+		packagePath = path[:idx]
+		definitionName = path[idx+2:] // Skip :#
+		return
+	}
+
+	// No explicit definition, capitalize the last path component
+	packagePath = path
+	parts := strings.Split(path, "/")
+	lastPart := parts[len(parts)-1]
+	definitionName = capitalizeFirst(lastPart)
+	return
+}
+
+// capitalizeFirst capitalizes the first letter of a string
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// parseInferHints parses --infer flags into a map
+// e.g., ["State=enum", "Type=enum"] → {"State": "enum", "Type": "enum"}
+func parseInferHints(hints []string) map[string]string {
+	result := make(map[string]string)
+	for _, hint := range hints {
+		parts := strings.SplitN(hint, "=", 2)
+		if len(parts) == 2 {
+			result[parts[0]] = parts[1]
+		}
+	}
+	return result
+}
+
+// loadJSONFile loads and parses a JSON file
+func loadJSONFile(path string) (interface{}, error) {
+	fileData, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var data interface{}
+	if err := json.Unmarshal(fileData, &data); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+// runSchemaEditCommand opens a schema file in the user's editor
+func runSchemaEditCommand(pathArg string) error {
+	// Parse the path argument to extract package path and optional definition name
+	packagePath, definitionName := parseSchemaEditPath(pathArg)
+
+	// Load configuration to get schema path
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewConfigError("Failed to load configuration", err)
+	}
+
+	// Resolve the file path
+	// Schema files can be at:
+	// 1. ~/.pudl/schema/<package_path>/<definition>.cue (created by pudl schema new)
+	// 2. ~/.pudl/schema/<package_path>.cue (simple single-file schema)
+	var filePath string
+	var found bool
+
+	// If definition name is provided, first try the definition-based path
+	if definitionName != "" {
+		// Try: aws/ec2 + Instance -> aws/ec2/instance.cue
+		defPath := filepath.Join(cfg.SchemaPath, packagePath, strings.ToLower(definitionName)+".cue")
+		if _, err := os.Stat(defPath); err == nil {
+			filePath = defPath
+			found = true
+		}
+	}
+
+	// If not found, try the simple package path
+	if !found {
+		simplePath := filepath.Join(cfg.SchemaPath, packagePath+".cue")
+		if _, err := os.Stat(simplePath); err == nil {
+			filePath = simplePath
+			found = true
+		}
+	}
+
+	// If still not found, return error with helpful message
+	if !found {
+		if definitionName != "" {
+			return errors.NewFileNotFoundError(
+				fmt.Sprintf("%s/%s.cue or %s.cue",
+					filepath.Join(cfg.SchemaPath, packagePath),
+					strings.ToLower(definitionName),
+					filepath.Join(cfg.SchemaPath, packagePath)))
+		}
+		return errors.NewFileNotFoundError(filepath.Join(cfg.SchemaPath, packagePath+".cue"))
+	}
+
+	// Get the editor from $EDITOR environment variable
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		// Try vi first, then nano as fallback
+		editor = "vi"
+	}
+
+	// Build the command arguments
+	var args []string
+
+	// If a definition name was specified and we're using vim/nvim, try to position the cursor
+	if definitionName != "" && isVimEditor(editor) {
+		// Use vim's +/pattern command to search for the definition
+		args = append(args, fmt.Sprintf("+/^#%s:", definitionName))
+	}
+
+	args = append(args, filePath)
+
+	// Execute the editor
+	cmd := exec.Command(editor, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem,
+			fmt.Sprintf("Failed to open editor '%s'", editor), err)
+	}
+
+	return nil
+}
+
+// parseSchemaEditPath parses the path argument for the edit command
+// e.g., "aws/ec2:#Instance" → ("aws/ec2", "Instance")
+// e.g., "aws/ec2" → ("aws/ec2", "")
+func parseSchemaEditPath(path string) (packagePath, definitionName string) {
+	// Check if path contains :# for explicit definition name
+	if idx := strings.Index(path, ":#"); idx != -1 {
+		packagePath = path[:idx]
+		definitionName = path[idx+2:] // Skip :#
+		return
+	}
+
+	// No explicit definition
+	packagePath = path
+	definitionName = ""
+	return
+}
+
+// isVimEditor checks if the editor is vim or nvim
+func isVimEditor(editor string) bool {
+	// Get the base name of the editor (in case it's a full path)
+	baseName := filepath.Base(editor)
+	return baseName == "vim" || baseName == "nvim" || baseName == "vi"
+}
