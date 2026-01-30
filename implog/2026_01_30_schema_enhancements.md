@@ -75,8 +75,24 @@ When running `pudl schema reinfer` on a collection entry, the inference would in
 3. Added `findFallbackSchema()` to return collection-appropriate fallbacks
 4. Updated reinfer command to pass collection type from catalog entry
 
+### Follow-up: Structural Type Detection for Collections
+
+The initial fix relied on `schema_type: "collection"` metadata, but this approach is flawed because:
+- Collection schemas like `#CatchAllCollection: [...]` are structurally arrays
+- Arrays can't have `_pudl` metadata (metadata is an object field)
+
+**Improved Solution:**
+- Use CUE's `IncompleteKind()` to detect if a schema is structurally a list type
+- Added `IsListType bool` field to `SchemaMetadata` (derived from CUE structure, not metadata)
+- Updated filtering to use `meta.IsListType` instead of checking `schema_type` metadata
+
+**Files Modified:**
+- `internal/validator/validation_result.go` - Added `IsListType` to SchemaMetadata
+- `internal/validator/cue_loader.go` - Detect list types using `schemaValue.IncompleteKind() & cue.ListKind`
+- `internal/inference/heuristics.go` - Use `meta.IsListType` for collection filtering
+- `internal/inference/inference.go` - Use `meta.IsListType` in findFallbackSchema
+
 ### Files Modified
 - `internal/inference/heuristics.go` - Added CollectionType to hints, filtering logic
 - `internal/inference/inference.go` - Added findFallbackSchema function
 - `cmd/schema.go` - Pass collection type in reinfer command
-

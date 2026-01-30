@@ -138,19 +138,28 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 		schemaName := fmt.Sprintf("pudl.schemas/%s:%s", moduleName, label)
 		schemas[schemaName] = schemaValue
 
+		// Detect if schema is structurally a list type using CUE's IncompleteKind.
+		// This allows us to identify collection schemas like `#CatchAllCollection: [...]`
+		// without relying on metadata (which arrays can't have).
+		isListType := (schemaValue.IncompleteKind() & cue.ListKind) != 0
+
 		// Extract PUDL metadata if present
-		iter, err := schemaValue.Fields(cue.Hidden(true))
+		var meta SchemaMetadata
+		innerIter, err := schemaValue.Fields(cue.Hidden(true))
 		if err == nil {
-			for iter.Next() {
-				if iter.Label() == "_pudl" {
-					var meta SchemaMetadata
-					if err := iter.Value().Decode(&meta); err == nil {
-						metadata[schemaName] = meta
+			for innerIter.Next() {
+				if innerIter.Label() == "_pudl" {
+					if err := innerIter.Value().Decode(&meta); err == nil {
+						// Metadata decoded successfully
 					}
 					break
 				}
 			}
 		}
+
+		// Set the IsListType field based on structural detection
+		meta.IsListType = isListType
+		metadata[schemaName] = meta
 	}
 
 	return &LoadedModule{

@@ -270,7 +270,7 @@ func containsCatchAll(name string) bool {
 // For collections, it returns a collection-appropriate schema instead of the item catchall.
 func findFallbackSchema(schemas map[string]cue.Value, metadata map[string]validator.SchemaMetadata, collectionType string) string {
 	if collectionType == "collection" {
-		// For collections, try to find a collection-type fallback
+		// For collections, try to find a collection-type fallback (known list-type schemas)
 		collectionFallbacks := []string{
 			"pudl.schemas/pudl/collections:#CatchAllCollection",
 			"pudl.schemas/collections/collections:#CatchAllCollection",
@@ -284,9 +284,9 @@ func findFallbackSchema(schemas map[string]cue.Value, metadata map[string]valida
 			}
 		}
 
-		// Search for any collection-type schema as fallback
+		// Search for any list-type schema as fallback (using structural detection, not metadata)
 		for name, meta := range metadata {
-			if meta.SchemaType == "collection" {
+			if meta.IsListType {
 				return name
 			}
 		}
