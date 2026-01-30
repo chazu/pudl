@@ -1049,7 +1049,15 @@ func runSchemaNewCommand() error {
 		return err
 	}
 
-	// Load data based on entry type and --collection flag
+	// Create the generator
+	generator := schemagen.NewGenerator(cfg.SchemaPath)
+
+	// Check if this is a collection entry with --collection flag (smart collection generation)
+	if entry.CollectionType != nil && *entry.CollectionType == "collection" && schemaNewCollection {
+		return runSmartCollectionGeneration(catalogDB, generator, entry, packagePath, definitionName, inferHints, cfg)
+	}
+
+	// Standard schema generation (item schema or legacy collection)
 	var data interface{}
 	if entry.CollectionType != nil && *entry.CollectionType == "collection" && !schemaNewCollection {
 		// It's a collection and --collection is NOT set: get all items and merge their data
@@ -1082,9 +1090,6 @@ func runSchemaNewCommand() error {
 				fmt.Sprintf("Failed to load data from %s", entry.StoredPath), err)
 		}
 	}
-
-	// Create the generator
-	generator := schemagen.NewGenerator(cfg.SchemaPath)
 
 	// Build generation options
 	opts := schemagen.GenerateOptions{
@@ -1122,6 +1127,100 @@ func runSchemaNewCommand() error {
 	fmt.Println("💡 Next steps:")
 	fmt.Printf("   - Edit the schema: pudl schema edit %s:#%s\n", packagePath, result.DefinitionName)
 	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", result.DefinitionName)
+
+	return nil
+}
+
+// runSmartCollectionGeneration handles smart collection schema generation.
+// It infers schemas for each item, reuses existing schemas where possible,
+// generates new item schemas for unmatched items, and creates a list-type collection schema.
+func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *schemagen.Generator, entry *database.CatalogEntry, packagePath, definitionName string, inferHints map[string]string, cfg *config.Config) error {
+	// Get collection items
+	items, err := catalogDB.GetCollectionItems(entry.ID)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get collection items", err)
+	}
+
+	if len(items) == 0 {
+		return errors.NewInputError("Collection has no items", "Cannot generate collection schema from empty collection")
+	}
+
+	// Load data from each item
+	var itemsData []interface{}
+	for _, item := range items {
+		itemData, err := loadJSONFile(item.StoredPath)
+		if err != nil {
+			return errors.WrapError(errors.ErrCodeFileSystem,
+				fmt.Sprintf("Failed to load item data from %s", item.StoredPath), err)
+		}
+		itemsData = append(itemsData, itemData)
+	}
+
+	// Initialize the schema inferrer
+	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to initialize schema inferrer", err)
+	}
+
+	// Build collection generation options
+	opts := schemagen.CollectionGenerateOptions{
+		PackagePath:    packagePath,
+		CollectionName: definitionName,
+		InferHints:     inferHints,
+	}
+
+	// Generate the smart collection
+	result, err := generator.GenerateSmartCollection(itemsData, opts, inferrer)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to generate collection schema", err)
+	}
+
+	// Write any new item schemas first
+	for _, itemSchema := range result.NewItemSchemas {
+		if err := generator.WriteSchema(itemSchema, itemSchema.Content); err != nil {
+			return errors.WrapError(errors.ErrCodeFileSystem,
+				fmt.Sprintf("Failed to write item schema file: %s", itemSchema.FilePath), err)
+		}
+		fmt.Printf("📄 Created item schema: %s\n", itemSchema.FilePath)
+	}
+
+	// Write the collection schema
+	if err := generator.WriteSchema(result.CollectionSchema, result.CollectionSchema.Content); err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem,
+			fmt.Sprintf("Failed to write collection schema file: %s", result.CollectionSchema.FilePath), err)
+	}
+
+	// Print results
+	fmt.Println()
+	fmt.Println("✅ Collection schema generated successfully!")
+	fmt.Println()
+	fmt.Printf("📄 Collection schema: %s\n", result.CollectionSchema.FilePath)
+	fmt.Printf("📦 Package: %s\n", result.CollectionSchema.PackageName)
+	fmt.Printf("📋 Definition: #%s\n", result.CollectionSchema.DefinitionName)
+
+	if len(result.ExistingSchemaRefs) > 0 {
+		fmt.Println()
+		fmt.Println("🔗 Reused existing schemas:")
+		for _, ref := range result.ExistingSchemaRefs {
+			fmt.Printf("   - %s\n", ref)
+		}
+	}
+
+	if len(result.NewItemSchemas) > 0 {
+		fmt.Println()
+		fmt.Println("✨ Generated new item schemas:")
+		for _, schema := range result.NewItemSchemas {
+			fmt.Printf("   - #%s (%d fields)\n", schema.DefinitionName, schema.FieldCount)
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("💡 Next steps:")
+	fmt.Printf("   - Edit the collection schema: pudl schema edit %s:#%s\n", packagePath, definitionName)
+	if len(result.NewItemSchemas) > 0 {
+		fmt.Printf("   - Edit item schemas as needed\n")
+	}
+	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", definitionName)
 
 	return nil
 }

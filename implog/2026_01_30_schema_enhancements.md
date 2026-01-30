@@ -96,3 +96,56 @@ The initial fix relied on `schema_type: "collection"` metadata, but this approac
 - `internal/inference/heuristics.go` - Added CollectionType to hints, filtering logic
 - `internal/inference/inference.go` - Added findFallbackSchema function
 - `cmd/schema.go` - Pass collection type in reinfer command
+
+---
+
+## Feature: Smart Collection Schema Generation (pudl-0gi)
+
+### Problem
+When running `pudl schema new --from <collection> --collection`, the command generated an object schema with `schema_type: "collection"` in metadata. This is incorrect - collection schemas should be structurally arrays (list types).
+
+### Solution
+Implemented smart collection schema generation that:
+1. Runs schema inference on each item in the collection
+2. Groups items by their inferred schema (reuses existing schemas where possible)
+3. Generates new item schemas only for items that don't match any existing schema
+4. Creates a proper list-type collection schema as a union of all item types
+
+### Example Output
+```cue
+package ec2
+
+import (
+	single "pudl.schemas/test/single"
+)
+
+#Ec2InstanceCollection: [...(#Ec2Instance | #Instance | single.#Item)]
+```
+
+### Key Features
+- **Schema Reuse**: Automatically detects and reuses existing schemas that match items
+- **Heterogeneous Collections**: Supports collections with mixed item types via union types
+- **Proper Imports**: Generates CUE import statements for cross-package references
+- **New Schema Generation**: Creates new item schemas for unmatched items
+
+### Files Modified
+- `internal/schemagen/generator.go`:
+  - Added `CollectionGenerateOptions` and `CollectionGenerateResult` types
+  - Added `GenerateSmartCollection()` method
+  - Added `generateItemSchemaForUnmatched()` helper
+  - Added `generateCollectionListSchema()` with proper import handling
+  - Added `parseSchemaRef()` for cross-package reference parsing
+- `cmd/schema.go`:
+  - Added `runSmartCollectionGeneration()` function
+  - Modified `runSchemaNewCommand()` to use smart generation for collections
+
+### Public API
+```
+pudl schema new --from <collection-proquint> --path <package>:#<CollectionName> --collection
+```
+
+When `--collection` is used with a collection entry:
+- Infers schemas for each item
+- Reuses existing schemas where confidence >= 0.5
+- Generates new item schemas for unmatched items
+- Creates list-type collection schema with union of all item types

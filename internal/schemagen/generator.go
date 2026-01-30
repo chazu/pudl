@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"pudl/internal/inference"
 )
 
 // Generator handles schema generation from data.
@@ -27,6 +29,21 @@ type GenerateOptions struct {
 	DefinitionName string            // e.g., "Instance" (without #)
 	IsCollection   bool              // whether to create a collection schema
 	InferHints     map[string]string // field hints like {"State": "enum"}
+}
+
+// CollectionGenerateOptions configures smart collection schema generation.
+type CollectionGenerateOptions struct {
+	PackagePath          string            // e.g., "aws/ec2"
+	CollectionName       string            // e.g., "Ec2InstanceCollection" (without #)
+	InferHints           map[string]string // field hints like {"State": "enum"}
+}
+
+// CollectionGenerateResult contains the result of smart collection schema generation.
+type CollectionGenerateResult struct {
+	CollectionSchema   *GenerateResult            // The collection schema (list type)
+	NewItemSchemas     []*GenerateResult          // Any new item schemas that were generated
+	ExistingSchemaRefs []string                   // References to existing schemas used
+	ItemSchemaMapping  map[int]string             // Maps item index to schema name
 }
 
 // GenerateResult contains the result of schema generation.
@@ -380,4 +397,234 @@ func sanitizeIdentifier(s string) string {
 		}
 	}
 	return result.String()
+}
+
+// GenerateSmartCollection generates a collection schema by inferring item schemas.
+// It runs inference on each item, groups by matched schema, generates new schemas
+// for unmatched items, and creates a collection schema as a union of all item types.
+func (g *Generator) GenerateSmartCollection(items []interface{}, opts CollectionGenerateOptions, inferrer *inference.SchemaInferrer) (*CollectionGenerateResult, error) {
+	if len(items) == 0 {
+		return nil, fmt.Errorf("collection has no items")
+	}
+
+	result := &CollectionGenerateResult{
+		NewItemSchemas:     []*GenerateResult{},
+		ExistingSchemaRefs: []string{},
+		ItemSchemaMapping:  make(map[int]string),
+	}
+
+	// Track which schemas are used and which items need new schemas
+	schemaUsage := make(map[string][]int)       // schema name -> item indices
+	unmatchedItems := make(map[int]interface{}) // item index -> item data
+
+	// Run inference on each item
+	for i, item := range items {
+		hints := inference.InferenceHints{
+			CollectionType: "item", // We're inferring item schemas, not collection schemas
+		}
+
+		inferResult, err := inferrer.Infer(item, hints)
+		if err != nil {
+			return nil, fmt.Errorf("failed to infer schema for item %d: %w", i, err)
+		}
+
+		// Check if it matched a real schema or fell back to catchall
+		if isCatchallSchema(inferResult.Schema) || inferResult.Confidence < 0.5 {
+			// Item doesn't match any existing schema well enough
+			unmatchedItems[i] = item
+		} else {
+			// Item matches an existing schema
+			schemaUsage[inferResult.Schema] = append(schemaUsage[inferResult.Schema], i)
+			result.ItemSchemaMapping[i] = inferResult.Schema
+		}
+	}
+
+	// Collect existing schema references
+	for schemaName := range schemaUsage {
+		result.ExistingSchemaRefs = append(result.ExistingSchemaRefs, schemaName)
+	}
+	sort.Strings(result.ExistingSchemaRefs)
+
+	// Generate new item schemas for unmatched items
+	if len(unmatchedItems) > 0 {
+		newSchema, err := g.generateItemSchemaForUnmatched(unmatchedItems, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate item schema: %w", err)
+		}
+		result.NewItemSchemas = append(result.NewItemSchemas, newSchema)
+
+		// Map unmatched items to the new schema
+		newSchemaRef := fmt.Sprintf("pudl.schemas/%s:#%s", opts.PackagePath, newSchema.DefinitionName)
+		for idx := range unmatchedItems {
+			result.ItemSchemaMapping[idx] = newSchemaRef
+		}
+	}
+
+	// Generate the collection schema as a list type
+	collectionResult, err := g.generateCollectionListSchema(opts, result.ExistingSchemaRefs, result.NewItemSchemas)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate collection schema: %w", err)
+	}
+	result.CollectionSchema = collectionResult
+
+	return result, nil
+}
+
+// isCatchallSchema checks if a schema name is a catchall schema.
+func isCatchallSchema(name string) bool {
+	return strings.Contains(name, "CatchAll") || strings.Contains(name, "catchall")
+}
+
+// generateItemSchemaForUnmatched generates a new item schema from unmatched items.
+func (g *Generator) generateItemSchemaForUnmatched(items map[int]interface{}, opts CollectionGenerateOptions) (*GenerateResult, error) {
+	// Convert map to slice for analysis
+	var itemSlice []interface{}
+	for _, item := range items {
+		itemSlice = append(itemSlice, item)
+	}
+
+	// Derive item schema name from collection name (remove "Collection" suffix if present)
+	itemName := opts.CollectionName
+	if strings.HasSuffix(itemName, "Collection") {
+		itemName = strings.TrimSuffix(itemName, "Collection")
+	} else {
+		itemName = itemName + "Item"
+	}
+
+	genOpts := GenerateOptions{
+		PackagePath:    opts.PackagePath,
+		DefinitionName: itemName,
+		IsCollection:   false,
+		InferHints:     opts.InferHints,
+	}
+
+	return g.Generate(itemSlice, genOpts)
+}
+
+// generateCollectionListSchema generates a collection schema as a list type.
+func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions, existingRefs []string, newSchemas []*GenerateResult) (*GenerateResult, error) {
+	packageName := filepath.Base(opts.PackagePath)
+	fileName := strings.ToLower(opts.CollectionName) + ".cue"
+	filePath := filepath.Join(g.SchemaPath, opts.PackagePath, fileName)
+
+	// Parse schema references and collect imports needed
+	type schemaRef struct {
+		pkgPath    string // e.g., "aws/ec2"
+		pkgAlias   string // e.g., "ec2" (last component)
+		defName    string // e.g., "#Instance"
+		isLocal    bool   // true if in same package
+	}
+
+	var refs []schemaRef
+	importPaths := make(map[string]string) // pkgPath -> alias
+
+	// Process existing schema references
+	for _, ref := range existingRefs {
+		parsed := parseSchemaRef(ref, opts.PackagePath)
+		refs = append(refs, parsed)
+		if !parsed.isLocal {
+			importPaths[parsed.pkgPath] = parsed.pkgAlias
+		}
+	}
+
+	// Add new schema references (always local)
+	for _, schema := range newSchemas {
+		refs = append(refs, schemaRef{
+			defName: "#" + schema.DefinitionName,
+			isLocal: true,
+		})
+	}
+
+	// Generate the CUE content
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("package %s\n", packageName))
+
+	// Add imports if needed
+	if len(importPaths) > 0 {
+		b.WriteString("\nimport (\n")
+		// Sort for deterministic output
+		var paths []string
+		for path := range importPaths {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		for _, path := range paths {
+			alias := importPaths[path]
+			// Use pudl.schemas module path
+			b.WriteString(fmt.Sprintf("\t%s \"pudl.schemas/%s\"\n", alias, path))
+		}
+		b.WriteString(")\n")
+	}
+	b.WriteString("\n")
+
+	// Build the union of all item types
+	var itemTypes []string
+	for _, ref := range refs {
+		if ref.isLocal {
+			itemTypes = append(itemTypes, ref.defName)
+		} else {
+			// Use alias.#Definition format
+			itemTypes = append(itemTypes, ref.pkgAlias+"."+ref.defName)
+		}
+	}
+
+	// Build the list type expression
+	var listType string
+	if len(itemTypes) == 1 {
+		listType = fmt.Sprintf("[...%s]", itemTypes[0])
+	} else {
+		listType = fmt.Sprintf("[...(%s)]", strings.Join(itemTypes, " | "))
+	}
+
+	b.WriteString(fmt.Sprintf("#%s: %s\n", opts.CollectionName, listType))
+
+	return &GenerateResult{
+		FilePath:       filePath,
+		PackageName:    packageName,
+		DefinitionName: opts.CollectionName,
+		FieldCount:     len(itemTypes),
+		Content:        b.String(),
+	}, nil
+}
+
+// parseSchemaRef parses a schema reference and determines if it's local or needs import.
+func parseSchemaRef(ref string, currentPackage string) struct {
+	pkgPath  string
+	pkgAlias string
+	defName  string
+	isLocal  bool
+} {
+	result := struct {
+		pkgPath  string
+		pkgAlias string
+		defName  string
+		isLocal  bool
+	}{}
+
+	// Parse the reference: "pudl.schemas/aws/ec2:#Instance" or "pudl.schemas/aws/ec2@v0:#Instance"
+	parts := strings.Split(ref, ":")
+	if len(parts) != 2 {
+		result.defName = ref
+		result.isLocal = true
+		return result
+	}
+
+	result.defName = parts[1] // e.g., "#Instance"
+	pkgPath := parts[0]       // e.g., "pudl.schemas/aws/ec2" or "pudl.schemas/aws/ec2@v0"
+
+	// Remove "pudl.schemas/" prefix and version suffix
+	pkgPath = strings.TrimPrefix(pkgPath, "pudl.schemas/")
+	if idx := strings.Index(pkgPath, "@"); idx != -1 {
+		pkgPath = pkgPath[:idx]
+	}
+
+	result.pkgPath = pkgPath
+	// Use last path component as alias
+	pathParts := strings.Split(pkgPath, "/")
+	result.pkgAlias = pathParts[len(pathParts)-1]
+
+	// Check if same package
+	result.isLocal = (pkgPath == currentPackage)
+
+	return result
 }
