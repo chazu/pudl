@@ -146,8 +146,12 @@ func (si *SchemaInferrer) tryUnify(schema cue.Value, jsonBytes []byte) bool {
 	// Unify the schema with the data
 	unified := schema.Unify(dataValue)
 
-	// Check if unification succeeded (no errors)
-	return unified.Validate() == nil
+	// Check if unification succeeded with concrete values required.
+	// Using cue.Concrete(true) ensures that all required fields in the schema
+	// must have concrete values in the data - this prevents schemas like
+	// #CatchAllCollection (which requires collection_id) from matching data
+	// that doesn't have that field.
+	return unified.Validate(cue.Concrete(true)) == nil
 }
 
 // Reload reloads schemas from the schema repository.
