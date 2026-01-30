@@ -118,13 +118,14 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 		}
 	}
 
-	// No schema matched - return catchall
+	// No schema matched - return appropriate fallback based on collection type
+	fallbackSchema := findFallbackSchema(si.schemas, si.metadata, hints.CollectionType)
 	return &InferenceResult{
-		Schema:      findCatchallSchema(si.schemas),
+		Schema:      fallbackSchema,
 		Confidence:  0.1,
 		CascadePath: cascadePath,
 		MatchedAt:   -1,
-		Reason:      "no schema matched, using catchall",
+		Reason:      "no schema matched, using fallback",
 	}, nil
 }
 
@@ -263,4 +264,34 @@ func findCatchallSchema(schemas map[string]cue.Value) string {
 func containsCatchAll(name string) bool {
 	return len(name) >= 8 && (name[len(name)-8:] == "CatchAll" ||
 		(len(name) >= 9 && name[len(name)-9:] == "#CatchAll"))
+}
+
+// findFallbackSchema finds an appropriate fallback schema based on collection type.
+// For collections, it returns a collection-appropriate schema instead of the item catchall.
+func findFallbackSchema(schemas map[string]cue.Value, metadata map[string]validator.SchemaMetadata, collectionType string) string {
+	if collectionType == "collection" {
+		// For collections, try to find a collection-type fallback
+		collectionFallbacks := []string{
+			"pudl.schemas/pudl/collections:#CatchAllCollection",
+			"pudl.schemas/collections/collections:#CatchAllCollection",
+			"pudl.schemas/pudl/collections:#Collection",
+			"pudl.schemas/collections/collections:#Collection",
+		}
+
+		for _, name := range collectionFallbacks {
+			if _, exists := schemas[name]; exists {
+				return name
+			}
+		}
+
+		// Search for any collection-type schema as fallback
+		for name, meta := range metadata {
+			if meta.SchemaType == "collection" {
+				return name
+			}
+		}
+	}
+
+	// Default to item catchall for items or unknown types
+	return findCatchallSchema(schemas)
 }

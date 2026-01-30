@@ -8,8 +8,9 @@ import (
 
 // InferenceHints provides optional context to improve candidate selection.
 type InferenceHints struct {
-	Origin string // e.g., "aws-ec2-instances", "kubectl-get-pods"
-	Format string // e.g., "json", "yaml", "csv"
+	Origin         string // e.g., "aws-ec2-instances", "kubectl-get-pods"
+	Format         string // e.g., "json", "yaml", "csv"
+	CollectionType string // "collection", "item", or "" for unknown
 }
 
 // CandidateScore represents a schema and its heuristic score.
@@ -62,6 +63,23 @@ func scoreCandidate(
 ) (float64, string) {
 	score := 0.0
 	var reasons []string
+
+	// Filter by collection type if specified
+	// Collections should only match collection schemas, items should not match collection schemas
+	if hints.CollectionType != "" {
+		schemaType := strings.ToLower(meta.SchemaType)
+		if hints.CollectionType == "collection" {
+			// Collections should only match collection-type schemas
+			if schemaType != "collection" && schemaType != "" {
+				return 0, "schema type mismatch (need collection)"
+			}
+		} else if hints.CollectionType == "item" {
+			// Items should not match collection schemas
+			if schemaType == "collection" || schemaType == "collection_item" {
+				return 0, "schema type mismatch (item cannot use collection schema)"
+			}
+		}
+	}
 
 	// Check identity fields - these are strong indicators
 	if len(meta.IdentityFields) > 0 {

@@ -55,3 +55,28 @@ Flags:
 - Command help verified: `./pudl schema reinfer --help`
 - Note: Pre-existing test failure in `internal/ui/ui_test.go` unrelated to these changes
 
+---
+
+## Bug Fix: Collection Type Awareness in Schema Inference
+
+### Problem
+When running `pudl schema reinfer` on a collection entry, the inference would incorrectly suggest `#CatchAll` (an item-only schema) instead of a collection-appropriate schema.
+
+### Root Cause
+1. `InferenceHints` didn't include collection type information
+2. The heuristics didn't filter schemas based on collection type
+3. The fallback logic always returned `#CatchAll` regardless of entry type
+
+### Solution
+1. Added `CollectionType` field to `InferenceHints` struct
+2. Updated `scoreCandidate()` to filter schemas based on collection type:
+   - Collections only match `schema_type: "collection"` schemas
+   - Items don't match collection or collection_item schemas
+3. Added `findFallbackSchema()` to return collection-appropriate fallbacks
+4. Updated reinfer command to pass collection type from catalog entry
+
+### Files Modified
+- `internal/inference/heuristics.go` - Added CollectionType to hints, filtering logic
+- `internal/inference/inference.go` - Added findFallbackSchema function
+- `cmd/schema.go` - Pass collection type in reinfer command
+
