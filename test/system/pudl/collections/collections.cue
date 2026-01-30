@@ -87,25 +87,8 @@ package collections
 	item_data: {...}
 }
 
-// Generic collection catch-all for unclassified collections
-#CatchAllCollection: {
-	// PUDL metadata for cascading validation
-	_pudl: {
-		schema_type:      "catchall_collection"
-		resource_type:    "generic.catchall_collection"
-		cascade_priority: 5
-		cascade_fallback: ["pudl.schemas/pudl/unknown:#CatchAll"]
-		identity_fields: ["collection_id"]
-		tracked_fields: ["item_count", "format"]
-		compliance_level: "permissive"
-	}
-
-	// Minimal collection structure - accepts any collection-like data
-	collection_id:       string
-	original_filename?:  string
-	format?:             string
-	item_count?:         int & >=0
-
-	// Accept any additional collection metadata
-	...
-}
+// Generic collection catch-all for any array/list data.
+// No metadata needed - collections are just containers, and the items
+// within get their own schema inference. Collection identity is determined
+// by content hash at import time.
+#CatchAllCollection: [...]
