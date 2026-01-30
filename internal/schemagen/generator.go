@@ -243,15 +243,15 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString(fmt.Sprintf("package %s\n\n", packageName))
 	b.WriteString(fmt.Sprintf("#%s: {\n", opts.DefinitionName))
 
-	// Write _pudl metadata
+	// Write _pudl metadata with inline documentation comments
 	b.WriteString("\t_pudl: {\n")
-	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\"\n", g.schemaType(opts)))
-	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\"\n", packageName, strings.ToLower(opts.DefinitionName)))
-	b.WriteString("\t\tcascade_priority: 100\n")
-	b.WriteString("\t\tcascade_fallback: [\"pudl.unknown.#CatchAll\"]\n")
+	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts)))
+	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName)))
+	b.WriteString("\t\tcascade_priority: 100 // 0-1000, higher = more specific (catchall=0, base=100, policy=200+)\n")
+	b.WriteString("\t\tcascade_fallback: [\"pudl.unknown.#CatchAll\"] // Schemas to try if this doesn't match\n")
 	b.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields)))
 	b.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis)))
-	b.WriteString("\t\tcompliance_level: \"strict\"\n")
+	b.WriteString("\t\tcompliance_level: \"strict\" // Valid: \"strict\", \"warn\", \"permissive\"\n")
 	b.WriteString("\t}\n\n")
 
 	// Write field definitions
