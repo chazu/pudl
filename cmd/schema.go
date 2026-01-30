@@ -1398,10 +1398,17 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 		return errors.NewSystemError(fmt.Sprintf("Failed to load data from %s", entry.StoredPath), err)
 	}
 
+	// Determine collection type for inference hints
+	collectionType := ""
+	if entry.CollectionType != nil {
+		collectionType = *entry.CollectionType
+	}
+
 	// Run inference
 	result, err := inferrer.Infer(data, inference.InferenceHints{
-		Origin: entry.Origin,
-		Format: entry.Format,
+		Origin:         entry.Origin,
+		Format:         entry.Format,
+		CollectionType: collectionType,
 	})
 	if err != nil {
 		return errors.NewSystemError("Schema inference failed", err)
@@ -1475,10 +1482,17 @@ func analyzeReinferChanges(entries []database.CatalogEntry, catalogDB *database.
 			continue
 		}
 
+		// Determine collection type for inference hints
+		collectionType := ""
+		if entry.CollectionType != nil {
+			collectionType = *entry.CollectionType
+		}
+
 		// Run inference
 		result, err := inferrer.Infer(data, inference.InferenceHints{
-			Origin: entry.Origin,
-			Format: entry.Format,
+			Origin:         entry.Origin,
+			Format:         entry.Format,
+			CollectionType: collectionType,
 		})
 		if err != nil {
 			changes.errors = append(changes.errors, fmt.Sprintf("%s: inference failed", proquint))
