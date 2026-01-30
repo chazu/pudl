@@ -65,18 +65,19 @@ func scoreCandidate(
 	var reasons []string
 
 	// Filter by collection type if specified
-	// Collections should only match collection schemas, items should not match collection schemas
+	// Collections should only match collection schemas (list types), items should not match collection schemas.
+	// We use IsListType (structural detection from CUE) rather than relying on metadata,
+	// since list-type schemas like `#CatchAllCollection: [...]` can't have metadata.
 	if hints.CollectionType != "" {
-		schemaType := strings.ToLower(meta.SchemaType)
 		if hints.CollectionType == "collection" {
-			// Collections should only match collection-type schemas
-			if schemaType != "collection" && schemaType != "" {
-				return 0, "schema type mismatch (need collection)"
+			// Collections should only match list-type schemas
+			if !meta.IsListType {
+				return 0, "schema type mismatch (need collection/list schema)"
 			}
 		} else if hints.CollectionType == "item" {
-			// Items should not match collection schemas
-			if schemaType == "collection" || schemaType == "collection_item" {
-				return 0, "schema type mismatch (item cannot use collection schema)"
+			// Items should not match list-type schemas
+			if meta.IsListType {
+				return 0, "schema type mismatch (item cannot use collection/list schema)"
 			}
 		}
 	}

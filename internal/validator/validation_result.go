@@ -44,6 +44,7 @@ type SchemaMetadata struct {
 	IdentityFields   []string `json:"identity_fields"`    // Fields that identify the resource
 	TrackedFields    []string `json:"tracked_fields"`     // Fields to monitor for changes
 	ComplianceLevel  string   `json:"compliance_level"`   // "strict", "moderate", "permissive"
+	IsListType       bool     `json:"is_list_type"`       // True if schema is structurally a list/array type (derived from CUE, not metadata)
 }
 
 // GetComplianceStatus determines compliance status based on cascade result
