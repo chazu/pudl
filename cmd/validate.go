@@ -51,6 +51,9 @@ func init() {
 	// At least one of --all or --entry must be specified
 	validateCmd.MarkFlagsOneRequired("all", "entry")
 	validateCmd.MarkFlagsMutuallyExclusive("all", "entry")
+
+	// Register completion functions
+	validateCmd.RegisterFlagCompletionFunc("entry", completeProquintIDs)
 }
 
 func runValidateCommand(cmd *cobra.Command, args []string) error {

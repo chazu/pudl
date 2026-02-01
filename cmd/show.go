@@ -91,6 +91,9 @@ func init() {
 	// Add flags
 	showCmd.Flags().BoolVar(&showMetadata, "metadata", false, "Show metadata file content")
 	showCmd.Flags().BoolVar(&showRaw, "raw", false, "Show raw data content")
+
+	// Register completion for positional argument (proquint ID)
+	showCmd.ValidArgsFunction = completeProquintIDs
 }
 
 // displayDetailedEntry displays detailed information about a single entry

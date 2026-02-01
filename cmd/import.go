@@ -211,6 +211,9 @@ func init() {
 
 	// Mark path as required
 	importCmd.MarkFlagRequired("path")
+
+	// Register completion functions
+	importCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
 }
 
 // displayImportResults shows the results of data import with cascading validation info

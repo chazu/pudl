@@ -31,8 +31,9 @@ var (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List imported data in the PUDL data lake",
+	Use:     "list",
+	Aliases: []string{"l"},
+	Short:   "List imported data in the PUDL data lake",
 	Long: `List and query imported data in the PUDL data lake with filtering and sorting options.
 
 This command displays information about all imported data, including metadata such as
@@ -220,6 +221,12 @@ func init() {
 
 	// Make collections-only and items-only mutually exclusive
 	listCmd.MarkFlagsMutuallyExclusive("collections-only", "items-only")
+
+	// Register completion functions
+	listCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	listCmd.RegisterFlagCompletionFunc("format", completeFormats)
+	listCmd.RegisterFlagCompletionFunc("sort-by", completeSortByOptions)
+	listCmd.RegisterFlagCompletionFunc("collection-id", completeProquintIDs)
 }
 
 // displayEntry displays a single catalog entry
