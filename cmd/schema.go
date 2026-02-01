@@ -53,8 +53,9 @@ var (
 
 // schemaCmd represents the schema command
 var schemaCmd = &cobra.Command{
-	Use:   "schema",
-	Short: "Manage CUE schemas for data validation",
+	Use:     "schema",
+	Aliases: []string{"s"},
+	Short:   "Manage CUE schemas for data validation",
 	Long: `Manage CUE schemas used for data validation and organization in PUDL.
 
 Schemas are organized by packages (aws, k8s, unknown, etc.) and stored in the
@@ -726,6 +727,14 @@ func init() {
 	schemaReinferCmd.Flags().StringVar(&reinferOrigin, "origin", "", "Re-infer only entries from a specific origin")
 	schemaReinferCmd.Flags().BoolVar(&reinferDryRun, "dry-run", false, "Show what would change without applying updates")
 	schemaReinferCmd.Flags().BoolVar(&reinferForce, "force", false, "Apply changes without confirmation prompt")
+
+	// Register completion functions
+	schemaListCmd.RegisterFlagCompletionFunc("package", completeSchemaPackages)
+	schemaNewCmd.RegisterFlagCompletionFunc("from", completeProquintIDs)
+	schemaReinferCmd.RegisterFlagCompletionFunc("entry", completeProquintIDs)
+	schemaReinferCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	schemaReviewCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	schemaReviewCmd.RegisterFlagCompletionFunc("format", completeFormats)
 }
 
 // listAllSchemas lists all schemas organized by package
