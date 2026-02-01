@@ -8,6 +8,7 @@ import (
 
 	"pudl/internal/config"
 	"pudl/internal/errors"
+	"pudl/internal/idgen"
 	"pudl/internal/lister"
 	"pudl/internal/ui"
 )
@@ -173,7 +174,12 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Total size: %s\n", formatBytes(results.TotalSize))
 		fmt.Printf("  Total records: %d\n", results.TotalRecords)
 		fmt.Printf("  Schemas: %s\n", strings.Join(results.UniqueSchemas, ", "))
-		fmt.Printf("  Origins: %s\n", strings.Join(results.UniqueOrigins, ", "))
+		// Format origins for display
+		formattedOrigins := make([]string, len(results.UniqueOrigins))
+		for i, origin := range results.UniqueOrigins {
+			formattedOrigins[i] = formatOriginForDisplay(origin)
+		}
+		fmt.Printf("  Origins: %s\n", strings.Join(formattedOrigins, ", "))
 		fmt.Printf("  Formats: %s\n", strings.Join(results.UniqueFormats, ", "))
 	}
 
@@ -229,24 +235,28 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		}
 	}
 
-	// Display proquint as the primary ID
-	fmt.Printf("%d. %s [%s] (%s)%s\n",
+	// Display proquint as the primary ID (no timestamp)
+	fmt.Printf("%d. %s [%s]%s\n",
 		index,
 		entry.Proquint,
 		entry.Schema,
-		entry.ImportTimestamp,
 		collectionIndicator)
+
+	// Format origin for display - convert hash-based origins to proquint
+	displayOrigin := formatOriginForDisplay(entry.Origin)
 
 	// Additional details
 	detailsLine := fmt.Sprintf("   Origin: %s | Format: %s | Records: %d | Size: %s",
-		entry.Origin,
+		displayOrigin,
 		entry.Format,
 		entry.RecordCount,
 		formatBytes(entry.SizeBytes))
 
 	// Add collection info if this is an item
 	if entry.CollectionType != nil && *entry.CollectionType == "item" && entry.CollectionID != nil {
-		detailsLine += fmt.Sprintf(" | Collection: %s", *entry.CollectionID)
+		// Convert collection ID hash to proquint for display
+		collectionProquint := idgen.HashToProquint(*entry.CollectionID)
+		detailsLine += fmt.Sprintf(" | Collection: %s", collectionProquint)
 		if entry.ItemIndex != nil {
 			detailsLine += fmt.Sprintf(" [#%d]", *entry.ItemIndex)
 		}
@@ -259,6 +269,7 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		fmt.Printf("   Hash: %s\n", entry.ID)
 		fmt.Printf("   Data: %s\n", entry.StoredPath)
 		fmt.Printf("   Metadata: %s\n", entry.MetadataPath)
+		fmt.Printf("   Timestamp: %s\n", entry.ImportTimestamp)
 		if entry.Confidence < 0.8 {
 			fmt.Printf("   ⚠️  Low schema confidence (%.2f)\n", entry.Confidence)
 		}
@@ -274,6 +285,31 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 	}
 
 	fmt.Println()
+}
+
+// formatOriginForDisplay converts hash-based origins to human-readable format
+// e.g., "3bd89e80cb116834..._item_0" becomes "govim-nupab_item_0"
+func formatOriginForDisplay(origin string) string {
+	// Check if origin contains "_item_" pattern (collection item origin)
+	if idx := strings.Index(origin, "_item_"); idx != -1 {
+		hashPart := origin[:idx]
+		itemPart := origin[idx:]
+		// If the hash part looks like a hex hash (64 chars), convert to proquint
+		if len(hashPart) == 64 && isHexString(hashPart) {
+			return idgen.HashToProquint(hashPart) + itemPart
+		}
+	}
+	return origin
+}
+
+// isHexString checks if a string contains only hexadecimal characters
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // formatBytes formats byte count as human-readable string

@@ -1,6 +1,9 @@
 package ui
 
 import (
+	"strings"
+
+	"pudl/internal/idgen"
 	"pudl/internal/lister"
 )
 
@@ -37,10 +40,36 @@ func (i ListItem) Title() string {
 
 // Description returns the description for the list item
 func (i ListItem) Description() string {
-	return "Origin: " + i.Entry.Origin + 
-		   " | Format: " + i.Entry.Format + 
-		   " | Records: " + formatInt(i.Entry.RecordCount) + 
+	displayOrigin := formatOriginForDisplay(i.Entry.Origin)
+	return "Origin: " + displayOrigin +
+		   " | Format: " + i.Entry.Format +
+		   " | Records: " + formatInt(i.Entry.RecordCount) +
 		   " | Size: " + formatBytes(i.Entry.SizeBytes)
+}
+
+// formatOriginForDisplay converts hash-based origins to human-readable format
+// e.g., "3bd89e80cb116834..._item_0" becomes "govim-nupab_item_0"
+func formatOriginForDisplay(origin string) string {
+	// Check if origin contains "_item_" pattern (collection item origin)
+	if idx := strings.Index(origin, "_item_"); idx != -1 {
+		hashPart := origin[:idx]
+		itemPart := origin[idx:]
+		// If the hash part looks like a hex hash (64 chars), convert to proquint
+		if len(hashPart) == 64 && isHexString(hashPart) {
+			return idgen.HashToProquint(hashPart) + itemPart
+		}
+	}
+	return origin
+}
+
+// isHexString checks if a string contains only hexadecimal characters
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // formatBytes formats byte count as human readable string
