@@ -163,6 +163,15 @@ func scoreCandidate(
 		}
 	}
 
+	// List-type schemas (collections) without metadata should still be considered
+	// when inferring collection data. Give them a minimal score so they're tried
+	// via CUE unification. This allows schemas like `#Ec2InstanceCollection: [...#Ec2Instance]`
+	// to be matched even without _pudl metadata.
+	if meta.IsListType && hints.CollectionType == "collection" && score == 0 {
+		score = 0.02 // Slightly higher than catchall so specific collections are tried first
+		reasons = append(reasons, "list-type schema for collection data")
+	}
+
 	reason := strings.Join(reasons, ", ")
 	if reason == "" {
 		reason = "no specific match"

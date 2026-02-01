@@ -147,11 +147,29 @@ func (si *SchemaInferrer) tryUnify(schema cue.Value, jsonBytes []byte) bool {
 	// Unify the schema with the data
 	unified := schema.Unify(dataValue)
 
-	// Check if unification succeeded with concrete values required.
-	// Using cue.Concrete(true) ensures that all required fields in the schema
-	// must have concrete values in the data - this prevents schemas like
-	// #CatchAllCollection (which requires collection_id) from matching data
-	// that doesn't have that field.
+	// First check if unification itself failed (structural mismatch)
+	if unified.Err() != nil {
+		return false
+	}
+
+	// For schemas with disjunctions (like collection schemas with unions),
+	// Validate with Concrete(true) will fail because CUE can't pick a branch.
+	// Instead, we first try without Concrete to see if the structure matches,
+	// then try with Concrete for schemas that don't have disjunctions.
+	//
+	// Check if the schema is a list type - list types with element constraints
+	// often have disjunctions and need more lenient validation.
+	isListType := (schema.IncompleteKind() & cue.ListKind) != 0
+
+	if isListType {
+		// For list types, just check that unification succeeded without errors.
+		// The disjunction in the element type (e.g., [...(A | B | C)]) will cause
+		// Concrete validation to fail even when the data is valid.
+		return unified.Validate() == nil
+	}
+
+	// For non-list types, use Concrete(true) to ensure all required fields
+	// have concrete values in the data.
 	return unified.Validate(cue.Concrete(true)) == nil
 }
 
