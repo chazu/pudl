@@ -12,6 +12,7 @@ func TestListItem(t *testing.T) {
 	collectionType := "collection"
 	entry := lister.ListEntry{
 		ID:              "test-id-123",
+		Proquint:        "govim-nupab", // Proquint is used for display, not ID
 		Schema:          "aws.#EC2Instance",
 		Origin:          "aws-ec2",
 		Format:          "json",
@@ -38,8 +39,8 @@ func TestListItem(t *testing.T) {
 
 	// Test Title
 	title := item.Title()
-	if !contains(title, "test-id-123") {
-		t.Errorf("Title() should contain ID, got %q", title)
+	if !contains(title, "govim-nupab") {
+		t.Errorf("Title() should contain proquint ID, got %q", title)
 	}
 	if !contains(title, "aws.#EC2Instance") {
 		t.Errorf("Title() should contain schema, got %q", title)
