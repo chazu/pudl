@@ -288,15 +288,16 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 }
 
 // formatOriginForDisplay converts hash-based origins to human-readable format
-// e.g., "3bd89e80cb116834..._item_0" becomes "govim-nupab_item_0"
+// For collection items, strips the "_item_X" suffix since that info is shown separately
+// e.g., "3bd89e80cb116834..._item_0" becomes "govim-nupab"
 func formatOriginForDisplay(origin string) string {
 	// Check if origin contains "_item_" pattern (collection item origin)
 	if idx := strings.Index(origin, "_item_"); idx != -1 {
 		hashPart := origin[:idx]
-		itemPart := origin[idx:]
 		// If the hash part looks like a hex hash (64 chars), convert to proquint
+		// and drop the _item_X suffix (it's shown in the Collection: field)
 		if len(hashPart) == 64 && isHexString(hashPart) {
-			return idgen.HashToProquint(hashPart) + itemPart
+			return idgen.HashToProquint(hashPart)
 		}
 	}
 	return origin
