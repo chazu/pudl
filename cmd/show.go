@@ -93,7 +93,7 @@ func init() {
 	showCmd.Flags().BoolVar(&showRaw, "raw", false, "Show raw data content")
 
 	// Register completion for positional argument (proquint ID)
-	showCmd.ValidArgsFunction = completeProquintIDs
+	showCmd.ValidArgsFunction = completeEntryIDs
 }
 
 // displayDetailedEntry displays detailed information about a single entry

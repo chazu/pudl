@@ -74,9 +74,11 @@ func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error
 	for _, inst := range instances {
 		loader.log("Processing instance: %s (dir: %s)", inst.PkgName, inst.Dir)
 
-		// Skip examples directory - it may have unfetched third-party dependencies
-		if strings.Contains(inst.Dir, "/examples") || inst.PkgName == "examples" {
-			loader.log("Skipping examples directory: %s", inst.Dir)
+		// Skip examples and test directories - they may have unfetched third-party dependencies
+		// or contain test schemas that shouldn't be used for inference
+		if strings.Contains(inst.Dir, "/examples") || inst.PkgName == "examples" ||
+			strings.Contains(inst.Dir, "/test") || inst.PkgName == "test" {
+			loader.log("Skipping examples/test directory: %s", inst.Dir)
 			continue
 		}
 

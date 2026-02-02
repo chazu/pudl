@@ -18,6 +18,7 @@ import (
 var (
 	importSchema      string
 	importOrigin      string
+	importFormat      string
 	streamingMemoryMB int
 	streamingChunkMB  float64
 )
@@ -84,6 +85,11 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	filePath, err := cmd.Flags().GetString("path")
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeInvalidInput, "Error getting path flag", err)
+	}
+
+	// Check if reading from stdin
+	if filePath == "-" || (filePath == "" && importer.IsStdinAvailable()) {
+		return importFromStdin(cmd)
 	}
 
 	if filePath == "" {
@@ -201,9 +207,10 @@ func init() {
 	rootCmd.AddCommand(importCmd)
 
 	// Add flags
-	importCmd.Flags().StringP("path", "p", "", "Path to file or wildcard pattern to import (required)")
+	importCmd.Flags().StringP("path", "p", "", "Path to file or wildcard pattern to import (use '-' for stdin)")
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
+	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 
 	// Streaming options
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
@@ -214,6 +221,7 @@ func init() {
 
 	// Register completion functions
 	importCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	importCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }
 
 // displayImportResults shows the results of data import with cascading validation info
@@ -452,4 +460,76 @@ func displayBatchImportSummary(successCount, totalCount, totalRecords int, total
 			fmt.Printf("   All %d files imported successfully\n", successCount)
 		}
 	}
+}
+
+// importFromStdin reads data from stdin and imports it
+func importFromStdin(cmd *cobra.Command) error {
+	// Read stdin to temporary file
+	tmpPath, err := importer.ReadStdinToTempFile()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to read from stdin", err)
+	}
+	defer os.Remove(tmpPath)
+
+	// Detect format if not specified
+	format := importFormat
+	if format == "" {
+		detectedFormat, err := importer.DetectFormatFromContent(tmpPath)
+		if err != nil {
+			return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to detect format from stdin", err)
+		}
+		format = detectedFormat
+	}
+
+	// Rename temp file to have proper extension
+	stdinFilename := importer.GetStdinFilename(format)
+	finalPath := filepath.Join(filepath.Dir(tmpPath), stdinFilename)
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to prepare stdin data", err)
+	}
+	defer os.Remove(finalPath)
+
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		return errors.NewConfigError("Failed to load configuration", err)
+	}
+
+	// Create importer
+	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	if err != nil {
+		return errors.NewSystemError("Failed to initialize importer", err)
+	}
+	defer imp.Close()
+
+	// Set origin to "stdin" if not specified
+	origin := importOrigin
+	if origin == "" {
+		origin = "stdin"
+	}
+
+	// Configure streaming
+	streamingConfig := streaming.DefaultStreamingConfig()
+	if streamingMemoryMB > 0 {
+		streamingConfig.MaxMemoryMB = streamingMemoryMB
+	}
+
+	// Set up import options
+	opts := importer.ImportOptions{
+		SourcePath:      finalPath,
+		Origin:          origin,
+		ManualSchema:    importSchema,
+		UseStreaming:    true,
+		StreamingConfig: streamingConfig,
+	}
+
+	// Perform import
+	result, err := imp.ImportFileWithFriendlyIDs(opts)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import stdin data", err)
+	}
+
+	// Display results
+	displayImportResults(result)
+	return nil
 }

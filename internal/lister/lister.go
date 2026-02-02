@@ -32,6 +32,8 @@ type DisplayOptions struct {
 	Limit   int    // Maximum number of results
 	SortBy  string // Field to sort by
 	Reverse bool   // Reverse sort order
+	Page    int    // Page number (1-based)
+	PerPage int    // Results per page
 }
 
 // ListEntry represents a single entry in the list results
@@ -64,6 +66,8 @@ type ListResults struct {
 	UniqueSchemas []string    `json:"unique_schemas"`
 	UniqueOrigins []string    `json:"unique_origins"`
 	UniqueFormats []string    `json:"unique_formats"`
+	TotalPages    int         `json:"total_pages"`
+	CurrentPage   int         `json:"current_page"`
 }
 
 // CatalogEntry represents an entry from the catalog file
@@ -117,10 +121,28 @@ func (l *Lister) Close() error {
 
 // ListData lists and filters data based on the provided criteria
 func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*ListResults, error) {
+	// Determine page and per-page values
+	page := displayOpts.Page
+	perPage := displayOpts.PerPage
+
+	// Default values if not set
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = displayOpts.Limit
+		if perPage < 1 {
+			perPage = 20 // Default per-page
+		}
+	}
+
+	// Calculate offset from page: offset = (page - 1) * perPage
+	offset := (page - 1) * perPage
+
 	// Convert display options to database query options
 	queryOpts := database.QueryOptions{
-		Limit:   displayOpts.Limit,
-		Offset:  0, // TODO: Add pagination support to DisplayOptions
+		Limit:   perPage,
+		Offset:  offset,
 		SortBy:  displayOpts.SortBy,
 		Reverse: displayOpts.Reverse,
 	}
@@ -165,10 +187,18 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 		listEntries = append(listEntries, listEntry)
 	}
 
+	// Calculate total pages
+	totalPages := (queryResult.FilteredCount + perPage - 1) / perPage
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
 	// Create results
 	results := &ListResults{
 		Entries:      listEntries,
 		TotalEntries: queryResult.FilteredCount, // Use filtered count as total for display
+		TotalPages:   totalPages,
+		CurrentPage:  page,
 	}
 
 	// Calculate summary statistics

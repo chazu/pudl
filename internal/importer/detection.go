@@ -2,6 +2,7 @@ package importer
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,13 +11,30 @@ import (
 
 // detectFormat detects the format of a file based on extension and content
 func (i *Importer) detectFormat(filePath string) (string, error) {
-	ext := strings.ToLower(filepath.Ext(filePath))
+	// First detect and handle compression
+	compression := DetectCompression(filePath)
+	var fileToAnalyze string
+	var err error
+
+	if compression != "none" {
+		// File is compressed, decompress it first
+		fileToAnalyze, err = DecompressFile(filePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to decompress file: %w", err)
+		}
+		// Clean up temporary decompressed file after detection
+		defer os.Remove(fileToAnalyze)
+	} else {
+		fileToAnalyze = filePath
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileToAnalyze))
 
 	// First try extension-based detection
 	switch ext {
 	case ".json":
 		// Check if it's NDJSON (newline-delimited JSON)
-		if isNDJSON, err := i.isNewlineDelimitedJSON(filePath); err == nil && isNDJSON {
+		if isNDJSON, err := i.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
 			return "ndjson", nil
 		}
 		return "json", nil
@@ -27,7 +45,7 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 	}
 
 	// If extension is unclear, try content-based detection
-	file, err := os.Open(filePath)
+	file, err := os.Open(fileToAnalyze)
 	if err != nil {
 		return "", err
 	}

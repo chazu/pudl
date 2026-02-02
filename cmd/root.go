@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	pudlInit "pudl/internal/init"
+	"pudl/internal/ui"
 )
 
 var (
@@ -14,7 +15,19 @@ var (
 	version = "dev"
 	commit  = "unknown"
 	date    = "unknown"
+
+	// Global output flags
+	jsonOutput bool
 )
+
+// GetOutputWriter returns an OutputWriter based on global flags
+func GetOutputWriter() *ui.OutputWriter {
+	format := ui.OutputFormatText
+	if jsonOutput {
+		format = ui.OutputFormatJSON
+	}
+	return ui.NewOutputWriter(format, true)
+}
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -64,7 +77,8 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.pudl.yaml)")
+	// Global --json flag for machine-readable output
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output results as JSON for scripting")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

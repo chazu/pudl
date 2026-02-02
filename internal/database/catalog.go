@@ -453,6 +453,32 @@ func (c *CatalogDB) GetUniqueValues(field string) ([]string, error) {
 	return values, nil
 }
 
+// GetDistinctOrigins returns a list of distinct origins from the catalog
+func (c *CatalogDB) GetDistinctOrigins() ([]string, error) {
+	selectSQL := "SELECT DISTINCT origin FROM catalog_entries WHERE origin IS NOT NULL AND origin != '' ORDER BY origin"
+
+	rows, err := c.db.Query(selectSQL)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query distinct origins", err)
+	}
+	defer rows.Close()
+
+	var origins []string
+	for rows.Next() {
+		var origin string
+		if err := rows.Scan(&origin); err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan origin", err)
+		}
+		origins = append(origins, origin)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating origins", err)
+	}
+
+	return origins, nil
+}
+
 // GetCollectionItems retrieves all items belonging to a collection
 func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, error) {
 	selectSQL := `

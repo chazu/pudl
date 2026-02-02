@@ -198,19 +198,32 @@ func (cv *CascadeValidator) determineFallbackReason(position int, intendedSchema
 // extractValidationErrors converts CUE validation errors to structured format
 func (cv *CascadeValidator) extractValidationErrors(err error, schemaName string) []ValidationError {
 	var errors []ValidationError
-	
-	// Parse CUE error message
-	errorMsg := err.Error()
-	
-	// For now, create a simple error structure
-	// TODO: Enhance this to parse CUE errors more precisely
-	errors = append(errors, ValidationError{
-		Path:       "root",
-		Message:    errorMsg,
-		SchemaName: schemaName,
-		Constraint: "unknown",
-	})
-	
+
+	// Use CUEErrorParser to parse errors into structured format
+	parser := NewCUEErrorParser()
+	parsedErrors := parser.Parse(err)
+
+	// Convert parsed errors to ValidationError format
+	for _, pe := range parsedErrors {
+		errors = append(errors, ValidationError{
+			Path:       pe.Path,
+			Message:    pe.Constraint,
+			SchemaName: schemaName,
+			Constraint: pe.Constraint,
+			Value:      pe.Got,
+		})
+	}
+
+	// If no errors were parsed, create a generic error
+	if len(errors) == 0 {
+		errors = append(errors, ValidationError{
+			Path:       "root",
+			Message:    err.Error(),
+			SchemaName: schemaName,
+			Constraint: "unknown",
+		})
+	}
+
 	return errors
 }
 
