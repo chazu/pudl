@@ -27,6 +27,8 @@ var (
 	listCollectionsOnly bool
 	listItemsOnly     bool
 	listFancy         bool
+	listPage          int
+	listPerPage       int
 )
 
 // listCmd represents the list command
@@ -109,6 +111,8 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		Limit:   listLimit,
 		SortBy:  listSortBy,
 		Reverse: listReverse,
+		Page:    listPage,
+		PerPage: listPerPage,
 	}
 
 	// List data
@@ -119,8 +123,24 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 
 	// Display results
 	if len(results.Entries) == 0 {
+		// Handle JSON output for empty results
+		output := GetOutputWriter()
+		if output.Format == ui.OutputFormatJSON {
+			return output.WriteJSON(ui.ListOutput{
+				Entries:      []ui.EntryOutput{},
+				TotalEntries: 0,
+				TotalPages:   0,
+				CurrentPage:  1,
+			})
+		}
 		fmt.Println("No data found matching the specified criteria.")
 		return nil
+	}
+
+	// Handle JSON output
+	output := GetOutputWriter()
+	if output.Format == ui.OutputFormatJSON {
+		return outputListAsJSON(output, results)
 	}
 
 	// Use fancy bubbletea UI if requested
@@ -129,10 +149,12 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Traditional text output
-	// Display summary
+	// Display summary with pagination info
 	fmt.Printf("Found %d entries", len(results.Entries))
 	if results.TotalEntries > len(results.Entries) {
-		fmt.Printf(" (showing %d of %d total)", len(results.Entries), results.TotalEntries)
+		startIdx := (results.CurrentPage-1)*listPerPage + 1
+		endIdx := startIdx + len(results.Entries) - 1
+		fmt.Printf(" (showing %d-%d of %d total, page %d of %d)", startIdx, endIdx, results.TotalEntries, results.CurrentPage, results.TotalPages)
 	}
 	fmt.Println()
 
@@ -209,6 +231,8 @@ func init() {
 	listCmd.Flags().IntVar(&listLimit, "limit", 50, "Limit number of results")
 	listCmd.Flags().StringVar(&listSortBy, "sort-by", "timestamp", "Sort by field (timestamp, size, records, schema, origin)")
 	listCmd.Flags().BoolVar(&listReverse, "reverse", false, "Reverse sort order")
+	listCmd.Flags().IntVar(&listPage, "page", 1, "Page number (1-based)")
+	listCmd.Flags().IntVar(&listPerPage, "per-page", 20, "Results per page")
 
 	// Collection-specific flags
 	listCmd.Flags().StringVar(&listCollectionID, "collection-id", "", "Filter by collection ID")
@@ -224,6 +248,7 @@ func init() {
 
 	// Register completion functions
 	listCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	listCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 	listCmd.RegisterFlagCompletionFunc("format", completeFormats)
 	listCmd.RegisterFlagCompletionFunc("sort-by", completeSortByOptions)
 	listCmd.RegisterFlagCompletionFunc("collection-id", completeProquintIDs)
@@ -332,4 +357,44 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// outputListAsJSON outputs list results as JSON
+func outputListAsJSON(output *ui.OutputWriter, results *lister.ListResults) error {
+	entries := make([]ui.EntryOutput, len(results.Entries))
+	for i, e := range results.Entries {
+		entries[i] = ui.EntryOutput{
+			ID:              e.ID,
+			Proquint:        e.Proquint,
+			Schema:          e.Schema,
+			Origin:          e.Origin,
+			Format:          e.Format,
+			SizeBytes:       e.SizeBytes,
+			RecordCount:     e.RecordCount,
+			ImportTimestamp: e.ImportTimestamp,
+			StoredPath:      e.StoredPath,
+			MetadataPath:    e.MetadataPath,
+			Confidence:      e.Confidence,
+			CollectionType:  e.CollectionType,
+			CollectionID:    e.CollectionID,
+			ItemID:          e.ItemID,
+			ItemIndex:       e.ItemIndex,
+		}
+	}
+
+	listOutput := ui.ListOutput{
+		Entries:      entries,
+		TotalEntries: results.TotalEntries,
+		TotalPages:   results.TotalPages,
+		CurrentPage:  results.CurrentPage,
+		Summary: &ui.ListSummary{
+			TotalSize:     results.TotalSize,
+			TotalRecords:  results.TotalRecords,
+			UniqueSchemas: results.UniqueSchemas,
+			UniqueOrigins: results.UniqueOrigins,
+			UniqueFormats: results.UniqueFormats,
+		},
+	}
+
+	return output.WriteJSON(listOutput)
 }

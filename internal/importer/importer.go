@@ -169,8 +169,20 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 	var data interface{}
 	var recordCount int
 
+	// Detect compression and decompress if needed for analysis
+	compression := DetectCompression(opts.SourcePath)
+	fileToAnalyze := opts.SourcePath
+	if compression != "none" {
+		decompressed, err := DecompressFile(opts.SourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress file: %w", err)
+		}
+		fileToAnalyze = decompressed
+		defer os.Remove(decompressed) // Clean up temporary decompressed file
+	}
+
 	// Always use streaming parser for optimal performance and memory usage
-	data, recordCount, err = i.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
+	data, recordCount, err = i.analyzeDataStreaming(fileToAnalyze, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
@@ -567,8 +579,20 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 
 // importNDJSONCollection handles importing NDJSON files as collections with individual items
 func (i *Importer) importNDJSONCollection(opts ImportOptions, timestamp time.Time, timestampStr, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo) (*ImportResult, error) {
+	// Detect compression and decompress if needed for analysis
+	compression := DetectCompression(opts.SourcePath)
+	fileToAnalyze := opts.SourcePath
+	if compression != "none" {
+		decompressed, err := DecompressFile(opts.SourcePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress file: %w", err)
+		}
+		fileToAnalyze = decompressed
+		defer os.Remove(decompressed) // Clean up temporary decompressed file
+	}
+
 	// Parse NDJSON file using streaming to get individual objects
-	data, recordCount, err := i.analyzeDataStreaming(opts.SourcePath, "json", opts.StreamingConfig)
+	data, recordCount, err := i.analyzeDataStreaming(fileToAnalyze, "json", opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze NDJSON data: %w", err)
 	}

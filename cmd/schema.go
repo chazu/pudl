@@ -755,7 +755,9 @@ func init() {
 	schemaNewCmd.RegisterFlagCompletionFunc("from", completeProquintIDs)
 	schemaReinferCmd.RegisterFlagCompletionFunc("entry", completeProquintIDs)
 	schemaReinferCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	schemaReinferCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 	schemaReviewCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
+	schemaReviewCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 	schemaReviewCmd.RegisterFlagCompletionFunc("format", completeFormats)
 }
 

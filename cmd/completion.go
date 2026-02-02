@@ -130,3 +130,74 @@ func completeSortByOptions(cmd *cobra.Command, args []string, toComplete string)
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeOrigins returns a completion function for data origins
+func completeOrigins(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	// dataPath is ~/.pudl/data, config dir (for database) is ~/.pudl
+	configDir := filepath.Dir(cfg.DataPath)
+
+	catalogDB, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	defer catalogDB.Close()
+
+	// Get distinct origins
+	origins, err := catalogDB.GetUniqueValues("origin")
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var completions []string
+	for _, origin := range origins {
+		// Filter by prefix if user has started typing
+		if toComplete == "" || strings.HasPrefix(origin, toComplete) {
+			completions = append(completions, origin)
+		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
+// completeEntryIDs returns a completion function for recent entry IDs
+func completeEntryIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	// dataPath is ~/.pudl/data, config dir (for database) is ~/.pudl
+	configDir := filepath.Dir(cfg.DataPath)
+
+	catalogDB, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	defer catalogDB.Close()
+
+	// Get recent entries (limit to 50 for performance)
+	result, err := catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{
+		Limit:   50,
+		SortBy:  "timestamp",
+		Reverse: true,
+	})
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	var completions []string
+	for _, entry := range result.Entries {
+		proquint := idgen.HashToProquint(entry.ID)
+		// Filter by prefix if user has started typing
+		if toComplete == "" || strings.HasPrefix(proquint, toComplete) {
+			// Add description for better UX
+			desc := entry.Schema
+			completions = append(completions, proquint+"\t"+desc)
+		}
+	}
+
+	return completions, cobra.ShellCompDirectiveNoFileComp
+}
+
