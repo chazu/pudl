@@ -13,11 +13,12 @@ import (
 )
 
 var (
-	revalidateAll    bool
-	revalidateSchema string
-	revalidateID     string
-	revalidateOrigin string
-	revalidateDryRun bool
+	revalidateAll      bool
+	revalidateSchema   string
+	revalidateID       string
+	revalidateOrigin   string
+	revalidateDryRun   bool
+	revalidateReassign bool
 )
 
 // revalidateCmd represents the revalidate command
@@ -26,14 +27,22 @@ var revalidateCmd = &cobra.Command{
 	Short: "Batch revalidate catalog entries against schemas",
 	Long: `Revalidate catalog entries against their assigned schemas.
 
-This command allows you to revalidate multiple entries in your catalog,
-optionally updating their schema assignments if they now validate against
-different schemas. Use --dry-run to preview changes without applying them.
+This command validates entries against their currently assigned schemas and
+reports which entries pass or fail validation. By default, it only reports
+results without modifying any data.
+
+Use --reassign to actually update schemas when validation fails (the cascade
+validator will assign entries to the most specific matching schema).
+
+Note: Schema assignment during import uses inference (pattern matching), while
+revalidation uses strict CUE validation. Entries may fail revalidation even if
+they were correctly assigned during import.
 
 Examples:
-    pudl revalidate --all                    # Revalidate all entries
+    pudl revalidate --all                    # Report validation status for all entries
+    pudl revalidate --all --reassign         # Revalidate and update schemas that fail
     pudl revalidate --schema aws.ec2         # Revalidate entries with specific schema
-    pudl revalidate --origin aws --dry-run   # Preview changes for AWS entries
+    pudl revalidate --origin aws --dry-run   # Preview what --reassign would do
     pudl revalidate --id babod-fakak         # Revalidate specific entry`,
 	Run: func(cmd *cobra.Command, args []string) {
 		errorHandler := errors.NewCLIErrorHandler(true)
@@ -52,6 +61,7 @@ func init() {
 	revalidateCmd.Flags().StringVar(&revalidateID, "id", "", "Revalidate specific entry by proquint")
 	revalidateCmd.Flags().StringVar(&revalidateOrigin, "origin", "", "Filter by data origin")
 	revalidateCmd.Flags().BoolVar(&revalidateDryRun, "dry-run", false, "Preview changes without applying them")
+	revalidateCmd.Flags().BoolVar(&revalidateReassign, "reassign", false, "Reassign schemas when validation fails (default: report only)")
 
 	// At least one filter must be specified
 	revalidateCmd.MarkFlagsOneRequired("all", "schema", "id", "origin")
@@ -117,10 +127,10 @@ func runRevalidateCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Revalidate entries
-	return revalidateEntries(catalogDB, validationService, entries, revalidateDryRun)
+	return revalidateEntries(catalogDB, validationService, entries, revalidateDryRun, revalidateReassign)
 }
 
-func revalidateEntries(catalogDB *database.CatalogDB, vs *review.ValidationService, entries []database.CatalogEntry, dryRun bool) error {
+func revalidateEntries(catalogDB *database.CatalogDB, vs *review.ValidationService, entries []database.CatalogEntry, dryRun bool, reassign bool) error {
 	fmt.Printf("Revalidating %d entries...\n\n", len(entries))
 
 	var passed, failed, schemaChanged int
@@ -149,8 +159,9 @@ func revalidateEntries(catalogDB *database.CatalogDB, vs *review.ValidationServi
 			fmt.Printf("VALID\n")
 			passed++
 		} else {
-			fmt.Printf("INVALID (assigned to %s)\n", result.AssignedSchema)
+			// Report validation failure
 			if result.AssignedSchema != entry.Schema {
+				fmt.Printf("INVALID (would cascade to %s)\n", result.AssignedSchema)
 				schemaChanged++
 				changes = append(changes, struct {
 					proquint  string
@@ -158,13 +169,17 @@ func revalidateEntries(catalogDB *database.CatalogDB, vs *review.ValidationServi
 					newSchema string
 				}{proquint, entry.Schema, result.AssignedSchema})
 
-				// Update schema if not dry-run
-				if !dryRun {
+				// Only update schema if --reassign flag is passed and not dry-run
+				if reassign && !dryRun {
 					entry.Schema = result.AssignedSchema
 					if err := catalogDB.UpdateEntry(entry); err != nil {
 						fmt.Printf("  Warning: Failed to update schema: %v\n", err)
+					} else {
+						fmt.Printf("  → Schema updated to %s\n", result.AssignedSchema)
 					}
 				}
+			} else {
+				fmt.Printf("INVALID (schema unchanged)\n")
 			}
 			failed++
 		}
@@ -182,10 +197,16 @@ func revalidateEntries(catalogDB *database.CatalogDB, vs *review.ValidationServi
 
 	if dryRun {
 		fmt.Println("\n(DRY RUN - No changes applied)")
+	} else if !reassign && schemaChanged > 0 {
+		fmt.Println("\n(REPORT ONLY - Use --reassign to update schemas)")
 	}
 
 	if len(changes) > 0 {
-		fmt.Println("\nSchema changes:")
+		if reassign && !dryRun {
+			fmt.Println("\nSchema changes applied:")
+		} else {
+			fmt.Println("\nPotential schema changes (not applied):")
+		}
 		for _, change := range changes {
 			fmt.Printf("  %s: %s → %s\n", change.proquint, change.oldSchema, change.newSchema)
 		}
