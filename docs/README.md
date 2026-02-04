@@ -117,7 +117,88 @@ pudl show <entry-id> --metadata  # Show metadata
 pudl show <entry-id> --raw       # Show raw data
 ```
 
-### 4. NDJSON Collections (NEW!)
+### 4. Data Deletion
+
+Remove entries from the catalog along with their data and metadata files:
+
+```bash
+# Delete a single entry (with confirmation prompt)
+pudl delete mivof-duhij
+
+# Delete without confirmation
+pudl delete mivof-duhij --force
+
+# Delete with JSON output (for scripting)
+pudl delete mivof-duhij --json --force
+```
+
+#### Collection Deletion
+
+Collections have special deletion semantics to prevent accidental data loss:
+
+```bash
+# Attempting to delete a collection with items fails by default
+pudl delete govim-nupab
+# Error: Collection 'govim-nupab' has 5 items
+# Suggestions:
+#   • Use --cascade to delete the collection and all its items
+#   • Or delete items individually first
+
+# Delete collection AND all its items
+pudl delete govim-nupab --cascade --force
+```
+
+#### Deletion Behavior
+
+| Entry Type | Default Behavior | With --cascade |
+|------------|------------------|----------------|
+| Standalone item | Deletes entry, data file, metadata file | Same |
+| Collection item | Deletes entry, data file, metadata file | Same |
+| Collection (no items) | Deletes entry, data file, metadata file | Same |
+| Collection (with items) | **Fails** - requires --cascade | Deletes collection + all items |
+
+#### What Gets Deleted
+
+When you delete an entry, PUDL removes:
+1. **Catalog entry** - The database record tracking the import
+2. **Data file** - The raw data stored in `~/.pudl/data/raw/YYYY/MM/DD/`
+3. **Metadata file** - The import metadata in `~/.pudl/data/metadata/`
+
+With `--cascade` on a collection, all child items are also deleted with their files.
+
+#### JSON Output
+
+For scripting and automation, use `--json` to get structured output:
+
+```bash
+pudl delete mivof-duhij --force --json
+```
+
+```json
+{
+  "success": true,
+  "entry_id": "87e21d152d1240a46293487b54f707069a2e054a39f72f58896b43d67458302c",
+  "proquint": "mivof-duhij",
+  "data_file_deleted": true,
+  "metadata_file_deleted": true
+}
+```
+
+For cascade deletions:
+
+```json
+{
+  "success": true,
+  "entry_id": "abc123...",
+  "proquint": "govim-nupab",
+  "data_file_deleted": true,
+  "metadata_file_deleted": true,
+  "items_deleted": 5,
+  "deleted_item_ids": ["fusaf-gofag", "vahuk-kunug", "joram-budav", "honab-faruf", "hugib-dubuf"]
+}
+```
+
+### 5. NDJSON Collections
 
 PUDL automatically detects and processes NDJSON (Newline-Delimited JSON) files as collections, creating both a collection entry and individual catalog entries for each JSON object.
 
@@ -237,7 +318,7 @@ pudl list --collection-id my-inventory --schema "aws.batch" --verbose
 - **Scalable Queries**: Database-optimized collection filtering
 - **Visual Clarity**: Clear distinction between collections (📦) and items (📄)
 
-### 5. Schema Management
+### 6. Schema Management
 
 PUDL uses CUE schemas organized by packages for data validation and structure definition.
 
@@ -279,7 +360,7 @@ pudl schema log --verbose                   # Detailed commit information
 - Use `pudl schema commit -m "message"` to commit changes
 - Use `pudl schema log` to view commit history
 
-### 6. CUE Processing
+### 7. CUE Processing
 
 Process CUE files with custom functions (legacy feature):
 
