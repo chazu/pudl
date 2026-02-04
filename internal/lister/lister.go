@@ -2,6 +2,7 @@ package lister
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -68,6 +69,17 @@ type ListResults struct {
 	UniqueFormats []string    `json:"unique_formats"`
 	TotalPages    int         `json:"total_pages"`
 	CurrentPage   int         `json:"current_page"`
+}
+
+// DeleteResult contains the result of a delete operation
+type DeleteResult struct {
+	Success             bool     `json:"success"`
+	EntryID             string   `json:"entry_id"`
+	Proquint            string   `json:"proquint"`
+	DataFileDeleted     bool     `json:"data_file_deleted"`
+	MetadataFileDeleted bool     `json:"metadata_file_deleted"`
+	ItemsDeleted        int      `json:"items_deleted,omitempty"`
+	DeletedItemIDs      []string `json:"deleted_item_ids,omitempty"`
 }
 
 // CatalogEntry represents an entry from the catalog file
@@ -276,4 +288,88 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 	}
 
 	return listEntry, nil
+}
+
+// GetCollectionItems retrieves all items belonging to a collection
+func (l *Lister) GetCollectionItems(collectionID string) ([]ListEntry, error) {
+	dbItems, err := l.catalogDB.GetCollectionItems(collectionID)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]ListEntry, len(dbItems))
+	for i, dbEntry := range dbItems {
+		items[i] = ListEntry{
+			ID:              dbEntry.ID,
+			Proquint:        idgen.HashToProquint(dbEntry.ID),
+			StoredPath:      dbEntry.StoredPath,
+			MetadataPath:    dbEntry.MetadataPath,
+			ImportTimestamp: dbEntry.ImportTimestamp.Format("2006-01-02T15:04:05-07:00"),
+			ParsedTimestamp: dbEntry.ImportTimestamp,
+			Format:          dbEntry.Format,
+			Origin:          dbEntry.Origin,
+			Schema:          dbEntry.Schema,
+			Confidence:      dbEntry.Confidence,
+			RecordCount:     dbEntry.RecordCount,
+			SizeBytes:       dbEntry.SizeBytes,
+			CollectionID:    dbEntry.CollectionID,
+			ItemIndex:       dbEntry.ItemIndex,
+			CollectionType:  dbEntry.CollectionType,
+			ItemID:          dbEntry.ItemID,
+		}
+	}
+
+	return items, nil
+}
+
+// DeleteEntry deletes an entry and optionally its collection items
+func (l *Lister) DeleteEntry(entryID string, cascade bool) (*DeleteResult, error) {
+	// Get the entry first
+	entry, err := l.catalogDB.GetEntry(entryID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DeleteResult{
+		Success:  true,
+		EntryID:  entry.ID,
+		Proquint: idgen.HashToProquint(entry.ID),
+	}
+
+	// If this is a collection and cascade is enabled, delete items first
+	if entry.CollectionType != nil && *entry.CollectionType == "collection" && cascade {
+		items, err := l.catalogDB.GetCollectionItems(entry.ID)
+		if err != nil {
+			return nil, errors.NewSystemError("Failed to get collection items", err)
+		}
+
+		for _, item := range items {
+			// Delete item files
+			_ = os.Remove(item.StoredPath)
+			_ = os.Remove(item.MetadataPath)
+
+			// Delete from database
+			if err := l.catalogDB.DeleteEntry(item.ID); err != nil {
+				return nil, errors.NewSystemError(fmt.Sprintf("Failed to delete item %s", item.ID), err)
+			}
+
+			result.DeletedItemIDs = append(result.DeletedItemIDs, idgen.HashToProquint(item.ID))
+		}
+		result.ItemsDeleted = len(items)
+	}
+
+	// Delete the entry's files
+	if err := os.Remove(entry.StoredPath); err == nil {
+		result.DataFileDeleted = true
+	}
+	if err := os.Remove(entry.MetadataPath); err == nil {
+		result.MetadataFileDeleted = true
+	}
+
+	// Delete from database
+	if err := l.catalogDB.DeleteEntry(entry.ID); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
