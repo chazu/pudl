@@ -331,7 +331,7 @@ func TestQueryEntries_CollectionFilters(t *testing.T) {
 			ImportTimestamp: time.Now().Add(time.Duration(i) * time.Second),
 			Format:          "json",
 			Origin:          fmt.Sprintf("test-item-%d", i),
-			Schema:          "core.#CollectionItem",
+			Schema:          "core.#Item",
 			Confidence:      0.8,
 			RecordCount:     1,
 			SizeBytes:       100,

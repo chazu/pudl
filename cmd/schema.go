@@ -19,6 +19,7 @@ import (
 	"pudl/internal/review"
 	"pudl/internal/schema"
 	"pudl/internal/schemagen"
+	"pudl/internal/ui"
 )
 
 var (
@@ -41,6 +42,7 @@ var (
 	schemaNewPath       string
 	schemaNewCollection bool
 	schemaNewInfer      []string
+	schemaNewForce      bool
 
 	// Reinfer command flags
 	reinferAll         bool
@@ -574,7 +576,7 @@ Examples:
     pudl schema review --only-unknown
 
     # Review specific schema assignments
-    pudl schema review --schema core.#CatchAll
+    pudl schema review --schema core.#Item
 
     # Review items from specific origin
     pudl schema review --origin aws-ec2
@@ -652,7 +654,7 @@ The schema name can be specified in formats like:
 
 Examples:
     pudl schema show aws/ec2.#Instance
-    pudl schema show pudl/core.#CatchAll
+    pudl schema show pudl/core.#Item
     pudl s show aws/ec2:#Instance`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeSchemaNames,
@@ -677,7 +679,7 @@ if a better match is found.
 
 Examples:
     # Re-infer all entries currently assigned to unknown schema
-    pudl schema reinfer --schema core.#CatchAll
+    pudl schema reinfer --schema core.#Item
 
     # Re-infer a specific entry
     pudl schema reinfer --entry babod-fakak
@@ -739,6 +741,7 @@ func init() {
 	schemaNewCmd.Flags().StringVar(&schemaNewPath, "path", "", "Schema path in format 'package/path:#Definition' (required)")
 	schemaNewCmd.Flags().BoolVar(&schemaNewCollection, "collection", false, "Create a collection schema instead of item schema")
 	schemaNewCmd.Flags().StringArrayVar(&schemaNewInfer, "infer", []string{}, "Field inference hints (e.g., State=enum)")
+	schemaNewCmd.Flags().BoolVar(&schemaNewForce, "force", false, "Overwrite existing schema files")
 	schemaNewCmd.MarkFlagRequired("from")
 	schemaNewCmd.MarkFlagRequired("path")
 
@@ -1140,11 +1143,33 @@ func runSchemaNewCommand() error {
 	}
 
 	// Write the schema file
-	if err := generator.WriteSchema(result, result.Content); err != nil {
+	if err := generator.WriteSchema(result, result.Content, schemaNewForce); err != nil {
+		// Check for schema exists error and provide better message
+		if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
+			return errors.NewInputError(
+				fmt.Sprintf("Schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+				"Use --force to overwrite the existing schema",
+			)
+		}
 		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to write schema file", err)
 	}
 
-	// Print results
+	// Check for JSON output
+	output := GetOutputWriter()
+	if output.Format == ui.OutputFormatJSON {
+		jsonOutput := ui.SchemaNewOutput{
+			Success:                true,
+			FilePath:               result.FilePath,
+			PackageName:            result.PackageName,
+			DefinitionName:         result.DefinitionName,
+			FieldCount:             result.FieldCount,
+			InferredIdentityFields: result.InferredIdentityFields,
+			IsCollection:           false,
+		}
+		return output.WriteJSON(jsonOutput)
+	}
+
+	// Print results (human-readable)
 	fmt.Println("✅ Schema generated successfully!")
 	fmt.Println()
 	fmt.Printf("📄 File created: %s\n", result.FilePath)
@@ -1208,22 +1233,64 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to generate collection schema", err)
 	}
 
+	// Track created item schemas for JSON output
+	var createdItemSchemas []ui.SchemaNewItemOutput
+
 	// Write any new item schemas first
 	for _, itemSchema := range result.NewItemSchemas {
-		if err := generator.WriteSchema(itemSchema, itemSchema.Content); err != nil {
+		if err := generator.WriteSchema(itemSchema, itemSchema.Content, schemaNewForce); err != nil {
+			// Check for schema exists error and provide better message
+			if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
+				return errors.NewInputError(
+					fmt.Sprintf("Item schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+					"Use --force to overwrite existing schemas",
+				)
+			}
 			return errors.WrapError(errors.ErrCodeFileSystem,
 				fmt.Sprintf("Failed to write item schema file: %s", itemSchema.FilePath), err)
 		}
-		fmt.Printf("📄 Created item schema: %s\n", itemSchema.FilePath)
+		createdItemSchemas = append(createdItemSchemas, ui.SchemaNewItemOutput{
+			FilePath:       itemSchema.FilePath,
+			DefinitionName: itemSchema.DefinitionName,
+			FieldCount:     itemSchema.FieldCount,
+		})
+		// Only print if not JSON output
+		output := GetOutputWriter()
+		if output.Format != ui.OutputFormatJSON {
+			fmt.Printf("📄 Created item schema: %s\n", itemSchema.FilePath)
+		}
 	}
 
 	// Write the collection schema
-	if err := generator.WriteSchema(result.CollectionSchema, result.CollectionSchema.Content); err != nil {
+	if err := generator.WriteSchema(result.CollectionSchema, result.CollectionSchema.Content, schemaNewForce); err != nil {
+		// Check for schema exists error and provide better message
+		if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
+			return errors.NewInputError(
+				fmt.Sprintf("Collection schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+				"Use --force to overwrite existing schemas",
+			)
+		}
 		return errors.WrapError(errors.ErrCodeFileSystem,
 			fmt.Sprintf("Failed to write collection schema file: %s", result.CollectionSchema.FilePath), err)
 	}
 
-	// Print results
+	// Check for JSON output
+	output := GetOutputWriter()
+	if output.Format == ui.OutputFormatJSON {
+		jsonOutput := ui.SchemaNewOutput{
+			Success:            true,
+			FilePath:           result.CollectionSchema.FilePath,
+			PackageName:        result.CollectionSchema.PackageName,
+			DefinitionName:     result.CollectionSchema.DefinitionName,
+			FieldCount:         result.CollectionSchema.FieldCount,
+			IsCollection:       true,
+			NewItemSchemas:     createdItemSchemas,
+			ExistingSchemaRefs: result.ExistingSchemaRefs,
+		}
+		return output.WriteJSON(jsonOutput)
+	}
+
+	// Print results (human-readable)
 	fmt.Println()
 	fmt.Println("✅ Collection schema generated successfully!")
 	fmt.Println()

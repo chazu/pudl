@@ -193,7 +193,7 @@ func (g *TestDataGenerator) GenerateGenericEntries(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
 	
 	genericSchemas := []string{
-		"core.#CatchAll",
+		"core.#Item",
 		"generic.#JSONData",
 		"generic.#CSVData",
 		"generic.#TextData",
