@@ -61,7 +61,7 @@ source: kind: "self"
 		return err
 	}
 
-	// Create core package with catchall schema
+	// Create core package with Item schema (universal fallback)
 	coreDir := filepath.Join(s.SchemaDir, "pudl", "core")
 	if err := os.MkdirAll(coreDir, 0755); err != nil {
 		return err
@@ -69,7 +69,7 @@ source: kind: "self"
 
 	coreContent := `package core
 
-#CatchAll: {
+#Item: {
 	_pudl: {
 		schema_type:      "catchall"
 		resource_type:    "unknown"

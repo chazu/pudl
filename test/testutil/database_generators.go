@@ -165,7 +165,7 @@ func (g *TestDataGenerator) GenerateCollectionWithItems(itemCount int) (database
 			ImportTimestamp: collection.ImportTimestamp.Add(time.Duration(i) * time.Second),
 			Format:          "json",
 			Origin:          fmt.Sprintf("%s-item-%d", collectionID, i),
-			Schema:          "core.#CollectionItem",
+			Schema:          "core.#Item",
 			Confidence:      0.8,
 			RecordCount:     1,
 			SizeBytes:       100,
@@ -208,7 +208,7 @@ func (g *TestDataGenerator) GenerateGenericEntries(count int) []database.Catalog
 	entries := make([]database.CatalogEntry, count)
 	
 	genericSchemas := []string{
-		"core.#CatchAll",
+		"core.#Item",
 		"generic.#JSONData",
 		"generic.#CSVData",
 		"generic.#TextData",

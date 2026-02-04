@@ -1,7 +1,8 @@
 package core
 
-// CatchAll schema for unclassified data - the ultimate fallback
-#CatchAll: {
+// Item is the universal fallback schema for any individual piece of data.
+// All more specific schemas should cascade to this as their ultimate fallback.
+#Item: {
 	// PUDL metadata for cascading validation
 	_pudl: {
 		schema_type:      "catchall"
@@ -23,7 +24,7 @@ package core
 		schema_type:      "collection"
 		resource_type:    "generic.collection"
 		cascade_priority: 75
-		cascade_fallback: ["pudl.schemas/pudl/core:#CatchAll"]
+		cascade_fallback: ["pudl.schemas/pudl/core:#Item"]
 		identity_fields: ["collection_id"]
 		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
 		compliance_level: "permissive"
@@ -68,38 +69,6 @@ package core
 	}
 
 	// Optional: First few items for preview (not stored for large collections)
-	sample_items?: [...#CollectionItem] & len(<=10)
-}
-
-// CollectionItem represents an individual item within a collection
-#CollectionItem: {
-	// PUDL metadata for collection items
-	_pudl: {
-		schema_type:       "collection_item"
-		resource_type:     "generic.collection_item"
-		cascade_priority:  60
-		identity_fields: ["item_id", "collection_id"]
-		tracked_fields: ["item_data"]
-		parent_collection?: string
-		item_index?:        int
-	}
-
-	// Item identification
-	item_id:       string
-	collection_id: string
-	item_index:    int & >=0
-
-	// Item metadata
-	item_metadata: {
-		extracted_at:       string
-		schema_assigned:    string
-		schema_confidence:  number & >=0 & <=1
-		size_bytes?:        int & >=0
-		validation_status:  "valid" | "invalid" | "warning" | "unknown"
-		validation_errors?: [...string]
-	}
-
-	// Flexible item data - actual content varies by item type
-	item_data: {...}
+	sample_items?: [...#Item] & len(<=10)
 }
 

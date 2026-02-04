@@ -141,3 +141,22 @@ type DoctorCheckOutput struct {
 	Fix     string `json:"fix,omitempty"`
 }
 
+// SchemaNewOutput represents structured output for schema new command
+type SchemaNewOutput struct {
+	Success                bool                      `json:"success"`
+	FilePath               string                    `json:"file_path"`
+	PackageName            string                    `json:"package_name"`
+	DefinitionName         string                    `json:"definition_name"`
+	FieldCount             int                       `json:"field_count"`
+	InferredIdentityFields []string                  `json:"inferred_identity_fields,omitempty"`
+	IsCollection           bool                      `json:"is_collection"`
+	NewItemSchemas         []SchemaNewItemOutput     `json:"new_item_schemas,omitempty"`
+	ExistingSchemaRefs     []string                  `json:"existing_schema_refs,omitempty"`
+}
+
+// SchemaNewItemOutput represents a generated item schema in collection generation
+type SchemaNewItemOutput struct {
+	FilePath       string `json:"file_path"`
+	DefinitionName string `json:"definition_name"`
+	FieldCount     int    `json:"field_count"`
+}

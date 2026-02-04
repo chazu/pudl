@@ -68,9 +68,15 @@ func TestIsCatchallSchema(t *testing.T) {
 		name     string
 		expected bool
 	}{
+		// New #Item schema names
+		{"core.#Item", true},
+		{"pudl.schemas/pudl/core:#Item", true},
+		{"pudl/core.#Item", true},
+		// Legacy #CatchAll names (backwards compatibility)
 		{"core.#CatchAll", true},
 		{"pudl.schemas/pudl/core:#CatchAll", true},
 		{"pudl/core.#CatchAll", true},
+		// Non-catchall schemas
 		{"aws.#EC2Instance", false},
 		{"k8s.#Pod", false},
 		{"", false},

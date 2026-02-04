@@ -23,8 +23,8 @@ func NewManager(schemaPath string) *Manager {
 // SchemaInfo represents information about a schema definition
 type SchemaInfo struct {
 	Package    string `json:"package"`
-	Name       string `json:"name"`        // The #Definition name (e.g., "#CatchAll")
-	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/core.#CatchAll")
+	Name       string `json:"name"`        // The #Definition name (e.g., "#Item")
+	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/core.#Item")
 	FilePath   string `json:"file_path"`   // Source file containing this definition
 	FileName   string `json:"file_name"`
 	Size       int64  `json:"size"`        // Size of the source file
@@ -141,7 +141,7 @@ func (m *Manager) AddSchema(packageName, schemaName, sourceFile string) error {
 }
 
 // GetSchema returns information about a specific schema definition
-// schemaName should be the definition name (e.g., "#CatchAll" or "CatchAll")
+// schemaName should be the definition name (e.g., "#Item" or "Item")
 func (m *Manager) GetSchema(packageName, schemaName string) (*SchemaInfo, error) {
 	// Normalize schema name to include # prefix if missing
 	if !strings.HasPrefix(schemaName, "#") {

@@ -265,7 +265,7 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts)))
 	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName)))
 	b.WriteString("\t\tcascade_priority: 100 // 0-1000, higher = more specific (catchall=0, base=100, policy=200+)\n")
-	b.WriteString("\t\tcascade_fallback: [\"core.#CatchAll\"] // Schemas to try if this doesn't match\n")
+	b.WriteString("\t\tcascade_fallback: [\"core.#Item\"] // Schemas to try if this doesn't match\n")
 	b.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields)))
 	b.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis)))
 	b.WriteString("\t\tcompliance_level: \"strict\" // Valid: \"strict\", \"warn\", \"permissive\"\n")
@@ -362,8 +362,20 @@ func (g *Generator) formatTrackedFields(analysis *FieldAnalysis) string {
 	return g.formatStringSlice(tracked)
 }
 
+// SchemaExistsError is returned when a schema file already exists and force is not set.
+type SchemaExistsError struct {
+	FilePath       string
+	DefinitionName string
+	PackagePath    string
+}
+
+func (e *SchemaExistsError) Error() string {
+	return fmt.Sprintf("schema file already exists: %s", e.FilePath)
+}
+
 // WriteSchema writes the generated schema to the schema repository.
-func (g *Generator) WriteSchema(result *GenerateResult, content string) error {
+// If force is true, existing files will be overwritten.
+func (g *Generator) WriteSchema(result *GenerateResult, content string, force bool) error {
 	// Create package directory
 	dir := filepath.Dir(result.FilePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -372,7 +384,14 @@ func (g *Generator) WriteSchema(result *GenerateResult, content string) error {
 
 	// Check if file already exists
 	if _, err := os.Stat(result.FilePath); err == nil {
-		return fmt.Errorf("schema file already exists: %s", result.FilePath)
+		if !force {
+			return &SchemaExistsError{
+				FilePath:       result.FilePath,
+				DefinitionName: result.DefinitionName,
+				PackagePath:    result.PackageName,
+			}
+		}
+		// force=true, file will be overwritten
 	}
 
 	// Write the file
@@ -470,9 +489,10 @@ func (g *Generator) GenerateSmartCollection(items []interface{}, opts Collection
 	return result, nil
 }
 
-// isCatchallSchema checks if a schema name is a catchall schema.
+// isCatchallSchema checks if a schema name is a catchall/fallback schema.
 func isCatchallSchema(name string) bool {
-	return strings.Contains(name, "CatchAll") || strings.Contains(name, "catchall")
+	return strings.Contains(name, "CatchAll") || strings.Contains(name, "catchall") ||
+		name == "core.#Item" || strings.HasSuffix(name, ":#Item")
 }
 
 // generateItemSchemaForUnmatched generates a new item schema from unmatched items.

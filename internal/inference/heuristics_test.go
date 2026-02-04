@@ -117,7 +117,7 @@ func TestScoreCandidate(t *testing.T) {
 		},
 		{
 			name:       "catchall always scores",
-			schemaName: "core.#CatchAll",
+			schemaName: "core.#Item",
 			meta: validator.SchemaMetadata{
 				SchemaType: "catchall",
 			},
@@ -143,7 +143,7 @@ func TestScoreCandidate(t *testing.T) {
 
 func TestSelectCandidates(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"core.#CatchAll": {
+		"core.#Item": {
 			SchemaType:      "catchall",
 			CascadePriority: 0,
 		},
@@ -216,7 +216,7 @@ func TestSelectCandidates(t *testing.T) {
 		// Should have at least catchall
 		hasCatchall := false
 		for _, c := range candidates {
-			if c.Schema == "core.#CatchAll" {
+			if c.Schema == "core.#Item" {
 				hasCatchall = true
 				break
 			}

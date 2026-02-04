@@ -64,7 +64,7 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 
 	if len(si.schemas) == 0 {
 		return &InferenceResult{
-			Schema:     "core.#CatchAll",
+			Schema:     "core.#Item",
 			Confidence: 0.1,
 			Reason:     "no schemas loaded",
 		}, nil
@@ -244,17 +244,25 @@ func calculateConfidence(heuristicScore float64, matchPosition, totalCandidates 
 	return confidence
 }
 
-// isCatchallSchema checks if a schema name represents a catchall schema.
+// isCatchallSchema checks if a schema name represents a catchall/fallback schema.
 func isCatchallSchema(schemaName string) bool {
-	return schemaName == "core.#CatchAll" ||
+	return schemaName == "core.#Item" ||
+		schemaName == "pudl.schemas/pudl/core:#Item" ||
+		schemaName == "pudl/core.#Item" ||
+		// Legacy names for backwards compatibility
+		schemaName == "core.#CatchAll" ||
 		schemaName == "pudl.schemas/pudl/core:#CatchAll" ||
 		schemaName == "pudl/core.#CatchAll"
 }
 
 // findCatchallSchema finds the catchall schema name from available schemas.
 func findCatchallSchema(schemas map[string]cue.Value) string {
-	// Try common catchall names
+	// Try common catchall names (prefer #Item over legacy #CatchAll)
 	catchallNames := []string{
+		"core.#Item",
+		"pudl.schemas/pudl/core:#Item",
+		"pudl/core.#Item",
+		// Legacy names for backwards compatibility
 		"core.#CatchAll",
 		"pudl.schemas/pudl/core:#CatchAll",
 		"pudl/core.#CatchAll",
@@ -266,7 +274,7 @@ func findCatchallSchema(schemas map[string]cue.Value) string {
 		}
 	}
 
-	// Search for any schema with "CatchAll" in the name
+	// Search for any schema with catchall-like name
 	for name := range schemas {
 		if isCatchallSchema(name) || containsCatchAll(name) {
 			return name
@@ -274,7 +282,7 @@ func findCatchallSchema(schemas map[string]cue.Value) string {
 	}
 
 	// Default fallback
-	return "core.#CatchAll"
+	return "core.#Item"
 }
 
 // containsCatchAll checks if a schema name contains "CatchAll".

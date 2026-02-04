@@ -826,8 +826,8 @@ func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (s
 		Format: "json",
 	})
 	if err != nil {
-		// Fall back to collection item schema on error
-		return "pudl.schemas/pudl/core:#CollectionItem", 0.5
+		// Fall back to Item schema on error
+		return "pudl.schemas/pudl/core:#Item", 0.5
 	}
 
 	return result.Schema, result.Confidence

@@ -114,11 +114,11 @@ source: kind: "self"
 `
 	s.WriteFileInSubDir("schema/cue.mod", "module.cue", moduleContent)
 
-	// Create core package with catchall schema
+	// Create core package with Item schema (universal fallback)
 	s.CreateSubDir("schema/pudl/core")
 	coreContent := `package core
 
-#CatchAll: {
+#Item: {
 	_pudl: {
 		schema_type:      "catchall"
 		resource_type:    "unknown"

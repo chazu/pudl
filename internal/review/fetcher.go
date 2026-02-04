@@ -34,7 +34,7 @@ func (f *ReviewItemFetcher) FetchItemsForReview(filter SessionFilter) ([]ReviewI
 
 	// Apply special filters
 	if filter.OnlyUnknown {
-		dbFilter.Schema = "core.#CatchAll"
+		dbFilter.Schema = "core.#Item"
 	}
 
 	// Set up query options
@@ -167,7 +167,7 @@ func (f *ReviewItemFetcher) suggestBetterSchema(entry database.CatalogEntry, dat
 	}
 
 	// If it's unknown schema, try to infer a better one
-	if entry.Schema == "core.#CatchAll" {
+	if entry.Schema == "core.#Item" {
 		return f.inferSchemaFromData(data, entry.Origin)
 	}
 
@@ -299,7 +299,7 @@ func (f *ReviewItemFetcher) GetReviewStats(filter SessionFilter) (*ReviewStats, 
 	}
 
 	if filter.OnlyUnknown {
-		dbFilter.Schema = "core.#CatchAll"
+		dbFilter.Schema = "core.#Item"
 	}
 
 	queryOpts := database.QueryOptions{
@@ -320,7 +320,7 @@ func (f *ReviewItemFetcher) GetReviewStats(filter SessionFilter) (*ReviewStats, 
 
 	stats := &ReviewStats{
 		TotalItems:       queryResult.FilteredCount,
-		UnknownItems:     schemaBreakdown["core.#CatchAll"],
+		UnknownItems:     schemaBreakdown["core.#Item"],
 		SchemaBreakdown:  schemaBreakdown,
 		FilterCriteria:   filter,
 	}
