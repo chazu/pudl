@@ -250,7 +250,7 @@ func (e *EnhancedImporter) GetIDDisplayFormat(id string) string {
 // createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
 func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
 	// Assign schema for collection - try collection-specific schemas first
-	schema := "pudl.schemas/collections/collections:#Collection"
+	schema := "pudl.schemas/pudl/core:#Collection"
 	confidence := 0.8
 
 	// Create metadata for collection

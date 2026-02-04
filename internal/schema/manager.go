@@ -24,7 +24,7 @@ func NewManager(schemaPath string) *Manager {
 type SchemaInfo struct {
 	Package    string `json:"package"`
 	Name       string `json:"name"`        // The #Definition name (e.g., "#CatchAll")
-	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/unknown.#CatchAll")
+	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/core.#CatchAll")
 	FilePath   string `json:"file_path"`   // Source file containing this definition
 	FileName   string `json:"file_name"`
 	Size       int64  `json:"size"`        // Size of the source file

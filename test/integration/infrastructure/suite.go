@@ -347,13 +347,13 @@ source: kind: "self"
 		return fmt.Errorf("failed to write module.cue: %w", err)
 	}
 
-	// Create unknown package with catchall schema
-	unknownDir := filepath.Join(s.SchemaDir, "pudl", "unknown")
-	if err := os.MkdirAll(unknownDir, 0755); err != nil {
-		return fmt.Errorf("failed to create unknown package: %w", err)
+	// Create core package with catchall schema
+	coreDir := filepath.Join(s.SchemaDir, "pudl", "core")
+	if err := os.MkdirAll(coreDir, 0755); err != nil {
+		return fmt.Errorf("failed to create core package: %w", err)
 	}
 
-	catchallContent := `package unknown
+	coreContent := `package core
 
 #CatchAll: {
 	_pudl: {
@@ -367,8 +367,8 @@ source: kind: "self"
 	...
 }
 `
-	if err := os.WriteFile(filepath.Join(unknownDir, "catchall.cue"), []byte(catchallContent), 0644); err != nil {
-		return fmt.Errorf("failed to write catchall.cue: %w", err)
+	if err := os.WriteFile(filepath.Join(coreDir, "core.cue"), []byte(coreContent), 0644); err != nil {
+		return fmt.Errorf("failed to write core.cue: %w", err)
 	}
 
 	return nil

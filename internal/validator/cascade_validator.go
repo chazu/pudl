@@ -123,7 +123,7 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 	}
 	
 	// Should never reach here due to catchall, but handle gracefully
-	result.SetFinalAssignment("unknown.#CatchAll", "catchall", "All validations failed")
+	result.SetFinalAssignment("core.#CatchAll", "catchall", "All validations failed")
 	
 	return result, nil
 }
@@ -133,24 +133,24 @@ func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
 	meta, exists := cv.metadata[intendedSchema]
 	if !exists {
 		// Default cascade chain for unknown schemas
-		return []string{intendedSchema, "unknown.#CatchAll"}
+		return []string{intendedSchema, "core.#CatchAll"}
 	}
-	
+
 	if len(meta.CascadeFallback) > 0 {
 		// Use explicit cascade chain from schema metadata
 		chain := []string{intendedSchema}
 		chain = append(chain, meta.CascadeFallback...)
 		return chain
 	}
-	
+
 	// Build cascade chain based on schema metadata
 	chain := []string{intendedSchema}
-	
+
 	// Add base schema if specified
 	if meta.BaseSchema != "" {
 		chain = append(chain, meta.BaseSchema)
 	}
-	
+
 	// Add generic fallbacks based on resource type
 	if meta.ResourceType != "" {
 		parts := strings.Split(meta.ResourceType, ".")
@@ -162,12 +162,12 @@ func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
 			}
 		}
 	}
-	
+
 	// Always end with catchall
-	if !contains(chain, "unknown.#CatchAll") {
-		chain = append(chain, "unknown.#CatchAll")
+	if !contains(chain, "core.#CatchAll") {
+		chain = append(chain, "core.#CatchAll")
 	}
-	
+
 	return chain
 }
 
@@ -188,7 +188,7 @@ func (cv *CascadeValidator) determineFallbackReason(position int, intendedSchema
 		return "" // No fallback occurred
 	}
 	
-	if assignedSchema == "unknown.#CatchAll" {
+	if assignedSchema == "core.#CatchAll" {
 		return "Failed all specific schema validations"
 	}
 	

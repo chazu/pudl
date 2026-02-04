@@ -8,7 +8,7 @@ import (
 
 func TestBuildInheritanceGraph(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"unknown.#CatchAll": {
+		"core.#CatchAll": {
 			SchemaType:      "catchall",
 			CascadePriority: 0,
 		},
@@ -70,7 +70,7 @@ func TestBuildInheritanceGraph(t *testing.T) {
 
 func TestGetMostSpecificFirst(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"unknown.#CatchAll": {
+		"core.#CatchAll": {
 			CascadePriority: 0,
 		},
 		"aws.#Resource": {
@@ -105,8 +105,8 @@ func TestGetMostSpecificFirst(t *testing.T) {
 		t.Errorf("Expected aws.#Resource third, got %s", ordered[2])
 	}
 
-	if ordered[3] != "unknown.#CatchAll" {
-		t.Errorf("Expected unknown.#CatchAll last, got %s", ordered[3])
+	if ordered[3] != "core.#CatchAll" {
+		t.Errorf("Expected core.#CatchAll last, got %s", ordered[3])
 	}
 }
 

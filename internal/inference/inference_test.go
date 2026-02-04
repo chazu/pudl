@@ -68,9 +68,9 @@ func TestIsCatchallSchema(t *testing.T) {
 		name     string
 		expected bool
 	}{
-		{"unknown.#CatchAll", true},
-		{"pudl.schemas/unknown:#CatchAll", true},
-		{"pudl/unknown.#CatchAll", true},
+		{"core.#CatchAll", true},
+		{"pudl.schemas/pudl/core:#CatchAll", true},
+		{"pudl/core.#CatchAll", true},
 		{"aws.#EC2Instance", false},
 		{"k8s.#Pod", false},
 		{"", false},
@@ -91,7 +91,7 @@ func TestContainsCatchAll(t *testing.T) {
 		name     string
 		expected bool
 	}{
-		{"unknown.#CatchAll", true},
+		{"core.#CatchAll", true},
 		{"foo.#CatchAll", true},
 		{"CatchAll", true},
 		{"#CatchAll", true},

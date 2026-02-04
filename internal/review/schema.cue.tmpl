@@ -7,7 +7,7 @@ package {{.PackageName}}
 		schema_type: "base" // Valid: "base", "collection", "policy", "catchall"
 		resource_type: "{{.PackageName}}.{{.SchemaNameLower}}" // Format: <package>.<type> - identifies this resource type
 		cascade_priority: 100 // 0-1000, higher = more specific (catchall=0, base=100, policy=200+)
-		cascade_fallback: ["unknown.#CatchAll"] // Schemas to try if this doesn't match
+		cascade_fallback: ["core.#CatchAll"] // Schemas to try if this doesn't match
 		identity_fields: {{.IdentityFields}}
 		tracked_fields: {{.TrackedFields}}
 		compliance_level: "strict" // Valid: "strict", "warn", "permissive"

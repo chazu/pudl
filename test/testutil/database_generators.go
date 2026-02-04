@@ -140,7 +140,7 @@ func (g *TestDataGenerator) GenerateCollectionWithItems(itemCount int) (database
 		ImportTimestamp: g.baseTime.Add(time.Duration(g.counter) * time.Hour),
 		Format:          "ndjson",
 		Origin:          "test-collection",
-		Schema:          "collections.#Collection",
+		Schema:          "core.#Collection",
 		Confidence:      0.95,
 		RecordCount:     itemCount,
 		SizeBytes:       int64(itemCount * 100), // Estimate based on item count
@@ -165,7 +165,7 @@ func (g *TestDataGenerator) GenerateCollectionWithItems(itemCount int) (database
 			ImportTimestamp: collection.ImportTimestamp.Add(time.Duration(i) * time.Second),
 			Format:          "json",
 			Origin:          fmt.Sprintf("%s-item-%d", collectionID, i),
-			Schema:          "collections.#CollectionItem",
+			Schema:          "core.#CollectionItem",
 			Confidence:      0.8,
 			RecordCount:     1,
 			SizeBytes:       100,
@@ -208,7 +208,7 @@ func (g *TestDataGenerator) GenerateGenericEntries(count int) []database.Catalog
 	entries := make([]database.CatalogEntry, count)
 	
 	genericSchemas := []string{
-		"unknown.#CatchAll",
+		"core.#CatchAll",
 		"generic.#JSONData",
 		"generic.#CSVData",
 		"generic.#TextData",
