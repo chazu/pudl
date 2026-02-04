@@ -61,13 +61,13 @@ source: kind: "self"
 		return err
 	}
 
-	// Create unknown package with catchall schema
-	unknownDir := filepath.Join(s.SchemaDir, "pudl", "unknown")
-	if err := os.MkdirAll(unknownDir, 0755); err != nil {
+	// Create core package with catchall schema
+	coreDir := filepath.Join(s.SchemaDir, "pudl", "core")
+	if err := os.MkdirAll(coreDir, 0755); err != nil {
 		return err
 	}
 
-	catchallContent := `package unknown
+	coreContent := `package core
 
 #CatchAll: {
 	_pudl: {
@@ -81,7 +81,7 @@ source: kind: "self"
 	...
 }
 `
-	if err := os.WriteFile(filepath.Join(unknownDir, "catchall.cue"), []byte(catchallContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(coreDir, "core.cue"), []byte(coreContent), 0644); err != nil {
 		return err
 	}
 

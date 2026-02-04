@@ -84,7 +84,7 @@ func (m *MockSchemaInferrer) Infer(filename string, data interface{}) *inference
 
 	// Default assignment for unknown files
 	return &inference.InferenceResult{
-		Schema:     "unknown.#CatchAll",
+		Schema:     "core.#CatchAll",
 		Confidence: 0.5,
 		Reason:     "No specific pattern matched, using default schema",
 	}

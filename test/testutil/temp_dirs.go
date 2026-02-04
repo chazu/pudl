@@ -114,9 +114,9 @@ source: kind: "self"
 `
 	s.WriteFileInSubDir("schema/cue.mod", "module.cue", moduleContent)
 
-	// Create unknown package with catchall schema
-	s.CreateSubDir("schema/pudl/unknown")
-	catchallContent := `package unknown
+	// Create core package with catchall schema
+	s.CreateSubDir("schema/pudl/core")
+	coreContent := `package core
 
 #CatchAll: {
 	_pudl: {
@@ -130,7 +130,7 @@ source: kind: "self"
 	...
 }
 `
-	s.WriteFileInSubDir("schema/pudl/unknown", "catchall.cue", catchallContent)
+	s.WriteFileInSubDir("schema/pudl/core", "core.cue", coreContent)
 
 	return workspace
 }

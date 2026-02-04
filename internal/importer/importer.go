@@ -623,7 +623,7 @@ func (i *Importer) importNDJSONCollection(opts ImportOptions, timestamp time.Tim
 // createCollectionEntry creates the main collection catalog entry
 func (i *Importer) createCollectionEntry(opts ImportOptions, timestamp time.Time, timestampStr, origin, filename, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
 	// Assign schema for collection - try collection-specific schemas first
-	schema := "pudl.schemas/collections/collections:#Collection"
+	schema := "pudl.schemas/pudl/core:#Collection"
 	confidence := 0.8
 
 	// All collections use the generic collection schema now
@@ -827,7 +827,7 @@ func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (s
 	})
 	if err != nil {
 		// Fall back to collection item schema on error
-		return "pudl.schemas/pudl/collections:#CollectionItem", 0.5
+		return "pudl.schemas/pudl/core:#CollectionItem", 0.5
 	}
 
 	return result.Schema, result.Confidence

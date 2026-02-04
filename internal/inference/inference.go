@@ -64,7 +64,7 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 
 	if len(si.schemas) == 0 {
 		return &InferenceResult{
-			Schema:     "unknown.#CatchAll",
+			Schema:     "core.#CatchAll",
 			Confidence: 0.1,
 			Reason:     "no schemas loaded",
 		}, nil
@@ -246,19 +246,18 @@ func calculateConfidence(heuristicScore float64, matchPosition, totalCandidates 
 
 // isCatchallSchema checks if a schema name represents a catchall schema.
 func isCatchallSchema(schemaName string) bool {
-	return schemaName == "unknown.#CatchAll" ||
-		schemaName == "pudl.schemas/unknown:#CatchAll" ||
-		schemaName == "pudl/unknown.#CatchAll"
+	return schemaName == "core.#CatchAll" ||
+		schemaName == "pudl.schemas/pudl/core:#CatchAll" ||
+		schemaName == "pudl/core.#CatchAll"
 }
 
 // findCatchallSchema finds the catchall schema name from available schemas.
 func findCatchallSchema(schemas map[string]cue.Value) string {
 	// Try common catchall names
 	catchallNames := []string{
-		"unknown.#CatchAll",
-		"pudl.schemas/unknown:#CatchAll",
-		"pudl/unknown.#CatchAll",
-		"pudl.schemas/pudl/unknown:#CatchAll",
+		"core.#CatchAll",
+		"pudl.schemas/pudl/core:#CatchAll",
+		"pudl/core.#CatchAll",
 	}
 
 	for _, name := range catchallNames {
@@ -275,7 +274,7 @@ func findCatchallSchema(schemas map[string]cue.Value) string {
 	}
 
 	// Default fallback
-	return "unknown.#CatchAll"
+	return "core.#CatchAll"
 }
 
 // containsCatchAll checks if a schema name contains "CatchAll".
@@ -288,12 +287,11 @@ func containsCatchAll(name string) bool {
 // For collections, it returns a collection-appropriate schema instead of the item catchall.
 func findFallbackSchema(schemas map[string]cue.Value, metadata map[string]validator.SchemaMetadata, collectionType string) string {
 	if collectionType == "collection" {
-		// For collections, try to find a collection-type fallback (known list-type schemas)
+		// For collections, try to find a collection-type fallback
 		collectionFallbacks := []string{
-			"pudl.schemas/pudl/collections:#CatchAllCollection",
-			"pudl.schemas/collections/collections:#CatchAllCollection",
-			"pudl.schemas/pudl/collections:#Collection",
-			"pudl.schemas/collections/collections:#Collection",
+			"pudl.schemas/pudl/core:#Collection",
+			"core.#Collection",
+			"pudl/core.#Collection",
 		}
 
 		for _, name := range collectionFallbacks {

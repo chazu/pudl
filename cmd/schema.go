@@ -574,7 +574,7 @@ Examples:
     pudl schema review --only-unknown
 
     # Review specific schema assignments
-    pudl schema review --schema unknown.#CatchAll
+    pudl schema review --schema core.#CatchAll
 
     # Review items from specific origin
     pudl schema review --origin aws-ec2
@@ -652,7 +652,7 @@ The schema name can be specified in formats like:
 
 Examples:
     pudl schema show aws/ec2.#Instance
-    pudl schema show pudl/unknown.#CatchAll
+    pudl schema show pudl/core.#CatchAll
     pudl s show aws/ec2:#Instance`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeSchemaNames,
@@ -677,7 +677,7 @@ if a better match is found.
 
 Examples:
     # Re-infer all entries currently assigned to unknown schema
-    pudl schema reinfer --schema unknown.#CatchAll
+    pudl schema reinfer --schema core.#CatchAll
 
     # Re-infer a specific entry
     pudl schema reinfer --entry babod-fakak

@@ -172,7 +172,7 @@ func (s *DatabaseTestSuite) SeedTestData() error {
 		s.generateAWSEntry("aws-s3-001", "aws.#S3Bucket"),
 		s.generateK8sEntry("k8s-pod-001", "k8s.#Pod"),
 		s.generateK8sEntry("k8s-svc-001", "k8s.#Service"),
-		s.generateGenericEntry("generic-001", "unknown.#CatchAll"),
+		s.generateGenericEntry("generic-001", "core.#CatchAll"),
 	}
 	
 	for _, entry := range entries {

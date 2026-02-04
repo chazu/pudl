@@ -31,8 +31,8 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 		}
 
 		// Convert embedded path to target path
-		// Embedded path: bootstrap/pudl/unknown/catchall.cue
-		// We want: <schemaPath>/pudl/unknown/catchall.cue
+		// Embedded path: bootstrap/pudl/core/core.cue
+		// We want: <schemaPath>/pudl/core/core.cue
 		relPath := path[len("bootstrap/"):] // Remove "bootstrap/" prefix
 
 		targetPath := filepath.Join(schemaPath, relPath)
@@ -67,10 +67,10 @@ func (i *Importer) ensureBasicSchemas() error {
 		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
 	}
 
-	// Check if catchall schema exists
-	catchallPath := filepath.Join(i.schemaPath, "pudl", "unknown", "catchall.cue")
-	if _, err := os.Stat(catchallPath); os.IsNotExist(err) {
-		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", catchallPath)
+	// Check if core schema exists
+	corePath := filepath.Join(i.schemaPath, "pudl", "core", "core.cue")
+	if _, err := os.Stat(corePath); os.IsNotExist(err) {
+		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", corePath)
 	}
 	return nil
 }
