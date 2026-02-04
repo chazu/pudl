@@ -1,7 +1,7 @@
 # Makefile for pudl
 
 BINARY_NAME := pudl
-INSTALL_PATH := /usr/local/bin
+INSTALL_PATH := $(HOME)/.local/bin
 
 # Build flags
 GO := go
@@ -16,6 +16,7 @@ build:
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BINARY_NAME) .
 
 install: build
+	@mkdir -p $(INSTALL_PATH)
 	install -m 755 $(BINARY_NAME) $(INSTALL_PATH)/$(BINARY_NAME)
 
 uninstall:
