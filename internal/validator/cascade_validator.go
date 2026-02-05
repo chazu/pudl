@@ -58,14 +58,43 @@ func NewCascadeValidator(schemaPath string) (*CascadeValidator, error) {
 
 
 
-	return &CascadeValidator{
+	cv := &CascadeValidator{
 		ctx:        ctx,
 		loader:     loader,
 		modules:    modules,
 		schemas:    schemas,
 		metadata:   metadata,
 		schemaPath: schemaPath,
-	}, nil
+	}
+
+	return cv, nil
+}
+
+// findFallbackSchemaName finds the actual schema name for the Item/catchall schema
+// from the loaded schemas map. Schema names include version suffixes (e.g., @v0).
+func (cv *CascadeValidator) findFallbackSchemaName() string {
+	// Try common fallback names in priority order
+	fallbackPatterns := []string{
+		"pudl.schemas/pudl/core@v0:#Item",
+		"pudl.schemas/pudl/core:#Item",
+		"core.#Item",
+	}
+
+	for _, pattern := range fallbackPatterns {
+		if _, exists := cv.schemas[pattern]; exists {
+			return pattern
+		}
+	}
+
+	// Search for any schema ending with "core" and "#Item"
+	for name := range cv.schemas {
+		if strings.Contains(name, "core") && strings.HasSuffix(name, "#Item") {
+			return name
+		}
+	}
+
+	// Fallback to a non-existent name (will be caught as "Schema not found")
+	return "core.#Item"
 }
 
 // ValidateWithCascade performs cascading validation against multiple schemas
@@ -75,21 +104,16 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 	// Get cascade chain for intended schema
 	cascadeChain := cv.getCascadeChain(intendedSchema)
 	
-	// Convert data to CUE value using JSON encoding to handle type conversions properly
-	var dataValue cue.Value
-
-	// If data is already a map[string]interface{} from JSON parsing, re-encode it as JSON
-	// and let CUE parse it to handle number types correctly
-	if dataMap, ok := data.(map[string]interface{}); ok {
-		jsonBytes, err := json.Marshal(dataMap)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal data to JSON: %w", err)
-		}
-		dataValue = cv.ctx.CompileBytes(jsonBytes)
-	} else {
-		// For other data types, use direct encoding
-		dataValue = cv.ctx.Encode(data)
+	// Convert data to CUE value using JSON encoding to handle type conversions properly.
+	// We always use json.Marshal + CompileBytes to ensure proper type handling:
+	// - JSON numbers become CUE int/float based on their actual value (not Go's float64)
+	// - This is critical for arrays/slices where ctx.Encode() would preserve Go's float64
+	//   for all numbers, causing int fields to fail validation
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal data to JSON: %w", err)
 	}
+	dataValue := cv.ctx.CompileBytes(jsonBytes)
 
 	if dataValue.Err() != nil {
 		return nil, fmt.Errorf("failed to encode data: %w", dataValue.Err())
@@ -123,17 +147,20 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 	}
 	
 	// Should never reach here due to catchall, but handle gracefully
-	result.SetFinalAssignment("core.#Item", "catchall", "All validations failed")
-	
+	fallbackSchema := cv.findFallbackSchemaName()
+	result.SetFinalAssignment(fallbackSchema, "catchall", "All validations failed")
+
 	return result, nil
 }
 
 // getCascadeChain builds the cascade chain for a given schema
 func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
+	fallbackSchema := cv.findFallbackSchemaName()
+
 	meta, exists := cv.metadata[intendedSchema]
 	if !exists {
 		// Default cascade chain for unknown schemas
-		return []string{intendedSchema, "core.#Item"}
+		return []string{intendedSchema, fallbackSchema}
 	}
 
 	if len(meta.CascadeFallback) > 0 {
@@ -164,8 +191,8 @@ func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
 	}
 
 	// Always end with catchall
-	if !contains(chain, "core.#Item") {
-		chain = append(chain, "core.#Item")
+	if !contains(chain, fallbackSchema) {
+		chain = append(chain, fallbackSchema)
 	}
 
 	return chain
@@ -187,11 +214,12 @@ func (cv *CascadeValidator) determineFallbackReason(position int, intendedSchema
 	if position == 0 {
 		return "" // No fallback occurred
 	}
-	
-	if assignedSchema == "core.#Item" {
+
+	// Check if assigned to a fallback schema (Item/catchall)
+	if strings.Contains(assignedSchema, "#Item") {
 		return "Failed all specific schema validations"
 	}
-	
+
 	return fmt.Sprintf("Failed validation against %s", intendedSchema)
 }
 
