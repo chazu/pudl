@@ -9,6 +9,8 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+
+	"pudl/internal/schemaname"
 )
 
 // CascadeValidator handles cascading schema validation with full CUE module support
@@ -71,36 +73,33 @@ func NewCascadeValidator(schemaPath string) (*CascadeValidator, error) {
 }
 
 // findFallbackSchemaName finds the actual schema name for the Item/catchall schema
-// from the loaded schemas map. Schema names include version suffixes (e.g., @v0).
+// from the loaded schemas map. Returns canonical format (e.g., "pudl/core.#Item").
 func (cv *CascadeValidator) findFallbackSchemaName() string {
-	// Try common fallback names in priority order
-	fallbackPatterns := []string{
-		"pudl.schemas/pudl/core@v0:#Item",
-		"pudl.schemas/pudl/core:#Item",
-		"core.#Item",
+	// Canonical fallback schema name
+	const fallbackCanonical = "pudl/core.#Item"
+
+	// Check if the canonical name exists
+	if _, exists := cv.schemas[fallbackCanonical]; exists {
+		return fallbackCanonical
 	}
 
-	for _, pattern := range fallbackPatterns {
-		if _, exists := cv.schemas[pattern]; exists {
-			return pattern
-		}
-	}
-
-	// Search for any schema ending with "core" and "#Item"
+	// Search for any schema that normalizes to the fallback
 	for name := range cv.schemas {
-		if strings.Contains(name, "core") && strings.HasSuffix(name, "#Item") {
+		if schemaname.IsFallbackSchema(name) && strings.HasSuffix(name, "#Item") {
 			return name
 		}
 	}
 
-	// Fallback to a non-existent name (will be caught as "Schema not found")
-	return "core.#Item"
+	// Return canonical format (will be caught as "Schema not found" if missing)
+	return fallbackCanonical
 }
 
 // ValidateWithCascade performs cascading validation against multiple schemas
 func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema string) (*ValidationResult, error) {
+	// Normalize the intended schema to canonical format
+	intendedSchema = schemaname.Normalize(intendedSchema)
 	result := NewValidationResult(intendedSchema)
-	
+
 	// Get cascade chain for intended schema
 	cascadeChain := cv.getCascadeChain(intendedSchema)
 	
@@ -216,7 +215,7 @@ func (cv *CascadeValidator) determineFallbackReason(position int, intendedSchema
 	}
 
 	// Check if assigned to a fallback schema (Item/catchall)
-	if strings.Contains(assignedSchema, "#Item") {
+	if schemaname.IsFallbackSchema(assignedSchema) {
 		return "Failed all specific schema validations"
 	}
 

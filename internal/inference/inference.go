@@ -7,6 +7,7 @@ import (
 
 	"cuelang.org/go/cue"
 
+	"pudl/internal/schemaname"
 	"pudl/internal/validator"
 )
 
@@ -245,67 +246,41 @@ func calculateConfidence(heuristicScore float64, matchPosition, totalCandidates 
 }
 
 // isCatchallSchema checks if a schema name represents a catchall/fallback schema.
-func isCatchallSchema(schemaName string) bool {
-	return schemaName == "core.#Item" ||
-		schemaName == "pudl.schemas/pudl/core:#Item" ||
-		schemaName == "pudl/core.#Item" ||
-		// Legacy names for backwards compatibility
-		schemaName == "core.#CatchAll" ||
-		schemaName == "pudl.schemas/pudl/core:#CatchAll" ||
-		schemaName == "pudl/core.#CatchAll"
+// Uses the schemaname package for normalization-aware comparison.
+func isCatchallSchema(name string) bool {
+	return schemaname.IsFallbackSchema(name)
 }
 
 // findCatchallSchema finds the catchall schema name from available schemas.
 func findCatchallSchema(schemas map[string]cue.Value) string {
-	// Try common catchall names (prefer #Item over legacy #CatchAll)
-	catchallNames := []string{
-		"core.#Item",
-		"pudl.schemas/pudl/core:#Item",
-		"pudl/core.#Item",
-		// Legacy names for backwards compatibility
-		"core.#CatchAll",
-		"pudl.schemas/pudl/core:#CatchAll",
-		"pudl/core.#CatchAll",
+	// Canonical fallback schema name
+	const fallbackCanonical = "pudl/core.#Item"
+
+	// Check if canonical name exists
+	if _, exists := schemas[fallbackCanonical]; exists {
+		return fallbackCanonical
 	}
 
-	for _, name := range catchallNames {
-		if _, exists := schemas[name]; exists {
-			return name
-		}
-	}
-
-	// Search for any schema with catchall-like name
+	// Search for any schema that is a fallback
 	for name := range schemas {
-		if isCatchallSchema(name) || containsCatchAll(name) {
+		if schemaname.IsFallbackSchema(name) {
 			return name
 		}
 	}
 
-	// Default fallback
-	return "core.#Item"
-}
-
-// containsCatchAll checks if a schema name contains "CatchAll".
-func containsCatchAll(name string) bool {
-	return len(name) >= 8 && (name[len(name)-8:] == "CatchAll" ||
-		(len(name) >= 9 && name[len(name)-9:] == "#CatchAll"))
+	// Default fallback (canonical format)
+	return fallbackCanonical
 }
 
 // findFallbackSchema finds an appropriate fallback schema based on collection type.
 // For collections, it returns a collection-appropriate schema instead of the item catchall.
 func findFallbackSchema(schemas map[string]cue.Value, metadata map[string]validator.SchemaMetadata, collectionType string) string {
 	if collectionType == "collection" {
-		// For collections, try to find a collection-type fallback
-		collectionFallbacks := []string{
-			"pudl.schemas/pudl/core:#Collection",
-			"core.#Collection",
-			"pudl/core.#Collection",
-		}
+		// Canonical collection fallback
+		const collectionFallback = "pudl/core.#Collection"
 
-		for _, name := range collectionFallbacks {
-			if _, exists := schemas[name]; exists {
-				return name
-			}
+		if _, exists := schemas[collectionFallback]; exists {
+			return collectionFallback
 		}
 
 		// Search for any list-type schema as fallback (using structural detection, not metadata)

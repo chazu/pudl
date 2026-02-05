@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"pudl/internal/schemaname"
 )
 
 // DatabaseTestSuite provides bulletproof database testing with guaranteed cleanup
@@ -363,7 +365,8 @@ func AssertDatabaseEntry(t *testing.T, expected, actual *CatalogEntry) {
 	assert.Equal(t, expected.MetadataPath, actual.MetadataPath, "Metadata path should match")
 	assert.Equal(t, expected.Format, actual.Format, "Format should match")
 	assert.Equal(t, expected.Origin, actual.Origin, "Origin should match")
-	assert.Equal(t, expected.Schema, actual.Schema, "Schema should match")
+	assert.True(t, schemaname.IsEquivalent(expected.Schema, actual.Schema),
+		"Schema should match (expected: %s, actual: %s)", expected.Schema, actual.Schema)
 	assert.Equal(t, expected.RecordCount, actual.RecordCount, "Record count should match")
 	assert.Equal(t, expected.SizeBytes, actual.SizeBytes, "Size bytes should match")
 

@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"pudl/internal/errors"
 	"pudl/internal/idgen"
+	"pudl/internal/schemaname"
 )
 
 // CatalogDB handles SQLite database operations for the catalog
@@ -127,7 +128,7 @@ func (c *CatalogDB) createTables() error {
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);`
-	
+
 	if _, err := c.db.Exec(createTableSQL); err != nil {
 		return fmt.Errorf("failed to create catalog_entries table: %w", err)
 	}
@@ -145,7 +146,7 @@ func (c *CatalogDB) createTables() error {
 			return fmt.Errorf("failed to create index: %w", err)
 		}
 	}
-	
+
 	// Create indexes for common query patterns
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_catalog_schema ON catalog_entries(schema);",
@@ -157,13 +158,13 @@ func (c *CatalogDB) createTables() error {
 		"CREATE INDEX IF NOT EXISTS idx_catalog_confidence ON catalog_entries(confidence);",
 		"CREATE INDEX IF NOT EXISTS idx_catalog_created_at ON catalog_entries(created_at);",
 	}
-	
+
 	for _, indexSQL := range indexes {
 		if _, err := c.db.Exec(indexSQL); err != nil {
 			return fmt.Errorf("failed to create index: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -177,6 +178,9 @@ func (c *CatalogDB) Close() error {
 
 // AddEntry adds a new entry to the catalog
 func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
+	// Normalize schema name to canonical format before storing
+	entry.Schema = schemaname.Normalize(entry.Schema)
+
 	insertSQL := `
 	INSERT INTO catalog_entries (
 		id, stored_path, metadata_path, import_timestamp, format, origin,
@@ -193,7 +197,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
 		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
 		entry.CollectionType, entry.ItemID, entry.CreatedAt, entry.UpdatedAt)
-	
+
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
 	}
@@ -226,7 +230,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.CreatedAt, &entry.UpdatedAt)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
 	}
@@ -299,7 +303,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	// Build WHERE clause
 	var whereConditions []string
 	var args []interface{}
-	
+
 	if filters.Schema != "" {
 		whereConditions = append(whereConditions, "schema LIKE ?")
 		args = append(args, "%"+filters.Schema+"%")
@@ -324,19 +328,19 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 		whereConditions = append(whereConditions, "item_id = ?")
 		args = append(args, filters.ItemID)
 	}
-	
+
 	whereClause := ""
 	if len(whereConditions) > 0 {
 		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
 	}
-	
+
 	// Get total count (without filters)
 	var totalCount int
 	err := c.db.QueryRow("SELECT COUNT(*) FROM catalog_entries").Scan(&totalCount)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get total count", err)
 	}
-	
+
 	// Get filtered count
 	var filteredCount int
 	countSQL := "SELECT COUNT(*) FROM catalog_entries " + whereClause
@@ -344,7 +348,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get filtered count", err)
 	}
-	
+
 	// Build ORDER BY clause
 	orderBy := "import_timestamp DESC" // Default sort
 	if options.SortBy != "" {
@@ -357,7 +361,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 			"format":    "format",
 			"confidence": "confidence",
 		}
-		
+
 		if dbField, valid := validSortFields[options.SortBy]; valid {
 			direction := "ASC"
 			if options.Reverse {
@@ -366,7 +370,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 			orderBy = fmt.Sprintf("%s %s", dbField, direction)
 		}
 	}
-	
+
 	// Build main query with LIMIT and OFFSET
 	selectSQL := fmt.Sprintf(`
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
@@ -375,21 +379,21 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	FROM catalog_entries
 	%s
 	ORDER BY %s`, whereClause, orderBy)
-	
+
 	if options.Limit > 0 {
 		selectSQL += fmt.Sprintf(" LIMIT %d", options.Limit)
 	}
 	if options.Offset > 0 {
 		selectSQL += fmt.Sprintf(" OFFSET %d", options.Offset)
 	}
-	
+
 	// Execute query
 	rows, err := c.db.Query(selectSQL, args...)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
 	}
 	defer rows.Close()
-	
+
 	// Scan results
 	var entries []CatalogEntry
 	for rows.Next() {
@@ -404,11 +408,11 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 		}
 		entries = append(entries, entry)
 	}
-	
+
 	if err = rows.Err(); err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating catalog entries", err)
 	}
-	
+
 	return &QueryResult{
 		Entries:       entries,
 		TotalCount:    totalCount,
@@ -544,6 +548,9 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 
 // UpdateEntry updates an existing catalog entry
 func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
+	// Normalize schema name to canonical format before storing
+	entry.Schema = schemaname.Normalize(entry.Schema)
+
 	updateSQL := `
 	UPDATE catalog_entries SET
 		stored_path = ?, metadata_path = ?, import_timestamp = ?, format = ?,
@@ -593,4 +600,50 @@ func (c *CatalogDB) DeleteEntry(id string) error {
 	}
 
 	return nil
+}
+
+
+// MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
+// Returns the number of entries updated.
+func (c *CatalogDB) MigrateSchemaNames() (int, error) {
+	// Get all entries with their current schema names
+	rows, err := c.db.Query("SELECT id, schema FROM catalog_entries")
+	if err != nil {
+		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
+	}
+	defer rows.Close()
+
+	// Collect entries that need updating
+	type update struct {
+		id        string
+		newSchema string
+	}
+	var updates []update
+
+	for rows.Next() {
+		var id, schema string
+		if err := rows.Scan(&id, &schema); err != nil {
+			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan row", err)
+		}
+
+		normalized := schemaname.Normalize(schema)
+		if normalized != schema {
+			updates = append(updates, update{id: id, newSchema: normalized})
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating rows", err)
+	}
+
+	// Update entries that need normalization
+	for _, u := range updates {
+		_, err := c.db.Exec("UPDATE catalog_entries SET schema = ?, updated_at = ? WHERE id = ?",
+			u.newSchema, time.Now(), u.id)
+		if err != nil {
+			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update entry schema", err)
+		}
+	}
+
+	return len(updates), nil
 }
