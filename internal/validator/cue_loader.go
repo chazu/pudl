@@ -8,6 +8,8 @@ import (
 	"cuelang.org/go/cue/build"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
+
+	"pudl/internal/schemaname"
 )
 
 // CUEModuleLoader handles loading CUE modules with proper cross-reference support
@@ -116,7 +118,7 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 	schemas := make(map[string]cue.Value)
 	metadata := make(map[string]SchemaMetadata)
 
-	// Convert import path to module name (e.g., "pudl.schemas/aws/ec2" -> "aws/ec2")
+	// Convert import path to module name (e.g., "pudl.schemas/aws/ec2@v0" -> "aws/ec2")
 	moduleName := strings.TrimPrefix(inst.ImportPath, "pudl.schemas/")
 	if moduleName == inst.ImportPath {
 		// Fallback to package name if not using module structure
@@ -136,9 +138,10 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 		}
 
 		schemaValue := iter.Value()
-		// Use module-aware schema naming: "pudl.schemas/aws/ec2:#Instance"
-		schemaName := fmt.Sprintf("pudl.schemas/%s:%s", moduleName, label)
-		schemas[schemaName] = schemaValue
+		// Use canonical schema naming: "aws/ec2.#Instance"
+		// The schemaname.Format function strips version suffixes like @v0
+		canonicalName := schemaname.Format(moduleName, label)
+		schemas[canonicalName] = schemaValue
 
 		// Detect if schema is structurally a list type using CUE's IncompleteKind.
 		// This allows us to identify collection schemas like `#CatchAllCollection: [...]`
@@ -161,7 +164,7 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 
 		// Set the IsListType field based on structural detection
 		meta.IsListType = isListType
-		metadata[schemaName] = meta
+		metadata[canonicalName] = meta
 	}
 
 	return &LoadedModule{

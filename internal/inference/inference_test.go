@@ -92,29 +92,8 @@ func TestIsCatchallSchema(t *testing.T) {
 	}
 }
 
-func TestContainsCatchAll(t *testing.T) {
-	tests := []struct {
-		name     string
-		expected bool
-	}{
-		{"core.#CatchAll", true},
-		{"foo.#CatchAll", true},
-		{"CatchAll", true},
-		{"#CatchAll", true},
-		{"aws.#EC2Instance", false},
-		{"Catch", false},
-		{"", false},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			result := containsCatchAll(tc.name)
-			if result != tc.expected {
-				t.Errorf("containsCatchAll(%q) = %v, want %v", tc.name, result, tc.expected)
-			}
-		})
-	}
-}
+// TestContainsCatchAll was removed as the containsCatchAll function
+// was replaced with schemaname.IsFallbackSchema() during schema name normalization.
 
 // TestNewSchemaInferrer tests the inferrer creation with a temporary schema directory.
 func TestNewSchemaInferrer(t *testing.T) {
