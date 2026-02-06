@@ -38,6 +38,7 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 - `pudl schema commit` - Commit schema changes
 - `pudl schema log` - Show schema commit history
 - `pudl doctor` - Health check utility
+- `pudl migrate identity` - Backfill resource identity tracking for existing entries
 
 ### Schema Infrastructure
 - `internal/importer/bootstrap/` - Embedded bootstrap CUE schemas
@@ -80,18 +81,30 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 - [x] Fixed root command description (removed stale Lisp reference)
 - [x] Updated `docs/VISION.md` to separate existing features from aspirational
 
+### 2026-02-06 Resource Identity Tracking
+- [x] Created `internal/identity/` package — field extraction + resource ID computation
+- [x] Database schema evolution — new columns, migrations, identity query methods
+- [x] Import flow integration — content hash dedup, identity extraction, versioning
+- [x] Reinfer integration — recompute identity when schema changes
+- [x] Lister and CLI updates — version display, identity fields in verbose mode
+- [x] Backfill command — `pudl migrate identity` for pre-existing entries
+- [x] Unit + integration tests (30 new tests)
+
 ### Design Decisions Made
 - **No Lisp/Zygomys rules** - Schema inference uses CUE-based detection, not a Lisp rules engine
 - **No interactive review TUI** - Review workflow removed; `pudl schema reinfer` handles batch re-inference
 - **Schema inference via CUE** - Heuristics + CUE unification for automatic schema detection
 - **Schema name normalization** - Canonical `<package>.<#Definition>` format
+- **Resource identity** - Stable `resource_id` from schema + identity fields; catchall uses content hash
+- **Content hash dedup** - Universal dedup gate: if hash matches, skip regardless of schema
+- **Collections are provenance** - Resources own identity independent of collection
 
 ## Future Development
 
 ### Phase 1: Analytical Layer (Next Priority)
-The single most impactful work is building features that turn PUDL from "a place data goes" into "a tool that tells me things."
+The single most impactful work is building features that turn PUDL from "a place data goes" into "a tool that tells me things." Resource identity tracking is now in place as the prerequisite.
 
-1. **`pudl diff`** - Compare two imports of the same resource type, show what changed
+1. **`pudl diff`** - Compare two versions of the same resource (resource_id + version)
 2. **`pudl summary`/`pudl stats`** - Aggregate views ("47 EC2 instances, 3 outliers")
 3. **Basic outlier detection** - Given N instances of a schema, identify unusual field values
 
@@ -102,8 +115,8 @@ The single most impactful work is building features that turn PUDL from "a place
 
 ### Phase 3: Correlation & Cross-Source
 1. **Cross-source correlation** - Link AWS resources to K8s resources
-2. **Temporal tracking** - Same resource across multiple imports
-3. **Resource identity** - Determine what constitutes a "change" vs "different resource"
+2. **Temporal tracking** - Same resource across multiple imports (enabled by resource_id + version)
+3. ~~**Resource identity**~~ - ✅ Implemented in identity tracking
 
 ### Phase 4: Advanced Analytics
 1. **DuckDB/Parquet integration** - Analytical query engine for large datasets
@@ -122,6 +135,7 @@ These items were identified in the project review but not yet addressed:
 ## Core Packages
 
 - `internal/importer/` - Data import logic
+- `internal/identity/` - Resource identity extraction and computation
 - `internal/schema/` - Schema loading and management
 - `internal/validator/` - CUE validation, cascade validation, validation service
 - `internal/inference/` - Schema inference engine

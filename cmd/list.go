@@ -267,10 +267,15 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		}
 	}
 
-	// Display proquint as the primary ID (no timestamp)
-	fmt.Printf("%d. %s [%s]%s\n",
+	// Display proquint as the primary ID with version info
+	versionStr := ""
+	if entry.Version != nil && *entry.Version > 0 {
+		versionStr = fmt.Sprintf(" v%d", *entry.Version)
+	}
+	fmt.Printf("%d. %s%s [%s]%s\n",
 		index,
 		entry.Proquint,
+		versionStr,
 		entry.Schema,
 		collectionIndicator)
 
@@ -304,6 +309,17 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		fmt.Printf("   Timestamp: %s\n", entry.ImportTimestamp)
 		if entry.Confidence < 0.8 {
 			fmt.Printf("   ⚠️  Low schema confidence (%.2f)\n", entry.Confidence)
+		}
+
+		// Show identity tracking details
+		if entry.ResourceID != nil {
+			fmt.Printf("   Resource ID: %s\n", *entry.ResourceID)
+		}
+		if entry.ContentHash != nil {
+			fmt.Printf("   Content Hash: %s\n", *entry.ContentHash)
+		}
+		if entry.Version != nil {
+			fmt.Printf("   Version: %d\n", *entry.Version)
 		}
 
 		// Show collection details
