@@ -7,59 +7,45 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 ## Current State
 
 ### Core Functionality (Implemented)
-- **Data Import** - Supports JSON, YAML, CSV, and NDJSON with format detection
-- **Streaming Support** - Process large files using Content-Defined Chunking (CDC)
-- **SQLite Catalog** - High-performance catalog database
-- **CUE Schema Management** - Schema loading, validation, and git version control
+- **Data Import** - JSON, YAML, CSV, NDJSON with automatic format detection
+- **Collection Support** - Collections split into individual items with parent references
+- **SQLite Catalog** - Query, filter, pagination, and provenance tracking
+- **CUE Schema Management** - Loading, validation, git version control, schema lifecycle
+- **CUE-based Schema Inference** - Automatic detection using heuristics + CUE unification
+- **Cascade Validation** - Multi-level schema matching (specific -> fallback -> catchall)
+- **Schema Generation** - `pudl schema new` generates CUE schemas from imported data
+- **Schema Name Normalization** - Canonical format for consistent schema references
 - **Bootstrap Schemas** - Base schemas (catchall, collections) embedded and copied on init
-- **User Repository** - Data lake at `~/.pudl/` with schema/, data/, config.yaml
+- **Export** - Multi-format output support
+- **Delete** - Remove catalog entries
+- **Doctor** - Health check utility
+
+### CLI Commands
+- `pudl init` - Initialize the data lake
+- `pudl import` - Import data files
+- `pudl list` - Query and filter catalog entries
+- `pudl export` - Export data in various formats
+- `pudl delete` - Remove catalog entries
+- `pudl validate` - Validate data against schemas
+- `pudl schema list` - List available schemas by package
+- `pudl schema add` - Add a new schema file
+- `pudl schema new` - Generate schema from imported data
+- `pudl schema show` - Display schema contents
+- `pudl schema edit` - Open schema in editor
+- `pudl schema reinfer` - Re-run schema inference on existing entries
+- `pudl schema migrate` - Migrate schema names to canonical format
+- `pudl schema status` - Show uncommitted schema changes
+- `pudl schema commit` - Commit schema changes
+- `pudl schema log` - Show schema commit history
+- `pudl doctor` - Health check utility
 
 ### Schema Infrastructure
 - `internal/importer/bootstrap/` - Embedded bootstrap CUE schemas
 - `internal/schema/manager.go` - Schema loading and management
-- `internal/validator/` - CUE validation and cascade validation
-- `internal/streaming/cue_integration.go` - CUE-based schema detection (framework)
-
-### What Works
-- `pudl init` - Initializes user repository with CUE module and bootstrap schemas
-- `pudl import` - Imports data files to the data lake
-- `pudl schema list` - Lists available schemas
-- `pudl validate` - Validates data against schemas
-- Format detection (JSON, YAML, CSV, NDJSON)
-- Basic schema inference framework
-
-## Technical Debt Addressed (2026-01-29 Cleanup)
-
-### Completed
-- [x] Removed `internal/importer/cue.mod/` - Was incorrectly creating CUE module in project repo
-- [x] Removed `internal/importer/pudl/` - Duplicate of bootstrap/pudl directory
-- [x] Consolidated CUE module creation - Removed duplicate `createCUEModule()` from cue_schemas.go
-- [x] Simplified `detectOrigin()` - Removed hardcoded AWS/K8s pattern matching, now uses filename only
-- [x] Updated tests to reflect simplified detection
-
-### Design Decisions Made
-- **No rules package** - The previously planned `internal/rules/` with zygomys Lisp support is not being implemented
-- **Schema inference strategy TBD** - Strategic decisions about CUE-based schema inference deferred for later
-- **Origin detection simplified** - Origin is now just filename; schema matching should be handled by CUE patterns
-
-## Future Development (Prioritized)
-
-### High Priority
-1. **Complete CUE-based schema detection** - The `internal/streaming/cue_integration.go` has placeholder code that needs implementation
-2. **Improve error messages** - Better user-facing error messages for common issues
-3. **Schema review workflow** - Complete the TUI-based schema review flow
-
-### Medium Priority
-1. **Schema pattern extraction** - Extract detection patterns from CUE schema `_pudl` metadata
-2. **User-defined schemas** - Support custom schemas in user's `~/.pudl/schema/`
-3. **Collection support** - Improve NDJSON/collection handling
-
-### Low Priority
-1. **Hot-reloading** - Reload schemas without restart
-2. **Schema debugging tools** - Tools to help develop and test schemas
-3. **Pattern conflict detection** - Detect conflicting schema patterns
-
-## Architecture Notes
+- `internal/validator/` - CUE validation, cascade validation, and validation service
+- `internal/inference/` - CUE-based schema inference with heuristics
+- `internal/schemaname/` - Schema name normalization
+- `internal/schemagen/` - Schema generation from data
 
 ### User Repository (`~/.pudl/`)
 ```
@@ -68,38 +54,86 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 ├── data/                  # Imported data files
 ├── schema/
 │   ├── cue.mod/
-│   │   └── module.cue    # CUE module with k8s deps
+│   │   └── module.cue    # CUE module
 │   ├── pudl/
-│   │   ├── unknown/
-│   │   │   └── catchall.cue
-│   │   └── collections/
-│   │       └── collections.cue
-│   └── examples/         # Usage examples
+│   │   ├── core/         # Core schemas (catchall)
+│   │   ├── collections/  # Collection schemas
+│   │   └── ...           # User-created schema packages
+│   └── ...
 └── catalog.db            # SQLite catalog
 ```
 
-### Bootstrap Flow
-1. `pudl init` calls `internal/init/initCUEModule()` to create `cue.mod/module.cue`
-2. `pudl init` calls `importer.CopyBootstrapSchemas()` to copy embedded schemas
-3. `cue mod tidy` is run to fetch k8s dependencies (if cue is available)
+## Completed Work
 
-### Import Flow
-1. `ensureBasicSchemas()` verifies schema repo is initialized (errors if not)
-2. `detectFormat()` determines file format
-3. `detectOrigin()` returns filename without extension
-4. Schema inference assigns appropriate schema (currently simplified)
-5. Data stored in catalog with metadata
+### 2026-01-29 Cleanup
+- [x] Removed `internal/importer/cue.mod/` - Was incorrectly creating CUE module in project repo
+- [x] Removed `internal/importer/pudl/` - Duplicate of bootstrap/pudl directory
+- [x] Consolidated CUE module creation
+- [x] Simplified `detectOrigin()` - Uses filename only; schema matching handled by CUE
+- [x] Updated tests to reflect simplified detection
 
-## Files Reference
+### 2026-02-06 Codebase Cleanup
+- [x] Removed `internal/review/` - Interactive review workflow removed (untested, unused)
+- [x] Moved `ValidationService` from `internal/review/` to `internal/validator/`
+- [x] Removed `cmd/git.go` - Redundant `pudl git cd` command
+- [x] Split `cmd/schema.go` (~1900 lines) into focused files (~9 files, each under 300 lines)
+- [x] Fixed root command description (removed stale Lisp reference)
+- [x] Updated `docs/VISION.md` to separate existing features from aspirational
 
-### Core Packages
+### Design Decisions Made
+- **No Lisp/Zygomys rules** - Schema inference uses CUE-based detection, not a Lisp rules engine
+- **No interactive review TUI** - Review workflow removed; `pudl schema reinfer` handles batch re-inference
+- **Schema inference via CUE** - Heuristics + CUE unification for automatic schema detection
+- **Schema name normalization** - Canonical `<package>.<#Definition>` format
+
+## Future Development
+
+### Phase 1: Analytical Layer (Next Priority)
+The single most impactful work is building features that turn PUDL from "a place data goes" into "a tool that tells me things."
+
+1. **`pudl diff`** - Compare two imports of the same resource type, show what changed
+2. **`pudl summary`/`pudl stats`** - Aggregate views ("47 EC2 instances, 3 outliers")
+3. **Basic outlier detection** - Given N instances of a schema, identify unusual field values
+
+### Phase 2: Schema Intelligence
+1. **Two-tier schema system** - Broad type recognition + policy compliance
+2. **Schema drift detection** - "This resource used to validate, now it doesn't"
+3. **Schema coverage reports** - "37% of data matches a specific schema, 63% is generic"
+
+### Phase 3: Correlation & Cross-Source
+1. **Cross-source correlation** - Link AWS resources to K8s resources
+2. **Temporal tracking** - Same resource across multiple imports
+3. **Resource identity** - Determine what constitutes a "change" vs "different resource"
+
+### Phase 4: Advanced Analytics
+1. **DuckDB/Parquet integration** - Analytical query engine for large datasets
+2. **Expert system components** - Automatic detection of common substructures
+3. **Dashboard/reporting interfaces** - Visual representation of infrastructure state
+
+## Remaining Cut Candidates
+
+These items were identified in the project review but not yet addressed:
+
+- `op/` + `internal/cue/processor.go` + `cmd/process.go` - CUE custom function processor (unrelated to core purpose)
+- `cmd/setup.go` - Shell integration (premature convenience optimization)
+- `cmd/module.go` - Thin wrapper around `cue mod` commands
+- `internal/streaming/` - CDC-based streaming parser (~4100 lines, speculative complexity)
+
+## Core Packages
+
 - `internal/importer/` - Data import logic
-- `internal/schema/` - Schema management
-- `internal/validator/` - CUE validation
-- `internal/streaming/` - Large file processing
-- `internal/init/` - Repository initialization
+- `internal/schema/` - Schema loading and management
+- `internal/validator/` - CUE validation, cascade validation, validation service
+- `internal/inference/` - Schema inference engine
+- `internal/schemaname/` - Schema name normalization
+- `internal/schemagen/` - Schema generation from data
 - `internal/database/` - SQLite catalog
-
-### Configuration
-- `internal/config/config.go` - Configuration loading
-- `cmd/*.go` - CLI commands
+- `internal/config/` - Configuration loading
+- `internal/init/` - Repository initialization
+- `internal/git/` - Git operations for schema repo
+- `internal/idgen/` - Proquint ID generation
+- `internal/errors/` - Error types
+- `internal/ui/` - Output formatting
+- `internal/doctor/` - Health checks
+- `internal/lister/` - List/query operations
+- `cmd/` - CLI command definitions

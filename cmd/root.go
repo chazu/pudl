@@ -33,19 +33,19 @@ func GetOutputWriter() *ui.OutputWriter {
 var rootCmd = &cobra.Command{
 	Use:   "pudl",
 	Short: "Personal Unified Data Lake - A tool for managing cloud infrastructure data",
-	Long: `PUDL is a CLI tool that helps those who work with cloud resources 
-amplify their ability to leverage data as part of their regular workflows. 
+	Long: `PUDL is a CLI tool that helps those who work with cloud resources
+amplify their ability to leverage data as part of their regular workflows.
 
-It manages the import, querying, processing and updating of a local 'data lake' 
-comprising data on remote resources such as AWS or GCP resources, Kubernetes 
+It manages the import, querying, and organization of a local 'data lake'
+comprising data on remote resources such as AWS or GCP resources, Kubernetes
 resources, logs, metrics, et cetera.
 
 Key features:
 - Schema management using CUE Lang
-- Automatic schema inference using embedded Lisp rules
-- Version-controlled schema repository
-- Data import from multiple sources and formats
-- Outlier detection and infrastructure sprawl reduction`,
+- Automatic CUE-based schema inference with cascade validation
+- Version-controlled schema repository with git integration
+- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
+- Schema generation from imported data`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },

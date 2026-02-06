@@ -12,7 +12,7 @@ import (
 	"pudl/internal/database"
 	"pudl/internal/errors"
 	"pudl/internal/idgen"
-	"pudl/internal/review"
+	"pudl/internal/validator"
 )
 
 var (
@@ -74,7 +74,7 @@ func runValidateCommand(cmd *cobra.Command, args []string) error {
 	defer catalogDB.Close()
 
 	// Create validation service
-	validationService, err := review.NewValidationService(cfg.SchemaPath)
+	validationService, err := validator.NewValidationService(cfg.SchemaPath)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize validation service", err)
 	}
@@ -87,7 +87,7 @@ func runValidateCommand(cmd *cobra.Command, args []string) error {
 }
 
 // validateSingleEntry validates a single catalog entry by proquint ID
-func validateSingleEntry(catalogDB *database.CatalogDB, vs *review.ValidationService, proquintID string) error {
+func validateSingleEntry(catalogDB *database.CatalogDB, vs *validator.ValidationService, proquintID string) error {
 	// Look up entry by proquint
 	entry, err := catalogDB.GetEntryByProquint(proquintID)
 	if err != nil {
@@ -130,7 +130,7 @@ func validateSingleEntry(catalogDB *database.CatalogDB, vs *review.ValidationSer
 }
 
 // validateAllEntries validates all entries in the catalog
-func validateAllEntries(catalogDB *database.CatalogDB, vs *review.ValidationService) error {
+func validateAllEntries(catalogDB *database.CatalogDB, vs *validator.ValidationService) error {
 	// Query all entries
 	queryResult, err := catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{
 		Limit:   0, // No limit
@@ -208,7 +208,7 @@ func validateAllEntries(catalogDB *database.CatalogDB, vs *review.ValidationServ
 	if invalidCount > 0 || errorCount > 0 {
 		return errors.NewInputError(
 			fmt.Sprintf("Validation failed: %d invalid, %d errors", invalidCount, errorCount),
-			"Run 'pudl schema review' to fix schema assignments")
+			"Run 'pudl schema reinfer --all' to update schema assignments")
 	}
 
 	fmt.Println()
@@ -219,7 +219,7 @@ func validateAllEntries(catalogDB *database.CatalogDB, vs *review.ValidationServ
 type invalidEntry struct {
 	Proquint string
 	Schema   string
-	Result   *review.ValidationResult
+	Result   *validator.ServiceValidationResult
 }
 
 // loadDataFromFile loads data from a stored file path
