@@ -13,6 +13,7 @@ import (
 	"pudl/internal/database"
 	"pudl/internal/errors"
 	"pudl/internal/idgen"
+	"pudl/internal/identity"
 	"pudl/internal/inference"
 )
 
@@ -165,7 +166,7 @@ func runSchemaReinferCommand() error {
 	}
 
 	// Apply changes
-	return applyReinferChanges(catalogDB, changes)
+	return applyReinferChanges(catalogDB, inferrer, changes)
 }
 
 // reinferSingleEntry re-infers schema for a single entry
@@ -228,13 +229,17 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 		}
 	}
 
-	// Update the entry directly
+	// Update the entry directly, recomputing identity with new schema
 	updatedEntry, err := catalogDB.GetEntry(entry.ID)
 	if err != nil {
 		return errors.NewSystemError("Failed to get catalog entry for update", err)
 	}
 	updatedEntry.Schema = result.Schema
 	updatedEntry.Confidence = result.Confidence
+
+	// Recompute identity with the new schema
+	recomputeEntryIdentity(updatedEntry, data, inferrer)
+
 	if err := catalogDB.UpdateEntry(*updatedEntry); err != nil {
 		return errors.NewSystemError("Failed to update catalog entry", err)
 	}
@@ -256,6 +261,7 @@ type reinferChange struct {
 	oldSchema  string
 	newSchema  string
 	confidence float64
+	data       interface{} // loaded data for identity recomputation
 }
 
 // analyzeReinferChanges analyzes what schema changes would occur
@@ -300,6 +306,7 @@ func analyzeReinferChanges(entries []database.CatalogEntry, catalogDB *database.
 				oldSchema:  entry.Schema,
 				newSchema:  result.Schema,
 				confidence: result.Confidence,
+				data:       data,
 			})
 		} else {
 			changes.unchanged = append(changes.unchanged, proquint)
@@ -333,7 +340,7 @@ func printReinferSummary(changes *reinferChanges) {
 }
 
 // applyReinferChanges applies the analyzed schema changes
-func applyReinferChanges(catalogDB *database.CatalogDB, changes *reinferChanges) error {
+func applyReinferChanges(catalogDB *database.CatalogDB, inferrer *inference.SchemaInferrer, changes *reinferChanges) error {
 	var successCount, failCount int
 	for _, change := range changes.updated {
 		entry, err := catalogDB.GetEntry(change.entryID)
@@ -344,6 +351,10 @@ func applyReinferChanges(catalogDB *database.CatalogDB, changes *reinferChanges)
 		}
 		entry.Schema = change.newSchema
 		entry.Confidence = change.confidence
+
+		// Recompute identity with the new schema
+		recomputeEntryIdentity(entry, change.data, inferrer)
+
 		if err := catalogDB.UpdateEntry(*entry); err != nil {
 			fmt.Printf("   ❌ %s: failed to update\n", change.proquint)
 			failCount++
@@ -360,6 +371,42 @@ func applyReinferChanges(catalogDB *database.CatalogDB, changes *reinferChanges)
 	}
 
 	return nil
+}
+
+// recomputeEntryIdentity recomputes resource_id and identity_json for an entry
+// using its current schema and loaded data. Version number stays the same
+// since reinfer is reclassification, not a new observation.
+func recomputeEntryIdentity(entry *database.CatalogEntry, data interface{}, inferrer *inference.SchemaInferrer) {
+	// Get identity fields from the new schema's metadata
+	var identityFields []string
+	if meta, found := inferrer.GetSchemaMetadata(entry.Schema); found {
+		identityFields = meta.IdentityFields
+	}
+
+	// Determine content hash — use existing or fall back to entry ID
+	contentHash := entry.ID
+	if entry.ContentHash != nil {
+		contentHash = *entry.ContentHash
+	}
+
+	// Extract identity values
+	identityValues, err := identity.ExtractFieldValues(data, identityFields)
+	if err != nil {
+		identityValues = nil
+	}
+
+	// Compute new resource_id
+	resourceID := identity.ComputeResourceID(entry.Schema, identityValues, contentHash)
+	entry.ResourceID = &resourceID
+
+	// Compute new identity_json
+	if identityValues != nil && len(identityValues) > 0 {
+		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
+			entry.IdentityJSON = &canonical
+		}
+	} else {
+		entry.IdentityJSON = nil
+	}
 }
 
 // loadReinferData loads data from a stored file path for re-inference

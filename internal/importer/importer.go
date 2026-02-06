@@ -51,6 +51,10 @@ type ImportResult struct {
 	ValidationResult *validator.ValidationResult `json:"validation_result,omitempty"`
 	Skipped          bool                        `json:"skipped,omitempty"`
 	SkipReason       string                      `json:"skip_reason,omitempty"`
+	ResourceID       string                      `json:"resource_id,omitempty"`
+	ContentHash      string                      `json:"content_hash,omitempty"`
+	Version          int                         `json:"version,omitempty"`
+	IsNewVersion     bool                        `json:"is_new_version,omitempty"`
 }
 
 // New creates a new Importer instance

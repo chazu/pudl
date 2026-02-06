@@ -46,8 +46,12 @@ type SchemaInfo struct {
 
 // ResourceTracking contains information for tracking resource changes
 type ResourceTracking struct {
-	IdentityFields []string `json:"identity_fields"`
-	TrackedFields  []string `json:"tracked_fields"`
+	IdentityFields []string               `json:"identity_fields"`
+	TrackedFields  []string               `json:"tracked_fields"`
+	ResourceID     string                 `json:"resource_id,omitempty"`
+	ContentHash    string                 `json:"content_hash,omitempty"`
+	IdentityValues map[string]interface{} `json:"identity_values,omitempty"`
+	Version        int                    `json:"version,omitempty"`
 }
 
 // CatalogEntry represents an entry in the data catalog

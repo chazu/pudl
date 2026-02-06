@@ -9,6 +9,7 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/idgen"
+	"pudl/internal/identity"
 	"pudl/internal/inference"
 )
 
@@ -68,17 +69,16 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	// Compute content-based ID (SHA256 hash)
-	mainID := idgen.ComputeContentID(fileData)
+	// Compute content-based ID (SHA256 hash) — this is both the entry ID and content_hash
+	contentHash := idgen.ComputeContentID(fileData)
+	mainID := contentHash
 
-	// Check if this content already exists in the catalog
-	exists, err := e.catalogDB.EntryExists(mainID)
+	// Content hash dedup: check if this exact content exists anywhere in the catalog
+	existingEntry, err := e.catalogDB.FindByContentHash(contentHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing entry: %w", err)
+		return nil, fmt.Errorf("failed to check for existing content: %w", err)
 	}
-	if exists {
-		// Content already imported - return a result indicating it was skipped
-		existingEntry, _ := e.catalogDB.GetEntry(mainID)
+	if existingEntry != nil {
 		return &ImportResult{
 			ID:             mainID,
 			SourcePath:     opts.SourcePath,
@@ -89,6 +89,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			AssignedSchema: existingEntry.Schema,
 			RecordCount:    existingEntry.RecordCount,
 			SizeBytes:      existingEntry.SizeBytes,
+			ContentHash:    contentHash,
 			Skipped:        true,
 			SkipReason:     "content already exists in catalog",
 		}, nil
@@ -96,10 +97,9 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 
 	// Create filename using content hash (truncated for filesystem compatibility)
 	ext := filepath.Ext(opts.SourcePath)
-	// Use first 16 chars of hash for filename (still unique, more manageable)
 	filename := fmt.Sprintf("%s%s", mainID[:16], ext)
 
-	// Create date-based directory structure (keep this for organization)
+	// Create date-based directory structure
 	dateDir := timestamp.Format("2006/01/02")
 	rawDir := filepath.Join(e.dataPath, "raw", dateDir)
 	metadataDir := filepath.Join(e.dataPath, "metadata")
@@ -117,11 +117,10 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return e.importNDJSONCollectionWithContentHash(opts, mainID, timestamp, origin, filename, rawDir, metadataDir, fileInfo, fileData)
 	}
 
-	// Analyze data for schema assignment (parse the data we already read)
+	// Analyze data for schema assignment
 	var data interface{}
 	var recordCount int
 
-	// Use streaming parser for optimal performance
 	data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
@@ -144,9 +143,38 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	schema := result.Schema
 	confidence := result.Confidence
 
-	// Create metadata with friendly ID
+	// Get schema metadata for identity fields
+	schemaIdentityFields := e.getSchemaIdentityFields(schema)
+
+	// Extract identity values from parsed data
+	identityValues, extractErr := identity.ExtractFieldValues(data, schemaIdentityFields)
+	if extractErr != nil {
+		// If extraction fails, treat as catchall (identity = content hash)
+		identityValues = nil
+	}
+
+	// Compute resource_id
+	resourceID := identity.ComputeResourceID(schema, identityValues, contentHash)
+
+	// Compute canonical identity JSON
+	identityJSON := ""
+	if identityValues != nil && len(identityValues) > 0 {
+		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
+			identityJSON = canonical
+		}
+	}
+
+	// Determine version
+	latestVersion, err := e.catalogDB.GetLatestVersion(resourceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest version: %w", err)
+	}
+	version := latestVersion + 1
+	isNewVersion := latestVersion > 0
+
+	// Create metadata
 	metadata := ImportMetadata{
-		ID: mainID, // Use friendly ID instead of filename-based ID
+		ID: mainID,
 		SourceInfo: SourceInfo{
 			Origin:       origin,
 			OriginalPath: opts.SourcePath,
@@ -167,8 +195,12 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
-			IdentityFields: []string{"id"},
-			TrackedFields:  []string{"data"},
+			IdentityFields: schemaIdentityFields,
+			TrackedFields:  []string{},
+			ResourceID:     resourceID,
+			ContentHash:    contentHash,
+			IdentityValues: identityValues,
+			Version:        version,
 		},
 	}
 
@@ -178,7 +210,12 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to save metadata: %w", err)
 	}
 
-	// Create catalog entry
+	// Create catalog entry with identity tracking
+	var identityJSONPtr *string
+	if identityJSON != "" {
+		identityJSONPtr = &identityJSON
+	}
+
 	entry := database.CatalogEntry{
 		ID:              mainID,
 		StoredPath:      storedPath,
@@ -190,14 +227,16 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		Confidence:      confidence,
 		RecordCount:     recordCount,
 		SizeBytes:       fileInfo.Size(),
+		ResourceID:      &resourceID,
+		ContentHash:     &contentHash,
+		IdentityJSON:    identityJSONPtr,
+		Version:         &version,
 	}
 
-	// Add to database
 	if err := e.catalogDB.AddEntry(entry); err != nil {
 		return nil, fmt.Errorf("failed to add to catalog: %w", err)
 	}
 
-	// Return result
 	return &ImportResult{
 		ID:               mainID,
 		SourcePath:       opts.SourcePath,
@@ -210,7 +249,10 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		RecordCount:      recordCount,
 		SizeBytes:        fileInfo.Size(),
 		ImportTimestamp:  timestamp.Format(time.RFC3339),
-		ValidationResult: nil,
+		ResourceID:       resourceID,
+		ContentHash:      contentHash,
+		Version:          version,
+		IsNewVersion:     isNewVersion,
 	}, nil
 }
 
@@ -247,13 +289,29 @@ func (e *EnhancedImporter) GetIDDisplayFormat(id string) string {
 	return idgen.HashToProquint(id)
 }
 
+// getSchemaIdentityFields returns the identity fields for a schema from schema metadata.
+// Returns nil if the schema has no identity fields or is a catchall/fallback schema.
+func (e *EnhancedImporter) getSchemaIdentityFields(schema string) []string {
+	if e.inferrer == nil {
+		return nil
+	}
+	meta, found := e.inferrer.GetSchemaMetadata(schema)
+	if !found {
+		return nil
+	}
+	return meta.IdentityFields
+}
+
 // createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
 func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
-	// Assign schema for collection - try collection-specific schemas first
 	schema := "pudl.schemas/pudl/core:#Collection"
 	confidence := 0.8
+	contentHash := collectionID // For collections, content hash is the collection ID (file hash)
 
-	// Create metadata for collection
+	// Collections use catchall identity (no identity fields)
+	resourceID := identity.ComputeResourceID(schema, nil, contentHash)
+	version := 1
+
 	metadata := &ImportMetadata{
 		ID: collectionID,
 		SourceInfo: SourceInfo{
@@ -276,18 +334,19 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
-			IdentityFields: []string{"collection_id"},
+			IdentityFields: []string{},
 			TrackedFields:  []string{"item_count", "item_schemas"},
+			ResourceID:     resourceID,
+			ContentHash:    contentHash,
+			Version:        version,
 		},
 	}
 
-	// Save collection metadata
 	metadataPath := filepath.Join(metadataDir, collectionID+".meta")
 	if err := e.saveMetadata(*metadata, metadataPath); err != nil {
 		return nil, fmt.Errorf("failed to save collection metadata: %w", err)
 	}
 
-	// Create collection catalog entry
 	collectionType := "collection"
 	entry := database.CatalogEntry{
 		ID:              metadata.ID,
@@ -300,18 +359,16 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 		Confidence:      confidence,
 		RecordCount:     recordCount,
 		SizeBytes:       fileInfo.Size(),
-		CollectionID:    nil, // Collections don't have parent collections
-		ItemIndex:       nil, // Collections don't have item index
 		CollectionType:  &collectionType,
-		ItemID:          nil, // Collections don't have item IDs
+		ResourceID:      &resourceID,
+		ContentHash:     &contentHash,
+		Version:         &version,
 	}
 
-	// Add to database
 	if err := e.catalogDB.AddEntry(entry); err != nil {
 		return nil, fmt.Errorf("failed to add collection to catalog: %w", err)
 	}
 
-	// Return result
 	return &ImportResult{
 		ID:               metadata.ID,
 		SourcePath:       opts.SourcePath,
@@ -324,7 +381,9 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 		RecordCount:      recordCount,
 		SizeBytes:        fileInfo.Size(),
 		ImportTimestamp:  timestamp.Format(time.RFC3339),
-		ValidationResult: nil, // Collections don't have individual validation results
+		ResourceID:       resourceID,
+		ContentHash:      contentHash,
+		Version:          version,
 	}, nil
 }
 
@@ -352,7 +411,17 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 	if err != nil {
 		return fmt.Errorf("failed to marshal item data: %w", err)
 	}
-	itemID := idgen.ComputeContentID(itemJSON)
+	itemContentHash := idgen.ComputeContentID(itemJSON)
+	itemID := itemContentHash
+
+	// Content hash dedup per-item
+	existingItem, err := e.catalogDB.FindByContentHash(itemContentHash)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing item: %w", err)
+	}
+	if existingItem != nil {
+		return nil // Skip duplicate item
+	}
 
 	// Create filename for individual item
 	itemFilename := fmt.Sprintf("%s_item_%d", collectionID, index)
@@ -370,6 +439,25 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 
 	// Assign schema to item
 	schema, confidence := e.assignItemSchema(itemData, opts)
+
+	// Compute identity for item
+	schemaIdentityFields := e.getSchemaIdentityFields(schema)
+	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
+	if extractErr != nil {
+		identityValues = nil
+	}
+
+	resourceID := identity.ComputeResourceID(schema, identityValues, itemContentHash)
+
+	identityJSON := ""
+	if identityValues != nil && len(identityValues) > 0 {
+		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
+			identityJSON = canonical
+		}
+	}
+
+	latestVersion, _ := e.catalogDB.GetLatestVersion(resourceID)
+	version := latestVersion + 1
 
 	// Create item metadata
 	itemMetadata := &ImportMetadata{
@@ -394,8 +482,12 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
-			IdentityFields: []string{"item_id"},
-			TrackedFields:  []string{"item_data"},
+			IdentityFields: schemaIdentityFields,
+			TrackedFields:  []string{},
+			ResourceID:     resourceID,
+			ContentHash:    itemContentHash,
+			IdentityValues: identityValues,
+			Version:        version,
 		},
 	}
 
@@ -405,8 +497,13 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		return fmt.Errorf("failed to save item metadata: %w", err)
 	}
 
-	// Create catalog entry for item
+	// Create catalog entry for item with identity tracking
 	collectionType := "item"
+	var identityJSONPtr *string
+	if identityJSON != "" {
+		identityJSONPtr = &identityJSON
+	}
+
 	entry := database.CatalogEntry{
 		ID:              itemID,
 		StoredPath:      itemPath,
@@ -422,8 +519,11 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		ItemIndex:       &index,
 		CollectionType:  &collectionType,
 		ItemID:          &itemID,
+		ResourceID:      &resourceID,
+		ContentHash:     &itemContentHash,
+		IdentityJSON:    identityJSONPtr,
+		Version:         &version,
 	}
 
-	// Add to database
 	return e.catalogDB.AddEntry(entry)
 }

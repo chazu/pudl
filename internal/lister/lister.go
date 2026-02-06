@@ -56,6 +56,11 @@ type ListEntry struct {
 	ItemIndex      *int    `json:"item_index,omitempty"`
 	CollectionType *string `json:"collection_type,omitempty"`
 	ItemID         *string `json:"item_id,omitempty"`
+	// Identity tracking fields
+	ResourceID   *string `json:"resource_id,omitempty"`
+	ContentHash  *string `json:"content_hash,omitempty"`
+	IdentityJSON *string `json:"identity_json,omitempty"`
+	Version      *int    `json:"version,omitempty"`
 }
 
 // ListResults contains the results of a list operation
@@ -178,24 +183,7 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	// Convert database entries to list entries
 	var listEntries []ListEntry
 	for _, dbEntry := range queryResult.Entries {
-		listEntry := ListEntry{
-			ID:              dbEntry.ID,
-			Proquint:        idgen.HashToProquint(dbEntry.ID),
-			StoredPath:      dbEntry.StoredPath,
-			MetadataPath:    dbEntry.MetadataPath,
-			ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
-			ParsedTimestamp: dbEntry.ImportTimestamp,
-			Format:          dbEntry.Format,
-			Origin:          dbEntry.Origin,
-			Schema:          dbEntry.Schema,
-			Confidence:      dbEntry.Confidence,
-			RecordCount:     dbEntry.RecordCount,
-			SizeBytes:       dbEntry.SizeBytes,
-			CollectionID:    dbEntry.CollectionID,
-			ItemIndex:       dbEntry.ItemIndex,
-			CollectionType:  dbEntry.CollectionType,
-			ItemID:          dbEntry.ItemID,
-		}
+		listEntry := dbEntryToListEntry(dbEntry)
 		listEntries = append(listEntries, listEntry)
 	}
 
@@ -267,27 +255,8 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 		}
 	}
 
-	// Convert database entry to list entry
-	listEntry := &ListEntry{
-		ID:              dbEntry.ID,
-		Proquint:        idgen.HashToProquint(dbEntry.ID),
-		StoredPath:      dbEntry.StoredPath,
-		MetadataPath:    dbEntry.MetadataPath,
-		ImportTimestamp: dbEntry.ImportTimestamp.Format(time.RFC3339),
-		ParsedTimestamp: dbEntry.ImportTimestamp,
-		Format:          dbEntry.Format,
-		Origin:          dbEntry.Origin,
-		Schema:          dbEntry.Schema,
-		Confidence:      dbEntry.Confidence,
-		RecordCount:     dbEntry.RecordCount,
-		SizeBytes:       dbEntry.SizeBytes,
-		CollectionID:    dbEntry.CollectionID,
-		ItemIndex:       dbEntry.ItemIndex,
-		CollectionType:  dbEntry.CollectionType,
-		ItemID:          dbEntry.ItemID,
-	}
-
-	return listEntry, nil
+	le := dbEntryToListEntry(*dbEntry)
+	return &le, nil
 }
 
 // GetCollectionItems retrieves all items belonging to a collection
@@ -299,24 +268,7 @@ func (l *Lister) GetCollectionItems(collectionID string) ([]ListEntry, error) {
 
 	items := make([]ListEntry, len(dbItems))
 	for i, dbEntry := range dbItems {
-		items[i] = ListEntry{
-			ID:              dbEntry.ID,
-			Proquint:        idgen.HashToProquint(dbEntry.ID),
-			StoredPath:      dbEntry.StoredPath,
-			MetadataPath:    dbEntry.MetadataPath,
-			ImportTimestamp: dbEntry.ImportTimestamp.Format("2006-01-02T15:04:05-07:00"),
-			ParsedTimestamp: dbEntry.ImportTimestamp,
-			Format:          dbEntry.Format,
-			Origin:          dbEntry.Origin,
-			Schema:          dbEntry.Schema,
-			Confidence:      dbEntry.Confidence,
-			RecordCount:     dbEntry.RecordCount,
-			SizeBytes:       dbEntry.SizeBytes,
-			CollectionID:    dbEntry.CollectionID,
-			ItemIndex:       dbEntry.ItemIndex,
-			CollectionType:  dbEntry.CollectionType,
-			ItemID:          dbEntry.ItemID,
-		}
+		items[i] = dbEntryToListEntry(dbEntry)
 	}
 
 	return items, nil
@@ -372,4 +324,30 @@ func (l *Lister) DeleteEntry(entryID string, cascade bool) (*DeleteResult, error
 	}
 
 	return result, nil
+}
+
+// dbEntryToListEntry converts a database CatalogEntry to a ListEntry.
+func dbEntryToListEntry(e database.CatalogEntry) ListEntry {
+	return ListEntry{
+		ID:              e.ID,
+		Proquint:        idgen.HashToProquint(e.ID),
+		StoredPath:      e.StoredPath,
+		MetadataPath:    e.MetadataPath,
+		ImportTimestamp: e.ImportTimestamp.Format(time.RFC3339),
+		ParsedTimestamp: e.ImportTimestamp,
+		Format:          e.Format,
+		Origin:          e.Origin,
+		Schema:          e.Schema,
+		Confidence:      e.Confidence,
+		RecordCount:     e.RecordCount,
+		SizeBytes:       e.SizeBytes,
+		CollectionID:    e.CollectionID,
+		ItemIndex:       e.ItemIndex,
+		CollectionType:  e.CollectionType,
+		ItemID:          e.ItemID,
+		ResourceID:      e.ResourceID,
+		ContentHash:     e.ContentHash,
+		IdentityJSON:    e.IdentityJSON,
+		Version:         e.Version,
+	}
 }
