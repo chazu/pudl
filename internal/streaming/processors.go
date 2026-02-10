@@ -11,11 +11,15 @@ import (
 )
 
 // GenericChunkProcessor handles chunks of unknown format
-type GenericChunkProcessor struct{}
+type GenericChunkProcessor struct {
+	buffer []byte // Buffer for incomplete data (not used by generic, but required for interface)
+}
 
 // NewGenericChunkProcessor creates a new generic chunk processor
 func NewGenericChunkProcessor() *GenericChunkProcessor {
-	return &GenericChunkProcessor{}
+	return &GenericChunkProcessor{
+		buffer: make([]byte, 0),
+	}
 }
 
 // ProcessChunk processes a chunk with unknown format
@@ -70,6 +74,22 @@ func (p *GenericChunkProcessor) CanProcess(data []byte) bool {
 // FormatName returns the name of the format this processor handles
 func (p *GenericChunkProcessor) FormatName() string {
 	return "generic"
+}
+
+// Finalize flushes any remaining buffered data (no-op for generic processor)
+func (p *GenericChunkProcessor) Finalize() (*ProcessedChunk, error) {
+	// Generic processor doesn't buffer, so nothing to finalize
+	return nil, nil
+}
+
+// Reset clears the internal state for reuse
+func (p *GenericChunkProcessor) Reset() {
+	p.buffer = p.buffer[:0]
+}
+
+// GetBufferSize returns the current buffer size
+func (p *GenericChunkProcessor) GetBufferSize() int {
+	return len(p.buffer)
 }
 
 // detectFormat attempts to detect the format of the data
@@ -245,6 +265,7 @@ func (p *GenericChunkProcessor) processTextChunk(chunk *CDCChunk, processed *Pro
 
 	// Create a text object
 	textObj := map[string]interface{}{
+		"format":     "unknown",
 		"content":    text,
 		"line_count": len(lines),
 		"char_count": len(text),
@@ -269,6 +290,7 @@ func (p *GenericChunkProcessor) processTextChunk(chunk *CDCChunk, processed *Pro
 func (p *GenericChunkProcessor) processBinaryChunk(chunk *CDCChunk, processed *ProcessedChunk) (*ProcessedChunk, error) {
 	// Create a binary object with basic information
 	binaryObj := map[string]interface{}{
+		"format":      "unknown",
 		"size":        chunk.Size,
 		"type":        "binary",
 		"hash":        chunk.Hash,

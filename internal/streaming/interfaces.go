@@ -25,12 +25,22 @@ type StreamingParser interface {
 type ChunkProcessor interface {
 	// ProcessChunk processes a single chunk of data
 	ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, error)
-	
+
+	// Finalize flushes any remaining buffered data at end of stream
+	// Returns nil if no data remains in buffer
+	Finalize() (*ProcessedChunk, error)
+
 	// CanProcess returns true if this processor can handle the given data format
 	CanProcess(data []byte) bool
-	
+
 	// FormatName returns the name of the format this processor handles
 	FormatName() string
+
+	// Reset clears internal state for reuse
+	Reset()
+
+	// GetBufferSize returns the current buffer size (0 if no buffering)
+	GetBufferSize() int
 }
 
 // SchemaDetector defines the interface for detecting schemas from chunks

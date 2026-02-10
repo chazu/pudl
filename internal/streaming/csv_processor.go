@@ -11,15 +11,21 @@ import (
 
 // CSVChunkProcessor handles CSV data with row completion logic
 type CSVChunkProcessor struct {
-	buffer  []byte   // Buffer for incomplete CSV rows
-	headers []string // CSV headers if detected
+	buffer         []byte              // Buffer for incomplete CSV rows
+	headers        []string            // CSV headers if detected
+	boundaryFinder *CSVBoundaryFinder  // Tracks CSV row boundaries across chunks
+	formatDetected bool                // Whether we've detected the format
+	sequence       int                 // Chunk sequence for Finalize
 }
 
 // NewCSVChunkProcessor creates a new CSV chunk processor
 func NewCSVChunkProcessor() *CSVChunkProcessor {
 	return &CSVChunkProcessor{
-		buffer:  make([]byte, 0),
-		headers: nil,
+		buffer:         make([]byte, 0),
+		headers:        nil,
+		boundaryFinder: NewCSVBoundaryFinder(),
+		formatDetected: false,
+		sequence:       0,
 	}
 }
 
@@ -37,7 +43,12 @@ func (p *CSVChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, erro
 
 	// Combine buffer with new chunk data
 	data := append(p.buffer, chunk.Data...)
-	
+
+	// Mark format as detected
+	if !p.formatDetected && len(bytes.TrimSpace(data)) > 0 {
+		p.formatDetected = true
+	}
+
 	// Parse CSV rows from the combined data
 	rows, boundaries, remaining, err := p.parseCSVRows(data)
 	if err != nil {
@@ -52,6 +63,7 @@ func (p *CSVChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, erro
 
 	// Update buffer with remaining incomplete data
 	p.buffer = remaining
+	p.sequence = chunk.Sequence
 
 	// Add metadata
 	processed.Metadata["csv_rows"] = len(rows)
@@ -63,6 +75,70 @@ func (p *CSVChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, erro
 	if p.headers != nil {
 		processed.Metadata["headers"] = p.headers
 	}
+
+	return processed, nil
+}
+
+// Finalize flushes any remaining buffered data at end of stream
+func (p *CSVChunkProcessor) Finalize() (*ProcessedChunk, error) {
+	if len(p.buffer) == 0 {
+		return nil, nil
+	}
+
+	// Try to parse whatever is left in the buffer
+	trimmed := bytes.TrimSpace(p.buffer)
+	if len(trimmed) == 0 {
+		p.buffer = nil
+		return nil, nil
+	}
+
+	processed := &ProcessedChunk{
+		Original: &CDCChunk{
+			Data:     p.buffer,
+			Offset:   0,
+			Size:     len(p.buffer),
+			Hash:     "",
+			Sequence: p.sequence + 1,
+		},
+		Format:     "csv",
+		Objects:    []interface{}{},
+		Metadata:   make(map[string]interface{}),
+		Errors:     []error{},
+		Partial:    false,
+		Boundaries: []int{},
+	}
+
+	// Try to parse the remaining data as CSV rows
+	reader := csv.NewReader(bytes.NewReader(trimmed))
+	reader.FieldsPerRecord = -1
+	reader.TrimLeadingSpace = true
+
+	var rows [][]string
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			processed.Errors = append(processed.Errors, err)
+			break
+		}
+		rows = append(rows, record)
+	}
+
+	// Convert rows to objects
+	if len(rows) > 0 {
+		objects := p.rowsToObjects(rows)
+		processed.Objects = objects
+		processed.Boundaries = append(processed.Boundaries, len(trimmed))
+	}
+
+	processed.Metadata["finalized"] = true
+	processed.Metadata["buffer_size"] = len(p.buffer)
+	processed.Metadata["csv_rows"] = len(rows)
+
+	// Clear the buffer
+	p.buffer = nil
 
 	return processed, nil
 }
@@ -273,10 +349,13 @@ func (p *CSVChunkProcessor) getColumnCount(rows [][]string) int {
 	return maxCols
 }
 
-// Reset clears the internal buffer and headers
+// Reset clears the internal buffer and state for reuse
 func (p *CSVChunkProcessor) Reset() {
 	p.buffer = p.buffer[:0]
 	p.headers = nil
+	p.boundaryFinder.Reset()
+	p.formatDetected = false
+	p.sequence = 0
 }
 
 // GetBufferSize returns the current buffer size

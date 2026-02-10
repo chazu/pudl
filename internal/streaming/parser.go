@@ -30,6 +30,11 @@ type DefaultStreamingParser struct {
 	// State
 	running bool
 	closed  bool
+
+	// Processor state management - maintain same processor across chunks
+	currentProcessor   ChunkProcessor // The processor selected for this stream
+	streamFormat       string         // Format detected at stream start
+	formatDetected     bool           // Whether format has been detected
 }
 
 // NewStreamingParser creates a new streaming parser with the given configuration
@@ -80,12 +85,21 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 	p.mu.Lock()
 	p.running = true
 	p.stats.StartTime = time.Now()
+	// Reset processor state for new stream
+	p.currentProcessor = nil
+	p.streamFormat = ""
+	p.formatDetected = false
 	p.mu.Unlock()
 
 	defer func() {
 		p.mu.Lock()
 		p.running = false
 		p.stats.Duration = time.Since(p.stats.StartTime)
+		// Reset processor for next stream
+		if p.currentProcessor != nil {
+			p.currentProcessor.Reset()
+			p.currentProcessor = nil
+		}
 		p.mu.Unlock()
 	}()
 
@@ -120,7 +134,36 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 
 		// Get next chunk from CDC
 		chunkData, err := chunker.Next()
+
+		// Handle EOF - but process the final chunk first if it has data
+		// The CDC library returns the last chunk AND io.EOF together
 		if err == io.EOF {
+			if len(chunkData) > 0 {
+				// Process the final chunk before breaking
+				cdcChunk := &CDCChunk{
+					Data:     chunkData,
+					Offset:   int64(p.stats.BytesProcessed),
+					Size:     len(chunkData),
+					Hash:     p.computeHash(chunkData),
+					Sequence: sequence,
+					Time:     time.Now(),
+				}
+
+				if !p.isDuplicate(cdcChunk.Hash) {
+					parsedChunk, procErr := p.processChunk(cdcChunk)
+					if procErr == nil {
+						select {
+						case results <- *parsedChunk:
+						case <-ctx.Done():
+							return
+						}
+						p.updateStats(int64(cdcChunk.Size), 1, int64(len(parsedChunk.Objects)))
+						sequence++
+					}
+				} else {
+					p.updateStats(int64(cdcChunk.Size), 0, 0)
+				}
+			}
 			break
 		}
 		if err != nil {
@@ -187,6 +230,36 @@ func (p *DefaultStreamingParser) parseStream(ctx context.Context, reader io.Read
 		sequence++
 	}
 
+	// Finalize: flush any remaining buffered data from the processor
+	if p.currentProcessor != nil {
+		bufferSize := p.currentProcessor.GetBufferSize()
+		finalChunk, err := p.currentProcessor.Finalize()
+		if err != nil {
+			errors <- fmt.Errorf("finalization error (buffer=%d): %w", bufferSize, err)
+		} else if finalChunk != nil && len(finalChunk.Objects) > 0 {
+			// Create parsed chunk from finalized data
+			parsedChunk := &ParsedChunk{
+				Objects:  finalChunk.Objects,
+				Metadata: finalChunk.Metadata,
+				Format:   finalChunk.Format,
+				Offset:   int64(p.stats.BytesProcessed),
+				Size:     finalChunk.Original.Size,
+				Hash:     "",
+				Sequence: sequence,
+				Time:     time.Now(),
+				Errors:   finalChunk.Errors,
+			}
+
+			// Send finalized result
+			select {
+			case results <- *parsedChunk:
+				p.updateStats(0, 1, int64(len(finalChunk.Objects)))
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+
 	// Finish progress reporting
 	if p.progressReporter != nil {
 		result := ProcessingResult{
@@ -229,10 +302,24 @@ func (p *DefaultStreamingParser) createChunker(reader io.Reader) (*chunkers.Chun
 
 // processChunk processes a single CDC chunk
 func (p *DefaultStreamingParser) processChunk(chunk *CDCChunk) (*ParsedChunk, error) {
-	// Find the best processor for this chunk
-	processor := p.processorRegistry.GetBestProcessor(chunk.Data)
+	p.mu.Lock()
+	// Detect format and select processor on first chunk with data
+	if !p.formatDetected && len(chunk.Data) > 0 {
+		p.currentProcessor = p.processorRegistry.GetBestProcessor(chunk.Data)
+		p.streamFormat = p.currentProcessor.FormatName()
+		p.formatDetected = true
+		// Note: Don't call Reset() here - the processor is freshly selected
+		// and Reset() would clear format detection state (isArray, isNDJSON)
+	}
+	processor := p.currentProcessor
+	p.mu.Unlock()
 
-	// Process the chunk
+	// Fall back to getting a processor if none was set (shouldn't happen normally)
+	if processor == nil {
+		processor = p.processorRegistry.GetBestProcessor(chunk.Data)
+	}
+
+	// Process the chunk using the same processor instance
 	processed, err := processor.ProcessChunk(chunk)
 	if err != nil {
 		return nil, fmt.Errorf("failed to process chunk: %w", err)

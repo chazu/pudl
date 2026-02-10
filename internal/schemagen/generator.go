@@ -9,6 +9,9 @@ import (
 	"strings"
 	"unicode"
 
+	"cuelang.org/go/cue/cuecontext"
+	"cuelang.org/go/cue/parser"
+
 	"pudl/internal/inference"
 )
 
@@ -265,7 +268,7 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts)))
 	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName)))
 	b.WriteString("\t\tcascade_priority: 100 // 0-1000, higher = more specific (catchall=0, base=100, policy=200+)\n")
-	b.WriteString("\t\tcascade_fallback: [\"core.#Item\"] // Schemas to try if this doesn't match\n")
+	b.WriteString("\t\tcascade_fallback: [\"pudl/core.#Item\"] // Schemas to try if this doesn't match\n")
 	b.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields)))
 	b.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis)))
 	b.WriteString("\t\tcompliance_level: \"strict\" // Valid: \"strict\", \"warn\", \"permissive\"\n")
@@ -277,6 +280,35 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString("}\n")
 
 	return b.String()
+}
+
+// needsQuoting returns true if a CUE field name requires quoting.
+// CUE identifiers must start with a letter or underscore and contain only
+// letters, digits, underscores, and $. Any other characters require quoting.
+func needsQuoting(name string) bool {
+	if len(name) == 0 {
+		return true
+	}
+	// First character must be letter, underscore, or $
+	first := rune(name[0])
+	if !unicode.IsLetter(first) && first != '_' && first != '$' {
+		return true
+	}
+	// Remaining characters must be letter, digit, underscore, or $
+	for _, r := range name[1:] {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '_' && r != '$' {
+			return true
+		}
+	}
+	return false
+}
+
+// formatFieldName returns the field name, quoted if necessary for valid CUE syntax.
+func formatFieldName(name string) string {
+	if needsQuoting(name) {
+		return fmt.Sprintf("\"%s\"", name)
+	}
+	return name
 }
 
 // writeFields writes field definitions to the builder.
@@ -297,6 +329,9 @@ func (g *Generator) writeFields(b *strings.Builder, fields map[string]*FieldInfo
 			optional = "?"
 		}
 
+		// Format field name with quoting if needed
+		fieldName := formatFieldName(name)
+
 		switch {
 		case fi.CUEType == "enum" && len(fi.EnumValues) > 0:
 			sort.Strings(fi.EnumValues)
@@ -304,15 +339,15 @@ func (g *Generator) writeFields(b *strings.Builder, fields map[string]*FieldInfo
 			for i, v := range fi.EnumValues {
 				quoted[i] = fmt.Sprintf("\"%s\"", v)
 			}
-			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, name, optional, strings.Join(quoted, " | ")))
+			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, fieldName, optional, strings.Join(quoted, " | ")))
 
 		case fi.CUEType == "struct" && fi.Nested != nil:
-			b.WriteString(fmt.Sprintf("%s%s%s: {\n", indentStr, name, optional))
+			b.WriteString(fmt.Sprintf("%s%s%s: {\n", indentStr, fieldName, optional))
 			g.writeFields(b, fi.Nested, indent+1)
 			b.WriteString(fmt.Sprintf("%s}\n", indentStr))
 
 		case fi.CUEType == "object_array" && fi.Nested != nil:
-			b.WriteString(fmt.Sprintf("%s%s%s: [...{\n", indentStr, name, optional))
+			b.WriteString(fmt.Sprintf("%s%s%s: [...{\n", indentStr, fieldName, optional))
 			g.writeFields(b, fi.Nested, indent+1)
 			b.WriteString(fmt.Sprintf("%s}]\n", indentStr))
 
@@ -321,7 +356,7 @@ func (g *Generator) writeFields(b *strings.Builder, fields map[string]*FieldInfo
 			if fi.IsNullable && typeStr != "_" {
 				typeStr = fmt.Sprintf("null | %s", typeStr)
 			}
-			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, name, optional, typeStr))
+			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, fieldName, optional, typeStr))
 		}
 	}
 }
@@ -373,9 +408,58 @@ func (e *SchemaExistsError) Error() string {
 	return fmt.Sprintf("schema file already exists: %s", e.FilePath)
 }
 
+// SchemaValidationError is returned when generated CUE content is invalid.
+type SchemaValidationError struct {
+	Content string
+	Errors  []string
+}
+
+func (e *SchemaValidationError) Error() string {
+	return fmt.Sprintf("generated schema has invalid CUE syntax: %s", strings.Join(e.Errors, "; "))
+}
+
+// ValidateCUEContent validates that the given content is valid CUE syntax.
+// Returns nil if valid, or a SchemaValidationError with details if invalid.
+func ValidateCUEContent(content string) error {
+	// Parse the CUE content
+	file, err := parser.ParseFile("generated.cue", content, parser.ParseComments)
+	if err != nil {
+		return &SchemaValidationError{
+			Content: content,
+			Errors:  []string{fmt.Sprintf("CUE syntax error: %v", err)},
+		}
+	}
+
+	// Build CUE value to check for semantic errors
+	ctx := cuecontext.New()
+	value := ctx.BuildFile(file)
+	if err := value.Err(); err != nil {
+		return &SchemaValidationError{
+			Content: content,
+			Errors:  []string{fmt.Sprintf("CUE build error: %v", err)},
+		}
+	}
+
+	// Validate the CUE value
+	if err := value.Validate(); err != nil {
+		return &SchemaValidationError{
+			Content: content,
+			Errors:  []string{fmt.Sprintf("CUE validation error: %v", err)},
+		}
+	}
+
+	return nil
+}
+
 // WriteSchema writes the generated schema to the schema repository.
+// It validates the CUE content before writing to prevent invalid schemas.
 // If force is true, existing files will be overwritten.
 func (g *Generator) WriteSchema(result *GenerateResult, content string, force bool) error {
+	// Validate CUE content before writing
+	if err := ValidateCUEContent(content); err != nil {
+		return err
+	}
+
 	// Create package directory
 	dir := filepath.Dir(result.FilePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
