@@ -10,13 +10,21 @@ import (
 
 // YAMLChunkProcessor handles YAML data with document boundary detection
 type YAMLChunkProcessor struct {
-	buffer []byte // Buffer for incomplete YAML documents
+	buffer         []byte             // Buffer for incomplete YAML documents
+	boundaryFinder *YAMLBoundaryFinder // Tracks YAML document boundaries across chunks
+	formatDetected bool               // Whether we've detected the format
+	hasMultipleDocs bool              // Whether stream contains multiple documents
+	sequence       int                // Chunk sequence for Finalize
 }
 
 // NewYAMLChunkProcessor creates a new YAML chunk processor
 func NewYAMLChunkProcessor() *YAMLChunkProcessor {
 	return &YAMLChunkProcessor{
-		buffer: make([]byte, 0),
+		buffer:         make([]byte, 0),
+		boundaryFinder: NewYAMLBoundaryFinder(),
+		formatDetected: false,
+		hasMultipleDocs: false,
+		sequence:       0,
 	}
 }
 
@@ -34,7 +42,12 @@ func (p *YAMLChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, err
 
 	// Combine buffer with new chunk data
 	data := append(p.buffer, chunk.Data...)
-	
+
+	// Detect format on first chunk
+	if !p.formatDetected && len(bytes.TrimSpace(data)) > 0 {
+		p.detectFormat(data)
+	}
+
 	// Parse YAML documents from the combined data
 	documents, boundaries, remaining, err := p.parseYAMLDocuments(data)
 	if err != nil {
@@ -47,11 +60,71 @@ func (p *YAMLChunkProcessor) ProcessChunk(chunk *CDCChunk) (*ProcessedChunk, err
 
 	// Update buffer with remaining incomplete data
 	p.buffer = remaining
+	p.sequence = chunk.Sequence
 
 	// Add metadata
 	processed.Metadata["yaml_documents"] = len(documents)
 	processed.Metadata["buffer_size"] = len(p.buffer)
 	processed.Metadata["has_partial"] = processed.Partial
+	processed.Metadata["has_multiple_docs"] = p.hasMultipleDocs
+
+	return processed, nil
+}
+
+// detectFormat detects whether this YAML has multiple documents
+func (p *YAMLChunkProcessor) detectFormat(data []byte) {
+	p.formatDetected = true
+	// Check for multiple document separators
+	docCount := bytes.Count(data, []byte("---"))
+	p.hasMultipleDocs = docCount > 1
+}
+
+// Finalize flushes any remaining buffered data at end of stream
+func (p *YAMLChunkProcessor) Finalize() (*ProcessedChunk, error) {
+	if len(p.buffer) == 0 {
+		return nil, nil
+	}
+
+	// Try to parse whatever is left in the buffer
+	trimmed := bytes.TrimSpace(p.buffer)
+	if len(trimmed) == 0 {
+		p.buffer = nil
+		return nil, nil
+	}
+
+	processed := &ProcessedChunk{
+		Original: &CDCChunk{
+			Data:     p.buffer,
+			Offset:   0,
+			Size:     len(p.buffer),
+			Hash:     "",
+			Sequence: p.sequence + 1,
+		},
+		Format:     "yaml",
+		Objects:    []interface{}{},
+		Metadata:   make(map[string]interface{}),
+		Errors:     []error{},
+		Partial:    false,
+		Boundaries: []int{},
+	}
+
+	// Try to parse the remaining data as YAML
+	var doc interface{}
+	if err := yaml.Unmarshal(trimmed, &doc); err == nil {
+		if doc != nil {
+			processed.Objects = append(processed.Objects, doc)
+			processed.Boundaries = append(processed.Boundaries, len(trimmed))
+		}
+	} else {
+		// If it fails to parse, include as error
+		processed.Errors = append(processed.Errors, err)
+	}
+
+	processed.Metadata["finalized"] = true
+	processed.Metadata["buffer_size"] = len(p.buffer)
+
+	// Clear the buffer
+	p.buffer = nil
 
 	return processed, nil
 }
@@ -183,9 +256,13 @@ func (p *YAMLChunkProcessor) parseSingleYAMLDocument(data []byte) ([]interface{}
 	return documents, boundaries, []byte{}, nil
 }
 
-// Reset clears the internal buffer
+// Reset clears the internal buffer and state for reuse
 func (p *YAMLChunkProcessor) Reset() {
 	p.buffer = p.buffer[:0]
+	p.boundaryFinder.Reset()
+	p.formatDetected = false
+	p.hasMultipleDocs = false
+	p.sequence = 0
 }
 
 // GetBufferSize returns the current buffer size

@@ -90,6 +90,16 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 - [x] Backfill command — `pudl migrate identity` for pre-existing entries
 - [x] Unit + integration tests (30 new tests)
 
+### 2026-02-09 Streaming Parser Fix & Schema Generation
+- [x] Fixed CUE field name quoting — Fields with special characters now properly quoted
+- [x] Added pre-write schema validation — `ValidateCUEContent()` validates before writing
+- [x] Fixed cascade fallback path format — Uses `"pudl/core.#Item"` not `"core.#Item"`
+- [x] Fixed CDC EOF handling — Final chunk now processed when `io.EOF` returned with data
+- [x] Fixed NDJSON false positive detection — Only count lines at column 0
+- [x] Implemented cross-chunk reassembly — Processor state persisted across chunks
+- [x] Added `Finalize()`, `Reset()`, `GetBufferSize()` to ChunkProcessor interface
+- [x] Large file tests — 6 new tests for cross-chunk reassembly up to 1MB
+
 ### Design Decisions Made
 - **No Lisp/Zygomys rules** - Schema inference uses CUE-based detection, not a Lisp rules engine
 - **No interactive review TUI** - Review workflow removed; `pudl schema reinfer` handles batch re-inference
@@ -130,7 +140,7 @@ These items were identified in the project review but not yet addressed:
 - `op/` + `internal/cue/processor.go` + `cmd/process.go` - CUE custom function processor (unrelated to core purpose)
 - `cmd/setup.go` - Shell integration (premature convenience optimization)
 - `cmd/module.go` - Thin wrapper around `cue mod` commands
-- `internal/streaming/` - CDC-based streaming parser (~4100 lines, speculative complexity)
+- ~~`internal/streaming/` - CDC-based streaming parser~~ — Fixed and working (2026-02-09)
 
 ## Core Packages
 
