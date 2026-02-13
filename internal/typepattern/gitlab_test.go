@@ -339,6 +339,35 @@ func TestGitLabPattern_KubernetesHasHigherPriority(t *testing.T) {
 	assert.Equal(t, "v1:Pod", result.TypeID)
 }
 
+func TestGitLabPattern_DetectWithInclude(t *testing.T) {
+	r := NewRegistry()
+	RegisterGitLabPatterns(r)
+
+	// Pipeline with include directive
+	data := map[string]interface{}{
+		"include": []interface{}{
+			map[string]interface{}{
+				"local": ".gitlab/ci/build.yml",
+			},
+			map[string]interface{}{
+				"project": "my-group/my-project",
+				"ref":     "main",
+				"file":    "templates/ci.yml",
+			},
+		},
+		"deploy": map[string]interface{}{
+			"stage":  "deploy",
+			"script": []interface{}{"deploy.sh"},
+		},
+	}
+
+	result := r.Detect(data)
+	require.NotNil(t, result)
+	assert.Equal(t, "gitlab-ci", result.Pattern.Name)
+	assert.Equal(t, "gitlab-ci:Pipeline", result.TypeID)
+	assert.Equal(t, "cue.dev/x/gitlab/gitlabci:Pipeline", result.ImportPath)
+}
+
 func TestGitLabPattern_ConfidenceWithOptionalFields(t *testing.T) {
 	r := NewRegistry()
 	RegisterGitLabPatterns(r)
