@@ -72,4 +72,3 @@ type PudlMetadata struct {
 	// TrackedFields lists fields that should be tracked for change detection
 	TrackedFields []string
 }
-

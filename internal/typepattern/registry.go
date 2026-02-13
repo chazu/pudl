@@ -148,4 +148,3 @@ func extractDefinition(typeID string) string {
 	}
 	return typeID
 }
-

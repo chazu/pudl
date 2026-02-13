@@ -223,4 +223,3 @@ func TestExtractDefinition(t *testing.T) {
 		})
 	}
 }
-
