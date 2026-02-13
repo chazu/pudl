@@ -282,6 +282,36 @@ func TestKubernetesPattern_Detection(t *testing.T) {
 	}
 }
 
+func TestKubernetesPattern_DetectDeployment(t *testing.T) {
+	r := NewRegistry()
+	RegisterKubernetesPatterns(r)
+
+	data := map[string]interface{}{
+		"apiVersion": "apps/v1",
+		"kind":       "Deployment",
+		"metadata": map[string]interface{}{
+			"name":      "nginx-deployment",
+			"namespace": "production",
+		},
+		"spec": map[string]interface{}{
+			"replicas": 3,
+			"selector": map[string]interface{}{
+				"matchLabels": map[string]interface{}{
+					"app": "nginx",
+				},
+			},
+		},
+	}
+
+	result := r.Detect(data)
+	require.NotNil(t, result)
+	assert.Equal(t, "kubernetes", result.Pattern.Name)
+	assert.Equal(t, "apps/v1:Deployment", result.TypeID)
+	assert.Equal(t, "cue.dev/x/k8s.io/api/apps/v1:Deployment", result.ImportPath)
+	assert.Equal(t, "Deployment", result.Definition)
+	assert.Greater(t, result.Confidence, 0.5)
+}
+
 func TestKubernetesPattern_ConfidenceBoost(t *testing.T) {
 	r := NewRegistry()
 	RegisterKubernetesPatterns(r)
