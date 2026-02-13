@@ -1,0 +1,56 @@
+[
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "mixed-pod",
+      "namespace": "default",
+      "uid": "11111111-1111-1111-1111-111111111111",
+      "creationTimestamp": "2026-02-13T08:00:00Z"
+    },
+    "spec": {
+      "containers": [{"name": "app", "image": "nginx"}],
+      "restartPolicy": "Always",
+      "nodeName": "node-1"
+    },
+    "status": {
+      "phase": "Running",
+      "podIP": "10.244.0.5"
+    }
+  },
+  {
+    "InstanceId": "i-mixed12345678",
+    "InstanceType": "t3.medium",
+    "State": {
+      "Code": 16,
+      "Name": "running"
+    },
+    "ImageId": "ami-mixed1234",
+    "PrivateIpAddress": "10.0.5.50",
+    "VpcId": "vpc-mixed1234",
+    "SubnetId": "subnet-mixed1234",
+    "LaunchTime": "2026-02-12T10:00:00Z"
+  },
+  {
+    "apiVersion": "batch/v1",
+    "kind": "Job",
+    "metadata": {
+      "name": "mixed-job",
+      "namespace": "default",
+      "uid": "22222222-2222-2222-2222-222222222222",
+      "creationTimestamp": "2026-02-13T07:00:00Z"
+    },
+    "spec": {
+      "template": {
+        "spec": {
+          "containers": [{"name": "worker", "image": "worker:v1"}],
+          "restartPolicy": "Never"
+        }
+      }
+    },
+    "status": {
+      "succeeded": 1
+    }
+  }
+]
+

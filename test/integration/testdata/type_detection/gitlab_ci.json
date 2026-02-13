@@ -1,0 +1,67 @@
+{
+  "stages": ["build", "test", "deploy"],
+  "variables": {
+    "CI_DEBUG_TRACE": "false",
+    "DOCKER_DRIVER": "overlay2"
+  },
+  "default": {
+    "image": "alpine:latest",
+    "before_script": ["echo Starting job..."]
+  },
+  "build_job": {
+    "stage": "build",
+    "script": [
+      "echo Building application...",
+      "make build"
+    ],
+    "artifacts": {
+      "paths": ["build/"],
+      "expire_in": "1 week"
+    }
+  },
+  "unit_tests": {
+    "stage": "test",
+    "script": [
+      "echo Running unit tests...",
+      "make test"
+    ],
+    "coverage": "/Coverage: \\d+\\.\\d+%/"
+  },
+  "integration_tests": {
+    "stage": "test",
+    "script": [
+      "echo Running integration tests...",
+      "make integration-test"
+    ],
+    "needs": ["build_job"]
+  },
+  "deploy_staging": {
+    "stage": "deploy",
+    "script": [
+      "echo Deploying to staging...",
+      "make deploy-staging"
+    ],
+    "environment": {
+      "name": "staging",
+      "url": "https://staging.example.com"
+    },
+    "rules": [
+      {"if": "$CI_COMMIT_BRANCH == 'develop'"}
+    ]
+  },
+  "deploy_production": {
+    "stage": "deploy",
+    "script": [
+      "echo Deploying to production...",
+      "make deploy-production"
+    ],
+    "environment": {
+      "name": "production",
+      "url": "https://example.com"
+    },
+    "rules": [
+      {"if": "$CI_COMMIT_BRANCH == 'main'", "when": "manual"}
+    ]
+  }
+}
+
