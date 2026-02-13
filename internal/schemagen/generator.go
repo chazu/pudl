@@ -582,6 +582,21 @@ func ValidateCUEContent(content string) error {
 	return nil
 }
 
+// ValidateCUESyntax validates only the syntax of CUE content without resolving imports.
+// This is useful for import-based schemas where dependencies aren't yet available.
+// Returns nil if syntax is valid, or a SchemaValidationError with details if invalid.
+func ValidateCUESyntax(content string) error {
+	// Parse the CUE content - this validates syntax without resolving imports
+	_, err := parser.ParseFile("generated.cue", content, parser.ParseComments)
+	if err != nil {
+		return &SchemaValidationError{
+			Content: content,
+			Errors:  []string{fmt.Sprintf("CUE syntax error: %v", err)},
+		}
+	}
+	return nil
+}
+
 // WriteSchema writes the generated schema to the schema repository.
 // It validates the CUE content before writing to prevent invalid schemas.
 // If force is true, existing files will be overwritten.
@@ -591,6 +606,24 @@ func (g *Generator) WriteSchema(result *GenerateResult, content string, force bo
 		return err
 	}
 
+	return g.writeSchemaFile(result, content, force)
+}
+
+// WriteSchemaWithSyntaxCheck writes the generated schema with syntax-only validation.
+// This is useful for import-based schemas where dependencies aren't available until
+// after the file is written and `cue mod tidy` is run.
+// If force is true, existing files will be overwritten.
+func (g *Generator) WriteSchemaWithSyntaxCheck(result *GenerateResult, content string, force bool) error {
+	// Validate CUE syntax only (doesn't try to resolve imports)
+	if err := ValidateCUESyntax(content); err != nil {
+		return err
+	}
+
+	return g.writeSchemaFile(result, content, force)
+}
+
+// writeSchemaFile is the internal implementation for writing schema files.
+func (g *Generator) writeSchemaFile(result *GenerateResult, content string, force bool) error {
 	// Create package directory
 	dir := filepath.Dir(result.FilePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
