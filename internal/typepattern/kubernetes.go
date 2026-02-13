@@ -123,6 +123,45 @@ func extractAPIGroup(typeID string) string {
 	return group
 }
 
+// BuildKubernetesDetectedType builds a DetectedType from a kind and apiVersion.
+// This is used for CLI commands that need to generate schemas for known Kubernetes types.
+// Returns the DetectedType with pattern, typeID, importPath, and definition set.
+func BuildKubernetesDetectedType(kind, apiVersion string) *DetectedType {
+	typeID := apiVersion + ":" + kind
+	importPath := mapKubernetesImport(typeID)
+
+	// Split importPath:Definition format back to just import path
+	actualImportPath := ""
+	if importPath != "" {
+		colonIdx := len(importPath) - len(kind) - 1
+		if colonIdx > 0 && importPath[colonIdx] == ':' {
+			actualImportPath = importPath[:colonIdx]
+		}
+	}
+
+	return &DetectedType{
+		Pattern: &TypePattern{
+			Name:             "kubernetes",
+			Ecosystem:        "kubernetes",
+			MetadataDefaults: kubernetesMetadataDefaults,
+		},
+		TypeID:     typeID,
+		ImportPath: actualImportPath,
+		Definition: kind,
+		Confidence: 1.0,
+	}
+}
+
+// GetKnownKubernetesTypes returns a list of known Kubernetes type IDs.
+// This can be used for CLI suggestions.
+func GetKnownKubernetesTypes() []string {
+	types := make([]string, 0, len(kubernetesImportMappings))
+	for typeID := range kubernetesImportMappings {
+		types = append(types, typeID)
+	}
+	return types
+}
+
 // RegisterKubernetesPatterns registers Kubernetes type detection patterns with the registry.
 func RegisterKubernetesPatterns(r *Registry) {
 	r.Register(&TypePattern{
