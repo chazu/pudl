@@ -246,14 +246,12 @@ func initCUEModule(schemaDir string, verbose bool) error {
 	}
 
 	// Create module.cue file with Kubernetes schemas dependency
+	// Note: We don't pre-declare deps because cue mod tidy will resolve them
+	// from the imports in the example file. This ensures we always get the
+	// latest compatible version from the CUE Central Registry.
 	moduleContent := `language: version: "v0.14.0"
 
 module: "pudl.schemas@v0"
-
-// Third-party dependencies for comprehensive schema support
-deps: {
-    "cue.dev/x/k8s.io@v0": v: "v0.1.0"
-}
 
 source: kind: "self"
 
@@ -262,23 +260,6 @@ description: "PUDL Schema Repository - CUE schemas for data lake validation and 
 
 	if err := os.WriteFile(moduleCuePath, []byte(moduleContent), 0644); err != nil {
 		return fmt.Errorf("failed to create module.cue: %w", err)
-	}
-
-	// Run cue mod tidy to fetch dependencies
-	if verbose {
-		fmt.Println("Fetching CUE module dependencies...")
-	}
-
-	tidyCmd := exec.Command("cue", "mod", "tidy")
-	tidyCmd.Dir = schemaDir
-	if output, err := tidyCmd.CombinedOutput(); err != nil {
-		if verbose {
-			fmt.Printf("⚠️  Failed to fetch CUE dependencies: %s\n", string(output))
-			fmt.Println("   You can run 'cue mod tidy' manually later in the schema directory")
-		}
-		// Don't return error - module structure is still valid
-	} else if verbose {
-		fmt.Println("✅ CUE module dependencies fetched successfully")
 	}
 
 	// Create local schema directory structure
@@ -293,10 +274,17 @@ description: "PUDL Schema Repository - CUE schemas for data lake validation and 
 		return fmt.Errorf("failed to create examples directory: %w", err)
 	}
 
-	// Create example usage file
-	exampleContent := `package examples
+	// Create Kubernetes example file
+	k8sExampleContent := `package examples
 
-// Example 1: Local PUDL schema definition
+// Import official Kubernetes schemas from cue.dev/x/k8s.io
+// These are fetched automatically by 'cue mod tidy' or 'pudl module tidy'
+import (
+	apps "cue.dev/x/k8s.io/api/apps/v1"
+	core "cue.dev/x/k8s.io/api/core/v1"
+)
+
+// Example 1: Local PUDL schema definition (without external dependencies)
 #BasicKubernetesDeployment: {
 	// PUDL metadata for tracking and validation
 	_pudl: {
@@ -358,60 +346,133 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	}
 }
 
-// Example 3: Using official Kubernetes schemas from cue.dev/x/k8s.io
-import (
-    apps "cue.dev/x/k8s.io/api/apps/v1"
-    core "cue.dev/x/k8s.io/api/core/v1"
-)
-
-// Extend official Kubernetes Deployment with PUDL metadata
+// Example 3: Using official Kubernetes schemas with PUDL metadata
+// These extend the complete K8s API schemas from the CUE Central Registry
 #KubernetesDeployment: apps.#Deployment & {
-    _pudl: {
-        schema_type: "kubernetes"
-        resource_type: "k8s.apps.deployment"
-        cascade_priority: 95
-        identity_fields: ["metadata.name", "metadata.namespace"]
-        tracked_fields: ["spec.replicas", "status.readyReplicas"]
-        compliance_level: "strict"
-    }
+	_pudl: {
+		schema_type:      "kubernetes"
+		resource_type:    "k8s.apps.deployment"
+		cascade_priority: 95
+		identity_fields: ["metadata.name", "metadata.namespace"]
+		tracked_fields: ["spec.replicas", "status.readyReplicas"]
+		compliance_level: "strict"
+	}
 }
 
-// Extend official Kubernetes Pod with PUDL metadata
 #KubernetesPod: core.#Pod & {
-    _pudl: {
-        schema_type: "kubernetes"
-        resource_type: "k8s.core.pod"
-        cascade_priority: 95
-        identity_fields: ["metadata.name", "metadata.namespace"]
-        tracked_fields: ["status.phase", "spec.containers"]
-        compliance_level: "strict"
-    }
+	_pudl: {
+		schema_type:      "kubernetes"
+		resource_type:    "k8s.core.pod"
+		cascade_priority: 95
+		identity_fields: ["metadata.name", "metadata.namespace"]
+		tracked_fields: ["status.phase", "spec.containers"]
+		compliance_level: "strict"
+	}
 }
 
-// Extend official Kubernetes Service with PUDL metadata
 #KubernetesService: core.#Service & {
-    _pudl: {
-        schema_type: "kubernetes"
-        resource_type: "k8s.core.service"
-        cascade_priority: 95
-        identity_fields: ["metadata.name", "metadata.namespace"]
-        tracked_fields: ["spec.type", "spec.ports", "spec.selector"]
-        compliance_level: "strict"
-    }
+	_pudl: {
+		schema_type:      "kubernetes"
+		resource_type:    "k8s.core.service"
+		cascade_priority: 95
+		identity_fields: ["metadata.name", "metadata.namespace"]
+		tracked_fields: ["spec.type", "spec.ports", "spec.selector"]
+		compliance_level: "strict"
+	}
 }
 `
 
-	examplePath := filepath.Join(examplesDir, "kubernetes.cue")
-	if err := os.WriteFile(examplePath, []byte(exampleContent), 0644); err != nil {
-		return fmt.Errorf("failed to create example file: %w", err)
+	k8sExamplePath := filepath.Join(examplesDir, "kubernetes.cue")
+	if err := os.WriteFile(k8sExamplePath, []byte(k8sExampleContent), 0644); err != nil {
+		return fmt.Errorf("failed to create kubernetes example file: %w", err)
+	}
+
+	// Create GitLab CI/CD example file
+	gitlabExampleContent := `package examples
+
+// Import GitLab CI/CD schemas from cue.dev/x/gitlab
+// These are fetched automatically by 'cue mod tidy' or 'pudl module tidy'
+import "cue.dev/x/gitlab/gitlabci"
+
+// Example: GitLab CI/CD Pipeline with PUDL metadata
+#GitLabPipeline: gitlabci.#Pipeline & {
+	_pudl: {
+		schema_type:      "cicd"
+		resource_type:    "gitlab.pipeline"
+		cascade_priority: 80
+		identity_fields: ["stages"]
+		tracked_fields: ["default", "workflow", "variables"]
+		compliance_level: "standard"
+	}
+}
+
+// Example pipeline definition
+examplePipeline: #GitLabPipeline & {
+	default: image: "golang:1.21"
+
+	stages: ["build", "test", "deploy"]
+
+	variables: {
+		GO111MODULE: "on"
+		CGO_ENABLED: "0"
+	}
+
+	build: {
+		stage: "build"
+		script: [
+			"go build -o app ./...",
+		]
+		artifacts: paths: ["app"]
+	}
+
+	test: {
+		stage: "test"
+		script: [
+			"go test -v ./...",
+		]
+	}
+
+	deploy: {
+		stage: "deploy"
+		script: [
+			"echo 'Deploying application...'",
+		]
+		rules: [{if: "$CI_COMMIT_BRANCH == \"main\""}]
+		environment: "production"
+	}
+}
+`
+
+	gitlabExamplePath := filepath.Join(examplesDir, "gitlab-ci.cue")
+	if err := os.WriteFile(gitlabExamplePath, []byte(gitlabExampleContent), 0644); err != nil {
+		return fmt.Errorf("failed to create gitlab-ci example file: %w", err)
+	}
+
+	// Run cue mod tidy to fetch dependencies
+	// This must run AFTER the example file is created so CUE can see the imports
+	if verbose {
+		fmt.Println("Fetching CUE module dependencies...")
+	}
+
+	tidyCmd := exec.Command("cue", "mod", "tidy")
+	tidyCmd.Dir = schemaDir
+	if output, err := tidyCmd.CombinedOutput(); err != nil {
+		if verbose {
+			fmt.Printf("⚠️  Failed to fetch CUE dependencies: %s\n", string(output))
+			fmt.Println("   You can run 'cue mod tidy' manually later in the schema directory")
+		}
+		// Don't return error - module structure is still valid
+	} else if verbose {
+		fmt.Println("✅ CUE module dependencies fetched successfully")
 	}
 
 	if verbose {
 		fmt.Printf("✅ CUE module initialized in %s\n", schemaDir)
-		fmt.Println("   - Third-party dependencies: cue.dev/x/k8s.io (complete Kubernetes API schemas)")
+		fmt.Println("   - Third-party dependencies:")
+		fmt.Println("     • cue.dev/x/k8s.io (complete Kubernetes API schemas)")
+		fmt.Println("     • cue.dev/x/gitlab (GitLab CI/CD pipeline schemas)")
 		fmt.Println("   - Local schemas: pudl/ (AWS, custom schemas)")
 		fmt.Println("   - Examples: examples/ (usage patterns and integrations)")
-		fmt.Println("   - Run 'pudl module tidy' to fetch dependencies")
 	}
 
 	return nil
