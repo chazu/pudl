@@ -1,0 +1,17 @@
+{
+  "custom_field_one": "some_value",
+  "custom_field_two": 12345,
+  "nested_object": {
+    "inner_field": "nested_value",
+    "another_number": 99.99
+  },
+  "array_data": [
+    {"item_id": 1, "item_name": "first"},
+    {"item_id": 2, "item_name": "second"},
+    {"item_id": 3, "item_name": "third"}
+  ],
+  "timestamp": "2026-02-13T12:00:00Z",
+  "is_active": true,
+  "tags": ["custom", "unknown", "test"]
+}
+

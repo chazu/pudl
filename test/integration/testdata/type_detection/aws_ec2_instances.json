@@ -1,0 +1,39 @@
+[
+  {
+    "InstanceId": "i-0123456789abcdef0",
+    "InstanceType": "t3.micro",
+    "State": {
+      "Code": 16,
+      "Name": "running"
+    },
+    "ImageId": "ami-12345678",
+    "PrivateIpAddress": "10.0.1.100",
+    "PublicIpAddress": "54.123.45.67",
+    "VpcId": "vpc-abcd1234",
+    "SubnetId": "subnet-1234abcd",
+    "LaunchTime": "2026-02-10T08:00:00Z",
+    "Tags": [
+      {"Key": "Name", "Value": "web-server-1"},
+      {"Key": "Environment", "Value": "production"}
+    ]
+  },
+  {
+    "InstanceId": "i-0abcdef123456789f",
+    "InstanceType": "t3.small",
+    "State": {
+      "Code": 16,
+      "Name": "running"
+    },
+    "ImageId": "ami-87654321",
+    "PrivateIpAddress": "10.0.2.200",
+    "PublicIpAddress": "54.123.45.89",
+    "VpcId": "vpc-abcd1234",
+    "SubnetId": "subnet-5678efgh",
+    "LaunchTime": "2026-02-11T14:30:00Z",
+    "Tags": [
+      {"Key": "Name", "Value": "api-server-1"},
+      {"Key": "Environment", "Value": "staging"}
+    ]
+  }
+]
+
