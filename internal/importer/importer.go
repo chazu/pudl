@@ -13,16 +13,21 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/inference"
+	"pudl/internal/schemagen"
+	"pudl/internal/schemaname"
 	"pudl/internal/streaming"
+	"pudl/internal/typepattern"
 	"pudl/internal/validator"
 )
 
 // Importer handles data import operations
 type Importer struct {
-	dataPath   string
-	schemaPath string
-	catalogDB  *database.CatalogDB
-	inferrer   *inference.SchemaInferrer
+	dataPath     string
+	schemaPath   string
+	catalogDB    *database.CatalogDB
+	inferrer     *inference.SchemaInferrer
+	typeRegistry *typepattern.Registry
+	schemaGen    *schemagen.Generator
 }
 
 // ImportOptions contains options for importing data
@@ -70,11 +75,20 @@ func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 		return nil, fmt.Errorf("failed to initialize catalog database: %w", err)
 	}
 
+	// Initialize type pattern registry with default patterns
+	typeRegistry := typepattern.NewRegistry()
+	typepattern.RegisterKubernetesPatterns(typeRegistry)
+
+	// Initialize schema generator
+	schemaGen := schemagen.NewGenerator(schemaPath)
+
 	// Create importer first (without inferrer)
 	imp := &Importer{
-		dataPath:   dataPath,
-		schemaPath: schemaPath,
-		catalogDB:  catalogDB,
+		dataPath:     dataPath,
+		schemaPath:   schemaPath,
+		catalogDB:    catalogDB,
+		typeRegistry: typeRegistry,
+		schemaGen:    schemaGen,
 	}
 
 	// Ensure bootstrap schemas exist before loading the inferrer
@@ -220,8 +234,9 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to infer schema: %w", err)
 		}
-		schema = result.Schema
-		confidence = result.Confidence
+
+		// If inference gave low confidence or matched catchall, try type detection
+		schema, confidence = i.handleUnmatchedData(data, result, true)
 	}
 
 	// Create metadata
@@ -834,5 +849,83 @@ func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (s
 		return "pudl.schemas/pudl/core:#Item", 0.5
 	}
 
-	return result.Schema, result.Confidence
+	// If inference gave low confidence or matched catchall, try type detection
+	return i.handleUnmatchedData(itemData, result, false)
+}
+
+// isCatchall checks if a schema name is a catchall/fallback schema
+func isCatchall(schema string) bool {
+	return schemaname.IsFallbackSchema(schema)
+}
+
+// handleUnmatchedData attempts to detect the data type and auto-generate a schema
+// when inference gives low confidence or matches a catchall schema.
+// It returns the (possibly new) schema name and confidence.
+func (i *Importer) handleUnmatchedData(
+	data interface{},
+	inferResult *inference.InferenceResult,
+	verbose bool,
+) (string, float64) {
+	// Only trigger if inference gave low confidence or matched catchall
+	if inferResult.Confidence >= 0.5 && !isCatchall(inferResult.Schema) {
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	// Try type detection - need map[string]interface{} for pattern matching
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	detected := i.typeRegistry.Detect(dataMap)
+	if detected == nil {
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	if verbose {
+		fmt.Printf("Detected [%s] resource: %s\n", detected.Pattern.Ecosystem, detected.TypeID)
+	}
+
+	// Generate schema from detected type
+	result, err := i.schemaGen.GenerateFromDetectedType(detected, data)
+	if err != nil {
+		if verbose {
+			fmt.Printf("Warning: failed to generate schema for detected type: %v\n", err)
+		}
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	// Write the generated schema (don't overwrite existing)
+	if err := i.schemaGen.WriteSchema(result, result.Content, false); err != nil {
+		// Check if it's a "schema already exists" error - that's fine, we can still use it
+		if _, ok := err.(*schemagen.SchemaExistsError); !ok {
+			if verbose {
+				fmt.Printf("Warning: failed to write generated schema: %v\n", err)
+			}
+			return inferResult.Schema, inferResult.Confidence
+		}
+	} else if verbose {
+		fmt.Printf("Generated schema: %s\n", result.FilePath)
+	}
+
+	// Reload schemas to pick up the new one
+	if err := i.inferrer.Reload(); err != nil {
+		if verbose {
+			fmt.Printf("Warning: failed to reload schemas: %v\n", err)
+		}
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	// Re-run inference - should now match the new schema
+	newResult, err := i.inferrer.Infer(data, inference.InferenceHints{
+		Format: "json",
+	})
+	if err != nil {
+		if verbose {
+			fmt.Printf("Warning: failed to re-infer schema: %v\n", err)
+		}
+		return inferResult.Schema, inferResult.Confidence
+	}
+
+	return newResult.Schema, newResult.Confidence
 }
