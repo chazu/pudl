@@ -1,0 +1,87 @@
+[
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "test-pod-1",
+      "namespace": "default",
+      "uid": "aaaaaaaa-1111-1111-1111-111111111111",
+      "creationTimestamp": "2026-02-13T09:00:00Z",
+      "labels": {
+        "app": "frontend"
+      }
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "app",
+          "image": "nginx:latest",
+          "ports": [{"containerPort": 80}]
+        }
+      ],
+      "restartPolicy": "Always",
+      "nodeName": "node-1"
+    },
+    "status": {
+      "phase": "Running",
+      "podIP": "10.244.0.10"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "test-pod-2",
+      "namespace": "kube-system",
+      "uid": "bbbbbbbb-2222-2222-2222-222222222222",
+      "creationTimestamp": "2026-02-13T09:15:00Z",
+      "labels": {
+        "app": "backend"
+      }
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "api",
+          "image": "api-server:v2.0",
+          "ports": [{"containerPort": 8080}]
+        }
+      ],
+      "restartPolicy": "Always",
+      "nodeName": "node-2"
+    },
+    "status": {
+      "phase": "Running",
+      "podIP": "10.244.1.20"
+    }
+  },
+  {
+    "apiVersion": "v1",
+    "kind": "Pod",
+    "metadata": {
+      "name": "test-pod-3",
+      "namespace": "production",
+      "uid": "cccccccc-3333-3333-3333-333333333333",
+      "creationTimestamp": "2026-02-13T09:30:00Z",
+      "labels": {
+        "app": "database"
+      }
+    },
+    "spec": {
+      "containers": [
+        {
+          "name": "postgres",
+          "image": "postgres:15",
+          "ports": [{"containerPort": 5432}]
+        }
+      ],
+      "restartPolicy": "Always",
+      "nodeName": "node-1"
+    },
+    "status": {
+      "phase": "Running",
+      "podIP": "10.244.0.15"
+    }
+  }
+]
+

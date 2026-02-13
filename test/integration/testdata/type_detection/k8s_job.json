@@ -1,0 +1,60 @@
+{
+  "apiVersion": "batch/v1",
+  "kind": "Job",
+  "metadata": {
+    "name": "test-job",
+    "namespace": "default",
+    "uid": "12345678-1234-1234-1234-123456789012",
+    "creationTimestamp": "2026-02-13T10:00:00Z",
+    "labels": {
+      "app": "test-app",
+      "job-name": "test-job"
+    }
+  },
+  "spec": {
+    "parallelism": 1,
+    "completions": 1,
+    "backoffLimit": 6,
+    "template": {
+      "metadata": {
+        "labels": {
+          "app": "test-app"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "name": "test-container",
+            "image": "test-registry/test-app:latest",
+            "command": ["echo", "hello"],
+            "resources": {
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "500m",
+                "memory": "256Mi"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Never"
+      }
+    }
+  },
+  "status": {
+    "succeeded": 1,
+    "completionTime": "2026-02-13T10:05:00Z",
+    "startTime": "2026-02-13T10:00:00Z",
+    "conditions": [
+      {
+        "type": "Complete",
+        "status": "True",
+        "lastProbeTime": "2026-02-13T10:05:00Z",
+        "lastTransitionTime": "2026-02-13T10:05:00Z"
+      }
+    ]
+  }
+}
+
