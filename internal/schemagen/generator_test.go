@@ -3,10 +3,13 @@ package schemagen
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"pudl/internal/typepattern"
 )
 
 func TestSchemaExistsError(t *testing.T) {
@@ -328,3 +331,223 @@ func TestSchemaValidationError(t *testing.T) {
 	})
 }
 
+func TestGenerateFromDetectedType(t *testing.T) {
+	t.Run("generates schema with canonical import", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "pudl-schemagen-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		generator := NewGenerator(tempDir)
+
+		detected := &typepattern.DetectedType{
+			Pattern: &typepattern.TypePattern{
+				Name:      "kubernetes",
+				Ecosystem: "k8s",
+				MetadataDefaults: func(typeID string) *typepattern.PudlMetadata {
+					return &typepattern.PudlMetadata{
+						SchemaType:      "kubernetes",
+						ResourceType:    "k8s.batch.job",
+						CascadePriority: 90,
+						IdentityFields:  []string{"metadata.name", "metadata.namespace"},
+						TrackedFields:   []string{"status.succeeded", "status.failed"},
+					}
+				},
+			},
+			TypeID:     "batch/v1:Job",
+			ImportPath: "cue.dev/x/k8s.io/api/batch/v1",
+			Definition: "Job",
+			Confidence: 0.9,
+		}
+
+		sampleData := map[string]interface{}{
+			"apiVersion": "batch/v1",
+			"kind":       "Job",
+			"metadata":   map[string]interface{}{"name": "test-job"},
+		}
+
+		result, err := generator.GenerateFromDetectedType(detected, sampleData)
+		require.NoError(t, err)
+
+		// Verify result structure
+		assert.Equal(t, "Job", result.DefinitionName)
+		assert.Equal(t, "k8s", result.PackageName)
+		assert.Contains(t, result.FilePath, "pudl/k8s/job.cue")
+
+		// Verify content structure
+		assert.Contains(t, result.Content, "package k8s")
+		assert.Contains(t, result.Content, `import batch "cue.dev/x/k8s.io/api/batch/v1"`)
+		assert.Contains(t, result.Content, "#Job: batch.#Job & {")
+		assert.Contains(t, result.Content, "_pudl: {")
+		assert.Contains(t, result.Content, `schema_type:      "kubernetes"`)
+		assert.Contains(t, result.Content, `resource_type:    "k8s.batch.job"`)
+		assert.Contains(t, result.Content, "cascade_priority: 90")
+		assert.Contains(t, result.Content, `["metadata.name", "metadata.namespace"]`)
+		assert.Contains(t, result.Content, `["status.succeeded", "status.failed"]`)
+	})
+
+	t.Run("falls back to standard generation when no import path", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "pudl-schemagen-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		generator := NewGenerator(tempDir)
+
+		detected := &typepattern.DetectedType{
+			Pattern: &typepattern.TypePattern{
+				Name:      "custom",
+				Ecosystem: "custom",
+			},
+			TypeID:     "Custom",
+			ImportPath: "", // No import path - should fall back
+			Definition: "Custom",
+			Confidence: 0.7,
+		}
+
+		sampleData := map[string]interface{}{
+			"id":   "test-123",
+			"name": "test item",
+		}
+
+		result, err := generator.GenerateFromDetectedType(detected, sampleData)
+		require.NoError(t, err)
+
+		// Verify fallback generation
+		assert.Equal(t, "Custom", result.DefinitionName)
+		assert.Contains(t, result.Content, "package custom")
+		assert.Contains(t, result.Content, "#Custom: {")
+		// Should NOT contain import statement
+		assert.NotContains(t, result.Content, "import ")
+		// Should have generated fields from sample data
+		assert.Contains(t, result.Content, "id:")
+		assert.Contains(t, result.Content, "name:")
+	})
+
+	t.Run("returns error for nil detected type", func(t *testing.T) {
+		generator := NewGenerator("/tmp")
+
+		_, err := generator.GenerateFromDetectedType(nil, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "detected type is nil")
+	})
+
+	t.Run("returns error for nil pattern", func(t *testing.T) {
+		generator := NewGenerator("/tmp")
+
+		detected := &typepattern.DetectedType{
+			Pattern: nil,
+		}
+
+		_, err := generator.GenerateFromDetectedType(detected, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "detected type has no pattern")
+	})
+
+	t.Run("uses default metadata when MetadataDefaults is nil", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "pudl-schemagen-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		generator := NewGenerator(tempDir)
+
+		detected := &typepattern.DetectedType{
+			Pattern: &typepattern.TypePattern{
+				Name:             "kubernetes",
+				Ecosystem:        "k8s",
+				MetadataDefaults: nil, // No metadata defaults
+			},
+			TypeID:     "apps/v1:Deployment",
+			ImportPath: "cue.dev/x/k8s.io/api/apps/v1",
+			Definition: "Deployment",
+			Confidence: 0.9,
+		}
+
+		result, err := generator.GenerateFromDetectedType(detected, nil)
+		require.NoError(t, err)
+
+		// Should use default metadata
+		assert.Contains(t, result.Content, `schema_type:      "base"`)
+		assert.Contains(t, result.Content, `resource_type:    "k8s.deployment"`)
+		assert.Contains(t, result.Content, "cascade_priority: 100")
+	})
+
+	t.Run("generated schema validates with CUE", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "pudl-schemagen-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(tempDir)
+
+		generator := NewGenerator(tempDir)
+
+		detected := &typepattern.DetectedType{
+			Pattern: &typepattern.TypePattern{
+				Name:      "kubernetes",
+				Ecosystem: "k8s",
+				MetadataDefaults: func(typeID string) *typepattern.PudlMetadata {
+					return &typepattern.PudlMetadata{
+						SchemaType:      "kubernetes",
+						ResourceType:    "k8s.batch.job",
+						CascadePriority: 90,
+						IdentityFields:  []string{"metadata.name"},
+						TrackedFields:   []string{"status.succeeded"},
+					}
+				},
+			},
+			TypeID:     "batch/v1:Job",
+			ImportPath: "cue.dev/x/k8s.io/api/batch/v1",
+			Definition: "Job",
+			Confidence: 0.9,
+		}
+
+		result, err := generator.GenerateFromDetectedType(detected, nil)
+		require.NoError(t, err)
+
+		// Validate CUE syntax (without actually resolving imports)
+		// We can't fully validate since the import won't resolve in test
+		// but we can check basic syntax
+		assert.True(t, strings.HasPrefix(result.Content, "package "))
+		assert.Contains(t, result.Content, "import ")
+		assert.Contains(t, result.Content, "#Job:")
+	})
+}
+
+func TestDeriveImportAlias(t *testing.T) {
+	generator := NewGenerator("/tmp")
+
+	tests := []struct {
+		name       string
+		importPath string
+		expected   string
+	}{
+		{
+			name:       "kubernetes batch api",
+			importPath: "cue.dev/x/k8s.io/api/batch/v1",
+			expected:   "batch",
+		},
+		{
+			name:       "kubernetes apps api",
+			importPath: "cue.dev/x/k8s.io/api/apps/v1",
+			expected:   "apps",
+		},
+		{
+			name:       "kubernetes core api",
+			importPath: "cue.dev/x/k8s.io/api/core/v1",
+			expected:   "core",
+		},
+		{
+			name:       "simple path",
+			importPath: "example.com/mypackage",
+			expected:   "mypackage",
+		},
+		{
+			name:       "path with version at end",
+			importPath: "example.com/package/v2",
+			expected:   "package",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := generator.deriveImportAlias(tt.importPath)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

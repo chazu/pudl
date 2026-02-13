@@ -13,6 +13,7 @@ import (
 	"cuelang.org/go/cue/parser"
 
 	"pudl/internal/inference"
+	"pudl/internal/typepattern"
 )
 
 // Generator handles schema generation from data.
@@ -95,6 +96,136 @@ func (g *Generator) Generate(data interface{}, opts GenerateOptions) (*GenerateR
 		Content:               content,
 	}, nil
 }
+
+// GenerateFromDetectedType generates a CUE schema from a detected type.
+// If the detected type has an ImportPath (canonical schema available), it generates
+// a schema that imports and extends the canonical type. Otherwise, it falls back
+// to standard Generate() behavior.
+func (g *Generator) GenerateFromDetectedType(
+	detected *typepattern.DetectedType,
+	sampleData interface{},
+) (*GenerateResult, error) {
+	if detected == nil {
+		return nil, fmt.Errorf("detected type is nil")
+	}
+
+	if detected.Pattern == nil {
+		return nil, fmt.Errorf("detected type has no pattern")
+	}
+
+	// Get ecosystem and definition name for file path
+	ecosystem := detected.Pattern.Ecosystem
+	definition := detected.Definition
+
+	// If no import path, fall back to standard generation
+	if detected.ImportPath == "" {
+		opts := GenerateOptions{
+			PackagePath:    fmt.Sprintf("pudl/%s", ecosystem),
+			DefinitionName: definition,
+			IsCollection:   false,
+		}
+		return g.Generate(sampleData, opts)
+	}
+
+	// Get PUDL metadata from pattern
+	var metadata *typepattern.PudlMetadata
+	if detected.Pattern.MetadataDefaults != nil {
+		metadata = detected.Pattern.MetadataDefaults(detected.TypeID)
+	}
+
+	// Generate schema with import
+	content := g.generateCUEContentWithImport(
+		detected.ImportPath,
+		definition,
+		metadata,
+		ecosystem,
+	)
+
+	// Determine file path: ~/.pudl/schema/pudl/<ecosystem>/<definition>.cue
+	fileName := strings.ToLower(definition) + ".cue"
+	filePath := filepath.Join(g.SchemaPath, "pudl", ecosystem, fileName)
+
+	return &GenerateResult{
+		FilePath:       filePath,
+		PackageName:    ecosystem,
+		DefinitionName: definition,
+		FieldCount:     0, // Import-based schemas don't track field count
+		Content:        content,
+	}, nil
+}
+
+// generateCUEContentWithImport generates CUE content that imports and extends a canonical type.
+// It creates proper CUE syntax with import statement and PUDL metadata block.
+func (g *Generator) generateCUEContentWithImport(
+	importPath string,
+	definition string,
+	metadata *typepattern.PudlMetadata,
+	ecosystem string,
+) string {
+	var b strings.Builder
+
+	// Package declaration
+	b.WriteString(fmt.Sprintf("package %s\n\n", ecosystem))
+
+	// Import statement with alias
+	importAlias := g.deriveImportAlias(importPath)
+	b.WriteString(fmt.Sprintf("import %s \"%s\"\n\n", importAlias, importPath))
+
+	// Definition that extends the imported type
+	b.WriteString(fmt.Sprintf("#%s: %s.#%s & {\n", definition, importAlias, definition))
+
+	// Add _pudl metadata block
+	b.WriteString("\t_pudl: {\n")
+
+	if metadata != nil {
+		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"%s\"\n", metadata.SchemaType))
+		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s\"\n", metadata.ResourceType))
+		b.WriteString(fmt.Sprintf("\t\tcascade_priority: %d\n", metadata.CascadePriority))
+		b.WriteString(fmt.Sprintf("\t\tidentity_fields:  %s\n", g.formatStringSlice(metadata.IdentityFields)))
+		b.WriteString(fmt.Sprintf("\t\ttracked_fields:   %s\n", g.formatStringSlice(metadata.TrackedFields)))
+	} else {
+		// Default metadata if none provided
+		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"base\"\n"))
+		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s.%s\"\n", ecosystem, strings.ToLower(definition)))
+		b.WriteString("\t\tcascade_priority: 100\n")
+		b.WriteString("\t\tidentity_fields:  []\n")
+		b.WriteString("\t\ttracked_fields:   []\n")
+	}
+
+	b.WriteString("\t}\n")
+	b.WriteString("}\n")
+
+	return b.String()
+}
+
+// deriveImportAlias extracts an appropriate alias from an import path.
+// For example, "cue.dev/x/k8s.io/api/batch/v1" returns "batch".
+func (g *Generator) deriveImportAlias(importPath string) string {
+	// Split by "/" and get the path segments
+	parts := strings.Split(importPath, "/")
+	if len(parts) == 0 {
+		return "pkg"
+	}
+
+	// Get the last meaningful segment (skip version suffixes like "v1")
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := parts[i]
+		// Skip version-like suffixes
+		if strings.HasPrefix(part, "v") && len(part) <= 3 {
+			continue
+		}
+		// Skip common path components
+		if part == "api" || part == "apis" {
+			continue
+		}
+		// Use this as the alias
+		return sanitizeIdentifier(part)
+	}
+
+	// Fallback to last segment
+	return sanitizeIdentifier(parts[len(parts)-1])
+}
+
 
 // analyzeData analyzes the data structure and infers types.
 func (g *Generator) analyzeData(data interface{}, opts GenerateOptions) *FieldAnalysis {
