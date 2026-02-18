@@ -58,8 +58,10 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 }
 
 // ensureBasicSchemas verifies that required schema files exist.
-// Returns an error if the schema repository is not properly initialized.
-// Users should run 'pudl init' to set up the schema repository.
+// If the schema repository is initialized (cue.mod exists) but bootstrap
+// schemas are missing, it copies them automatically. This handles the case
+// where new bootstrap schemas are added after the user has already run
+// 'pudl init'.
 func (i *Importer) ensureBasicSchemas() error {
 	// Check cue.mod/module.cue exists (required for CUE module loading)
 	modulePath := filepath.Join(i.schemaPath, "cue.mod", "module.cue")
@@ -67,10 +69,16 @@ func (i *Importer) ensureBasicSchemas() error {
 		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
 	}
 
-	// Check if core schema exists
+	// Check if core schema exists; if not, copy bootstrap schemas to fill gaps
 	corePath := filepath.Join(i.schemaPath, "pudl", "core", "core.cue")
 	if _, err := os.Stat(corePath); os.IsNotExist(err) {
-		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", corePath)
+		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
+		}
+		// Verify the copy succeeded
+		if _, err := os.Stat(corePath); os.IsNotExist(err) {
+			return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", corePath)
+		}
 	}
 	return nil
 }
