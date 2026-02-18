@@ -100,6 +100,10 @@ PUDL (Personal Unified Data Lake) is a CLI tool for SRE/platform engineers to ma
 - [x] Added `Finalize()`, `Reset()`, `GetBufferSize()` to ChunkProcessor interface
 - [x] Large file tests — 6 new tests for cross-chunk reassembly up to 1MB
 
+### 2026-02-18 Collection Wrapper Detection Research
+- [x] pudl-yqt: Researched built-in schema for API collection wrapper responses
+- [x] pudl-mxk: Deep dive into Option B (CUE schema-based detection) — concluded CUE type system cannot express the structural constraint; Option A (import-time unwrap) is recommended
+
 ### Design Decisions Made
 - **No Lisp/Zygomys rules** - Schema inference uses CUE-based detection, not a Lisp rules engine
 - **No interactive review TUI** - Review workflow removed; `pudl schema reinfer` handles batch re-inference
