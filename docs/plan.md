@@ -284,7 +284,7 @@ Currently, `assignItemSchema()` (line 844) and the inference call in `ImportFile
 
 **File size impact:** ~2 lines changed in `importer.go`.
 
-#### Task 5: Integration Test (depends on Tasks 2, 3, 4)
+#### Task 5: Integration Test (depends on Tasks 2, 3, 4) ✅ DONE
 
 Add integration tests to `internal/importer/importer_test.go` that test the full import flow with wrapper data.
 

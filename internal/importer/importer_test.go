@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -394,4 +396,114 @@ func TestImportResult_Timestamps(t *testing.T) {
 	// Verify timestamp is reasonable (allow some tolerance for test execution time)
 	assert.True(t, importTime.After(beforeImport.Add(-time.Second)) || importTime.Equal(beforeImport))
 	assert.True(t, importTime.Before(afterImport.Add(time.Second)) || importTime.Equal(afterImport))
+}
+
+func TestImportFile_CollectionWrapper(t *testing.T) {
+	setup := testutil.NewTempDirSetup(t)
+	workspace := setup.CreatePUDLWorkspace()
+
+	// Create a JSON file that looks like a collection wrapper response
+	wrapperJSON := `{"items": [{"id": "a", "name": "alpha"}, {"id": "b", "name": "beta"}], "count": 2}`
+	wrapperFile := setup.WriteFile("wrapper.json", wrapperJSON)
+
+	imp, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	require.NoError(t, err)
+
+	result, err := imp.ImportFile(ImportOptions{SourcePath: wrapperFile})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// The wrapper should be detected and imported as a collection
+	assert.Equal(t, 2, result.RecordCount, "wrapper should report 2 items")
+	assert.Contains(t, result.AssignedSchema, "#Collection", "schema should be Collection")
+	testutil.AssertFileExists(t, result.StoredPath)
+	testutil.AssertFileExists(t, result.MetadataPath)
+
+	// Verify catalog has the collection entry plus 2 item entries
+	items, err := imp.catalogDB.GetCollectionItems(result.ID)
+	require.NoError(t, err)
+	assert.Len(t, items, 2, "catalog should contain 2 item entries")
+
+	// Verify each item has the expected properties
+	for _, item := range items {
+		assert.NotEmpty(t, item.ID)
+		assert.Equal(t, "json", item.Format)
+		assert.NotNil(t, item.CollectionType)
+		assert.Equal(t, "item", *item.CollectionType)
+		assert.NotNil(t, item.CollectionID)
+		assert.Equal(t, result.ID, *item.CollectionID)
+		// Verify item data files exist on disk
+		testutil.AssertFileExists(t, item.StoredPath)
+	}
+
+	// Verify the collection entry itself exists
+	collectionEntry, err := imp.catalogDB.GetCollectionByID(result.ID)
+	require.NoError(t, err)
+	require.NotNil(t, collectionEntry)
+	assert.Equal(t, "collection", *collectionEntry.CollectionType)
+}
+
+func TestImportFile_NormalObjectNotDetectedAsWrapper(t *testing.T) {
+	setup := testutil.NewTempDirSetup(t)
+	workspace := setup.CreatePUDLWorkspace()
+	fixtures := testutil.NewTestDataFixtures()
+
+	// A normal JSON object should NOT be detected as a wrapper
+	jsonFile := setup.WriteFile("normal.json", fixtures.ValidJSON())
+
+	imp, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	require.NoError(t, err)
+
+	result, err := imp.ImportFile(ImportOptions{SourcePath: jsonFile})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Should be imported as a single object, not a collection
+	assert.Equal(t, "json", result.DetectedFormat)
+	assert.Equal(t, 1, result.RecordCount)
+	assert.NotContains(t, result.AssignedSchema, "#Collection",
+		"normal object should not be assigned Collection schema")
+	testutil.AssertFileExists(t, result.StoredPath)
+	testutil.AssertFileExists(t, result.MetadataPath)
+
+	// Verify no collection items were created for this entry
+	items, err := imp.catalogDB.GetCollectionItems(result.ID)
+	require.NoError(t, err)
+	assert.Empty(t, items, "normal object should have no collection items")
+}
+
+func TestImportFile_NDJSONUsesNDJSONPath(t *testing.T) {
+	setup := testutil.NewTempDirSetup(t)
+	workspace := setup.CreatePUDLWorkspace()
+
+	// Create an NDJSON file with .json extension so that detectFormat's
+	// isNewlineDelimitedJSON check is triggered (the switch only handles .json).
+	ndjsonContent := `{"id": 1, "name": "item1", "type": "test"}
+{"id": 2, "name": "item2", "type": "test"}
+{"id": 3, "name": "item3", "type": "test"}`
+	ndjsonFile := setup.WriteFile("collection.json", ndjsonContent)
+
+	imp, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	require.NoError(t, err)
+
+	result, err := imp.ImportFile(ImportOptions{
+		SourcePath:      ndjsonFile,
+		StreamingConfig: streaming.DefaultStreamingConfig(),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// NDJSON should be detected as "ndjson" format, routed through the NDJSON
+	// collection path (not the wrapper path)
+	assert.Equal(t, "ndjson", result.DetectedFormat, "format should be ndjson")
+	assert.Contains(t, result.AssignedSchema, "#Collection")
+	assert.Greater(t, result.RecordCount, 0, "should have imported records")
+	testutil.AssertFileExists(t, result.StoredPath)
+
+	// Verify individual item files were created on disk
+	rawDir := filepath.Dir(result.StoredPath)
+	entries, err := os.ReadDir(rawDir)
+	require.NoError(t, err)
+	// Should have the original NDJSON file plus individual item JSON files
+	assert.Greater(t, len(entries), 1, "raw dir should contain original file plus item files")
 }
