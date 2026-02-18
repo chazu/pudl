@@ -264,7 +264,7 @@ Modify `ImportFile()` in `importer.go` to call `DetectCollectionWrapper` after `
 
 **File size impact:** ~30 lines added to `importer.go` (the `importWrappedCollection` method + the detection call).
 
-#### Task 4: Fix CollectionType Hint Propagation (depends on Task 1, can be done in parallel with Task 3)
+#### Task 4: Fix CollectionType Hint Propagation (depends on Task 1, can be done in parallel with Task 3) ✅ DONE
 
 Currently, `assignItemSchema()` (line 844) and the inference call in `ImportFile()` (line 230) do not pass `CollectionType` in `InferenceHints`. This means the collection/item filtering in `heuristics.go:71-83` never activates.
 
