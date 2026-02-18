@@ -842,7 +842,8 @@ func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (s
 
 	// Use schema inferrer for automatic schema assignment
 	result, err := i.inferrer.Infer(itemData, inference.InferenceHints{
-		Format: "json",
+		Format:         "json",
+		CollectionType: "item",
 	})
 	if err != nil {
 		// Fall back to Item schema on error
