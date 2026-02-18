@@ -205,6 +205,13 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
 
+	// Check if the data is a collection wrapper (e.g., {"items": [...], "count": 2})
+	if dataMap, ok := data.(map[string]interface{}); ok {
+		if wrapper := DetectCollectionWrapper(dataMap); wrapper != nil {
+			return i.importWrappedCollection(opts, wrapper, timestamp, timestampStr, origin, filename, rawDir, metadataDir, fileInfo)
+		}
+	}
+
 	// Copy file to raw storage AFTER analysis
 	storedPath := filepath.Join(rawDir, filename)
 	if err := i.copyFile(opts.SourcePath, storedPath); err != nil {
@@ -633,6 +640,40 @@ func (i *Importer) importNDJSONCollection(opts ImportOptions, timestamp time.Tim
 
 	// Create individual item entries
 	if err := i.createCollectionItems(collectionID, data, timestamp, rawDir, metadataDir, opts); err != nil {
+		return nil, fmt.Errorf("failed to create collection items: %w", err)
+	}
+
+	return collectionResult, nil
+}
+
+// importWrappedCollection handles importing a detected collection wrapper as a
+// collection with individual items. It reuses the same collection infrastructure
+// as NDJSON import.
+func (i *Importer) importWrappedCollection(
+	opts ImportOptions,
+	wrapper *WrapperDetection,
+	timestamp time.Time,
+	timestampStr, origin, filename string,
+	rawDir, metadataDir string,
+	fileInfo os.FileInfo,
+) (*ImportResult, error) {
+	// Copy original file to raw storage
+	storedPath := filepath.Join(rawDir, filename)
+	if err := i.copyFile(opts.SourcePath, storedPath); err != nil {
+		return nil, fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	// Generate collection ID
+	collectionID := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+	// Create collection entry using the extracted items
+	collectionResult, err := i.createCollectionEntry(opts, timestamp, timestampStr, origin, filename, storedPath, metadataDir, fileInfo, len(wrapper.Items), wrapper.Items)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create collection entry: %w", err)
+	}
+
+	// Create individual item entries
+	if err := i.createCollectionItems(collectionID, wrapper.Items, timestamp, rawDir, metadataDir, opts); err != nil {
 		return nil, fmt.Errorf("failed to create collection items: %w", err)
 	}
 

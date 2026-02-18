@@ -222,7 +222,7 @@ Comprehensive tests for `DetectCollectionWrapper`:
 
 **File size estimate:** ~250 lines.
 
-#### Task 3: Integration into `importer.go` — Wrapper Detection in Import Path (depends on Task 1)
+#### Task 3: Integration into `importer.go` — Wrapper Detection in Import Path (depends on Task 1) ✅ DONE
 
 Modify `ImportFile()` in `importer.go` to call `DetectCollectionWrapper` after `analyzeDataStreaming()` returns a single object (`map[string]interface{}`).
 
