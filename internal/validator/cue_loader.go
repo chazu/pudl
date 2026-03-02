@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -48,59 +49,69 @@ type LoadedModule struct {
 	LoadPath    string                    `json:"load_path"`
 }
 
-// LoadAllModules loads all CUE modules from the schema directory
-// This method properly handles the new CUE module structure with hierarchical imports
-// and third-party dependencies
+// LoadAllModules loads all CUE modules from the schema directory.
+// If any instances have missing dependencies, it runs "cue mod tidy" to fetch
+// them and retries the load once.
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
+	modules, needsTidy, err := loader.loadAllModulesOnce()
+	if err != nil && !needsTidy {
+		return nil, err
+	}
+	if needsTidy {
+		loader.log("Missing CUE dependencies detected, running cue mod tidy")
+		if tidyErr := loader.runCueModTidy(); tidyErr != nil {
+			return nil, fmt.Errorf("missing CUE dependencies and cue mod tidy failed: %w", tidyErr)
+		}
+		modules, _, err = loader.loadAllModulesOnce()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return modules, nil
+}
+
+// loadAllModulesOnce attempts a single load pass. It returns needsTidy=true
+// if any instance has an error indicating missing packages/modules.
+func (loader *CUEModuleLoader) loadAllModulesOnce() (map[string]*LoadedModule, bool, error) {
 	modules := make(map[string]*LoadedModule)
 
 	loader.log("Loading CUE modules from: %s", loader.schemaPath)
 
-	// Load the entire CUE module from the schema root
-	// This handles all packages and their cross-references automatically,
-	// including third-party dependencies from the module cache
 	config := &load.Config{
 		Dir: loader.schemaPath,
 	}
 
-	// Load all packages - we'll skip examples during processing
 	instances := load.Instances([]string{"./..."}, config)
 
 	if len(instances) == 0 {
-		return nil, fmt.Errorf("no CUE instances found in schema module")
+		return nil, false, fmt.Errorf("no CUE instances found in schema module")
 	}
 
 	loader.log("Found %d CUE instances to load", len(instances))
 
-	// Process each loaded instance (package)
 	for _, inst := range instances {
 		loader.log("Processing instance: %s (dir: %s)", inst.PkgName, inst.Dir)
 
-		// Skip examples and test directories - they may have unfetched third-party dependencies
-		// or contain test schemas that shouldn't be used for inference
-		if strings.Contains(inst.Dir, "/examples") || inst.PkgName == "examples" ||
-			strings.Contains(inst.Dir, "/test") || inst.PkgName == "test" {
-			loader.log("Skipping examples/test directory: %s", inst.Dir)
-			continue
-		}
-
 		if inst.Err != nil {
+			if isMissingDependencyErr(inst.Err) {
+				return nil, true, inst.Err
+			}
 			loader.log("Error loading instance %s: %v", inst.PkgName, inst.Err)
-			return nil, fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err)
+			return nil, false, fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err)
 		}
 
 		// Build the CUE value from the loaded instance
 		value := loader.ctx.BuildInstance(inst)
 		if value.Err() != nil {
 			loader.log("Error building CUE value for %s: %v", inst.PkgName, value.Err())
-			return nil, fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err())
+			return nil, false, fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err())
 		}
 
 		// Create module from instance
 		module, err := loader.createModuleFromInstance(inst, value)
 		if err != nil {
 			loader.log("Error creating module from %s: %v", inst.PkgName, err)
-			return nil, fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err)
+			return nil, false, fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err)
 		}
 
 		loader.log("Successfully loaded module %s with %d schemas", inst.PkgName, len(module.Schemas))
@@ -108,7 +119,27 @@ func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error
 	}
 
 	loader.log("Loaded %d modules total", len(modules))
-	return modules, nil
+	return modules, false, nil
+}
+
+// isMissingDependencyErr returns true if the error indicates unfetched CUE
+// packages or modules that "cue mod tidy" can resolve.
+func isMissingDependencyErr(err error) bool {
+	s := err.Error()
+	return strings.Contains(s, "cannot find package") || strings.Contains(s, "cannot find module")
+}
+
+// runCueModTidy executes "cue mod tidy" in the schema directory to fetch
+// missing third-party dependencies from the CUE module registry.
+func (loader *CUEModuleLoader) runCueModTidy() error {
+	cmd := exec.Command("cue", "mod", "tidy")
+	cmd.Dir = loader.schemaPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, string(output))
+	}
+	loader.log("cue mod tidy completed successfully")
+	return nil
 }
 
 // Legacy methods removed - no longer needed with new CUE module structure
