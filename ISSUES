@@ -1,0 +1,6 @@
+* In schema review flow, user should be able to specify package path for schema like so : package.someShit or package.subpackage.Fuckthis
+* Adding a schema via review flow doesn't properly store the schema name - no #
+DONE
+* In schema review flow, the 'inferred' name for a schema is always just 'Customresource' - kill this 'functionality'
+* In schema review flow, when creating, editor opens template which imports time but does not use it
+* In schema review flow, there are comments at the end of the create template which violate cue syntax
