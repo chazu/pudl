@@ -274,6 +274,12 @@ description: "PUDL Schema Repository - CUE schemas for data lake validation and 
 		return fmt.Errorf("failed to create examples directory: %w", err)
 	}
 
+	// Create definitions directory
+	definitionsDir := filepath.Join(schemaDir, "definitions")
+	if err := os.MkdirAll(definitionsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create definitions directory: %w", err)
+	}
+
 	// Create Kubernetes example file
 	k8sExampleContent := `package examples
 

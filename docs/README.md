@@ -11,6 +11,7 @@ This directory contains all PUDL documentation. Start with the [root README](../
 | [cli-reference.md](cli-reference.md) | All commands, flags, and examples |
 | [schema-authoring.md](schema-authoring.md) | Writing custom CUE schemas with `_pudl` metadata |
 | [model-authoring.md](model-authoring.md) | Writing models that compose schemas with behavior |
+| [definition-authoring.md](definition-authoring.md) | Writing definitions (named instances of models) |
 | [collections.md](collections.md) | NDJSON, wrapper detection, collection queries |
 
 ## Architecture & Design

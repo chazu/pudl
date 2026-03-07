@@ -192,6 +192,30 @@ The key distinction: can CUE validate it statically? If yes, it's a schema const
 
 See [model-authoring.md](model-authoring.md) for the full guide on writing models.
 
+## Definitions
+
+Definitions are named instances of models with concrete configuration. While a model describes what a resource type looks like and what operations it supports, a definition assigns specific values and wires instances together.
+
+### Socket Wiring
+
+Definitions connect to each other through socket wiring — one definition's field references another definition's output:
+
+```cue
+prod_instance: examples.#EC2InstanceModel & {
+    schema: {
+        VpcId: prod_vpc.outputs.vpc_id  // wired to VPC output
+    }
+}
+```
+
+CUE validates type compatibility at parse time. The dependency graph is built automatically from these cross-references.
+
+### Dependency Graph
+
+Definitions form a directed acyclic graph (DAG) based on socket wiring. `pudl definition graph` shows the topological ordering — the order in which definitions should be processed so that dependencies are resolved first.
+
+See [definition-authoring.md](definition-authoring.md) for the full guide on writing definitions.
+
 ## Workspace Layout
 
 ```
