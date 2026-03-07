@@ -26,38 +26,234 @@ The core import/catalog/schema pipeline is stable and well-tested (291+ passing 
 - **Resource identity** — Stable `resource_id` from schema + identity fields; catchall uses content hash
 - **Collections are provenance** — Resources own identity independent of collection
 
-## Roadmap
+---
 
-### Phase 1: Analytical Layer (Next Priority)
+## Roadmap: Infrastructure Automation Expansion
 
-The single most impactful work: turn PUDL from "a place data goes" into "a tool that tells me things." Resource identity tracking is the prerequisite — already implemented.
+PUDL is expanding from a data processing/cataloging tool into a full infrastructure automation system inspired by System Initiative. The existing data pipeline becomes the artifact management layer underneath a new execution engine. Nothing is removed — scope grows.
 
-1. **`pudl diff`** — Compare two versions of the same resource (`resource_id` + `version`)
-2. **`pudl summary` / `pudl stats`** — Aggregate views ("47 EC2 instances, 3 outliers")
-3. **Basic outlier detection** — Given N instances of a schema, identify unusual field values
+Reference: `architecture.docx` in repo root.
 
-### Phase 2: Schema Intelligence
+### Key Concepts: Schema vs Model vs Definition
+
+| Concept | What it is |
+|---------|-----------|
+| **Schema** | A data shape. CUE constraints describing what a resource looks like. What pudl has today. |
+| **Model** | A schema + methods + sockets + auth + metadata + state shape. A schema becomes a model when it declares operational capabilities beyond data shape. |
+| **Definition** | A named instance of a model with concrete args. A CUE value that unifies against a model schema. |
+
+**Methods** have a `kind` field that determines their role in the execution lifecycle:
+
+- `action` — CRUD and custom operations (default). Create, delete, restart, etc.
+- `qualification` — Precondition check. Returns pass/fail. Declared to run before specific actions. These are aspects — cross-cutting concerns inserted at lifecycle cut-points.
+- `attribute` — Computed value derivation. May overlap with native CUE expressions for simple cases; Glojure for cases requiring external data.
+- `codegen` — Output transformation to other formats (JSON, YAML, HCL).
+
+The runtime uses one method execution pipeline with aspect-like dispatch based on `kind` and lifecycle hooks (`before`, `blocks`).
+
+**Sockets** are typed input/output ports on models, enabling inter-component data flow:
+
+- Input sockets are like function arguments — what this component needs from others.
+- Output sockets are like function returns — what this component provides to others.
+- Socket types are CUE values (primitives or schemas).
+- When definitions are connected via sockets, data flows automatically — a definition's output socket value populates another definition's input socket.
+- Cross-definition CUE references are the file-based equivalent of socket wiring.
+
+### Phase 1: Models — Schema + Methods + Sockets
+
+**Goal:** Formalize the distinction between schemas (data shapes) and models (schemas with operational capabilities). A model declares what you can *do* with a resource, not just what it looks like.
+
+Pudl already has CUE schemas with `_pudl` metadata. This phase extends that vocabulary to support methods, sockets, authentication, and state shape — turning a schema into a model.
+
+1. **Define base types in bootstrap CUE:**
+   - `#Method` — `kind` (action|qualification|attribute|codegen), `inputs`, `returns`, `timeout`, `retries`, `blocks` (for qualifications: which methods this gates)
+   - `#Socket` — `direction` (input|output), `type` (CUE value/schema), `description`, `required`
+   - `#ModelMetadata` — `name`, `description`, `category`, `icon`
+   - `#AuthConfig` — `method` (bearer|sigv4|basic|custom), `credentials` (vault references)
+   - `#QualificationResult` — `passed: bool`, `message: string` (standard return type for qualification methods)
+2. **Extend `_pudl` metadata block** to support model fields:
+   - `methods` — map of method declarations with `kind`, input/output schemas
+   - `sockets` — map of typed input/output ports
+   - `auth` — authentication configuration
+   - `state` — CUE schema for live resource state (used for drift detection)
+   - Existing schemas without these fields continue to work as plain schemas
+3. **`pudl model list`** — List schemas that declare methods (i.e., are models)
+4. **`pudl model show <name>`** — Display model schema including methods, sockets, auth, state shape
+5. **Write 2-3 example models** to validate the format:
+   - `aws/ec2.#Instance` — action methods (list, create, delete), qualification (valid_credentials, ami_exists), sockets (vpc_id input, instance_id output), sigv4 auth
+   - `generic/http.#Endpoint` — action methods (get, post), basic/bearer auth, generic sockets
+   - A simple model with no sockets to verify plain schemas still work
+
+**Reuses:** CUE loader, validator, schema registry, `_pudl` metadata convention, bootstrap embed system.
+
+**New packages:** `internal/model/` (model discovery, method/socket extraction, lifecycle resolution — "given method X, what qualifications must run first?").
+
+### Phase 2: Definitions — Named Resource Instances
+
+**Goal:** Users declare named instances of models with concrete configuration and socket wiring.
+
+Definitions are CUE files that unify against a model schema — pudl already does this during import validation. This phase makes it a first-class concept with persistent named entries and inter-definition connections.
+
+1. **Definition file convention** — `.pudl/definitions/<name>.cue` files that import and unify against model schemas
+2. **Definition storage and discovery** — Scan definitions dir, validate each against its model
+3. **Socket wiring** — Definitions connect to each other by binding input sockets to other definitions' output sockets. In CUE this is a typed reference: `inputs: { vpc_id: definitions.prod_vpc.outputs.vpc_id }`. The type system validates compatibility at parse time.
+4. **Vault reference syntax** — `vault."path/to/secret"` markers in definition args (resolution comes in Phase 5)
+5. **Cross-definition CUE references** — Native CUE path references for both socket wiring and direct field access
+6. **`pudl definition list`** — List all definitions with their model type and socket connections
+7. **`pudl definition show <name>`** — Print resolved definition value including wired sockets
+8. **`pudl definition validate <name>`** — Validate against model schema, verify socket type compatibility
+9. **`pudl definition graph`** — Show the dependency graph of definitions based on socket wiring and cross-references
+10. **`pudl repo validate`** — Validate all definitions and models across the workspace; detect broken socket wiring, missing dependencies
+
+**Reuses:** CUE evaluator, cascade validator (for error reporting), schema name normalization.
+
+**New packages:** `internal/definition/` (definition loader, validator, socket wiring resolution, dependency graph builder).
+
+### Phase 3: Glojure Runtime — Executable Methods
+
+**Goal:** Method logic written in Glojure can be executed by the Go runtime, with lifecycle dispatch based on method kind.
+
+This is the biggest new technical piece. Glojure is a Go-hosted Clojure dialect — method files are `.clj` s-expressions that call Go-registered builtins. The homoiconic property makes methods inspectable and agent-friendly.
+
+1. **Embed the Glojure runtime** — `github.com/glojurelang/glojure` as a Go dependency
+2. **Builtin namespace registration** — Go functions exposed to Glojure as callable namespaces
+   - Start with 3 namespaces: `pudl.http` (generic HTTP), `pudl.exec` (subprocess), `pudl.core` (utilities)
+3. **Method file convention** — `methods/<model-name>/<method-name>.clj` with `(defn run [args] ...)` entry point
+4. **Method execution pipeline with lifecycle dispatch:**
+   - Load definition → resolve args (including socket inputs from connected definitions) → bind to Glojure env
+   - **Before action:** find all `qualification` methods that declare `blocks: [<this-method>]`, execute them first. If any return `{passed: false}`, abort with the qualification's message.
+   - Evaluate `.clj` file → call `(run args)`
+   - Validate return value against CUE return schema (qualification methods validate against `#QualificationResult`)
+   - **After action:** run any `attribute` methods to compute derived values; run `codegen` methods to produce output transforms
+   - Store result as immutable data artifact (via existing pudl storage)
+   - Update output socket values on the definition (available to downstream definitions)
+5. **`pudl method run <definition> <method> [--tag k=v]`** — Execute a method (qualifications run automatically)
+6. **`pudl method run --dry-run <definition> <method>`** — Run qualifications only, show what would execute
+7. **`pudl method run --skip-qualifications <definition> <method>`** — Bypass qualification checks (requires explicit flag)
+8. **`pudl method list <definition>`** — List available methods grouped by kind
+
+**Reuses:** CUE evaluator (return schema validation), content-addressed storage, catalog (artifact indexing), metadata writer, definition graph (Phase 2, for socket resolution).
+
+**New packages:** `internal/glojure/` (runtime embedding, namespace registry, method loader), `internal/executor/` (lifecycle dispatch, qualification runner, socket value propagation).
+
+### Phase 4: Artifact Management — Unify Storage
+
+**Goal:** Method outputs, imported data, and workflow results share one storage and query layer.
+
+Pudl's existing catalog becomes the unified artifact backend. Method outputs are stored with the same content hashing, dedup, and provenance tracking as imported data — but with richer metadata (definition, method, run-id, tags).
+
+1. **Extend `CatalogEntry`** with execution metadata — `definition`, `method`, `run_id`, `tags`
+2. **Artifact path convention** — `.pudl/data/<definition>/<method>/<timestamp>-<hash>.json` with `latest` symlink
+3. **Tag system** — Key-value tags on definitions propagate to artifacts; overridable with `--tag`
+4. **`pudl data search`** — Search artifacts by definition, method, tag, time range
+5. **`pudl data latest <definition> <method>`** — Show most recent artifact
+6. **Adapt existing `pudl list`/`pudl show`** to display execution artifacts alongside imported data
+
+**Reuses:** SQLite catalog, content hash dedup, metadata writer, lister/query system, export command.
+
+**New:** Migration to add execution columns; tag storage and query; artifact path conventions.
+
+### Phase 5: Vault System — Credential Management
+
+**Goal:** Secrets referenced in definitions are resolved securely at execution time.
+
+Vault references (`vault."path"`) in definition files are resolved by the Go runtime immediately before method execution. Resolved values never hit disk or artifacts.
+
+1. **Vault interface** — `Get(path) → (string, error)` with backend implementations
+2. **Environment vault** — Reads from env vars (default; suitable for CI)
+3. **File vault** — Encrypted JSON files in `.pudl/vaults/` using `age`
+4. **Vault resolution in definition pipeline** — Walk CUE value, substitute `vault:` references before passing to Glojure
+5. **`pudl vault set/get/list`** — CLI for managing secrets
+6. **`pudl vault rotate-key`** — Re-encrypt file vault with new key
+
+**Reuses:** Config system (vault backend selection per definition).
+
+**New packages:** `internal/vault/` (interface, env backend, file backend, resolution walker).
+
+### Phase 6: Workflows — DAG Orchestration
+
+**Goal:** CUE files describe ordered graphs of method executions with automatic dependency resolution.
+
+Workflows are DAGs where nodes are method invocations and edges are CUE field references between steps. Steps with no data dependency run concurrently.
+
+1. **Workflow CUE file format** — Steps with `definition`, `method`, `inputs`, `condition`, `timeout`, `retries`
+2. **DAG builder** — Extract step dependencies from CUE field references
+3. **Topological sort + concurrent execution** — `errgroup` for parallel steps; configurable abort-on-failure
+4. **Step input/output threading** — `steps.<name>.outputs.<field>` resolved from prior step artifacts
+5. **Workflow run manifest** — `.pudl/data/.runs/<workflow>/<run-id>.json` recording outcomes, timing, artifact paths
+6. **`pudl workflow run/list/show/validate/history`** — Full workflow CLI
+
+**Reuses:** CUE evaluator, method execution pipeline (Phase 3), artifact storage (Phase 4).
+
+**New packages:** `internal/workflow/` (DAG builder, scheduler, runner, manifest writer).
+
+### Phase 7: Drift Detection
+
+**Goal:** Compare declared infrastructure state against live state using CUE unification.
+
+This brings the analytics roadmap items (diff, schema drift) together with the execution engine.
+
+1. **`pudl drift check <definition>`** — Run list/describe method, unify result against declared definition + last artifact
+2. **`pudl drift check --all`** — Drift check across all definitions
+3. **`pudl drift report <definition>`** — Display last drift report without re-running
+4. **CUE-based diff** — Use `cue.Value.Subsume()` to detect constraint violations between declared and live state
+5. **Integrate with `pudl diff`** — Resource version comparison from the original analytics roadmap
+
+**Reuses:** CUE evaluator, method execution (to fetch live state), artifact storage (last known state), resource identity (version tracking).
+
+**New:** `internal/drift/` (comparator, report generator).
+
+### Phase 8: Agent Integration & Skill Files
+
+**Goal:** AI agents can discover models, write definitions and methods, compose workflows, and present artifacts for human review.
+
+1. **Skill markdown files** — Bundled into binary, written to `.claude/skills/` on init
+   - `pudl-core/SKILL.md` — CLI usage, repo layout
+   - `pudl-definitions/SKILL.md` — Writing CUE definitions
+   - `pudl-methods/SKILL.md` — Writing Glojure methods
+   - `pudl-workflows/SKILL.md` — Composing workflow DAGs
+   - `pudl-models/SKILL.md` — Defining extension models
+2. **`pudl model search <query>`** — Keyword search across model schemas
+3. **`pudl model scaffold <name>`** — Generate model CUE schema + method stubs
+4. **Effect description pattern** — Methods return `{:pudl/effects [...]}` instead of executing directly; runtime handles execution with audit trail and `--dry-run` support
+5. **Extension model discovery** — User-defined models in `extensions/models/` auto-discovered
+
+**Reuses:** Everything — this phase is the capstone that ties the system together for agent use.
+
+---
+
+## Original Analytics Roadmap (Preserved)
+
+The following items from the original roadmap remain relevant and can be pursued in parallel or integrated into the phases above where noted.
+
+### Analytics: Analytical Layer
+
+1. **`pudl diff`** — Compare two versions of the same resource (integrates with Phase 7: Drift)
+2. **`pudl summary` / `pudl stats`** — Aggregate views
+3. **Basic outlier detection** — Unusual field values across instances of a schema
+
+### Analytics: Schema Intelligence
 
 1. **Two-tier schema system** — Broad type recognition + policy compliance
-2. **Schema drift detection** — "This resource used to validate, now it doesn't"
-3. **Schema coverage reports** — "37% of data matches a specific schema, 63% is generic"
+2. **Schema drift detection** — Integrates with Phase 7
+3. **Schema coverage reports** — Schema match distribution across data
 
-### Phase 3: Correlation & Cross-Source
+### Analytics: Correlation & Cross-Source
 
-1. **Cross-source correlation** — Link AWS resources to K8s resources
-2. **Temporal tracking** — Same resource across multiple imports (enabled by `resource_id` + `version`)
+1. **Cross-source correlation** — Link resources across providers
+2. **Temporal tracking** — Same resource across imports (enabled by `resource_id` + `version`)
 
-### Phase 4: Advanced Analytics
+### Analytics: Advanced
 
-1. **DuckDB/Parquet integration** — Analytical query engine for large datasets
-2. **Expert system components** — Automatic detection of common substructures
-3. **Dashboard/reporting interfaces** — Visual representation of infrastructure state
+1. **DuckDB/Parquet integration** — Analytical queries for large datasets
+2. **Expert system components** — Common substructure detection
+3. **Dashboard/reporting** — Visual infrastructure state
 
 ## Cut Candidates
 
 Identified in project review but not yet addressed:
 
-- `op/` + `internal/cue/processor.go` + `cmd/process.go` — CUE custom function processor (unrelated to core purpose)
+- `op/` + `internal/cue/processor.go` + `cmd/process.go` — CUE custom function processor (may be repurposed for CUE evaluation pipeline)
 - `cmd/setup.go` — Shell integration (premature convenience optimization)
 - `cmd/module.go` — Thin wrapper around `cue mod` commands
 
@@ -80,6 +276,8 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 
 ## Core Packages
 
+### Existing (Data Pipeline)
+
 | Package | Path | Responsibility |
 |---------|------|----------------|
 | `importer` | `internal/importer/` | Import pipeline, format detection, collections, wrapper detection |
@@ -99,3 +297,15 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 | `doctor` | `internal/doctor/` | Health checks |
 | `errors` | `internal/errors/` | Typed error codes |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
+
+### New (Infrastructure Automation)
+
+| Package | Path | Phase | Responsibility |
+|---------|------|-------|----------------|
+| `model` | `internal/model/` | 1 | Model discovery, method/socket extraction, lifecycle resolution |
+| `definition` | `internal/definition/` | 2 | Definition loader, validator, socket wiring, dependency graph |
+| `glojure` | `internal/glojure/` | 3 | Runtime embedding, namespace registry, method loader |
+| `executor` | `internal/executor/` | 3 | Lifecycle dispatch, qualification runner, socket value propagation |
+| `vault` | `internal/vault/` | 5 | Vault interface, env/file backends, resolution walker |
+| `workflow` | `internal/workflow/` | 6 | DAG builder, scheduler, runner, manifest writer |
+| `drift` | `internal/drift/` | 7 | State comparator, report generator |
