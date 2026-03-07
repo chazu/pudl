@@ -39,8 +39,34 @@ Reference: `architecture.docx` in repo root.
 | Concept | What it is |
 |---------|-----------|
 | **Schema** | A data shape. CUE constraints describing what a resource looks like. What pudl has today. |
-| **Model** | A schema + methods + sockets + auth + metadata + state shape. A schema becomes a model when it declares operational capabilities beyond data shape. |
-| **Definition** | A named instance of a model with concrete args. A CUE value that unifies against a model schema. |
+| **Model** | A separate entity that *references* one or more schemas and adds methods, sockets, auth, metadata, and state shape. Models are not schemas — they compose schemas. |
+| **Definition** | A named instance of a model with concrete args. A CUE value that unifies against a model's resource schema. |
+
+Models reference schemas rather than embedding operational behavior into them. This preserves schema purity (a schema is always just a data shape) and enables reuse — the same schema can back multiple models, and schemas evolve independently of operational logic.
+
+### Three Validation Layers
+
+Validation in pudl operates at three distinct layers, each with a natural home:
+
+| Layer | What it validates | How | Where it lives |
+|-------|------------------|-----|----------------|
+| **Base schema** | Structural shape — required fields, types, field constraints | CUE constraints | Schema files (existing pudl schemas) |
+| **Policy schemas** | Stricter rules layered on top — compliance, security, business rules | CUE constraints (cascade unification) | Schema files (cascade validation tiers) |
+| **Qualification methods** | Checks requiring runtime or external data — credential validity, resource existence, network reachability | Glojure methods with `kind: "qualification"` | Model method declarations + `.clj` files |
+
+The key distinction: **can CUE validate it statically?**
+
+- **Yes → it's a schema** (base or policy tier). Cascade validation handles the layering. Example: "replicas must be >= 3 in production" is a CUE constraint on a policy-tier schema.
+- **No → it's a qualification method** on the model. Example: "does this AMI actually exist in AWS?" requires calling an API at runtime.
+
+This means the existing two-tier schema system (base + policy/compliance) is preserved and orthogonal to models. A resource can have:
+- A schema with policy tiers but **no model** (pure data validation, no operations)
+- A model that references a base schema, and policy tiers still apply when validating definitions against it
+- Qualification methods on a model that gate execution with runtime checks that CUE structurally cannot express
+
+The three layers compose rather than replace each other.
+
+### Methods
 
 **Methods** have a `kind` field that determines their role in the execution lifecycle:
 
@@ -59,11 +85,13 @@ The runtime uses one method execution pipeline with aspect-like dispatch based o
 - When definitions are connected via sockets, data flows automatically — a definition's output socket value populates another definition's input socket.
 - Cross-definition CUE references are the file-based equivalent of socket wiring.
 
-### Phase 1: Models — Schema + Methods + Sockets
+### Phase 1: Models — Composing Schemas with Behavior (COMPLETE)
 
-**Goal:** Formalize the distinction between schemas (data shapes) and models (schemas with operational capabilities). A model declares what you can *do* with a resource, not just what it looks like.
+**Goal:** Introduce models as a new concept separate from schemas. A model *references* one or more schemas and adds methods, sockets, authentication, and state shape. Schemas remain pure data shapes — unchanged from what pudl has today.
 
-Pudl already has CUE schemas with `_pudl` metadata. This phase extends that vocabulary to support methods, sockets, authentication, and state shape — turning a schema into a model.
+**Status:** Complete. See `implog/2026_03_06_phase1_models.md` for details.
+
+Models live in their own directory (`models/`) and import schemas rather than extending them. This preserves schema reuse, independent evolution, and the existing cascade validation system.
 
 1. **Define base types in bootstrap CUE:**
    - `#Method` — `kind` (action|qualification|attribute|codegen), `inputs`, `returns`, `timeout`, `retries`, `blocks` (for qualifications: which methods this gates)
@@ -71,22 +99,32 @@ Pudl already has CUE schemas with `_pudl` metadata. This phase extends that voca
    - `#ModelMetadata` — `name`, `description`, `category`, `icon`
    - `#AuthConfig` — `method` (bearer|sigv4|basic|custom), `credentials` (vault references)
    - `#QualificationResult` — `passed: bool`, `message: string` (standard return type for qualification methods)
-2. **Extend `_pudl` metadata block** to support model fields:
-   - `methods` — map of method declarations with `kind`, input/output schemas
-   - `sockets` — map of typed input/output ports
-   - `auth` — authentication configuration
-   - `state` — CUE schema for live resource state (used for drift detection)
-   - Existing schemas without these fields continue to work as plain schemas
-3. **`pudl model list`** — List schemas that declare methods (i.e., are models)
-4. **`pudl model show <name>`** — Display model schema including methods, sockets, auth, state shape
+   - `#Model` — top-level model type: `schema` (reference to a resource schema), `state` (optional state schema), `methods`, `sockets`, `auth`, `metadata`
+2. **Model file convention** — Models are CUE files in `models/` that import and reference schemas:
+   ```cue
+   import "pudl/schemas/aws/ec2"
+
+   #InstanceModel: #Model & {
+       schema:   ec2.#Instance       // resource shape
+       state:    ec2.#InstanceState   // live state shape (for drift)
+       metadata: { name: "ec2_instance", category: "compute", ... }
+       methods:  { list: ..., create: ..., delete: ... }
+       sockets:  { vpc_id: { direction: "input", type: string }, ... }
+       auth:     { method: "sigv4" }
+   }
+   ```
+   Schemas (`ec2.#Instance`) stay in the schema repo unchanged. The model adds behavior around them.
+3. **`pudl model list`** — List all models, showing which schema(s) each references
+4. **`pudl model show <name>`** — Display model including referenced schemas, methods, sockets, auth, state shape
 5. **Write 2-3 example models** to validate the format:
-   - `aws/ec2.#Instance` — action methods (list, create, delete), qualification (valid_credentials, ami_exists), sockets (vpc_id input, instance_id output), sigv4 auth
-   - `generic/http.#Endpoint` — action methods (get, post), basic/bearer auth, generic sockets
-   - A simple model with no sockets to verify plain schemas still work
+   - `aws/ec2.#InstanceModel` — references `ec2.#Instance` + `ec2.#InstanceState`, action methods (list, create, delete), qualification (valid_credentials, ami_exists), sockets (vpc_id input, instance_id output), sigv4 auth
+   - `generic/http.#EndpointModel` — references `http.#Request` + `http.#Response`, action methods (get, post), basic/bearer auth, generic sockets
+   - A simple model referencing a schema with no sockets, to verify minimal models work
+   - Verify that schemas without models continue to work for pure data validation (cascade validation, import, etc.)
 
-**Reuses:** CUE loader, validator, schema registry, `_pudl` metadata convention, bootstrap embed system.
+**Reuses:** CUE loader, validator, schema registry, bootstrap embed system. Schemas and cascade validation are untouched.
 
-**New packages:** `internal/model/` (model discovery, method/socket extraction, lifecycle resolution — "given method X, what qualifications must run first?").
+**New packages:** `internal/model/` (model discovery, schema reference resolution, method/socket extraction, lifecycle resolution — "given method X, what qualifications must run first?").
 
 ### Phase 2: Definitions — Named Resource Instances
 

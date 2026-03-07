@@ -80,5 +80,14 @@ func (i *Importer) ensureBasicSchemas() error {
 			return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", corePath)
 		}
 	}
+
+	// Check if model bootstrap schema exists; if not, copy bootstrap schemas
+	modelPath := filepath.Join(i.schemaPath, "pudl", "model", "model.cue")
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
+		}
+	}
+
 	return nil
 }

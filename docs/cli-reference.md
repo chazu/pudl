@@ -229,6 +229,34 @@ pudl schema log                        # Show commit history
 pudl schema log --verbose              # Detailed history
 ```
 
+## Model Management
+
+### `pudl model list`
+
+List available models.
+
+```bash
+pudl model list
+pudl model list --category compute
+pudl model list --verbose
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--category` | Filter by category (compute, storage, network, security, data, custom) |
+| `--verbose` | Show detailed information including file paths and auth |
+
+### `pudl model show <name>`
+
+Display detailed model information including metadata, methods, sockets, and auth.
+
+```bash
+pudl model show pudl/model/examples.#EC2InstanceModel
+pudl model show pudl/model/examples.#SimpleModel
+```
+
 ## Migration
 
 ### `pudl migrate identity`
