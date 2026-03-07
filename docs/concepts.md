@@ -166,6 +166,32 @@ Items inherit provenance from their collection but get their own schema assignme
 
 See [collections.md](collections.md) for the full collection guide.
 
+## Models
+
+Models are a separate concept from schemas. A model *references* one or more schemas and adds methods, sockets, authentication, and metadata. Schemas remain pure data shapes — models layer behavior on top.
+
+### Schema vs Model vs Definition
+
+| Concept | What it is |
+|---------|-----------|
+| **Schema** | A data shape. CUE constraints describing what a resource looks like. |
+| **Model** | A separate entity that references schemas and adds methods, sockets, auth, metadata. |
+| **Definition** | A named instance of a model with concrete args. |
+
+Models reference schemas rather than embedding operational behavior into them. This preserves schema purity and enables reuse — the same schema can back multiple models.
+
+### Three Validation Layers
+
+| Layer | What it validates | How |
+|-------|------------------|-----|
+| **Base schema** | Structural shape — required fields, types | CUE constraints |
+| **Policy schemas** | Stricter rules — compliance, security | CUE constraints (cascade) |
+| **Qualification methods** | Runtime checks — credential validity, resource existence | Model methods with `kind: "qualification"` |
+
+The key distinction: can CUE validate it statically? If yes, it's a schema constraint. If no (requires API calls, network checks), it's a qualification method on the model. The three layers compose rather than replace each other.
+
+See [model-authoring.md](model-authoring.md) for the full guide on writing models.
+
 ## Workspace Layout
 
 ```
