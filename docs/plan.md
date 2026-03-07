@@ -126,22 +126,20 @@ Models live in their own directory (`models/`) and import schemas rather than ex
 
 **New packages:** `internal/model/` (model discovery, schema reference resolution, method/socket extraction, lifecycle resolution — "given method X, what qualifications must run first?").
 
-### Phase 2: Definitions — Named Resource Instances
+### Phase 2: Definitions — Named Resource Instances (COMPLETE)
 
 **Goal:** Users declare named instances of models with concrete configuration and socket wiring.
 
-Definitions are CUE files that unify against a model schema — pudl already does this during import validation. This phase makes it a first-class concept with persistent named entries and inter-definition connections.
+**Status:** Complete. See `implog/2026_03_06_phase2_definitions.md` for details.
 
-1. **Definition file convention** — `.pudl/definitions/<name>.cue` files that import and unify against model schemas
-2. **Definition storage and discovery** — Scan definitions dir, validate each against its model
-3. **Socket wiring** — Definitions connect to each other by binding input sockets to other definitions' output sockets. In CUE this is a typed reference: `inputs: { vpc_id: definitions.prod_vpc.outputs.vpc_id }`. The type system validates compatibility at parse time.
-4. **Vault reference syntax** — `vault."path/to/secret"` markers in definition args (resolution comes in Phase 5)
-5. **Cross-definition CUE references** — Native CUE path references for both socket wiring and direct field access
-6. **`pudl definition list`** — List all definitions with their model type and socket connections
-7. **`pudl definition show <name>`** — Print resolved definition value including wired sockets
-8. **`pudl definition validate <name>`** — Validate against model schema, verify socket type compatibility
-9. **`pudl definition graph`** — Show the dependency graph of definitions based on socket wiring and cross-references
-10. **`pudl repo validate`** — Validate all definitions and models across the workspace; detect broken socket wiring, missing dependencies
+Definitions are CUE files in `~/.pudl/schema/definitions/` that unify against model schemas. The definition package provides discovery, validation, and dependency graph analysis based on socket wiring between definitions.
+
+1. **Definition file convention** — `definitions/*.cue` files in the schema repository
+2. **Definition discovery** — Text-based parsing to find definitions that unify against `#*Model` types
+3. **Socket wiring** — Cross-definition CUE references detected and tracked as socket bindings
+4. **Dependency graph** — DAG built from socket wiring with topological sort and cycle detection
+5. **CLI commands** — `pudl definition list/show/validate/graph` and `pudl repo validate`
+6. **Validation** — Definitions validated via CUE module loader (validates all CUE in workspace)
 
 **Reuses:** CUE evaluator, cascade validator (for error reporting), schema name normalization.
 

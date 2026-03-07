@@ -50,6 +50,11 @@ func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
 			return filepath.SkipDir
 		}
 
+		// Skip definitions directory (named instances, not schemas)
+		if info.IsDir() && info.Name() == "definitions" {
+			return filepath.SkipDir
+		}
+
 		// Skip directories and non-CUE files
 		if info.IsDir() || !strings.HasSuffix(info.Name(), ".cue") {
 			return nil

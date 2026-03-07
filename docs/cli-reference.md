@@ -257,6 +257,63 @@ pudl model show pudl/model/examples.#EC2InstanceModel
 pudl model show pudl/model/examples.#SimpleModel
 ```
 
+## Definition Management
+
+### `pudl definition list`
+
+List available definitions.
+
+```bash
+pudl definition list
+pudl definition list --verbose
+pudl definition list --model examples.#EC2InstanceModel
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--model` | Filter by model reference |
+| `--verbose` | Show detailed information including file paths and bindings |
+
+### `pudl definition show <name>`
+
+Display detailed definition information including model reference, socket bindings, and dependencies.
+
+```bash
+pudl definition show my_simple
+pudl def show prod_instance
+```
+
+### `pudl definition validate [name]`
+
+Validate definitions against their model schemas.
+
+```bash
+pudl definition validate              # Validate all
+pudl definition validate prod_instance  # Validate one
+```
+
+### `pudl definition graph`
+
+Show the dependency graph between definitions based on socket wiring.
+
+```bash
+pudl definition graph
+```
+
+## Repository Operations
+
+### `pudl repo validate`
+
+Validate all schemas, models, and definitions workspace-wide.
+
+```bash
+pudl repo validate
+```
+
+Reports total models, definitions, validation errors, and broken socket wiring.
+
 ## Migration
 
 ### `pudl migrate identity`
