@@ -10,6 +10,7 @@ import (
 	"pudl/internal/definition"
 	"pudl/internal/glojure"
 	"pudl/internal/model"
+	"pudl/internal/vault"
 )
 
 // Executor orchestrates method execution with lifecycle dispatch.
@@ -21,6 +22,7 @@ type Executor struct {
 	modelDisc  *model.Discoverer
 	defDisc    *definition.Discoverer
 	methodsDir string // base dir for .clj files
+	vault      vault.Vault
 }
 
 // RunOptions configures a method execution.
@@ -55,14 +57,15 @@ type PostActionOutcome struct {
 	Error  error
 }
 
-// New creates a new Executor.
-func New(rt *glojure.Runtime, reg *glojure.Registry, modelDisc *model.Discoverer, defDisc *definition.Discoverer, methodsDir string) *Executor {
+// New creates a new Executor. The vault parameter is optional (may be nil).
+func New(rt *glojure.Runtime, reg *glojure.Registry, modelDisc *model.Discoverer, defDisc *definition.Discoverer, methodsDir string, v vault.Vault) *Executor {
 	return &Executor{
 		runtime:    rt,
 		registry:   reg,
 		modelDisc:  modelDisc,
 		defDisc:    defDisc,
 		methodsDir: methodsDir,
+		vault:      v,
 	}
 }
 

@@ -51,7 +51,7 @@ func runMethodListCommand(defName string) error {
 	defDisc := definition.NewDiscoverer(cfg.SchemaPath)
 	methodsDir := filepath.Join(cfg.SchemaPath, "methods")
 
-	exec := executor.New(rt, registry, modelDisc, defDisc, methodsDir)
+	exec := executor.New(rt, registry, modelDisc, defDisc, methodsDir, nil)
 
 	methods, err := exec.ListMethods(defName)
 	if err != nil {

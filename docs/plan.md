@@ -221,22 +221,24 @@ Pudl's existing catalog becomes the unified artifact backend. Method outputs are
 
 **New:** Migration to add execution columns; tag storage and query; artifact path conventions.
 
-### Phase 5: Vault System — Credential Management
+### Phase 5: Vault System — Credential Management (COMPLETE)
 
 **Goal:** Secrets referenced in definitions are resolved securely at execution time.
 
-Vault references (`vault."path"`) in definition files are resolved by the Go runtime immediately before method execution. Resolved values never hit disk or artifacts.
+**Status:** Complete. See `implog/2026_03_07_phase5_vault_system.md` for details.
+
+Vault references (`vault://path`) in definition socket bindings are resolved by the executor immediately before method execution. Resolved values never hit disk or artifacts. Two backends: environment variables (default, CI-friendly) and age-encrypted file (`~/.pudl/vaults/default.age`). Config key `vault_backend` selects backend. CLI commands `pudl vault get/set/list/rotate-key` manage secrets.
 
 1. **Vault interface** — `Get(path) → (string, error)` with backend implementations
 2. **Environment vault** — Reads from env vars (default; suitable for CI)
 3. **File vault** — Encrypted JSON files in `.pudl/vaults/` using `age`
-4. **Vault resolution in definition pipeline** — Walk CUE value, substitute `vault:` references before passing to Glojure
+4. **Vault resolution in executor** — Walk args map, substitute `vault://` references before method execution
 5. **`pudl vault set/get/list`** — CLI for managing secrets
 6. **`pudl vault rotate-key`** — Re-encrypt file vault with new key
 
-**Reuses:** Config system (vault backend selection per definition).
+**Reuses:** Config system (vault backend selection), executor args resolution.
 
-**New packages:** `internal/vault/` (interface, env backend, file backend, resolution walker).
+**New packages:** `internal/vault/` (interface, env backend, file backend, factory).
 
 ### Phase 6: Workflows — DAG Orchestration
 
