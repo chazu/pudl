@@ -25,6 +25,7 @@ type FilterOptions struct {
 	CollectionID   string // Filter by collection ID
 	CollectionType string // Filter by collection type ('collection', 'item')
 	ItemID         string // Filter by item ID
+	EntryType      string // Filter by entry type ("import", "artifact")
 }
 
 // DisplayOptions contains display preferences for listing data
@@ -61,6 +62,12 @@ type ListEntry struct {
 	ContentHash  *string `json:"content_hash,omitempty"`
 	IdentityJSON *string `json:"identity_json,omitempty"`
 	Version      *int    `json:"version,omitempty"`
+	// Artifact tracking fields
+	EntryType  *string `json:"entry_type,omitempty"`
+	Definition *string `json:"definition,omitempty"`
+	Method     *string `json:"method,omitempty"`
+	RunID      *string `json:"run_id,omitempty"`
+	Tags       *string `json:"tags,omitempty"`
 }
 
 // ListResults contains the results of a list operation
@@ -172,6 +179,7 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 		CollectionID:   filters.CollectionID,
 		CollectionType: filters.CollectionType,
 		ItemID:         filters.ItemID,
+		EntryType:      filters.EntryType,
 	}
 
 	// Query database
@@ -349,5 +357,10 @@ func dbEntryToListEntry(e database.CatalogEntry) ListEntry {
 		ContentHash:     e.ContentHash,
 		IdentityJSON:    e.IdentityJSON,
 		Version:         e.Version,
+		EntryType:       e.EntryType,
+		Definition:      e.Definition,
+		Method:          e.Method,
+		RunID:           e.RunID,
+		Tags:            e.Tags,
 	}
 }

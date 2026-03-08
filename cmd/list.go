@@ -29,6 +29,8 @@ var (
 	listFancy         bool
 	listPage          int
 	listPerPage       int
+	listArtifacts     bool
+	listAll           bool
 )
 
 // listCmd represents the list command
@@ -95,6 +97,15 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer l.Close()
 
+	// Determine entry type filter
+	entryType := "import" // default: imports only
+	if listArtifacts {
+		entryType = "artifact"
+	}
+	if listAll {
+		entryType = "" // no filter
+	}
+
 	// Set up filter options
 	filters := lister.FilterOptions{
 		Schema:         listSchema,
@@ -103,6 +114,7 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		CollectionID:   listCollectionID,
 		CollectionType: determineCollectionType(),
 		ItemID:         listItemID,
+		EntryType:      entryType,
 	}
 
 	// Set up display options
@@ -239,6 +251,11 @@ func init() {
 	listCmd.Flags().StringVar(&listItemID, "item-id", "", "Filter by item ID")
 	listCmd.Flags().BoolVar(&listCollectionsOnly, "collections-only", false, "Show only collections")
 	listCmd.Flags().BoolVar(&listItemsOnly, "items-only", false, "Show only individual items")
+
+	// Entry type flags
+	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only artifacts (method outputs)")
+	listCmd.Flags().BoolVar(&listAll, "all", false, "Show both imports and artifacts")
+	listCmd.MarkFlagsMutuallyExclusive("artifacts", "all")
 
 	// UI flags
 	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")
