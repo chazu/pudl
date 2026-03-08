@@ -87,7 +87,7 @@ test_def: examples.#TestModel & {
 	modelDisc := model.NewDiscoverer(tmpDir)
 	defDisc := definition.NewDiscoverer(tmpDir)
 
-	exec := New(rt, registry, modelDisc, defDisc, filepath.Join(tmpDir, "methods"))
+	exec := New(rt, registry, modelDisc, defDisc, filepath.Join(tmpDir, "methods"), nil)
 
 	return &testEnv{
 		executor:   exec,

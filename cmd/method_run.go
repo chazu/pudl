@@ -16,6 +16,7 @@ import (
 	"pudl/internal/executor"
 	"pudl/internal/glojure"
 	"pudl/internal/model"
+	"pudl/internal/vault"
 )
 
 var (
@@ -78,8 +79,16 @@ func runMethodRunCommand(defName, methodName string) error {
 	// Methods dir defaults to <schemaPath>/methods/
 	methodsDir := cfg.SchemaPath + "/methods"
 
+	// Create vault (non-fatal on failure)
+	var v vault.Vault
+	v, vaultErr := vault.New(cfg.VaultBackend, config.GetPudlDir())
+	if vaultErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: vault not available: %v\n", vaultErr)
+		v = nil
+	}
+
 	// Create executor
-	exec := executor.New(rt, registry, modelDisc, defDisc, methodsDir)
+	exec := executor.New(rt, registry, modelDisc, defDisc, methodsDir, v)
 
 	// Parse tags
 	tags := make(map[string]string)

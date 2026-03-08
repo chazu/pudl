@@ -12,9 +12,10 @@ import (
 )
 
 type Config struct {
-	SchemaPath string `yaml:"schema_path"`
-	DataPath   string `yaml:"data_path"`
-	Version    string `yaml:"version"`
+	SchemaPath   string `yaml:"schema_path"`
+	DataPath     string `yaml:"data_path"`
+	Version      string `yaml:"version"`
+	VaultBackend string `yaml:"vault_backend,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -100,7 +101,7 @@ func Exists() bool {
 }
 
 func ValidConfigKeys() []string {
-	return []string{"schema_path", "data_path", "version"}
+	return []string{"schema_path", "data_path", "version", "vault_backend"}
 }
 
 func IsValidConfigKey(key string) bool {
@@ -205,6 +206,14 @@ func SetConfigValue(key, value string) error {
 			return errors.NewInputError("Version cannot be empty", "Provide a valid version string")
 		}
 		cfg.Version = value
+
+	case "vault_backend":
+		if value != "env" && value != "file" && value != "" {
+			return errors.NewInputError(
+				fmt.Sprintf("Invalid vault_backend: %s", value),
+				"Valid values are: env, file")
+		}
+		cfg.VaultBackend = value
 	}
 
 	// Save the updated configuration
