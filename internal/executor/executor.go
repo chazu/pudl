@@ -41,6 +41,8 @@ type RunResult struct {
 	Output         interface{}
 	Qualifications []QualificationOutcome
 	PostActions    []PostActionOutcome
+	Effects        []Effect
+	EffectOutcomes []EffectOutcome
 }
 
 // QualificationOutcome records whether a qualification passed.
@@ -131,6 +133,20 @@ func (e *Executor) Run(ctx context.Context, opts RunOptions) (*RunResult, error)
 		return nil, fmt.Errorf("method %q: %w", opts.MethodName, err)
 	}
 	result.Output = output
+
+	// Check for effects in output
+	if effects, found := ParseEffects(output); found {
+		result.Effects = effects
+		if opts.DryRun {
+			// In dry-run mode, list effects but don't execute them
+			for _, e := range effects {
+				result.EffectOutcomes = append(result.EffectOutcomes, EffectOutcome{
+					Effect: e,
+					Status: "skipped",
+				})
+			}
+		}
+	}
 
 	// Run post-actions
 	for _, postName := range lifecycle.PostActions {
