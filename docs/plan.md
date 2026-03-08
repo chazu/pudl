@@ -240,18 +240,19 @@ Vault references (`vault://path`) in definition socket bindings are resolved by 
 
 **New packages:** `internal/vault/` (interface, env backend, file backend, factory).
 
-### Phase 6: Workflows — DAG Orchestration
+### Phase 6: Workflows — DAG Orchestration ✅
 
 **Goal:** CUE files describe ordered graphs of method executions with automatic dependency resolution.
 
 Workflows are DAGs where nodes are method invocations and edges are CUE field references between steps. Steps with no data dependency run concurrently.
 
-1. **Workflow CUE file format** — Steps with `definition`, `method`, `inputs`, `condition`, `timeout`, `retries`
-2. **DAG builder** — Extract step dependencies from CUE field references
-3. **Topological sort + concurrent execution** — `errgroup` for parallel steps; configurable abort-on-failure
-4. **Step input/output threading** — `steps.<name>.outputs.<field>` resolved from prior step artifacts
-5. **Workflow run manifest** — `.pudl/data/.runs/<workflow>/<run-id>.json` recording outcomes, timing, artifact paths
-6. **`pudl workflow run/list/show/validate/history`** — Full workflow CLI
+1. ✅ **Workflow CUE file format** — Steps with `definition`, `method`, `inputs`, `condition`, `timeout`, `retries`
+2. ✅ **DAG builder** — Extract step dependencies from CUE field references
+3. ✅ **Topological sort + concurrent execution** — `errgroup` for parallel steps; configurable abort-on-failure
+4. ✅ **Step input/output threading** — `steps.<name>.outputs.<field>` resolved from prior step artifacts via `sync.Map`
+5. ✅ **Workflow run manifest** — `.pudl/data/.runs/<workflow>/<run-id>.json` recording outcomes, timing, artifact paths
+6. ✅ **`pudl workflow run/list/show/validate/history`** — Full workflow CLI
+7. ✅ **Acceptance test** — SSH-based workflow acceptance test with testcontainers (gated behind `//go:build acceptance`)
 
 **Reuses:** CUE evaluator, method execution pipeline (Phase 3), artifact storage (Phase 4).
 
