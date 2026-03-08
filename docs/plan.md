@@ -258,21 +258,23 @@ Workflows are DAGs where nodes are method invocations and edges are CUE field re
 
 **New packages:** `internal/workflow/` (DAG builder, scheduler, runner, manifest writer).
 
-### Phase 7: Drift Detection
+### Phase 7: Drift Detection ✅
 
-**Goal:** Compare declared infrastructure state against live state using CUE unification.
+**Goal:** Compare declared infrastructure state against live state using JSON deep diff.
 
-This brings the analytics roadmap items (diff, schema drift) together with the execution engine.
+**Status:** Complete. See `implog/2026_03_07_phase7_drift_detection.md` for details.
 
-1. **`pudl drift check <definition>`** — Run list/describe method, unify result against declared definition + last artifact
-2. **`pudl drift check --all`** — Drift check across all definitions
-3. **`pudl drift report <definition>`** — Display last drift report without re-running
-4. **CUE-based diff** — Use `cue.Value.Subsume()` to detect constraint violations between declared and live state
-5. **Integrate with `pudl diff`** — Resource version comparison from the original analytics roadmap
+Drift detection compares a definition's declared state (socket bindings) against live state (method output artifacts). JSON deep diff reports added/removed/changed fields with dot-notation paths. Drift reports stored in `.pudl/data/.drift/<definition>/<timestamp>.json`. Optional `--refresh` flag re-executes the method before comparing via the `StepExecutor` interface.
 
-**Reuses:** CUE evaluator, method execution (to fetch live state), artifact storage (last known state), resource identity (version tracking).
+1. ✅ **`pudl drift check <definition>`** — Compare declared vs live state, show field-level diffs
+2. ✅ **`pudl drift check --all`** — Drift check across all definitions
+3. ✅ **`pudl drift report <definition>`** — Display last saved drift report without re-running
+4. ✅ **JSON deep diff** — Recursive field comparison with numeric type coercion, dot-notation paths
+5. ✅ **Report storage** — `.pudl/data/.drift/<definition>/<timestamp>.json` with save/list/get/getLatest
 
-**New:** `internal/drift/` (comparator, report generator).
+**Reuses:** Definition discoverer, model discoverer, artifact storage (last known state), StepExecutor interface (from workflow), executor (for refresh).
+
+**New packages:** `internal/drift/` (comparator, checker, report store).
 
 ### Phase 8: Agent Integration & Skill Files
 
