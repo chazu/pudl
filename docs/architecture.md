@@ -188,6 +188,45 @@ ImportFileWithFriendlyIDs(opts)
 | `errors` | `internal/errors/` | Typed error codes |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
 
+## Two Execution Layers
+
+PUDL has two distinct execution layers that share the same Glojure runtime but serve different purposes.
+
+### CUE Functions (Op Layer)
+
+CUE functions run **during CUE evaluation** to compute values that become part of the CUE tree. They are invoked via `op.#Function & { args: [...] }` syntax inside CUE files. The CUE processor intercepts these during AST walking, calls into the function registry (Go or Glojure implementations), and splices the result back into the CUE value.
+
+CUE functions may perform I/O (HTTP requests, file reads) to fetch values, but they are not part of the lifecycle dispatch system. They answer "what is this field's value?" — not "should we proceed?" or "go create this resource."
+
+### Methods (Execution Layer)
+
+Methods run **during `pudl method run`** against resolved definitions. They participate in lifecycle dispatch: advice (qualifications) gates actions, attributes derive values post-action, codegen produces output transforms. Method results are stored as immutable artifacts in the catalog.
+
+### Comparison
+
+| | CUE functions (op layer) | Methods (execution layer) |
+|---|---|---|
+| **Purpose** | Compute/fetch a **value** for the CUE tree | Perform an **operation** on infrastructure |
+| **When** | During CUE evaluation | During `pudl method run` |
+| **Returns** | A CUE-compatible value | Artifacts, status, socket outputs |
+| **May do I/O?** | Yes (HTTP, file reads, etc.) | Yes |
+| **Lifecycle dispatch?** | No — called and returns | Yes — advice gates, ordering, propagation |
+| **Idempotent expectation?** | Yes — same inputs, same value | Not necessarily (create, delete) |
+| **Stored?** | No — value lives in the CUE tree | Yes — artifacts in catalog |
+
+### Design Rationale
+
+The boundary is **purpose**, not **purity**. Both layers can perform I/O, but they answer different questions:
+
+- **"What value should this field have?"** → CUE function. Example: fetch the latest AMI ID from AWS and use it in a definition field.
+- **"Is this safe to proceed?"** → Advice method. Example: check whether AWS credentials are valid before launching an instance.
+- **"Do this thing."** → Action method. Example: launch the EC2 instance.
+- **"What can we derive from the result?"** → Attribute method. Example: compute a cost estimate from instance type + region.
+
+Both layers share the same embedded Glojure runtime and function registry. CUE functions are registered in the `op` package; methods live in `.clj` files under `methods/`. This avoids two separate runtimes while keeping the invocation paths cleanly separated.
+
+Because CUE functions can do I/O, the CUE processor must handle timeouts, caching (same function+args across definitions should not fetch twice), and error reporting that distinguishes eval-time failures from execution-time failures.
+
 ## Technology Stack
 
 - **Go 1.24** — core application

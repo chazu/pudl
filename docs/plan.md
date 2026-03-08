@@ -145,32 +145,52 @@ Definitions are CUE files in `~/.pudl/schema/definitions/` that unify against mo
 
 **New packages:** `internal/definition/` (definition loader, validator, socket wiring resolution, dependency graph builder).
 
-### Phase 3: Glojure Runtime — Executable Methods
+### Phase 3a: Glojure Runtime + CUE Function Unification
+
+**Goal:** Embed the Glojure runtime and unify it with the existing CUE custom function system (`op/` + `internal/cue/processor.go`).
+
+PUDL has two execution layers that share one Glojure runtime but serve different purposes. CUE functions compute values during CUE evaluation (the "op layer"). Methods perform operations during `pudl method run` (the "execution layer"). See `docs/architecture.md` for the full rationale.
+
+This phase establishes the shared runtime before methods exist, so methods build on an established foundation rather than introducing a parallel system.
+
+1. **Embed the Glojure runtime** — `github.com/glojurelang/glojure` as a Go dependency
+2. **Unified function registry** — Refactor `op/` to support both Go and Glojure function implementations behind the same `CustomFunction` interface
+3. **Builtin namespace registration** — Go functions exposed to Glojure as callable namespaces
+   - Start with 3 namespaces: `pudl.http` (generic HTTP), `pudl.exec` (subprocess), `pudl.core` (utilities)
+4. **Upgrade CUE processor** — `internal/cue/processor.go` calls into the unified registry, supporting Glojure-backed functions alongside existing Go ones
+5. **I/O-capable CUE functions** — CUE functions may perform I/O (HTTP requests, file reads) to fetch values. The processor handles:
+   - Timeouts on function calls
+   - Result caching (same function+args → same result, don't fetch twice)
+   - Clear error reporting distinguishing eval-time from execution-time failures
+6. **`pudl process` upgrade** — Works with both Go and Glojure functions seamlessly
+
+**Reuses:** `op/` package (refactored), `internal/cue/processor.go` (upgraded), CUE evaluator.
+
+**New packages:** `internal/glojure/` (runtime embedding, namespace registry).
+
+### Phase 3b: Method Execution Pipeline
 
 **Goal:** Method logic written in Glojure can be executed by the Go runtime, with lifecycle dispatch based on method kind.
 
-This is the biggest new technical piece. Glojure is a Go-hosted Clojure dialect — method files are `.clj` s-expressions that call Go-registered builtins. The homoiconic property makes methods inspectable and agent-friendly.
+Methods are `.clj` files that call Go-registered builtins via the Glojure runtime established in Phase 3a. Qualifications are renamed to **advice** to make the aspect-oriented nature explicit — they are cross-cutting concerns inserted at lifecycle cut-points.
 
-1. **Embed the Glojure runtime** — `github.com/glojurelang/glojure` as a Go dependency
-2. **Builtin namespace registration** — Go functions exposed to Glojure as callable namespaces
-   - Start with 3 namespaces: `pudl.http` (generic HTTP), `pudl.exec` (subprocess), `pudl.core` (utilities)
-3. **Method file convention** — `methods/<model-name>/<method-name>.clj` with `(defn run [args] ...)` entry point
-4. **Method execution pipeline with lifecycle dispatch:**
+1. **Method file convention** — `methods/<model-name>/<method-name>.clj` with `(defn run [args] ...)` entry point
+2. **Method execution pipeline with lifecycle dispatch:**
    - Load definition → resolve args (including socket inputs from connected definitions) → bind to Glojure env
-   - **Before action:** find all `qualification` methods that declare `blocks: [<this-method>]`, execute them first. If any return `{passed: false}`, abort with the qualification's message.
+   - **Before action:** find all `advice` methods that declare `blocks: [<this-method>]`, execute them first. If any return `{passed: false}`, abort with the advice message.
    - Evaluate `.clj` file → call `(run args)`
-   - Validate return value against CUE return schema (qualification methods validate against `#QualificationResult`)
+   - Validate return value against CUE return schema (advice methods validate against `#AdviceResult`)
    - **After action:** run any `attribute` methods to compute derived values; run `codegen` methods to produce output transforms
    - Store result as immutable data artifact (via existing pudl storage)
    - Update output socket values on the definition (available to downstream definitions)
-5. **`pudl method run <definition> <method> [--tag k=v]`** — Execute a method (qualifications run automatically)
-6. **`pudl method run --dry-run <definition> <method>`** — Run qualifications only, show what would execute
-7. **`pudl method run --skip-qualifications <definition> <method>`** — Bypass qualification checks (requires explicit flag)
-8. **`pudl method list <definition>`** — List available methods grouped by kind
+3. **`pudl method run <definition> <method> [--tag k=v]`** — Execute a method (advice runs automatically)
+4. **`pudl method run --dry-run <definition> <method>`** — Run advice only, show what would execute
+5. **`pudl method run --skip-advice <definition> <method>`** — Bypass advice checks (requires explicit flag)
+6. **`pudl method list <definition>`** — List available methods grouped by kind
 
-**Reuses:** CUE evaluator (return schema validation), content-addressed storage, catalog (artifact indexing), metadata writer, definition graph (Phase 2, for socket resolution).
+**Reuses:** Glojure runtime (Phase 3a), CUE evaluator (return schema validation), content-addressed storage, catalog (artifact indexing), metadata writer, definition graph (Phase 2, for socket resolution).
 
-**New packages:** `internal/glojure/` (runtime embedding, namespace registry, method loader), `internal/executor/` (lifecycle dispatch, qualification runner, socket value propagation).
+**New packages:** `internal/executor/` (lifecycle dispatch, advice runner, socket value propagation).
 
 ### Phase 4: Artifact Management — Unify Storage
 
@@ -340,8 +360,8 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 |---------|------|-------|----------------|
 | `model` | `internal/model/` | 1 | Model discovery, method/socket extraction, lifecycle resolution |
 | `definition` | `internal/definition/` | 2 | Definition loader, validator, socket wiring, dependency graph |
-| `glojure` | `internal/glojure/` | 3 | Runtime embedding, namespace registry, method loader |
-| `executor` | `internal/executor/` | 3 | Lifecycle dispatch, qualification runner, socket value propagation |
+| `glojure` | `internal/glojure/` | 3a | Runtime embedding, namespace registry, CUE function bridge |
+| `executor` | `internal/executor/` | 3b | Lifecycle dispatch, advice runner, socket value propagation |
 | `vault` | `internal/vault/` | 5 | Vault interface, env/file backends, resolution walker |
 | `workflow` | `internal/workflow/` | 6 | DAG builder, scheduler, runner, manifest writer |
 | `drift` | `internal/drift/` | 7 | State comparator, report generator |
