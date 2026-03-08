@@ -172,9 +172,13 @@ This phase establishes the shared runtime before methods exist, so methods build
 
 **New packages:** `internal/glojure/` (runtime embedding, namespace registry).
 
-### Phase 3b: Method Execution Pipeline
+### Phase 3b: Method Execution Pipeline (COMPLETE)
 
 **Goal:** Method logic written in Glojure can be executed by the Go runtime, with lifecycle dispatch based on method kind.
+
+**Status:** Complete. See `implog/2026_03_07_phase3b_method_execution.md` for details.
+
+The executor package (`internal/executor/`) orchestrates method execution: loads `.clj` files, runs qualifications before actions, executes post-actions after. CLI commands `pudl method run` and `pudl method list` provide user access. Qualification terminology kept as-is in code (CUE schemas use "qualification"); "advice" used only as conceptual term.
 
 Methods are `.clj` files that call Go-registered builtins via the Glojure runtime established in Phase 3a. Qualifications are renamed to **advice** to make the aspect-oriented nature explicit — they are cross-cutting concerns inserted at lifecycle cut-points.
 
