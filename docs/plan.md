@@ -145,9 +145,13 @@ Definitions are CUE files in `~/.pudl/schema/definitions/` that unify against mo
 
 **New packages:** `internal/definition/` (definition loader, validator, socket wiring resolution, dependency graph builder).
 
-### Phase 3a: Glojure Runtime + CUE Function Unification
+### Phase 3a: Glojure Runtime + CUE Function Unification (COMPLETE)
 
 **Goal:** Embed the Glojure runtime and unify it with the existing CUE custom function system (`op/` + `internal/cue/processor.go`).
+
+**Status:** Complete. See `implog/2026_03_07_phase3a_glojure_runtime.md` for details.
+
+Glojure v0.6.4 embedded as Go dependency. Unified function registry (`internal/glojure/`) supports both Go and Glojure function implementations behind the `CustomFunction` interface. Two builtin namespaces registered: `pudl.core` (string ops, format, env, timestamps) and `pudl.http` (HTTP GET/POST/status/JSON). CUE processor upgraded with registry lookup, result caching, per-function timeouts, and improved error context.
 
 PUDL has two execution layers that share one Glojure runtime but serve different purposes. CUE functions compute values during CUE evaluation (the "op layer"). Methods perform operations during `pudl method run` (the "execution layer"). See `docs/architecture.md` for the full rationale.
 
