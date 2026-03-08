@@ -350,6 +350,9 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 | 2026-02-13 | Schema generate-type command, type detection |
 | 2026-02-18 | Collection wrapper detection research |
 | 2026-03 | Collection wrapper detection + unwrap implementation |
+| 2026-03-06 | Phase 1 (Models), Phase 2 (Definitions) |
+| 2026-03-07 | Phases 3-8: Glojure runtime, method execution, artifacts, vault, workflows, drift, agent integration |
+| 2026-03-08 | Documentation consistency update: all docs updated for Phases 1-8, created method/workflow/drift/vault guides |
 
 ## Core Packages
 

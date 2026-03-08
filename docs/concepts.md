@@ -216,6 +216,85 @@ Definitions form a directed acyclic graph (DAG) based on socket wiring. `pudl de
 
 See [definition-authoring.md](definition-authoring.md) for the full guide on writing definitions.
 
+## Methods & Execution
+
+Methods are Glojure (.clj) files that implement model operations. They live in `methods/<model-name>/<method-name>.clj` and must define a `run` function.
+
+### Method Kinds
+
+Methods have a `kind` that determines their role in the execution lifecycle:
+
+- **Action** (default) — CRUD and custom operations. The core operation.
+- **Qualification** — Precondition checks that run before actions. Return pass/fail. If any qualification fails, the action is aborted.
+- **Attribute** — Computed value derivation. Runs after the action.
+- **Codegen** — Output transformation to other formats (JSON, YAML, HCL).
+
+### Lifecycle Dispatch
+
+When you run `pudl method run <definition> <method>`:
+
+1. **Qualifications** that declare `blocks: [<method>]` run first
+2. If all pass, the **action** executes
+3. **Attribute** and **codegen** methods run as post-actions
+4. The result is stored as an immutable artifact in the catalog
+
+### Two Execution Layers
+
+PUDL has two execution layers sharing one Glojure runtime:
+
+| | CUE Functions (op layer) | Methods (execution layer) |
+|---|---|---|
+| **Purpose** | Compute a value for the CUE tree | Perform an operation on infrastructure |
+| **When** | During CUE evaluation | During `pudl method run` |
+| **Stored?** | No — value lives in the CUE tree | Yes — artifacts in catalog |
+
+## Artifacts
+
+Method outputs, imported data, and workflow results share one storage and query layer. Artifacts are stored with the same content hashing, dedup, and provenance tracking as imported data, but with additional metadata: `definition`, `method`, `run_id`, and `tags`.
+
+`pudl list` shows imports by default. Use `--artifacts` for method outputs or `--all` for everything.
+
+Artifacts can be queried with `pudl data search` (by definition, method, tag) and `pudl data latest` (most recent for a definition/method pair).
+
+## Workflows
+
+Workflows are CUE files describing DAGs of method executions. Steps with no data dependencies run concurrently.
+
+Dependencies are inferred from CUE field references between steps — for example, `steps.create_vpc.outputs.VpcId` creates an edge from `create_subnet` to `create_vpc`.
+
+Each workflow run produces a manifest recording step execution order, timing, per-step status, and artifact references.
+
+## Drift Detection
+
+Drift detection compares a definition's declared state (socket bindings) against live state (method output artifacts). The JSON deep diff reports added, removed, and changed fields with dot-notation paths.
+
+Use `pudl drift check <definition>` to check one definition, or `--all` to check everything. The `--refresh` flag re-executes the method before comparing.
+
+Drift reports are stored in `.pudl/data/.drift/<definition>/<timestamp>.json`.
+
+## Vault
+
+The vault manages secrets referenced in definitions. Vault references (`vault://path`) in definition socket bindings are resolved by the executor immediately before method execution. Resolved values never hit disk or artifacts.
+
+Two backends:
+- **Environment** (default) — reads from environment variables. CI-friendly.
+- **File** — age-encrypted JSON in `~/.pudl/vaults/default.age`.
+
+Configure with `vault_backend` in `config.yaml`.
+
+## Effects
+
+Methods can return effect descriptions instead of executing side effects directly:
+
+```clojure
+{"result" "planned"
+ "pudl/effects" [{"kind" "create"
+                   "description" "Launch EC2 instance"
+                   "params" {...}}]}
+```
+
+Effect kinds: `create`, `delete`, `update`, `http`, `exec`. With `--dry-run`, effects are listed but not executed, providing an audit trail.
+
 ## Workspace Layout
 
 ```
@@ -224,12 +303,19 @@ See [definition-authoring.md](definition-authoring.md) for the full guide on wri
 ├── data/
 │   ├── raw/YYYY/MM/DD/            # Date-partitioned imported data
 │   ├── metadata/                  # Per-import JSON metadata sidecar files
-│   └── sqlite/catalog.db          # SQLite catalog database
-└── schema/                        # Git-tracked CUE schema repository
-    ├── cue.mod/module.cue         # CUE module definition
-    └── pudl/
-        ├── core/core.cue          # Bootstrap schemas (catchall, collection)
-        └── <your packages>/       # AWS, K8s, custom schemas
+│   ├── sqlite/catalog.db          # SQLite catalog database
+│   ├── .runs/                     # Workflow run manifests
+│   └── .drift/                    # Drift detection reports
+├── schema/                        # Git-tracked CUE schema repository
+│   ├── cue.mod/module.cue         # CUE module definition
+│   ├── pudl/
+│   │   ├── core/core.cue          # Bootstrap schemas (catchall, collection)
+│   │   └── <your packages>/       # AWS, K8s, custom schemas
+│   ├── models/                    # Model CUE files
+│   ├── definitions/               # Named model instances
+│   ├── methods/                   # Glojure method implementations
+│   └── extensions/models/         # User extension models
+└── vaults/                        # Encrypted credential stores
 ```
 
 The schema directory is a git repository — `pudl schema status`, `pudl schema commit`, and `pudl schema log` manage its history.

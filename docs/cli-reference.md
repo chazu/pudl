@@ -106,6 +106,8 @@ pudl list --fancy  # Interactive TUI
 | `--page` | Page number for pagination |
 | `--per-page` | Entries per page |
 | `--fancy` | Launch interactive TUI (bubbletea) |
+| `--artifacts` | Show only artifacts (method outputs) |
+| `--all` | Show both imports and artifacts |
 
 ### `pudl show <id>`
 
@@ -257,6 +259,24 @@ pudl model show pudl/model/examples.#EC2InstanceModel
 pudl model show pudl/model/examples.#SimpleModel
 ```
 
+### `pudl model search <query>`
+
+Search models by keyword across model schemas.
+
+```bash
+pudl model search ec2
+pudl model search storage
+```
+
+### `pudl model scaffold <name>`
+
+Generate model boilerplate including CUE schema, method stubs, and definition template.
+
+```bash
+pudl model scaffold myservice
+pudl model scaffold myservice --category custom --methods list,create,delete --sockets api_url:input,resource_id:output --auth bearer
+```
+
 ## Definition Management
 
 ### `pudl definition list`
@@ -322,6 +342,164 @@ Backfill `resource_id`, `content_hash`, and `version` columns for catalog entrie
 
 ```bash
 pudl migrate identity
+```
+
+## Method Execution
+
+### `pudl method run <definition> <method>`
+
+Execute a method on a definition with full lifecycle dispatch.
+
+Qualifications run before the action. If any fail, the action is aborted. Post-actions (attribute/codegen methods) run after.
+
+```bash
+pudl method run prod_instance list
+pudl method run prod_instance create --dry-run
+pudl method run prod_instance create --tag env=staging
+pudl method run prod_instance create --skip-advice
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--dry-run` | Run qualifications only, skip the action |
+| `--skip-advice` | Skip qualification checks |
+| `--tag` | Pass extra arguments as key=value (repeatable) |
+
+### `pudl method list <definition>`
+
+List available methods for a definition, grouped by kind (action, qualification, attribute, codegen).
+
+```bash
+pudl method list prod_instance
+```
+
+## Workflow Management
+
+### `pudl workflow run <name>`
+
+Execute a workflow DAG. Steps run concurrently when they have no data dependencies.
+
+```bash
+pudl workflow run deploy-stack
+```
+
+### `pudl workflow list`
+
+List available workflows from `workflows/*.cue` files.
+
+```bash
+pudl workflow list
+```
+
+### `pudl workflow show <name>`
+
+Display workflow details including steps and DAG structure.
+
+```bash
+pudl workflow show deploy-stack
+```
+
+### `pudl workflow validate <name>`
+
+Validate a workflow DAG -- checks for cycles, missing definitions, and missing methods.
+
+```bash
+pudl workflow validate deploy-stack
+```
+
+### `pudl workflow history <name>`
+
+View execution history for a workflow. Shows run manifests with timing and status.
+
+```bash
+pudl workflow history deploy-stack
+```
+
+## Drift Detection
+
+### `pudl drift check [definition]`
+
+Compare declared definition state against live state from the latest artifact.
+
+```bash
+pudl drift check my_instance
+pudl drift check my_instance --method list
+pudl drift check my_instance --refresh
+pudl drift check --all
+pudl drift check my_instance --tag env=prod
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--method` | Method whose artifact to compare (default: auto-detect) |
+| `--refresh` | Re-execute the method before comparing |
+| `--all` | Check all definitions |
+| `--tag` | Extra args as key=value (repeatable) |
+
+### `pudl drift report <definition>`
+
+Display the last saved drift report without re-running.
+
+```bash
+pudl drift report my_instance
+```
+
+## Vault
+
+### `pudl vault get <path>`
+
+Retrieve a secret from the vault.
+
+```bash
+pudl vault get aws/access_key
+```
+
+### `pudl vault set <path> <value>`
+
+Store a secret in the vault (file backend only).
+
+```bash
+pudl vault set aws/access_key "AKIA..."
+```
+
+### `pudl vault list`
+
+List stored secret paths.
+
+```bash
+pudl vault list
+```
+
+### `pudl vault rotate-key`
+
+Re-encrypt the file vault with a new passphrase.
+
+```bash
+pudl vault rotate-key
+```
+
+## Data Search
+
+### `pudl data search`
+
+Search artifacts by definition, method, tag, or time range.
+
+```bash
+pudl data search --definition prod_instance
+pudl data search --method create
+pudl data search --tag env=prod
+```
+
+### `pudl data latest <definition> <method>`
+
+Show the most recent artifact for a definition/method pair.
+
+```bash
+pudl data latest prod_instance list
 ```
 
 ## Legacy

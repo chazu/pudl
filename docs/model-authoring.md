@@ -149,7 +149,7 @@ sockets: {
 - **Input sockets** are like function arguments — what this model needs from others.
 - **Output sockets** are like function returns — what this model provides to others.
 - Socket types are CUE values (primitives or schemas).
-- Sockets enable wiring between definitions in Phase 2.
+- Sockets enable wiring between definitions.
 
 ## Authentication
 
@@ -215,6 +215,32 @@ import "pudl.schemas/pudl/model"
 }
 ```
 
+## Extension Models
+
+User-defined models can be placed in `extensions/models/` under the schema path for automatic discovery. Extension models appear in `pudl model list` and `pudl model search` alongside built-in models.
+
+```
+~/.pudl/schema/
+  extensions/
+    models/
+      mycompany/
+        custom_service.cue
+```
+
+## Effect Pattern
+
+Instead of executing side effects directly, methods can return effect descriptions for the runtime to process:
+
+```clojure
+(defn run [args]
+  {"result" "planned"
+   "pudl/effects" [{"kind" "create"
+                     "description" "Launch EC2 instance"
+                     "params" {"instance_type" (get args "InstanceType")}}]})
+```
+
+Effect kinds: `create`, `delete`, `update`, `http`, `exec`. With `--dry-run`, effects are listed but not executed, providing an audit trail.
+
 ## CLI Commands
 
 ```bash
@@ -222,4 +248,23 @@ pudl model list                    # List all models
 pudl model list --category compute # Filter by category
 pudl model list --verbose          # Show details
 pudl model show <model-name>       # Show model details
+pudl model search <query>          # Search models by keyword
+pudl model scaffold <name>         # Generate model boilerplate
 ```
+
+### Scaffold Command
+
+Generate model boilerplate with `pudl model scaffold`:
+
+```bash
+pudl model scaffold myservice \
+  --category custom \
+  --methods list,create,delete \
+  --sockets api_url:input,resource_id:output \
+  --auth bearer
+```
+
+This creates:
+- `models/<name>/<name>.cue` — Model CUE file
+- `methods/<name>/<method>.clj` — Method stub files
+- `definitions/<name>_def.cue` — Definition template
