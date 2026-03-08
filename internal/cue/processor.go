@@ -1,9 +1,12 @@
 package cue
 
 import (
+	"context"
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/ast"
@@ -12,18 +15,24 @@ import (
 	"cuelang.org/go/cue/parser"
 	"cuelang.org/go/cue/token"
 
-	"pudl/op"
+	"pudl/internal/glojure"
 )
 
 // CUEProcessor handles the processing of CUE files with custom functions
 type CUEProcessor struct {
-	ctx *cue.Context
+	ctx      *cue.Context
+	registry *glojure.Registry
+
+	cacheMu sync.Mutex
+	cache   map[string]interface{}
 }
 
-// NewCUEProcessor creates a new CUE processor
-func NewCUEProcessor() *CUEProcessor {
+// NewCUEProcessor creates a new CUE processor backed by the given function registry.
+func NewCUEProcessor(registry *glojure.Registry) *CUEProcessor {
 	return &CUEProcessor{
-		ctx: cuecontext.New(),
+		ctx:      cuecontext.New(),
+		registry: registry,
+		cache:    make(map[string]interface{}),
 	}
 }
 
@@ -195,45 +204,81 @@ func (p *CUEProcessor) tryProcessCustomFunction(expr *ast.BinaryExpr) (ast.Expr,
 
 	// Extract function name from selector
 	var functionName string
-	if ident, ok := selector.Sel.(*ast.Ident); ok {
-		functionName = ident.Name
+	if sel, ok := selector.Sel.(*ast.Ident); ok {
+		functionName = sel.Name
 	} else {
 		return nil, false, nil
 	}
 
-	customFunc := op.GetFunction(functionName)
-	if customFunc == nil {
+	// Look up function in registry
+	entry, found := p.registry.Get(functionName)
+	if !found {
 		return nil, false, nil
 	}
 
 	// Extract arguments from the right side (should be a struct with args field)
 	structLit, ok := expr.Y.(*ast.StructLit)
 	if !ok {
-		return nil, false, fmt.Errorf("expected struct literal for function arguments")
+		return nil, false, fmt.Errorf("function %s: expected struct literal for arguments", functionName)
 	}
 
 	args, err := p.extractArguments(structLit)
 	if err != nil {
-		return nil, false, err
+		return nil, false, fmt.Errorf("function %s: %w", functionName, err)
 	}
+
+	// Check cache for cacheable functions
+	var cacheKey string
+	if entry.Cacheable {
+		cacheKey = p.cacheKey(functionName, args)
+		p.cacheMu.Lock()
+		if cached, ok := p.cache[cacheKey]; ok {
+			p.cacheMu.Unlock()
+			return p.resultStruct(cached), true, nil
+		}
+		p.cacheMu.Unlock()
+	}
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), entry.Timeout)
+	defer cancel()
 
 	// Execute the custom function
-	result, err := customFunc.Execute(args)
+	result, err := entry.Impl.Execute(ctx, args)
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to execute function %s: %w", functionName, err)
+		return nil, false, fmt.Errorf("function %s(%v) failed: %w", functionName, args, err)
 	}
 
-	// Create a struct literal with the result
-	resultStruct := &ast.StructLit{
+	// Store in cache if cacheable
+	if entry.Cacheable && cacheKey != "" {
+		p.cacheMu.Lock()
+		p.cache[cacheKey] = result
+		p.cacheMu.Unlock()
+	}
+
+	return p.resultStruct(result), true, nil
+}
+
+// cacheKey generates a cache key from function name and arguments.
+func (p *CUEProcessor) cacheKey(name string, args []interface{}) string {
+	h := sha256.New()
+	h.Write([]byte(name))
+	for _, a := range args {
+		h.Write([]byte(fmt.Sprintf("|%v", a)))
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// resultStruct creates a CUE struct literal with a result field.
+func (p *CUEProcessor) resultStruct(value interface{}) ast.Expr {
+	return &ast.StructLit{
 		Elts: []ast.Decl{
 			&ast.Field{
 				Label: ast.NewIdent("result"),
-				Value: p.createLiteralFromValue(result),
+				Value: p.createLiteralFromValue(value),
 			},
 		},
 	}
-
-	return resultStruct, true, nil
 }
 
 // extractArguments extracts arguments from a struct literal

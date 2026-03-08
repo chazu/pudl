@@ -1,13 +1,15 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/cue"
+	pudlcue "pudl/internal/cue"
 	"pudl/internal/errors"
+	"pudl/internal/glojure"
 )
 
 // processCmd represents the process command
@@ -23,7 +25,7 @@ unified result.
 The CUE file should import the "op" package to use custom functions:
 
     import "op"
-    
+
     greeting: op.#Uppercase & {
         args: ["hello, world!"]
     }
@@ -57,8 +59,19 @@ func runProcessCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewFileNotFoundError(filename)
 	}
 
+	// Initialize Glojure runtime and function registry
+	rt := glojure.New()
+	if err := rt.Init(); err != nil {
+		return fmt.Errorf("failed to initialize Glojure runtime: %w", err)
+	}
+
+	registry := glojure.NewRegistry(rt)
+	if err := glojure.RegisterBuiltins(registry); err != nil {
+		return fmt.Errorf("failed to register builtin functions: %w", err)
+	}
+
 	// Process the file
-	processor := cue.NewCUEProcessor()
+	processor := pudlcue.NewCUEProcessor(registry)
 	if err := processor.ProcessFile(filename); err != nil {
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Error processing CUE file", err)
 	}
@@ -68,14 +81,4 @@ func runProcessCommand(cmd *cobra.Command, args []string) error {
 
 func init() {
 	rootCmd.AddCommand(processCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// processCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// processCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
