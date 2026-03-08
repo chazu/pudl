@@ -276,20 +276,24 @@ Drift detection compares a definition's declared state (socket bindings) against
 
 **New packages:** `internal/drift/` (comparator, checker, report store).
 
-### Phase 8: Agent Integration & Skill Files
+### Phase 8: Agent Integration & Skill Files ✅
 
 **Goal:** AI agents can discover models, write definitions and methods, compose workflows, and present artifacts for human review.
 
-1. **Skill markdown files** — Bundled into binary, written to `.claude/skills/` on init
+**Status:** Complete. See `implog/2026_03_07_phase8_agent_integration.md` for details.
+
+Effect types and parsing enable methods to return `pudl/effects` descriptions for audit trails and dry-run support. Five skill files are embedded into the binary and written to `.claude/skills/` on init. Model search and scaffold commands generate boilerplate. Extension models in `extensions/models/` are auto-discovered.
+
+1. ✅ **Skill markdown files** — Bundled into binary, written to `.claude/skills/` on init
    - `pudl-core/SKILL.md` — CLI usage, repo layout
    - `pudl-definitions/SKILL.md` — Writing CUE definitions
    - `pudl-methods/SKILL.md` — Writing Glojure methods
    - `pudl-workflows/SKILL.md` — Composing workflow DAGs
    - `pudl-models/SKILL.md` — Defining extension models
-2. **`pudl model search <query>`** — Keyword search across model schemas
-3. **`pudl model scaffold <name>`** — Generate model CUE schema + method stubs
-4. **Effect description pattern** — Methods return `{:pudl/effects [...]}` instead of executing directly; runtime handles execution with audit trail and `--dry-run` support
-5. **Extension model discovery** — User-defined models in `extensions/models/` auto-discovered
+2. ✅ **`pudl model search <query>`** — Keyword search across model schemas
+3. ✅ **`pudl model scaffold <name>`** — Generate model CUE schema + method stubs
+4. ✅ **Effect description pattern** — Methods return `{:pudl/effects [...]}` instead of executing directly; runtime handles execution with audit trail and `--dry-run` support
+5. ✅ **Extension model discovery** — User-defined models in `extensions/models/` auto-discovered
 
 **Reuses:** Everything — this phase is the capstone that ties the system together for agent use.
 

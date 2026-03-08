@@ -50,6 +50,28 @@ func (d *Discoverer) ListModels() ([]ModelInfo, error) {
 		return nil, fmt.Errorf("failed to walk schema directory: %w", err)
 	}
 
+	// Also walk extensions/models/ for user-defined models
+	extModelsDir := filepath.Join(d.schemaPath, "extensions", "models")
+	if info, err := os.Stat(extModelsDir); err == nil && info.IsDir() {
+		_ = filepath.Walk(extModelsDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() && info.Name() == "cue.mod" {
+				return filepath.SkipDir
+			}
+			if info.IsDir() || !strings.HasSuffix(info.Name(), ".cue") {
+				return nil
+			}
+			fileModels, err := d.parseModelsFromFile(path)
+			if err != nil {
+				return nil
+			}
+			models = append(models, fileModels...)
+			return nil
+		})
+	}
+
 	sort.Slice(models, func(i, j int) bool {
 		return models[i].Name < models[j].Name
 	})

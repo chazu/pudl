@@ -8,6 +8,7 @@ import (
 
 	"pudl/internal/config"
 	"pudl/internal/importer"
+	"pudl/internal/skills"
 )
 
 // InitOptions contains options for initialization
@@ -61,6 +62,14 @@ func Initialize(opts InitOptions) error {
 	}
 	if opts.Verbose {
 		fmt.Println("✅ Bootstrap schemas copied (catchall, collections)")
+	}
+
+	// Write skill files if .claude/ exists in project root
+	if err := writeSkillFiles(cfg.SchemaPath, opts.Verbose); err != nil {
+		// Non-fatal — skill files are a convenience
+		if opts.Verbose {
+			fmt.Printf("⚠️  Failed to write skill files: %v\n", err)
+		}
 	}
 
 	// Initialize git repository in schema directory
@@ -479,6 +488,37 @@ examplePipeline: #GitLabPipeline & {
 		fmt.Println("     • cue.dev/x/gitlab (GitLab CI/CD pipeline schemas)")
 		fmt.Println("   - Local schemas: pudl/ (AWS, custom schemas)")
 		fmt.Println("   - Examples: examples/ (usage patterns and integrations)")
+	}
+
+	return nil
+}
+
+// writeSkillFiles writes embedded PUDL skill files to .claude/skills/ if
+// a .claude/ directory exists in the project root (detected by walking up
+// from the schema path) or alongside the schema directory.
+func writeSkillFiles(schemaPath string, verbose bool) error {
+	// Check for .claude/ in the schema path's parent (typical project root)
+	projectRoot := filepath.Dir(schemaPath)
+	claudeDir := filepath.Join(projectRoot, ".claude")
+
+	// Also check current working directory
+	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
+		cwd, _ := os.Getwd()
+		claudeDir = filepath.Join(cwd, ".claude")
+		if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
+			// No .claude/ directory found — skip silently
+			return nil
+		}
+	}
+
+	targetDir := filepath.Join(claudeDir, "skills")
+	if err := skills.WriteSkills(targetDir); err != nil {
+		return fmt.Errorf("writing skill files: %w", err)
+	}
+
+	if verbose {
+		skillList, _ := skills.ListSkills()
+		fmt.Printf("✅ Wrote %d PUDL skill files to %s\n", len(skillList), targetDir)
 	}
 
 	return nil

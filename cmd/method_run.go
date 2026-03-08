@@ -136,6 +136,20 @@ func runMethodRunCommand(defName, methodName string) error {
 		storeArtifact(cfg, defName, methodName, result.Output, tags)
 	}
 
+	// Print effects if present
+	if len(result.Effects) > 0 {
+		fmt.Println("\nEffects:")
+		for _, e := range result.Effects {
+			fmt.Printf("  %s\n", executor.FormatEffect(e))
+		}
+		if len(result.EffectOutcomes) > 0 {
+			fmt.Println("\nEffect Outcomes:")
+			for _, eo := range result.EffectOutcomes {
+				fmt.Printf("  %s\n", executor.FormatEffectOutcome(eo))
+			}
+		}
+	}
+
 	// Print post-action results
 	if len(result.PostActions) > 0 {
 		fmt.Println("\nPost-actions:")
