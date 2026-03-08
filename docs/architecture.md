@@ -12,13 +12,25 @@ This document describes PUDL's internal architecture: storage layout, streaming 
 │   │   └── YYYYMMDD_HHMMSS_origin.ext
 │   ├── metadata/                  # Per-import JSON metadata sidecar files
 │   │   └── YYYYMMDD_HHMMSS_origin.ext.meta
-│   └── sqlite/catalog.db          # SQLite catalog database
-└── schema/                        # Git-tracked CUE schema repository
-    ├── .git/                      # Full git repository
-    ├── cue.mod/module.cue         # CUE module definition
-    └── pudl/
-        ├── core/core.cue          # Bootstrap schemas (catchall, collection)
-        └── <user packages>/       # Custom schema packages
+│   ├── sqlite/catalog.db          # SQLite catalog database
+│   ├── .runs/                     # Workflow run manifests
+│   │   └── <workflow>/<run-id>.json
+│   └── .drift/                    # Drift detection reports
+│       └── <definition>/<timestamp>.json
+├── schema/                        # Git-tracked CUE schema repository
+│   ├── .git/                      # Full git repository
+│   ├── cue.mod/module.cue         # CUE module definition
+│   ├── pudl/
+│   │   ├── core/core.cue          # Bootstrap schemas (catchall, collection)
+│   │   └── <user packages>/       # Custom schema packages
+│   ├── models/                    # Model CUE files
+│   ├── definitions/               # Named model instances
+│   ├── methods/                   # Glojure method implementations
+│   │   └── <model-name>/<method-name>.clj
+│   └── extensions/
+│       └── models/                # User extension models
+└── vaults/                        # Encrypted credential stores
+    └── default.age                # age-encrypted secrets file
 ```
 
 ### Raw Data
@@ -58,6 +70,11 @@ catalog_entries (
     item_index        INTEGER,           -- Position in collection (NULL for collections)
     collection_type   TEXT,              -- 'collection', 'item', or NULL
     item_id           TEXT,              -- Unique item identifier within collection
+    entry_type        TEXT,              -- 'import' or 'artifact'
+    definition        TEXT,              -- Definition name (artifacts only)
+    method            TEXT,              -- Method name (artifacts only)
+    run_id            TEXT,              -- Execution run ID (artifacts only)
+    tags              TEXT,              -- JSON-encoded key-value tags
     created_at        DATETIME,
     updated_at        DATETIME
 )
@@ -186,6 +203,16 @@ ImportFileWithFriendlyIDs(opts)
 | `ui` | `internal/ui/` | Output formatting, interactive TUI |
 | `doctor` | `internal/doctor/` | Health checks |
 | `errors` | `internal/errors/` | Typed error codes |
+| `model` | `internal/model/` | Model discovery, schema reference resolution, method/socket extraction |
+| `definition` | `internal/definition/` | Definition loader, validator, socket wiring, dependency graph |
+| `glojure` | `internal/glojure/` | Glojure runtime embedding, namespace registry, CUE function bridge |
+| `executor` | `internal/executor/` | Lifecycle dispatch, qualification runner, socket value propagation |
+| `artifact` | `internal/artifact/` | Artifact serialization, hashing, storage, dedup |
+| `vault` | `internal/vault/` | Vault interface, env/file backends, resolution walker |
+| `workflow` | `internal/workflow/` | DAG builder, scheduler, runner, manifest writer |
+| `drift` | `internal/drift/` | State comparator, report generator |
+| `skills` | `internal/skills/` | Agent skill file management, embedding |
+| `effects` | `internal/effects/` | Effect type parsing, formatting |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
 
 ## Two Execution Layers
@@ -236,4 +263,6 @@ Because CUE functions can do I/O, the CUE processor must handle timeouts, cachin
 - **go-cdc-chunkers** — Content-Defined Chunking for streaming
 - **Bubbletea + Bubbles + Lipgloss** — interactive TUI (`pudl list --fancy`)
 - **yaml.v3** — YAML config and data parsing
+- **Glojure** (`github.com/glojurelang/glojure v0.6.4`) — Clojure-like scripting for method implementations
+- **age** — encryption for file-based vault
 - **testify** — test assertions

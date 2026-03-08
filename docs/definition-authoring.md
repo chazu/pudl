@@ -92,20 +92,28 @@ my_resource: {
 
 The `_model` field is used for discovery but does not participate in CUE validation.
 
-## Vault References (Phase 5 Preview)
+## Vault References
 
-Secret values can be marked with vault references for future resolution:
+Secret values use `vault://` references, resolved by the executor at method execution time. Resolved values never hit disk or artifacts.
 
 ```cue
 prod_db: examples.#DatabaseModel & {
     schema: {
         host:     "db.example.com"
-        password: vault."prod/db/password"  // resolved at execution time
+        password: "vault://prod/db/password"  // resolved at execution time
     }
 }
 ```
 
-Vault resolution is not yet implemented. Values are stored as markers.
+Manage vault secrets with the CLI:
+
+```bash
+pudl vault set prod/db/password "s3cret"
+pudl vault get prod/db/password
+pudl vault list
+```
+
+Two backends are available: environment variables (default, CI-friendly) and age-encrypted file (`~/.pudl/vaults/default.age`). Configure with `vault_backend` in `config.yaml`. See [vault.md](vault.md) for details.
 
 ## CLI Commands
 

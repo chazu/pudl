@@ -4,6 +4,7 @@
 
 - Go 1.24+ (for building from source)
 - Git (for schema version control)
+- CUE (cuelang.org) for schema definitions
 
 ## Install and Initialize
 
@@ -196,9 +197,129 @@ pudl import --path huge-file.json --streaming-memory 500
 pudl import --path massive-data.json --streaming-chunk-size 0.064
 ```
 
+## Define a Model
+
+Models compose CUE schemas with operational behavior — methods, sockets, authentication, and metadata.
+
+```bash
+# List available models
+pudl model list
+
+# Search for models by keyword
+pudl model search ec2
+
+# Generate a model scaffold
+pudl model scaffold myservice --category custom --methods list,create --auth bearer
+
+# View model details
+pudl model show pudl/model/examples.#EC2InstanceModel
+```
+
+See [model-authoring.md](model-authoring.md) for the full guide.
+
+## Create a Definition
+
+Definitions are named instances of models with concrete configuration:
+
+```bash
+# List definitions
+pudl definition list
+
+# Validate all definitions
+pudl definition validate
+
+# View the dependency graph
+pudl definition graph
+```
+
+See [definition-authoring.md](definition-authoring.md) for the full guide.
+
+## Run a Method
+
+Methods execute operations against definitions with lifecycle dispatch:
+
+```bash
+# Execute a method
+pudl method run prod_instance list
+
+# Dry run (qualifications only)
+pudl method run prod_instance create --dry-run
+
+# Pass extra arguments
+pudl method run prod_instance create --tag env=staging
+
+# List available methods for a definition
+pudl method list prod_instance
+```
+
+See [method-authoring.md](method-authoring.md) for the full guide.
+
+## Run a Workflow
+
+Workflows orchestrate multiple method executions as a DAG:
+
+```bash
+# Run a workflow
+pudl workflow run deploy-stack
+
+# Validate before running
+pudl workflow validate deploy-stack
+
+# View workflow details
+pudl workflow show deploy-stack
+
+# Check run history
+pudl workflow history deploy-stack
+```
+
+See [workflows.md](workflows.md) for more.
+
+## Check for Drift
+
+Compare declared infrastructure state against live state:
+
+```bash
+# Check a single definition
+pudl drift check prod_instance
+
+# Check all definitions
+pudl drift check --all
+
+# Re-execute method before comparing
+pudl drift check prod_instance --refresh
+
+# View last saved report
+pudl drift report prod_instance
+```
+
+See [drift.md](drift.md) for more.
+
+## Manage Secrets
+
+The vault stores credentials used by definitions and methods:
+
+```bash
+# Store a secret
+pudl vault set aws/access_key "AKIA..."
+
+# Retrieve a secret
+pudl vault get aws/access_key
+
+# List stored paths
+pudl vault list
+```
+
+Vault references in definitions (`vault://aws/access_key`) are resolved at execution time. See [vault.md](vault.md) for more.
+
 ## Next Steps
 
 - Read [concepts.md](concepts.md) to understand the identity system and schema inference
 - Read [schema-authoring.md](schema-authoring.md) to write custom schemas
 - Read [collections.md](collections.md) for advanced collection workflows
+- Read [model-authoring.md](model-authoring.md) to write models
+- Read [definition-authoring.md](definition-authoring.md) to write definitions
+- Read [method-authoring.md](method-authoring.md) to write methods
+- Read [workflows.md](workflows.md) for workflow orchestration
+- Read [drift.md](drift.md) for drift detection
+- Read [vault.md](vault.md) for credential management
 - Run `pudl --help` or `pudl <command> --help` for inline CLI help
