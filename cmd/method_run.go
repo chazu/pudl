@@ -3,11 +3,14 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 
+	"pudl/internal/artifact"
 	"pudl/internal/config"
+	"pudl/internal/database"
 	"pudl/internal/definition"
 	"pudl/internal/errors"
 	"pudl/internal/executor"
@@ -119,6 +122,11 @@ func runMethodRunCommand(defName, methodName string) error {
 		fmt.Printf("Result: %v\n", result.Output)
 	}
 
+	// Store artifact (non-fatal on failure)
+	if result.Output != nil && !methodDryRun {
+		storeArtifact(cfg, defName, methodName, result.Output, tags)
+	}
+
 	// Print post-action results
 	if len(result.PostActions) > 0 {
 		fmt.Println("\nPost-actions:")
@@ -132,4 +140,32 @@ func runMethodRunCommand(defName, methodName string) error {
 	}
 
 	return nil
+}
+
+func storeArtifact(cfg *config.Config, defName, methodName string, output interface{}, tags map[string]string) {
+	configDir := config.GetPudlDir()
+	db, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to open catalog for artifact storage: %v\n", err)
+		return
+	}
+	defer db.Close()
+
+	result, err := artifact.Store(db, artifact.StoreOptions{
+		Definition: defName,
+		Method:     methodName,
+		Output:     output,
+		Tags:       tags,
+		DataPath:   cfg.DataPath,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to store artifact: %v\n", err)
+		return
+	}
+
+	if result.Deduped {
+		fmt.Printf("\nArtifact unchanged: %s (deduplicated)\n", result.Proquint)
+	} else {
+		fmt.Printf("\nArtifact stored: %s\n", result.Proquint)
+	}
 }

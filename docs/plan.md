@@ -200,9 +200,13 @@ Methods are `.clj` files that call Go-registered builtins via the Glojure runtim
 
 **New packages:** `internal/executor/` (lifecycle dispatch, advice runner, socket value propagation).
 
-### Phase 4: Artifact Management — Unify Storage
+### Phase 4: Artifact Management — Unify Storage (COMPLETE)
 
 **Goal:** Method outputs, imported data, and workflow results share one storage and query layer.
+
+**Status:** Complete. See `implog/2026_03_07_phase4_artifact_management.md` for details.
+
+Method outputs are stored as catalog entries alongside imported data using the same content-hashing, dedup, and SQLite catalog. New columns (`entry_type`, `definition`, `method`, `run_id`, `tags`) discriminate artifacts from imports. CLI commands `pudl data search` and `pudl data latest` provide artifact querying. `pudl list` defaults to imports only (backwards-compatible); `--artifacts` and `--all` flags added.
 
 Pudl's existing catalog becomes the unified artifact backend. Method outputs are stored with the same content hashing, dedup, and provenance tracking as imported data — but with richer metadata (definition, method, run-id, tags).
 
@@ -370,6 +374,7 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 | `definition` | `internal/definition/` | 2 | Definition loader, validator, socket wiring, dependency graph |
 | `glojure` | `internal/glojure/` | 3a | Runtime embedding, namespace registry, CUE function bridge |
 | `executor` | `internal/executor/` | 3b | Lifecycle dispatch, advice runner, socket value propagation |
+| `artifact` | `internal/artifact/` | 4 | Artifact serialization, hashing, storage, dedup |
 | `vault` | `internal/vault/` | 5 | Vault interface, env/file backends, resolution walker |
 | `workflow` | `internal/workflow/` | 6 | DAG builder, scheduler, runner, manifest writer |
 | `drift` | `internal/drift/` | 7 | State comparator, report generator |

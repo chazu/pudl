@@ -49,6 +49,53 @@ func (c *CatalogDB) ensureIdentityColumns() error {
 	return nil
 }
 
+// ensureArtifactColumns adds artifact tracking columns if missing.
+// Idempotent — safe to run on every DB open.
+func (c *CatalogDB) ensureArtifactColumns() error {
+	columns := []struct {
+		name string
+		ddl  string
+	}{
+		{"entry_type", "ALTER TABLE catalog_entries ADD COLUMN entry_type TEXT DEFAULT 'import'"},
+		{"definition", "ALTER TABLE catalog_entries ADD COLUMN definition TEXT"},
+		{"method", "ALTER TABLE catalog_entries ADD COLUMN method TEXT"},
+		{"run_id", "ALTER TABLE catalog_entries ADD COLUMN run_id TEXT"},
+		{"tags", "ALTER TABLE catalog_entries ADD COLUMN tags TEXT"},
+	}
+
+	for _, col := range columns {
+		exists, err := c.columnExists("catalog_entries", col.name)
+		if err != nil {
+			return fmt.Errorf("failed to check column %s: %w", col.name, err)
+		}
+		if !exists {
+			if _, err := c.db.Exec(col.ddl); err != nil {
+				return fmt.Errorf("failed to add column %s: %w", col.name, err)
+			}
+		}
+	}
+
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_entry_type ON catalog_entries(entry_type)",
+		"CREATE INDEX IF NOT EXISTS idx_definition ON catalog_entries(definition)",
+		"CREATE INDEX IF NOT EXISTS idx_definition_method ON catalog_entries(definition, method)",
+		"CREATE INDEX IF NOT EXISTS idx_run_id ON catalog_entries(run_id)",
+	}
+	for _, idx := range indexes {
+		if _, err := c.db.Exec(idx); err != nil {
+			return fmt.Errorf("failed to create artifact index: %w", err)
+		}
+	}
+
+	// Backfill entry_type for existing rows
+	_, err := c.db.Exec(`UPDATE catalog_entries SET entry_type = 'import' WHERE entry_type IS NULL`)
+	if err != nil {
+		return fmt.Errorf("failed to backfill entry_type: %w", err)
+	}
+
+	return nil
+}
+
 // columnExists checks if a column exists using PRAGMA table_info.
 func (c *CatalogDB) columnExists(table, column string) (bool, error) {
 	rows, err := c.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
