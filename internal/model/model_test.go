@@ -52,9 +52,9 @@ func TestListModels(t *testing.T) {
 	for _, m := range models {
 		names[m.Name] = true
 	}
-	assert.True(t, names["pudl/model/examples.#EC2InstanceModel"], "missing EC2 model")
-	assert.True(t, names["pudl/model/examples.#HTTPEndpointModel"], "missing HTTP model")
-	assert.True(t, names["pudl/model/examples.#SimpleModel"], "missing Simple model")
+	assert.True(t, names["examples.#EC2InstanceModel"], "missing EC2 model")
+	assert.True(t, names["examples.#HTTPEndpointModel"], "missing HTTP model")
+	assert.True(t, names["examples.#SimpleModel"], "missing Simple model")
 }
 
 func TestGetModel(t *testing.T) {
@@ -62,7 +62,7 @@ func TestGetModel(t *testing.T) {
 	discoverer := NewDiscoverer(schemaDir)
 
 	t.Run("existing model", func(t *testing.T) {
-		m, err := discoverer.GetModel("pudl/model/examples.#EC2InstanceModel")
+		m, err := discoverer.GetModel("examples.#EC2InstanceModel")
 		require.NoError(t, err)
 		assert.Equal(t, "ec2_instance", m.Metadata.Name)
 		assert.Equal(t, "compute", m.Metadata.Category)
@@ -78,7 +78,7 @@ func TestEC2ModelParsing(t *testing.T) {
 	schemaDir := setupTestSchemaDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
-	m, err := discoverer.GetModel("pudl/model/examples.#EC2InstanceModel")
+	m, err := discoverer.GetModel("examples.#EC2InstanceModel")
 	require.NoError(t, err)
 
 	// Metadata
@@ -116,7 +116,7 @@ func TestHTTPModelParsing(t *testing.T) {
 	schemaDir := setupTestSchemaDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
-	m, err := discoverer.GetModel("pudl/model/examples.#HTTPEndpointModel")
+	m, err := discoverer.GetModel("examples.#HTTPEndpointModel")
 	require.NoError(t, err)
 
 	assert.Equal(t, "http_endpoint", m.Metadata.Name)
@@ -134,7 +134,7 @@ func TestSimpleModelParsing(t *testing.T) {
 	schemaDir := setupTestSchemaDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
-	m, err := discoverer.GetModel("pudl/model/examples.#SimpleModel")
+	m, err := discoverer.GetModel("examples.#SimpleModel")
 	require.NoError(t, err)
 
 	assert.Equal(t, "simple", m.Metadata.Name)
@@ -149,7 +149,7 @@ func TestLifecycleResolution(t *testing.T) {
 	schemaDir := setupTestSchemaDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
-	m, err := discoverer.GetModel("pudl/model/examples.#EC2InstanceModel")
+	m, err := discoverer.GetModel("examples.#EC2InstanceModel")
 	require.NoError(t, err)
 
 	t.Run("create has qualifications", func(t *testing.T) {
@@ -180,7 +180,7 @@ func TestLifecycleMinimalModel(t *testing.T) {
 	schemaDir := setupTestSchemaDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
-	m, err := discoverer.GetModel("pudl/model/examples.#SimpleModel")
+	m, err := discoverer.GetModel("examples.#SimpleModel")
 	require.NoError(t, err)
 
 	lc, err := ResolveLifecycle(m, "get")
