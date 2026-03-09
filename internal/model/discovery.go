@@ -104,16 +104,23 @@ func (d *Discoverer) parseModelsFromFile(filePath string) ([]ModelInfo, error) {
 		return nil, err
 	}
 
-	relPath, err := filepath.Rel(d.schemaPath, filePath)
-	if err != nil {
-		relPath = filePath
-	}
-	packageName := filepath.Dir(relPath)
-	if packageName == "." {
-		packageName = "root"
+	// Extract the CUE package name from the file content. Definitions
+	// reference models by CUE package name (e.g. "examples.#SimpleModel"),
+	// so model names must use the declared package, not the filesystem path.
+	text := string(content)
+	packageName := extractCUEPackageName(text)
+	if packageName == "" {
+		// Fallback to directory-based naming if no package declaration
+		relPath, err := filepath.Rel(d.schemaPath, filePath)
+		if err != nil {
+			relPath = filePath
+		}
+		packageName = filepath.Base(filepath.Dir(relPath))
+		if packageName == "." {
+			packageName = "root"
+		}
 	}
 
-	text := string(content)
 	var models []ModelInfo
 
 	// Find all top-level definitions that reference #Model
@@ -141,6 +148,16 @@ func (d *Discoverer) parseModelsFromFile(filePath string) ([]ModelInfo, error) {
 	}
 
 	return models, nil
+}
+
+// extractCUEPackageName extracts the package name from a CUE file's
+// "package <name>" declaration.
+func extractCUEPackageName(text string) string {
+	re := regexp.MustCompile(`(?m)^package\s+(\w+)`)
+	if m := re.FindStringSubmatch(text); len(m) > 1 {
+		return m[1]
+	}
+	return ""
 }
 
 // extractDefinitionBody returns the text from the definition start to the
