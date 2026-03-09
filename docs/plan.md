@@ -16,6 +16,7 @@ The core import/catalog/schema pipeline is stable and well-tested (291+ passing 
 - **Schema Name Normalization** — Canonical `<package-path>.#<Definition>` format
 - **Bootstrap Schemas** — Embedded CUE files (`pudl/core.#Item`, `pudl/core.#Collection`)
 - **Full CLI** — Import, list, show, delete, export, validate, schema lifecycle, doctor
+- **Repo Init** — `pudl repo init` creates `.pudl/` in a repo and installs Claude skills to `.claude/skills/`
 
 ### Key Design Decisions
 
