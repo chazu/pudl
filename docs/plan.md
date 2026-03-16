@@ -17,6 +17,7 @@ The core import/catalog/schema pipeline is stable and well-tested (291+ passing 
 - **Bootstrap Schemas** — Embedded CUE files (`pudl/core.#Item`, `pudl/core.#Collection`)
 - **Full CLI** — Import, list, show, delete, export, validate, schema lifecycle, doctor
 - **Repo Init** — `pudl repo init` creates `.pudl/` in a repo and installs Claude skills to `.claude/skills/`
+- **Fixed-Point Verification** — `pudl verify` re-runs inference on all entries and confirms schema stability
 
 ### Key Design Decisions
 
@@ -298,6 +299,32 @@ Effect types and parsing enable methods to return `pudl/effects` descriptions fo
 
 **Reuses:** Everything — this phase is the capstone that ties the system together for agent use.
 
+### Phase 11: Schema Catalog Layer (COMPLETE)
+
+**Goal:** Add a central catalog layer that registers pudl's schema types as a browsable inventory, inspired by defn's catalog pattern.
+
+**Status:** Complete. See `implog/2026_03_15_phase11_catalog_layer.md` for details.
+
+A bootstrap `catalog.cue` defines `#CatalogEntry` and registers the core types (`pudl/core.#Item`, `pudl/core.#Collection`). The `pudl catalog` command loads all CUE schemas and displays each registered type with its metadata (schema_type, resource_type). Users can extend the catalog by adding their own entries.
+
+1. **Bootstrap `catalog.cue`** — `internal/importer/bootstrap/pudl/catalog/catalog.cue` defines `#CatalogEntry` and registers core types
+2. **`pudl catalog`** — Lists all registered schema types with metadata from `_pudl` annotations
+3. **Auto-bootstrap** — `ensureBasicSchemas` copies catalog schema alongside core schema on init
+
+**Reuses:** CUE module loader, bootstrap embed system, validator metadata extraction.
+
+### Phase 13: Mu Plugin Interface (COMPLETE)
+
+**Goal:** Bridge pudl's drift knowledge to mu's execution engine via a `pudl export-actions` command that reads drift reports and emits mu-compatible JSON action specs.
+
+**Status:** Complete. See `implog/2026_03_15_phase13_mu_plugin_interface.md` for details.
+
+1. **`internal/mubridge/export.go`** — `ActionSpec`, `PlanResponse` types matching mu's plugin protocol; `ExportFromDriftReport()` converts drift differences into action specs
+2. **`cmd/export_actions.go`** — `pudl export-actions` command with `--definition` and `--all` flags; outputs a single JSON plan response to stdout
+3. **`drift.ReportStore.ListDefinitions()`** — New method to enumerate all definitions with saved drift reports (supports `--all` flag)
+
+**Reuses:** Drift detection (Phase 7), config, report store.
+
 ---
 
 ## Original Analytics Roadmap (Preserved)
@@ -354,6 +381,9 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 | 2026-03-06 | Phase 1 (Models), Phase 2 (Definitions) |
 | 2026-03-07 | Phases 3-8: Glojure runtime, method execution, artifacts, vault, workflows, drift, agent integration |
 | 2026-03-08 | Documentation consistency update: all docs updated for Phases 1-8, created method/workflow/drift/vault guides |
+| 2026-03-15 | Phase 11: Schema catalog layer (bootstrap catalog.cue + `pudl catalog` command) |
+| 2026-03-15 | Phase 13: Mu plugin interface (`pudl export-actions`, mubridge package) |
+| 2026-03-15 | Phase 14: Directory structure validation in doctor command (exhaustive `~/.pudl/` structure check) |
 
 ## Core Packages
 
@@ -391,3 +421,4 @@ Detailed implementation history is in the [`implog/`](../implog/) directory. Key
 | `vault` | `internal/vault/` | 5 | Vault interface, env/file backends, resolution walker |
 | `workflow` | `internal/workflow/` | 6 | DAG builder, scheduler, runner, manifest writer |
 | `drift` | `internal/drift/` | 7 | State comparator, report generator |
+| `mubridge` | `internal/mubridge/` | 13 | Drift-to-mu action export, plan response generation |

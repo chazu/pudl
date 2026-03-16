@@ -215,7 +215,7 @@ Additionally, the cascade priority system in the validator is replaced with nati
 
 ---
 
-## Phase 11: Add Catalog Layer
+## Phase 11: Add Catalog Layer [DONE]
 
 **Goal:** A central `catalog.cue` in the schema repo that registers known resource types, schemas, and relationships — inspired by defn's catalog pattern.
 
@@ -228,7 +228,7 @@ Additionally, the cascade priority system in the validator is replaced with nati
 
 ---
 
-## Phase 12: Add Fixed-Point Verification
+## Phase 12: Add Fixed-Point Verification [DONE]
 
 **Goal:** `pudl verify` re-runs schema inference on all catalog entries and confirms every entry resolves to the same schema. Two-pass idempotency check, inspired by defn's `gen.clj`.
 
@@ -245,7 +245,7 @@ All three are worth knowing about. This is a correctness invariant, not a build 
 
 ---
 
-## Phase 13: Add mu Plugin Interface
+## Phase 13: Add mu Plugin Interface [DONE]
 
 **Goal:** Bridge pudl's knowledge to mu's execution. `pudl export-actions` reads drift reports and emits mu-compatible NDJSON action DAGs.
 
@@ -257,7 +257,7 @@ All three are worth knowing about. This is a correctness invariant, not a build 
 
 ---
 
-## Phase 14: Add Structural Validation
+## Phase 14: Add Structural Validation [DONE]
 
 **Goal:** CUE `close({})` pattern to validate the `~/.pudl/` directory structure.
 

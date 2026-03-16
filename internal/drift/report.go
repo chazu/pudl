@@ -97,6 +97,27 @@ func (s *ReportStore) GetLatest(definitionName string) (*DriftResult, error) {
 	return s.Get(definitionName, ids[0])
 }
 
+// ListDefinitions returns the names of all definitions that have drift reports.
+func (s *ReportStore) ListDefinitions() ([]string, error) {
+	driftDir := filepath.Join(s.dataPath, ".drift")
+	entries, err := os.ReadDir(driftDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read drift directory: %w", err)
+	}
+
+	var names []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
 // reportDir returns the directory for a definition's drift reports.
 func (s *ReportStore) reportDir(definitionName string) string {
 	return filepath.Join(s.dataPath, ".drift", definitionName)

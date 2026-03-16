@@ -89,5 +89,13 @@ func (i *Importer) ensureBasicSchemas() error {
 		}
 	}
 
+	// Check if catalog bootstrap schema exists; if not, copy bootstrap schemas
+	catalogPath := filepath.Join(i.schemaPath, "pudl", "catalog", "catalog.cue")
+	if _, err := os.Stat(catalogPath); os.IsNotExist(err) {
+		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
+		}
+	}
+
 	return nil
 }
