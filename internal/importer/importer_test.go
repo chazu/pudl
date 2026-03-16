@@ -108,7 +108,7 @@ func TestImportFile_JSON(t *testing.T) {
 
 	// Verify metadata file contains expected content
 	testutil.AssertFileContains(t, result.MetadataPath, result.ID)
-	testutil.AssertFileContains(t, result.MetadataPath, "#Item")
+	testutil.AssertFileContains(t, result.MetadataPath, result.AssignedSchema)
 }
 
 func TestImportFile_YAML(t *testing.T) {
