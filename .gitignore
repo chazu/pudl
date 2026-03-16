@@ -72,6 +72,9 @@ config.local.*
 *.db-shm
 *.db-wal
 
+# Beads issue tracker
+.beads/
+
 # OS generated files
 .DS_Store
 .DS_Store?
