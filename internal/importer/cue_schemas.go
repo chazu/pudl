@@ -81,19 +81,23 @@ func (i *Importer) ensureBasicSchemas() error {
 		}
 	}
 
-	// Check if model bootstrap schema exists; if not, copy bootstrap schemas
-	modelPath := filepath.Join(i.schemaPath, "pudl", "model", "model.cue")
-	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
-			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
-		}
+	// Check if other bootstrap schemas exist; if not, copy them all
+	// This handles the case where new schema packages are added after init
+	bootstrapChecks := []string{
+		filepath.Join(i.schemaPath, "pudl", "catalog", "catalog.cue"),
+		filepath.Join(i.schemaPath, "pudl", "fs", "fs.cue"),
+		filepath.Join(i.schemaPath, "pudl", "version", "version.cue"),
+		filepath.Join(i.schemaPath, "pudl", "infra", "infra.cue"),
+		filepath.Join(i.schemaPath, "pudl", "component", "component.cue"),
+		filepath.Join(i.schemaPath, "pudl", "artifact", "artifact.cue"),
+		filepath.Join(i.schemaPath, "pudl", "registry", "registry.cue"),
 	}
-
-	// Check if catalog bootstrap schema exists; if not, copy bootstrap schemas
-	catalogPath := filepath.Join(i.schemaPath, "pudl", "catalog", "catalog.cue")
-	if _, err := os.Stat(catalogPath); os.IsNotExist(err) {
-		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
-			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
+	for _, checkPath := range bootstrapChecks {
+		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
+			if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+				return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
+			}
+			break // One copy covers all missing files
 		}
 	}
 
