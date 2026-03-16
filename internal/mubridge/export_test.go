@@ -7,84 +7,177 @@ import (
 	"pudl/internal/drift"
 )
 
-func TestExportFromDriftReport_NilReport(t *testing.T) {
-	resp := ExportFromDriftReport(nil)
-	if resp.Error == "" {
-		t.Fatal("expected error for nil report")
-	}
-}
-
-func TestExportFromDriftReport_NoDifferences(t *testing.T) {
-	report := &drift.DriftResult{
-		Definition:  "test_def",
-		Status:      "clean",
-		Timestamp:   time.Now(),
-		Differences: nil,
-	}
-	resp := ExportFromDriftReport(report)
-	if resp.Error != "" {
-		t.Fatalf("unexpected error: %s", resp.Error)
-	}
-	if len(resp.Actions) != 0 {
-		t.Fatalf("expected 0 actions, got %d", len(resp.Actions))
-	}
-	if resp.Outputs["status"] != "clean" {
-		t.Fatalf("expected status 'clean', got %q", resp.Outputs["status"])
-	}
-}
-
-func TestExportFromDriftReport_WithDifferences(t *testing.T) {
-	report := &drift.DriftResult{
-		Definition: "my_instance",
-		Status:     "drifted",
-		Timestamp:  time.Now(),
-		Differences: []drift.FieldDiff{
-			{Path: "spec.replicas", Type: "changed", Declared: 3, Live: 5},
-			{Path: "metadata.extra_label", Type: "added", Declared: nil, Live: "new-value"},
-			{Path: "spec.old_field", Type: "removed", Declared: "gone", Live: nil},
+func TestExportMuConfig_NoDrift(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition: "my_server",
+				Status:     "clean",
+				Timestamp:  time.Now(),
+			},
+			SchemaRef: "file.#Config",
 		},
 	}
 
-	resp := ExportFromDriftReport(report)
-	if resp.Error != "" {
-		t.Fatalf("unexpected error: %s", resp.Error)
+	cfg := ExportMuConfig(results, nil)
+	if len(cfg.Targets) != 0 {
+		t.Fatalf("expected 0 targets for clean drift, got %d", len(cfg.Targets))
 	}
-	if len(resp.Actions) != 3 {
-		t.Fatalf("expected 3 actions, got %d", len(resp.Actions))
+}
+
+func TestExportMuConfig_SingleDrift(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition: "nginx_conf",
+				Status:     "drifted",
+				Timestamp:  time.Now(),
+				DeclaredKeys: map[string]interface{}{
+					"path":    "/etc/nginx/nginx.conf",
+					"content": "server { listen 80; }",
+					"mode":    "0644",
+				},
+				Differences: []drift.FieldDiff{
+					{Path: "content", Type: "changed", Declared: "server { listen 80; }", Live: "server { listen 8080; }"},
+				},
+			},
+			SchemaRef: "file.#Config",
+			Sources:   []string{"definitions/nginx.cue"},
+		},
 	}
 
-	// Verify changed action
-	changed := resp.Actions[0]
-	if changed.ID != "my_instance-drift-0" {
-		t.Errorf("unexpected action ID: %s", changed.ID)
-	}
-	if changed.Inputs["type"] != "changed" {
-		t.Errorf("expected type 'changed', got %q", changed.Inputs["type"])
-	}
-	if changed.Inputs["field"] != "spec.replicas" {
-		t.Errorf("expected field 'spec.replicas', got %q", changed.Inputs["field"])
-	}
-	if len(changed.Command) != 2 || changed.Command[0] != "echo" {
-		t.Errorf("expected echo command, got %v", changed.Command)
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
 	}
 
-	// Verify added action
-	added := resp.Actions[1]
-	if added.Inputs["type"] != "added" {
-		t.Errorf("expected type 'added', got %q", added.Inputs["type"])
+	target := cfg.Targets[0]
+	if target.Name != "//nginx_conf" {
+		t.Errorf("target name = %q, want %q", target.Name, "//nginx_conf")
+	}
+	if target.Toolchain != "file" {
+		t.Errorf("toolchain = %q, want %q", target.Toolchain, "file")
+	}
+	if target.Config["path"] != "/etc/nginx/nginx.conf" {
+		t.Errorf("config.path = %v, want %q", target.Config["path"], "/etc/nginx/nginx.conf")
+	}
+	if target.Config["content"] != "server { listen 80; }" {
+		t.Errorf("config.content = %v", target.Config["content"])
+	}
+	if len(target.Sources) != 1 || target.Sources[0] != "definitions/nginx.cue" {
+		t.Errorf("sources = %v, want [definitions/nginx.cue]", target.Sources)
+	}
+}
+
+func TestExportMuConfig_MultipleDrifts(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition:   "web_server",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"replicas": float64(3)},
+				Differences:  []drift.FieldDiff{{Path: "replicas", Type: "changed"}},
+			},
+			SchemaRef: "k8s.#Deployment",
+		},
+		{
+			Result: &drift.DriftResult{
+				Definition:   "bucket",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"versioning": true},
+				Differences:  []drift.FieldDiff{{Path: "versioning", Type: "changed"}},
+			},
+			SchemaRef: "s3.#Bucket",
+		},
+		{
+			Result: &drift.DriftResult{
+				Definition: "clean_thing",
+				Status:     "clean",
+			},
+			SchemaRef: "file.#Config",
+		},
 	}
 
-	// Verify removed action
-	removed := resp.Actions[2]
-	if removed.Inputs["type"] != "removed" {
-		t.Errorf("expected type 'removed', got %q", removed.Inputs["type"])
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 2 {
+		t.Fatalf("expected 2 targets (skipping clean), got %d", len(cfg.Targets))
 	}
 
-	// Verify outputs
-	if resp.Outputs["definition"] != "my_instance" {
-		t.Errorf("expected definition 'my_instance', got %q", resp.Outputs["definition"])
+	if cfg.Targets[0].Toolchain != "k8s" {
+		t.Errorf("first target toolchain = %q, want k8s", cfg.Targets[0].Toolchain)
 	}
-	if resp.Outputs["status"] != "drifted" {
-		t.Errorf("expected status 'drifted', got %q", resp.Outputs["status"])
+	if cfg.Targets[1].Toolchain != "aws" {
+		t.Errorf("second target toolchain = %q, want aws", cfg.Targets[1].Toolchain)
+	}
+}
+
+func TestExportMuConfig_CustomMappings(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition:   "my_resource",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"foo": "bar"},
+				Differences:  []drift.FieldDiff{{Path: "foo", Type: "changed"}},
+			},
+			SchemaRef: "mycloud.#Thing",
+		},
+	}
+
+	mappings := []ToolchainMapping{
+		{Prefix: "mycloud", Toolchain: "mycloud-plugin"},
+	}
+
+	cfg := ExportMuConfig(results, mappings)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[0].Toolchain != "mycloud-plugin" {
+		t.Errorf("toolchain = %q, want mycloud-plugin", cfg.Targets[0].Toolchain)
+	}
+}
+
+func TestExportMuConfig_UnknownSchemaFallsBackToGeneric(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition:   "mystery",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"x": 1},
+				Differences:  []drift.FieldDiff{{Path: "x", Type: "changed"}},
+			},
+			SchemaRef: "unknown.#Thing",
+		},
+	}
+
+	cfg := ExportMuConfig(results, nil)
+
+	if cfg.Targets[0].Toolchain != "generic" {
+		t.Errorf("toolchain = %q, want generic", cfg.Targets[0].Toolchain)
+	}
+}
+
+func TestResolveToolchain(t *testing.T) {
+	tests := []struct {
+		schemaRef string
+		want      string
+	}{
+		{"ec2.#Instance", "aws"},
+		{"s3.#Bucket", "aws"},
+		{"k8s.#Deployment", "k8s"},
+		{"kubernetes.#Pod", "k8s"},
+		{"file.#Config", "file"},
+		{"config.#AppSettings", "file"},
+		{"unknown.#Foo", "generic"},
+	}
+
+	for _, tt := range tests {
+		got := resolveToolchain(tt.schemaRef, DefaultMappings)
+		if got != tt.want {
+			t.Errorf("resolveToolchain(%q) = %q, want %q", tt.schemaRef, got, tt.want)
+		}
 	}
 }
