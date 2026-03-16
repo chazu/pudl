@@ -79,8 +79,7 @@ func gitlabCIMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "cicd",
 		ResourceType:    "gitlab.pipeline",
-		CascadePriority: 85,
-		IdentityFields:  []string{},
+		IdentityFields: []string{},
 		TrackedFields:   []string{"stages"},
 	}
 }

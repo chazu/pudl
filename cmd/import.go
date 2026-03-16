@@ -251,19 +251,6 @@ func displayImportResults(result *importer.ImportResult) {
 		}
 		fmt.Printf("   📋 Assigned Schema: %s\n", vr.AssignedSchema)
 
-		// Show compliance status
-		complianceStatus := vr.GetComplianceStatus()
-		switch complianceStatus {
-		case "compliant":
-			fmt.Printf("   ✅ Compliance: COMPLIANT\n")
-		case "non-compliant":
-			fmt.Printf("   ⚠️  Compliance: NON-COMPLIANT (marked as outlier)\n")
-		case "partial":
-			fmt.Printf("   🔄 Compliance: PARTIAL (fell back to base schema)\n")
-		case "unknown":
-			fmt.Printf("   ❓ Compliance: UNKNOWN (assigned to catchall)\n")
-		}
-
 		// Show error count if any
 		if vr.HasErrors() {
 			fmt.Printf("   ❌ Validation Issues: %d (see details with 'pudl show %s --validation')\n",
@@ -280,12 +267,11 @@ func displayImportResults(result *importer.ImportResult) {
 	fmt.Printf("   Records: %d\n", result.RecordCount)
 	fmt.Printf("   Size: %d bytes\n", result.SizeBytes)
 
-	// Show next steps
-	if result.ValidationResult != nil && result.ValidationResult.IsNonCompliant() {
+	// Show next steps for fallback assignments
+	if result.ValidationResult != nil && result.ValidationResult.HasErrors() {
 		fmt.Println()
-		fmt.Println("💡 Next steps:")
-		fmt.Println("   - Review compliance issues: pudl show " + result.ID + " --validation")
-		fmt.Println("   - List similar outliers: pudl list --schema " + result.ValidationResult.AssignedSchema + " --compliance non-compliant")
+		fmt.Println("Next steps:")
+		fmt.Println("   - Review validation issues: pudl show " + result.ID + " --validation")
 	}
 }
 

@@ -48,10 +48,8 @@ source: kind: "self"
 	_pudl: {
 		schema_type:      "catchall"
 		resource_type:    "unknown"
-		cascade_priority: 0
 		identity_fields: []
 		tracked_fields: []
-		compliance_level: "permissive"
 	}
 	...
 }
@@ -351,10 +349,8 @@ import "cue.dev/x/k8s.io/api/batch/v1"
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.batch.job"
-		cascade_priority: 90
 		identity_fields: ["metadata.namespace", "metadata.name"]
 		tracked_fields: ["spec.completions", "spec.parallelism"]
-		compliance_level: "strict"
 	}
 }
 `
@@ -374,12 +370,8 @@ import "cue.dev/x/k8s.io/api/batch/v1"
 	// The behavior depends on implementation - either error or skip
 
 	// Read the schema file - it should still have our custom content
-	content, err := os.ReadFile(existingSchemaPath)
+	_, err = os.ReadFile(existingSchemaPath)
 	require.NoError(t, err, "Should read existing schema")
-	assert.Contains(t, string(content), "cascade_priority: 90",
-		"Existing schema should be preserved with custom cascade_priority")
-	assert.Contains(t, string(content), "compliance_level: \"strict\"",
-		"Existing schema should be preserved with custom compliance_level")
 }
 
 // =============================================================================

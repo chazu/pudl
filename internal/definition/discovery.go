@@ -80,17 +80,17 @@ func (d *Discoverer) GetDefinition(name string) (*DefinitionInfo, error) {
 
 // Regex patterns for definition detection
 var (
-	// Matches: name: examples.#SomeModel & {
-	modelUnifyPattern = regexp.MustCompile(`^(\w+)\s*:\s*(\S+\.#\w+Model)\s*&`)
-	// Matches: name: { with _model marker inside
-	markerPattern = regexp.MustCompile(`_model:\s*"([^"]+)"`)
+	// Matches: name: pkg.#SomeSchema & {
+	schemaUnifyPattern = regexp.MustCompile(`^(\w+)\s*:\s*(\S+\.#\w+)\s*&`)
+	// Matches: name: { with _schema marker inside
+	markerPattern = regexp.MustCompile(`_schema:\s*"([^"]+)"`)
 	// Matches cross-definition references like: prod_vpc.outputs.vpc_id
 	crossRefPattern = regexp.MustCompile(`(\w+)\.(outputs|schema)\.\w+`)
 )
 
 // parseDefinitionsFromFile extracts definition declarations from a CUE file.
-// Detection heuristic: a CUE value that unifies against a #*Model type
-// (text contains #...Model &) is a definition.
+// Detection heuristic: a CUE value that unifies against a #Schema type
+// (text contains pkg.#Name &) is a definition.
 func (d *Discoverer) parseDefinitionsFromFile(filePath string) ([]DefinitionInfo, error) {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
@@ -120,18 +120,17 @@ func (d *Discoverer) parseDefinitionsFromFile(filePath string) ([]DefinitionInfo
 			continue
 		}
 
-		// Check for model unification pattern: name: pkg.#Model & {
-		if matches := modelUnifyPattern.FindStringSubmatch(trimmed); len(matches) > 2 {
+		// Check for schema unification pattern: name: pkg.#Schema & {
+		if matches := schemaUnifyPattern.FindStringSubmatch(trimmed); len(matches) > 2 {
 			defName := matches[1]
-			modelRef := matches[2]
+			schemaRef := matches[2]
 
-			// Extract the definition body for socket binding analysis
 			body := extractBody(lines, i)
 			bindings := extractSocketBindings(body)
 
 			definitions = append(definitions, DefinitionInfo{
 				Name:           defName,
-				ModelRef:       modelRef,
+				SchemaRef:      schemaRef,
 				Package:        packageName,
 				FilePath:       filePath,
 				SocketBindings: bindings,
@@ -139,7 +138,7 @@ func (d *Discoverer) parseDefinitionsFromFile(filePath string) ([]DefinitionInfo
 			continue
 		}
 
-		// Check for marker-based definitions: name: { ... _model: "..." ... }
+		// Check for marker-based definitions: name: { ... _schema: "..." ... }
 		if matches := regexp.MustCompile(`^(\w+)\s*:\s*\{`).FindStringSubmatch(trimmed); len(matches) > 1 {
 			defName := matches[1]
 			body := extractBody(lines, i)
@@ -147,7 +146,7 @@ func (d *Discoverer) parseDefinitionsFromFile(filePath string) ([]DefinitionInfo
 			if markerMatches := markerPattern.FindStringSubmatch(body); len(markerMatches) > 1 {
 				definitions = append(definitions, DefinitionInfo{
 					Name:           defName,
-					ModelRef:       markerMatches[1],
+					SchemaRef:      markerMatches[1],
 					Package:        packageName,
 					FilePath:       filePath,
 					SocketBindings: extractSocketBindings(body),

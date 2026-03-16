@@ -8,7 +8,6 @@ import (
 	"pudl/internal/config"
 	"pudl/internal/definition"
 	"pudl/internal/errors"
-	"pudl/internal/model"
 	"pudl/internal/repo"
 )
 
@@ -60,8 +59,8 @@ Examples:
 
 var repoValidateCmd = &cobra.Command{
 	Use:   "validate",
-	Short: "Validate all schemas, models, and definitions",
-	Long: `Run workspace-wide validation across all schemas, models, and definitions.
+	Short: "Validate all schemas and definitions",
+	Long: `Run workspace-wide validation across all schemas and definitions.
 
 Reports total counts, validation errors, and broken socket wiring.
 
@@ -91,16 +90,6 @@ func runRepoValidateCommand() error {
 	fmt.Println()
 
 	hasErrors := false
-
-	// Models
-	modelDiscoverer := model.NewDiscoverer(cfg.SchemaPath)
-	models, err := modelDiscoverer.ListModels()
-	if err != nil {
-		fmt.Printf("  Models:      error loading (%v)\n", err)
-		hasErrors = true
-	} else {
-		fmt.Printf("  Models:      %d found\n", len(models))
-	}
 
 	// Definitions
 	defDiscoverer := definition.NewDiscoverer(cfg.SchemaPath)

@@ -75,7 +75,6 @@ func TestCloudFormationMetadataDefaults(t *testing.T) {
 	require.NotNil(t, meta)
 	assert.Equal(t, "aws", meta.SchemaType)
 	assert.Equal(t, "aws.ec2.instance", meta.ResourceType)
-	assert.Equal(t, 85, meta.CascadePriority)
 	assert.Equal(t, []string{"LogicalResourceId"}, meta.IdentityFields)
 }
 
@@ -84,7 +83,6 @@ func TestEC2MetadataDefaults(t *testing.T) {
 	require.NotNil(t, meta)
 	assert.Equal(t, "aws", meta.SchemaType)
 	assert.Equal(t, "aws.ec2.instance", meta.ResourceType)
-	assert.Equal(t, 85, meta.CascadePriority)
 	assert.Equal(t, []string{"InstanceId"}, meta.IdentityFields)
 	assert.Contains(t, meta.TrackedFields, "State.Name")
 }

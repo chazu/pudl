@@ -345,11 +345,10 @@ func TestGenerateFromDetectedType(t *testing.T) {
 				Ecosystem: "k8s",
 				MetadataDefaults: func(typeID string) *typepattern.PudlMetadata {
 					return &typepattern.PudlMetadata{
-						SchemaType:      "kubernetes",
-						ResourceType:    "k8s.batch.job",
-						CascadePriority: 90,
-						IdentityFields:  []string{"metadata.name", "metadata.namespace"},
-						TrackedFields:   []string{"status.succeeded", "status.failed"},
+						SchemaType:     "kubernetes",
+						ResourceType:   "k8s.batch.job",
+						IdentityFields: []string{"metadata.name", "metadata.namespace"},
+						TrackedFields:  []string{"status.succeeded", "status.failed"},
 					}
 				},
 			},
@@ -380,7 +379,6 @@ func TestGenerateFromDetectedType(t *testing.T) {
 		assert.Contains(t, result.Content, "_pudl: {")
 		assert.Contains(t, result.Content, `schema_type:      "kubernetes"`)
 		assert.Contains(t, result.Content, `resource_type:    "k8s.batch.job"`)
-		assert.Contains(t, result.Content, "cascade_priority: 90")
 		assert.Contains(t, result.Content, `["metadata.name", "metadata.namespace"]`)
 		assert.Contains(t, result.Content, `["status.succeeded", "status.failed"]`)
 	})
@@ -467,7 +465,6 @@ func TestGenerateFromDetectedType(t *testing.T) {
 		// Should use default metadata
 		assert.Contains(t, result.Content, `schema_type:      "base"`)
 		assert.Contains(t, result.Content, `resource_type:    "k8s.deployment"`)
-		assert.Contains(t, result.Content, "cascade_priority: 100")
 	})
 
 	t.Run("generated schema validates with CUE", func(t *testing.T) {
@@ -483,11 +480,10 @@ func TestGenerateFromDetectedType(t *testing.T) {
 				Ecosystem: "k8s",
 				MetadataDefaults: func(typeID string) *typepattern.PudlMetadata {
 					return &typepattern.PudlMetadata{
-						SchemaType:      "kubernetes",
-						ResourceType:    "k8s.batch.job",
-						CascadePriority: 90,
-						IdentityFields:  []string{"metadata.name"},
-						TrackedFields:   []string{"status.succeeded"},
+						SchemaType:     "kubernetes",
+						ResourceType:   "k8s.batch.job",
+						IdentityFields: []string{"metadata.name"},
+						TrackedFields:  []string{"status.succeeded"},
 					}
 				},
 			},

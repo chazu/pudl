@@ -9,61 +9,62 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// setupTestSchemaDir copies bootstrap files into a temp directory
-// mirroring the layout used by CopyBootstrapSchemas.
-func setupTestSchemaDir(t *testing.T) string {
+// setupTestDefinitionsDir creates a temp schema dir with test definition files.
+func setupTestDefinitionsDir(t *testing.T) string {
 	t.Helper()
 	tmpDir := t.TempDir()
 
-	srcDir := filepath.Join("..", "importer", "bootstrap")
-	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		relPath, _ := filepath.Rel(srcDir, path)
-		targetPath := filepath.Join(tmpDir, relPath)
-		if info.IsDir() {
-			return os.MkdirAll(targetPath, 0755)
-		}
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(targetPath, content, 0644)
-	})
-	require.NoError(t, err)
+	defsDir := filepath.Join(tmpDir, "definitions")
+	require.NoError(t, os.MkdirAll(defsDir, 0755))
+
+	// Schema unification pattern definition
+	unifyDef := `package definitions
+
+prod_instance: examples.#EC2Instance & {
+	VpcId: prod_vpc.outputs.vpc_id
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(defsDir, "instance.cue"), []byte(unifyDef), 0644))
+
+	// Marker-based definition
+	markerDef := `package definitions
+
+prod_vpc: {
+	_schema: "examples.#VPC"
+	cidr: "10.0.0.0/16"
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(defsDir, "vpc.cue"), []byte(markerDef), 0644))
 
 	return tmpDir
 }
 
 func TestListDefinitions(t *testing.T) {
-	schemaDir := setupTestSchemaDir(t)
+	schemaDir := setupTestDefinitionsDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
 	definitions, err := discoverer.ListDefinitions()
 	require.NoError(t, err)
 
-	// Should find definitions from example files
-	assert.GreaterOrEqual(t, len(definitions), 3, "expected at least 3 definitions")
+	assert.Len(t, definitions, 2)
 
 	names := make(map[string]bool)
 	for _, d := range definitions {
 		names[d.Name] = true
 	}
-	assert.True(t, names["my_simple"], "missing my_simple definition")
-	assert.True(t, names["api_endpoint"], "missing api_endpoint definition")
 	assert.True(t, names["prod_instance"], "missing prod_instance definition")
+	assert.True(t, names["prod_vpc"], "missing prod_vpc definition")
 }
 
 func TestGetDefinition(t *testing.T) {
-	schemaDir := setupTestSchemaDir(t)
+	schemaDir := setupTestDefinitionsDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
 	t.Run("existing definition", func(t *testing.T) {
-		def, err := discoverer.GetDefinition("my_simple")
+		def, err := discoverer.GetDefinition("prod_instance")
 		require.NoError(t, err)
-		assert.Equal(t, "my_simple", def.Name)
-		assert.Equal(t, "examples.#SimpleModel", def.ModelRef)
+		assert.Equal(t, "prod_instance", def.Name)
+		assert.Equal(t, "examples.#EC2Instance", def.SchemaRef)
 	})
 
 	t.Run("non-existent definition", func(t *testing.T) {
@@ -72,41 +73,40 @@ func TestGetDefinition(t *testing.T) {
 	})
 }
 
-func TestDefinitionModelRef(t *testing.T) {
-	schemaDir := setupTestSchemaDir(t)
-	discoverer := NewDiscoverer(schemaDir)
-
-	def, err := discoverer.GetDefinition("api_endpoint")
-	require.NoError(t, err)
-	assert.Equal(t, "examples.#HTTPEndpointModel", def.ModelRef)
-}
-
-func TestDefinitionSocketBindings(t *testing.T) {
-	schemaDir := setupTestSchemaDir(t)
+func TestDefinitionSchemaRef(t *testing.T) {
+	schemaDir := setupTestDefinitionsDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
 	def, err := discoverer.GetDefinition("prod_instance")
 	require.NoError(t, err)
-	assert.Equal(t, "examples.#EC2InstanceModel", def.ModelRef)
+	assert.Equal(t, "examples.#EC2Instance", def.SchemaRef)
+}
 
-	// Should detect cross-definition reference
+func TestDefinitionSocketBindings(t *testing.T) {
+	schemaDir := setupTestDefinitionsDir(t)
+	discoverer := NewDiscoverer(schemaDir)
+
+	def, err := discoverer.GetDefinition("prod_instance")
+	require.NoError(t, err)
+
 	assert.NotEmpty(t, def.SocketBindings, "expected socket bindings for prod_instance")
 	assert.Contains(t, def.SocketBindings, "VpcId")
 	assert.Equal(t, "prod_vpc.outputs.vpc_id", def.SocketBindings["VpcId"])
 }
 
 func TestDefinitionMarkerBased(t *testing.T) {
-	schemaDir := setupTestSchemaDir(t)
+	schemaDir := setupTestDefinitionsDir(t)
 	discoverer := NewDiscoverer(schemaDir)
 
 	def, err := discoverer.GetDefinition("prod_vpc")
 	require.NoError(t, err)
 	assert.Equal(t, "prod_vpc", def.Name)
-	assert.Equal(t, "examples.#VPCModel", def.ModelRef)
+	assert.Equal(t, "examples.#VPC", def.SchemaRef)
 }
 
 func TestEmptyDefinitionsDir(t *testing.T) {
 	tmpDir := t.TempDir()
+	os.MkdirAll(filepath.Join(tmpDir, "definitions"), 0755)
 	discoverer := NewDiscoverer(tmpDir)
 
 	definitions, err := discoverer.ListDefinitions()
@@ -159,7 +159,6 @@ func TestBuildGraphWithWiring(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, sorted, 2)
 
-	// prod_vpc should come before prod_instance
 	vpcIdx := -1
 	instanceIdx := -1
 	for i, name := range sorted {

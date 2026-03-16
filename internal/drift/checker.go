@@ -9,37 +9,27 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/definition"
-	"pudl/internal/executor"
-	"pudl/internal/model"
-	"pudl/internal/workflow"
 )
 
 // Checker performs drift detection by comparing declared definition state
-// against live state from the latest artifact.
+// against live state from the latest imported data.
 type Checker struct {
-	defDisc   *definition.Discoverer
-	modelDisc *model.Discoverer
-	db        *database.CatalogDB
-	executor  workflow.StepExecutor
-	dataPath  string
+	defDisc  *definition.Discoverer
+	db       *database.CatalogDB
+	dataPath string
 }
 
 // CheckOptions configures a drift check.
 type CheckOptions struct {
 	DefinitionName string
-	Method         string // which method's artifact to compare; empty = auto-detect
-	Refresh        bool   // re-execute the method before comparing
-	Tags           map[string]string
 }
 
 // NewChecker creates a new drift checker.
-func NewChecker(defDisc *definition.Discoverer, modelDisc *model.Discoverer, db *database.CatalogDB, exec workflow.StepExecutor, dataPath string) *Checker {
+func NewChecker(defDisc *definition.Discoverer, db *database.CatalogDB, dataPath string) *Checker {
 	return &Checker{
-		defDisc:   defDisc,
-		modelDisc: modelDisc,
-		db:        db,
-		executor:  exec,
-		dataPath:  dataPath,
+		defDisc:  defDisc,
+		db:       db,
+		dataPath: dataPath,
 	}
 }
 
@@ -51,42 +41,20 @@ func (c *Checker) Check(ctx context.Context, opts CheckOptions) (*DriftResult, e
 		return nil, fmt.Errorf("failed to load definition %q: %w", opts.DefinitionName, err)
 	}
 
-	// Determine method to use
-	method := opts.Method
-	if method == "" {
-		method, err = c.findDefaultMethod(def.ModelRef)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Optionally refresh by re-executing the method
-	if opts.Refresh {
-		_, err := c.executor.Run(ctx, executor.RunOptions{
-			DefinitionName: opts.DefinitionName,
-			MethodName:     method,
-			Tags:           opts.Tags,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to refresh %s.%s: %w", opts.DefinitionName, method, err)
-		}
-	}
-
-	// Load latest artifact
-	entry, err := c.db.GetLatestArtifact(opts.DefinitionName, method)
+	// Load latest catalog entry for this definition
+	entry, err := c.db.GetLatestArtifact(opts.DefinitionName, "")
 	if err != nil {
 		return &DriftResult{
 			Definition: opts.DefinitionName,
-			Method:     method,
 			Status:     "unknown",
 			Timestamp:  time.Now(),
 		}, nil
 	}
 
-	// Read artifact JSON from StoredPath
+	// Read live state JSON from stored path
 	liveState, err := readArtifactJSON(entry.StoredPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read artifact at %s: %w", entry.StoredPath, err)
+		return nil, fmt.Errorf("failed to read data at %s: %w", entry.StoredPath, err)
 	}
 
 	// Build declared state from socket bindings
@@ -105,7 +73,6 @@ func (c *Checker) Check(ctx context.Context, opts CheckOptions) (*DriftResult, e
 
 	result := &DriftResult{
 		Definition:   opts.DefinitionName,
-		Method:       method,
 		Status:       status,
 		Timestamp:    time.Now(),
 		DeclaredKeys: declaredKeys,
@@ -121,29 +88,6 @@ func (c *Checker) Check(ctx context.Context, opts CheckOptions) (*DriftResult, e
 	}
 
 	return result, nil
-}
-
-// findDefaultMethod finds the first action method on the definition's model.
-func (c *Checker) findDefaultMethod(modelRef string) (string, error) {
-	m, err := c.modelDisc.GetModel(modelRef)
-	if err != nil {
-		return "", fmt.Errorf("failed to load model %q: %w", modelRef, err)
-	}
-
-	// Prefer "list" or "describe" if available, otherwise first action method
-	for _, name := range []string{"list", "describe"} {
-		if method, ok := m.Methods[name]; ok && method.Kind == "action" {
-			return name, nil
-		}
-	}
-
-	for name, method := range m.Methods {
-		if method.Kind == "action" {
-			return name, nil
-		}
-	}
-
-	return "", fmt.Errorf("no action method found on model %q", modelRef)
 }
 
 // readArtifactJSON reads a JSON file and returns it as a map.

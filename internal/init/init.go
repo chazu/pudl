@@ -305,10 +305,8 @@ import (
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "deployment"
-		cascade_priority: 20
 		identity_fields: ["metadata.name", "metadata.namespace"]
 		tracked_fields:  ["spec.replicas", "spec.template.spec.containers"]
-		compliance_level: "strict"
 	}
 
 	// Basic Kubernetes Deployment structure
@@ -367,10 +365,8 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.apps.deployment"
-		cascade_priority: 95
 		identity_fields: ["metadata.name", "metadata.namespace"]
 		tracked_fields: ["spec.replicas", "status.readyReplicas"]
-		compliance_level: "strict"
 	}
 }
 
@@ -378,10 +374,8 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.core.pod"
-		cascade_priority: 95
 		identity_fields: ["metadata.name", "metadata.namespace"]
 		tracked_fields: ["status.phase", "spec.containers"]
-		compliance_level: "strict"
 	}
 }
 
@@ -389,10 +383,8 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.core.service"
-		cascade_priority: 95
 		identity_fields: ["metadata.name", "metadata.namespace"]
 		tracked_fields: ["spec.type", "spec.ports", "spec.selector"]
-		compliance_level: "strict"
 	}
 }
 `
@@ -414,10 +406,8 @@ import "cue.dev/x/gitlab/gitlabci"
 	_pudl: {
 		schema_type:      "cicd"
 		resource_type:    "gitlab.pipeline"
-		cascade_priority: 80
 		identity_fields: ["stages"]
 		tracked_fields: ["default", "workflow", "variables"]
-		compliance_level: "standard"
 	}
 }
 

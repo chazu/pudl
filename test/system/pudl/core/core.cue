@@ -7,10 +7,8 @@ package core
 	_pudl: {
 		schema_type:      "catchall"
 		resource_type:    "unknown"
-		cascade_priority: 0
 		identity_fields: []
 		tracked_fields: []
-		compliance_level: "permissive"
 	}
 
 	// Accept any structure
@@ -23,11 +21,8 @@ package core
 	_pudl: {
 		schema_type:      "collection"
 		resource_type:    "generic.collection"
-		cascade_priority: 75
-		cascade_fallback: ["pudl.schemas/pudl/core:#Item"]
 		identity_fields: ["collection_id"]
 		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
-		compliance_level: "permissive"
 	}
 
 	// Core collection fields

@@ -52,7 +52,7 @@ func runDefinitionShowCommand(defName string) error {
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Println()
 
-	fmt.Printf("  Model:    %s\n", def.ModelRef)
+	fmt.Printf("  Schema:   %s\n", def.SchemaRef)
 	fmt.Printf("  Package:  %s\n", def.Package)
 	fmt.Printf("  File:     %s\n", def.FilePath)
 	fmt.Println()
@@ -109,7 +109,7 @@ func completeDefinitionNames(cmd *cobra.Command, args []string, toComplete strin
 	var completions []string
 	for _, d := range definitions {
 		if toComplete == "" || strings.HasPrefix(d.Name, toComplete) {
-			completions = append(completions, d.Name+"\t"+d.ModelRef)
+			completions = append(completions, d.Name+"\t"+d.SchemaRef)
 		}
 	}
 

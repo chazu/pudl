@@ -144,24 +144,20 @@ func TestScoreCandidate(t *testing.T) {
 func TestSelectCandidates(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
 		"core.#Item": {
-			SchemaType:      "catchall",
-			CascadePriority: 0,
+			SchemaType: "catchall",
 		},
 		"aws.#Resource": {
-			ResourceType:    "aws.resource",
-			CascadePriority: 50,
+			ResourceType: "aws.resource",
 		},
 		"aws.#EC2Instance": {
-			ResourceType:    "aws.ec2.instance",
-			BaseSchema:      "aws.#Resource",
-			CascadePriority: 80,
-			IdentityFields:  []string{"InstanceId"},
-			TrackedFields:   []string{"State", "InstanceType"},
+			ResourceType:   "aws.ec2.instance",
+			BaseSchema:     "aws.#Resource",
+			IdentityFields: []string{"InstanceId"},
+			TrackedFields:  []string{"State", "InstanceType"},
 		},
 		"k8s.#Pod": {
-			ResourceType:    "k8s.pod",
-			CascadePriority: 80,
-			IdentityFields:  []string{"kind", "apiVersion", "metadata"},
+			ResourceType:   "k8s.pod",
+			IdentityFields: []string{"kind", "apiVersion", "metadata"},
 		},
 	}
 
@@ -229,9 +225,9 @@ func TestSelectCandidates(t *testing.T) {
 
 func TestSortCandidates(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"schemaA": {CascadePriority: 100},
-		"schemaB": {CascadePriority: 50, BaseSchema: "schemaA"},
-		"schemaC": {CascadePriority: 75},
+		"schemaA": {},
+		"schemaB": {BaseSchema: "schemaA"},
+		"schemaC": {},
 	}
 	graph := BuildInheritanceGraph(metadata)
 
@@ -249,9 +245,9 @@ func TestSortCandidates(t *testing.T) {
 		t.Errorf("Expected schemaB first (highest depth), got %s", candidates[0].Schema)
 	}
 
-	// Among depth-0 schemas, schemaA (priority 100) should beat schemaC (priority 75)
+	// Among depth-0 schemas, schemaA should come before schemaC (alphabetical)
 	if candidates[1].Schema != "schemaA" {
-		t.Errorf("Expected schemaA second (higher priority), got %s", candidates[1].Schema)
+		t.Errorf("Expected schemaA second (alphabetical), got %s", candidates[1].Schema)
 	}
 }
 
