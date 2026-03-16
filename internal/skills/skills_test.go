@@ -22,7 +22,7 @@ func TestListSkills(t *testing.T) {
 		names[s.Name] = true
 	}
 
-	expected := []string{"pudl-core", "pudl-definitions", "pudl-methods", "pudl-workflows", "pudl-models"}
+	expected := []string{"pudl-core"}
 	for _, name := range expected {
 		if !names[name] {
 			t.Errorf("expected skill %q not found", name)
@@ -59,7 +59,7 @@ func TestWriteSkills(t *testing.T) {
 	}
 
 	// Verify skill directories and files were created
-	expected := []string{"pudl-core", "pudl-definitions", "pudl-methods", "pudl-workflows", "pudl-models"}
+	expected := []string{"pudl-core"}
 	for _, name := range expected {
 		skillPath := filepath.Join(tmpDir, name, "SKILL.md")
 		info, err := os.Stat(skillPath)

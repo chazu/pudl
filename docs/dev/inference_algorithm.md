@@ -42,7 +42,7 @@ Tracks schema parent-child relationships for specificity ordering:
 type InheritanceGraph struct {
     children map[string][]string // parent -> children (more specific)
     parents  map[string]string   // child -> parent (less specific)
-    priority map[string]int      // schema -> cascade_priority
+    all      map[string]bool     // all schema names
     roots    []string            // base schemas (no parent)
     leaves   []string            // most specific (no children)
 }
@@ -80,7 +80,7 @@ type InferenceHints struct {
 3. SORT candidates by:
    a. Heuristic score (descending)
    b. Inheritance depth (more specific first)
-   c. cascade_priority (tiebreaker)
+   c. Alphabetical (deterministic tiebreaker)
 
 4. TRY CUE UNIFICATION for each candidate:
    a. Convert data to CUE value
@@ -110,14 +110,12 @@ Schemas include embedded metadata that drives inference:
 
 ```go
 type SchemaMetadata struct {
-    SchemaType       string   // "base", "policy", "custom", "catchall"
-    ResourceType     string   // "aws.ec2.instance", "k8s.pod"
-    BaseSchema       string   // Parent schema reference
-    CascadePriority  int      // Higher = more specific
-    CascadeFallback  []string // Explicit fallback chain
-    IdentityFields   []string // Key fields for this type
-    TrackedFields    []string // Fields to monitor for changes
-    IsListType       bool     // Structurally a list (auto-detected)
+    SchemaType     string   // "base", "policy", "custom", "catchall"
+    ResourceType   string   // "aws.ec2.instance", "k8s.pod"
+    BaseSchema     string   // Parent schema reference
+    IdentityFields []string // Key fields for this type
+    TrackedFields  []string // Fields to monitor for changes
+    IsListType     bool     // Structurally a list (auto-detected)
 }
 ```
 
@@ -129,7 +127,7 @@ type SchemaMetadata struct {
 | `tracked_fields` | Monitor for changes (future use); weak inference signal | `["State", "Tags"]` |
 | `resource_type` | Match against origin hints | `"aws.ec2.instance"` |
 | `base_schema` | Build inheritance graph for specificity | `"aws.#BaseResource"` |
-| `cascade_priority` | Tiebreaker when scores are equal | `100` (higher = more specific) |
+| (alphabetical) | Deterministic tiebreaker when scores/depth are equal | N/A |
 
 ## CUE Unification
 
