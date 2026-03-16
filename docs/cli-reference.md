@@ -8,7 +8,7 @@ All commands support `--json` for machine-readable output and `--help` for inlin
 
 Initialize the PUDL workspace at `~/.pudl/`.
 
-Creates the configuration file, data directories, and a git-tracked schema repository with bootstrap schemas. Safe to run multiple times — skips if already initialized.
+Creates the configuration file, data directories, and a git-tracked schema repository with bootstrap schemas. Safe to run multiple times -- skips if already initialized.
 
 ```bash
 pudl init
@@ -33,6 +33,35 @@ Show version, commit, and build date.
 
 Run health checks on the PUDL workspace.
 
+### `pudl setup`
+
+Set up shell integration (aliases, completion, helper functions).
+
+```bash
+pudl setup                     # Auto-detect shell and install
+pudl setup --shell bash        # Force bash setup
+pudl setup --dry-run           # Show what would be added
+pudl setup --uninstall         # Remove PUDL integration
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--shell` | Target shell: `bash`, `zsh`, `fish` (auto-detected if omitted) |
+| `--dry-run` | Preview changes without modifying config files |
+| `--uninstall` | Remove PUDL shell integration from all detected shells |
+
+### `pudl completion`
+
+Generate shell completion scripts.
+
+```bash
+pudl completion bash
+pudl completion zsh
+pudl completion fish
+```
+
 ## Data Import
 
 ### `pudl import`
@@ -43,7 +72,8 @@ Import data files with automatic format detection, schema inference, and provena
 pudl import --path <file>
 pudl import --path <file> --origin <source>
 pudl import --path <file> --schema <schema-name>
-pudl import --path <file> --format <format>  # For stdin
+pudl import --path <file> --format <format>
+pudl import --path "*.json"                       # Wildcard batch import
 ```
 
 **Flags:**
@@ -61,7 +91,7 @@ pudl import --path <file> --format <format>  # For stdin
 
 - Duplicate files (same content hash) are skipped automatically
 - NDJSON files are split into collections with individual items
-- JSON API wrapper responses are detected and unwrapped (score ≥ 0.50)
+- JSON API wrapper responses are detected and unwrapped (score >= 0.50)
 - Format is detected from extension and content analysis
 - Origin is inferred from filename patterns
 
@@ -106,8 +136,6 @@ pudl list --fancy  # Interactive TUI
 | `--page` | Page number for pagination |
 | `--per-page` | Entries per page |
 | `--fancy` | Launch interactive TUI (bubbletea) |
-| `--artifacts` | Show only artifacts (method outputs) |
-| `--all` | Show both imports and artifacts |
 
 ### `pudl show <id>`
 
@@ -117,12 +145,31 @@ Inspect a specific catalog entry. Accepts proquint IDs (`mivof-duhij`) or full h
 pudl show mivof-duhij
 pudl show mivof-duhij --raw         # Show raw data content
 pudl show mivof-duhij --metadata    # Show import metadata
-pudl show mivof-duhij --validation  # Show validation results
 ```
 
 ### `pudl export`
 
 Export data in various formats.
+
+```bash
+pudl export --id babod-fakak                    # Export single entry by proquint ID
+pudl export --schema aws.#EC2Instance           # Export all EC2 instances
+pudl export --origin k8s-pods --format yaml     # Export K8s pods as YAML
+pudl export --id babod-fakak --output out.json  # Export to file
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--id` | Export entry by proquint ID |
+| `--schema` | Export entries matching schema |
+| `--origin` | Export entries from origin |
+| `--format` | Output format: `json`, `yaml`, `csv`, `ndjson` (default: `json`) |
+| `--output` / `-o` | Output file (default: stdout) |
+| `--pretty` | Pretty-print output (default: true) |
+
+At least one of `--id`, `--schema`, or `--origin` is required.
 
 ## Data Management
 
@@ -149,7 +196,31 @@ Collections with items cannot be deleted without `--cascade`. Individual items c
 
 ### `pudl validate`
 
-Validate data against CUE schemas.
+Validate catalog data against assigned CUE schemas.
+
+```bash
+pudl validate --entry babod-fakak      # Validate a specific entry by proquint
+pudl validate --all                     # Validate all catalog entries
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--entry` | Validate a specific entry by proquint ID |
+| `--all` | Validate all catalog entries |
+
+Exactly one of `--entry` or `--all` is required.
+
+### `pudl verify`
+
+Verify that schema inference is a fixed point for all catalog entries. Re-runs inference on every entry and confirms each still resolves to the same schema it was originally assigned.
+
+```bash
+pudl verify
+```
+
+Any mismatch indicates drift between stored assignments and current inference rules.
 
 ## Schema Management
 
@@ -192,14 +263,6 @@ pudl schema new --from govim-nupab --collection --path mypackage/#MyItem
 | `--collection` | Generate schema for collection items (not the wrapper) |
 | `--infer <field>=enum` | Infer field as enum from observed values |
 
-### `pudl schema generate-type`
-
-Generate a schema from a type registry (Kubernetes, AWS, GitLab).
-
-```bash
-pudl schema generate-type --kind Pod --api-version v1
-```
-
 ### `pudl schema show <name>`
 
 Print schema file contents to stdout.
@@ -207,6 +270,10 @@ Print schema file contents to stdout.
 ### `pudl schema edit <name>`
 
 Open a schema file in `$EDITOR`.
+
+### `pudl schema validate`
+
+Validate CUE schema files for correctness.
 
 ### `pudl schema reinfer`
 
@@ -220,6 +287,14 @@ pudl schema reinfer
 
 Migrate schema names to canonical `<package-path>.#<Definition>` format.
 
+### `pudl schema generate-type`
+
+Generate a schema from a type registry (Kubernetes, AWS, GitLab).
+
+```bash
+pudl schema generate-type --kind Pod --api-version v1
+```
+
 ### Schema Version Control
 
 The schema directory is a git repository:
@@ -231,51 +306,22 @@ pudl schema log                        # Show commit history
 pudl schema log --verbose              # Detailed history
 ```
 
-## Model Management
+## Schema Catalog
 
-### `pudl model list`
+### `pudl catalog`
 
-List available models.
+Display the schema catalog -- a central inventory of all registered schema types with their metadata.
 
 ```bash
-pudl model list
-pudl model list --category compute
-pudl model list --verbose
+pudl catalog              # List all registered types
+pudl catalog --verbose    # Show identity fields, tracked fields, etc.
 ```
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--category` | Filter by category (compute, storage, network, security, data, custom) |
-| `--verbose` | Show detailed information including file paths and auth |
-
-### `pudl model show <name>`
-
-Display detailed model information including metadata, methods, sockets, and auth.
-
-```bash
-pudl model show pudl/model/examples.#EC2InstanceModel
-pudl model show pudl/model/examples.#SimpleModel
-```
-
-### `pudl model search <query>`
-
-Search models by keyword across model schemas.
-
-```bash
-pudl model search ec2
-pudl model search storage
-```
-
-### `pudl model scaffold <name>`
-
-Generate model boilerplate including CUE schema, method stubs, and definition template.
-
-```bash
-pudl model scaffold myservice
-pudl model scaffold myservice --category custom --methods list,create,delete --sockets api_url:input,resource_id:output --auth bearer
-```
+| `--verbose` / `-v` | Show additional metadata fields (identity_fields, tracked_fields) |
 
 ## Definition Management
 
@@ -286,28 +332,22 @@ List available definitions.
 ```bash
 pudl definition list
 pudl definition list --verbose
-pudl definition list --model examples.#EC2InstanceModel
 ```
 
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--model` | Filter by model reference |
-| `--verbose` | Show detailed information including file paths and bindings |
+Aliases: `pudl def list`, `pudl d list`
 
 ### `pudl definition show <name>`
 
-Display detailed definition information including model reference, socket bindings, and dependencies.
+Display detailed definition information including socket bindings and dependencies.
 
 ```bash
-pudl definition show my_simple
+pudl definition show my_definition
 pudl def show prod_instance
 ```
 
 ### `pudl definition validate [name]`
 
-Validate definitions against their model schemas.
+Validate definitions against their schemas.
 
 ```bash
 pudl definition validate              # Validate all
@@ -322,130 +362,88 @@ Show the dependency graph between definitions based on socket wiring.
 pudl definition graph
 ```
 
+## Drift Detection
+
+### `pudl drift check [definition]`
+
+Compare declared definition state against live state from imported data.
+
+```bash
+pudl drift check my_instance
+pudl drift check --all
+```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--all` | Check all definitions |
+
+### `pudl drift report <definition>`
+
+Display the last saved drift report without re-running detection.
+
+```bash
+pudl drift report my_instance
+```
+
 ## Repository Operations
+
+### `pudl repo init`
+
+Initialize a `.pudl/` directory in the current repository and install Claude skills into `.claude/skills/`.
+
+```bash
+pudl repo init
+pudl repo init --force    # Force reinitialize
+```
 
 ### `pudl repo validate`
 
-Validate all schemas, models, and definitions workspace-wide.
+Validate all schemas and definitions workspace-wide.
 
 ```bash
 pudl repo validate
 ```
 
-Reports total models, definitions, validation errors, and broken socket wiring.
+Reports total definitions, validation errors, and broken socket wiring.
 
-## Migration
+## Interoperability
 
-### `pudl migrate identity`
+### `pudl export-actions`
 
-Backfill `resource_id`, `content_hash`, and `version` columns for catalog entries created before identity tracking was added.
-
-```bash
-pudl migrate identity
-```
-
-## Method Execution
-
-### `pudl method run <definition> <method>`
-
-Execute a method on a definition with full lifecycle dispatch.
-
-Qualifications run before the action. If any fail, the action is aborted. Post-actions (attribute/codegen methods) run after.
+Export drift reports as mu-compatible action specs (JSON to stdout).
 
 ```bash
-pudl method run prod_instance list
-pudl method run prod_instance create --dry-run
-pudl method run prod_instance create --tag env=staging
-pudl method run prod_instance create --skip-advice
+pudl export-actions --definition my_instance
+pudl export-actions --all
 ```
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--dry-run` | Run qualifications only, skip the action |
-| `--skip-advice` | Skip qualification checks |
-| `--tag` | Pass extra arguments as key=value (repeatable) |
+| `--definition` | Definition name to export actions for |
+| `--all` | Export actions for all definitions with drift reports |
 
-### `pudl method list <definition>`
+### `pudl data search`
 
-List available methods for a definition, grouped by kind (action, qualification, attribute, codegen).
+Search stored artifacts by definition, method, or other criteria.
 
 ```bash
-pudl method list prod_instance
+pudl data search
+pudl data search --definition prod_instance
+pudl data search --definition prod_instance --method list
+pudl data search --limit 10
 ```
 
-## Workflow Management
+### `pudl data latest <definition> <method>`
 
-### `pudl workflow run <name>`
-
-Execute a workflow DAG. Steps run concurrently when they have no data dependencies.
+Show the most recent artifact for a definition/method pair.
 
 ```bash
-pudl workflow run deploy-stack
-```
-
-### `pudl workflow list`
-
-List available workflows from `workflows/*.cue` files.
-
-```bash
-pudl workflow list
-```
-
-### `pudl workflow show <name>`
-
-Display workflow details including steps and DAG structure.
-
-```bash
-pudl workflow show deploy-stack
-```
-
-### `pudl workflow validate <name>`
-
-Validate a workflow DAG -- checks for cycles, missing definitions, and missing methods.
-
-```bash
-pudl workflow validate deploy-stack
-```
-
-### `pudl workflow history <name>`
-
-View execution history for a workflow. Shows run manifests with timing and status.
-
-```bash
-pudl workflow history deploy-stack
-```
-
-## Drift Detection
-
-### `pudl drift check [definition]`
-
-Compare declared definition state against live state from the latest artifact.
-
-```bash
-pudl drift check my_instance
-pudl drift check my_instance --method list
-pudl drift check my_instance --refresh
-pudl drift check --all
-pudl drift check my_instance --tag env=prod
-```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--method` | Method whose artifact to compare (default: auto-detect) |
-| `--refresh` | Re-execute the method before comparing |
-| `--all` | Check all definitions |
-| `--tag` | Extra args as key=value (repeatable) |
-
-### `pudl drift report <definition>`
-
-Display the last saved drift report without re-running.
-
-```bash
-pudl drift report my_instance
+pudl data latest prod_instance list
+pudl data latest prod_instance list --raw
 ```
 
 ## Vault
@@ -482,32 +480,25 @@ Re-encrypt the file vault with a new passphrase.
 pudl vault rotate-key
 ```
 
-## Data Search
+## Migration
 
-### `pudl data search`
+### `pudl migrate identity`
 
-Search artifacts by definition, method, tag, or time range.
-
-```bash
-pudl data search --definition prod_instance
-pudl data search --method create
-pudl data search --tag env=prod
-```
-
-### `pudl data latest <definition> <method>`
-
-Show the most recent artifact for a definition/method pair.
+Backfill `resource_id`, `content_hash`, and `version` columns for catalog entries created before identity tracking was added.
 
 ```bash
-pudl data latest prod_instance list
+pudl migrate identity
 ```
 
-## Legacy
-
-### `pudl process <file.cue>`
-
-Process a CUE file with custom functions. Legacy feature from early development.
+## CUE Module Management
 
 ### `pudl module`
 
-Thin wrapper around `cue mod` commands.
+Manage CUE module dependencies for the schema repository.
+
+```bash
+pudl module tidy              # Fetch and update module dependencies
+pudl module list              # List current module dependencies
+pudl module info              # Show module information
+pudl module add <module@ver>  # Add a third-party module dependency
+```

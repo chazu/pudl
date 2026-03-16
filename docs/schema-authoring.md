@@ -1,6 +1,6 @@
 # Schema Authoring Guide
 
-PUDL schemas are [CUE](https://cuelang.org/) files that define both the **shape** of your data and the **metadata** that drives schema inference, identity tracking, and cascade validation.
+PUDL schemas are [CUE](https://cuelang.org/) files that define both the **shape** of your data and the **metadata** that drives schema inference, identity tracking, and validation.
 
 ## Anatomy of a Schema
 
@@ -8,16 +8,15 @@ PUDL schemas are [CUE](https://cuelang.org/) files that define both the **shape*
 package ec2
 
 #Instance: {
-    // PUDL metadata — drives inference, identity, and cascading
+    // PUDL metadata -- drives inference, identity, and validation
     _pudl: {
-        schema_type:      "base"
-        resource_type:    "aws.ec2.instance"
-        cascade_priority: 100
-        identity_fields:  ["InstanceId"]
-        tracked_fields:   ["State", "InstanceType", "Tags"]
+        schema_type:     "base"
+        resource_type:   "aws.ec2.instance"
+        identity_fields: ["InstanceId"]
+        tracked_fields:  ["State", "InstanceType", "Tags"]
     }
 
-    // Data shape — standard CUE constraints
+    // Data shape -- standard CUE constraints
     InstanceId:   string
     InstanceType: string
     State: {
@@ -37,14 +36,16 @@ Every PUDL schema has two parts:
 
 ## The `_pudl` Metadata Block
 
+The valid metadata fields are described below. There are no priority numbers or fallback lists -- validation order is determined by native CUE unification and the schema inheritance graph.
+
 ### `schema_type`
 
-Declares the role of this schema in the cascade hierarchy.
+Declares the role of this schema in the validation hierarchy.
 
 | Value | Purpose |
 |-------|---------|
-| `"base"` | Type recognition — matches any valid instance of this resource type |
-| `"policy"` | Compliance checking — adds constraints beyond type recognition |
+| `"base"` | Type recognition -- matches any valid instance of this resource type |
+| `"policy"` | Compliance checking -- adds constraints beyond type recognition |
 | `"custom"` | User-defined schemas outside the type/policy hierarchy |
 | `"catchall"` | Universal fallback that accepts anything |
 | `"collection"` | Schema for collection entries (not individual items) |
@@ -57,19 +58,6 @@ Examples: `"aws.ec2.instance"`, `"k8s.pod"`, `"gitlab.pipeline"`, `"generic.coll
 
 When PUDL imports a file named `aws-ec2-instances.json`, the origin `aws-ec2-instances` is matched against `resource_type` values. Two or more keyword matches (e.g., "aws" and "ec2") boost the schema's candidate score by +0.15.
 
-### `cascade_priority`
-
-An integer controlling the order in which schemas are tried during inference and cascade validation. **Higher values = more specific = tried first.**
-
-Recommended ranges:
-
-| Range | Use |
-|-------|-----|
-| 0 | Catchall (accepts everything) |
-| 50–75 | Generic / collection schemas |
-| 80–100 | Base type schemas (e.g., "any EC2 instance") |
-| 101–150 | Policy schemas (e.g., "compliant EC2 instance with tags") |
-
 ### `identity_fields`
 
 A list of field names that **uniquely identify a logical resource**. These serve two purposes:
@@ -78,16 +66,16 @@ A list of field names that **uniquely identify a logical resource**. These serve
 2. **Resource identity**: The values of these fields (combined with the schema name) produce the `resource_id` hash, which tracks the same logical resource across re-imports
 
 ```cue
-identity_fields: ["InstanceId"]           // EC2 instance
-identity_fields: ["metadata.name", "metadata.namespace"]  // K8s resource
-identity_fields: ["BucketName"]           // S3 bucket
+identity_fields: ["InstanceId"]                                  // EC2 instance
+identity_fields: ["metadata.name", "metadata.namespace"]         // K8s resource
+identity_fields: ["BucketName"]                                  // S3 bucket
 ```
 
 If `identity_fields` is empty (as in the catchall), the content hash is used as the identity component.
 
 ### `tracked_fields`
 
-A list of fields to **monitor for changes** between versions of the same resource. These provide a weaker inference signal (+0.1 × ratio of present fields) and will be used for future diff/change-tracking features.
+A list of fields to **monitor for changes** between versions of the same resource. These provide a weaker inference signal (+0.1 x ratio of present fields) and are used for diff/change-tracking features.
 
 ```cue
 tracked_fields: ["State", "InstanceType", "Tags"]
@@ -95,15 +83,14 @@ tracked_fields: ["State", "InstanceType", "Tags"]
 
 ### `base_schema` (optional)
 
-Reference to a parent schema. This builds an inheritance graph used for specificity ordering — child schemas (more specific) are tried before parent schemas (more generic).
+Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).
 
 ```cue
 // A compliant EC2 instance inherits from the base EC2 instance schema
 #CompliantInstance: #Instance & {
     _pudl: {
-        schema_type:      "policy"
-        base_schema:      "aws/ec2.#Instance"
-        cascade_priority: 120
+        schema_type:  "policy"
+        base_schema:  "aws/ec2.#Instance"
     }
 
     // Additional compliance requirements
@@ -111,22 +98,28 @@ Reference to a parent schema. This builds an inheritance graph used for specific
 }
 ```
 
-### `cascade_fallback` (optional)
+## How Validation Works
 
-An explicit ordered list of schemas to try if this schema fails validation. If not specified, the cascade follows the inheritance graph.
+When data is imported, PUDL determines which schema to assign using a two-phase process:
 
-```cue
-cascade_fallback: ["aws/ec2.#Instance", "pudl/core.#Item"]
-```
+### Phase 1: Candidate Selection (Heuristic Scoring)
 
-### `compliance_level` (optional)
+Candidate schemas are scored based on:
+- **Identity field presence**: +0.5 if all `identity_fields` exist in the data
+- **Tracked field presence**: +0.1 x (ratio of `tracked_fields` found)
+- **Origin keyword matching**: +0.15 if two or more `resource_type` keywords match the origin
+- **Schema specificity**: Candidates are sorted most-specific-first using the `base_schema` inheritance graph
 
-Hint for how strictly this schema should be applied. Currently informational.
+### Phase 2: CUE Unification
 
-| Value | Meaning |
-|-------|---------|
-| `"strict"` | All fields must match exactly |
-| `"permissive"` | Extra fields are allowed (the `...` in CUE) |
+Starting with the most specific candidate, PUDL attempts CUE unification (`tryUnify`) against the data. The first schema that successfully unifies is assigned.
+
+If no candidate passes unification, PUDL walks the `base_schema` chain -- trying progressively less specific schemas. If the entire chain fails, the catchall schema (`pudl/core.#Item`) is assigned.
+
+This means:
+- **No priority numbers** -- ordering comes from the inheritance graph and heuristic scores
+- **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
+- **Data is never rejected** -- the catchall always accepts
 
 ## Creating a Schema from Data
 
@@ -140,7 +133,7 @@ pudl import --path my-data.json
 pudl schema new --from mivof-duhij --path mypackage/#MyResource
 ```
 
-This creates a CUE file with fields inferred from the data. You'll want to edit it to:
+This creates a CUE file with fields inferred from the data. You will want to edit it to:
 1. Add the `_pudl` metadata block
 2. Tighten constraints (replace `_` with specific types)
 3. Mark optional fields with `?`
@@ -170,16 +163,16 @@ Schemas live in `~/.pudl/schema/` organized by package (directory). The schema n
 
 ```
 ~/.pudl/schema/
-├── cue.mod/module.cue
-└── pudl/
-    ├── core/core.cue              # pudl/core.#Item, pudl/core.#Collection
-    ├── aws/
-    │   ├── ec2.cue                # aws/ec2.#Instance
-    │   └── s3.cue                 # aws/s3.#Bucket
-    ├── k8s/
-    │   └── resources.cue          # k8s.#Pod, k8s.#Service, etc.
-    └── mypackage/
-        └── myresource.cue         # mypackage.#MyResource
++-- cue.mod/module.cue
++-- pudl/
+    +-- core/core.cue              # pudl/core.#Item, pudl/core.#Collection
+    +-- aws/
+    |   +-- ec2.cue                # aws/ec2.#Instance
+    |   +-- s3.cue                 # aws/s3.#Bucket
+    +-- k8s/
+    |   +-- resources.cue          # k8s.#Pod, k8s.#Service, etc.
+    +-- mypackage/
+        +-- myresource.cue         # mypackage.#MyResource
 ```
 
 When adding a schema manually:
@@ -210,9 +203,17 @@ pudl schema reinfer
 
 This re-runs inference on all entries and updates their schema assignments. Entries that previously fell through to the catchall may now match your new, more specific schema.
 
+You can also verify that inference is stable after changes:
+
+```bash
+pudl verify
+```
+
+This confirms that re-running inference on every entry produces the same schema assignment it already has.
+
 ## Example: Full Custom Schema
 
-Here's a complete example for a custom API resource:
+Here is a complete example for a custom API resource:
 
 ```cue
 package myapi
@@ -222,11 +223,10 @@ import "list"
 // User represents a user account from the internal API
 #User: {
     _pudl: {
-        schema_type:      "base"
-        resource_type:    "myapi.user"
-        cascade_priority: 100
-        identity_fields:  ["id"]
-        tracked_fields:   ["email", "role", "last_login"]
+        schema_type:     "base"
+        resource_type:   "myapi.user"
+        identity_fields: ["id"]
+        tracked_fields:  ["email", "role", "last_login"]
     }
 
     id:         string & =~"^usr_[a-zA-Z0-9]+$"
@@ -239,12 +239,11 @@ import "list"
     ...
 }
 
-// AdminUser is a policy schema — a User with admin-specific requirements
+// AdminUser is a policy schema -- a User with admin-specific requirements
 #AdminUser: #User & {
     _pudl: {
-        schema_type:      "policy"
-        base_schema:      "myapi.#User"
-        cascade_priority: 120
+        schema_type:  "policy"
+        base_schema:  "myapi.#User"
     }
 
     role: "admin"
@@ -265,4 +264,5 @@ pudl schema reinfer  # Re-classify existing imports
 - **Start permissive, tighten later**: Use `...` to accept extra fields, then constrain as you learn your data shape
 - **Identity fields matter most**: Good identity fields enable version tracking and strong inference. Choose fields that uniquely identify a resource instance.
 - **Use `pudl schema reinfer`** after any schema change to re-classify existing data
-- **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match — consider adding more identity fields or adjusting priority.
+- **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match -- consider adding more identity fields or refining the schema structure.
+- **Use `base_schema` for inheritance**: Policy schemas should reference their base type via `base_schema` so the validation cascade walks the inheritance chain correctly.
