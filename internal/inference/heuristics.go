@@ -212,10 +212,8 @@ func shouldSwap(i, j CandidateScore, graph *InheritanceGraph) bool {
 		return false
 	}
 
-	// Tertiary: cascade priority (higher first)
-	priorityI := graph.GetPriority(i.Schema)
-	priorityJ := graph.GetPriority(j.Schema)
-	return priorityJ > priorityI
+	// Tertiary: alphabetical (deterministic, A before Z)
+	return j.Schema < i.Schema
 }
 
 // extractTopLevelFields extracts the top-level field names from data.

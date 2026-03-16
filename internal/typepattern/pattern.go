@@ -63,9 +63,6 @@ type PudlMetadata struct {
 	// ResourceType identifies the resource type, e.g., "kubernetes-job", "aws-ec2-instance"
 	ResourceType string
 
-	// CascadePriority determines schema matching order in PUDL inference
-	CascadePriority int
-
 	// IdentityFields lists fields used to uniquely identify a resource
 	IdentityFields []string
 

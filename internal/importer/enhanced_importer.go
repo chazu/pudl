@@ -190,8 +190,8 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
-			CascadeLevel:     "auto",
-			ComplianceStatus: "unknown",
+
+
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
@@ -329,8 +329,8 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
-			CascadeLevel:     "auto",
-			ComplianceStatus: "unknown",
+
+
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
@@ -477,8 +477,8 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
-			CascadeLevel:     "auto",
-			ComplianceStatus: "unknown",
+
+
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{

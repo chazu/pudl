@@ -221,10 +221,8 @@ func (s *SchemaFixtures) BasicSchema() string {
 	_pudl: {
 		schema_type:      "unknown"
 		resource_type:    "basic_item"
-		cascade_priority: 10
 		identity_fields:  ["name"]
 		tracked_fields:   ["count", "active"]
-		compliance_level: "loose"
 	}
 }`
 }
@@ -257,10 +255,8 @@ func (s *SchemaFixtures) KubernetesSchema() string {
 	_pudl: {
 		schema_type:      "kubernetes"
 		resource_type:    "pod"
-		cascade_priority: 20
 		identity_fields:  ["metadata.name", "metadata.namespace"]
 		tracked_fields:   ["spec.containers"]
-		compliance_level: "strict"
 	}
 }`
 }

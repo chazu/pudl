@@ -11,7 +11,7 @@ func TestReportStore_SaveAndGet(t *testing.T) {
 
 	result := &DriftResult{
 		Definition: "my_instance",
-		Method:     "list",
+
 		Status:     "drifted",
 		Timestamp:  time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC),
 		DeclaredKeys: map[string]interface{}{
@@ -67,13 +67,13 @@ func TestReportStore_GetLatest(t *testing.T) {
 	// Save two reports with different timestamps
 	r1 := &DriftResult{
 		Definition: "test",
-		Method:     "list",
+
 		Status:     "clean",
 		Timestamp:  time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC),
 	}
 	r2 := &DriftResult{
 		Definition: "test",
-		Method:     "list",
+
 		Status:     "drifted",
 		Timestamp:  time.Date(2026, 3, 7, 14, 0, 0, 0, time.UTC),
 	}

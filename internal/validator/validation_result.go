@@ -5,12 +5,11 @@ import (
 	"strings"
 )
 
-// ValidationResult represents the result of cascading schema validation
+// ValidationResult represents the result of schema validation
 type ValidationResult struct {
-	IntendedSchema   string            `json:"intended_schema"`   // What user requested
-	AssignedSchema   string            `json:"assigned_schema"`   // What data actually got assigned to
-	CascadeLevel     string            `json:"cascade_level"`     // "exact", "fallback", "catchall"
-	ComplianceStatus string            `json:"compliance_status"` // "compliant", "non-compliant", "unknown"
+	IntendedSchema   string            `json:"intended_schema"`
+	AssignedSchema   string            `json:"assigned_schema"`
+	Valid            bool              `json:"valid"`             // Whether data matched the intended schema
 	ValidationErrors []ValidationError `json:"validation_errors,omitempty"`
 	FallbackReason   string            `json:"fallback_reason,omitempty"`
 	Success          bool              `json:"success"`           // Always true (never reject data)
@@ -19,14 +18,14 @@ type ValidationResult struct {
 
 // ValidationError represents a specific validation failure
 type ValidationError struct {
-	Path        string      `json:"path"`         // CUE path where error occurred
-	Message     string      `json:"message"`      // Human-readable error message
-	Value       interface{} `json:"value"`        // The value that caused the error
-	SchemaName  string      `json:"schema_name"`  // Which schema produced this error
-	Constraint  string      `json:"constraint"`   // The constraint that was violated
+	Path       string      `json:"path"`
+	Message    string      `json:"message"`
+	Value      interface{} `json:"value"`
+	SchemaName string      `json:"schema_name"`
+	Constraint string      `json:"constraint"`
 }
 
-// CascadeAttempt represents a single validation attempt in the cascade
+// CascadeAttempt represents a single validation attempt
 type CascadeAttempt struct {
 	SchemaName string            `json:"schema_name"`
 	Success    bool              `json:"success"`
@@ -36,100 +35,67 @@ type CascadeAttempt struct {
 
 // SchemaMetadata represents PUDL metadata embedded in CUE schemas
 type SchemaMetadata struct {
-	SchemaType       string   `json:"schema_type"`        // "base", "policy", "custom"
-	ResourceType     string   `json:"resource_type"`      // "aws.ec2.instance", "k8s.pod"
-	BaseSchema       string   `json:"base_schema"`        // Parent schema reference
-	CascadePriority  int      `json:"cascade_priority"`   // Higher = more specific
-	CascadeFallback  []string `json:"cascade_fallback"`   // Explicit fallback chain
-	IdentityFields   []string `json:"identity_fields"`    // Fields that identify the resource
-	TrackedFields    []string `json:"tracked_fields"`     // Fields to monitor for changes
-	ComplianceLevel  string   `json:"compliance_level"`   // "strict", "moderate", "permissive"
-	IsListType       bool     `json:"is_list_type"`       // True if schema is structurally a list/array type (derived from CUE, not metadata)
-}
-
-// GetComplianceStatus determines compliance status based on cascade result
-func (vr *ValidationResult) GetComplianceStatus() string {
-	if vr.CascadeLevel == "exact" {
-		return "compliant"
-	}
-	
-	if vr.CascadeLevel == "fallback" {
-		// Check if we fell back from a policy schema to a base schema
-		if strings.Contains(vr.IntendedSchema, "Compliant") || 
-		   strings.Contains(vr.IntendedSchema, "Policy") {
-			return "non-compliant"
-		}
-		return "partial"
-	}
-	
-	if vr.CascadeLevel == "catchall" {
-		return "unknown"
-	}
-	
-	return "unknown"
+	SchemaType     string   `json:"schema_type"`      // "base", "policy", "custom", "catchall"
+	ResourceType   string   `json:"resource_type"`    // "aws.ec2.instance", "k8s.pod"
+	BaseSchema     string   `json:"base_schema"`      // Parent schema reference
+	IdentityFields []string `json:"identity_fields"`  // Fields that identify the resource
+	TrackedFields  []string `json:"tracked_fields"`   // Fields to monitor for changes
+	IsListType     bool     `json:"is_list_type"`     // True if schema is structurally a list/array type
 }
 
 // GetSummary returns a human-readable summary of the validation result
 func (vr *ValidationResult) GetSummary() string {
-	status := vr.GetComplianceStatus()
-	
-	switch vr.CascadeLevel {
-	case "exact":
-		return fmt.Sprintf("✅ Validated successfully against %s", vr.AssignedSchema)
-	case "fallback":
-		return fmt.Sprintf("⚠️  Fell back to %s (intended: %s) - Status: %s", 
-			vr.AssignedSchema, vr.IntendedSchema, strings.ToUpper(status))
-	case "catchall":
-		return fmt.Sprintf("🔄 Assigned to catchall schema (intended: %s) - Status: %s", 
-			vr.IntendedSchema, strings.ToUpper(status))
-	default:
-		return fmt.Sprintf("❓ Unknown validation result for %s", vr.IntendedSchema)
+	if vr.Valid {
+		return fmt.Sprintf("Validated against %s", vr.AssignedSchema)
 	}
+	if vr.AssignedSchema != "" && vr.AssignedSchema != vr.IntendedSchema {
+		return fmt.Sprintf("Does not match %s, assigned to %s", vr.IntendedSchema, vr.AssignedSchema)
+	}
+	return fmt.Sprintf("Assigned to catchall (intended: %s)", vr.IntendedSchema)
 }
 
 // GetDetailedReport returns a detailed validation report
 func (vr *ValidationResult) GetDetailedReport() string {
 	var report strings.Builder
-	
-	report.WriteString(fmt.Sprintf("🎯 Intended Schema: %s\n", vr.IntendedSchema))
-	report.WriteString(fmt.Sprintf("📋 Assigned Schema: %s\n", vr.AssignedSchema))
-	report.WriteString(fmt.Sprintf("📊 Cascade Level: %s\n", strings.ToUpper(vr.CascadeLevel)))
-	report.WriteString(fmt.Sprintf("⚖️  Compliance Status: %s\n", strings.ToUpper(vr.GetComplianceStatus())))
-	
+
+	report.WriteString(fmt.Sprintf("Intended Schema: %s\n", vr.IntendedSchema))
+	report.WriteString(fmt.Sprintf("Assigned Schema: %s\n", vr.AssignedSchema))
+	report.WriteString(fmt.Sprintf("Valid: %t\n", vr.Valid))
+
 	if vr.FallbackReason != "" {
-		report.WriteString(fmt.Sprintf("💭 Fallback Reason: %s\n", vr.FallbackReason))
+		report.WriteString(fmt.Sprintf("Fallback Reason: %s\n", vr.FallbackReason))
 	}
-	
+
 	if len(vr.CascadeAttempts) > 1 {
-		report.WriteString("\n🔄 Cascade Attempts:\n")
+		report.WriteString("\nValidation Attempts:\n")
 		for i, attempt := range vr.CascadeAttempts {
-			status := "❌"
+			status := "FAIL"
 			if attempt.Success {
-				status = "✅"
+				status = "OK"
 			}
-			report.WriteString(fmt.Sprintf("   %d. %s %s", i+1, status, attempt.SchemaName))
+			report.WriteString(fmt.Sprintf("   %d. [%s] %s", i+1, status, attempt.SchemaName))
 			if attempt.Reason != "" {
 				report.WriteString(fmt.Sprintf(" (%s)", attempt.Reason))
 			}
 			report.WriteString("\n")
 		}
 	}
-	
+
 	if len(vr.ValidationErrors) > 0 {
-		report.WriteString("\n❌ Validation Errors:\n")
+		report.WriteString("\nValidation Errors:\n")
 		for _, err := range vr.ValidationErrors {
-			report.WriteString(fmt.Sprintf("   • %s: %s", err.Path, err.Message))
+			report.WriteString(fmt.Sprintf("   %s: %s", err.Path, err.Message))
 			if err.SchemaName != "" {
 				report.WriteString(fmt.Sprintf(" (from %s)", err.SchemaName))
 			}
 			report.WriteString("\n")
 		}
 	}
-	
+
 	return report.String()
 }
 
-// HasErrors returns true if there were validation errors during cascade
+// HasErrors returns true if there were validation errors
 func (vr *ValidationResult) HasErrors() bool {
 	return len(vr.ValidationErrors) > 0
 }
@@ -150,21 +116,6 @@ func (vr *ValidationResult) GetErrorsForSchema(schemaName string) []ValidationEr
 	return errors
 }
 
-// IsCompliant returns true if the data meets the intended schema requirements
-func (vr *ValidationResult) IsCompliant() bool {
-	return vr.GetComplianceStatus() == "compliant"
-}
-
-// IsNonCompliant returns true if the data is a valid type but doesn't meet business rules
-func (vr *ValidationResult) IsNonCompliant() bool {
-	return vr.GetComplianceStatus() == "non-compliant"
-}
-
-// IsUnknown returns true if the data couldn't be classified properly
-func (vr *ValidationResult) IsUnknown() bool {
-	return vr.GetComplianceStatus() == "unknown"
-}
-
 // NewValidationResult creates a new validation result with basic information
 func NewValidationResult(intendedSchema string) *ValidationResult {
 	return &ValidationResult{
@@ -175,7 +126,7 @@ func NewValidationResult(intendedSchema string) *ValidationResult {
 	}
 }
 
-// AddCascadeAttempt adds a cascade attempt to the result
+// AddCascadeAttempt adds a validation attempt to the result
 func (vr *ValidationResult) AddCascadeAttempt(schemaName string, success bool, errors []ValidationError, reason string) {
 	attempt := CascadeAttempt{
 		SchemaName: schemaName,
@@ -184,18 +135,17 @@ func (vr *ValidationResult) AddCascadeAttempt(schemaName string, success bool, e
 		Reason:     reason,
 	}
 	vr.CascadeAttempts = append(vr.CascadeAttempts, attempt)
-	
+
 	// Add errors to the main error list
 	for _, err := range errors {
-		err.SchemaName = schemaName // Ensure schema name is set
+		err.SchemaName = schemaName
 		vr.ValidationErrors = append(vr.ValidationErrors, err)
 	}
 }
 
-// SetFinalAssignment sets the final schema assignment and cascade level
-func (vr *ValidationResult) SetFinalAssignment(assignedSchema, cascadeLevel, fallbackReason string) {
+// SetFinalAssignment sets the final schema assignment
+func (vr *ValidationResult) SetFinalAssignment(assignedSchema, fallbackReason string) {
 	vr.AssignedSchema = assignedSchema
-	vr.CascadeLevel = cascadeLevel
+	vr.Valid = (assignedSchema == vr.IntendedSchema)
 	vr.FallbackReason = fallbackReason
-	vr.ComplianceStatus = vr.GetComplianceStatus()
 }

@@ -3,14 +3,12 @@ package core
 // Item is the universal fallback schema for any individual piece of data.
 // All more specific schemas should cascade to this as their ultimate fallback.
 #Item: {
-	// PUDL metadata for cascading validation
+	// PUDL metadata
 	_pudl: {
-		schema_type:      "catchall"
-		resource_type:    "unknown"
-		cascade_priority: 0
+		schema_type:   "catchall"
+		resource_type: "unknown"
 		identity_fields: []
 		tracked_fields: []
-		compliance_level: "permissive"
 	}
 
 	// Accept any structure
@@ -19,15 +17,12 @@ package core
 
 // Collection represents a collection of related data items (e.g., NDJSON files)
 #Collection: {
-	// PUDL metadata for cascading validation
+	// PUDL metadata
 	_pudl: {
-		schema_type:      "collection"
-		resource_type:    "generic.collection"
-		cascade_priority: 75
-		cascade_fallback: ["pudl.schemas/pudl/core:#Item"]
+		schema_type:   "collection"
+		resource_type: "generic.collection"
 		identity_fields: ["collection_id"]
 		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
-		compliance_level: "permissive"
 	}
 
 	// Core collection fields

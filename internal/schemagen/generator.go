@@ -180,14 +180,12 @@ func (g *Generator) generateCUEContentWithImport(
 	if metadata != nil {
 		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"%s\"\n", metadata.SchemaType))
 		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s\"\n", metadata.ResourceType))
-		b.WriteString(fmt.Sprintf("\t\tcascade_priority: %d\n", metadata.CascadePriority))
 		b.WriteString(fmt.Sprintf("\t\tidentity_fields:  %s\n", g.formatStringSlice(metadata.IdentityFields)))
 		b.WriteString(fmt.Sprintf("\t\ttracked_fields:   %s\n", g.formatStringSlice(metadata.TrackedFields)))
 	} else {
 		// Default metadata if none provided
 		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"base\"\n"))
 		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s.%s\"\n", ecosystem, strings.ToLower(definition)))
-		b.WriteString("\t\tcascade_priority: 100\n")
 		b.WriteString("\t\tidentity_fields:  []\n")
 		b.WriteString("\t\ttracked_fields:   []\n")
 	}
@@ -398,11 +396,9 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString("\t_pudl: {\n")
 	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts)))
 	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName)))
-	b.WriteString("\t\tcascade_priority: 100 // 0-1000, higher = more specific (catchall=0, base=100, policy=200+)\n")
 	b.WriteString("\t\tcascade_fallback: [\"pudl/core.#Item\"] // Schemas to try if this doesn't match\n")
 	b.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields)))
 	b.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis)))
-	b.WriteString("\t\tcompliance_level: \"strict\" // Valid: \"strict\", \"warn\", \"permissive\"\n")
 	b.WriteString("\t}\n\n")
 
 	// Write field definitions

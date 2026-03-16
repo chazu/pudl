@@ -12,7 +12,7 @@ import (
 type InheritanceGraph struct {
 	children map[string][]string // parent -> children (more specific schemas)
 	parents  map[string]string   // child -> parent (less specific schema)
-	priority map[string]int      // schema -> cascade_priority from metadata
+	all      map[string]bool     // all schema names
 	roots    []string            // schemas with no parent (base schemas)
 	leaves   []string            // schemas with no children (most specific)
 }
@@ -23,34 +23,31 @@ func BuildInheritanceGraph(metadata map[string]validator.SchemaMetadata) *Inheri
 	g := &InheritanceGraph{
 		children: make(map[string][]string),
 		parents:  make(map[string]string),
-		priority: make(map[string]int),
+		all:      make(map[string]bool),
 	}
 
-	// First pass: record all schemas and their priorities
-	allSchemas := make(map[string]bool)
-	for schemaName, meta := range metadata {
-		allSchemas[schemaName] = true
-		g.priority[schemaName] = meta.CascadePriority
+	// First pass: record all schemas
+	for schemaName := range metadata {
+		g.all[schemaName] = true
 	}
 
 	// Second pass: build parent-child relationships
 	for schemaName, meta := range metadata {
 		if meta.BaseSchema != "" {
-			// This schema has a parent
 			g.parents[schemaName] = meta.BaseSchema
 			g.children[meta.BaseSchema] = append(g.children[meta.BaseSchema], schemaName)
 		}
 	}
 
 	// Identify roots (schemas with no parent)
-	for schemaName := range allSchemas {
+	for schemaName := range g.all {
 		if _, hasParent := g.parents[schemaName]; !hasParent {
 			g.roots = append(g.roots, schemaName)
 		}
 	}
 
 	// Identify leaves (schemas with no children)
-	for schemaName := range allSchemas {
+	for schemaName := range g.all {
 		if _, hasChildren := g.children[schemaName]; !hasChildren {
 			g.leaves = append(g.leaves, schemaName)
 		}
@@ -66,28 +63,27 @@ func BuildInheritanceGraph(metadata map[string]validator.SchemaMetadata) *Inheri
 // GetMostSpecificFirst returns all schemas sorted by specificity (most specific first).
 // Specificity is determined by:
 // 1. Inheritance depth (leaves before roots)
-// 2. cascade_priority (higher values first) as tiebreaker
+// 2. Alphabetical order as tiebreaker (deterministic)
 func (g *InheritanceGraph) GetMostSpecificFirst() []string {
 	// Calculate depth for each schema (distance from root)
 	depths := make(map[string]int)
-	for schema := range g.priority {
+	for schema := range g.all {
 		depths[schema] = g.calculateDepth(schema)
 	}
 
 	// Collect all schemas
 	var schemas []string
-	for schema := range g.priority {
+	for schema := range g.all {
 		schemas = append(schemas, schema)
 	}
 
-	// Sort by depth (descending), then by priority (descending)
+	// Sort by depth (descending), then alphabetically
 	sort.Slice(schemas, func(i, j int) bool {
 		depthI, depthJ := depths[schemas[i]], depths[schemas[j]]
 		if depthI != depthJ {
 			return depthI > depthJ // Higher depth = more specific
 		}
-		// Tiebreaker: cascade_priority
-		return g.priority[schemas[i]] > g.priority[schemas[j]]
+		return schemas[i] < schemas[j] // Alphabetical tiebreaker
 	})
 
 	return schemas
@@ -112,12 +108,11 @@ func (g *InheritanceGraph) calculateDepth(schema string) int {
 	return depth
 }
 
-// GetCascadeChain returns the cascade chain for a schema, from most specific to least.
-// This follows the inheritance chain up to the root, then adds the catchall.
+// GetCascadeChain returns the chain for a schema, from most specific to least.
+// This follows the inheritance chain up to the root.
 func (g *InheritanceGraph) GetCascadeChain(schema string) []string {
 	chain := []string{schema}
 
-	// Walk up the inheritance tree
 	current := schema
 	for {
 		parent, hasParent := g.parents[current]
@@ -126,7 +121,6 @@ func (g *InheritanceGraph) GetCascadeChain(schema string) []string {
 		}
 		chain = append(chain, parent)
 		current = parent
-		// Safety: prevent infinite loops
 		if len(chain) > 100 {
 			break
 		}
@@ -164,11 +158,6 @@ func (g *InheritanceGraph) GetLeaves() []string {
 	result := make([]string, len(g.leaves))
 	copy(result, g.leaves)
 	return result
-}
-
-// GetPriority returns the cascade_priority for a schema
-func (g *InheritanceGraph) GetPriority(schema string) int {
-	return g.priority[schema]
 }
 
 // IsLeaf returns true if the schema has no children (is most specific in its chain)

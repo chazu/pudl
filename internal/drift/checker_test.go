@@ -10,29 +10,14 @@ import (
 
 	"pudl/internal/database"
 	"pudl/internal/definition"
-	"pudl/internal/executor"
-	"pudl/internal/model"
 )
 
-// mockStepExecutor implements workflow.StepExecutor for testing.
-type mockStepExecutor struct {
-	runFunc func(ctx context.Context, opts executor.RunOptions) (*executor.RunResult, error)
-}
-
-func (m *mockStepExecutor) Run(ctx context.Context, opts executor.RunOptions) (*executor.RunResult, error) {
-	if m.runFunc != nil {
-		return m.runFunc(ctx, opts)
-	}
-	return &executor.RunResult{}, nil
-}
-
-func TestChecker_MissingArtifact(t *testing.T) {
+func TestChecker_MissingData(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Set up schema dir with a definition and model
+	// Set up schema dir with a definition
 	schemaDir := filepath.Join(tmpDir, "schema")
 	setupTestDefinition(t, schemaDir)
-	setupTestModel(t, schemaDir)
 
 	// Open a temp catalog DB
 	dbDir := filepath.Join(tmpDir, "db")
@@ -44,22 +29,19 @@ func TestChecker_MissingArtifact(t *testing.T) {
 	defer db.Close()
 
 	defDisc := definition.NewDiscoverer(schemaDir)
-	modelDisc := model.NewDiscoverer(schemaDir)
-	exec := &mockStepExecutor{}
 	dataPath := filepath.Join(tmpDir, "data")
 
-	checker := NewChecker(defDisc, modelDisc, db, exec, dataPath)
+	checker := NewChecker(defDisc, db, dataPath)
 
 	result, err := checker.Check(context.Background(), CheckOptions{
 		DefinitionName: "my_instance",
-		Method:         "list",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if result.Status != "unknown" {
-		t.Errorf("expected status 'unknown' for missing artifact, got %q", result.Status)
+		t.Errorf("expected status 'unknown' for missing data, got %q", result.Status)
 	}
 }
 
@@ -68,7 +50,6 @@ func TestChecker_CleanState(t *testing.T) {
 
 	schemaDir := filepath.Join(tmpDir, "schema")
 	setupTestDefinition(t, schemaDir)
-	setupTestModel(t, schemaDir)
 
 	dbDir := filepath.Join(tmpDir, "db")
 	os.MkdirAll(dbDir, 0755)
@@ -78,89 +59,37 @@ func TestChecker_CleanState(t *testing.T) {
 	}
 	defer db.Close()
 
-	// Create an artifact file with matching data
-	artifactDir := filepath.Join(tmpDir, "data", "artifacts")
-	os.MkdirAll(artifactDir, 0755)
-	artifactPath := filepath.Join(artifactDir, "test.json")
+	// Create a data file with matching data
+	dataDir := filepath.Join(tmpDir, "data", "artifacts")
+	os.MkdirAll(dataDir, 0755)
+	dataPath := filepath.Join(dataDir, "test.json")
 	artifactData := map[string]interface{}{
 		"vpc_id": "vpc-123",
 	}
 	data, _ := json.Marshal(artifactData)
-	os.WriteFile(artifactPath, data, 0644)
+	os.WriteFile(dataPath, data, 0644)
 
-	// Insert artifact into catalog
-	insertTestArtifact(t, db, "my_instance", "list", artifactPath)
+	// Insert entry into catalog
+	insertTestArtifact(t, db, "my_instance", "", dataPath)
 
 	defDisc := definition.NewDiscoverer(schemaDir)
-	modelDisc := model.NewDiscoverer(schemaDir)
-	exec := &mockStepExecutor{}
-	dataPath := filepath.Join(tmpDir, "data")
 
-	checker := NewChecker(defDisc, modelDisc, db, exec, dataPath)
+	checker := NewChecker(defDisc, db, filepath.Join(tmpDir, "data"))
 
 	result, err := checker.Check(context.Background(), CheckOptions{
 		DefinitionName: "my_instance",
-		Method:         "list",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if result.Status != "drifted" {
-		// Socket bindings are cross-ref expressions, not plain values, so they'll differ
-		// unless live state has identical keys. This tests the flow completes.
-		t.Logf("status: %s, diffs: %d", result.Status, len(result.Differences))
-	}
-}
-
-func TestChecker_Refresh(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	schemaDir := filepath.Join(tmpDir, "schema")
-	setupTestDefinition(t, schemaDir)
-	setupTestModel(t, schemaDir)
-
-	dbDir := filepath.Join(tmpDir, "db")
-	os.MkdirAll(dbDir, 0755)
-	db, err := database.NewCatalogDB(dbDir)
-	if err != nil {
-		t.Fatalf("failed to create DB: %v", err)
-	}
-	defer db.Close()
-
-	// Track whether executor was called
-	executorCalled := false
-	exec := &mockStepExecutor{
-		runFunc: func(ctx context.Context, opts executor.RunOptions) (*executor.RunResult, error) {
-			executorCalled = true
-			return &executor.RunResult{
-				MethodName:     opts.MethodName,
-				DefinitionName: opts.DefinitionName,
-			}, nil
-		},
-	}
-
-	defDisc := definition.NewDiscoverer(schemaDir)
-	modelDisc := model.NewDiscoverer(schemaDir)
-	dataPath := filepath.Join(tmpDir, "data")
-
-	checker := NewChecker(defDisc, modelDisc, db, exec, dataPath)
-
-	_, err = checker.Check(context.Background(), CheckOptions{
-		DefinitionName: "my_instance",
-		Method:         "list",
-		Refresh:        true,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !executorCalled {
-		t.Error("expected executor to be called with Refresh=true")
-	}
+	// Socket bindings are cross-ref expressions, not plain values, so they'll differ
+	// unless live state has identical keys. This tests the flow completes.
+	t.Logf("status: %s, diffs: %d", result.Status, len(result.Differences))
 }
 
 // setupTestDefinition creates a minimal definition CUE file.
+// Uses the model unification pattern that the discoverer currently expects.
 func setupTestDefinition(t *testing.T, schemaDir string) {
 	t.Helper()
 	defsDir := filepath.Join(schemaDir, "definitions")
@@ -173,31 +102,6 @@ my_instance: examples.#EC2InstanceModel & {
 }
 `
 	os.WriteFile(filepath.Join(defsDir, "test.cue"), []byte(content), 0644)
-}
-
-// setupTestModel creates a minimal model CUE file.
-func setupTestModel(t *testing.T, schemaDir string) {
-	t.Helper()
-	modelsDir := filepath.Join(schemaDir, "examples")
-	os.MkdirAll(modelsDir, 0755)
-
-	content := `package examples
-
-#EC2InstanceModel: #Model & {
-	metadata: {
-		name: "ec2_instance"
-		description: "EC2 Instance"
-		category: "compute"
-	}
-	methods: {
-		list: #Method & {
-			kind: "action"
-			description: "List instances"
-		}
-	}
-}
-`
-	os.WriteFile(filepath.Join(modelsDir, "ec2.cue"), []byte(content), 0644)
 }
 
 // insertTestArtifact inserts a test artifact entry into the catalog.
@@ -217,7 +121,9 @@ func insertTestArtifact(t *testing.T, db *database.CatalogDB, defName, method, s
 		SizeBytes:      100,
 		EntryType:      &entryType,
 		Definition:     &defName,
-		Method:         &method,
+	}
+	if method != "" {
+		entry.Method = &method
 	}
 
 	err := db.AddEntry(entry)

@@ -267,8 +267,6 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 			SchemaVersion:    "v1.0",
 			ValidationStatus: getValidationStatus(validationResult),
 			IntendedSchema:   getIntendedSchema(validationResult),
-			ComplianceStatus: getComplianceStatus(validationResult),
-			CascadeLevel:     getCascadeLevel(validationResult),
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: []string{}, // Will be extracted from CUE schema later
@@ -339,20 +337,6 @@ func getIntendedSchema(vr *validator.ValidationResult) string {
 		return ""
 	}
 	return vr.IntendedSchema
-}
-
-func getComplianceStatus(vr *validator.ValidationResult) string {
-	if vr == nil {
-		return "unknown"
-	}
-	return vr.GetComplianceStatus()
-}
-
-func getCascadeLevel(vr *validator.ValidationResult) string {
-	if vr == nil {
-		return "auto"
-	}
-	return vr.CascadeLevel
 }
 
 // extractPackage extracts the package name from a schema definition
@@ -707,8 +691,8 @@ func (i *Importer) createCollectionEntry(opts ImportOptions, timestamp time.Time
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
-			CascadeLevel:     "auto",
-			ComplianceStatus: "unknown",
+
+
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
@@ -835,8 +819,8 @@ func (i *Importer) createCollectionItem(collectionID string, itemData interface{
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
-			CascadeLevel:     "auto",
-			ComplianceStatus: "unknown",
+
+
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{

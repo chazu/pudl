@@ -117,7 +117,7 @@ func validateSingleEntry(catalogDB *database.CatalogDB, vs *validator.Validation
 	fmt.Printf("Data path: %s\n", entry.StoredPath)
 	fmt.Println()
 
-	fmt.Print(vs.GetDetailedValidationReport(result))
+	fmt.Print(vs.GetValidationSummary(result))
 
 	if !result.Valid {
 		return errors.NewValidationError(

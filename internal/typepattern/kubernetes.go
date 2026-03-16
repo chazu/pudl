@@ -87,8 +87,7 @@ func kubernetesMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "kubernetes",
 		ResourceType:    resourceType,
-		CascadePriority: 90,
-		IdentityFields:  []string{"metadata.name", "metadata.namespace"},
+		IdentityFields: []string{"metadata.name", "metadata.namespace"},
 		TrackedFields:   trackedFields,
 	}
 }

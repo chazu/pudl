@@ -37,7 +37,6 @@ func cloudFormationMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    resourceType,
-		CascadePriority: 85,
 		IdentityFields:  []string{"LogicalResourceId"},
 		TrackedFields:   []string{},
 	}
@@ -66,7 +65,6 @@ func ec2MetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    "aws.ec2.instance",
-		CascadePriority: 85,
 		IdentityFields:  []string{"InstanceId"},
 		TrackedFields:   awsTrackedFields["ec2:Instance"],
 	}
@@ -82,7 +80,6 @@ func s3BucketMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    "aws.s3.bucket",
-		CascadePriority: 85,
 		IdentityFields:  []string{"Name"},
 		TrackedFields:   awsTrackedFields["s3:Bucket"],
 	}
@@ -98,7 +95,6 @@ func s3ObjectMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    "aws.s3.object",
-		CascadePriority: 85,
 		IdentityFields:  []string{"Key"},
 		TrackedFields:   awsTrackedFields["s3:Object"],
 	}
@@ -114,7 +110,6 @@ func lambdaMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    "aws.lambda.function",
-		CascadePriority: 85,
 		IdentityFields:  []string{"FunctionArn"},
 		TrackedFields:   awsTrackedFields["lambda:Function"],
 	}
@@ -130,7 +125,6 @@ func iamRoleMetadataDefaults(typeID string) *PudlMetadata {
 	return &PudlMetadata{
 		SchemaType:      "aws",
 		ResourceType:    "aws.iam.role",
-		CascadePriority: 85,
 		IdentityFields:  []string{"Arn"},
 		TrackedFields:   awsTrackedFields["iam:Role"],
 	}

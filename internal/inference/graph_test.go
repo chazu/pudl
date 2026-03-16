@@ -9,25 +9,21 @@ import (
 func TestBuildInheritanceGraph(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
 		"core.#Item": {
-			SchemaType:      "catchall",
-			CascadePriority: 0,
+			SchemaType: "catchall",
 		},
 		"aws.#Resource": {
-			SchemaType:      "base",
-			ResourceType:    "aws.resource",
-			CascadePriority: 50,
+			SchemaType:   "base",
+			ResourceType: "aws.resource",
 		},
 		"aws.#EC2Instance": {
-			SchemaType:      "base",
-			ResourceType:    "aws.ec2.instance",
-			BaseSchema:      "aws.#Resource",
-			CascadePriority: 80,
+			SchemaType:   "base",
+			ResourceType: "aws.ec2.instance",
+			BaseSchema:   "aws.#Resource",
 		},
 		"aws.#CompliantEC2Instance": {
-			SchemaType:      "policy",
-			ResourceType:    "aws.ec2.instance",
-			BaseSchema:      "aws.#EC2Instance",
-			CascadePriority: 90,
+			SchemaType:   "policy",
+			ResourceType: "aws.ec2.instance",
+			BaseSchema:   "aws.#EC2Instance",
 		},
 	}
 
@@ -70,37 +66,26 @@ func TestBuildInheritanceGraph(t *testing.T) {
 
 func TestGetMostSpecificFirst(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"core.#Item": {
-			CascadePriority: 0,
-		},
-		"aws.#Resource": {
-			CascadePriority: 50,
-		},
-		"aws.#EC2Instance": {
-			BaseSchema:      "aws.#Resource",
-			CascadePriority: 80,
-		},
-		"aws.#CompliantEC2Instance": {
-			BaseSchema:      "aws.#EC2Instance",
-			CascadePriority: 90,
-		},
+		"core.#Item":                {},
+		"aws.#Resource":             {},
+		"aws.#EC2Instance":          {BaseSchema: "aws.#Resource"},
+		"aws.#CompliantEC2Instance": {BaseSchema: "aws.#EC2Instance"},
 	}
 
 	g := BuildInheritanceGraph(metadata)
 	ordered := g.GetMostSpecificFirst()
 
-	// CompliantEC2Instance should be first (depth 2, priority 90)
+	// CompliantEC2Instance should be first (depth 2)
 	if ordered[0] != "aws.#CompliantEC2Instance" {
 		t.Errorf("Expected aws.#CompliantEC2Instance first, got %s", ordered[0])
 	}
 
-	// EC2Instance should be second (depth 1, priority 80)
+	// EC2Instance should be second (depth 1)
 	if ordered[1] != "aws.#EC2Instance" {
 		t.Errorf("Expected aws.#EC2Instance second, got %s", ordered[1])
 	}
 
-	// Resource and CatchAll are both roots (depth 0), sorted by priority
-	// Resource (50) should come before Item (0)
+	// Depth-0 schemas sorted alphabetically: aws.#Resource, core.#Item
 	if ordered[2] != "aws.#Resource" {
 		t.Errorf("Expected aws.#Resource third, got %s", ordered[2])
 	}
@@ -112,17 +97,9 @@ func TestGetMostSpecificFirst(t *testing.T) {
 
 func TestGetCascadeChain(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"aws.#Resource": {
-			CascadePriority: 50,
-		},
-		"aws.#EC2Instance": {
-			BaseSchema:      "aws.#Resource",
-			CascadePriority: 80,
-		},
-		"aws.#CompliantEC2Instance": {
-			BaseSchema:      "aws.#EC2Instance",
-			CascadePriority: 90,
-		},
+		"aws.#Resource":             {},
+		"aws.#EC2Instance":          {BaseSchema: "aws.#Resource"},
+		"aws.#CompliantEC2Instance": {BaseSchema: "aws.#EC2Instance"},
 	}
 
 	g := BuildInheritanceGraph(metadata)
@@ -150,7 +127,7 @@ func TestGetCascadeChain(t *testing.T) {
 
 func TestCalculateDepth(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"root": {},
+		"root":   {},
 		"level1": {BaseSchema: "root"},
 		"level2": {BaseSchema: "level1"},
 		"level3": {BaseSchema: "level2"},
@@ -178,14 +155,13 @@ func TestCalculateDepth(t *testing.T) {
 
 func TestIsLeafAndIsRoot(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
-		"root": {},
+		"root":   {},
 		"middle": {BaseSchema: "root"},
-		"leaf": {BaseSchema: "middle"},
+		"leaf":   {BaseSchema: "middle"},
 	}
 
 	g := BuildInheritanceGraph(metadata)
 
-	// Test IsRoot
 	if !g.IsRoot("root") {
 		t.Error("root should be a root")
 	}
@@ -196,7 +172,6 @@ func TestIsLeafAndIsRoot(t *testing.T) {
 		t.Error("leaf should not be a root")
 	}
 
-	// Test IsLeaf
 	if g.IsLeaf("root") {
 		t.Error("root should not be a leaf")
 	}
@@ -222,25 +197,24 @@ func TestEmptyGraph(t *testing.T) {
 	}
 }
 
-func TestPriorityTiebreaker(t *testing.T) {
-	// Two schemas at the same depth, different priorities
+func TestAlphabeticalTiebreaker(t *testing.T) {
+	// Three schemas at the same depth, should sort alphabetically
 	metadata := map[string]validator.SchemaMetadata{
-		"schemaA": {CascadePriority: 100},
-		"schemaB": {CascadePriority: 50},
-		"schemaC": {CascadePriority: 75},
+		"schemaC": {},
+		"schemaA": {},
+		"schemaB": {},
 	}
 
 	g := BuildInheritanceGraph(metadata)
 	ordered := g.GetMostSpecificFirst()
 
-	// Should be ordered by priority: A (100), C (75), B (50)
 	if ordered[0] != "schemaA" {
 		t.Errorf("Expected schemaA first, got %s", ordered[0])
 	}
-	if ordered[1] != "schemaC" {
-		t.Errorf("Expected schemaC second, got %s", ordered[1])
+	if ordered[1] != "schemaB" {
+		t.Errorf("Expected schemaB second, got %s", ordered[1])
 	}
-	if ordered[2] != "schemaB" {
-		t.Errorf("Expected schemaB third, got %s", ordered[2])
+	if ordered[2] != "schemaC" {
+		t.Errorf("Expected schemaC third, got %s", ordered[2])
 	}
 }

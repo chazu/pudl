@@ -213,7 +213,6 @@ func TestGitLabCIMetadataDefaults(t *testing.T) {
 	require.NotNil(t, meta)
 	assert.Equal(t, "cicd", meta.SchemaType)
 	assert.Equal(t, "gitlab.pipeline", meta.ResourceType)
-	assert.Equal(t, 85, meta.CascadePriority)
 	assert.Empty(t, meta.IdentityFields)
 	assert.Equal(t, []string{"stages"}, meta.TrackedFields)
 }

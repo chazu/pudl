@@ -13,12 +13,12 @@ import (
 var definitionListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available definitions",
-	Long: `List all available definitions showing name, model reference, and socket bindings.
+	Long: `List all available definitions showing name, schema reference, and socket bindings.
 
 Examples:
     pudl definition list
     pudl definition list --verbose
-    pudl definition list --model examples.#EC2InstanceModel`,
+    pudl definition list --schema examples.#EC2Instance`,
 	Run: func(cmd *cobra.Command, args []string) {
 		errorHandler := errors.NewCLIErrorHandler(true)
 		if err := runDefinitionListCommand(); err != nil {
@@ -30,7 +30,7 @@ Examples:
 func init() {
 	definitionCmd.AddCommand(definitionListCmd)
 	definitionListCmd.Flags().BoolVarP(&defVerbose, "verbose", "v", false, "Show detailed information")
-	definitionListCmd.Flags().StringVar(&defModel, "model", "", "Filter by model reference")
+	definitionListCmd.Flags().StringVar(&defSchema, "schema", "", "Filter by schema reference")
 }
 
 func runDefinitionListCommand() error {
@@ -46,10 +46,10 @@ func runDefinitionListCommand() error {
 	}
 
 	// Filter by model if specified
-	if defModel != "" {
+	if defSchema != "" {
 		var filtered []definition.DefinitionInfo
 		for _, d := range definitions {
-			if d.ModelRef == defModel {
+			if d.SchemaRef == defSchema {
 				filtered = append(filtered, d)
 			}
 		}
@@ -58,8 +58,8 @@ func runDefinitionListCommand() error {
 
 	if len(definitions) == 0 {
 		fmt.Println("No definitions found.")
-		if defModel != "" {
-			fmt.Printf("\nNo definitions for model '%s'. Try: pudl definition list\n", defModel)
+		if defSchema != "" {
+			fmt.Printf("\nNo definitions for schema '%s'. Try: pudl definition list\n", defSchema)
 		}
 		return nil
 	}
@@ -70,7 +70,7 @@ func runDefinitionListCommand() error {
 	for _, d := range definitions {
 		if defVerbose {
 			fmt.Printf("  %s\n", d.Name)
-			fmt.Printf("    Model:    %s\n", d.ModelRef)
+			fmt.Printf("    Schema:   %s\n", d.SchemaRef)
 			fmt.Printf("    Package:  %s\n", d.Package)
 			fmt.Printf("    File:     %s\n", d.FilePath)
 			if len(d.SocketBindings) > 0 {
@@ -85,7 +85,7 @@ func runDefinitionListCommand() error {
 			if len(d.SocketBindings) > 0 {
 				bindingStr = fmt.Sprintf("  %d bindings", len(d.SocketBindings))
 			}
-			fmt.Printf("  %-30s %-40s%s\n", d.Name, d.ModelRef, bindingStr)
+			fmt.Printf("  %-30s %-40s%s\n", d.Name, d.SchemaRef, bindingStr)
 		}
 	}
 

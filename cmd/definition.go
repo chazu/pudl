@@ -6,23 +6,23 @@ import (
 
 var (
 	defVerbose bool
-	defModel   string
+	defSchema  string
 )
 
 // definitionCmd represents the definition command
 var definitionCmd = &cobra.Command{
 	Use:     "definition",
 	Aliases: []string{"def", "d"},
-	Short:   "Manage definitions (named instances of models)",
-	Long: `Manage definitions that bind concrete values to model schemas.
+	Short:   "Manage definitions (named instances of schemas)",
+	Long: `Manage definitions that bind concrete values to schemas.
 
-A definition is a named instance of a model with specific configuration
+A definition is a named instance of a schema with specific configuration
 and socket wiring to other definitions.
 
 Available subcommands:
 - list:     Show available definitions
 - show:     Display definition details
-- validate: Validate definitions against their models
+- validate: Validate definitions against their schemas
 - graph:    Show definition dependency graph
 
 Examples:

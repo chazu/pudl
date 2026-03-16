@@ -155,7 +155,6 @@ func TestKubernetesMetadataDefaults(t *testing.T) {
 			require.NotNil(t, meta)
 			assert.Equal(t, tt.expectedSchemaType, meta.SchemaType)
 			assert.Equal(t, tt.expectedResType, meta.ResourceType)
-			assert.Equal(t, 90, meta.CascadePriority)
 			assert.Equal(t, []string{"metadata.name", "metadata.namespace"}, meta.IdentityFields)
 			assert.Equal(t, tt.expectedTracked, meta.TrackedFields)
 		})
@@ -167,7 +166,6 @@ func TestKubernetesMetadataDefaults_UnknownType(t *testing.T) {
 	require.NotNil(t, meta)
 	assert.Equal(t, "kubernetes", meta.SchemaType)
 	assert.Equal(t, "k8s.custom.myresource", meta.ResourceType)
-	assert.Equal(t, 90, meta.CascadePriority)
 	assert.Empty(t, meta.TrackedFields)
 }
 

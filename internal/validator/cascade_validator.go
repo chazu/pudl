@@ -94,20 +94,17 @@ func (cv *CascadeValidator) findFallbackSchemaName() string {
 	return fallbackCanonical
 }
 
-// ValidateWithCascade performs cascading validation against multiple schemas
+// ValidateWithCascade validates data against the intended schema using CUE unification.
+// If the intended schema fails, it tries the base schema (if any), then the catchall.
 func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema string) (*ValidationResult, error) {
 	// Normalize the intended schema to canonical format
 	intendedSchema = schemaname.Normalize(intendedSchema)
 	result := NewValidationResult(intendedSchema)
 
-	// Get cascade chain for intended schema
-	cascadeChain := cv.getCascadeChain(intendedSchema)
-	
-	// Convert data to CUE value using JSON encoding to handle type conversions properly.
-	// We always use json.Marshal + CompileBytes to ensure proper type handling:
-	// - JSON numbers become CUE int/float based on their actual value (not Go's float64)
-	// - This is critical for arrays/slices where ctx.Encode() would preserve Go's float64
-	//   for all numbers, causing int fields to fail validation
+	// Build validation chain: intended → base (if any) → catchall
+	chain := cv.buildValidationChain(intendedSchema)
+
+	// Convert data to CUE value using JSON encoding for proper type handling
 	jsonBytes, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal data to JSON: %w", err)
@@ -117,76 +114,56 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 	if dataValue.Err() != nil {
 		return nil, fmt.Errorf("failed to encode data: %w", dataValue.Err())
 	}
-	
-	// Try each schema in cascade order
-	for i, schemaName := range cascadeChain {
+
+	// Try each schema in chain via CUE unification
+	for _, schemaName := range chain {
 		schema, exists := cv.schemas[schemaName]
 		if !exists {
 			result.AddCascadeAttempt(schemaName, false, nil, "Schema not found")
 			continue
 		}
 
-		// Attempt validation by unifying data with schema
 		unified := schema.Unify(dataValue)
 		if err := unified.Validate(); err == nil {
-			// Validation succeeded
-			cascadeLevel := cv.determineCascadeLevel(i, len(cascadeChain))
-			fallbackReason := cv.determineFallbackReason(i, intendedSchema, schemaName)
-
-			result.SetFinalAssignment(schemaName, cascadeLevel, fallbackReason)
+			fallbackReason := ""
+			if schemaName != intendedSchema {
+				fallbackReason = fmt.Sprintf("Failed validation against %s", intendedSchema)
+			}
+			result.SetFinalAssignment(schemaName, fallbackReason)
 			result.AddCascadeAttempt(schemaName, true, nil, "Validation successful")
-
 			return result, nil
 		} else {
-			// Validation failed - collect errors and continue cascade
 			validationErrors := cv.extractValidationErrors(err, schemaName)
 			reason := fmt.Sprintf("Validation failed: %d errors", len(validationErrors))
 			result.AddCascadeAttempt(schemaName, false, validationErrors, reason)
 		}
 	}
-	
+
 	// Should never reach here due to catchall, but handle gracefully
 	fallbackSchema := cv.findFallbackSchemaName()
-	result.SetFinalAssignment(fallbackSchema, "catchall", "All validations failed")
+	result.SetFinalAssignment(fallbackSchema, "All validations failed")
 
 	return result, nil
 }
 
-// getCascadeChain builds the cascade chain for a given schema
-func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
+// buildValidationChain builds the validation chain: intended → base (if any) → catchall.
+// Uses CUE's natural inheritance via base_schema references.
+func (cv *CascadeValidator) buildValidationChain(intendedSchema string) []string {
 	fallbackSchema := cv.findFallbackSchemaName()
 
-	meta, exists := cv.metadata[intendedSchema]
-	if !exists {
-		// Default cascade chain for unknown schemas
-		return []string{intendedSchema, fallbackSchema}
-	}
-
-	if len(meta.CascadeFallback) > 0 {
-		// Use explicit cascade chain from schema metadata
-		chain := []string{intendedSchema}
-		chain = append(chain, meta.CascadeFallback...)
-		return chain
-	}
-
-	// Build cascade chain based on schema metadata
 	chain := []string{intendedSchema}
 
-	// Add base schema if specified
-	if meta.BaseSchema != "" {
-		chain = append(chain, meta.BaseSchema)
-	}
-
-	// Add generic fallbacks based on resource type
-	if meta.ResourceType != "" {
-		parts := strings.Split(meta.ResourceType, ".")
-		if len(parts) >= 2 {
-			// Add generic resource schema (e.g., aws.#Resource)
-			genericSchema := fmt.Sprintf("%s.#Resource", parts[0])
-			if genericSchema != intendedSchema && !contains(chain, genericSchema) {
-				chain = append(chain, genericSchema)
-			}
+	// Walk up the base schema chain
+	current := intendedSchema
+	for {
+		meta, exists := cv.metadata[current]
+		if !exists || meta.BaseSchema == "" {
+			break
 		}
+		if !contains(chain, meta.BaseSchema) {
+			chain = append(chain, meta.BaseSchema)
+		}
+		current = meta.BaseSchema
 	}
 
 	// Always end with catchall
@@ -195,31 +172,6 @@ func (cv *CascadeValidator) getCascadeChain(intendedSchema string) []string {
 	}
 
 	return chain
-}
-
-// determineCascadeLevel determines the cascade level based on position in chain
-func (cv *CascadeValidator) determineCascadeLevel(position, chainLength int) string {
-	if position == 0 {
-		return "exact"
-	}
-	if position == chainLength-1 {
-		return "catchall"
-	}
-	return "fallback"
-}
-
-// determineFallbackReason creates a human-readable fallback reason
-func (cv *CascadeValidator) determineFallbackReason(position int, intendedSchema, assignedSchema string) string {
-	if position == 0 {
-		return "" // No fallback occurred
-	}
-
-	// Check if assigned to a fallback schema (Item/catchall)
-	if schemaname.IsFallbackSchema(assignedSchema) {
-		return "Failed all specific schema validations"
-	}
-
-	return fmt.Sprintf("Failed validation against %s", intendedSchema)
 }
 
 // extractValidationErrors converts CUE validation errors to structured format
@@ -290,14 +242,7 @@ func (cv *CascadeValidator) GetSchemasByResourceType(resourceType string) []stri
 			schemas = append(schemas, name)
 		}
 	}
-	
-	// Sort by cascade priority (higher priority first)
-	sort.Slice(schemas, func(i, j int) bool {
-		metaI := cv.metadata[schemas[i]]
-		metaJ := cv.metadata[schemas[j]]
-		return metaI.CascadePriority > metaJ.CascadePriority
-	})
-	
+	sort.Strings(schemas)
 	return schemas
 }
 
