@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/definition"
 	"pudl/internal/drift"
 	"pudl/internal/mubridge"
 )
@@ -18,15 +19,17 @@ var (
 
 var exportActionsCmd = &cobra.Command{
 	Use:   "export-actions [--definition <name> | --all]",
-	Short: "Export drift reports as mu-compatible action specs",
-	Long: `Read drift reports and emit mu-compatible JSON action specs to stdout.
+	Short: "Export drift reports as a mu.json configuration",
+	Long: `Read drift reports and emit a mu-compatible JSON config to stdout.
 
-This bridges pudl's drift knowledge to mu's execution engine. Each field
-difference in a drift report becomes an ActionSpec in the plan response.
+Each drifted definition becomes a mu target whose config is the desired state.
+The toolchain is inferred from the definition's schema reference. mu plugins
+for each resource type handle the actual convergence.
 
 Examples:
     pudl export-actions --definition my_instance
-    pudl export-actions --all`,
+    pudl export-actions --all
+    pudl export-actions --all | mu build --config /dev/stdin //...`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		defFlag, _ := cmd.Flags().GetString("definition")
 
@@ -38,9 +41,9 @@ Examples:
 		}
 
 		if exportActionsAll {
-			return runExportActionsAll()
+			return runExportAll()
 		}
-		return runExportActions(defFlag)
+		return runExportOne(defFlag)
 	},
 }
 
@@ -50,7 +53,7 @@ func init() {
 	exportActionsCmd.Flags().BoolVar(&exportActionsAll, "all", false, "Export actions for all definitions with drift reports")
 }
 
-func runExportActions(name string) error {
+func runExportOne(name string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -62,11 +65,24 @@ func runExportActions(name string) error {
 		return err
 	}
 
-	resp := mubridge.ExportFromDriftReport(report)
-	return outputPlanResponse(resp)
+	defDisc := definition.NewDiscoverer(cfg.SchemaPath)
+	def, err := defDisc.GetDefinition(name)
+	if err != nil {
+		return fmt.Errorf("loading definition %q: %w", name, err)
+	}
+
+	inputs := []*mubridge.DriftInput{
+		{
+			Result:    report,
+			SchemaRef: def.SchemaRef,
+			Sources:   []string{def.FilePath},
+		},
+	}
+
+	return outputMuConfig(mubridge.ExportMuConfig(inputs, nil))
 }
 
-func runExportActionsAll() error {
+func runExportAll() error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -80,13 +96,12 @@ func runExportActionsAll() error {
 
 	if len(defNames) == 0 {
 		fmt.Fprintln(os.Stderr, "No definitions with drift reports found.")
-		return outputPlanResponse(&mubridge.PlanResponse{})
+		return outputMuConfig(&mubridge.MuConfig{})
 	}
 
-	// Merge all drift reports into a single plan response
-	var allActions []mubridge.ActionSpec
-	outputs := map[string]string{}
+	defDisc := definition.NewDiscoverer(cfg.SchemaPath)
 
+	var inputs []*mubridge.DriftInput
 	for _, name := range defNames {
 		report, err := store.GetLatest(name)
 		if err != nil {
@@ -94,25 +109,28 @@ func runExportActionsAll() error {
 			continue
 		}
 
-		resp := mubridge.ExportFromDriftReport(report)
-		allActions = append(allActions, resp.Actions...)
-		for k, v := range resp.Outputs {
-			outputs[name+"."+k] = v
+		schemaRef := "generic"
+		var sources []string
+		if def, err := defDisc.GetDefinition(name); err == nil {
+			schemaRef = def.SchemaRef
+			sources = []string{def.FilePath}
 		}
+
+		inputs = append(inputs, &mubridge.DriftInput{
+			Result:    report,
+			SchemaRef: schemaRef,
+			Sources:   sources,
+		})
 	}
 
-	combined := &mubridge.PlanResponse{
-		Actions: allActions,
-		Outputs: outputs,
-	}
-	return outputPlanResponse(combined)
+	return outputMuConfig(mubridge.ExportMuConfig(inputs, nil))
 }
 
-func outputPlanResponse(resp *mubridge.PlanResponse) error {
+func outputMuConfig(cfg *mubridge.MuConfig) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(resp); err != nil {
-		return fmt.Errorf("failed to encode plan response: %w", err)
+	if err := enc.Encode(cfg); err != nil {
+		return fmt.Errorf("failed to encode mu config: %w", err)
 	}
 	return nil
 }
