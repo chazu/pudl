@@ -132,6 +132,76 @@ entries: {
 	}
 }
 
+// AWS types
+entries: {
+	"pudl/aws.#Account": {
+		schema:        "pudl/aws.#Account"
+		schema_type:   "base"
+		resource_type: "aws.account"
+		description:   "AWS account with 12-digit ID"
+	}
+	"pudl/aws.#VPC": {
+		schema:        "pudl/aws.#VPC"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc"
+		description:   "AWS Virtual Private Cloud"
+	}
+	"pudl/aws.#Subnet": {
+		schema:        "pudl/aws.#Subnet"
+		schema_type:   "base"
+		resource_type: "aws.ec2.subnet"
+		description:   "Subdivision of a VPC tied to an availability zone"
+	}
+	"pudl/aws.#RouteTable": {
+		schema:        "pudl/aws.#RouteTable"
+		schema_type:   "base"
+		resource_type: "aws.ec2.route_table"
+		description:   "VPC routing rules"
+	}
+	"pudl/aws.#SecurityGroup": {
+		schema:        "pudl/aws.#SecurityGroup"
+		schema_type:   "base"
+		resource_type: "aws.ec2.security_group"
+		description:   "Stateful firewall for EC2 resources"
+	}
+	"pudl/aws.#InternetGateway": {
+		schema:        "pudl/aws.#InternetGateway"
+		schema_type:   "base"
+		resource_type: "aws.ec2.internet_gateway"
+		description:   "Internet access gateway for a VPC"
+	}
+	"pudl/aws.#NATGateway": {
+		schema:        "pudl/aws.#NATGateway"
+		schema_type:   "base"
+		resource_type: "aws.ec2.nat_gateway"
+		description:   "Outbound internet for private subnets"
+	}
+	"pudl/aws.#NetworkACL": {
+		schema:        "pudl/aws.#NetworkACL"
+		schema_type:   "base"
+		resource_type: "aws.ec2.network_acl"
+		description:   "Stateless subnet-level firewall"
+	}
+	"pudl/aws.#VPCPeering": {
+		schema:        "pudl/aws.#VPCPeering"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc_peering"
+		description:   "Connection between two VPCs"
+	}
+	"pudl/aws.#VPCEndpoint": {
+		schema:        "pudl/aws.#VPCEndpoint"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc_endpoint"
+		description:   "Private connectivity to an AWS service"
+	}
+	"pudl/aws.#ElasticIP": {
+		schema:        "pudl/aws.#ElasticIP"
+		schema_type:   "base"
+		resource_type: "aws.ec2.elastic_ip"
+		description:   "Static public IPv4 address"
+	}
+}
+
 // Registry types
 entries: {
 	"pudl/registry.#Entry": {
