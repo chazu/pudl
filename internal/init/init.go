@@ -258,7 +258,7 @@ func initCUEModule(schemaDir string, verbose bool) error {
 	// Note: We don't pre-declare deps because cue mod tidy will resolve them
 	// from the imports in the example file. This ensures we always get the
 	// latest compatible version from the CUE Central Registry.
-	moduleContent := `language: version: "v0.14.0"
+	moduleContent := `language: version: "v0.16.0"
 
 module: "pudl.schemas@v0"
 

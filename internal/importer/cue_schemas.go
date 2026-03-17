@@ -91,6 +91,7 @@ func (i *Importer) ensureBasicSchemas() error {
 		filepath.Join(i.schemaPath, "pudl", "component", "component.cue"),
 		filepath.Join(i.schemaPath, "pudl", "artifact", "artifact.cue"),
 		filepath.Join(i.schemaPath, "pudl", "registry", "registry.cue"),
+		filepath.Join(i.schemaPath, "pudl", "aws", "aws.cue"),
 	}
 	for _, checkPath := range bootstrapChecks {
 		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
