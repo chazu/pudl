@@ -9,12 +9,13 @@ import (
 
 // DriftResult holds the outcome of comparing declared vs live state.
 type DriftResult struct {
-	Definition   string                 `json:"definition"`
-	Status       string                 `json:"status"` // "clean", "drifted", "unknown"
-	Timestamp    time.Time              `json:"timestamp"`
+	Definition   string      `json:"definition"`
+	Method       string      `json:"method"`
+	Status       string      `json:"status"` // "clean", "drifted", "unknown"
+	Timestamp    time.Time   `json:"timestamp"`
 	DeclaredKeys map[string]interface{} `json:"declared_keys"`
 	LiveState    map[string]interface{} `json:"live_state"`
-	Differences  []FieldDiff            `json:"differences"`
+	Differences  []FieldDiff `json:"differences"`
 }
 
 // FieldDiff describes a single field-level difference between declared and live state.
