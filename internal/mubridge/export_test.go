@@ -171,6 +171,13 @@ func TestResolveToolchain(t *testing.T) {
 		{"kubernetes.#Pod", "k8s"},
 		{"file.#Config", "file"},
 		{"config.#AppSettings", "file"},
+		{"terraform.#Module", "terraform"},
+		{"tf.#Resource", "terraform"},
+		{"docker.#Image", "docker"},
+		{"container.#Build", "docker"},
+		{"shell.#Command", "shell"},
+		{"exec.#Script", "shell"},
+		{"zig.#Build", "zig"},
 		{"unknown.#Foo", "generic"},
 	}
 
