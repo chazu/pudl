@@ -11,48 +11,61 @@ import (
 
 // Discoverer finds and parses definition files from the definitions directory.
 type Discoverer struct {
-	schemaPath string
+	searchPaths []string // ordered list of schema paths to search
 }
 
-// NewDiscoverer creates a new definition discoverer.
+// NewDiscoverer creates a discoverer with a single schema path (backward compatible).
 func NewDiscoverer(schemaPath string) *Discoverer {
-	return &Discoverer{schemaPath: schemaPath}
+	return &Discoverer{searchPaths: []string{schemaPath}}
 }
 
-// definitionsDir returns the path to the definitions directory.
-func (d *Discoverer) definitionsDir() string {
-	return filepath.Join(d.schemaPath, "definitions")
+// NewMultiDiscoverer creates a discoverer that searches multiple paths in order.
+// Definitions found in earlier paths shadow definitions with the same name in later paths.
+func NewMultiDiscoverer(schemaPaths []string) *Discoverer {
+	return &Discoverer{searchPaths: schemaPaths}
 }
 
-// ListDefinitions finds all definitions in the definitions directory.
-func (d *Discoverer) ListDefinitions() ([]DefinitionInfo, error) {
-	defsDir := d.definitionsDir()
-
-	if _, err := os.Stat(defsDir); os.IsNotExist(err) {
-		return nil, nil // No definitions directory yet
+// definitionsDirs returns the paths to all definitions directories.
+func (d *Discoverer) definitionsDirs() []string {
+	var dirs []string
+	for _, sp := range d.searchPaths {
+		dirs = append(dirs, filepath.Join(sp, "definitions"))
 	}
+	return dirs
+}
 
+// ListDefinitions finds all definitions across all search paths.
+// Definitions in earlier paths shadow definitions with the same name in later paths.
+func (d *Discoverer) ListDefinitions() ([]DefinitionInfo, error) {
+	seen := make(map[string]bool)
 	var definitions []DefinitionInfo
 
-	err := filepath.Walk(defsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	for _, defsDir := range d.definitionsDirs() {
+		if _, err := os.Stat(defsDir); os.IsNotExist(err) {
+			continue
 		}
 
-		if info.IsDir() || !strings.HasSuffix(info.Name(), ".cue") {
+		err := filepath.Walk(defsDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || !strings.HasSuffix(info.Name(), ".cue") {
+				return nil
+			}
+
+			fileDefs, err := d.parseDefinitionsFromFile(path)
+			if err != nil {
+				return nil // Skip files that can't be parsed
+			}
+
+			for _, def := range fileDefs {
+				if !seen[def.Name] {
+					seen[def.Name] = true
+					definitions = append(definitions, def)
+				}
+			}
 			return nil
-		}
-
-		fileDefs, err := d.parseDefinitionsFromFile(path)
+		})
 		if err != nil {
-			return nil // Skip files that can't be parsed
+			return nil, fmt.Errorf("failed to walk definitions directory %s: %w", defsDir, err)
 		}
-
-		definitions = append(definitions, fileDefs...)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk definitions directory: %w", err)
 	}
 
 	sort.Slice(definitions, func(i, j int) bool {

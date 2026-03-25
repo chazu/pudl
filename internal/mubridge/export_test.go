@@ -188,3 +188,142 @@ func TestResolveToolchain(t *testing.T) {
 		}
 	}
 }
+
+func TestExportMuConfig_BrickToolchain(t *testing.T) {
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition: "my_app",
+				Status:     "drifted",
+				DeclaredKeys: map[string]interface{}{
+					"name":      "my-app",
+					"kind":      "component",
+					"toolchain": "k8s",
+					"config": map[string]interface{}{
+						"replicas": 3,
+						"image":    "nginx:latest",
+					},
+				},
+				Differences: []drift.FieldDiff{{Path: "config.replicas", Type: "changed"}},
+			},
+			SchemaRef:      "brick.#Target",
+			BrickToolchain: "k8s",
+		},
+	}
+
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[0].Toolchain != "k8s" {
+		t.Errorf("toolchain = %q, want %q", cfg.Targets[0].Toolchain, "k8s")
+	}
+}
+
+func TestExportMuConfig_BrickToolchainPrecedence(t *testing.T) {
+	// BrickToolchain should override prefix heuristic even when SchemaRef
+	// would match a different toolchain.
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition:   "hybrid_target",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"foo": "bar"},
+				Differences:  []drift.FieldDiff{{Path: "foo", Type: "changed"}},
+			},
+			SchemaRef:      "k8s.#Deployment",
+			BrickToolchain: "shell",
+		},
+	}
+
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[0].Toolchain != "shell" {
+		t.Errorf("toolchain = %q, want %q (BrickToolchain should win over prefix)", cfg.Targets[0].Toolchain, "shell")
+	}
+}
+
+func TestExportMuConfig_NoBrickFallback(t *testing.T) {
+	// When BrickToolchain is empty, the prefix heuristic should still work.
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition:   "web_server",
+				Status:       "drifted",
+				DeclaredKeys: map[string]interface{}{"replicas": 3},
+				Differences:  []drift.FieldDiff{{Path: "replicas", Type: "changed"}},
+			},
+			SchemaRef:      "k8s.#Deployment",
+			BrickToolchain: "",
+		},
+	}
+
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+	if cfg.Targets[0].Toolchain != "k8s" {
+		t.Errorf("toolchain = %q, want %q (should fall back to prefix heuristic)", cfg.Targets[0].Toolchain, "k8s")
+	}
+}
+
+func TestExportMuConfig_BrickConfig(t *testing.T) {
+	// When BrickConfig is set, only those fields should appear in config,
+	// not the full DeclaredKeys (which include BRICK metadata).
+	brickConfig := map[string]any{
+		"replicas": 3,
+		"image":    "nginx:latest",
+	}
+	results := []*DriftInput{
+		{
+			Result: &drift.DriftResult{
+				Definition: "my_app",
+				Status:     "drifted",
+				DeclaredKeys: map[string]interface{}{
+					"name":      "my-app",
+					"kind":      "component",
+					"toolchain": "k8s",
+					"config": map[string]interface{}{
+						"replicas": 3,
+						"image":    "nginx:latest",
+					},
+				},
+				Differences: []drift.FieldDiff{{Path: "config.replicas", Type: "changed"}},
+			},
+			SchemaRef:      "brick.#Target",
+			BrickToolchain: "k8s",
+			BrickConfig:    brickConfig,
+		},
+	}
+
+	cfg := ExportMuConfig(results, nil)
+
+	if len(cfg.Targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(cfg.Targets))
+	}
+
+	target := cfg.Targets[0]
+
+	// Config should only have the BRICK config fields, not metadata.
+	if _, ok := target.Config["kind"]; ok {
+		t.Error("config should not contain BRICK metadata field 'kind'")
+	}
+	if _, ok := target.Config["toolchain"]; ok {
+		t.Error("config should not contain BRICK metadata field 'toolchain'")
+	}
+	if _, ok := target.Config["name"]; ok {
+		t.Error("config should not contain BRICK metadata field 'name'")
+	}
+
+	if target.Config["replicas"] != 3 {
+		t.Errorf("config.replicas = %v, want 3", target.Config["replicas"])
+	}
+	if target.Config["image"] != "nginx:latest" {
+		t.Errorf("config.image = %v, want %q", target.Config["image"], "nginx:latest")
+	}
+}

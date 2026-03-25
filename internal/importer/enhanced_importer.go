@@ -18,10 +18,17 @@ type EnhancedImporter struct {
 	*Importer // Embed the original importer
 }
 
-// NewEnhancedImporter creates a new enhanced importer with content-based ID support
+// NewEnhancedImporter creates a new enhanced importer with content-based ID support.
+// The schemaPath parameter is the primary schema path. For multi-path support,
+// use NewEnhancedImporterWithSchemaPaths.
 func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImporter, error) {
-	// Create base importer
-	baseImporter, err := New(dataPath, schemaPath, configDir)
+	return NewEnhancedImporterWithSchemaPaths(dataPath, configDir, schemaPath)
+}
+
+// NewEnhancedImporterWithSchemaPaths creates a new enhanced importer with multiple schema paths.
+// Paths are searched in order; earlier paths take priority (per-repo shadows global).
+func NewEnhancedImporterWithSchemaPaths(dataPath, configDir string, schemaPaths ...string) (*EnhancedImporter, error) {
+	baseImporter, err := NewWithSchemaPaths(dataPath, configDir, schemaPaths...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create base importer: %w", err)
 	}

@@ -31,6 +31,7 @@ var (
 	listPerPage       int
 	listArtifacts     bool
 	listAll           bool
+	listAllWorkspaces bool
 )
 
 // listCmd represents the list command
@@ -106,10 +107,17 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		entryType = "" // no filter
 	}
 
+	// Default origin to workspace name when inside a workspace,
+	// unless --all-workspaces is set or --origin is explicitly provided.
+	effectiveOrigin := listOrigin
+	if effectiveOrigin == "" && !listAllWorkspaces && wsCtx != nil && wsCtx.Workspace != nil {
+		effectiveOrigin = wsCtx.EffectiveOrigin
+	}
+
 	// Set up filter options
 	filters := lister.FilterOptions{
 		Schema:         listSchema,
-		Origin:         listOrigin,
+		Origin:         effectiveOrigin,
 		Format:         listFormat,
 		CollectionID:   listCollectionID,
 		CollectionType: determineCollectionType(),
@@ -256,6 +264,10 @@ func init() {
 	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only artifacts (method outputs)")
 	listCmd.Flags().BoolVar(&listAll, "all", false, "Show both imports and artifacts")
 	listCmd.MarkFlagsMutuallyExclusive("artifacts", "all")
+
+	// Workspace flags
+	listCmd.Flags().BoolVar(&listAllWorkspaces, "all-workspaces", false,
+		"Show entries from all workspaces (default: current workspace only)")
 
 	// UI flags
 	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")

@@ -45,11 +45,29 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 ### Mu Bridge
 - `pudl export-actions` converts drift reports into mu-compatible JSON action specs
 - Supports single-definition and `--all` modes
+- BRICK-aware: `brick.#Target` toolchain and config fields used directly
+
+### ACUTE Feedback Loop
+- `pudl ingest-observe` — ingest mu observe results as live state for drift detection
+- `pudl ingest-manifest` — ingest mu build manifests, track per-action results
+- `pudl status` — per-definition convergence status (unknown/clean/drifted/converging/converged/failed)
+- Status column on catalog entries, updated through the full ACUTE cycle
+- Architecture: [`docs/acute-loop-architecture.md`](acute-loop-architecture.md)
+
+### Per-Repo Workspaces
+- `pudl repo init` creates `.pudl/workspace.cue` with schema/ and definitions/ directories
+- Workspace discovery walks up from cwd looking for `.pudl/workspace.cue`
+- Catalog queries scoped by workspace origin (--all-workspaces to bypass)
+- Multi-path definition discovery with per-repo shadowing of global definitions
+- Multi-path schema resolution with per-repo shadowing of global schemas
+- Imports within a workspace auto-tagged with workspace name as origin
 
 ### Infrastructure
-- `pudl repo init` creates `.pudl/` and installs Claude skills
+- `pudl repo init` creates `.pudl/` with workspace.cue and installs Claude skills
 - `pudl doctor` with directory structure validation
 - Database migrations (idempotent, run on every open)
+
+---
 
 ## What's Next
 
@@ -62,8 +80,6 @@ Potential future work, roughly ordered by value.
 - Temporal tracking (same resource across imports via `resource_id` + `version`)
 
 ### Deeper Mu Integration
-- Bidirectional protocol: mu queries pudl for context during execution
-- Action result feedback: mu reports outcomes back to pudl
 - Richer action types beyond field-level drift (create, delete, reconcile)
 
 ### More Type Patterns
@@ -93,7 +109,8 @@ Potential future work, roughly ordered by value.
 | `validator` | `internal/validator/` | CUE validation |
 | `definition` | `internal/definition/` | Definition loader, validator, dependency graph |
 | `drift` | `internal/drift/` | State comparator, report store |
-| `mubridge` | `internal/mubridge/` | Drift-to-mu action export |
+| `mubridge` | `internal/mubridge/` | Drift-to-mu action export, manifest/observe ingestion |
+| `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |
 | `typepattern` | `internal/typepattern/` | Pluggable type detection patterns |

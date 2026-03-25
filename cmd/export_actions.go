@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/database"
 	"pudl/internal/definition"
 	"pudl/internal/drift"
 	"pudl/internal/mubridge"
@@ -72,14 +74,19 @@ func runExportOne(name string) error {
 	}
 
 	inputs := []*mubridge.DriftInput{
-		{
-			Result:    report,
-			SchemaRef: def.SchemaRef,
-			Sources:   []string{def.FilePath},
-		},
+		buildDriftInput(def, report),
 	}
 
-	return outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg)))
+	if err := outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg))); err != nil {
+		return err
+	}
+
+	// Mark drifted definitions as converging
+	if err := markConverging(cfg, inputs); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update status: %v\n", err)
+	}
+
+	return nil
 }
 
 func runExportAll() error {
@@ -111,19 +118,53 @@ func runExportAll() error {
 
 		schemaRef := "generic"
 		var sources []string
-		if def, err := defDisc.GetDefinition(name); err == nil {
+		var def *definition.DefinitionInfo
+		if d, err := defDisc.GetDefinition(name); err == nil {
+			def = d
 			schemaRef = def.SchemaRef
 			sources = []string{def.FilePath}
 		}
 
-		inputs = append(inputs, &mubridge.DriftInput{
-			Result:    report,
-			SchemaRef: schemaRef,
-			Sources:   sources,
-		})
+		if def != nil {
+			inputs = append(inputs, buildDriftInput(def, report))
+		} else {
+			inputs = append(inputs, &mubridge.DriftInput{
+				Result:    report,
+				SchemaRef: schemaRef,
+				Sources:   sources,
+			})
+		}
 	}
 
-	return outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg)))
+	if err := outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg))); err != nil {
+		return err
+	}
+
+	// Mark drifted definitions as converging
+	if err := markConverging(cfg, inputs); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to update status: %v\n", err)
+	}
+
+	return nil
+}
+
+// markConverging opens the catalog DB and sets status to "converging" for
+// exported definitions that are not clean.
+func markConverging(cfg *config.Config, inputs []*mubridge.DriftInput) error {
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	for _, input := range inputs {
+		if input.Result.Status != "clean" {
+			if err := db.UpdateStatus(input.Result.Definition, "converging"); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to update status for %s: %v\n", input.Result.Definition, err)
+			}
+		}
+	}
+	return nil
 }
 
 // loadMappings merges user-configured toolchain mappings with defaults.
@@ -142,6 +183,39 @@ func loadMappings(cfg *config.Config) []mubridge.ToolchainMapping {
 	}
 	merged = append(merged, mubridge.DefaultMappings...)
 	return merged
+}
+
+// buildDriftInput creates a DriftInput from a definition and drift report,
+// extracting BRICK-specific fields when the definition is a BRICK target.
+func buildDriftInput(def *definition.DefinitionInfo, report *drift.DriftResult) *mubridge.DriftInput {
+	input := &mubridge.DriftInput{
+		Result:    report,
+		SchemaRef: def.SchemaRef,
+		Sources:   []string{def.FilePath},
+	}
+
+	// If this is a BRICK target, extract toolchain and config from declared state.
+	if isBrickTarget(def.SchemaRef) {
+		if tc, ok := report.DeclaredKeys["toolchain"]; ok {
+			if tcStr, ok := tc.(string); ok {
+				input.BrickToolchain = tcStr
+			}
+		}
+		if configMap, ok := report.DeclaredKeys["config"]; ok {
+			if cm, ok := configMap.(map[string]interface{}); ok {
+				input.BrickConfig = cm
+			}
+		}
+	}
+
+	return input
+}
+
+// isBrickTarget checks if a schema ref is a BRICK target type.
+func isBrickTarget(schemaRef string) bool {
+	return strings.Contains(schemaRef, "brick.#Target") ||
+		strings.Contains(schemaRef, "brick.#Kit") ||
+		strings.Contains(schemaRef, "brick.#Interface")
 }
 
 func outputMuConfig(cfg *mubridge.MuConfig) error {

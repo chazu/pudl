@@ -91,13 +91,25 @@ func ExportMuConfig(results []*DriftInput, mappings []ToolchainMapping) *MuConfi
 			continue // No drift, no target needed.
 		}
 
-		toolchain := resolveToolchain(input.SchemaRef, mappings)
+		// BRICK toolchain takes precedence over prefix heuristic.
+		var toolchain string
+		if input.BrickToolchain != "" {
+			toolchain = input.BrickToolchain
+		} else {
+			toolchain = resolveToolchain(input.SchemaRef, mappings)
+		}
 		toolchainsSeen[toolchain] = true
 
-		// Build target config from declared state.
-		config := make(map[string]any, len(input.Result.DeclaredKeys))
-		for k, v := range input.Result.DeclaredKeys {
-			config[k] = v
+		// Build target config: use BRICK config if available, otherwise declared state.
+		config := make(map[string]any)
+		if input.BrickConfig != nil {
+			for k, v := range input.BrickConfig {
+				config[k] = v
+			}
+		} else {
+			for k, v := range input.Result.DeclaredKeys {
+				config[k] = v
+			}
 		}
 
 		targets = append(targets, Target{
@@ -117,9 +129,11 @@ func ExportMuConfig(results []*DriftInput, mappings []ToolchainMapping) *MuConfi
 
 // DriftInput pairs a drift result with metadata needed for mu config generation.
 type DriftInput struct {
-	Result    *drift.DriftResult
-	SchemaRef string   // e.g. "ec2.#Instance"
-	Sources   []string // source files (e.g. CUE definition files)
+	Result         *drift.DriftResult
+	SchemaRef      string            // e.g. "ec2.#Instance"
+	Sources        []string          // source files (e.g. CUE definition files)
+	BrickToolchain string            // explicit toolchain from BRICK metadata (takes precedence)
+	BrickConfig    map[string]any    // config sub-field from BRICK target (replaces DeclaredKeys)
 }
 
 // --- Legacy types kept for backward compatibility ---

@@ -15,15 +15,17 @@ import (
 
 // CascadeValidator handles cascading schema validation with full CUE module support
 type CascadeValidator struct {
-	ctx        *cue.Context
-	loader     *CUEModuleLoader
-	modules    map[string]*LoadedModule
-	schemas    map[string]cue.Value      // Flattened schema map for quick access
-	metadata   map[string]SchemaMetadata // Flattened metadata map for quick access
-	schemaPath string
+	ctx         *cue.Context
+	loaders     []*CUEModuleLoader
+	modules     map[string]*LoadedModule
+	schemas     map[string]cue.Value      // Flattened schema map for quick access
+	metadata    map[string]SchemaMetadata // Flattened metadata map for quick access
+	schemaPaths []string
 }
 
-// NewCascadeValidator creates a new cascade validator with full CUE module support
+// NewCascadeValidator creates a new cascade validator with full CUE module support.
+// When multiple paths are provided, schemas are loaded in order; the first occurrence
+// of a schema name wins (per-repo shadows global).
 //
 // This implementation uses CUE's official load package to properly handle:
 // - Cross-references between schemas within the same package
@@ -31,42 +33,66 @@ type CascadeValidator struct {
 // - Proper CUE module compilation with all dependencies resolved
 //
 // The loading process:
-// 1. Discovers all package directories in the schema path
+// 1. Discovers all package directories in each schema path
 // 2. Uses CUE's load.Instances to load each package as a unified module
 // 3. Extracts all schema definitions and metadata from loaded modules
 // 4. Validates module integrity including cross-reference consistency
-func NewCascadeValidator(schemaPath string) (*CascadeValidator, error) {
+func NewCascadeValidator(schemaPaths ...string) (*CascadeValidator, error) {
+	if len(schemaPaths) == 0 {
+		return nil, fmt.Errorf("at least one schema path is required")
+	}
+
 	ctx := cuecontext.New()
 
-	// Create the CUE module loader for proper cross-reference handling
-	loader := NewCUEModuleLoader(schemaPath)
+	allSchemas := make(map[string]cue.Value)
+	allMetadata := make(map[string]SchemaMetadata)
+	allModules := make(map[string]*LoadedModule)
+	var allLoaders []*CUEModuleLoader
 
-	// Load all CUE modules with proper cross-reference support
-	// This replaces the previous individual file compilation approach
-	modules, err := loader.LoadAllModules()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load CUE modules: %w", err)
+	for _, sp := range schemaPaths {
+		loader := NewCUEModuleLoader(sp)
+		allLoaders = append(allLoaders, loader)
+
+		modules, err := loader.LoadAllModules()
+		if err != nil {
+			// Skip inaccessible or invalid schema directories
+			continue
+		}
+
+		// Validate module integrity for this path
+		if err := loader.ValidateModuleIntegrity(modules); err != nil {
+			// Skip paths with integrity issues
+			continue
+		}
+
+		schemas := loader.GetAllSchemas(modules)
+		metadata := loader.GetAllMetadata(modules)
+
+		// First-found wins: only add schemas not already seen
+		for name, val := range schemas {
+			if _, exists := allSchemas[name]; !exists {
+				allSchemas[name] = val
+			}
+		}
+		for name, meta := range metadata {
+			if _, exists := allMetadata[name]; !exists {
+				allMetadata[name] = meta
+			}
+		}
+		for name, mod := range modules {
+			if _, exists := allModules[name]; !exists {
+				allModules[name] = mod
+			}
+		}
 	}
-
-	// Validate module integrity (check cross-references, base schema existence, etc.)
-	if err := loader.ValidateModuleIntegrity(modules); err != nil {
-		return nil, fmt.Errorf("module integrity validation failed: %w", err)
-	}
-
-	// Create flattened maps for quick access during validation
-	// This maintains the same interface as before while supporting full module loading
-	schemas := loader.GetAllSchemas(modules)
-	metadata := loader.GetAllMetadata(modules)
-
-
 
 	cv := &CascadeValidator{
-		ctx:        ctx,
-		loader:     loader,
-		modules:    modules,
-		schemas:    schemas,
-		metadata:   metadata,
-		schemaPath: schemaPath,
+		ctx:         ctx,
+		loaders:     allLoaders,
+		modules:     allModules,
+		schemas:     allSchemas,
+		metadata:    allMetadata,
+		schemaPaths: schemaPaths,
 	}
 
 	return cv, nil
@@ -347,24 +373,60 @@ func (cv *CascadeValidator) GetLoadedModules() map[string]*LoadedModule {
 
 // GetModuleInfo returns information about a specific loaded module
 func (cv *CascadeValidator) GetModuleInfo(packageName string) (*LoadedModule, error) {
-	return cv.loader.GetModuleInfo(cv.modules, packageName)
+	// Search through all loaders
+	for _, loader := range cv.loaders {
+		mod, err := loader.GetModuleInfo(cv.modules, packageName)
+		if err == nil {
+			return mod, nil
+		}
+	}
+	return nil, fmt.Errorf("module %s not found", packageName)
 }
 
 // ReloadModules reloads all CUE modules (useful for development/testing)
 func (cv *CascadeValidator) ReloadModules() error {
-	modules, err := cv.loader.LoadAllModules()
-	if err != nil {
-		return fmt.Errorf("failed to reload CUE modules: %w", err)
+	allSchemas := make(map[string]cue.Value)
+	allMetadata := make(map[string]SchemaMetadata)
+	allModules := make(map[string]*LoadedModule)
+	var allLoaders []*CUEModuleLoader
+
+	for _, sp := range cv.schemaPaths {
+		loader := NewCUEModuleLoader(sp)
+		allLoaders = append(allLoaders, loader)
+
+		modules, err := loader.LoadAllModules()
+		if err != nil {
+			continue
+		}
+
+		if err := loader.ValidateModuleIntegrity(modules); err != nil {
+			continue
+		}
+
+		schemas := loader.GetAllSchemas(modules)
+		metadata := loader.GetAllMetadata(modules)
+
+		for name, val := range schemas {
+			if _, exists := allSchemas[name]; !exists {
+				allSchemas[name] = val
+			}
+		}
+		for name, meta := range metadata {
+			if _, exists := allMetadata[name]; !exists {
+				allMetadata[name] = meta
+			}
+		}
+		for name, mod := range modules {
+			if _, exists := allModules[name]; !exists {
+				allModules[name] = mod
+			}
+		}
 	}
 
-	if err := cv.loader.ValidateModuleIntegrity(modules); err != nil {
-		return fmt.Errorf("module integrity validation failed after reload: %w", err)
-	}
-
-	// Update the validator with reloaded modules
-	cv.modules = modules
-	cv.schemas = cv.loader.GetAllSchemas(modules)
-	cv.metadata = cv.loader.GetAllMetadata(modules)
+	cv.loaders = allLoaders
+	cv.modules = allModules
+	cv.schemas = allSchemas
+	cv.metadata = allMetadata
 
 	return nil
 }

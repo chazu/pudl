@@ -48,6 +48,8 @@ type CatalogEntry struct {
 	Method     *string `json:"method,omitempty"`      // Method name (for artifacts)
 	RunID      *string `json:"run_id,omitempty"`      // Unique run identifier
 	Tags       *string `json:"tags,omitempty"`        // JSON-encoded map[string]string
+	// Convergence status tracking
+	Status     *string `json:"status,omitempty"`      // Convergence status (unknown/clean/drifted/converging/converged/failed)
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -187,6 +189,11 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure artifact columns: %w", err)
 	}
 
+	// Run status column migration (idempotent)
+	if err := c.ensureStatusColumn(); err != nil {
+		return fmt.Errorf("failed to ensure status column: %w", err)
+	}
+
 	return nil
 }
 
@@ -208,13 +215,19 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		id, stored_path, metadata_path, import_timestamp, format, origin,
 		schema, confidence, record_count, size_bytes, collection_id, item_index,
 		collection_type, item_id, resource_id, content_hash, identity_json, version,
-		entry_type, definition, method, run_id, tags,
+		entry_type, definition, method, run_id, tags, status,
 		created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	now := time.Now()
 	entry.CreatedAt = now
 	entry.UpdatedAt = now
+
+	// Default status to "unknown" if not set
+	if entry.Status == nil {
+		defaultStatus := "unknown"
+		entry.Status = &defaultStatus
+	}
 
 	_, err := c.db.Exec(insertSQL,
 		entry.ID, entry.StoredPath, entry.MetadataPath, entry.ImportTimestamp,
@@ -222,7 +235,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
 		entry.CollectionType, entry.ItemID, entry.ResourceID, entry.ContentHash,
 		entry.IdentityJSON, entry.Version, entry.EntryType, entry.Definition,
-		entry.Method, entry.RunID, entry.Tags, entry.CreatedAt, entry.UpdatedAt)
+		entry.Method, entry.RunID, entry.Tags, entry.Status, entry.CreatedAt, entry.UpdatedAt)
 
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
@@ -247,7 +260,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id = ?`
@@ -259,7 +272,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
@@ -288,7 +301,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id LIKE ?
@@ -309,7 +322,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
 		}
@@ -414,7 +427,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	%s
@@ -444,7 +457,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan catalog entry", err)
 		}
@@ -531,7 +544,7 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE collection_id = ? AND collection_type = 'item'
@@ -552,7 +565,7 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan collection item", err)
 		}
@@ -572,7 +585,7 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id = ? AND collection_type = 'collection'`
@@ -584,7 +597,7 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Collection not found: %s", collectionID), nil)

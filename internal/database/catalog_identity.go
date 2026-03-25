@@ -13,7 +13,7 @@ func (c *CatalogDB) FindByContentHash(contentHash string) (*CatalogEntry, error)
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE content_hash = ?
@@ -26,7 +26,7 @@ func (c *CatalogDB) FindByContentHash(contentHash string) (*CatalogEntry, error)
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -44,7 +44,7 @@ func (c *CatalogDB) FindByResourceID(resourceID string) ([]CatalogEntry, error) 
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags,
+		   entry_type, definition, method, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE resource_id = ?
@@ -65,7 +65,7 @@ func (c *CatalogDB) FindByResourceID(resourceID string) ([]CatalogEntry, error) 
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
 		}
