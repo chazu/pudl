@@ -36,14 +36,28 @@ type ToolchainMapping struct {
 
 // DefaultMappings provides reasonable defaults for common resource types.
 var DefaultMappings = []ToolchainMapping{
+	// AWS
 	{Prefix: "ec2", Toolchain: "aws"},
 	{Prefix: "s3", Toolchain: "aws"},
 	{Prefix: "iam", Toolchain: "aws"},
 	{Prefix: "aws", Toolchain: "aws"},
+	// Kubernetes
 	{Prefix: "k8s", Toolchain: "k8s"},
 	{Prefix: "kubernetes", Toolchain: "k8s"},
+	// Files
 	{Prefix: "file", Toolchain: "file"},
 	{Prefix: "config", Toolchain: "file"},
+	// Terraform
+	{Prefix: "terraform", Toolchain: "terraform"},
+	{Prefix: "tf", Toolchain: "terraform"},
+	// Docker
+	{Prefix: "docker", Toolchain: "docker"},
+	{Prefix: "container", Toolchain: "docker"},
+	// Shell
+	{Prefix: "shell", Toolchain: "shell"},
+	{Prefix: "exec", Toolchain: "shell"},
+	// Zig
+	{Prefix: "zig", Toolchain: "zig"},
 }
 
 // resolveToolchain maps a schema reference to a mu toolchain name.
