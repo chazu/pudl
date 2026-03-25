@@ -11,11 +11,18 @@ import (
 	"pudl/internal/errors"
 )
 
+// ToolchainMapping maps a pudl schema prefix to a mu toolchain name.
+type ToolchainMapping struct {
+	Prefix    string `yaml:"prefix"`
+	Toolchain string `yaml:"toolchain"`
+}
+
 type Config struct {
-	SchemaPath   string `yaml:"schema_path"`
-	DataPath     string `yaml:"data_path"`
-	Version      string `yaml:"version"`
-	VaultBackend string `yaml:"vault_backend,omitempty"`
+	SchemaPath         string             `yaml:"schema_path"`
+	DataPath           string             `yaml:"data_path"`
+	Version            string             `yaml:"version"`
+	VaultBackend       string             `yaml:"vault_backend,omitempty"`
+	ToolchainMappings  []ToolchainMapping `yaml:"toolchain_mappings,omitempty"`
 }
 
 func DefaultConfig() *Config {

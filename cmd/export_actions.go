@@ -79,7 +79,7 @@ func runExportOne(name string) error {
 		},
 	}
 
-	return outputMuConfig(mubridge.ExportMuConfig(inputs, nil))
+	return outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg)))
 }
 
 func runExportAll() error {
@@ -123,7 +123,25 @@ func runExportAll() error {
 		})
 	}
 
-	return outputMuConfig(mubridge.ExportMuConfig(inputs, nil))
+	return outputMuConfig(mubridge.ExportMuConfig(inputs, loadMappings(cfg)))
+}
+
+// loadMappings merges user-configured toolchain mappings with defaults.
+// User mappings take precedence (checked first).
+func loadMappings(cfg *config.Config) []mubridge.ToolchainMapping {
+	if len(cfg.ToolchainMappings) == 0 {
+		return nil // nil triggers DefaultMappings in ExportMuConfig
+	}
+	// User mappings first (higher priority), then defaults.
+	var merged []mubridge.ToolchainMapping
+	for _, m := range cfg.ToolchainMappings {
+		merged = append(merged, mubridge.ToolchainMapping{
+			Prefix:    m.Prefix,
+			Toolchain: m.Toolchain,
+		})
+	}
+	merged = append(merged, mubridge.DefaultMappings...)
+	return merged
 }
 
 func outputMuConfig(cfg *mubridge.MuConfig) error {
