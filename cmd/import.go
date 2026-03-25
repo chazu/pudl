@@ -178,10 +178,16 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		streamingConfig.MaxChunkSize = chunkBytes * 4 // 400% of avg
 	}
 
+	// Auto-set origin from workspace when inside one and not explicitly overridden
+	effectiveImportOrigin := importOrigin
+	if effectiveImportOrigin == "" && wsCtx != nil && wsCtx.Workspace != nil {
+		effectiveImportOrigin = wsCtx.EffectiveOrigin
+	}
+
 	// Set up import options
 	opts := importer.ImportOptions{
 		SourcePath:       absPath,
-		Origin:           importOrigin, // Will be auto-detected if empty
+		Origin:           effectiveImportOrigin, // Will be auto-detected if empty
 		ManualSchema:     importSchema,
 		CascadeValidator: cascadeValidator,
 		UseStreaming:     true, // Always use streaming for optimal performance
@@ -378,6 +384,12 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	totalRecords := 0
 	totalSize := int64(0)
 
+	// Auto-set origin from workspace when inside one and not explicitly overridden
+	batchEffectiveOrigin := importOrigin
+	if batchEffectiveOrigin == "" && wsCtx != nil && wsCtx.Workspace != nil {
+		batchEffectiveOrigin = wsCtx.EffectiveOrigin
+	}
+
 	// Import each file
 	for i, filePath := range filePaths {
 		fmt.Printf("📁 [%d/%d] Importing: %s\n", i+1, len(filePaths), filepath.Base(filePath))
@@ -385,7 +397,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 		// Set up import options for this file
 		opts := importer.ImportOptions{
 			SourcePath:       filePath,
-			Origin:           importOrigin, // Will be auto-detected if empty
+			Origin:           batchEffectiveOrigin, // Will be auto-detected if empty
 			ManualSchema:     importSchema,
 			CascadeValidator: cascadeValidator,
 			UseStreaming:     true, // Always use streaming for optimal performance

@@ -10,13 +10,28 @@ import (
 
 // Manager handles schema file operations and organization
 type Manager struct {
-	schemaPath string
+	schemaPath  string   // primary schema path
+	schemaPaths []string // all schema paths in priority order
 }
 
-// NewManager creates a new schema manager
+// NewManager creates a new schema manager with a single schema path.
 func NewManager(schemaPath string) *Manager {
 	return &Manager{
-		schemaPath: schemaPath,
+		schemaPath:  schemaPath,
+		schemaPaths: []string{schemaPath},
+	}
+}
+
+// NewManagerWithPaths creates a new schema manager with multiple schema search paths.
+// Earlier paths take priority (per-repo shadows global).
+func NewManagerWithPaths(schemaPaths ...string) *Manager {
+	primary := ""
+	if len(schemaPaths) > 0 {
+		primary = schemaPaths[0]
+	}
+	return &Manager{
+		schemaPath:  primary,
+		schemaPaths: schemaPaths,
 	}
 }
 
@@ -109,6 +124,45 @@ func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
 	}
 
 	return schemas, nil
+}
+
+// ListAllSchemas returns schemas from all configured schema paths.
+// Earlier paths take priority: if the same FullName appears in multiple paths,
+// only the version from the first path is kept (per-repo shadows global).
+func (m *Manager) ListAllSchemas() (map[string][]SchemaInfo, error) {
+	if len(m.schemaPaths) <= 1 {
+		return m.ListSchemas()
+	}
+
+	result := make(map[string][]SchemaInfo)
+	seen := make(map[string]bool) // track FullName to implement shadowing
+
+	for _, sp := range m.schemaPaths {
+		tempMgr := &Manager{schemaPath: sp, schemaPaths: []string{sp}}
+		schemas, err := tempMgr.ListSchemas()
+		if err != nil {
+			// Skip inaccessible directories
+			continue
+		}
+
+		for pkg, infos := range schemas {
+			for _, info := range infos {
+				if !seen[info.FullName] {
+					seen[info.FullName] = true
+					result[pkg] = append(result[pkg], info)
+				}
+			}
+		}
+	}
+
+	// Sort schemas within each package
+	for pkg := range result {
+		sort.Slice(result[pkg], func(i, j int) bool {
+			return result[pkg][i].Name < result[pkg][j].Name
+		})
+	}
+
+	return result, nil
 }
 
 // AddSchema adds a new schema file to the appropriate package directory

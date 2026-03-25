@@ -10,12 +10,13 @@ import (
 // ValidationService handles CUE validation for data validation workflows
 type ValidationService struct {
 	cascadeValidator *CascadeValidator
-	schemaPath       string
+	schemaPaths      []string
 }
 
-// NewValidationService creates a new validation service
-func NewValidationService(schemaPath string) (*ValidationService, error) {
-	cascadeValidator, err := NewCascadeValidator(schemaPath)
+// NewValidationService creates a new validation service.
+// Accepts one or more schema paths; earlier paths take priority for shadowing.
+func NewValidationService(schemaPaths ...string) (*ValidationService, error) {
+	cascadeValidator, err := NewCascadeValidator(schemaPaths...)
 	if err != nil {
 		return nil, errors.WrapError(
 			errors.ErrCodeValidationFailed,
@@ -26,7 +27,7 @@ func NewValidationService(schemaPath string) (*ValidationService, error) {
 
 	return &ValidationService{
 		cascadeValidator: cascadeValidator,
-		schemaPath:       schemaPath,
+		schemaPaths:      schemaPaths,
 	}, nil
 }
 

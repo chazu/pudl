@@ -96,6 +96,24 @@ func (c *CatalogDB) ensureArtifactColumns() error {
 	return nil
 }
 
+// ensureStatusColumn adds the convergence status column if missing.
+// Idempotent — safe to run on every DB open.
+func (c *CatalogDB) ensureStatusColumn() error {
+	var count int
+	err := c.db.QueryRow(
+		"SELECT COUNT(*) FROM pragma_table_info('catalog_entries') WHERE name='status'",
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil // Already exists
+	}
+
+	_, err = c.db.Exec("ALTER TABLE catalog_entries ADD COLUMN status TEXT DEFAULT 'unknown'")
+	return err
+}
+
 // columnExists checks if a column exists using PRAGMA table_info.
 func (c *CatalogDB) columnExists(table, column string) (bool, error) {
 	rows, err := c.db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))

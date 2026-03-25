@@ -218,3 +218,132 @@ func TestExtractReferencedDef(t *testing.T) {
 	assert.Equal(t, "foo", extractReferencedDef("foo.schema.bar"))
 	assert.Equal(t, "", extractReferencedDef("noDot"))
 }
+
+// --- Multi-path discovery tests ---
+
+// setupMultiPathDirs creates two schema dirs: "per-repo" and "global" with definitions.
+func setupMultiPathDirs(t *testing.T, perRepoDefs map[string]string, globalDefs map[string]string) (perRepo string, global string) {
+	t.Helper()
+
+	perRepo = t.TempDir()
+	global = t.TempDir()
+
+	if perRepoDefs != nil {
+		defsDir := filepath.Join(perRepo, "definitions")
+		require.NoError(t, os.MkdirAll(defsDir, 0755))
+		for name, content := range perRepoDefs {
+			require.NoError(t, os.WriteFile(filepath.Join(defsDir, name), []byte(content), 0644))
+		}
+	}
+
+	if globalDefs != nil {
+		defsDir := filepath.Join(global, "definitions")
+		require.NoError(t, os.MkdirAll(defsDir, 0755))
+		for name, content := range globalDefs {
+			require.NoError(t, os.WriteFile(filepath.Join(defsDir, name), []byte(content), 0644))
+		}
+	}
+
+	return perRepo, global
+}
+
+func TestMultiDiscoverer_PerRepoFirst(t *testing.T) {
+	// Both dirs define "app_server" — per-repo version should win.
+	perRepoDef := `package definitions
+
+app_server: local.#AppServer & {
+	port: 8080
+}
+`
+	globalDef := `package definitions
+
+app_server: global.#AppServer & {
+	port: 9090
+}
+`
+	perRepo, global := setupMultiPathDirs(t,
+		map[string]string{"app.cue": perRepoDef},
+		map[string]string{"app.cue": globalDef},
+	)
+
+	disc := NewMultiDiscoverer([]string{perRepo, global})
+	defs, err := disc.ListDefinitions()
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Equal(t, "app_server", defs[0].Name)
+	assert.Equal(t, "local.#AppServer", defs[0].SchemaRef, "per-repo definition should shadow global")
+}
+
+func TestMultiDiscoverer_MergesBoth(t *testing.T) {
+	// Per-repo has app_server, global has database — both should appear.
+	perRepoDef := `package definitions
+
+app_server: examples.#AppServer & {
+	port: 8080
+}
+`
+	globalDef := `package definitions
+
+database: examples.#Database & {
+	engine: "postgres"
+}
+`
+	perRepo, global := setupMultiPathDirs(t,
+		map[string]string{"app.cue": perRepoDef},
+		map[string]string{"db.cue": globalDef},
+	)
+
+	disc := NewMultiDiscoverer([]string{perRepo, global})
+	defs, err := disc.ListDefinitions()
+	require.NoError(t, err)
+	require.Len(t, defs, 2)
+
+	names := make(map[string]bool)
+	for _, d := range defs {
+		names[d.Name] = true
+	}
+	assert.True(t, names["app_server"], "missing app_server from per-repo")
+	assert.True(t, names["database"], "missing database from global")
+}
+
+func TestMultiDiscoverer_EmptyPerRepo(t *testing.T) {
+	// Per-repo definitions dir is empty, global has definitions.
+	globalDef := `package definitions
+
+database: examples.#Database & {
+	engine: "postgres"
+}
+`
+	perRepo, global := setupMultiPathDirs(t,
+		map[string]string{}, // empty per-repo
+		map[string]string{"db.cue": globalDef},
+	)
+
+	disc := NewMultiDiscoverer([]string{perRepo, global})
+	defs, err := disc.ListDefinitions()
+	require.NoError(t, err)
+	require.Len(t, defs, 1)
+	assert.Equal(t, "database", defs[0].Name)
+}
+
+func TestMultiDiscoverer_NoDirs(t *testing.T) {
+	// All paths point to non-existent directories.
+	disc := NewMultiDiscoverer([]string{"/tmp/nonexistent-path-1", "/tmp/nonexistent-path-2"})
+	defs, err := disc.ListDefinitions()
+	require.NoError(t, err)
+	assert.Empty(t, defs)
+}
+
+func TestNewDiscoverer_BackwardCompat(t *testing.T) {
+	// Single-path NewDiscoverer should work identically to before.
+	schemaDir := setupTestDefinitionsDir(t)
+	disc := NewDiscoverer(schemaDir)
+
+	defs, err := disc.ListDefinitions()
+	require.NoError(t, err)
+	assert.Len(t, defs, 2)
+
+	def, err := disc.GetDefinition("prod_instance")
+	require.NoError(t, err)
+	assert.Equal(t, "examples.#EC2Instance", def.SchemaRef)
+}

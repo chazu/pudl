@@ -23,7 +23,8 @@ import (
 // Importer handles data import operations
 type Importer struct {
 	dataPath     string
-	schemaPath   string
+	schemaPath   string   // primary schema path (first in schemaPaths)
+	schemaPaths  []string // all schema paths in priority order
 	catalogDB    *database.CatalogDB
 	inferrer     *inference.SchemaInferrer
 	typeRegistry *typepattern.Registry
@@ -62,10 +63,29 @@ type ImportResult struct {
 	IsNewVersion     bool                        `json:"is_new_version,omitempty"`
 }
 
-// New creates a new Importer instance
+// New creates a new Importer instance.
+// The schemaPath parameter is the primary schema path. For multi-path support,
+// use NewWithSchemaPaths.
 func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
-	// Validate schema path is provided
-	if schemaPath == "" {
+	return NewWithSchemaPaths(dataPath, pudlHome, schemaPath)
+}
+
+// NewWithSchemaPaths creates a new Importer with multiple schema search paths.
+// Paths are searched in order; earlier paths take priority (per-repo shadows global).
+func NewWithSchemaPaths(dataPath, pudlHome string, schemaPaths ...string) (*Importer, error) {
+	if len(schemaPaths) == 0 {
+		return nil, fmt.Errorf("at least one schema path is required")
+	}
+
+	// Use the first non-empty path as the primary schema path
+	primarySchemaPath := ""
+	for _, sp := range schemaPaths {
+		if sp != "" {
+			primarySchemaPath = sp
+			break
+		}
+	}
+	if primarySchemaPath == "" {
 		return nil, fmt.Errorf("schema path is required")
 	}
 
@@ -79,13 +99,14 @@ func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 	typeRegistry := typepattern.NewRegistry()
 	typepattern.RegisterKubernetesPatterns(typeRegistry)
 
-	// Initialize schema generator
-	schemaGen := schemagen.NewGenerator(schemaPath)
+	// Initialize schema generator (uses primary path for writing)
+	schemaGen := schemagen.NewGenerator(primarySchemaPath)
 
 	// Create importer first (without inferrer)
 	imp := &Importer{
 		dataPath:     dataPath,
-		schemaPath:   schemaPath,
+		schemaPath:   primarySchemaPath,
+		schemaPaths:  schemaPaths,
 		catalogDB:    catalogDB,
 		typeRegistry: typeRegistry,
 		schemaGen:    schemaGen,
@@ -96,8 +117,8 @@ func New(dataPath, schemaPath, pudlHome string) (*Importer, error) {
 		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
 	}
 
-	// Initialize schema inferrer (now schemas should exist)
-	inferrer, err := inference.NewSchemaInferrer(schemaPath)
+	// Initialize schema inferrer with all paths
+	inferrer, err := inference.NewSchemaInferrer(schemaPaths...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}

@@ -14,14 +14,14 @@ import (
 // SchemaInferrer determines the best matching schema for data by attempting
 // CUE unification against schemas from the schema repository.
 type SchemaInferrer struct {
-	mu        sync.RWMutex
-	loader    *validator.CUEModuleLoader
-	modules   map[string]*validator.LoadedModule
-	schemas   map[string]cue.Value
-	metadata  map[string]validator.SchemaMetadata
-	graph     *InheritanceGraph
-	ctx       *cue.Context
-	schemaPath string
+	mu          sync.RWMutex
+	loaders     []*validator.CUEModuleLoader
+	modules     map[string]*validator.LoadedModule
+	schemas     map[string]cue.Value
+	metadata    map[string]validator.SchemaMetadata
+	graph       *InheritanceGraph
+	ctx         *cue.Context
+	schemaPaths []string
 }
 
 // InferenceResult represents the result of schema inference.
@@ -33,27 +33,72 @@ type InferenceResult struct {
 	Reason      string   // Why this schema was selected
 }
 
-// NewSchemaInferrer creates a new schema inferrer that loads schemas from the given path.
-func NewSchemaInferrer(schemaPath string) (*SchemaInferrer, error) {
-	loader := validator.NewCUEModuleLoader(schemaPath)
-
-	modules, err := loader.LoadAllModules()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load CUE modules: %w", err)
+// NewSchemaInferrer creates a new schema inferrer that loads schemas from the given path(s).
+// When multiple paths are provided, schemas are loaded in order; the first occurrence
+// of a schema name wins (per-repo shadows global).
+func NewSchemaInferrer(schemaPaths ...string) (*SchemaInferrer, error) {
+	if len(schemaPaths) == 0 {
+		return nil, fmt.Errorf("at least one schema path is required")
 	}
 
-	schemas := loader.GetAllSchemas(modules)
-	metadata := loader.GetAllMetadata(modules)
+	schemas, metadata, loaders, modules, err := loadSchemasFromPaths(schemaPaths)
+	if err != nil {
+		return nil, err
+	}
+
 	graph := BuildInheritanceGraph(metadata)
 
 	return &SchemaInferrer{
-		loader:     loader,
-		modules:    modules,
-		schemas:    schemas,
-		metadata:   metadata,
-		graph:      graph,
-		schemaPath: schemaPath,
+		loaders:     loaders,
+		modules:     modules,
+		schemas:     schemas,
+		metadata:    metadata,
+		graph:       graph,
+		schemaPaths: schemaPaths,
 	}, nil
+}
+
+// loadSchemasFromPaths loads schemas from multiple paths with first-found-wins shadowing.
+// Earlier paths take priority: if the same schema name appears in multiple paths,
+// only the version from the first path is kept.
+func loadSchemasFromPaths(schemaPaths []string) (map[string]cue.Value, map[string]validator.SchemaMetadata, []*validator.CUEModuleLoader, map[string]*validator.LoadedModule, error) {
+	allSchemas := make(map[string]cue.Value)
+	allMetadata := make(map[string]validator.SchemaMetadata)
+	allModules := make(map[string]*validator.LoadedModule)
+	var allLoaders []*validator.CUEModuleLoader
+
+	for _, sp := range schemaPaths {
+		loader := validator.NewCUEModuleLoader(sp)
+		allLoaders = append(allLoaders, loader)
+
+		modules, err := loader.LoadAllModules()
+		if err != nil {
+			// Skip inaccessible or invalid schema directories
+			continue
+		}
+
+		schemas := loader.GetAllSchemas(modules)
+		metadata := loader.GetAllMetadata(modules)
+
+		// First-found wins: only add schemas not already seen
+		for name, val := range schemas {
+			if _, exists := allSchemas[name]; !exists {
+				allSchemas[name] = val
+			}
+		}
+		for name, meta := range metadata {
+			if _, exists := allMetadata[name]; !exists {
+				allMetadata[name] = meta
+			}
+		}
+		for name, mod := range modules {
+			if _, exists := allModules[name]; !exists {
+				allModules[name] = mod
+			}
+		}
+	}
+
+	return allSchemas, allMetadata, allLoaders, allModules, nil
 }
 
 // Infer determines the best matching schema for the given data.
@@ -179,14 +224,15 @@ func (si *SchemaInferrer) Reload() error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	modules, err := si.loader.LoadAllModules()
+	schemas, metadata, loaders, modules, err := loadSchemasFromPaths(si.schemaPaths)
 	if err != nil {
 		return fmt.Errorf("failed to reload CUE modules: %w", err)
 	}
 
+	si.loaders = loaders
 	si.modules = modules
-	si.schemas = si.loader.GetAllSchemas(modules)
-	si.metadata = si.loader.GetAllMetadata(modules)
+	si.schemas = schemas
+	si.metadata = metadata
 	si.graph = BuildInheritanceGraph(si.metadata)
 
 	return nil

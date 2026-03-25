@@ -8,6 +8,7 @@ import (
 
 	pudlInit "pudl/internal/init"
 	"pudl/internal/ui"
+	"pudl/internal/workspace"
 )
 
 var (
@@ -18,6 +19,9 @@ var (
 
 	// Global output flags
 	jsonOutput bool
+
+	// Workspace context (nil when not in a workspace)
+	wsCtx *workspace.Context
 )
 
 // GetOutputWriter returns an OutputWriter based on global flags
@@ -46,9 +50,15 @@ Key features:
 - Version-controlled schema repository with git integration
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
 - Schema generation from imported data`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// Discover workspace (may be nil for global mode)
+		var err error
+		wsCtx, err = workspace.NewContext()
+		if err != nil {
+			return fmt.Errorf("workspace discovery: %w", err)
+		}
+		return nil
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
