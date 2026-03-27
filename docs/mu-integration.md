@@ -150,6 +150,99 @@ pudl infers the mu toolchain from the CUE schema reference:
 
 Custom mappings can be provided to `ExportMuConfig()` in the Go API.
 
+## BRICK Interface Enforcement
+
+pudl validates that BRICK components satisfy the contracts defined by their
+interfaces. This runs automatically as part of `pudl definition validate`.
+
+### Defining an Interface
+
+An interface declares a contract — the fields any implementing component must have:
+
+```cue
+package definitions
+
+import "pudl.schemas/pudl/brick"
+
+lint_interface: brick.#Interface & {
+    name: "//interface/lint"
+    kind: "interface"
+    desc: "Contract for code linting targets"
+    contract: {
+        toolchain: "lint"
+        config: {
+            command: [...string]
+        }
+    }
+}
+```
+
+### Implementing an Interface
+
+Components declare which interface they implement via the `implements` field:
+
+```cue
+lint_go_vet: brick.#Target & {
+    name:       "//lint/go-vet"
+    kind:       "component"
+    toolchain:  "lint"
+    implements: "//interface/lint"
+    config: {
+        command: ["go", "vet", "./..."]
+    }
+}
+```
+
+### Validation
+
+`pudl definition validate` checks two things:
+
+1. **Schema validation** — each definition conforms to its CUE schema
+   (e.g., `brick.#Target` fields are correct)
+2. **Interface enforcement** — each component's fields unify with its
+   interface's contract via CUE unification
+
+```bash
+$ pudl definition validate
+  PASS  lint_go_vet
+  PASS  lint_gofmt
+  PASS  lint_interface
+
+Results: 3 passed, 0 failed, 3 total
+
+Interface enforcement: 1 interfaces, 2 components
+  All components satisfy their interfaces.
+```
+
+When a component violates its interface:
+
+```
+  FAIL  //lint/bad (implements //interface/lint)
+        field "toolchain": conflicting values "lint" and "wrong"
+```
+
+### How It Works
+
+The interface checker:
+
+1. Loads all definitions as CUE values
+2. Identifies interfaces (`kind: "interface"` with a `contract` field)
+3. Identifies components (targets with an `implements` field)
+4. For each component, unifies it with its interface's contract
+5. CUE unification naturally catches mismatches — conflicting values,
+   missing required fields, and type errors
+
+Components referencing non-existent interfaces produce warnings (orphans).
+
+### The Split
+
+- **pudl enforces** that components satisfy interface contracts (pre-deploy)
+- **mu carries** `kind` and `implements` through build manifests (metadata)
+- **mu does not enforce** contracts — it executes targets regardless of BRICK classification
+
+This keeps mu simple (execute everything, ask no questions) while pudl
+provides the safety net (validate before exporting to mu).
+
 ## Design Principles
 
 **pudl doesn't execute.** It observes, models, and reports. Execution is mu's job.
