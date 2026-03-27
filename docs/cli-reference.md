@@ -347,11 +347,23 @@ pudl def show prod_instance
 
 ### `pudl definition validate [name]`
 
-Validate definitions against their schemas.
+Validate definitions against their schemas and enforce BRICK interface contracts.
+
+When run without arguments, validates all definitions in two passes:
+
+1. **Schema validation** — each definition conforms to its declared CUE schema
+2. **Interface enforcement** — components with `implements` satisfy their interface's `contract` via CUE unification
 
 ```bash
-pudl definition validate              # Validate all
+pudl definition validate              # Validate all + check interfaces
 pudl definition validate prod_instance  # Validate one
+```
+
+Interface violations show which fields conflict:
+
+```
+  FAIL  //lint/bad (implements //interface/lint)
+        field "toolchain": conflicting values "lint" and "wrong"
 ```
 
 ### `pudl definition graph`
