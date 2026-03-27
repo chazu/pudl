@@ -24,8 +24,8 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":{"replicas":3}}
-{"target":"//my_db","state":{"engine":"postgres","version":"15"}}
+	input := `{"target":"//my_app","state":"converged"}
+{"target":"//my_db","state":"drifted","diff":"replicas: 3 -> 2"}
 `
 	reader := strings.NewReader(input)
 
@@ -78,7 +78,7 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":{"replicas":3}}`
+	input := `{"target":"//my_app","state":"converged"}`
 
 	// Ingest first time
 	count1, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
@@ -118,9 +118,9 @@ func TestIngestObserveResults_InvalidJSON(t *testing.T) {
 
 	// Mix of valid and invalid lines
 	input := `not valid json
-{"target":"//my_app","state":{"replicas":3}}
+{"target":"//my_app","state":"converged"}
 also not valid
-{"target":"//my_db","state":{"engine":"postgres"}}
+{"target":"//my_db","state":"drifted","diff":"engine changed"}
 `
 	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
@@ -153,7 +153,7 @@ func TestIngestObserveResults_TargetWithoutPrefix(t *testing.T) {
 	defer db.Close()
 
 	// Target without "//" prefix should also work
-	input := `{"target":"my_app","state":{"replicas":3}}`
+	input := `{"target":"my_app","state":"converged"}`
 	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -178,7 +178,7 @@ func TestIngestObserveResults_CustomOrigin(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":{"replicas":3}}`
+	input := `{"target":"//my_app","state":"drifted","diff":"something changed"}`
 	count, err := IngestObserveResults(db, strings.NewReader(input), "custom-origin", dataDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
