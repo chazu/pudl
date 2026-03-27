@@ -60,8 +60,8 @@ func runDefinitionValidateAll() error {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
-	validator := definition.NewValidator(cfg.SchemaPath)
-	results, err := validator.ValidateAll()
+	v := definition.NewValidator(cfg.SchemaPath)
+	results, err := v.ValidateAll()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to validate definitions", err)
 	}
@@ -84,6 +84,29 @@ func runDefinitionValidateAll() error {
 	}
 
 	fmt.Printf("\nResults: %d passed, %d failed, %d total\n", passCount, failCount, len(results))
+
+	// Interface enforcement: check that components satisfy their interfaces.
+	ifaceResult, ifaceErr := v.CheckInterfaces()
+	if ifaceErr != nil {
+		fmt.Printf("\nInterface check error: %v\n", ifaceErr)
+	} else if ifaceResult != nil && (ifaceResult.Components > 0 || ifaceResult.Interfaces > 0) {
+		fmt.Printf("\nInterface enforcement: %d interfaces, %d components\n",
+			ifaceResult.Interfaces, ifaceResult.Components)
+
+		for _, violation := range ifaceResult.Violations {
+			fmt.Printf("  FAIL  %s (implements %s)\n", violation.ComponentName, violation.InterfaceName)
+			for _, e := range violation.Errors {
+				fmt.Printf("        %s\n", e)
+			}
+			failCount++
+		}
+		for _, orphan := range ifaceResult.Orphans {
+			fmt.Printf("  WARN  %s\n", orphan)
+		}
+		if len(ifaceResult.Violations) == 0 && len(ifaceResult.Orphans) == 0 {
+			fmt.Println("  All components satisfy their interfaces.")
+		}
+	}
 
 	if failCount > 0 {
 		return errors.NewValidationError("definitions", nil, fmt.Errorf("%d definitions failed validation", failCount))
