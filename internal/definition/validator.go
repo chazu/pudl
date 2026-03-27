@@ -81,3 +81,9 @@ func (v *Validator) ValidateAll() ([]ValidationResult, error) {
 
 	return results, nil
 }
+
+// CheckInterfaces validates that BRICK components satisfy their declared interfaces.
+func (v *Validator) CheckInterfaces() (*InterfaceCheckResult, error) {
+	checker := NewInterfaceChecker(v.schemaPath)
+	return checker.Check()
+}
