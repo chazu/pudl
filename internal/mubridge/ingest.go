@@ -16,10 +16,11 @@ import (
 )
 
 // ObserveInput represents a single observe result from mu.
+// mu outputs: {"target": "//foo", "state": "converged", "diff": "..."}
 type ObserveInput struct {
-	Target string                 `json:"target"`
-	State  map[string]interface{} `json:"state"`
-	Diff   map[string]interface{} `json:"diff,omitempty"`
+	Target string `json:"target"`
+	State  string `json:"state"`          // "converged", "drifted", or "unknown"
+	Diff   string `json:"diff,omitempty"` // human-readable diff when drifted
 }
 
 // IngestObserveResults processes mu observe output and stores results in the catalog.
@@ -58,15 +59,13 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 		defName := obs.Target
 		defName = strings.TrimPrefix(defName, "//")
 
-		// Serialize state to JSON for hashing and storage
-		stateJSON, err := json.Marshal(obs.State)
+		// Compute content hash from the full observe result (target + state + diff).
+		observeJSON, err := json.Marshal(obs)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: skipping line %d: failed to marshal state: %v\n", lineNum, err)
+			fmt.Fprintf(os.Stderr, "Warning: skipping line %d: failed to marshal observe result: %v\n", lineNum, err)
 			continue
 		}
-
-		// Compute content hash from state JSON
-		hash := sha256.Sum256(stateJSON)
+		hash := sha256.Sum256(observeJSON)
 		contentHash := fmt.Sprintf("%x", hash)
 
 		// Check for dedup: if content hash matches latest observe entry for this definition, skip
@@ -85,15 +84,11 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 			return ingested, fmt.Errorf("failed to create raw directory: %w", err)
 		}
 
-		// Write full observe result (not just state) to raw storage
-		fullJSON, err := json.Marshal(obs)
-		if err != nil {
-			return ingested, fmt.Errorf("failed to marshal observe result: %w", err)
-		}
-
-		filename := fmt.Sprintf("%s_observe_%s.json", now.Format("20060102_150405"), defName)
+		// Sanitize definition name for use in filename (replace / with --)
+		safeName := strings.ReplaceAll(defName, "/", "--")
+		filename := fmt.Sprintf("%s_observe_%s.json", now.Format("20060102_150405"), safeName)
 		storedPath := filepath.Join(rawDir, filename)
-		if err := os.WriteFile(storedPath, fullJSON, 0644); err != nil {
+		if err := os.WriteFile(storedPath, observeJSON, 0644); err != nil {
 			return ingested, fmt.Errorf("failed to write observe result: %w", err)
 		}
 
@@ -114,7 +109,7 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 			Schema:         schema,
 			Confidence:     1.0,
 			RecordCount:    1,
-			SizeBytes:      int64(len(fullJSON)),
+			SizeBytes:      int64(len(observeJSON)),
 			EntryType:      &entryType,
 			Definition:     &defName,
 			ResourceID:     &resourceID,
