@@ -8,13 +8,14 @@ package mu
 		schema_type:     "base"
 		resource_type:   "mu.manifest"
 		identity_fields: ["timestamp"]
-		tracked_fields:  ["summary", "actions"]
+		tracked_fields:  ["summary", "actions", "targets"]
 	}
 
 	version:    int & >=1
 	type:       "mu.build.manifest/v1"
 	timestamp:  string // ISO 8601
 	duration_s: number & >=0
+	targets: [...#ManifestTarget]
 	actions: [...#ManifestAction]
 	summary: {
 		completed: int & >=0
@@ -22,6 +23,15 @@ package mu
 		failed:    int & >=0
 		cancelled: int & >=0
 	}
+}
+
+// ManifestTarget describes a target that was part of the build.
+// Carries BRICK classification metadata for round-tripping through pudl.
+#ManifestTarget: {
+	name:        string
+	toolchain:   string
+	kind?:       string // BRICK kind (set by pudl export-actions)
+	implements?: string // BRICK interface (set by pudl export-actions)
 }
 
 // ManifestAction records the outcome of a single action in a build.
