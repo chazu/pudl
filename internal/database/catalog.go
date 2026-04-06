@@ -194,6 +194,11 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure status column: %w", err)
 	}
 
+	// Create facts table (idempotent)
+	if err := c.ensureFactsTable(); err != nil {
+		return fmt.Errorf("failed to ensure facts table: %w", err)
+	}
+
 	return nil
 }
 

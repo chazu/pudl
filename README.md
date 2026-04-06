@@ -47,6 +47,7 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **Collections**: NDJSON files and JSON API wrappers are automatically split into individual items with parent references
 - **Definitions**: Named configurations validated against CUE schemas, with socket-based wiring between them
 - **Drift detection**: Compare declared definition state against imported data using deep diff
+- **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
 - **mu bridge**: Export drift reports as action specs for the [mu](https://github.com/...) build tool
 
 See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas.
@@ -88,6 +89,15 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl drift check` | Compare declared vs live state |
 | `pudl drift report` | Show last drift report |
 | `pudl export-actions` | Bridge drift reports to mu action specs |
+
+### Observations and Facts
+
+| Command | Description |
+|---------|-------------|
+| `pudl observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
+| `pudl facts list` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
+
+See [docs/facts.md](docs/facts.md) for the bitemporal fact store documentation.
 
 ### Workspace Operations
 
