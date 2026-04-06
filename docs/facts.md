@@ -1,6 +1,6 @@
 # Bitemporal Fact Store
 
-The fact store is a general-purpose, bitemporal persistence layer for structured facts. It lives alongside the catalog in the same SQLite database and serves as the foundation for agent observations, Datalog-derived facts, and eventually the nous reasoning engine.
+The fact store is a general-purpose, bitemporal persistence layer for structured facts. It lives alongside the catalog in the same SQLite database and serves as the foundation for agent observations, Datalog-derived facts, and the nous reasoning engine.
 
 ## Why a Separate Table
 
@@ -14,7 +14,7 @@ The catalog (`catalog_entries`) is purpose-built for imported data artifacts -- 
 
 These don't have stored paths, file formats, or record counts. They have a **relation** (what kind of fact), **args** (the specifics), **temporal bounds** (when was it true, when did we learn it), and a **source** (who asserted it).
 
-The catalog and fact store coexist in the same database. Future query infrastructure (the Datalog evaluator) will read from both -- treating catalog entries as one relation among many.
+The catalog and fact store coexist in the same database. The Datalog evaluator (`pudl query`) reads from both -- treating catalog entries as a `catalog_entry` relation and facts queried directly by relation name.
 
 ## Schema
 
@@ -66,7 +66,7 @@ This gives four query modes:
 ```go
 f, err := db.AddFact(database.Fact{
     Relation: "observation",
-    Args:     `{"kind":"obstacle","description":"circular dep in auth","scope":["pkg/auth","pkg/user"]}`,
+    Args:     `{"kind":"obstacle","description":"circular dep in auth","repo":"pkg/auth"}`,
     Source:   "claude-code",
 })
 ```
@@ -161,6 +161,12 @@ pudl observe "the Config struct has 47 fields, should be split" \
 
 Observations are stored as facts in the `observation` relation. The `--kind` flag accepts: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity. The `--source` flag defaults to the current OS user.
 
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--kind` | Observation kind | `fact` |
+| `--repo` | Repository or package this pertains to | (none) |
+| `--source` | Who made the observation | current OS user |
+
 ### `pudl facts list`
 
 Query facts from the store:
@@ -185,6 +191,39 @@ pudl facts list --relation observation --verbose
 pudl facts list --relation observation --json
 ```
 
+| Flag | Description |
+|------|-------------|
+| `--relation` | Relation to query (required) |
+| `--source` | Filter by source |
+| `--as-of-valid` | Query valid time (RFC3339 or Unix timestamp) |
+| `--as-of-tx` | Query transaction time (RFC3339 or Unix timestamp) |
+| `-v, --verbose` | Show full fact details |
+
+### `pudl facts show`
+
+Inspect a single fact by ID. Accepts the full 64-character hex ID or a unique prefix:
+
+```bash
+pudl facts show c0b4392d347a
+pudl facts show c0b4392d347a --json
+```
+
+### `pudl facts retract`
+
+Mark a fact as retracted -- "we were wrong." Sets `tx_end` so the fact disappears from current queries but remains in the audit trail:
+
+```bash
+pudl facts retract c0b4392d347a
+```
+
+### `pudl facts invalidate`
+
+Mark a fact as no longer valid -- "reality changed." Sets `valid_end` so the fact is no longer current but remains visible in historical queries (`--as-of-valid`):
+
+```bash
+pudl facts invalidate c0b4392d347a
+```
+
 ## Connection to the Catalog
 
 The fact store and catalog serve different purposes but live in the same database:
@@ -197,4 +236,4 @@ The fact store and catalog serve different purposes but live in the same databas
 | **Schema** | CUE schema per entry | JSON args per relation |
 | **Use case** | "What data do we have?" | "What do we know?" |
 
-The Datalog evaluator (future) will treat both as EDB sources -- catalog entries exposed as a `catalog_entry` relation, facts queried directly by relation name.
+The Datalog evaluator (`pudl query`) treats both as EDB sources -- catalog entries exposed as a `catalog_entry` relation, facts queried directly by relation name. See [datalog.md](datalog.md) for details.

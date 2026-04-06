@@ -502,6 +502,101 @@ Backfill `resource_id`, `content_hash`, and `version` columns for catalog entrie
 pudl migrate identity
 ```
 
+## Observations and Facts
+
+### `pudl observe`
+
+Record a structured observation about the codebase. Observations are stored as facts in the bitemporal fact store.
+
+```bash
+pudl observe "auth has circular dependency with user" --kind obstacle --repo pkg/auth
+pudl observe "all db calls use single connection pool" --kind pattern
+pudl observe "Config struct has 47 fields" --kind suggestion --repo internal/config --source claude-code
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--kind` | `fact` | Observation kind: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity |
+| `--repo` | (none) | Repository or package this pertains to |
+| `--source` | OS username | Who made the observation |
+
+### `pudl facts list`
+
+Query facts from the bitemporal store.
+
+```bash
+pudl facts list --relation observation
+pudl facts list --relation observation --source claude-code
+pudl facts list --relation depends --as-of-valid 2026-04-01T14:30:00Z
+pudl facts list --relation observation -v
+pudl facts list --relation observation --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `--relation` | Relation to query (required) |
+| `--source` | Filter by source |
+| `--as-of-valid` | Query at a point in valid time (RFC3339 or Unix timestamp) |
+| `--as-of-tx` | Query at a point in transaction time |
+| `-v, --verbose` | Show full fact details |
+
+### `pudl facts show`
+
+Inspect a single fact by ID or unique prefix.
+
+```bash
+pudl facts show c0b4392d347a
+pudl facts show c0b4392d347a --json
+```
+
+### `pudl facts retract`
+
+Mark a fact as retracted ("we were wrong"). Sets `tx_end` -- the fact disappears from current queries but remains in the audit trail.
+
+```bash
+pudl facts retract c0b4392d347a
+```
+
+### `pudl facts invalidate`
+
+Mark a fact as no longer valid ("reality changed"). Sets `valid_end` -- the fact disappears from current queries but remains visible in historical queries via `--as-of-valid`.
+
+```bash
+pudl facts invalidate c0b4392d347a
+```
+
+## Datalog and Rules
+
+### `pudl query`
+
+Evaluate Datalog rules over the fact store and catalog, then query results. Rules are loaded from `.pudl/schema/pudl/rules/` (repo-scoped) and `~/.pudl/schema/pudl/rules/` (global).
+
+```bash
+pudl query depends_transitive
+pudl query depends_transitive from=api
+pudl query observation kind=obstacle
+pudl query at_risk -f my-analysis.cue
+pudl query depends_transitive --json
+```
+
+| Flag | Description |
+|------|-------------|
+| `-f, --rule-file` | Load additional rules from a CUE file |
+| `--all-workspaces` | Include global rules and all workspace data |
+
+### `pudl rule add`
+
+Validate and install a Datalog rule file. The file must contain valid CUE with at least one `#Rule`-shaped value (head + body fields).
+
+```bash
+pudl rule add transitive-deps.cue           # repo-scoped
+pudl rule add company-standards.cue --global # global
+```
+
+| Flag | Description |
+|------|-------------|
+| `--global` | Install to `~/.pudl/schema/pudl/rules/` instead of `.pudl/schema/pudl/rules/` |
+
 ## CUE Module Management
 
 ### `pudl module`
