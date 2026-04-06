@@ -19,11 +19,15 @@ var (
 var ingestObserveCmd = &cobra.Command{
 	Use:   "ingest-observe",
 	Short: "Ingest mu observe results into the catalog",
-	Long: `Read mu observe output (NDJSON) and store observed state in the catalog.
+	Long: `Read mu observe --json output and store observed state in the catalog.
 The observed state becomes the "live" side for subsequent drift checks.
 
+Input format: JSON array of ObserveResult objects from mu observe --json.
+Each target's current.records are stored as individual observe entries,
+routed to the correct schema via the _schema field.
+
 Examples:
-    mu observe --json | pudl ingest-observe
+    mu observe --json //home/odroid | pudl ingest-observe
     pudl ingest-observe --path observe-results.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Determine input source

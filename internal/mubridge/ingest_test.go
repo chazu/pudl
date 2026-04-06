@@ -24,53 +24,90 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":"converged"}
-{"target":"//my_db","state":"drifted","diff":"replicas: 3 -> 2"}
-`
-	reader := strings.NewReader(input)
+	// mu observe --json output: array of ObserveResult with current.records
+	input := `[
+		{
+			"target": "//home/odroid",
+			"current": {
+				"records": [
+					{"_schema": "linux.host", "hostname": "renge", "kernel": "5.10.0", "arch": "aarch64", "os": {"id": "debian", "version": "10", "name": "Debian"}, "uptime_seconds": 12114},
+					{"_schema": "linux.package", "host": "renge", "name": "acl", "version": "2.2.53-4", "status": "ii "},
+					{"_schema": "linux.package", "host": "renge", "name": "adduser", "version": "3.118", "status": "ii "},
+					{"_schema": "linux.service", "host": "renge", "unit": "ssh.service", "active": "active", "sub": "running"}
+				]
+			}
+		}
+	]`
 
-	count, err := IngestObserveResults(db, reader, "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	if err != nil {
+		t.Fatalf("IngestObserveResults failed: %v", err)
+	}
+	if count != 4 {
+		t.Errorf("expected 4 ingested records, got %d", count)
+	}
+
+	// All records should be stored as observe entries for target "home/odroid"
+	entry, err := db.GetLatestObserve("home/odroid")
+	if err != nil {
+		t.Fatalf("GetLatestObserve failed: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("expected observe entry for home/odroid")
+	}
+	if entry.EntryType == nil || *entry.EntryType != "observe" {
+		t.Errorf("expected entry_type 'observe', got %v", entry.EntryType)
+	}
+	if entry.Origin != "mu-observe" {
+		t.Errorf("expected origin 'mu-observe', got %s", entry.Origin)
+	}
+}
+
+func TestIngestObserveResults_SchemaRouting(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	input := `[
+		{
+			"target": "//home/renge",
+			"current": {
+				"records": [
+					{"_schema": "linux.host", "hostname": "renge", "kernel": "5.10.0", "arch": "aarch64", "os": {"id": "debian", "version": "10", "name": "Debian"}, "uptime_seconds": 100},
+					{"_schema": "linux.service", "host": "renge", "unit": "cron.service", "active": "active", "sub": "running"}
+				]
+			}
+		}
+	]`
+
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
 	}
 	if count != 2 {
-		t.Errorf("expected 2 ingested results, got %d", count)
+		t.Errorf("expected 2 records, got %d", count)
 	}
 
-	// Verify first entry
-	entry1, err := db.GetLatestObserve("my_app")
+	// Query all observe entries and check schemas were routed correctly
+	entries, err := db.QueryEntries(
+		database.FilterOptions{EntryType: "observe"},
+		database.QueryOptions{Limit: 100},
+	)
 	if err != nil {
-		t.Fatalf("GetLatestObserve failed: %v", err)
+		t.Fatalf("QueryEntries failed: %v", err)
 	}
-	if entry1 == nil {
-		t.Fatal("expected observe entry for my_app")
-	}
-	if entry1.EntryType == nil || *entry1.EntryType != "observe" {
-		t.Errorf("expected entry_type 'observe', got %v", entry1.EntryType)
-	}
-	if entry1.Definition == nil || *entry1.Definition != "my_app" {
-		t.Errorf("expected definition 'my_app', got %v", entry1.Definition)
-	}
-	if entry1.Schema != "pudl/mu.#ObserveResult" {
-		t.Errorf("expected schema 'pudl/mu.#ObserveResult', got %s", entry1.Schema)
-	}
-	if entry1.Origin != "mu-observe" {
-		t.Errorf("expected origin 'mu-observe', got %s", entry1.Origin)
-	}
-	if entry1.Format != "json" {
-		t.Errorf("expected format 'json', got %s", entry1.Format)
+	if entries.FilteredCount != 2 {
+		t.Fatalf("expected 2 entries, got %d", entries.FilteredCount)
 	}
 
-	// Verify second entry
-	entry2, err := db.GetLatestObserve("my_db")
-	if err != nil {
-		t.Fatalf("GetLatestObserve failed: %v", err)
+	schemas := map[string]bool{}
+	for _, e := range entries.Entries {
+		schemas[e.Schema] = true
 	}
-	if entry2 == nil {
-		t.Fatal("expected observe entry for my_db")
+	if !schemas["pudl/linux.#Host"] {
+		t.Error("expected pudl/linux.#Host schema in results")
 	}
-	if entry2.Definition == nil || *entry2.Definition != "my_db" {
-		t.Errorf("expected definition 'my_db', got %v", entry2.Definition)
+	if !schemas["pudl/linux.#Service"] {
+		t.Error("expected pudl/linux.#Service schema in results")
 	}
 }
 
@@ -78,24 +115,23 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":"converged"}`
+	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"box","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
 
-	// Ingest first time
 	count1, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
 		t.Fatalf("first ingest failed: %v", err)
 	}
 	if count1 != 1 {
-		t.Errorf("expected 1 result on first ingest, got %d", count1)
+		t.Errorf("expected 1 on first ingest, got %d", count1)
 	}
 
-	// Ingest same data again — should be deduplicated
+	// Same data again — should deduplicate
 	count2, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
 		t.Fatalf("second ingest failed: %v", err)
 	}
 	if count2 != 0 {
-		t.Errorf("expected 0 results on duplicate ingest, got %d", count2)
+		t.Errorf("expected 0 on duplicate ingest, got %d", count2)
 	}
 }
 
@@ -108,69 +144,82 @@ func TestIngestObserveResults_EmptyInput(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count != 0 {
-		t.Errorf("expected 0 results for empty input, got %d", count)
+		t.Errorf("expected 0 for empty input, got %d", count)
 	}
 }
 
-func TestIngestObserveResults_InvalidJSON(t *testing.T) {
+func TestIngestObserveResults_TargetError(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	// Mix of valid and invalid lines
-	input := `not valid json
-{"target":"//my_app","state":"converged"}
-also not valid
-{"target":"//my_db","state":"drifted","diff":"engine changed"}
-`
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if count != 2 {
-		t.Errorf("expected 2 valid results (skipping invalid), got %d", count)
-	}
+	// Targets with errors should be skipped, not ingested
+	input := `[
+		{"target":"//broken","error":"plugin crashed"},
+		{"target":"//ok","current":{"records":[{"_schema":"linux.host","hostname":"good","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}
+	]`
 
-	// Verify valid entries were stored
-	entry1, err := db.GetLatestObserve("my_app")
-	if err != nil {
-		t.Fatalf("GetLatestObserve failed: %v", err)
-	}
-	if entry1 == nil {
-		t.Error("expected observe entry for my_app")
-	}
-
-	entry2, err := db.GetLatestObserve("my_db")
-	if err != nil {
-		t.Fatalf("GetLatestObserve failed: %v", err)
-	}
-	if entry2 == nil {
-		t.Error("expected observe entry for my_db")
-	}
-}
-
-func TestIngestObserveResults_TargetWithoutPrefix(t *testing.T) {
-	db, dataDir := setupIngestTestDB(t)
-	defer db.Close()
-
-	// Target without "//" prefix should also work
-	input := `{"target":"my_app","state":"converged"}`
 	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("expected 1 result, got %d", count)
+		t.Errorf("expected 1 (skipping errored target), got %d", count)
+	}
+}
+
+func TestIngestObserveResults_NoRecordsKey(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	// current without records key — treat whole current as single record
+	input := `[{"target":"//simple","current":{"status":"healthy","uptime":42}}]`
+
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("expected 1 record, got %d", count)
 	}
 
-	entry, err := db.GetLatestObserve("my_app")
+	entry, err := db.GetLatestObserve("simple")
 	if err != nil {
 		t.Fatalf("GetLatestObserve failed: %v", err)
 	}
 	if entry == nil {
-		t.Fatal("expected observe entry for my_app")
+		t.Fatal("expected observe entry for simple")
 	}
-	if entry.Definition == nil || *entry.Definition != "my_app" {
-		t.Errorf("expected definition 'my_app', got %v", entry.Definition)
+	// No _schema field, should fall back to generic observe result
+	if entry.Schema != "pudl/mu.#ObserveResult" {
+		t.Errorf("expected fallback schema, got %s", entry.Schema)
+	}
+}
+
+func TestIngestObserveResults_MultipleTargets(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	input := `[
+		{"target":"//host/a","current":{"records":[{"_schema":"linux.host","hostname":"a","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}},
+		{"target":"//host/b","current":{"records":[{"_schema":"linux.host","hostname":"b","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":2}]}}
+	]`
+
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected 2 records (one per target), got %d", count)
+	}
+
+	// Both targets should have entries
+	e1, _ := db.GetLatestObserve("host/a")
+	e2, _ := db.GetLatestObserve("host/b")
+	if e1 == nil {
+		t.Error("expected observe entry for host/a")
+	}
+	if e2 == nil {
+		t.Error("expected observe entry for host/b")
 	}
 }
 
@@ -178,20 +227,44 @@ func TestIngestObserveResults_CustomOrigin(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	input := `{"target":"//my_app","state":"drifted","diff":"something changed"}`
+	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"x","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
+
 	count, err := IngestObserveResults(db, strings.NewReader(input), "custom-origin", dataDir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if count != 1 {
-		t.Errorf("expected 1 result, got %d", count)
+		t.Errorf("expected 1, got %d", count)
 	}
 
-	entry, err := db.GetLatestObserve("my_app")
-	if err != nil {
-		t.Fatalf("GetLatestObserve failed: %v", err)
+	entry, _ := db.GetLatestObserve("app")
+	if entry == nil {
+		t.Fatal("expected entry")
 	}
 	if entry.Origin != "custom-origin" {
 		t.Errorf("expected origin 'custom-origin', got %s", entry.Origin)
+	}
+}
+
+func TestResourceTypeToSchema(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"linux.host", "pudl/linux.#Host"},
+		{"linux.package", "pudl/linux.#Package"},
+		{"linux.network_interface", "pudl/linux.#NetworkInterface"},
+		{"linux.service", "pudl/linux.#Service"},
+		{"linux.filesystem", "pudl/linux.#Filesystem"},
+		{"linux.user", "pudl/linux.#User"},
+		{"aws.ec2_instance", "pudl/aws.#Ec2Instance"},
+		{"unknown", "pudl/mu.#ObserveResult"},  // no dot separator
+	}
+
+	for _, tt := range tests {
+		got := resourceTypeToSchema(tt.input)
+		if got != tt.expected {
+			t.Errorf("resourceTypeToSchema(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
 	}
 }
