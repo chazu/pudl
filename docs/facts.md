@@ -128,7 +128,7 @@ Args are stored as JSON objects with meaningful keys. There is no enforced schem
 
 ```json
 // observation relation
-{"kind": "obstacle", "description": "circular dep in auth", "scope": ["pkg/auth"]}
+{"kind": "obstacle", "description": "circular dep in auth", "repo": "pkg/auth"}
 
 // depends relation
 {"from": "api", "to": "db"}
@@ -148,14 +148,14 @@ Record a structured observation:
 ```bash
 pudl observe "auth package has circular dependency with user package" \
     --kind obstacle \
-    --scope pkg/auth,pkg/user
+    --repo pkg/auth
 
 pudl observe "all database calls go through a single connection pool" \
     --kind pattern
 
 pudl observe "the Config struct has 47 fields, should be split" \
     --kind suggestion \
-    --scope internal/config \
+    --repo internal/config \
     --source claude-code
 ```
 

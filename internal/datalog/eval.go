@@ -46,12 +46,16 @@ func (e *Evaluator) Evaluate() ([]Tuple, error) {
 		}
 	}
 
+	// Build initial indexes
+	knownIdx := buildIndexes(known)
+	deltaIdx := buildIndexes(delta)
+
 	// Semi-naive iteration
 	for i := 0; i < e.maxIter; i++ {
 		newFacts := make(map[string]map[string]Tuple)
 
 		for _, rule := range e.rules {
-			derived, err := e.fireRule(rule, known, delta)
+			derived, err := e.fireRule(rule, known, delta, knownIdx, deltaIdx)
 			if err != nil {
 				return nil, fmt.Errorf("rule %s: %w", rule.Name, err)
 			}
@@ -67,7 +71,7 @@ func (e *Evaluator) Evaluate() ([]Tuple, error) {
 			break // fixed point reached
 		}
 
-		// Merge new facts into known, set as next delta
+		// Merge new facts into known, rebuild indexes
 		delta = newFacts
 		for rel, tuples := range newFacts {
 			for key, t := range tuples {
@@ -75,8 +79,14 @@ func (e *Evaluator) Evaluate() ([]Tuple, error) {
 					known[rel] = make(map[string]Tuple)
 				}
 				known[rel][key] = t
+				// Incrementally update known index
+				if knownIdx[rel] == nil {
+					knownIdx[rel] = newIndex()
+				}
+				knownIdx[rel].add(t)
 			}
 		}
+		deltaIdx = buildIndexes(delta)
 	}
 
 	// Collect IDB (exclude EDB)
@@ -128,13 +138,13 @@ func (e *Evaluator) Query(relation string, constraints map[string]interface{}) (
 
 // fireRule finds all substitutions satisfying the rule body, requiring at
 // least one body atom to match something in delta (semi-naive condition).
-func (e *Evaluator) fireRule(rule Rule, known, delta map[string]map[string]Tuple) ([]Tuple, error) {
+func (e *Evaluator) fireRule(rule Rule, known, delta map[string]map[string]Tuple, knownIdx, deltaIdx map[string]*index) ([]Tuple, error) {
 	var results []Tuple
 
 	// For each "delta position" (which body atom uses delta facts),
 	// compute all substitutions.
-	for deltaIdx := range rule.Body {
-		bindings := e.joinBody(rule.Body, known, delta, deltaIdx)
+	for di := range rule.Body {
+		bindings := e.joinBody(rule.Body, known, delta, di, knownIdx, deltaIdx)
 
 		for _, b := range bindings {
 			t, err := b.Apply(rule.Head)
@@ -150,20 +160,23 @@ func (e *Evaluator) fireRule(rule Rule, known, delta map[string]map[string]Tuple
 
 // joinBody computes all consistent bindings for the rule body.
 // The atom at deltaIdx must match facts from delta; others match from known.
-func (e *Evaluator) joinBody(body []Atom, known, delta map[string]map[string]Tuple, deltaIdx int) []Binding {
+func (e *Evaluator) joinBody(body []Atom, known, delta map[string]map[string]Tuple, deltaIdx int, knownIdx, deltaIdx2 map[string]*index) []Binding {
 	bindings := []Binding{{}}
 
 	for i, atom := range body {
 		var pool []Tuple
+		var idx *index
 		if i == deltaIdx {
 			pool = tuplesToSlice(delta[atom.Rel])
+			idx = deltaIdx2[atom.Rel]
 		} else {
 			pool = tuplesToSlice(known[atom.Rel])
+			idx = knownIdx[atom.Rel]
 		}
 
 		var next []Binding
 		for _, b := range bindings {
-			matches := matchAtom(atom, pool, b)
+			matches := matchAtomIndexed(atom, pool, idx, b)
 			next = append(next, matches...)
 		}
 		bindings = next
@@ -218,6 +231,31 @@ func matchAtom(atom Atom, pool []Tuple, existing Binding) []Binding {
 	}
 
 	return results
+}
+
+// matchAtomIndexed uses the index to narrow the candidate pool before matching.
+// If a bound variable or ground term exists, we use the index for O(1) lookup
+// instead of scanning all tuples.
+func matchAtomIndexed(atom Atom, pool []Tuple, idx *index, existing Binding) []Binding {
+	// Find the best arg to use for index lookup: a ground term or already-bound variable
+	if idx != nil {
+		for argKey, term := range atom.Args {
+			var lookupVal interface{}
+			if !term.IsVariable() {
+				lookupVal = term.Value
+			} else if prev, bound := existing[term.Variable]; bound {
+				lookupVal = prev
+			}
+			if lookupVal != nil {
+				candidates := idx.lookup(atom.Rel, argKey, lookupVal)
+				if candidates != nil {
+					return matchAtom(atom, candidates, existing)
+				}
+			}
+		}
+	}
+	// Fallback to full scan
+	return matchAtom(atom, pool, existing)
 }
 
 // matchConstraints checks if a tuple satisfies the given field constraints.
@@ -277,6 +315,15 @@ func (e *Evaluator) mentionedRelations() []string {
 		rels = append(rels, r)
 	}
 	return rels
+}
+
+// buildIndexes creates per-relation indexes from a relation->tuples map.
+func buildIndexes(m map[string]map[string]Tuple) map[string]*index {
+	idxs := make(map[string]*index, len(m))
+	for rel, tuples := range m {
+		idxs[rel] = buildIndex(tuples)
+	}
+	return idxs
 }
 
 func addTuple(m map[string]map[string]Tuple, t Tuple) {

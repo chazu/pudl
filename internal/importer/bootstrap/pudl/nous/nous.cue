@@ -7,8 +7,8 @@ package nous
 #Observation: {
 	kind:        "fact" | "obstacle" | "pattern" | "antipattern" | "suggestion" | "bug" | "opportunity"
 	description: string
-	scope?:      [...string] // file paths, package names, module names
-	source:      string      // agent name or "human"
+	repo?:       string // repository or package this observation pertains to
+	source:      string // agent name or "human"
 	status:      "raw" | "reviewed" | "promoted" | "rejected" | *"raw"
 	worth:       number & >=0 & <=1 | *0.5
 	promotedTo?: string // if promoted, what rule/convention it became

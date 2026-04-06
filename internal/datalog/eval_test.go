@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"fmt"
 	"sort"
 	"testing"
 
@@ -314,6 +315,81 @@ recursiveDep: {
 	results, err := eval.Query("depends_transitive", map[string]interface{}{"from": "api"})
 	require.NoError(t, err)
 	assert.Len(t, results, 2) // api->db, api->cache
+}
+
+// --- Index tests ---
+
+func TestIndexLookup(t *testing.T) {
+	idx := newIndex()
+
+	t1 := Tuple{Relation: "depends", Args: map[string]interface{}{"from": "api", "to": "db"}}
+	t2 := Tuple{Relation: "depends", Args: map[string]interface{}{"from": "api", "to": "cache"}}
+	t3 := Tuple{Relation: "depends", Args: map[string]interface{}{"from": "db", "to": "redis"}}
+
+	idx.add(t1)
+	idx.add(t2)
+	idx.add(t3)
+
+	// Lookup by from=api should return 2 tuples
+	results := idx.lookup("depends", "from", "api")
+	assert.Len(t, results, 2)
+
+	// Lookup by from=db should return 1 tuple
+	results = idx.lookup("depends", "from", "db")
+	assert.Len(t, results, 1)
+
+	// Lookup by to=cache should return 1 tuple
+	results = idx.lookup("depends", "to", "cache")
+	assert.Len(t, results, 1)
+
+	// Missing value returns nil
+	results = idx.lookup("depends", "from", "nonexistent")
+	assert.Nil(t, results)
+
+	// Missing relation returns nil
+	results = idx.lookup("other", "from", "api")
+	assert.Nil(t, results)
+}
+
+func TestIndexedEvaluatorSameResults(t *testing.T) {
+	// Verify indexed evaluation produces same results as the test above
+	// by running the transitive closure with a larger dataset
+	edb := NewMemoryEDB()
+	// Chain of 10 nodes
+	for i := 0; i < 10; i++ {
+		edb.Add(Tuple{
+			Relation: "edge",
+			Args:     map[string]interface{}{"from": fmt.Sprintf("n%d", i), "to": fmt.Sprintf("n%d", i+1)},
+		})
+	}
+
+	rules := []Rule{
+		{
+			Name: "base",
+			Head: Atom{Rel: "path", Args: map[string]Term{"from": Var("X"), "to": Var("Z")}},
+			Body: []Atom{{Rel: "edge", Args: map[string]Term{"from": Var("X"), "to": Var("Z")}}},
+		},
+		{
+			Name: "recursive",
+			Head: Atom{Rel: "path", Args: map[string]Term{"from": Var("X"), "to": Var("Z")}},
+			Body: []Atom{
+				{Rel: "edge", Args: map[string]Term{"from": Var("X"), "to": Var("Y")}},
+				{Rel: "path", Args: map[string]Term{"from": Var("Y"), "to": Var("Z")}},
+			},
+		},
+	}
+
+	eval := NewEvaluator(rules, edb)
+	results, err := eval.Evaluate()
+	require.NoError(t, err)
+
+	// 10 nodes, transitive closure = 10+9+8+...+1 = 55 paths
+	assert.Len(t, results, 55)
+
+	// Check specific query
+	fromN0, err := eval.Query("path", map[string]interface{}{"from": "n0"})
+	require.NoError(t, err)
+	assert.Len(t, fromN0, 10) // n0 can reach all 10 other nodes
 }
 
 // --- Type tests ---
