@@ -61,6 +61,38 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 	if entry.Origin != "mu-observe" {
 		t.Errorf("expected origin 'mu-observe', got %s", entry.Origin)
 	}
+
+	// Records should be members of a snapshot collection
+	if entry.CollectionID == nil {
+		t.Fatal("expected record to be a member of a collection")
+	}
+	if entry.CollectionType == nil || *entry.CollectionType != "item" {
+		t.Errorf("expected collection_type 'item', got %v", entry.CollectionType)
+	}
+
+	// The snapshot collection should exist
+	snapshot, err := db.GetCollectionByID(*entry.CollectionID)
+	if err != nil {
+		t.Fatalf("GetCollectionByID failed: %v", err)
+	}
+	if snapshot == nil {
+		t.Fatal("expected snapshot collection entry")
+	}
+	if snapshot.Schema != "pudl/mu.#ObserveSnapshot" {
+		t.Errorf("expected snapshot schema, got %s", snapshot.Schema)
+	}
+	if snapshot.RecordCount != 4 {
+		t.Errorf("expected snapshot record_count 4, got %d", snapshot.RecordCount)
+	}
+
+	// Snapshot should have 4 items
+	items, err := db.GetCollectionItems(*entry.CollectionID)
+	if err != nil {
+		t.Fatalf("GetCollectionItems failed: %v", err)
+	}
+	if len(items) != 4 {
+		t.Errorf("expected 4 collection items, got %d", len(items))
+	}
 }
 
 func TestIngestObserveResults_SchemaRouting(t *testing.T) {
@@ -87,16 +119,16 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 		t.Errorf("expected 2 records, got %d", count)
 	}
 
-	// Query all observe entries and check schemas were routed correctly
+	// Query observe item entries (not the snapshot collection) and check schema routing
 	entries, err := db.QueryEntries(
-		database.FilterOptions{EntryType: "observe"},
+		database.FilterOptions{EntryType: "observe", CollectionType: "item"},
 		database.QueryOptions{Limit: 100},
 	)
 	if err != nil {
 		t.Fatalf("QueryEntries failed: %v", err)
 	}
 	if entries.FilteredCount != 2 {
-		t.Fatalf("expected 2 entries, got %d", entries.FilteredCount)
+		t.Fatalf("expected 2 item entries, got %d", entries.FilteredCount)
 	}
 
 	schemas := map[string]bool{}
