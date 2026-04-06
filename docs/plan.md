@@ -4,7 +4,7 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
-The core pipeline is stable and tested. Execution-related features (models, methods, workflows, Glojure runtime, vault, artifacts) were implemented in Phases 1-8, then extracted into **mu** as a separate tool. What remains in pudl is the knowledge layer.
+The core pipeline is stable and tested. Execution-related features (models, methods, workflows, Glojure runtime, vault, artifacts) were implemented in Phases 1-8, then extracted into **mu** as a separate tool. What remains in pudl is the knowledge layer. Residual execution CLI surface (`pudl data search/latest`, `drift check --method`, Glojure adapter) has been removed; some internal artifacts (database fields, CUE model schemas) remain for future cleanup.
 
 ### Data Lake
 - Multi-format import (JSON, YAML, CSV, NDJSON) with automatic format detection

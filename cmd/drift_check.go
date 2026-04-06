@@ -15,9 +15,8 @@ import (
 )
 
 var (
-	driftMethod  string
-	driftAll     bool
-	driftTags    []string
+	driftAll  bool
+	driftTags []string
 )
 
 var driftCheckCmd = &cobra.Command{
@@ -27,7 +26,6 @@ var driftCheckCmd = &cobra.Command{
 
 Examples:
     pudl drift check my_instance
-    pudl drift check my_instance --method list
     pudl drift check --all
     pudl drift check my_instance --tag env=prod`,
 	Args: cobra.MaximumNArgs(1),
@@ -44,7 +42,6 @@ Examples:
 
 func init() {
 	driftCmd.AddCommand(driftCheckCmd)
-	driftCheckCmd.Flags().StringVar(&driftMethod, "method", "", "Method whose artifact to compare (default: auto-detect)")
 	driftCheckCmd.Flags().BoolVar(&driftAll, "all", false, "Check all definitions")
 	driftCheckCmd.Flags().StringArrayVar(&driftTags, "tag", nil, "Extra args as key=value (repeatable)")
 }
@@ -58,7 +55,6 @@ func runDriftCheck(name string) error {
 
 	result, err := checker.Check(context.Background(), drift.CheckOptions{
 		DefinitionName: name,
-		Method:         driftMethod,
 	})
 	if err != nil {
 		return err
@@ -94,7 +90,6 @@ func runDriftCheckAll() error {
 	for _, def := range defs {
 		result, err := checker.Check(context.Background(), drift.CheckOptions{
 			DefinitionName: def.Name,
-			Method:         driftMethod,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: %s: %v\n", def.Name, err)
@@ -136,7 +131,6 @@ func initDriftChecker() (*drift.Checker, func(), error) {
 
 func printDriftResult(result *drift.DriftResult) {
 	fmt.Printf("Definition: %s\n", result.Definition)
-	fmt.Printf("Method:     %s\n", result.Method)
 	fmt.Printf("Status:     %s\n", result.Status)
 	fmt.Printf("Checked:    %s\n", drift.FormatTimestamp(result.Timestamp))
 
