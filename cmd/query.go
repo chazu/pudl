@@ -17,6 +17,8 @@ import (
 var (
 	queryRuleFile     string
 	queryAllWorkspace bool
+	queryAsOfValid    string
+	queryAsOfTx       string
 )
 
 var queryCmd = &cobra.Command{
@@ -34,11 +36,18 @@ Ad-hoc rules can be loaded from a file with -f.
 
 Positional constraints filter results (field=value pairs).
 
+Temporal modes (determined by which flags are set):
+  (none)           Evaluate over current facts
+  --as-of-valid    Evaluate over facts true at a point in time
+  --as-of-tx       Evaluate over facts known at a point in time
+  (both)           Evaluate over what was believed at --as-of-tx about --as-of-valid
+
 Examples:
     pudl query depends_transitive
-    pudl query depends_transitive --from=api
+    pudl query depends_transitive from=api
     pudl query at_risk
     pudl query -f my-analysis.cue corroborated_obstacle
+    pudl query observation --as-of-valid 2026-04-01T14:30:00Z
     pudl query depends_transitive --json`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -61,9 +70,27 @@ Examples:
 		}
 		defer db.Close()
 
+		// Parse temporal flags
+		var validAt, txAt *int64
+		if queryAsOfValid != "" {
+			t, err := parseTime(queryAsOfValid)
+			if err != nil {
+				return fmt.Errorf("invalid --as-of-valid: %w", err)
+			}
+			validAt = &t
+		}
+		if queryAsOfTx != "" {
+			t, err := parseTime(queryAsOfTx)
+			if err != nil {
+				return fmt.Errorf("invalid --as-of-tx: %w", err)
+			}
+			txAt = &t
+		}
+
 		// Build EDB from facts + catalog
+		factsEDB := datalog.NewTemporalFactsEDB(db, validAt, txAt)
 		edb := datalog.NewMultiEDB(
-			datalog.NewFactsEDB(db),
+			factsEDB,
 			datalog.NewCatalogEDB(db),
 		)
 
@@ -148,4 +175,6 @@ func init() {
 
 	queryCmd.Flags().StringVarP(&queryRuleFile, "rule-file", "f", "", "Load additional rules from a CUE file")
 	queryCmd.Flags().BoolVar(&queryAllWorkspace, "all-workspaces", false, "Include global rules and all workspace data")
+	queryCmd.Flags().StringVar(&queryAsOfValid, "as-of-valid", "", "Evaluate over facts true at this time (RFC3339 or Unix)")
+	queryCmd.Flags().StringVar(&queryAsOfTx, "as-of-tx", "", "Evaluate over facts known at this time (RFC3339 or Unix)")
 }
