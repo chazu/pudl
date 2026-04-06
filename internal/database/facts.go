@@ -193,6 +193,54 @@ func (c *CatalogDB) GetFact(id string) (*Fact, error) {
 	return f, nil
 }
 
+// GetFactByPrefix retrieves a single fact by ID prefix.
+// Returns an error if the prefix is ambiguous (matches multiple facts).
+func (c *CatalogDB) GetFactByPrefix(prefix string) (*Fact, error) {
+	rows, err := c.db.Query(
+		`SELECT id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance
+		 FROM facts WHERE id LIKE ? LIMIT 2`, prefix+"%")
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query by prefix", err)
+	}
+	defer rows.Close()
+
+	var facts []Fact
+	for rows.Next() {
+		var f Fact
+		var validEnd, txEnd sql.NullInt64
+		var source, provenance sql.NullString
+		err := rows.Scan(&f.ID, &f.Relation, &f.Args,
+			&f.ValidStart, &validEnd, &f.TxStart, &txEnd,
+			&source, &provenance)
+		if err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan fact", err)
+		}
+		if validEnd.Valid {
+			f.ValidEnd = &validEnd.Int64
+		}
+		if txEnd.Valid {
+			f.TxEnd = &txEnd.Int64
+		}
+		if source.Valid {
+			f.Source = source.String
+		}
+		if provenance.Valid {
+			f.Provenance = provenance.String
+		}
+		facts = append(facts, f)
+	}
+
+	if len(facts) == 0 {
+		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("no fact found with prefix: %s", prefix), nil)
+	}
+	if len(facts) > 1 {
+		return nil, errors.WrapError(errors.ErrCodeInvalidInput,
+			fmt.Sprintf("ambiguous prefix %s: matches %s, %s, ...", prefix, facts[0].ID[:16], facts[1].ID[:16]), nil)
+	}
+
+	return &facts[0], nil
+}
+
 // QueryFacts returns facts matching the filter with bitemporal scoping.
 func (c *CatalogDB) QueryFacts(filter FactFilter) ([]Fact, error) {
 	if filter.Relation == "" {
