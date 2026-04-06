@@ -11,6 +11,7 @@ type InferenceHints struct {
 	Origin         string // e.g., "aws-ec2-instances", "kubectl-get-pods"
 	Format         string // e.g., "json", "yaml", "csv"
 	CollectionType string // "collection", "item", or "" for unknown
+	DeclaredSchema string // value of "_schema" field in the data, if present
 }
 
 // CandidateScore represents a schema and its heuristic score.
@@ -30,6 +31,11 @@ func SelectCandidates(
 	graph *InheritanceGraph,
 ) []CandidateScore {
 	dataFields := extractTopLevelFields(data)
+
+	// Extract _schema from data if not already provided in hints
+	if hints.DeclaredSchema == "" {
+		hints.DeclaredSchema = extractDeclaredSchema(data)
+	}
 
 	var candidates []CandidateScore
 
@@ -79,6 +85,16 @@ func scoreCandidate(
 			if meta.IsListType {
 				return 0, "schema type mismatch (item cannot use collection/list schema)"
 			}
+		}
+	}
+
+	// Check _schema field - if the data declares its own schema, this is the
+	// strongest possible hint. Match it against resource_type in schema metadata.
+	if hints.DeclaredSchema != "" && meta.ResourceType != "" {
+		if strings.EqualFold(hints.DeclaredSchema, meta.ResourceType) {
+			score += 0.9
+			reasons = append(reasons, "_schema field matches resource_type")
+			return score, strings.Join(reasons, ", ")
 		}
 	}
 
@@ -237,6 +253,24 @@ func extractTopLevelFields(data interface{}) map[string]bool {
 	}
 
 	return fields
+}
+
+// extractDeclaredSchema returns the value of the "_schema" field if present in
+// a map, or "" otherwise. This supports data that self-declares its schema type.
+func extractDeclaredSchema(data interface{}) string {
+	m, ok := data.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	v, ok := m["_schema"]
+	if !ok {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return s
 }
 
 // GetFieldList returns a sorted list of field names from data.
