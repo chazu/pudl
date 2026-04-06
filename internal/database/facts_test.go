@@ -317,23 +317,20 @@ func TestObservationWorkflow(t *testing.T) {
 	agents := []struct {
 		source string
 		obs    []struct {
-			kind, desc string
-			scope      []string
+			kind, desc, repo string
 		}
 	}{
 		{"claude-code", []struct {
-			kind, desc string
-			scope      []string
+			kind, desc, repo string
 		}{
-			{"obstacle", "circular dependency between auth and user", []string{"pkg/auth", "pkg/user"}},
-			{"suggestion", "split Config struct into sub-configs", []string{"internal/config"}},
+			{"obstacle", "circular dependency between auth and user", "pkg/auth"},
+			{"suggestion", "split Config struct into sub-configs", "internal/config"},
 		}},
 		{"review-agent", []struct {
-			kind, desc string
-			scope      []string
+			kind, desc, repo string
 		}{
-			{"obstacle", "circular dependency between auth and user", []string{"pkg/auth", "pkg/user"}},
-			{"pattern", "all handlers follow middleware chain pattern", []string{"cmd/api"}},
+			{"obstacle", "circular dependency between auth and user", "pkg/auth"},
+			{"pattern", "all handlers follow middleware chain pattern", "cmd/api"},
 		}},
 	}
 
@@ -342,7 +339,7 @@ func TestObservationWorkflow(t *testing.T) {
 			args, _ := json.Marshal(map[string]interface{}{
 				"kind":        o.kind,
 				"description": o.desc,
-				"scope":       o.scope,
+				"repo":        o.repo,
 				"source":      agent.source,
 				"status":      "raw",
 				"worth":       0.5,

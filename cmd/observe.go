@@ -14,7 +14,7 @@ import (
 
 var (
 	observeKind   string
-	observeScope  []string
+	observeRepo   string
 	observeSource string
 )
 
@@ -37,10 +37,10 @@ Kinds:
   opportunity   A potential enhancement
 
 Examples:
-    pudl observe "auth package has circular dependency with user package" --kind obstacle --scope pkg/auth,pkg/user
+    pudl observe "auth package has circular dependency with user package" --kind obstacle --repo pkg/auth
     pudl observe "all database calls go through a single connection pool" --kind pattern
-    pudl observe "error handling in API layer is inconsistent" --kind antipattern --scope cmd/api
-    pudl observe "the Config struct has 47 fields, should be split" --kind suggestion --scope internal/config`,
+    pudl observe "error handling in API layer is inconsistent" --kind antipattern --repo cmd/api
+    pudl observe "the Config struct has 47 fields, should be split" --kind suggestion --repo internal/config`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		description := args[0]
@@ -56,8 +56,8 @@ Examples:
 			"status":      "raw",
 			"worth":       0.5,
 		}
-		if len(observeScope) > 0 {
-			obs["scope"] = observeScope
+		if observeRepo != "" {
+			obs["repo"] = observeRepo
 		}
 
 		argsJSON, err := json.Marshal(obs)
@@ -102,7 +102,7 @@ func init() {
 	rootCmd.AddCommand(observeCmd)
 
 	observeCmd.Flags().StringVar(&observeKind, "kind", "fact", "Observation kind (fact, obstacle, pattern, antipattern, suggestion, bug, opportunity)")
-	observeCmd.Flags().StringSliceVar(&observeScope, "scope", nil, "Scope: file paths, package names, or module names")
+	observeCmd.Flags().StringVar(&observeRepo, "repo", "", "Repository or package this observation pertains to")
 
 	// Default source to current OS user
 	defaultSource := "human"
