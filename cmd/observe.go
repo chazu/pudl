@@ -14,7 +14,7 @@ import (
 
 var (
 	observeKind   string
-	observeRepo   string
+	observeScope  string
 	observeSource string
 )
 
@@ -36,11 +36,27 @@ Kinds:
   bug           A defect
   opportunity   A potential enhancement
 
+Scope format:
+  Use "repo:path" to identify where the observation applies.
+  The repo name is the repository, and the path is the package
+  or file within it. Omit the path for repo-wide observations.
+
+  Examples:
+    pudl:internal/database      — a specific package in the pudl repo
+    pudl:cmd/api                — the API command package
+    nous:internal/engine        — the nous engine package
+    pudl                        — the pudl repo as a whole
+    myapp:pkg/auth              — a package in another repo
+
+  Agents: always use this format so observations are globally
+  unambiguous and joinable by Datalog rules across repositories.
+
 Examples:
-    pudl observe "auth package has circular dependency with user package" --kind obstacle --repo pkg/auth
-    pudl observe "all database calls go through a single connection pool" --kind pattern
-    pudl observe "error handling in API layer is inconsistent" --kind antipattern --repo cmd/api
-    pudl observe "the Config struct has 47 fields, should be split" --kind suggestion --repo internal/config`,
+    pudl observe "auth has circular dep with user" --kind obstacle --scope pudl:pkg/auth
+    pudl observe "all database calls use single pool" --kind pattern --scope pudl:internal/db
+    pudl observe "error handling is inconsistent" --kind antipattern --scope pudl:cmd/api
+    pudl observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config
+    pudl observe "all repos should use golangci-lint" --kind suggestion`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		description := args[0]
@@ -56,8 +72,8 @@ Examples:
 			"status":      "raw",
 			"worth":       0.5,
 		}
-		if observeRepo != "" {
-			obs["repo"] = observeRepo
+		if observeScope != "" {
+			obs["scope"] = observeScope
 		}
 
 		argsJSON, err := json.Marshal(obs)
@@ -102,7 +118,7 @@ func init() {
 	rootCmd.AddCommand(observeCmd)
 
 	observeCmd.Flags().StringVar(&observeKind, "kind", "fact", "Observation kind (fact, obstacle, pattern, antipattern, suggestion, bug, opportunity)")
-	observeCmd.Flags().StringVar(&observeRepo, "repo", "", "Repository or package this observation pertains to")
+	observeCmd.Flags().StringVar(&observeScope, "scope", "", "Scope as repo:path (e.g. pudl:internal/database, nous:internal/engine)")
 
 	// Default source to current OS user
 	defaultSource := "human"

@@ -94,7 +94,7 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 
 | Command | Description |
 |---------|-------------|
-| `pudl observe <description>` | Record a structured observation (`--kind`, `--repo`, `--source`) |
+| `pudl observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
 | `pudl facts list` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
 | `pudl facts show <id>` | Inspect a single fact (supports ID prefix matching) |
 | `pudl facts retract <id>` | Mark a fact as retracted (assertion was wrong) |

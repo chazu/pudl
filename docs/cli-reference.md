@@ -509,15 +509,15 @@ pudl migrate identity
 Record a structured observation about the codebase. Observations are stored as facts in the bitemporal fact store.
 
 ```bash
-pudl observe "auth has circular dependency with user" --kind obstacle --repo pkg/auth
+pudl observe "auth has circular dependency with user" --kind obstacle --scope pudl:pkg/auth
 pudl observe "all db calls use single connection pool" --kind pattern
-pudl observe "Config struct has 47 fields" --kind suggestion --repo internal/config --source claude-code
+pudl observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config --source claude-code
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--kind` | `fact` | Observation kind: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity |
-| `--repo` | (none) | Repository or package this pertains to |
+| `--scope` | (none) | Scope as repo:path (e.g. `pudl:internal/database`) |
 | `--source` | OS username | Who made the observation |
 
 ### `pudl facts list`
