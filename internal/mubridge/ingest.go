@@ -25,9 +25,9 @@ type ObserveResult struct {
 // IngestObserveResults processes mu observe --json output and stores results
 // in the catalog. The input is a JSON array of ObserveResult objects.
 //
-// For each target, if current.records exists and is an array, each record is
-// stored as an individual observe entry with its _schema used to determine the
-// pudl schema. Records are tagged with the originating target.
+// Creates an ObserveSnapshot collection entry for the run, then stores each
+// record from current.records as an individual observe entry linked to the
+// snapshot. Records with a _schema field are routed to their specific schema.
 //
 // Returns the number of records ingested and any error.
 func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin string, dataDir string) (int, error) {
@@ -56,27 +56,38 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 		return 0, fmt.Errorf("failed to create raw directory: %w", err)
 	}
 
-	ingested := 0
+	// Collect all records across targets, tracking metadata for the snapshot.
+	type targetRecord struct {
+		record map[string]any
+		target string
+	}
+	var allRecords []targetRecord
+	var targets []string
+	var errors []map[string]string
+	schemaCounts := map[string]int{}
 
 	for _, result := range results {
 		if result.Target == "" {
 			fmt.Fprintf(os.Stderr, "Warning: skipping observe result with empty target\n")
 			continue
 		}
+
+		target := strings.TrimPrefix(result.Target, "//")
+
 		if result.Error != "" {
 			fmt.Fprintf(os.Stderr, "Warning: target %s reported error: %s\n", result.Target, result.Error)
+			errors = append(errors, map[string]string{"target": target, "error": result.Error})
+			targets = append(targets, target)
 			continue
 		}
 		if result.Current == nil {
 			continue
 		}
 
-		target := strings.TrimPrefix(result.Target, "//")
+		targets = append(targets, target)
 
-		// Extract records from current.records (the convention for multi-record observe plugins).
-		// If current.records doesn't exist, treat the whole current map as a single record.
+		// Extract records from current.records, or treat current as a single record.
 		var records []map[string]any
-
 		if rawRecords, ok := result.Current["records"]; ok {
 			if arr, ok := rawRecords.([]any); ok {
 				for _, item := range arr {
@@ -86,22 +97,123 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 				}
 			}
 		}
-
 		if len(records) == 0 {
-			// No records array — treat current itself as a single record.
 			records = []map[string]any{result.Current}
 		}
 
-		for i, record := range records {
-			n, err := ingestObserveRecord(db, record, target, origin, rawDir, now, i)
-			if err != nil {
-				return ingested, err
+		for _, rec := range records {
+			allRecords = append(allRecords, targetRecord{record: rec, target: target})
+			if s, ok := rec["_schema"].(string); ok {
+				schemaCounts[resourceTypeToSchema(s)]++
+			} else {
+				schemaCounts["pudl/mu.#ObserveResult"]++
 			}
-			ingested += n
 		}
 	}
 
+	if len(allRecords) == 0 {
+		return 0, nil
+	}
+
+	// Create the snapshot collection entry.
+	snapshotID := fmt.Sprintf("observe_%s", now.Format("20060102_150405"))
+	snapshotCollectionID, err := createObserveSnapshot(db, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir)
+	if err != nil {
+		return 0, err
+	}
+
+	// Ingest each record as a member of the snapshot.
+	ingested := 0
+	for i, tr := range allRecords {
+		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID)
+		if err != nil {
+			return ingested, err
+		}
+		ingested += n
+	}
+
 	return ingested, nil
+}
+
+// createObserveSnapshot creates the collection entry for an observe run.
+func createObserveSnapshot(
+	db *database.CatalogDB,
+	snapshotID string,
+	now time.Time,
+	origin string,
+	targets []string,
+	recordCount int,
+	schemaCounts map[string]int,
+	errors []map[string]string,
+	rawDir string,
+) (string, error) {
+	// Build schema summary.
+	var schemaSummary []map[string]any
+	for schema, count := range schemaCounts {
+		schemaSummary = append(schemaSummary, map[string]any{
+			"schema": schema,
+			"count":  count,
+		})
+	}
+
+	snapshot := map[string]any{
+		"snapshot_id":    snapshotID,
+		"timestamp":      now.Format(time.RFC3339),
+		"origin":         origin,
+		"targets":        targets,
+		"record_count":   recordCount,
+		"schema_summary": schemaSummary,
+	}
+	if len(errors) > 0 {
+		snapshot["errors"] = errors
+	}
+
+	snapshotJSON, err := json.Marshal(snapshot)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal snapshot: %w", err)
+	}
+	hash := sha256.Sum256(snapshotJSON)
+	contentHash := fmt.Sprintf("%x", hash)
+
+	// Store the snapshot JSON.
+	filename := fmt.Sprintf("%s_snapshot.json", snapshotID)
+	storedPath := filepath.Join(rawDir, filename)
+	if err := os.WriteFile(storedPath, snapshotJSON, 0644); err != nil {
+		return "", fmt.Errorf("failed to write snapshot: %w", err)
+	}
+
+	// Dedup: if a snapshot with this content hash already exists, return it.
+	existingSnapshot, err := db.GetEntry(contentHash)
+	if err == nil && existingSnapshot != nil {
+		return contentHash, nil
+	}
+
+	schema := "pudl/mu.#ObserveSnapshot"
+	resourceID := identity.ComputeResourceID(schema, map[string]any{"snapshot_id": snapshotID}, contentHash)
+	entryType := "observe"
+	collectionType := "collection"
+
+	entry := database.CatalogEntry{
+		ID:             contentHash,
+		StoredPath:     storedPath,
+		ImportTimestamp: now,
+		Format:         "json",
+		Origin:         origin,
+		Schema:         schema,
+		Confidence:     1.0,
+		RecordCount:    recordCount,
+		SizeBytes:      int64(len(snapshotJSON)),
+		EntryType:      &entryType,
+		ResourceID:     &resourceID,
+		ContentHash:    &contentHash,
+		CollectionType: &collectionType,
+	}
+
+	if err := db.AddEntry(entry); err != nil {
+		return "", fmt.Errorf("failed to add snapshot entry: %w", err)
+	}
+
+	return contentHash, nil
 }
 
 // ingestObserveRecord stores a single observe record in the catalog.
@@ -114,12 +226,11 @@ func ingestObserveRecord(
 	rawDir string,
 	now time.Time,
 	index int,
+	collectionID string,
 ) (int, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
 	schema := "pudl/mu.#ObserveResult"
 	if declaredSchema, ok := record["_schema"].(string); ok && declaredSchema != "" {
-		// Map resource_type (e.g. "linux.host") to pudl schema path.
-		// Convention: "linux.host" -> "pudl/linux.#Host"
 		schema = resourceTypeToSchema(declaredSchema)
 	}
 
@@ -153,7 +264,6 @@ func ingestObserveRecord(
 	if s, ok := record["_schema"].(string); ok {
 		identityValues["_schema"] = s
 	}
-	// Add identity-contributing fields for known schemas.
 	for _, key := range []string{"hostname", "host", "name", "unit", "mountpoint", "ifname"} {
 		if v, ok := record[key]; ok {
 			identityValues[key] = v
@@ -162,6 +272,8 @@ func ingestObserveRecord(
 	resourceID := identity.ComputeResourceID(schema, identityValues, contentHash)
 
 	entryType := "observe"
+	collectionType := "item"
+	itemID := fmt.Sprintf("%s_item_%d", safeTarget, index)
 	entry := database.CatalogEntry{
 		ID:              contentHash,
 		StoredPath:      storedPath,
@@ -176,6 +288,10 @@ func ingestObserveRecord(
 		Definition:      &target,
 		ResourceID:      &resourceID,
 		ContentHash:     &contentHash,
+		CollectionID:    &collectionID,
+		CollectionType:  &collectionType,
+		ItemIndex:       &index,
+		ItemID:          &itemID,
 	}
 
 	if err := db.AddEntry(entry); err != nil {
@@ -194,7 +310,6 @@ func resourceTypeToSchema(resourceType string) string {
 	}
 	pkg := parts[0]
 	name := parts[1]
-	// Capitalize first letter: "host" -> "Host"
 	if len(name) > 0 {
 		name = strings.ToUpper(name[:1]) + name[1:]
 	}

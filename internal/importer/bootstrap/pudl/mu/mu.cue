@@ -42,19 +42,45 @@ package mu
 	outputs: {[string]: string} | *{}
 }
 
-// ObserveResult represents a single entry from `mu observe --json`.
-// The output is an array of these, one per observed target.
+// ObserveResult represents a single observe record that doesn't declare a
+// _schema field. Records with _schema are routed to their specific schema
+// (e.g. pudl/linux.#Host); this is the fallback for untyped observe data.
 #ObserveResult: {
 	_pudl: {
 		schema_type:     "base"
 		resource_type:   "mu.observe"
 		identity_fields: ["target"]
-		tracked_fields:  ["state", "diff"]
+		tracked_fields:  []
 	}
 
-	target: string                         // e.g. "//k8s/api-deployment"
-	state:  "converged" | "drifted" | "unknown"
-	diff?:  string                         // human-readable diff when drifted
+	target?: string
+	...
+}
+
+// ObserveSnapshot represents a single mu observe run — the collection of all
+// records observed across one or more targets at a point in time.
+// Created by `pudl ingest-observe` to group records from one invocation.
+#ObserveSnapshot: {
+	_pudl: {
+		schema_type:     "collection"
+		resource_type:   "mu.observe_snapshot"
+		identity_fields: ["snapshot_id"]
+		tracked_fields:  ["targets", "record_count", "schema_summary"]
+	}
+
+	snapshot_id:  string             // timestamp-based ID
+	timestamp:    string             // ISO 8601
+	origin:       string             // e.g. "mu-observe"
+	targets:      [...string]        // targets that were observed
+	record_count: int & >=0          // total records across all targets
+	schema_summary: [...{            // distribution of _schema types
+		schema: string
+		count:  int & >=0
+	}]
+	errors?: [...{                   // targets that reported errors
+		target: string
+		error:  string
+	}]
 }
 
 // PlanOutput represents the output of `mu build --plan --json`.
