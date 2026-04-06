@@ -484,6 +484,32 @@ func TestInvalidateThenQuery(t *testing.T) {
 	assert.Contains(t, facts[0].Args, "legacy-db")
 }
 
+func TestGetFactByPrefix(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	f, err := db.AddFact(Fact{
+		Relation: "observation",
+		Args:     `{"kind":"pattern","description":"prefix test"}`,
+		Source:   "agent-1",
+	})
+	require.NoError(t, err)
+
+	// Full ID works
+	got, err := db.GetFactByPrefix(f.ID)
+	require.NoError(t, err)
+	assert.Equal(t, f.ID, got.ID)
+
+	// Short prefix works
+	got, err = db.GetFactByPrefix(f.ID[:12])
+	require.NoError(t, err)
+	assert.Equal(t, f.ID, got.ID)
+
+	// Non-matching prefix fails
+	_, err = db.GetFactByPrefix("zzzzzzzzzzzz")
+	assert.Error(t, err)
+}
+
 func TestFactProvenance(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()

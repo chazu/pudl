@@ -20,12 +20,16 @@ Facts are typed assertions — observations, dependencies, derived facts — wit
 full valid-time and transaction-time tracking.
 
 Available subcommands:
-- list: Query facts by relation with temporal filtering
+- list:       Query facts by relation with temporal filtering
+- show:       Inspect a single fact by ID
+- retract:    Mark a fact as retracted (we were wrong)
+- invalidate: Mark a fact as no longer valid (reality changed)
 
 Examples:
     pudl facts list --relation observation
-    pudl facts list --relation observation --source claude-code
-    pudl facts list --relation depends --as-of-valid 2026-04-01T14:30:00Z`,
+    pudl facts show abc123...
+    pudl facts retract abc123...
+    pudl facts invalidate abc123...`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
@@ -214,9 +218,140 @@ func parseTime(s string) (int64, error) {
 	return 0, fmt.Errorf("expected RFC3339 (e.g. 2026-04-01T14:30:00Z) or Unix timestamp, got %q", s)
 }
 
+var factsShowCmd = &cobra.Command{
+	Use:   "show <id>",
+	Short: "Show details of a single fact",
+	Long: `Display full details of a fact by its ID.
+
+Accepts the full 64-character hex ID or a unique prefix.
+
+Examples:
+    pudl facts show c0b4392d347aca8e517c9bb8775a78951c6214e07f04f9168dbe3fbfa862e32a
+    pudl facts show c0b4392d347a
+    pudl facts show c0b4392d347a --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id := args[0]
+
+		configDir := config.GetPudlDir()
+		db, err := database.NewCatalogDB(configDir)
+		if err != nil {
+			return fmt.Errorf("failed to open catalog: %w", err)
+		}
+		defer db.Close()
+
+		// Try exact match first, then prefix match
+		f, err := db.GetFact(id)
+		if err != nil {
+			f, err = db.GetFactByPrefix(id)
+			if err != nil {
+				return fmt.Errorf("fact not found: %s", id)
+			}
+		}
+
+		if jsonOutput {
+			out, _ := json.MarshalIndent(f, "", "  ")
+			fmt.Println(string(out))
+			return nil
+		}
+
+		printFact(*f, true)
+		return nil
+	},
+}
+
+var factsRetractCmd = &cobra.Command{
+	Use:   "retract <id>",
+	Short: "Retract a fact (mark as no longer asserted)",
+	Long: `Mark a fact as retracted by setting its transaction end time.
+
+Use this when a fact was recorded in error — the assertion was wrong.
+The fact remains in the store for audit purposes but disappears from
+current queries.
+
+Examples:
+    pudl facts retract c0b4392d347aca8e...`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id := args[0]
+
+		configDir := config.GetPudlDir()
+		db, err := database.NewCatalogDB(configDir)
+		if err != nil {
+			return fmt.Errorf("failed to open catalog: %w", err)
+		}
+		defer db.Close()
+
+		// Resolve prefix if needed
+		resolved, err := resolveFactID(db, id)
+		if err != nil {
+			return err
+		}
+
+		if err := db.RetractFact(resolved); err != nil {
+			return fmt.Errorf("failed to retract: %w", err)
+		}
+
+		fmt.Printf("Retracted fact %s\n", resolved[:12])
+		return nil
+	},
+}
+
+var factsInvalidateCmd = &cobra.Command{
+	Use:   "invalidate <id>",
+	Short: "Invalidate a fact (mark as no longer true)",
+	Long: `Mark a fact as no longer valid by setting its valid end time.
+
+Use this when reality changed — the fact was correct when recorded but
+is no longer true. The fact remains visible in historical queries
+(--as-of-valid) but disappears from current queries.
+
+Examples:
+    pudl facts invalidate c0b4392d347aca8e...`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id := args[0]
+
+		configDir := config.GetPudlDir()
+		db, err := database.NewCatalogDB(configDir)
+		if err != nil {
+			return fmt.Errorf("failed to open catalog: %w", err)
+		}
+		defer db.Close()
+
+		resolved, err := resolveFactID(db, id)
+		if err != nil {
+			return err
+		}
+
+		if err := db.InvalidateFact(resolved); err != nil {
+			return fmt.Errorf("failed to invalidate: %w", err)
+		}
+
+		fmt.Printf("Invalidated fact %s\n", resolved[:12])
+		return nil
+	},
+}
+
+// resolveFactID tries exact match then prefix match for a fact ID.
+func resolveFactID(db *database.CatalogDB, id string) (string, error) {
+	f, err := db.GetFact(id)
+	if err == nil {
+		return f.ID, nil
+	}
+	f, err = db.GetFactByPrefix(id)
+	if err != nil {
+		return "", fmt.Errorf("fact not found: %s", id)
+	}
+	return f.ID, nil
+}
+
 func init() {
 	rootCmd.AddCommand(factsCmd)
 	factsCmd.AddCommand(factsListCmd)
+	factsCmd.AddCommand(factsShowCmd)
+	factsCmd.AddCommand(factsRetractCmd)
+	factsCmd.AddCommand(factsInvalidateCmd)
 
 	factsListCmd.Flags().StringVar(&factsRelation, "relation", "", "Relation to query (required)")
 	factsListCmd.Flags().StringVar(&factsSource, "source", "", "Filter by source")
