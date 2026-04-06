@@ -94,10 +94,22 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 
 | Command | Description |
 |---------|-------------|
-| `pudl observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
+| `pudl observe <description>` | Record a structured observation (`--kind`, `--repo`, `--source`) |
 | `pudl facts list` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
+| `pudl facts show <id>` | Inspect a single fact (supports ID prefix matching) |
+| `pudl facts retract <id>` | Mark a fact as retracted (assertion was wrong) |
+| `pudl facts invalidate <id>` | Mark a fact as no longer valid (reality changed) |
 
 See [docs/facts.md](docs/facts.md) for the bitemporal fact store documentation.
+
+### Datalog and Rules
+
+| Command | Description |
+|---------|-------------|
+| `pudl query <relation> [key=value ...]` | Evaluate rules and query derived facts |
+| `pudl rule add <file>` | Validate and install a Datalog rule file (`--global`) |
+
+See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule authoring guide.
 
 ### Workspace Operations
 
