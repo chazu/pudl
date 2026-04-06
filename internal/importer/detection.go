@@ -32,6 +32,8 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 
 	// First try extension-based detection
 	switch ext {
+	case ".ndjson", ".jsonl":
+		return "ndjson", nil
 	case ".json":
 		// Check if it's NDJSON (newline-delimited JSON)
 		if isNDJSON, err := i.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
@@ -51,8 +53,8 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	// Read first 1KB for content detection
-	buffer := make([]byte, 1024)
+	// Read first 4KB for content detection
+	buffer := make([]byte, 4096)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
 		return "", err
@@ -61,9 +63,16 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 	content := string(buffer[:n])
 	content = strings.TrimSpace(content)
 
-	// Try to detect JSON
+	// Try to detect JSON-like content
 	if (strings.HasPrefix(content, "{") && strings.Contains(content, "}")) ||
 		(strings.HasPrefix(content, "[") && strings.Contains(content, "]")) {
+		// Content looks like JSON — but check for NDJSON first.
+		// NDJSON is multiple JSON objects separated by newlines, not a JSON array.
+		if strings.HasPrefix(content, "{") {
+			if isNDJSON, err := i.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
+				return "ndjson", nil
+			}
+		}
 		return "json", nil
 	}
 

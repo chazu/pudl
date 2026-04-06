@@ -153,6 +153,143 @@ func (w *PUDLWorkspace) DataPath(parts ...string) string {
 	return filepath.Join(allParts...)
 }
 
+// AddBootstrapSchemas adds specific schema packages to the test workspace.
+// Unlike a real pudl init (which copies all bootstrap schemas), this only writes
+// the schemas needed for the test, avoiding broken CUE dependencies from other
+// bootstrap packages that reference modules not available in test environments.
+//
+// It also writes empty stubs for all checked bootstrap paths so that the
+// importer's ensureBasicSchemas() doesn't trigger a full bootstrap copy.
+func (s *TempDirSetup) AddBootstrapSchemas(workspace *PUDLWorkspace) {
+	// Write empty stubs for all paths checked by ensureBasicSchemas, so it
+	// won't trigger a full bootstrap copy that drags in broken dependencies.
+	stubs := []struct{ dir, file, pkg string }{
+		{"schema/pudl/catalog", "catalog.cue", "catalog"},
+		{"schema/pudl/fs", "fs.cue", "fs"},
+		{"schema/pudl/version", "version.cue", "version"},
+		{"schema/pudl/infra", "infra.cue", "infra"},
+		{"schema/pudl/component", "component.cue", "component"},
+		{"schema/pudl/artifact", "artifact.cue", "artifact"},
+		{"schema/pudl/registry", "registry.cue", "registry"},
+		{"schema/pudl/aws", "aws.cue", "aws"},
+		{"schema/pudl/mu", "mu.cue", "mu"},
+		{"schema/pudl/brick", "brick.cue", "brick"},
+	}
+	for _, stub := range stubs {
+		s.CreateSubDir(stub.dir)
+		s.WriteFileInSubDir(stub.dir, stub.file, "package "+stub.pkg+"\n")
+	}
+
+	// Add linux schema package
+	s.CreateSubDir("schema/pudl/linux")
+	linuxContent := `package linux
+
+#Host: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.host"
+		identity_fields: ["hostname"]
+		tracked_fields: ["os", "kernel", "arch"]
+	}
+	hostname:        string
+	os: {
+		id:      string
+		version: string
+		name:    string
+	}
+	kernel:          string
+	arch:            string
+	uptime_seconds:  int
+	...
+}
+
+#Package: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.package"
+		identity_fields: ["host", "name"]
+		tracked_fields: ["version", "status"]
+	}
+	host:    string
+	name:    string
+	version: string
+	status:  string
+	...
+}
+
+#Service: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.service"
+		identity_fields: ["host", "unit"]
+		tracked_fields: ["active", "sub"]
+	}
+	host:   string
+	unit:   string
+	active: string
+	sub:    string
+	...
+}
+
+#Filesystem: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.filesystem"
+		identity_fields: ["host", "mountpoint"]
+		tracked_fields: ["device", "fstype", "size_bytes", "used_bytes", "avail_bytes"]
+	}
+	host:        string
+	device:      string
+	mountpoint:  string
+	fstype:      string
+	size_bytes:  int
+	used_bytes:  int
+	avail_bytes: int
+	...
+}
+
+#User: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.user"
+		identity_fields: ["host", "name"]
+		tracked_fields: ["uid", "gid", "home", "shell"]
+	}
+	host:  string
+	name:  string
+	uid:   int
+	gid:   int
+	home:  string
+	shell: string
+	...
+}
+
+#NetworkInterface: {
+	_pudl: {
+		schema_type:    "base"
+		resource_type:  "linux.network_interface"
+		identity_fields: ["host", "ifname"]
+		tracked_fields: ["operstate", "addr_info"]
+	}
+	host:        string
+	ifname:      string
+	operstate?:  string
+	flags?:      [...string]
+	mtu?:        int
+	link_type?:  string
+	address?:    string
+	addr_info?:  [...{
+		family:     string
+		local:      string
+		prefixlen:  int
+		...
+	}]
+	...
+}
+`
+	s.WriteFileInSubDir("schema/pudl/linux", "linux.cue", linuxContent)
+}
+
 // Cleanup manually cleans up the workspace (usually not needed due to t.Cleanup)
 func (s *TempDirSetup) Cleanup() {
 	if s.cleanup != nil {
