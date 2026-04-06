@@ -44,12 +44,12 @@ Given facts `depends(api, db)` and `depends(db, cache)`, this derives `depends_t
 ```cue
 obstacleAlert: {
     name: "obstacle_alert"
-    head: { rel: "at_risk", args: { repo: "$R" } }
-    body: [{ rel: "observation", args: { kind: "obstacle", repo: "$R" } }]
+    head: { rel: "at_risk", args: { scope: "$S" } }
+    body: [{ rel: "observation", args: { kind: "obstacle", scope: "$S" } }]
 }
 ```
 
-Any observation with `kind=obstacle` produces a derived `at_risk` fact for that repo.
+Any observation with `kind=obstacle` produces a derived `at_risk` fact for that scope.
 
 ### Example: Cross-Relation Join
 
@@ -58,7 +58,7 @@ flaggedOrigin: {
     name: "flagged_origin"
     head: { rel: "flagged", args: { origin: "$O" } }
     body: [
-        { rel: "observation",    args: { kind: "obstacle", repo: "$S" } },
+        { rel: "observation",    args: { kind: "obstacle", scope: "$S" } },
         { rel: "catalog_entry",  args: { origin: "$O", schema: "$S" } },
     ]
 }

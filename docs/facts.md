@@ -66,7 +66,7 @@ This gives four query modes:
 ```go
 f, err := db.AddFact(database.Fact{
     Relation: "observation",
-    Args:     `{"kind":"obstacle","description":"circular dep in auth","repo":"pkg/auth"}`,
+    Args:     `{"kind":"obstacle","description":"circular dep in auth","scope":"pudl:pkg/auth"}`,
     Source:   "claude-code",
 })
 ```
@@ -128,7 +128,7 @@ Args are stored as JSON objects with meaningful keys. There is no enforced schem
 
 ```json
 // observation relation
-{"kind": "obstacle", "description": "circular dep in auth", "repo": "pkg/auth"}
+{"kind": "obstacle", "description": "circular dep in auth", "scope": "pudl:pkg/auth"}
 
 // depends relation
 {"from": "api", "to": "db"}
@@ -148,14 +148,14 @@ Record a structured observation:
 ```bash
 pudl observe "auth package has circular dependency with user package" \
     --kind obstacle \
-    --repo pkg/auth
+    --scope pudl:pkg/auth
 
 pudl observe "all database calls go through a single connection pool" \
     --kind pattern
 
 pudl observe "the Config struct has 47 fields, should be split" \
     --kind suggestion \
-    --repo internal/config \
+    --scope pudl:internal/config \
     --source claude-code
 ```
 
@@ -164,7 +164,7 @@ Observations are stored as facts in the `observation` relation. The `--kind` fla
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--kind` | Observation kind | `fact` |
-| `--repo` | Repository or package this pertains to | (none) |
+| `--scope` | Scope as repo:path (e.g. `pudl:internal/database`) | (none) |
 | `--source` | Who made the observation | current OS user |
 
 ### `pudl facts list`
