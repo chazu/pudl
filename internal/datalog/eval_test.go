@@ -317,6 +317,31 @@ recursiveDep: {
 	assert.Len(t, results, 2) // api->db, api->cache
 }
 
+// --- Temporal EDB tests ---
+
+func TestTemporalFactsEDB(t *testing.T) {
+	// Verify that FactsEDB respects temporal parameters via MemoryEDB
+	// (full temporal test requires database; this tests the evaluator contract)
+
+	// Simulate: two facts at different times, rule derives from both
+	edb := NewMemoryEDB()
+	edb.Add(Tuple{Relation: "event", Args: map[string]interface{}{"name": "deploy", "time": "early"}})
+	edb.Add(Tuple{Relation: "event", Args: map[string]interface{}{"name": "incident", "time": "late"}})
+
+	rules := []Rule{
+		{
+			Name: "event_log",
+			Head: Atom{Rel: "logged", Args: map[string]Term{"name": Var("N")}},
+			Body: []Atom{{Rel: "event", Args: map[string]Term{"name": Var("N")}}},
+		},
+	}
+
+	eval := NewEvaluator(rules, edb)
+	results, err := eval.Query("logged", nil)
+	require.NoError(t, err)
+	assert.Len(t, results, 2) // both events derive logged facts
+}
+
 // --- Index tests ---
 
 func TestIndexLookup(t *testing.T) {

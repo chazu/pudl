@@ -36,18 +36,30 @@ func (m *MultiEDB) Scan(relation string) ([]Tuple, error) {
 	return all, nil
 }
 
-// FactsEDB reads from the bitemporal facts table (AsOfNow).
+// FactsEDB reads from the bitemporal facts table.
+// By default uses AsOfNow; set ValidAt and/or TxAt for temporal queries.
 type FactsEDB struct {
-	db *database.CatalogDB
+	db      *database.CatalogDB
+	ValidAt *int64 // query at this valid time (nil = current)
+	TxAt    *int64 // query at this transaction time (nil = current)
 }
 
-// NewFactsEDB creates an EDB backed by the facts table.
+// NewFactsEDB creates an EDB backed by the facts table (AsOfNow).
 func NewFactsEDB(db *database.CatalogDB) *FactsEDB {
 	return &FactsEDB{db: db}
 }
 
+// NewTemporalFactsEDB creates an EDB backed by the facts table with temporal scoping.
+func NewTemporalFactsEDB(db *database.CatalogDB, validAt, txAt *int64) *FactsEDB {
+	return &FactsEDB{db: db, ValidAt: validAt, TxAt: txAt}
+}
+
 func (f *FactsEDB) Scan(relation string) ([]Tuple, error) {
-	facts, err := f.db.QueryFacts(database.FactFilter{Relation: relation})
+	facts, err := f.db.QueryFacts(database.FactFilter{
+		Relation: relation,
+		ValidAt:  f.ValidAt,
+		TxAt:     f.TxAt,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("facts scan %s: %w", relation, err)
 	}
