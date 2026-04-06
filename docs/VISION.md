@@ -22,6 +22,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Schema Repository**: `~/.pudl/schema/` -- Git repository containing CUE schema definitions
 - **Data Storage**: `~/.pudl/data/` -- Imported data files with full provenance metadata
 - **Catalog Database**: SQLite-based catalog with query, filter, and pagination support
+- **Bitemporal Fact Store**: General-purpose table for typed assertions with valid-time and transaction-time tracking, content-addressed dedup, and four temporal query modes (see [docs/facts.md](facts.md))
 - **Self-contained**: No external dependencies required for the PUDL binary
 
 ### Schema System
@@ -94,6 +95,8 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl export-actions` -- Export drift as mu-compatible action specs
 - `pudl module` -- Manage CUE module dependencies
 - `pudl migrate` -- Run database migrations
+- `pudl observe` -- Record structured observations about the codebase
+- `pudl facts list` -- Query the bitemporal fact store by relation with temporal filtering
 - `pudl doctor` -- Health check utility
 - `pudl completion` -- Generate shell completion scripts
 
@@ -103,6 +106,23 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **SQLite** -- Catalog database
 
 ## Future Vision
+
+### Agent Observations (`pudl observe`)
+- **Structured observation ingestion**: Agents and humans record observations about the codebase via `pudl observe`, stored as facts in the bitemporal store
+- **Observation schema**: `pudl/nous.#Observation` with kind taxonomy (fact, obstacle, pattern, antipattern, suggestion, bug, opportunity)
+- **Corroboration**: Multiple agents independently flagging the same thing increases worth; the count is signal
+- **Promotion pipeline**: Raw observations → human review → promoted to Datalog rules or conventions
+
+### Datalog Evaluator (`pudl query`)
+- **Rule-based inference**: Bottom-up semi-naive evaluation over facts and catalog entries as EDB
+- **CUE-defined rules**: `#Rule` values with head/body structure, stored in workspace-scoped rule directories
+- **Workspace scoping**: Repo-scoped rules (`.pudl/rules/`) shadow global rules (`~/.pudl/rules/`)
+- **Temporal queries**: Evaluate rules over historical EDB snapshots using the bitemporal fact store
+
+### nous Integration
+- **nous reads from pudl**: Unit store hydrated from catalog entries and derived facts (IDB)
+- **nous writes to pudl**: Discovered patterns, conjectures, and candidate rules stored as facts
+- **Three-loop architecture**: Fast (Datalog inference) → Medium (nous agenda) → Slow (human validation)
 
 ### Deeper CUE Integration
 - **Catalog-driven generation**: Use the schema catalog to drive code generation, documentation, and tooling
