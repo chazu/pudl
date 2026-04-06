@@ -62,8 +62,11 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - Multi-path schema resolution with per-repo shadowing of global schemas
 - Imports within a workspace auto-tagged with workspace name as origin
 
-### Infrastructure
+### Agent Integration
+- `pudl prime` outputs a structured prompt teaching agents how to use pudl
 - `pudl repo init` creates `.pudl/` with workspace.cue and installs Claude skills
+
+### Infrastructure
 - `pudl doctor` with directory structure validation
 - Database migrations (idempotent, run on every open)
 
