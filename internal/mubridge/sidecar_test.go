@@ -65,3 +65,29 @@ func TestCanonicalRef_NoDefinition(t *testing.T) {
 		t.Errorf("got %q, want mu/aws@v1", got)
 	}
 }
+
+func TestReadSidecar_WithInlineDefinitions(t *testing.T) {
+	dir := t.TempDir()
+	data := filepath.Join(dir, "out.json")
+	os.WriteFile(data, []byte("{}"), 0o644)
+	side := []byte(`{
+        "module": "mu/aws",
+        "version": "v1",
+        "definitions": [
+            {"path": "ec2.cue", "content": "package aws\n#EC2Instance: {}\n"},
+            {"path": "vpc/vpc.cue", "content": "package vpc\n#VPC: {}\n"}
+        ]
+    }`)
+	os.WriteFile(SidecarPath(data), side, 0o644)
+
+	got, err := ReadSidecar(data)
+	if err != nil {
+		t.Fatalf("ReadSidecar: %v", err)
+	}
+	if len(got.Definitions) != 2 {
+		t.Fatalf("Definitions len = %d, want 2", len(got.Definitions))
+	}
+	if got.Definitions[0].Path != "ec2.cue" {
+		t.Errorf("Definitions[0].Path = %q", got.Definitions[0].Path)
+	}
+}

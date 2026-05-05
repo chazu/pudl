@@ -17,11 +17,27 @@ import (
 //
 // File naming convention: for a data file at "<path>", the sidecar
 // lives at "<path>.schema.json".
+//
+// Optionally, the sidecar may carry the schema's CUE definition files
+// inline so pudl can auto-register an unknown ref on first sight (the
+// brainstorm's "schema travels with the data" tier). Each Definition
+// is a slash-separated relative path inside the (module, version)
+// directory plus the file's bytes; pudl writes them into its schema
+// cache under <pudlDir>/schemas/<module>/<version>/<rel_path>.
 type SchemaSidecar struct {
-	Module     string `json:"module"`
-	Version    string `json:"version"`
-	Definition string `json:"definition,omitempty"` // optional, e.g. "#EC2Instance"
-	Source     string `json:"source,omitempty"`     // advisory: "vendored" | "remote"
+	Module      string                  `json:"module"`
+	Version     string                  `json:"version"`
+	Definition  string                  `json:"definition,omitempty"` // optional, e.g. "#EC2Instance"
+	Source      string                  `json:"source,omitempty"`     // advisory: "vendored" | "remote"
+	Definitions []SidecarDefinitionFile `json:"definitions,omitempty"`
+}
+
+// SidecarDefinitionFile is one CUE source file carried inline with the
+// sidecar. The Path is slash-separated, relative to the module's
+// version directory, e.g. "ec2.cue" or "vpc/vpc.cue".
+type SidecarDefinitionFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 // CanonicalRef returns the schema_ref string used in the

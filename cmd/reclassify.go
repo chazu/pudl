@@ -3,11 +3,13 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
 	"pudl/internal/database"
+	"pudl/internal/muschemas"
 )
 
 var reclassifyRef string
@@ -46,6 +48,11 @@ func runReclassify(ref string) error {
 	}
 	defer db.Close()
 
+	cache, err := muschemas.New(SchemaCacheRoot())
+	if err != nil {
+		return fmt.Errorf("open schema cache: %w", err)
+	}
+
 	rows, err := db.ListUnresolvedItemSchemas(ref)
 	if err != nil {
 		return fmt.Errorf("list unresolved: %w", err)
@@ -58,10 +65,7 @@ func runReclassify(ref string) error {
 	upgraded := 0
 	stillUnresolved := 0
 	for _, r := range rows {
-		// Schema-cache lookup is not yet wired (cross-process exposure
-		// of mu's schema cache to pudl is a follow-up). For now report
-		// the unresolved set so operators know what's pending.
-		resolved, err := tryResolveSchemaRef(r.SchemaRef)
+		resolved, err := tryResolveSchemaRef(cache, r.SchemaRef)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  WARN %s -> %s: %v\n", r.ItemID, r.SchemaRef, err)
 			stillUnresolved++
@@ -84,19 +88,29 @@ func runReclassify(ref string) error {
 	fmt.Printf("Reclassify: %d upgraded, %d still unresolved (of %d total).\n",
 		upgraded, stillUnresolved, len(rows))
 	if stillUnresolved > 0 {
-		fmt.Println("Tip: schemas referenced by these rows are not yet known to pudl.")
-		fmt.Println("Once the mu plugin schema cache is exposed to pudl, rerun `pudl reclassify`.")
+		fmt.Println("Tip: schemas referenced by these rows are not yet in pudl's schema cache.")
+		fmt.Printf("Cache root: %s\n", cache.Root())
 	}
 	return nil
 }
 
-// tryResolveSchemaRef attempts to resolve a schema reference against
-// pudl's available schemas. Returns (true, nil) if the ref is now
-// known and the row can be upgraded; (false, nil) if it is still
-// unknown; or an error for unexpected lookup failures.
-//
-// Currently a stub — schema-cache lookup wiring is a follow-up.
-func tryResolveSchemaRef(ref string) (bool, error) {
-	_ = ref
-	return false, nil
+// tryResolveSchemaRef parses ref and reports whether the (module,
+// version) is present in the schema cache. Definition selectors
+// (e.g. "#EC2Instance") are accepted but not yet validated against
+// the schema's declared types — presence of the module/version is
+// sufficient to upgrade an unresolved row to declared.
+func tryResolveSchemaRef(cache *muschemas.Cache, ref string) (bool, error) {
+	module, version, _, err := muschemas.ParseRef(ref)
+	if err != nil {
+		return false, err
+	}
+	return cache.Has(module, version), nil
+}
+
+// SchemaCacheRoot returns the on-disk root of pudl's schema cache.
+// Lives at <pudlDir>/schemas. Exported so that ingest paths
+// (pudl import) can register schemas into the same cache that
+// reclassify reads from.
+func SchemaCacheRoot() string {
+	return filepath.Join(config.GetPudlDir(), "schemas")
 }
