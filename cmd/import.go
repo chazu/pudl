@@ -50,6 +50,13 @@ Schema Assignment:
 - Automatic schema inference from CUE schemas in the schema repository
 - Cascading validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
+- Sidecar discovery: if "<datafile>.schema.json" exists alongside the
+  data file, its declared CUE schema reference (e.g. mu/aws@v1) is
+  recorded in the item_schemas junction table. Unknown refs are tagged
+  for later upgrade via 'pudl reclassify'. mu plugins emit these
+  sidecars automatically when they declare an output_schema.
+- Multiple schemas per item: items can satisfy more than one schema
+  (declared, inferred, unresolved) — see 'pudl reclassify --help'.
 
 Streaming Processing:
 - All imports use streaming for optimal performance and memory usage
@@ -62,6 +69,9 @@ Example usage:
     pudl import --path data.json
     pudl import --path aws-instances.json --schema aws.compliant-ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
+
+    # CUE schema reference (e.g. emitted by a mu plugin)
+    pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
     # Wildcard batch import
     pudl import --path *.json
