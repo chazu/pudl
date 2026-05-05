@@ -1,12 +1,19 @@
 # pudl + mu Integration
 
-pudl detects drift. mu fixes it.
+The two tools collaborate in two directions:
 
-- **pudl** models desired state in CUE, imports actual state, and computes diffs.
-- **mu** takes desired-state targets and converges them using resource-type plugins.
+- **pudl → mu** (drift convergence): pudl models desired state in CUE,
+  imports actual state, computes diffs, and emits a `mu.json` for mu to
+  consume and converge.
+- **mu → pudl** (data import): mu plugins produce structured data; that
+  data flows into pudl's catalog, optionally tagged with a CUE schema
+  reference declared by the plugin.
 
-The two tools communicate through mu.json — pudl generates it, mu consumes it.
-There is no code-level dependency between them.
+There is no code-level dependency between the two binaries — they
+communicate through files (mu.json, plugin output, schema sidecars)
+that either side can author independently.
+
+## Direction 1: drift convergence (pudl → mu)
 
 ## The Flow
 
@@ -256,3 +263,69 @@ desired state as a JSON config object.
 **No coupling.** pudl needs to know what config shape each plugin expects
 (so it can translate CUE definitions correctly), but this is just schema
 knowledge — the same thing pudl already manages.
+
+---
+
+## Direction 2: data import (mu → pudl)
+
+mu plugins produce structured data. When that data flows into pudl, the
+plugin can declare a CUE schema reference so pudl classifies the data
+under a meaningful type instead of falling back to the catchall
+`pudl/core.#Item`.
+
+### The flow
+
+```
+mu plugin produces output
+        │
+        ├── data file (e.g. out.json)
+        └── sidecar (out.json.schema.json) — declares the schema ref
+        │
+        ▼
+pudl import --path out.json
+        │
+        ├── reads sidecar (or --schema flag)
+        ├── attempts to resolve the ref
+        │      ├── known   → classify (declared)
+        │      ├── auto-register from vendored CUE → classify (auto_registered)
+        │      └── unknown → infer + tag for `pudl reclassify` (unresolved)
+        ▼
+catalog row + item_schemas rows recording all classifications
+```
+
+### Sidecar shape
+
+For data file `<path>`, the sidecar lives at `<path>.schema.json`:
+
+```json
+{
+  "module":     "mu/aws",
+  "version":    "v1",
+  "definition": "#EC2Instance"
+}
+```
+
+### Explicit override
+
+For agentic or one-off use, the sidecar can be skipped — `pudl import
+--schema mu/aws@v1#EC2Instance --path out.json` does the same thing.
+
+### Multiple schemas per item
+
+A single imported item can match multiple schemas (e.g.
+`mu/aws#EC2Instance` *and* `cloud/compute#Instance`). The `item_schemas`
+junction table represents this naturally — one row per (item,
+schema_ref) pair, each with its own status and timestamp.
+
+### Reclassification
+
+When a schema reference is unknown at import time, pudl tags the item
+with the unresolved ref. `pudl reclassify` rescans these rows and
+upgrades them once the schema becomes resolvable. See the W4/W5
+sections of `docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md`
+in the mu repo for the full design.
+
+### Plugin author docs
+
+If you're writing a mu plugin and want pudl to type-classify your
+output, see `mu/docs/plugin-output-schemas.md`.

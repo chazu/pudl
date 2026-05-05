@@ -9,8 +9,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"pudl/internal/config"
+	"pudl/internal/database"
 	"pudl/internal/errors"
 	"pudl/internal/importer"
+	"pudl/internal/mubridge"
 	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
@@ -204,8 +206,60 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
 	}
 
+	// Record the item's schema associations in the item_schemas junction
+	// table. Always records the inferred schema; if a sidecar declared
+	// a CUE schema reference, records that too with status=unresolved
+	// (until a future change wires schema-cache lookup + auto-register).
+	if !result.Skipped {
+		if err := recordItemSchemas(result, absPath); err != nil && os.Getenv("PUDL_DEBUG") != "" {
+			fmt.Fprintf(os.Stderr, "DEBUG: recordItemSchemas: %v\n", err)
+		}
+	}
+
 	// Display results
 	displayImportResults(result)
+	return nil
+}
+
+// recordItemSchemas writes the item_schemas rows associated with an
+// import. The inferred schema (whatever pudl assigned) is recorded with
+// status=inferred. If a sidecar is present, the declared CUE ref is
+// also recorded — for now always with status=unresolved, since
+// cross-process schema cache lookup is not yet implemented. Future
+// changes will upgrade matching rows to status=declared on import.
+func recordItemSchemas(result *importer.ImportResult, dataPath string) error {
+	if result == nil || result.ID == "" {
+		return nil
+	}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return fmt.Errorf("open catalog: %w", err)
+	}
+	defer db.Close()
+
+	if result.AssignedSchema != "" {
+		if err := db.AddItemSchema(database.ItemSchema{
+			ItemID:    result.ID,
+			SchemaRef: result.AssignedSchema,
+			Status:    database.ItemSchemaStatusInferred,
+		}); err != nil {
+			return fmt.Errorf("record inferred: %w", err)
+		}
+	}
+
+	side, err := mubridge.ReadSidecar(dataPath)
+	if err != nil {
+		return err
+	}
+	if side != nil {
+		if err := db.AddItemSchema(database.ItemSchema{
+			ItemID:    result.ID,
+			SchemaRef: side.CanonicalRef(),
+			Status:    database.ItemSchemaStatusUnresolved,
+		}); err != nil {
+			return fmt.Errorf("record sidecar ref: %w", err)
+		}
+	}
 	return nil
 }
 
