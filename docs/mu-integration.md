@@ -278,58 +278,61 @@ under a meaningful type instead of falling back to the catchall
 ```
 mu plugin produces output
         │
-        ├── data file (e.g. out.json)
-        └── sidecar (out.json.schema.json) — declares the schema ref
+        └── envelope.json  ({schema, definitions?, data})
         │
         ▼
-pudl import --path out.json
+pudl import --path envelope.json
         │
-        ├── reads sidecar (or --schema flag)
-        ├── attempts to resolve the ref
-        │      ├── known   → classify (declared)
-        │      ├── auto-register from vendored CUE → classify (auto_registered)
-        │      └── unknown → infer + tag for `pudl reclassify` (unresolved)
+        ├── unwraps the envelope (data → temp file → importer)
+        ├── classifies the schema ref against pudl's schema cache
+        │      ├── cache hit                → declared
+        │      ├── inline definitions write → auto_registered
+        │      └── neither                  → unresolved (tag for reclassify)
         ▼
 catalog row + item_schemas rows recording all classifications
 ```
 
-### Sidecar shape
+### Envelope shape
 
-For data file `<path>`, the sidecar lives at `<path>.schema.json`:
-
-```json
-{
-  "module":     "mu/aws",
-  "version":    "v1",
-  "definition": "#EC2Instance"
-}
-```
-
-For first-import auto-registration, the sidecar can also carry the
-schema's CUE definitions inline. pudl writes them into its schema
-cache (`<pudlDir>/schemas/<module>/<version>/...`) on first sight,
-classifies the item as `auto_registered`, and treats subsequent
-imports of the same `(module, version)` as `declared` — the schema
-travels with the data.
+A typed import is a single JSON document with a top-level `schema`,
+optional `definitions`, and a `data` payload:
 
 ```json
 {
-  "module":  "mu/aws",
-  "version": "v1",
+  "schema": {
+    "module":     "mu/aws",
+    "version":    "v1",
+    "definition": "#EC2Instance"
+  },
   "definitions": [
     {"path": "ec2.cue",     "content": "package aws\n#EC2Instance: {...}\n"},
     {"path": "vpc/vpc.cue", "content": "package vpc\n#VPC: {...}\n"}
-  ]
+  ],
+  "data": { "instance_id": "i-abc", "state": "running" }
 }
 ```
 
-Definition contents are immutable per `(module, version)`: a sidecar
-with conflicting bytes for an existing version is rejected.
+Detection is by shape: a top-level JSON object with both `schema`
+(populated module + version) and `data` is an envelope; anything else
+is raw JSON and passes through untouched. `data` may be any JSON value
+(object, array, string, etc.).
+
+When `definitions` is present, pudl writes the CUE files into its
+schema cache (`<pudlDir>/schemas/<module>/<version>/...`) on first
+sight. Subsequent imports of the same `(module, version)` skip that
+step and land as `declared`. Definition bytes are immutable per
+version: an envelope whose definitions disagree with what's cached is
+rejected rather than silently re-classified.
 
 ### Explicit override
 
-For agentic or one-off use, the sidecar can be skipped — `pudl import
---schema mu/aws@v1#EC2Instance --path out.json` does the same thing.
+For agentic or one-off use, raw JSON can still be typed via the flag:
+
+```
+pudl import --schema mu/aws@v1#EC2Instance --path raw.json
+```
+
+This bypasses envelope detection entirely.
 
 ### Multiple schemas per item
 
