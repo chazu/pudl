@@ -199,6 +199,14 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure facts table: %w", err)
 	}
 
+	// Create item_schemas junction table (idempotent).
+	// Tracks declared/inferred/unresolved schema references per item;
+	// supports an item satisfying multiple schemas. See
+	// docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W4).
+	if err := c.ensureItemSchemasTable(); err != nil {
+		return fmt.Errorf("failed to ensure item_schemas table: %w", err)
+	}
+
 	return nil
 }
 
