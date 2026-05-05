@@ -305,6 +305,27 @@ For data file `<path>`, the sidecar lives at `<path>.schema.json`:
 }
 ```
 
+For first-import auto-registration, the sidecar can also carry the
+schema's CUE definitions inline. pudl writes them into its schema
+cache (`<pudlDir>/schemas/<module>/<version>/...`) on first sight,
+classifies the item as `auto_registered`, and treats subsequent
+imports of the same `(module, version)` as `declared` — the schema
+travels with the data.
+
+```json
+{
+  "module":  "mu/aws",
+  "version": "v1",
+  "definitions": [
+    {"path": "ec2.cue",     "content": "package aws\n#EC2Instance: {...}\n"},
+    {"path": "vpc/vpc.cue", "content": "package vpc\n#VPC: {...}\n"}
+  ]
+}
+```
+
+Definition contents are immutable per `(module, version)`: a sidecar
+with conflicting bytes for an existing version is rejected.
+
 ### Explicit override
 
 For agentic or one-off use, the sidecar can be skipped — `pudl import

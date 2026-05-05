@@ -13,6 +13,7 @@ import (
 	"pudl/internal/errors"
 	"pudl/internal/importer"
 	"pudl/internal/mubridge"
+	"pudl/internal/muschemas"
 	"pudl/internal/streaming"
 	"pudl/internal/validator"
 )
@@ -262,15 +263,63 @@ func recordItemSchemas(result *importer.ImportResult, dataPath string) error {
 		return err
 	}
 	if side != nil {
+		cache, err := muschemas.New(SchemaCacheRoot())
+		if err != nil {
+			return fmt.Errorf("open schema cache: %w", err)
+		}
+		status, err := classifySidecar(cache, side)
+		if err != nil {
+			return fmt.Errorf("classify sidecar: %w", err)
+		}
 		if err := db.AddItemSchema(database.ItemSchema{
 			ItemID:    result.ID,
 			SchemaRef: side.CanonicalRef(),
-			Status:    database.ItemSchemaStatusUnresolved,
+			Status:    status,
 		}); err != nil {
 			return fmt.Errorf("record sidecar ref: %w", err)
 		}
 	}
 	return nil
+}
+
+// classifySidecar resolves a sidecar against pudl's schema cache and
+// returns the status to record in item_schemas:
+//
+//   - declared        — (module, version) already in cache.
+//   - auto_registered — sidecar carried inline definitions which were
+//     written into the cache (or matched what was already there).
+//   - unresolved      — neither: tag for `pudl reclassify`.
+func classifySidecar(cache *muschemas.Cache, side *mubridge.SchemaSidecar) (string, error) {
+	if cache.Has(side.Module, side.Version) {
+		// If the sidecar also carries definitions, verify they match
+		// what's cached (Insert will return ErrVersionMismatch on
+		// divergence — surface that as an error rather than silently
+		// classifying with a different schema than the data carried).
+		if len(side.Definitions) > 0 {
+			if err := registerSidecarDefinitions(cache, side); err != nil {
+				return "", err
+			}
+		}
+		return database.ItemSchemaStatusDeclared, nil
+	}
+	if len(side.Definitions) > 0 {
+		if err := registerSidecarDefinitions(cache, side); err != nil {
+			return "", err
+		}
+		return database.ItemSchemaStatusAutoRegistered, nil
+	}
+	return database.ItemSchemaStatusUnresolved, nil
+}
+
+func registerSidecarDefinitions(cache *muschemas.Cache, side *mubridge.SchemaSidecar) error {
+	files := make([]muschemas.File, 0, len(side.Definitions))
+	for _, d := range side.Definitions {
+		files = append(files, muschemas.File{
+			RelPath: d.Path,
+			Content: []byte(d.Content),
+		})
+	}
+	return cache.Insert(side.Module, side.Version, files)
 }
 
 func init() {
