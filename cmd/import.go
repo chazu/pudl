@@ -51,11 +51,14 @@ Schema Assignment:
 - Automatic schema inference from CUE schemas in the schema repository
 - Cascading validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
-- Sidecar discovery: if "<datafile>.schema.json" exists alongside the
-  data file, its declared CUE schema reference (e.g. mu/aws@v1) is
-  recorded in the item_schemas junction table. Unknown refs are tagged
-  for later upgrade via 'pudl reclassify'. mu plugins emit these
-  sidecars automatically when they declare an output_schema.
+- Envelope wire format: a JSON file shaped like
+    {"schema": {"module": "mu/aws", "version": "v1"},
+     "definitions": [...],   // optional inline CUE
+     "data": <payload>}
+  is auto-detected on import. The declared CUE schema ref is recorded
+  in the item_schemas table; inline definitions are written to pudl's
+  schema cache for future imports. Raw JSON without the envelope shape
+  is imported untouched.
 - Multiple schemas per item: items can satisfy more than one schema
   (declared, inferred, unresolved) — see 'pudl reclassify --help'.
 
@@ -197,9 +200,24 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		effectiveImportOrigin = wsCtx.EffectiveOrigin
 	}
 
+	// If the file is an envelope (JSON with top-level schema + data),
+	// extract the inner data to a temp file and import that. The
+	// envelope's schema portion is recorded in item_schemas after the
+	// import completes. Raw JSON / non-envelope inputs pass through
+	// untouched.
+	importPath := absPath
+	envelope, cleanup, err := extractEnvelopeIfPresent(absPath, effectiveImportOrigin)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to unwrap envelope", err)
+	}
+	defer cleanup()
+	if envelope != nil {
+		importPath = envelope.dataPath
+	}
+
 	// Set up import options
 	opts := importer.ImportOptions{
-		SourcePath:       absPath,
+		SourcePath:       importPath,
 		Origin:           effectiveImportOrigin, // Will be auto-detected if empty
 		ManualSchema:     importSchema,
 		CascadeValidator: cascadeValidator,
@@ -218,11 +236,11 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Record the item's schema associations in the item_schemas junction
-	// table. Always records the inferred schema; if a sidecar declared
-	// a CUE schema reference, records that too with status=unresolved
-	// (until a future change wires schema-cache lookup + auto-register).
+	// table. Always records the inferred schema; if the input was an
+	// envelope, records the declared CUE ref too — auto-registering
+	// inline definitions if they were carried.
 	if !result.Skipped {
-		if err := recordItemSchemas(result, absPath); err != nil && os.Getenv("PUDL_DEBUG") != "" {
+		if err := recordItemSchemas(result, envelope); err != nil && os.Getenv("PUDL_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "DEBUG: recordItemSchemas: %v\n", err)
 		}
 	}
@@ -233,12 +251,15 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 }
 
 // recordItemSchemas writes the item_schemas rows associated with an
-// import. The inferred schema (whatever pudl assigned) is recorded with
-// status=inferred. If a sidecar is present, the declared CUE ref is
-// also recorded — for now always with status=unresolved, since
-// cross-process schema cache lookup is not yet implemented. Future
-// changes will upgrade matching rows to status=declared on import.
-func recordItemSchemas(result *importer.ImportResult, dataPath string) error {
+// import. The inferred schema (whatever pudl assigned) is always
+// recorded with status=inferred. If the import came from an envelope,
+// the declared CUE ref is also recorded with one of:
+//
+//   - declared        — (module, version) already in pudl's schema cache
+//   - auto_registered — envelope carried inline definitions, written to cache
+//   - unresolved      — declared without definitions and not cached;
+//                       tag for `pudl reclassify`
+func recordItemSchemas(result *importer.ImportResult, env *unwrappedEnvelope) error {
 	if result == nil || result.ID == "" {
 		return nil
 	}
@@ -257,53 +278,42 @@ func recordItemSchemas(result *importer.ImportResult, dataPath string) error {
 			return fmt.Errorf("record inferred: %w", err)
 		}
 	}
-
-	side, err := mubridge.ReadSidecar(dataPath)
-	if err != nil {
-		return err
+	if env == nil {
+		return nil
 	}
-	if side != nil {
-		cache, err := muschemas.New(SchemaCacheRoot())
-		if err != nil {
-			return fmt.Errorf("open schema cache: %w", err)
-		}
-		status, err := classifySidecar(cache, side)
-		if err != nil {
-			return fmt.Errorf("classify sidecar: %w", err)
-		}
-		if err := db.AddItemSchema(database.ItemSchema{
-			ItemID:    result.ID,
-			SchemaRef: side.CanonicalRef(),
-			Status:    status,
-		}); err != nil {
-			return fmt.Errorf("record sidecar ref: %w", err)
-		}
+	cache, err := muschemas.New(SchemaCacheRoot())
+	if err != nil {
+		return fmt.Errorf("open schema cache: %w", err)
+	}
+	status, err := classifyEnvelopeSchema(cache, env.envelope)
+	if err != nil {
+		return fmt.Errorf("classify envelope: %w", err)
+	}
+	if err := db.AddItemSchema(database.ItemSchema{
+		ItemID:    result.ID,
+		SchemaRef: env.envelope.Schema.CanonicalRef(),
+		Status:    status,
+	}); err != nil {
+		return fmt.Errorf("record envelope ref: %w", err)
 	}
 	return nil
 }
 
-// classifySidecar resolves a sidecar against pudl's schema cache and
-// returns the status to record in item_schemas:
-//
-//   - declared        — (module, version) already in cache.
-//   - auto_registered — sidecar carried inline definitions which were
-//     written into the cache (or matched what was already there).
-//   - unresolved      — neither: tag for `pudl reclassify`.
-func classifySidecar(cache *muschemas.Cache, side *mubridge.SchemaSidecar) (string, error) {
-	if cache.Has(side.Module, side.Version) {
-		// If the sidecar also carries definitions, verify they match
-		// what's cached (Insert will return ErrVersionMismatch on
-		// divergence — surface that as an error rather than silently
-		// classifying with a different schema than the data carried).
-		if len(side.Definitions) > 0 {
-			if err := registerSidecarDefinitions(cache, side); err != nil {
+// classifyEnvelopeSchema resolves an envelope's schema portion against
+// pudl's schema cache and returns the status to record. Conflicts
+// between inline definitions and an existing cached version surface
+// as an error rather than silently picking one.
+func classifyEnvelopeSchema(cache *muschemas.Cache, env *mubridge.Envelope) (string, error) {
+	if cache.Has(env.Schema.Module, env.Schema.Version) {
+		if len(env.Definitions) > 0 {
+			if err := registerEnvelopeDefinitions(cache, env); err != nil {
 				return "", err
 			}
 		}
 		return database.ItemSchemaStatusDeclared, nil
 	}
-	if len(side.Definitions) > 0 {
-		if err := registerSidecarDefinitions(cache, side); err != nil {
+	if len(env.Definitions) > 0 {
+		if err := registerEnvelopeDefinitions(cache, env); err != nil {
 			return "", err
 		}
 		return database.ItemSchemaStatusAutoRegistered, nil
@@ -311,15 +321,62 @@ func classifySidecar(cache *muschemas.Cache, side *mubridge.SchemaSidecar) (stri
 	return database.ItemSchemaStatusUnresolved, nil
 }
 
-func registerSidecarDefinitions(cache *muschemas.Cache, side *mubridge.SchemaSidecar) error {
-	files := make([]muschemas.File, 0, len(side.Definitions))
-	for _, d := range side.Definitions {
-		files = append(files, muschemas.File{
-			RelPath: d.Path,
-			Content: []byte(d.Content),
-		})
+func registerEnvelopeDefinitions(cache *muschemas.Cache, env *mubridge.Envelope) error {
+	files := make([]muschemas.File, 0, len(env.Definitions))
+	for _, d := range env.Definitions {
+		files = append(files, muschemas.File{RelPath: d.Path, Content: []byte(d.Content)})
 	}
-	return cache.Insert(side.Module, side.Version, files)
+	return cache.Insert(env.Schema.Module, env.Schema.Version, files)
+}
+
+// unwrappedEnvelope holds the parsed envelope plus the temp data path
+// that the importer should ingest. cleanup is called by the caller
+// (via defer) regardless of whether an envelope was detected.
+type unwrappedEnvelope struct {
+	envelope *mubridge.Envelope
+	dataPath string
+}
+
+// extractEnvelopeIfPresent reads absPath, detects whether it is an
+// envelope, and (if so) materializes the inner data to a temp file
+// alongside it. The temp file's name preserves the original basename
+// so origin/format detection in the importer is unaffected. Returns
+// (nil, noopCleanup, nil) for raw inputs.
+func extractEnvelopeIfPresent(absPath, origin string) (*unwrappedEnvelope, func(), error) {
+	noop := func() {}
+	f, err := os.Open(absPath)
+	if err != nil {
+		return nil, noop, err
+	}
+	env, _, err := mubridge.Unwrap(f)
+	f.Close()
+	if err != nil {
+		return nil, noop, err
+	}
+	if env == nil {
+		return nil, noop, nil
+	}
+
+	// Materialize the inner payload to a temp file. Use a name derived
+	// from the original so format auto-detection (.json/.yaml/etc.) and
+	// origin auto-detection continue to behave the same.
+	dir := filepath.Dir(absPath)
+	base := filepath.Base(absPath)
+	tmp, err := os.CreateTemp(dir, ".envelope-*-"+base)
+	if err != nil {
+		return nil, noop, fmt.Errorf("create temp: %w", err)
+	}
+	if _, err := tmp.Write(env.Data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return nil, noop, fmt.Errorf("write inner payload: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return nil, noop, err
+	}
+	cleanup := func() { os.Remove(tmp.Name()) }
+	return &unwrappedEnvelope{envelope: env, dataPath: tmp.Name()}, cleanup, nil
 }
 
 func init() {
