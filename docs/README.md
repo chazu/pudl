@@ -17,13 +17,13 @@ Start with the [root README](../README.md) for a project overview.
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, performance |
 | [VISION.md](VISION.md) | Project vision and roadmap |
 | [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |
+| [inference-algorithm.md](inference-algorithm.md) | Schema inference engine: heuristics, CUE unification, scoring |
 | [plan.md](plan.md) | Living development plan: what's built, what's next |
 
 ## Subdirectories
 
 | Directory | Description |
 |-----------|-------------|
-| [beads/](beads/) | Active work items: ACUTE loop, workspace, BRICK toolchain |
 | [research/](research/) | Design proposals and research notes |
 | [issues/](issues/) | Open issues and known gaps |
-| [archive/](archive/) | Completed plans and historical dev notes |
+| [implog/](implog/) | Implementation logs (chronological) |
