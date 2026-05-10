@@ -66,6 +66,10 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - `pudl prime` outputs a structured prompt teaching agents how to use pudl
 - `pudl repo init` creates `.pudl/` with workspace.cue and installs Claude skills
 
+### Documentation
+- Reorganized docs: user-facing guides in `docs/`, active work in `docs/beads/`, research in `docs/research/`, completed plans in `docs/archive/`
+- `docs/README.md` index covers all subdirectories
+
 ### Infrastructure
 - `pudl doctor` with directory structure validation
 - Database migrations (idempotent, run on every open)
