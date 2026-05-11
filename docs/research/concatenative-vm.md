@@ -1003,39 +1003,9 @@ for deep debugging.
 - **Retro** — sigil-based Forth. Sigils redundant when the program is
   already typed CUE data.
 
-### Q7: String Literal Syntax ✅
-
-**Resolved:** Single-quote sigil prefix. `"'state"` pushes `"state"` as
-a literal string. Checked first in dispatch, before word lookup or field
-ref resolution.
-
-This is a *role* sigil (word vs data), not a *type* sigil (number vs
-string). The research doc's objection to sigils was about type
-disambiguation, which CUE already handles. Role disambiguation is a
-different problem CUE can't solve since both are `string` type.
-
-```cue
-// Before (broken): "state" dispatches as word
-body: ["state", "get"]  // ERROR: unknown word: state
-
-// After (works): 'prefix pushes literal
-body: ["'state", "get"]  // pushes "state", then calls get
-```
-
-CUE validation: `#StringLit: =~"^'."` can catch malformed literals.
-
-Programs now look like:
-```cue
-body: [
-    "'state", "get", "'running", "eq",     // string keys via sigil
-    "input.host",                           // field refs (no sigil)
-    "catalog/query",                        // driver words (no sigil)
-]
-```
-
 ## Next Steps
 
-1. ~~Create `~/dev/go/pith/`~~ — **DONE.** VM complete, 109 tests passing.
+1. ~~Create `~/dev/go/pith/`~~ — **DONE.** VM complete, 116 tests passing.
 2. ~~Define CUE vocabulary schemas~~ — **DONE.** `cue.cue` ships
    `#Program`/`#Op` with all tier unions.
 3. ~~Q1 Field ref resolution~~ — **DONE.** `VM.SetContext()` + dispatch fallback.
@@ -1045,7 +1015,13 @@ body: [
 7. ~~Q5 Missing vocabulary~~ — **DONE.** `group-by` + `flatten` implemented.
 8. ~~Q6 Error reporting~~ — **DONE.** Op index in errors.
 9. ~~Q7 String literals~~ — **DONE.** Single-quote sigil prefix.
-9. Write 3-5 example programs against real pudl catalog data.
-10. Evaluate: does the agent-authoring hypothesis hold?
+10. ~~Example programs~~ — **DONE.** 5 integration tests in
+    `internal/pithdriver/examples_test.go`: fleet summary (query +
+    group-by), filter by status, count by origin, schema discovery,
+    field ref query. Agent-authoring hypothesis holds for these cases.
 11. Import pith into mu; register effectful driver words, integrate
-    with action execution and plan methods.
+    with plan phase and action execution.
+12. Add `pudl exec` CLI for testing/debugging methods (informed by mu
+    usage patterns).
+13. Implement deferred words as needed: `format/*` (mu driver),
+    `diff` (drift detection), `schema/match`, `schema/infer`.
