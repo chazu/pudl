@@ -121,11 +121,26 @@ Examples:
 			rules = append(rules, fileRules...)
 		}
 
-		// Evaluate and query
-		eval := datalog.NewEvaluator(rules, edb)
-		results, err := eval.Query(relation, constraints)
-		if err != nil {
-			return fmt.Errorf("query failed: %w", err)
+		// Partition rules: use SQL for non-recursive, in-memory for recursive
+		scope := datalog.TemporalScope{ValidAt: validAt, TxAt: txAt}
+		recursive, nonRecursive := datalog.PartitionRules(rules)
+
+		var results []datalog.Tuple
+
+		if len(nonRecursive) > 0 || len(recursive) == 0 {
+			sqlEval := datalog.NewSQLEvaluator(db, nonRecursive, scope)
+			results, err = sqlEval.Query(relation, constraints)
+			if err != nil {
+				return fmt.Errorf("sql query failed: %w", err)
+			}
+		}
+
+		if len(results) == 0 && len(recursive) > 0 {
+			eval := datalog.NewEvaluator(rules, edb)
+			results, err = eval.Query(relation, constraints)
+			if err != nil {
+				return fmt.Errorf("query failed: %w", err)
+			}
 		}
 
 		if jsonOutput {
