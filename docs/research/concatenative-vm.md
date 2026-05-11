@@ -106,10 +106,11 @@ at definition time:
 
 #DriverOp:   =~"^[a-z]+/[a-z_]+$"
 #FieldRef:   =~"^(input|output|data)\\."
+#StringLit:  =~"^'."
 
 #Op: #StackOp | #CombOp | #SeqOp | #CondOp |
      #DataOp | #CompareOp | #LogicOp | #StringOp |
-     #DriverOp | #FieldRef |
+     #DriverOp | #FieldRef | #StringLit |
      number | bool | string |
      [...#Op]
 ```
@@ -833,6 +834,143 @@ pith ────────────── runtime ────────
   └── mu context:   effectful driver words (http, exec, cas, action)
 ```
 
+## Implementation Status
+
+pith VM is complete at `~/dev/go/pith/`. 97 tests passing. All four
+tiers implemented:
+
+- **Tier 1 (stack):** dup, drop, swap, over, nip, rot, tuck, 2dup, 2drop
+- **Tier 2 (combinators):** apply, dip, keep, bi, bi*, bi@, each, map,
+  filter, reduce, any?, all?, if, when, unless
+- **Tier 3 (data):** get, set, has?, keys, values, path, pick, omit,
+  merge, eq, neq, lt, gt, lte, gte, and, or, not, null?, concat, len, split
+- **Tier 4 (drivers):** RegisterDriver API works, no drivers shipped
+  (consumers register their own)
+- **CUE integration:** ExtractProgram converts cue.Value → []any,
+  cue.cue ships #Program/#Op schemas
+- **Trace mode:** NewWithTrace prints stack after each word
+
+Module structure matches the plan. Only stdlib deps in core; cue.go
+imports cuelang.org/go for program extraction.
+
+### Resolved Design Decisions
+
+**Module placement:** Standalone at `~/dev/go/pith/`. Confirmed by ewe
+precedent. mu imports pith directly; no pudl→mu coupling.
+
+**action/emit pattern (mu):** Driver words close over coordinator state.
+`action/emit` appends to an external `[]ActionSpec` via closure.
+Coordinator drains buffer after `vm.Run` completes. No side-channel
+in VM itself.
+
+**CUE schema imports:** Consumers import `github.com/chazu/pith` for
+`#Program` type. CUE validates programs at definition time.
+
+## Open Questions
+
+These must be resolved before pudl/mu integration:
+
+### Q1: Field Reference Resolution ✅
+
+**Resolved:** Option 2 — catch-all resolver in VM dispatch.
+
+`VM.SetContext(name, data)` registers named context maps. Field refs like
+`"input.host"` resolve via fallback in `Run`: split on `.`, check prefix
+against registered contexts, walk nested maps. Missing keys push `nil`.
+Traces show original ref name. No extraction rewriting, no explicit
+`get`/`path` boilerplate.
+
+```go
+vm.SetContext("input", map[string]any{"host": "example.com"})
+vm.Run([]any{"input.host"}) // pushes "example.com"
+```
+
+Implementation: `pith/vm.go` — `refs` field, `SetContext()`, `resolveFieldRef()`.
+Tests: `pith/vm_test.go` — 7 cases (simple, nested, missing key, unknown
+prefix, multiple contexts, mixed with words, trace output).
+
+### Q2: Execution Entry Point in pudl ✅
+
+**Resolved:** No pudl-side entry point for v1. mu imports pudl's driver
+word adapters as a Go package and owns the trigger. pudl's role is
+exposing catalog/fact/schema operations as importable driver words (Q3).
+
+A `pudl exec` CLI command for testing/debugging methods will be added
+later, informed by real usage patterns from mu integration.
+
+### Q3: Driver Word ↔ pudl API Adapter Layer ✅
+
+**Resolved:** `internal/pithdriver/` package with JSON round-trip conversion.
+
+Type mapping uses generic `mapToStruct[T]` / `structToMap` helpers that
+marshal through `encoding/json`. All pudl structs already have json tags.
+Microsecond overhead, irrelevant for DB-bound operations.
+
+Write words (`fact/assert`, `fact/retract`) included in pudl's driver —
+facts are pudl's domain, mu just triggers them.
+
+Implemented words:
+
+| Word | Stack signature | Status |
+|---|---|---|
+| `catalog/query` | `( filters -- [entries] )` | ✅ |
+| `catalog/get` | `( id -- entry )` | ✅ (tries proquint then raw ID) |
+| `catalog/count` | `( filters -- n )` | ✅ |
+| `fact/query` | `( pattern -- [facts] )` | ✅ |
+| `fact/assert` | `( subj pred obj -- )` | ✅ |
+| `fact/retract` | `( id -- )` | ✅ |
+| `schema/list` | `( -- schemas )` | ✅ |
+| `schema/match` | `( data -- schema )` | deferred (API doesn't exist) |
+| `schema/infer` | `( data -- schema )` | deferred (API doesn't exist) |
+
+Usage: `pithdriver.Register(vm, db, schemaMgr)` registers all three
+namespaces. Callers pass nil for unused components.
+
+### Q4: mu's Actual Architecture vs Research Assumptions ✅
+
+**Resolved:** No mismatch. Research doc assumptions were correct.
+
+mu has a Go coordinator (`cmd/mu/main.go`) that dispatches to plugins
+via NDJSON over stdin/stdout. Babashka `.bb` scripts are one plugin
+runtime, not an alternative architecture. Go coordinator resolves `bb`
+binary as a toolchain artifact, spawns plugins as subprocesses.
+
+Pipeline: Config (CUE) → Plan (plugins emit ActionSpecs via NDJSON) →
+DAG construction → topological parallel execution → outputs to CAS.
+
+pith integrates in-process: targets/actions with `body` field (CUE list)
+run via pith VM instead of subprocess. No NDJSON overhead for simple
+transform-and-emit logic. Coexists with `.bb` plugin dispatch.
+
+### Q5: Missing Vocabulary ✅
+
+**Resolved:** Two words implemented, two deferred.
+
+- `group-by` ( seq [q] -- map ) — ✅ implemented. Quotation extracts key
+  from each element, returns `map[string][]any`. Key is `fmt.Sprintf("%v", k)`.
+- `flatten` ( seq -- seq' ) — ✅ implemented. One-level array flattening.
+  Non-array elements pass through.
+- `format/*` — deferred. Domain-specific driver words, mu's responsibility.
+- `diff` — deferred. Useful for drift detection but no consumer yet.
+
+**Discovered issue: no string literal syntax.** All strings in programs
+dispatch as word lookups. `["state", "get"]` fails because `"state"` is
+treated as a word, not a literal. This breaks every research doc example
+that uses `get`/`set`/`path` with inline string keys. See Q7 below.
+
+### Q6: Error Reporting for Agent-Authored Programs ✅
+
+**Resolved:** Op index in all error messages + trace mode for step-by-step.
+
+Errors now include position: `"op 3 (get): expected map[string]any, got int"`
+and `"op 2: unknown word: staet"`. Index is zero-based, matches program
+array position. Nested quotations (via apply/each/map/etc.) have their
+own indices starting at 0 — the word name in the outer error provides
+context for which combinator invoked the inner program.
+
+Trace mode (already implemented) provides full step-by-step stack state
+for deep debugging.
+
 ## Risks
 
 - **Scope creep**: "just a small interpreter" → error handling, debugging,
@@ -865,16 +1003,49 @@ pith ────────────── runtime ────────
 - **Retro** — sigil-based Forth. Sigils redundant when the program is
   already typed CUE data.
 
+### Q7: String Literal Syntax ✅
+
+**Resolved:** Single-quote sigil prefix. `"'state"` pushes `"state"` as
+a literal string. Checked first in dispatch, before word lookup or field
+ref resolution.
+
+This is a *role* sigil (word vs data), not a *type* sigil (number vs
+string). The research doc's objection to sigils was about type
+disambiguation, which CUE already handles. Role disambiguation is a
+different problem CUE can't solve since both are `string` type.
+
+```cue
+// Before (broken): "state" dispatches as word
+body: ["state", "get"]  // ERROR: unknown word: state
+
+// After (works): 'prefix pushes literal
+body: ["'state", "get"]  // pushes "state", then calls get
+```
+
+CUE validation: `#StringLit: =~"^'."` can catch malformed literals.
+
+Programs now look like:
+```cue
+body: [
+    "'state", "get", "'running", "eq",     // string keys via sigil
+    "input.host",                           // field refs (no sigil)
+    "catalog/query",                        // driver words (no sigil)
+]
+```
+
 ## Next Steps
 
-1. Create `~/dev/go/pith/` — standalone Go module, interpreter + stack +
-   word dispatch + builtins (~150-200 lines total)
-2. Define CUE vocabulary schemas for core words (ship as embedded CUE
-   in pith, importable by consumers)
-3. Import pith into pudl; register read-only driver words
-   (catalog/query, schema/match, fact/query)
-4. Write 3-5 example programs against real pudl catalog data
-5. Evaluate: does the agent-authoring hypothesis hold? Can an LLM
-   reliably produce correct programs for common queries?
-6. If yes: import pith into mu, register effectful driver words,
-   integrate with action execution and plan methods
+1. ~~Create `~/dev/go/pith/`~~ — **DONE.** VM complete, 109 tests passing.
+2. ~~Define CUE vocabulary schemas~~ — **DONE.** `cue.cue` ships
+   `#Program`/`#Op` with all tier unions.
+3. ~~Q1 Field ref resolution~~ — **DONE.** `VM.SetContext()` + dispatch fallback.
+4. ~~Q2 Execution entry point~~ — **DONE.** Deferred; mu owns trigger.
+5. ~~Q3 Driver word adapters~~ — **DONE.** `internal/pithdriver/` package.
+6. ~~Q4 mu architecture~~ — **DONE.** No mismatch; Go coordinator confirmed.
+7. ~~Q5 Missing vocabulary~~ — **DONE.** `group-by` + `flatten` implemented.
+8. ~~Q6 Error reporting~~ — **DONE.** Op index in errors.
+9. ~~Q7 String literals~~ — **DONE.** Single-quote sigil prefix.
+9. Write 3-5 example programs against real pudl catalog data.
+10. Evaluate: does the agent-authoring hypothesis hold?
+11. Import pith into mu; register effectful driver words, integrate
+    with action execution and plan methods.
