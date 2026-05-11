@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"pudl/internal/errors"
 	"pudl/internal/idgen"
 	"pudl/internal/schemaname"
@@ -104,7 +104,7 @@ func (c *CatalogDB) initialize() error {
 
 	// Open database connection
 	dbPath := filepath.Join(sqliteDir, "catalog.db")
-	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_synchronous=NORMAL&_cache_size=10000")
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=cache_size(10000)")
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
