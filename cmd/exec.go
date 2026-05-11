@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,17 +34,18 @@ The program is a JSON array of operations. Driver words available:
   fact/*      Fact store operations
   schema/*    Schema operations
 
-Programs can be provided as a JSON string argument or loaded from a file.
+Programs can be provided as a JSON string argument, loaded from a file,
+or piped via stdin (use - or just pipe). Stdin/file avoids shell quoting issues.
 
 Context values (--context key=value) are available as field refs (e.g. "ctx.key").
 Values are parsed as JSON when possible, otherwise treated as strings.
 
 Examples:
-    pudl exec '["'observation", "fact/list"]'
     pudl exec -f program.json
-    pudl exec --trace '["'hello", "'world", "swap"]'
-    pudl exec --context name=api '["ctx.name", "catalog/get"]'
-    pudl exec --json '[1, 2, "add"]'`,
+    echo '["schema/list", "keys"]' | pudl exec -
+    pudl exec --trace -f program.json
+    pudl exec --context name=api -f query.json
+    pudl exec --json '[{}, "catalog/count"]'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Read program source
 		var programJSON []byte
@@ -54,10 +56,17 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("failed to read program file: %w", err)
 			}
-		} else if len(args) > 0 {
+		} else if len(args) > 0 && args[0] != "-" {
 			programJSON = []byte(args[0])
 		} else {
-			return fmt.Errorf("provide a program as argument or use -f <file>")
+			// Read from stdin (piped or heredoc)
+			programJSON, err = io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("failed to read stdin: %w", err)
+			}
+			if len(programJSON) == 0 {
+				return fmt.Errorf("provide a program as argument, -f <file>, or pipe to stdin")
+			}
 		}
 
 		// Parse JSON program
