@@ -18,7 +18,15 @@ type CompiledQuery struct {
 	Vars   map[string]string // variable name → SQL expression (e.g. "json_extract(t0.args, '$.from')")
 }
 
+type CompileOptions struct {
+	TableOverrides map[string]string
+}
+
 func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
+	return CompileWithOptions(rule, scope, CompileOptions{})
+}
+
+func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*CompiledQuery, error) {
 	if len(rule.Body) == 0 {
 		return nil, fmt.Errorf("rule %s has no body atoms", rule.Name)
 	}
@@ -28,7 +36,6 @@ func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
 		tableName = "facts"
 	}
 
-	// Track first occurrence of each variable → its SQL expression
 	varExprs := make(map[string]string)
 
 	var fromParts []string
@@ -37,15 +44,25 @@ func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
 
 	for i, atom := range rule.Body {
 		alias := fmt.Sprintf("t%d", i)
-		fromParts = append(fromParts, fmt.Sprintf("%s %s", tableName, alias))
 
-		whereParts = append(whereParts, fmt.Sprintf("%s.relation = ?", alias))
-		params = append(params, atom.Rel)
+		override, hasOverride := opts.TableOverrides[atom.Rel]
+		if hasOverride {
+			fromParts = append(fromParts, fmt.Sprintf("%s %s", override, alias))
+		} else {
+			fromParts = append(fromParts, fmt.Sprintf("%s %s", tableName, alias))
+			whereParts = append(whereParts, fmt.Sprintf("%s.relation = ?", alias))
+			params = append(params, atom.Rel)
+		}
 
 		keys := sortedArgKeys(atom.Args)
 		for _, key := range keys {
 			term := atom.Args[key]
-			expr := fmt.Sprintf("json_extract(%s.args, '$.%s')", alias, key)
+			var expr string
+			if hasOverride {
+				expr = fmt.Sprintf("%s.\"%s\"", alias, key)
+			} else {
+				expr = fmt.Sprintf("json_extract(%s.args, '$.%s')", alias, key)
+			}
 
 			if term.IsVariable() {
 				if prev, seen := varExprs[term.Variable]; seen {
@@ -59,22 +76,24 @@ func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
 			}
 		}
 
-		if scope.ValidAt != nil {
-			whereParts = append(whereParts,
-				fmt.Sprintf("%s.valid_start <= ?", alias),
-				fmt.Sprintf("(%s.valid_end IS NULL OR %s.valid_end > ?)", alias, alias),
-			)
-			params = append(params, *scope.ValidAt, *scope.ValidAt)
-		}
+		if !hasOverride {
+			if scope.ValidAt != nil {
+				whereParts = append(whereParts,
+					fmt.Sprintf("%s.valid_start <= ?", alias),
+					fmt.Sprintf("(%s.valid_end IS NULL OR %s.valid_end > ?)", alias, alias),
+				)
+				params = append(params, *scope.ValidAt, *scope.ValidAt)
+			}
 
-		if scope.TxAt != nil {
-			whereParts = append(whereParts,
-				fmt.Sprintf("%s.tx_start <= ?", alias),
-				fmt.Sprintf("(%s.tx_end IS NULL OR %s.tx_end > ?)", alias, alias),
-			)
-			params = append(params, *scope.TxAt, *scope.TxAt)
-		} else if scope.ValidAt != nil {
-			whereParts = append(whereParts, fmt.Sprintf("%s.tx_end IS NULL", alias))
+			if scope.TxAt != nil {
+				whereParts = append(whereParts,
+					fmt.Sprintf("%s.tx_start <= ?", alias),
+					fmt.Sprintf("(%s.tx_end IS NULL OR %s.tx_end > ?)", alias, alias),
+				)
+				params = append(params, *scope.TxAt, *scope.TxAt)
+			} else if scope.ValidAt != nil {
+				whereParts = append(whereParts, fmt.Sprintf("%s.tx_end IS NULL", alias))
+			}
 		}
 	}
 

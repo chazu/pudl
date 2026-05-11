@@ -87,13 +87,6 @@ Examples:
 			txAt = &t
 		}
 
-		// Build EDB from facts + catalog
-		factsEDB := datalog.NewTemporalFactsEDB(db, validAt, txAt)
-		edb := datalog.NewMultiEDB(
-			factsEDB,
-			datalog.NewCatalogEDB(db),
-		)
-
 		// Load rules from workspace paths
 		var rulePaths []string
 
@@ -136,10 +129,9 @@ Examples:
 		}
 
 		if len(results) == 0 && len(recursive) > 0 {
-			eval := datalog.NewEvaluator(rules, edb)
-			results, err = eval.Query(relation, constraints)
+			results, err = datalog.EvalRecursive(db, rules, relation, constraints, scope)
 			if err != nil {
-				return fmt.Errorf("query failed: %w", err)
+				return fmt.Errorf("recursive query failed: %w", err)
 			}
 		}
 
