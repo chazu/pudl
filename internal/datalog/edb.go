@@ -55,11 +55,18 @@ func NewTemporalFactsEDB(db *database.CatalogDB, validAt, txAt *int64) *FactsEDB
 }
 
 func (f *FactsEDB) Scan(relation string) ([]Tuple, error) {
-	facts, err := f.db.QueryFacts(database.FactFilter{
-		Relation: relation,
-		ValidAt:  f.ValidAt,
-		TxAt:     f.TxAt,
-	})
+	var facts []database.Fact
+	var err error
+
+	if f.ValidAt == nil && f.TxAt == nil {
+		facts, err = f.db.QueryCurrentFacts(relation)
+	} else {
+		facts, err = f.db.QueryFacts(database.FactFilter{
+			Relation: relation,
+			ValidAt:  f.ValidAt,
+			TxAt:     f.TxAt,
+		})
+	}
 	if err != nil {
 		return nil, fmt.Errorf("facts scan %s: %w", relation, err)
 	}

@@ -97,6 +97,7 @@ func (c *CatalogDB) ensureFactsTable() error {
 // AddFact inserts a new fact into the store.
 // The fact ID is computed from content if not already set.
 // TxStart is set to now if zero.
+// Also inserts into current_facts if the fact is currently valid (no valid_end or tx_end).
 func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	if f.Relation == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact relation is required", nil)
@@ -117,15 +118,29 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 		f.ID = ComputeFactID(f.Relation, f.Args, f.ValidStart, f.Source)
 	}
 
-	insertSQL := `
-	INSERT INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	tx, err := c.db.Begin()
+	if err != nil {
+		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
+	}
+	defer tx.Rollback()
 
-	_, err := c.db.Exec(insertSQL,
+	_, err = tx.Exec(
+		`INSERT INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		f.ID, f.Relation, f.Args, f.ValidStart, f.ValidEnd,
 		f.TxStart, f.TxEnd, f.Source, f.Provenance)
 	if err != nil {
 		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to add fact", err)
+	}
+
+	if f.ValidEnd == nil && f.TxEnd == nil {
+		if err := c.insertCurrentFact(tx, f); err != nil {
+			return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to commit", err)
 	}
 
 	return f, nil
@@ -133,10 +148,17 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 
 // RetractFact marks a fact as retracted by setting tx_end to now.
 // Facts are never deleted — retraction preserves the full audit trail.
+// Also removes from current_facts.
 func (c *CatalogDB) RetractFact(id string) error {
 	now := time.Now().Unix()
 
-	result, err := c.db.Exec(
+	tx, err := c.db.Begin()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		"UPDATE facts SET tx_end = ? WHERE id = ? AND tx_end IS NULL",
 		now, id)
 	if err != nil {
@@ -151,15 +173,26 @@ func (c *CatalogDB) RetractFact(id string) error {
 		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("fact not found or already retracted: %s", id), nil)
 	}
 
-	return nil
+	if err := c.deleteCurrentFact(tx, id); err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
+	}
+
+	return tx.Commit()
 }
 
 // InvalidateFact marks a fact as no longer valid by setting valid_end to now.
 // This is distinct from retraction: the fact was true but is no longer.
+// Also removes from current_facts.
 func (c *CatalogDB) InvalidateFact(id string) error {
 	now := time.Now().Unix()
 
-	result, err := c.db.Exec(
+	tx, err := c.db.Begin()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.Exec(
 		"UPDATE facts SET valid_end = ? WHERE id = ? AND valid_end IS NULL",
 		now, id)
 	if err != nil {
@@ -174,7 +207,11 @@ func (c *CatalogDB) InvalidateFact(id string) error {
 		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("fact not found or already invalidated: %s", id), nil)
 	}
 
-	return nil
+	if err := c.deleteCurrentFact(tx, id); err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
+	}
+
+	return tx.Commit()
 }
 
 // GetFact retrieves a single fact by ID.

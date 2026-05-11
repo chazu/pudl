@@ -199,6 +199,14 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure facts table: %w", err)
 	}
 
+	// Create current_facts materialized view (idempotent)
+	if err := c.ensureCurrentFactsTable(); err != nil {
+		return fmt.Errorf("failed to ensure current_facts table: %w", err)
+	}
+	if err := c.backfillCurrentFacts(); err != nil {
+		return fmt.Errorf("failed to backfill current_facts: %w", err)
+	}
+
 	// Create item_schemas junction table (idempotent).
 	// Tracks declared/inferred/unresolved schema references per item;
 	// supports an item satisfying multiple schemas. See
