@@ -1095,3 +1095,8 @@ for deep debugging.
 14. ~~e2e mu example~~ — **DONE.** `examples/pith-e2e/`: data target
     with inline Plan (emit metrics action), report target with Transform
     (read dependency output) + Plan (emit summary action).
+15. Add arithmetic builtins to pith (`add`, `sub`, `mul`, `div`).
+16. Transform output passing — transform stack result doesn't propagate
+    to subsequent actions. Currently must write to file via outputs.
+17. Publish pith module to GitHub; remove `replace` directives in
+    pudl and mu `go.mod` before shipping.
