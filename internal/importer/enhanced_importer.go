@@ -11,6 +11,7 @@ import (
 	"pudl/internal/idgen"
 	"pudl/internal/identity"
 	"pudl/internal/inference"
+	"pudl/internal/schemaname"
 )
 
 // EnhancedImporter extends the base importer with content-based ID generation
@@ -147,7 +148,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	if err != nil {
 		return nil, fmt.Errorf("failed to infer schema: %w", err)
 	}
-	schema := result.Schema
+	schema := schemaname.Normalize(result.Schema)
 	confidence := result.Confidence
 
 	// Get schema metadata for identity fields

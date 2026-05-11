@@ -267,6 +267,8 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		schema, confidence = i.handleUnmatchedData(data, result, true)
 	}
 
+	schema = schemaname.Normalize(schema)
+
 	// Create metadata
 	metadata := ImportMetadata{
 		ID: strings.TrimSuffix(filename, ext),
