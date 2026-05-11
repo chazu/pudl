@@ -4,15 +4,19 @@ PUDL includes a Datalog evaluator that derives new facts from existing ones usin
 
 ## How It Works
 
-The evaluator uses **semi-naive bottom-up evaluation**:
+Rules are compiled to **parameterized SQL** and executed directly inside SQLite. Each body atom becomes a self-join on the `current_facts` table (or `facts` for temporal queries), with `json_extract()` for arg access. Shared variables across body atoms become equi-join conditions. Ground terms become WHERE predicates.
 
-1. Load all base facts from EDB sources (fact store + catalog)
-2. For each rule, find all variable substitutions that satisfy the body
-3. Apply the substitution to the head to produce a derived fact
-4. If new facts were derived, repeat from step 2
-5. Stop when no new facts are produced (fixed point)
+**Non-recursive rules** are compiled to a single SQL query per rule. Multiple rules deriving the same relation are combined with UNION ALL.
 
-An in-memory hash index (relation + arg key + arg value) accelerates joins. When a body atom has a ground term or an already-bound variable, the evaluator does an O(1) index lookup instead of scanning all tuples.
+**Recursive rules** (e.g., transitive closure) use semi-naive fixpoint evaluation via SQLite temp tables:
+
+1. Create temp tables `_rule_<relation>` and `_delta_<relation>`
+2. Seed with base case results
+3. Loop: join delta against data, insert new rows, rebuild delta
+4. Stop when no new rows are produced (fixed point)
+5. Extract results and drop temp tables
+
+All iteration happens inside SQLite. Only final results cross the SQL/Go boundary.
 
 ## Writing Rules
 
@@ -122,11 +126,13 @@ pudl query at_risk -f my-analysis.cue
 pudl query depends_transitive --json
 ```
 
-The evaluator loads rules from both global and repo-scoped directories, evaluates to fixed point, then filters results by the requested relation and constraints.
+Rules are compiled to SQL, executed, and results filtered by the requested relation and constraints. Temporal flags switch from `current_facts` to the full `facts` table with time-scoped filters.
 
 | Flag | Description |
 |------|-------------|
 | `-f, --rule-file` | Load additional rules from a CUE file |
+| `--as-of-valid` | Evaluate over facts true at this time (RFC3339 or Unix) |
+| `--as-of-tx` | Evaluate over facts known at this time (RFC3339 or Unix) |
 | `--all-workspaces` | Include global rules and all workspace data |
 | `--json` | Output as JSON |
 
@@ -159,9 +165,9 @@ Location: .pudl/schema/pudl/rules/transitive-deps.cue
 
 The evaluator reads base facts from two sources, combined via `MultiEDB`:
 
-### Fact Store (`FactsEDB`)
+### Fact Store
 
-Reads from the `facts` table using `AsOfNow` temporal mode (current valid, not retracted). Each fact's JSON `args` are parsed into a tuple. The relation name comes from the `relation` column.
+For present-time queries, the SQL compiler reads from the `current_facts` table -- a materialized view of only currently-valid, non-retracted facts. For temporal queries (`--as-of-valid`, `--as-of-tx`), it reads from the full `facts` table with appropriate temporal filters.
 
 ### Catalog (`CatalogEDB`)
 
@@ -182,8 +188,6 @@ Rules can join across both sources -- e.g., matching observations against catalo
 
 ## Performance
 
-The evaluator uses hash indexes for joins. For each relation, tuples are indexed by every arg key + value combination. When matching a body atom with a bound variable or ground term, the evaluator does an O(1) hash lookup instead of scanning all tuples.
+Rules compile to SQL, so SQLite's query planner handles join ordering and index selection. The `current_facts` table is indexed on `relation` for fast base-case lookups. Recursive evaluation uses temp tables with primary key dedup, avoiding redundant re-derivation.
 
-For typical workloads (hundreds of rules, thousands of facts), evaluation completes in milliseconds. The safety limit is 100 iterations before the evaluator stops (configurable).
-
-Transitive closure of a 10-node graph (55 derived paths) runs in under 1ms.
+The safety limit for recursive fixpoint is 100 iterations. For typical workloads (hundreds of rules, thousands of facts), evaluation completes in milliseconds.
