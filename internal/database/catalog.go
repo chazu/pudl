@@ -218,6 +218,11 @@ func (c *CatalogDB) createTables() error {
 	return nil
 }
 
+// DB returns the underlying *sql.DB for direct query execution.
+func (c *CatalogDB) DB() *sql.DB {
+	return c.db
+}
+
 // Close closes the database connection
 func (c *CatalogDB) Close() error {
 	if c.db != nil {
