@@ -627,6 +627,70 @@ import "github.com/chazu/pith"
 ```
 
 CUE validates programs against `pith.#Program` at config load time.
+
+### Integration Design Decisions
+
+Resolved during Q1-Q7 design review (2026-05-11):
+
+**Phase-scoped driver registration.** Three execution phases, each gets
+a different driver word set. Words unavailable in a phase produce
+"unknown word" errors — no silent misuse.
+
+| Word | Plan | Transform | Execute |
+|---|:---:|:---:|:---:|
+| `action/emit` | ✓ | | |
+| `action/depends` | ✓ | | |
+| `target/config` | ✓ | ✓ | ✓ |
+| `target/output` | | ✓ | ✓ |
+| `http/*` | | | ✓ |
+| `exec/*` | | | ✓ |
+| `cas/*` | | | ✓ |
+| `secret/resolve` | | | ✓ |
+| `catalog/*` (pudl) | ✓ | ✓ | ✓ |
+| `fact/*` (pudl) | ✓ | ✓ | ✓ |
+| `schema/*` (pudl) | ✓ | ✓ | ✓ |
+
+Implementation: three registration functions (`registerPlanDrivers`,
+`registerTransformDrivers`, `registerExecDrivers`) that each call
+`vm.RegisterDriver` with the appropriate subset.
+
+**`target/output` timing.** Only available in transform and execute
+phases. Transform bodies run after dependencies complete but before
+own actions execute. Plan programs cannot read dependency outputs —
+they only see own config via `target/config`. This avoids stale-cache
+reads and keeps plan programs hermetic.
+
+Execution order within mu's pipeline:
+```
+dependencies execute → outputs stored in CAS
+    ↓
+transform body runs → reads dependency outputs via target/output
+    ↓
+own actions execute (body or command)
+```
+
+**`action/emit` semantics.** Closure-based buffer. Plan-time VM
+captures emitted ActionSpecs in a slice via closure. After `vm.Run`
+completes, coordinator drains the buffer and merges specs into the
+DAG. Multiple emits per plan program are supported. `action/emit`
+returns nothing (stack effect: `( spec -- )`).
+
+**Error propagation.** pith errors map directly to mu's existing
+failure model. `vm.Run` returns `error` → mu wraps with context:
+- Plan phase: `"target //infra/dns: plan: op 3 (get): ..."` → target
+  skipped, no actions emitted.
+- Execute phase: `"action create-record: op 2 (http/post): ..."` →
+  action failed, transitive dependents cancelled, independent
+  subgraphs continue.
+
+No new error types or handling needed.
+
+**Secrets in traces.** Caller responsibility. Trace mode is opt-in
+(`pith.NewWithTrace`). mu's executor does not enable trace in
+production. If a developer enables trace on a program using
+`secret/resolve`, that's an intentional debugging choice. No
+redaction mechanism in v1 — add `SecretValue` wrapper type later
+if it becomes a real problem.
 Unknown words, malformed ops, and type errors are caught before the
 coordinator starts — same as existing CUE validation for target configs.
 
