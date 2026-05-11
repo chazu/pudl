@@ -1087,9 +1087,11 @@ for deep debugging.
     plan phase (ActionBuffer + action/emit), transform phase (synthetic
     `_transform` action injection), execute phase (getOutput closure +
     http/exec/cas drivers). 427 tests pass.
-12. Add `pudl exec` CLI for testing/debugging methods (informed by mu
-    usage patterns).
+12. ~~`pudl exec` CLI~~ — **DONE.** `cmd/exec.go`: runs pith programs
+    against pudl data lake. JSON arg or `-f file`, `--trace`, `--context
+    key=value` for field refs, `--json` for formatted output.
 13. Implement deferred words as needed: `format/*` (mu driver),
     `diff` (drift detection), `schema/match`, `schema/infer`.
-14. Write an end-to-end mu target that uses inline pith Plan + Transform
-    to validate the full flow.
+14. ~~e2e mu example~~ — **DONE.** `examples/pith-e2e/`: data target
+    with inline Plan (emit metrics action), report target with Transform
+    (read dependency output) + Plan (emit summary action).
