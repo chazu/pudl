@@ -262,7 +262,7 @@ After import, data can be:
 - **Go 1.24** -- core application
 - **Cobra** -- CLI framework
 - **CUE** (`cuelang.org/go v0.14`) -- schema definition, validation, unification
-- **SQLite** (`go-sqlite3`) -- catalog database
+- **SQLite** (`modernc.org/sqlite`, pure Go) -- catalog database
 - **go-cdc-chunkers** -- Content-Defined Chunking for streaming
 - **Bubbletea + Bubbles + Lipgloss** -- interactive TUI (`pudl list --fancy`)
 - **yaml.v3** -- YAML config and data parsing
