@@ -1083,9 +1083,13 @@ for deep debugging.
     `internal/pithdriver/examples_test.go`: fleet summary (query +
     group-by), filter by status, count by origin, schema discovery,
     field ref query. Agent-authoring hypothesis holds for these cases.
-11. Import pith into mu; register effectful driver words, integrate
-    with plan phase and action execution.
+11. ~~mu integration~~ — **DONE.** Full pith VM support in mu:
+    plan phase (ActionBuffer + action/emit), transform phase (synthetic
+    `_transform` action injection), execute phase (getOutput closure +
+    http/exec/cas drivers). 427 tests pass.
 12. Add `pudl exec` CLI for testing/debugging methods (informed by mu
     usage patterns).
 13. Implement deferred words as needed: `format/*` (mu driver),
     `diff` (drift detection), `schema/match`, `schema/infer`.
+14. Write an end-to-end mu target that uses inline pith Plan + Transform
+    to validate the full flow.
