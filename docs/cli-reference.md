@@ -597,6 +597,34 @@ pudl rule add company-standards.cue --global # global
 |------|-------------|
 | `--global` | Install to `~/.pudl/schema/pudl/rules/` instead of `.pudl/schema/pudl/rules/` |
 
+## Pith VM
+
+### `pudl exec`
+
+Run a pith concatenative program against the pudl data lake. All pudl driver words (`catalog/*`, `fact/*`, `schema/*`, `drift/*`) are registered automatically.
+
+```bash
+pudl exec '[{}, "catalog/count"]'
+pudl exec -f program.json
+echo '["schema/list", "keys"]' | pudl exec -
+pudl exec --trace '[3, 4, "add"]'
+pudl exec --context schema=aws.#EC2Instance -f query.json
+pudl exec --json '["schema/list", "keys"]'
+```
+
+**Input methods:** inline JSON argument, `-f` file, or stdin (pipe/heredoc).
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `-f, --file` | Load program from a JSON file |
+| `--trace` | Print stack state after each op to stderr |
+| `--context key=value` | Set context values (repeatable). Available as `ctx.key` field refs. |
+| `--json` | Pretty-print result as indented JSON |
+
+See [pith-vm.md](pith-vm.md) for the full vocabulary reference, driver words, and examples.
+
 ## CUE Module Management
 
 ### `pudl module`

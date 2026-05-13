@@ -1090,13 +1090,16 @@ for deep debugging.
 12. ~~`pudl exec` CLI~~ — **DONE.** `cmd/exec.go`: runs pith programs
     against pudl data lake. JSON arg or `-f file`, `--trace`, `--context
     key=value` for field refs, `--json` for formatted output.
-13. Implement deferred words as needed: `format/*` (mu driver),
-    `diff` (drift detection), `schema/match`, `schema/infer`.
+13. ~~Implement deferred words~~ — **DONE.** `format/json`,
+    `format/compact` in mu. `drift/diff`, `schema/match`,
+    `schema/infer` in pudl. Tests pass.
 14. ~~e2e mu example~~ — **DONE.** `examples/pith-e2e/`: data target
     with inline Plan (emit metrics action), report target with Transform
     (read dependency output) + Plan (emit summary action).
-15. Add arithmetic builtins to pith (`add`, `sub`, `mul`, `div`).
-16. Transform output passing — transform stack result doesn't propagate
-    to subsequent actions. Currently must write to file via outputs.
+15. ~~Arithmetic builtins~~ — **DONE.** `add`, `sub`, `mul`, `div`,
+    `mod` in pith `data.go`. CUE schema `#ArithOp`. 11 tests.
+16. ~~Transform output passing~~ — **DONE.** `pithResults` map in
+    executor stores VM stack result. Downstream actions access via
+    `target/output` under `_result` key. Test in `executor_test.go`.
 17. Publish pith module to GitHub; remove `replace` directives in
     pudl and mu `go.mod` before shipping.

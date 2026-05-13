@@ -16,6 +16,7 @@ Start with the [root README](../README.md) for a project overview.
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, performance |
 | [VISION.md](VISION.md) | Project vision and roadmap |
+| [pith-vm.md](pith-vm.md) | Pith VM: vocabulary reference, `pudl exec`, driver words, examples |
 | [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |
 | [inference-algorithm.md](inference-algorithm.md) | Schema inference engine: heuristics, CUE unification, scoring |
 | [plan.md](plan.md) | Living development plan: what's built, what's next |

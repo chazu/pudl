@@ -14,6 +14,7 @@ import (
 
 	"pudl/internal/config"
 	"pudl/internal/database"
+	"pudl/internal/inference"
 	"pudl/internal/pithdriver"
 	"pudl/internal/schema"
 )
@@ -99,7 +100,21 @@ Examples:
 			mgr = schema.NewManager(filepath.Join(configDir, "schema"))
 		}
 
-		pithdriver.Register(vm, db, mgr)
+		// Create schema inferrer (best-effort — nil if schemas can't load)
+		var inferrer *inference.SchemaInferrer
+		if mgr != nil {
+			var schemaPaths []string
+			if wsCtx != nil && len(wsCtx.SchemaSearchPaths) > 0 {
+				schemaPaths = wsCtx.SchemaSearchPaths
+			} else {
+				schemaPaths = []string{filepath.Join(configDir, "schema")}
+			}
+			if inf, err := inference.NewSchemaInferrer(schemaPaths...); err == nil {
+				inferrer = inf
+			}
+		}
+
+		pithdriver.Register(vm, db, mgr, inferrer)
 
 		// Set context values from --context flags
 		if len(execContextKV) > 0 {

@@ -250,6 +250,72 @@ Components referencing non-existent interfaces produce warnings (orphans).
 This keeps mu simple (execute everything, ask no questions) while pudl
 provides the safety net (validate before exporting to mu).
 
+## Shared Language: pith VM
+
+pudl and mu share a concatenative virtual machine called
+[pith](pith-vm.md). Programs are JSON arrays of words, interpreted
+against a stack. The VM is a standalone Go module — both tools import
+it, neither depends on the other.
+
+### How It Bridges pudl and mu
+
+The same program syntax works in both contexts. Only the registered
+driver words differ:
+
+| Context | Available drivers | Purpose |
+|---------|-------------------|---------|
+| pudl | `catalog/*`, `fact/*`, `schema/*`, `drift/*` | Read-only knowledge queries |
+| mu plan phase | `action/emit`, `target/config` | Declare actions into the DAG |
+| mu transform phase | `target/output`, `target/config` | Reshape dependency outputs |
+| mu execute phase | `http/*`, `exec/*`, `cas/*`, `format/*`, `target/output` | Perform side effects |
+
+### pudl Side
+
+`pudl exec` runs pith programs against the catalog, fact store, and
+schemas. Use it for ad-hoc queries, testing agent-authored programs,
+and composing data views:
+
+```bash
+pudl exec '[{"schema": "aws.#EC2Instance"}, "catalog/query", "len"]'
+```
+
+Driver words: `catalog/query`, `catalog/get`, `catalog/count`,
+`fact/query`, `fact/assert`, `fact/retract`, `schema/list`,
+`schema/match`, `schema/infer`, `drift/diff`.
+
+### mu Side
+
+mu uses pith for inline programs in three target fields:
+
+- **`plan`** — emits actions into the DAG (replaces simple plugins)
+- **`transform`** — reshapes dependency outputs before own actions run
+- **`body`** — on actions, replaces shell commands with VM programs
+
+```cue
+target: {
+    name: "//infra/dns"
+    plan: [
+        "target/config",
+        "dup", "'record_type", "get", "'A", "eq",
+        [["'host", "get"], ["'ip", "get"], "dns/create-a"],
+        [["'host", "get"], ["'target", "get"], "dns/create-cname"],
+        "if",
+        "action/emit",
+    ]
+}
+```
+
+Transform results automatically propagate to subsequent actions via
+`target/output` under the `_result` key — no file-based output
+declarations needed.
+
+### The Payoff
+
+An agent that learns to write `["catalog/query", ["'status", "get"],
+"map"]` for pudl also knows the syntax for mu actions. The vocabulary
+is the only difference, and it is introspectable from CUE via
+`pith.#Program`.
+
 ## Design Principles
 
 **pudl doesn't execute.** It observes, models, and reports. Execution is mu's job.
