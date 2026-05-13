@@ -56,7 +56,7 @@ func TestExampleFleetSummary(t *testing.T) {
 	seedFleet(t, db)
 
 	vm := pith.New(context.Background())
-	Register(vm, db, nil)
+	Register(vm, db, nil, nil)
 
 	// Program: query EC2 instances, dup for count, group by status
 	program := []any{
@@ -112,7 +112,7 @@ func TestExampleFilterByStatus(t *testing.T) {
 	seedFleet(t, db)
 
 	vm := pith.New(context.Background())
-	Register(vm, db, nil)
+	Register(vm, db, nil, nil)
 
 	program := []any{
 		map[string]any{"schema": "aws.#EC2Instance"},
@@ -140,7 +140,7 @@ func TestExampleCountByOrigin(t *testing.T) {
 	seedFleet(t, db)
 
 	vm := pith.New(context.Background())
-	Register(vm, db, nil)
+	Register(vm, db, nil, nil)
 
 	program := []any{
 		map[string]any{"origin": "aws"}, "catalog/count",
@@ -175,7 +175,7 @@ func TestExampleSchemaDiscovery(t *testing.T) {
 
 	mgr := schema.NewManager(schemaDir)
 	vm := pith.New(context.Background())
-	Register(vm, nil, mgr)
+	Register(vm, nil, mgr, nil)
 
 	// Program: list schemas, get package names
 	program := []any{
@@ -201,7 +201,7 @@ func TestExampleFieldRefQuery(t *testing.T) {
 	seedFleet(t, db)
 
 	vm := pith.New(context.Background())
-	Register(vm, db, nil)
+	Register(vm, db, nil, nil)
 	vm.SetContext("input", map[string]any{
 		"schema": "aws.#EC2Instance",
 		"origin": "aws",
@@ -223,5 +223,42 @@ func TestExampleFieldRefQuery(t *testing.T) {
 	result, _ := vm.Result()
 	if result != 6 {
 		t.Errorf("count = %v, want 6", result)
+	}
+}
+
+// Example 6: Drift diff between two maps
+func TestExampleDriftDiff(t *testing.T) {
+	vm := pith.New(context.Background())
+	Register(vm, nil, nil, nil)
+
+	declared := map[string]any{"name": "web-1", "state": "running", "ip": "10.0.0.1"}
+	live := map[string]any{"name": "web-1", "state": "stopped", "zone": "us-east-1"}
+
+	vm.Push(declared)
+	vm.Push(live)
+	err := vm.Run([]any{"drift/diff"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	result, _ := vm.Result()
+	diffs, ok := result.([]any)
+	if !ok {
+		t.Fatalf("expected []any, got %T", result)
+	}
+	// 3 diffs: ip removed, state changed, zone added
+	if len(diffs) != 3 {
+		t.Fatalf("len(diffs) = %d, want 3", len(diffs))
+	}
+
+	types := make(map[string]bool)
+	for _, d := range diffs {
+		dm := d.(map[string]any)
+		types[dm["type"].(string)] = true
+	}
+	for _, want := range []string{"changed", "added", "removed"} {
+		if !types[want] {
+			t.Errorf("missing diff type %q in %v", want, diffs)
+		}
 	}
 }
