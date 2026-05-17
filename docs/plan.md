@@ -64,6 +64,7 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 
 ### Agent Integration
 - `pudl prime` outputs a structured prompt teaching agents how to use pudl
+- `pudl guide` provides topic-based reference guides for agents and humans (overview, import, schemas, facts, datalog, definitions, drift, pith, mu, agents)
 - `pudl repo init` creates `.pudl/` with workspace.cue and installs Claude skills
 
 ### Documentation
