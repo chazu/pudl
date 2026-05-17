@@ -186,6 +186,72 @@ Exposes `catalog_entries` as a `catalog_entry` relation with these fields:
 
 Rules can join across both sources -- e.g., matching observations against catalog entries.
 
+## Temporal Queries
+
+All Datalog evaluation respects bitemporal semantics. By default, rules evaluate over **current facts** (valid now, not retracted). Temporal flags shift the evaluation window.
+
+### What Was True At a Point In Time
+
+```bash
+# What observations were valid at deploy time?
+pudl query observation --as-of-valid 2026-04-01T14:30:00Z
+
+# What dependencies existed last month?
+pudl query depends_transitive --as-of-valid 2026-04-15T00:00:00Z
+```
+
+When `--as-of-valid` is set, the compiler switches from `current_facts` to the full `facts` table with:
+```sql
+WHERE valid_start <= ? AND (valid_end IS NULL OR valid_end > ?)
+  AND tx_end IS NULL
+```
+
+This answers "what was true at time T, according to our **current** knowledge" -- if a fact was later retracted (we learned it was wrong), it won't appear.
+
+### What We Believed At a Point In Time
+
+```bash
+# What did we know last Tuesday?
+pudl query observation --as-of-tx 1743379200
+```
+
+When `--as-of-tx` is set:
+```sql
+WHERE tx_start <= ? AND (tx_end IS NULL OR tx_end > ?)
+```
+
+This answers "what did we believe at time T" -- includes facts that were later retracted (because we hadn't retracted them yet at that point).
+
+### Combined: What We Believed About What Was True
+
+```bash
+# What did we believe on May 1st about what was true on April 15th?
+pudl query observation --as-of-valid 2026-04-15T00:00:00Z --as-of-tx 2026-05-01T00:00:00Z
+```
+
+Both filters apply simultaneously. Useful for reconstructing past decision states.
+
+### How Temporal Scope Propagates
+
+Temporal flags apply **globally** to the entire rule evaluation. Every body atom in every rule sees the same temporal window. This means:
+
+- Recursive rules (transitive closure) compute the closure as it existed at the specified time
+- Cross-relation joins work correctly -- both sides see the same temporal snapshot
+- Derived facts inherit the temporal semantics of their input facts
+
+There is no per-atom temporal override -- all atoms in a rule evaluation share one temporal scope. This keeps semantics simple and results consistent.
+
+### Relationship to `pudl facts list`
+
+`pudl facts list` queries raw facts without rule evaluation. `pudl query` evaluates rules. Both support the same temporal flags:
+
+| Command | Evaluates Rules | Temporal Flags |
+|---------|-----------------|----------------|
+| `pudl facts list --relation X` | No | `--as-of-valid`, `--as-of-tx` |
+| `pudl query X` | Yes | `--as-of-valid`, `--as-of-tx` |
+
+For details on fact lifecycle (retraction vs invalidation) and the bitemporal model, see [facts.md](facts.md).
+
 ## Performance
 
 Rules compile to SQL, so SQLite's query planner handles join ordering and index selection. The `current_facts` table is indexed on `relation` for fast base-case lookups. Recursive evaluation uses temp tables with primary key dedup, avoiding redundant re-derivation.

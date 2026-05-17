@@ -95,8 +95,8 @@ Potential future work, roughly ordered by value.
 - User-defined pattern registration
 
 ### Analytics
+- ~~`pudl summary` / `pudl stats` for aggregate views~~ → Done: `pudl facts stats --group-by`
 - `pudl diff` to compare two versions of the same resource
-- `pudl summary` / `pudl stats` for aggregate views
 - Basic outlier detection across instances of a schema
 - DuckDB/Parquet integration for analytical queries on large datasets
 
