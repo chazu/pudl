@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -346,16 +347,165 @@ func resolveFactID(db *database.CatalogDB, id string) (string, error) {
 	return f.ID, nil
 }
 
+var (
+	statsRelation string
+	statsGroupBy  string
+)
+
+var factsStatsCmd = &cobra.Command{
+	Use:   "stats",
+	Short: "Aggregate statistics over the fact store",
+	Long: `Show counts grouped by relation, kind, scope, source, or any arg field.
+
+Without --group-by, shows count per relation. With --relation, defaults to
+grouping by 'kind'. Explicit --group-by overrides the default.
+
+Supports comma-separated field names for cross-tabulation.
+
+Examples:
+    pudl facts stats
+    pudl facts stats --relation observation
+    pudl facts stats --relation observation --group-by kind
+    pudl facts stats --group-by scope
+    pudl facts stats --group-by kind,scope
+    pudl facts stats --relation observation --group-by source`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		configDir := config.GetPudlDir()
+		db, err := database.NewCatalogDB(configDir)
+		if err != nil {
+			return fmt.Errorf("failed to open catalog: %w", err)
+		}
+		defer db.Close()
+
+		groupFields := resolveGroupBy(statsRelation, statsGroupBy)
+
+		var selectParts []string
+		var groupParts []string
+		for _, field := range groupFields {
+			if field == "relation" {
+				selectParts = append(selectParts, "relation")
+				groupParts = append(groupParts, "relation")
+			} else if field == "source" {
+				selectParts = append(selectParts, "source")
+				groupParts = append(groupParts, "source")
+			} else {
+				expr := fmt.Sprintf("json_extract(args, '$.%s')", field)
+				selectParts = append(selectParts, fmt.Sprintf("%s AS \"%s\"", expr, field))
+				groupParts = append(groupParts, expr)
+			}
+		}
+		selectParts = append(selectParts, "COUNT(*) AS count")
+
+		where := "valid_end IS NULL AND tx_end IS NULL"
+		var params []interface{}
+		if statsRelation != "" {
+			where += " AND relation = ?"
+			params = append(params, statsRelation)
+		}
+
+		query := fmt.Sprintf("SELECT %s FROM facts WHERE %s GROUP BY %s ORDER BY count DESC",
+			joinStrings(selectParts, ", "),
+			where,
+			joinStrings(groupParts, ", "),
+		)
+
+		rows, err := db.DB().Query(query, params...)
+		if err != nil {
+			return fmt.Errorf("query failed: %w", err)
+		}
+		defer rows.Close()
+
+		cols, _ := rows.Columns()
+
+		if jsonOutput {
+			var results []map[string]interface{}
+			for rows.Next() {
+				vals := make([]interface{}, len(cols))
+				ptrs := make([]interface{}, len(cols))
+				for i := range vals {
+					ptrs[i] = &vals[i]
+				}
+				rows.Scan(ptrs...)
+				row := make(map[string]interface{})
+				for i, col := range cols {
+					row[col] = vals[i]
+				}
+				results = append(results, row)
+			}
+			out, _ := json.MarshalIndent(results, "", "  ")
+			fmt.Println(string(out))
+			return nil
+		}
+
+		// Print table header
+		for _, col := range cols {
+			fmt.Printf("%-32s", col)
+		}
+		fmt.Println()
+		for range cols {
+			fmt.Printf("%-32s", "────────────────────────────────")
+		}
+		fmt.Println()
+
+		total := 0
+		for rows.Next() {
+			vals := make([]interface{}, len(cols))
+			ptrs := make([]interface{}, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			rows.Scan(ptrs...)
+			for _, v := range vals {
+				switch val := v.(type) {
+				case int64:
+					fmt.Printf("%-32d", val)
+					total += int(val)
+				case []byte:
+					fmt.Printf("%-32s", string(val))
+				case string:
+					fmt.Printf("%-32s", val)
+				case nil:
+					fmt.Printf("%-32s", "(null)")
+				default:
+					fmt.Printf("%-32v", val)
+				}
+			}
+			fmt.Println()
+		}
+		fmt.Printf("\nTotal: %d\n", total)
+		return nil
+	},
+}
+
+func resolveGroupBy(relation, groupBy string) []string {
+	if groupBy != "" {
+		parts := strings.Split(groupBy, ",")
+		var trimmed []string
+		for _, p := range parts {
+			trimmed = append(trimmed, strings.TrimSpace(p))
+		}
+		return trimmed
+	}
+	if relation != "" {
+		return []string{"kind"}
+	}
+	return []string{"relation"}
+}
+
 func init() {
 	rootCmd.AddCommand(factsCmd)
 	factsCmd.AddCommand(factsListCmd)
 	factsCmd.AddCommand(factsShowCmd)
 	factsCmd.AddCommand(factsRetractCmd)
 	factsCmd.AddCommand(factsInvalidateCmd)
+	factsCmd.AddCommand(factsStatsCmd)
 
 	factsListCmd.Flags().StringVar(&factsRelation, "relation", "", "Relation to query (required)")
 	factsListCmd.Flags().StringVar(&factsSource, "source", "", "Filter by source")
 	factsListCmd.Flags().StringVar(&factsAsOfValid, "as-of-valid", "", "Query valid time (RFC3339 or Unix timestamp)")
 	factsListCmd.Flags().StringVar(&factsAsOfTx, "as-of-tx", "", "Query transaction time (RFC3339 or Unix timestamp)")
 	factsListCmd.Flags().BoolVarP(&factsVerbose, "verbose", "v", false, "Show full fact details")
+
+	factsStatsCmd.Flags().StringVar(&statsRelation, "relation", "", "Filter to specific relation")
+	factsStatsCmd.Flags().StringVar(&statsGroupBy, "group-by", "", "Comma-separated fields to group by (e.g. kind,scope)")
 }

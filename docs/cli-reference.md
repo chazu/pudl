@@ -565,6 +565,47 @@ Mark a fact as no longer valid ("reality changed"). Sets `valid_end` -- the fact
 pudl facts invalidate c0b4392d347a
 ```
 
+### `pudl facts stats`
+
+Aggregate statistics over the fact store. Groups facts by relation, kind, scope, source, or any arg field.
+
+```bash
+pudl facts stats                                        # count by relation
+pudl facts stats --relation observation                 # count by kind (default for single relation)
+pudl facts stats --relation observation --group-by kind # explicit grouping
+pudl facts stats --group-by scope                       # count per scope
+pudl facts stats --group-by kind,scope                  # cross-tabulation
+pudl facts stats --relation observation --group-by source
+```
+
+| Flag | Description |
+|------|-------------|
+| `--relation` | Filter to specific relation |
+| `--group-by` | Comma-separated arg fields to group by (e.g. `kind,scope`) |
+
+Without `--group-by`: defaults to grouping by `relation` (or `kind` if `--relation` is set).
+
+### `pudl pull`
+
+Retrieve all facts related to a scope or entity. Supports prefix matching on scope, plus filtering by kind, source, and relation.
+
+```bash
+pudl pull procyon-park:src/cli          # all facts scoped here
+pudl pull procyon-park                  # all facts in this repo (prefix match)
+pudl pull --kind bug                    # all bugs across all scopes
+pudl pull --source claude-code          # everything from this source
+pudl pull procyon-park --kind bug       # bugs in procyon-park
+pudl pull maggie:vm --json              # machine-readable
+```
+
+| Flag | Description |
+|------|-------------|
+| `--kind` | Filter by observation kind (bug, obstacle, pattern, etc.) |
+| `--source` | Filter by source |
+| `--relation` | Filter by relation (default: all) |
+
+Output is grouped by scope, showing description, kind, source, and date.
+
 ## Datalog and Rules
 
 ### `pudl query`
