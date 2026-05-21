@@ -44,6 +44,8 @@ func init() {
 	driftCmd.AddCommand(driftCheckCmd)
 	driftCheckCmd.Flags().BoolVar(&driftAll, "all", false, "Check all definitions")
 	driftCheckCmd.Flags().StringArrayVar(&driftTags, "tag", nil, "Extra args as key=value (repeatable)")
+
+	driftCheckCmd.ValidArgsFunction = completeDefinitionNames
 }
 
 func runDriftCheck(name string) error {

@@ -173,4 +173,8 @@ func init() {
 	pullCmd.Flags().StringVar(&pullKind, "kind", "", "Filter by observation kind (bug, obstacle, pattern, etc.)")
 	pullCmd.Flags().StringVar(&pullSource, "source", "", "Filter by source")
 	pullCmd.Flags().StringVar(&pullRelation, "relation", "", "Filter by relation (default: all)")
+
+	pullCmd.RegisterFlagCompletionFunc("kind", completeObservationKinds)
+	pullCmd.RegisterFlagCompletionFunc("source", completeSources)
+	pullCmd.RegisterFlagCompletionFunc("relation", completeRelations)
 }

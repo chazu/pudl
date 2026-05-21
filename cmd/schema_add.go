@@ -48,6 +48,7 @@ Examples:
 
 func init() {
 	schemaCmd.AddCommand(schemaAddCmd)
+	schemaAddCmd.ValidArgsFunction = completeSchemaNames
 }
 
 // runSchemaAddCommand contains the actual schema add logic with structured error handling

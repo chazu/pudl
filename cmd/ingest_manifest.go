@@ -70,4 +70,6 @@ func init() {
 
 	ingestManifestCmd.Flags().StringVar(&manifestPath, "path", "", "Path to manifest JSON file (reads stdin if omitted)")
 	ingestManifestCmd.Flags().StringVar(&manifestOrigin, "origin", "mu-build", "Origin label for catalog entries")
+
+	ingestManifestCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }

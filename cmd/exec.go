@@ -173,4 +173,8 @@ func init() {
 	execCmd.Flags().StringVarP(&execFile, "file", "f", "", "Load program from a JSON file")
 	execCmd.Flags().BoolVar(&execTrace, "trace", false, "Enable trace mode (print stack after each op to stderr)")
 	execCmd.Flags().StringArrayVar(&execContextKV, "context", nil, "Set context values as key=value (repeatable, values parsed as JSON)")
+
+	execCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"json"}, cobra.ShellCompDirectiveFilterFileExt
+	})
 }
