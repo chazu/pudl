@@ -57,6 +57,21 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 	})
 }
 
+// BootstrapPackages returns the set of package paths (e.g. "pudl/core") that
+// are shipped as built-in bootstrap schemas.
+func BootstrapPackages() map[string]bool {
+	packages := make(map[string]bool)
+	fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || !d.IsDir() || path == "bootstrap" {
+			return nil
+		}
+		rel := path[len("bootstrap/"):]
+		packages[rel] = true
+		return nil
+	})
+	return packages
+}
+
 // ensureBasicSchemas verifies that required schema files exist.
 // If the schema repository is initialized (cue.mod exists) but bootstrap
 // schemas are missing, it copies them automatically. This handles the case

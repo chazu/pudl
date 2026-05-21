@@ -10,8 +10,9 @@ import (
 
 // Manager handles schema file operations and organization
 type Manager struct {
-	schemaPath  string   // primary schema path
-	schemaPaths []string // all schema paths in priority order
+	schemaPath      string            // primary schema path
+	schemaPaths     []string          // all schema paths in priority order
+	builtInPackages map[string]bool   // packages shipped with pudl
 }
 
 // NewManager creates a new schema manager with a single schema path.
@@ -35,6 +36,19 @@ func NewManagerWithPaths(schemaPaths ...string) *Manager {
 	}
 }
 
+// SetBuiltInPackages sets the set of package paths that are built-in.
+func (m *Manager) SetBuiltInPackages(packages map[string]bool) {
+	m.builtInPackages = packages
+}
+
+// isBuiltIn checks whether a package path matches a built-in package.
+func (m *Manager) isBuiltIn(packageName string) bool {
+	if m.builtInPackages == nil {
+		return false
+	}
+	return m.builtInPackages[packageName]
+}
+
 // SchemaInfo represents information about a schema definition
 type SchemaInfo struct {
 	Package    string `json:"package"`
@@ -43,6 +57,7 @@ type SchemaInfo struct {
 	FilePath   string `json:"file_path"`   // Source file containing this definition
 	FileName   string `json:"file_name"`
 	Size       int64  `json:"size"`        // Size of the source file
+	BuiltIn    bool   `json:"built_in"`
 }
 
 // ListSchemas returns all available schemas organized by package
@@ -105,6 +120,7 @@ func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
 				FilePath: path,
 				FileName: fileName,
 				Size:     info.Size(),
+				BuiltIn:  m.isBuiltIn(packageName),
 			}
 			schemas[packageName] = append(schemas[packageName], schemaInfo)
 		}
@@ -368,6 +384,7 @@ func (m *Manager) GetSchemasInPackage(packageName string) ([]SchemaInfo, error) 
 					FilePath: schemaPath,
 					FileName: entry.Name(),
 					Size:     info.Size(),
+					BuiltIn:  m.isBuiltIn(packageName),
 				}
 				schemas = append(schemas, schemaInfo)
 			}
