@@ -33,6 +33,7 @@ Examples:
 
 func init() {
 	schemaCmd.AddCommand(schemaEditCmd)
+	schemaEditCmd.ValidArgsFunction = completeSchemaNames
 }
 
 // runSchemaEditCommand opens a schema file in the user's editor

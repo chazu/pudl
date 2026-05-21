@@ -44,4 +44,5 @@ Examples:
 
 func init() {
 	vaultCmd.AddCommand(vaultSetCmd)
+	vaultSetCmd.ValidArgsFunction = completeVaultPaths
 }

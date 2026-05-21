@@ -39,6 +39,8 @@ docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W5).`,
 func init() {
 	rootCmd.AddCommand(reclassifyCmd)
 	reclassifyCmd.Flags().StringVar(&reclassifyRef, "ref", "", "Only reclassify rows tagged with this schema ref (e.g. mu/aws@v1)")
+
+	reclassifyCmd.RegisterFlagCompletionFunc("ref", completeSchemaNames)
 }
 
 func runReclassify(ref string) error {

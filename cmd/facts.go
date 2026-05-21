@@ -506,6 +506,15 @@ func init() {
 	factsListCmd.Flags().StringVar(&factsAsOfTx, "as-of-tx", "", "Query transaction time (RFC3339 or Unix timestamp)")
 	factsListCmd.Flags().BoolVarP(&factsVerbose, "verbose", "v", false, "Show full fact details")
 
+	factsListCmd.RegisterFlagCompletionFunc("relation", completeRelations)
+	factsListCmd.RegisterFlagCompletionFunc("source", completeSources)
+
+	factsShowCmd.ValidArgsFunction = completeFactIDs
+	factsRetractCmd.ValidArgsFunction = completeFactIDs
+	factsInvalidateCmd.ValidArgsFunction = completeFactIDs
+
 	factsStatsCmd.Flags().StringVar(&statsRelation, "relation", "", "Filter to specific relation")
 	factsStatsCmd.Flags().StringVar(&statsGroupBy, "group-by", "", "Comma-separated fields to group by (e.g. kind,scope)")
+
+	factsStatsCmd.RegisterFlagCompletionFunc("relation", completeRelations)
 }

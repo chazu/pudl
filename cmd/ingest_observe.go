@@ -73,4 +73,6 @@ func init() {
 
 	ingestObserveCmd.Flags().StringVar(&ingestObservePath, "path", "", "Read from file instead of stdin")
 	ingestObserveCmd.Flags().StringVar(&ingestObserveOrigin, "origin", "mu-observe", "Override origin")
+
+	ingestObserveCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }

@@ -371,6 +371,44 @@ func (c *CatalogDB) QueryFacts(filter FactFilter) ([]Fact, error) {
 	return facts, nil
 }
 
+// GetDistinctRelations returns all distinct relation names from current facts.
+func (c *CatalogDB) GetDistinctRelations() ([]string, error) {
+	rows, err := c.db.Query("SELECT DISTINCT relation FROM current_facts ORDER BY relation")
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query distinct relations", err)
+	}
+	defer rows.Close()
+
+	var relations []string
+	for rows.Next() {
+		var r string
+		if err := rows.Scan(&r); err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan relation", err)
+		}
+		relations = append(relations, r)
+	}
+	return relations, rows.Err()
+}
+
+// GetDistinctSources returns all distinct source values from current facts.
+func (c *CatalogDB) GetDistinctSources() ([]string, error) {
+	rows, err := c.db.Query("SELECT DISTINCT source FROM current_facts WHERE source IS NOT NULL AND source != '' ORDER BY source")
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query distinct sources", err)
+	}
+	defer rows.Close()
+
+	var sources []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan source", err)
+		}
+		sources = append(sources, s)
+	}
+	return sources, rows.Err()
+}
+
 // scanFact scans a single fact from a sql.Row.
 func scanFact(row *sql.Row) (*Fact, error) {
 	var f Fact

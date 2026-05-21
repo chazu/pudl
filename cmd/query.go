@@ -184,4 +184,6 @@ func init() {
 	queryCmd.Flags().BoolVar(&queryAllWorkspace, "all-workspaces", false, "Include global rules and all workspace data")
 	queryCmd.Flags().StringVar(&queryAsOfValid, "as-of-valid", "", "Evaluate over facts true at this time (RFC3339 or Unix)")
 	queryCmd.Flags().StringVar(&queryAsOfTx, "as-of-tx", "", "Evaluate over facts known at this time (RFC3339 or Unix)")
+
+	queryCmd.ValidArgsFunction = completeRelations
 }

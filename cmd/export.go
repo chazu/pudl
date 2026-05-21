@@ -63,9 +63,7 @@ func init() {
 	exportCmd.RegisterFlagCompletionFunc("id", completeEntryIDs)
 	exportCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
 	exportCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
-	exportCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"json", "yaml", "csv", "ndjson"}, cobra.ShellCompDirectiveNoFileComp
-	})
+	exportCmd.RegisterFlagCompletionFunc("format", completeFormats)
 }
 
 func runExportCommand(cmd *cobra.Command, args []string) error {
