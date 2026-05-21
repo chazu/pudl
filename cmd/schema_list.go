@@ -7,6 +7,7 @@ import (
 
 	"pudl/internal/config"
 	"pudl/internal/errors"
+	"pudl/internal/importer"
 	"pudl/internal/schema"
 )
 
@@ -56,6 +57,7 @@ func runSchemaListCommand() error {
 
 	// Create schema manager
 	manager := schema.NewManager(cfg.SchemaPath)
+	manager.SetBuiltInPackages(importer.BootstrapPackages())
 
 	if schemaPackage != "" {
 		// List schemas in specific package
@@ -86,7 +88,11 @@ func listAllSchemas(manager *schema.Manager) error {
 
 	totalSchemas := 0
 	for packageName, packageSchemas := range schemas {
-		fmt.Printf("📦 Package: %s (%d schemas)\n", packageName, len(packageSchemas))
+		builtInTag := ""
+		if len(packageSchemas) > 0 && packageSchemas[0].BuiltIn {
+			builtInTag = " [built-in]"
+		}
+		fmt.Printf("📦 Package: %s (%d schemas)%s\n", packageName, len(packageSchemas), builtInTag)
 
 		for _, schemaInfo := range packageSchemas {
 			totalSchemas++
@@ -120,7 +126,11 @@ func listSchemasInPackage(manager *schema.Manager, packageName string) error {
 		return nil
 	}
 
-	fmt.Printf("Schemas in package '%s':\n", packageName)
+	builtInTag := ""
+	if len(schemas) > 0 && schemas[0].BuiltIn {
+		builtInTag = " [built-in]"
+	}
+	fmt.Printf("Schemas in package '%s'%s:\n", packageName, builtInTag)
 	fmt.Println()
 
 	for _, schemaInfo := range schemas {
