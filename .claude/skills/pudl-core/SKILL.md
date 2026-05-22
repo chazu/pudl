@@ -19,7 +19,6 @@ CLI tool for infrastructure data management and automation.
     sqlite/catalog.db  # SQLite catalog
     .runs/             # workflow run manifests
     .drift/            # drift detection reports
-  vaults/              # encrypted credential stores
 ```
 
 ## Common Commands
@@ -58,8 +57,6 @@ CLI tool for infrastructure data management and automation.
 
 ### Infrastructure
 - `pudl drift check <definition>` — Compare declared vs live state
-- `pudl vault set <path> <value>` — Store a secret
-- `pudl vault get <path>` — Retrieve a secret
 
 ### Utilities
 - `pudl init` — Initialize workspace

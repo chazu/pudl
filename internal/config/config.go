@@ -21,7 +21,6 @@ type Config struct {
 	SchemaPath         string             `yaml:"schema_path"`
 	DataPath           string             `yaml:"data_path"`
 	Version            string             `yaml:"version"`
-	VaultBackend       string             `yaml:"vault_backend,omitempty"`
 	ToolchainMappings  []ToolchainMapping `yaml:"toolchain_mappings,omitempty"`
 }
 
@@ -108,7 +107,7 @@ func Exists() bool {
 }
 
 func ValidConfigKeys() []string {
-	return []string{"schema_path", "data_path", "version", "vault_backend"}
+	return []string{"schema_path", "data_path", "version"}
 }
 
 func IsValidConfigKey(key string) bool {
@@ -214,13 +213,6 @@ func SetConfigValue(key, value string) error {
 		}
 		cfg.Version = value
 
-	case "vault_backend":
-		if value != "env" && value != "file" && value != "" {
-			return errors.NewInputError(
-				fmt.Sprintf("Invalid vault_backend: %s", value),
-				"Valid values are: env, file")
-		}
-		cfg.VaultBackend = value
 	}
 
 	// Save the updated configuration

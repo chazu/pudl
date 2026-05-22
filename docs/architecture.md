@@ -24,8 +24,6 @@ This document describes PUDL's internal architecture: storage layout, streaming 
 |   +-- definitions/               # Named schema instances
 |   +-- extensions/
 |       +-- models/                # User extension models
-+-- vaults/                        # Encrypted credential stores
-    +-- default.age                # age-encrypted secrets file
 ```
 
 ### Raw Data
@@ -204,7 +202,6 @@ ImportFileWithFriendlyIDs(opts)
 | `typepattern` | `internal/typepattern/` | Type detection for K8s, AWS, GitLab registries |
 | `ui` | `internal/ui/` | Output formatting, interactive TUI (bubbletea) |
 | `validator` | `internal/validator/` | CUE module loader, cascade validator, validation service |
-| `vault` | `internal/vault/` | Vault interface, env/file backends, resolution walker |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
 
 ## Core Data Flow
@@ -266,5 +263,4 @@ After import, data can be:
 - **go-cdc-chunkers** -- Content-Defined Chunking for streaming
 - **Bubbletea + Bubbles + Lipgloss** -- interactive TUI (`pudl list --fancy`)
 - **yaml.v3** -- YAML config and data parsing
-- **age** -- encryption for file-based vault
 - **testify** -- test assertions

@@ -1,12 +1,16 @@
 # Makefile for pudl
 
 BINARY_NAME := pudl
-INSTALL_PATH := $(HOME)/.local/bin
 
 # Build flags
 GO := go
 GOFLAGS := -v
 LDFLAGS := -s -w
+
+INSTALL_PATH := $(shell $(GO) env GOBIN)
+ifeq ($(strip $(INSTALL_PATH)),)
+INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
+endif
 
 .PHONY: all build install uninstall clean test release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci
 

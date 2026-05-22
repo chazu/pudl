@@ -458,40 +458,6 @@ pudl data latest prod_instance list
 pudl data latest prod_instance list --raw
 ```
 
-## Vault
-
-### `pudl vault get <path>`
-
-Retrieve a secret from the vault.
-
-```bash
-pudl vault get aws/access_key
-```
-
-### `pudl vault set <path> <value>`
-
-Store a secret in the vault (file backend only).
-
-```bash
-pudl vault set aws/access_key "AKIA..."
-```
-
-### `pudl vault list`
-
-List stored secret paths.
-
-```bash
-pudl vault list
-```
-
-### `pudl vault rotate-key`
-
-Re-encrypt the file vault with a new passphrase.
-
-```bash
-pudl vault rotate-key
-```
-
 ## Migration
 
 ### `pudl migrate identity`

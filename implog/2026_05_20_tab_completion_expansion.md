@@ -1,12 +1,11 @@
 # Tab Completion Expansion
 
 ## Summary
-Expanded tab completion coverage from ~13 commands to ~25 commands. Added new completion helpers for relations, sources, vault paths, fact IDs, and observation kinds. Wired up existing completers to commands that were missing them.
+Expanded tab completion coverage from ~13 commands to ~25 commands. Added new completion helpers for relations, sources, fact IDs, and observation kinds. Wired up existing completers to commands that were missing them.
 
 ## New Completion Helpers
 - `completeRelations` — distinct relation names from current_facts
 - `completeSources` — distinct source values from current_facts
-- `completeVaultPaths` — vault secret paths via Vault.List()
 - `completeFactIDs` — recent fact hex IDs (12-char prefix) with relation description
 - `completeObservationKinds` — static list of known observation kinds
 
@@ -25,8 +24,6 @@ Expanded tab completion coverage from ~13 commands to ~25 commands. Added new co
 - `drift check` — positional arg (definition names)
 - `ingest-manifest` — `--origin`
 - `ingest-observe` — `--origin`
-- `vault get` — positional arg (vault paths)
-- `vault set` — positional arg (vault paths)
 - `schema add` — positional arg (schema names)
 - `schema edit` — positional arg (schema names)
 - `export` — `--format` deduped to use shared `completeFormats`

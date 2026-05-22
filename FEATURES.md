@@ -120,13 +120,6 @@ Known gap: workspace context infrastructure exists but most CLI commands still u
 - Scoped to repo:path (e.g. `pudl:internal/database`)
 - Stored as facts in the bitemporal store with dedup
 
-## Vault — EXPERIMENTAL
-
-- Secret storage with pluggable backends
-- Environment variable backend
-- File-based backend with passphrase encryption (age)
-- Key rotation (`pudl vault rotate-key`)
-
 ## CUE Module Management — CORE
 
 - `pudl module tidy` — fetch and update dependencies
