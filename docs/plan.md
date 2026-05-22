@@ -4,7 +4,7 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
-The core pipeline is stable and tested. Execution-related features (models, methods, workflows, Glojure runtime, vault, artifacts) were implemented in Phases 1-8, then extracted into **mu** as a separate tool. What remains in pudl is the knowledge layer. Residual execution CLI surface (`pudl data search/latest`, `drift check --method`, Glojure adapter) has been removed; some internal artifacts (database fields, CUE model schemas) remain for future cleanup.
+The core pipeline is stable and tested. Execution-related features (models, methods, workflows, Glojure runtime, artifacts) were implemented in Phases 1-8, then extracted into **mu** as a separate tool. What remains in pudl is the knowledge layer. Residual execution CLI surface (`pudl data search/latest`, `drift check --method`, Glojure adapter) has been removed; some internal artifacts (database fields, CUE model schemas) remain for future cleanup.
 
 ### Data Lake
 - Multi-format import (JSON, YAML, CSV, NDJSON) with automatic format detection
@@ -131,7 +131,6 @@ Potential future work, roughly ordered by value.
 | `schema` | `internal/schema/` | Schema operations |
 | `repo` | `internal/repo/` | Repo init, skill installation |
 | `skills` | `internal/skills/` | Embedded Claude skill files |
-| `vault` | `internal/vault/` | Vault interface (retained for definition resolution) |
 | `ui` | `internal/ui/` | Output formatting |
 | `errors` | `internal/errors/` | Typed error codes |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |

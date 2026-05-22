@@ -10,7 +10,6 @@ import (
 	"pudl/internal/database"
 	"pudl/internal/idgen"
 	"pudl/internal/schema"
-	"pudl/internal/vault"
 )
 
 // completeProquintIDs returns a completion function for proquint entry IDs
@@ -254,34 +253,6 @@ func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]st
 	for _, s := range sources {
 		if toComplete == "" || strings.HasPrefix(s, toComplete) {
 			completions = append(completions, s)
-		}
-	}
-
-	return completions, cobra.ShellCompDirectiveNoFileComp
-}
-
-// completeVaultPaths returns a completion function for vault secret paths
-func completeVaultPaths(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	v, err := vault.New(cfg.VaultBackend, config.GetPudlDir())
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	defer v.Close()
-
-	paths, err := v.List()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-
-	var completions []string
-	for _, p := range paths {
-		if toComplete == "" || strings.HasPrefix(p, toComplete) {
-			completions = append(completions, p)
 		}
 	}
 
