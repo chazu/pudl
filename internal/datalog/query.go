@@ -14,6 +14,14 @@ import (
 // This is the single source of truth shared by the CLI (`pudl query`) and the
 // public API (pkg/factstore).
 func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
+	// Built-in EDB relations (e.g. catalog_entry) are join-only: they resolve
+	// inside rule bodies but cannot be queried directly. Querying one with no
+	// producing rule would silently fall through to the facts table and return
+	// nothing, so fail loudly instead.
+	if _, isBuiltin := builtinEDBTables[relation]; isBuiltin && !relationHasAnyRule(relation, rules) {
+		return nil, fmt.Errorf("relation %q is a join-only built-in (catalog) relation: reference it in a rule body, or list catalog entries directly instead of querying it", relation)
+	}
+
 	recursive, nonRecursive := PartitionRules(rules)
 
 	// If the queried relation is derived by a recursive rule, the fixpoint
@@ -52,6 +60,16 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 // recursive rule.
 func relationHasRecursiveRule(relation string, recursive []Rule) bool {
 	for _, r := range recursive {
+		if r.Head.Rel == relation {
+			return true
+		}
+	}
+	return false
+}
+
+// relationHasAnyRule reports whether the given relation is the head of any rule.
+func relationHasAnyRule(relation string, rules []Rule) bool {
+	for _, r := range rules {
 		if r.Head.Rel == relation {
 			return true
 		}

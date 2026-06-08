@@ -121,7 +121,9 @@ Done 2026-06-08 — see `implog/2026_06_08_catalog_datalog_bridge.md`. `catalog_
 is a built-in EDB relation (backed by the `catalog_entry_edb` view) usable as a rule
 body atom; rules can join facts against catalog data through `Store.Query`. The
 relation name is reserved at `AddFact`. Direct querying of `catalog_entry` (no rule)
-is not supported yet — body-atom use only. Design notes below.
+returns an explicit join-only error rather than a silent empty result, and
+`factstore.Store.ListCatalog` provides typed catalog access. Public API documented
+in `docs/library-api.md`. Design notes below.
 
 
 

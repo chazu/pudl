@@ -163,15 +163,17 @@ Location: .pudl/schema/pudl/rules/transitive-deps.cue
 
 ## EDB Sources
 
-The evaluator reads base facts from two sources, combined via `MultiEDB`:
+The evaluator reads base facts from two sources.
 
 ### Fact Store
 
-For present-time queries, the SQL compiler reads from the `current_facts` table -- a materialized view of only currently-valid, non-retracted facts. For temporal queries (`--as-of-valid`, `--as-of-tx`), it reads from the full `facts` table with appropriate temporal filters.
+For present-time queries, the SQL compiler reads from the `current_facts` table -- a materialized view of only currently-valid, non-retracted facts. For temporal queries (`--as-of-valid`, `--as-of-tx`), it reads from the full `facts` table with appropriate temporal filters. Any relation name not reserved as a built-in (below) is read from the fact store.
 
-### Catalog (`CatalogEDB`)
+### Catalog (`catalog_entry`)
 
-Exposes `catalog_entries` as a `catalog_entry` relation with these fields:
+The catalog is exposed to Datalog as a built-in `catalog_entry` relation, backed by the `catalog_entry_edb` SQL view over `catalog_entries`. Because the view has native columns (not a JSON `args` blob), the compiler reads its columns directly via `CompileOptions.TableOverrides` -- no `json_extract`, and no temporal filtering (the catalog is atemporal).
+
+Available fields (view columns):
 
 | Field | Source |
 |-------|--------|
@@ -179,12 +181,32 @@ Exposes `catalog_entries` as a `catalog_entry` relation with these fields:
 | `schema` | CUE schema name |
 | `origin` | Data origin / workspace |
 | `format` | File format |
+| `status` | Convergence status |
 | `entry_type` | import, artifact, observe, manifest |
 | `definition` | Definition name (if applicable) |
-| `status` | Convergence status |
+| `method` | Method name (for artifacts) |
+| `run_id` | Run identifier |
 | `resource_id` | Stable resource identity |
+| `content_hash` | SHA256 of stored data |
+| `version` | Monotonic version per `resource_id` |
+| `collection_id` / `collection_type` / `item_id` | Collection membership |
 
-Rules can join across both sources -- e.g., matching observations against catalog entries.
+Rules can join facts against the catalog -- e.g., matching an observation against the catalog entry it refers to:
+
+```cue
+owned: {
+    head: { rel: "owned", args: { id: "$I", team: "$T" } }
+    body: [
+        { rel: "catalog_entry", args: { id: "$I", origin: "$O" } },
+        { rel: "team_owns",     args: { origin: "$O", team: "$T" } },
+    ]
+}
+```
+
+**`catalog_entry` is join-only and reserved:**
+
+- It works as a rule **body atom**, not as a direct query target. `pudl query catalog_entry` (no rule producing it) returns a clear error, not a silent empty result. To list catalog entries, use `pudl list` or the library `Store.ListCatalog` (see [library-api.md](library-api.md)).
+- The name is reserved: `AddFact` rejects facts asserted under the `catalog_entry` relation, so user facts can never silently shadow the built-in.
 
 ## Temporal Queries
 

@@ -14,7 +14,7 @@ The catalog (`catalog_entries`) is purpose-built for imported data artifacts -- 
 
 These don't have stored paths, file formats, or record counts. They have a **relation** (what kind of fact), **args** (the specifics), **temporal bounds** (when was it true, when did we learn it), and a **source** (who asserted it).
 
-The catalog and fact store coexist in the same database. The Datalog evaluator (`pudl query`) reads from both -- treating catalog entries as a `catalog_entry` relation and facts queried directly by relation name.
+The catalog and fact store coexist in the same database. The Datalog evaluator (`pudl query`) reads from both -- treating catalog entries as a built-in `catalog_entry` relation (join-only, usable in rule bodies) and facts queried directly by relation name. `catalog_entry` is reserved: you cannot assert facts under that relation. See [datalog.md](datalog.md#catalog-catalog_entry).
 
 ## Schema
 
