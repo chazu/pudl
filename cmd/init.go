@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
-	pudlInit "pudl/internal/init"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
+	pudlInit "github.com/chazu/pudl/internal/init"
 )
 
 var (

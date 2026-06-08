@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/test/integration/infrastructure"
+	"github.com/chazu/pudl/test/integration/infrastructure"
 )
 
 func TestIntegrationInfrastructure(t *testing.T) {

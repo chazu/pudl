@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 func addTestEntry(t *testing.T, db *database.CatalogDB, id, origin string) {

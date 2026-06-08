@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/drift"
+	"github.com/chazu/pudl/internal/drift"
 )
 
 func TestExportMuConfig_NoDrift(t *testing.T) {

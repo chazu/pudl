@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
-	"pudl/internal/config"
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // CheckResult represents the result of a health check

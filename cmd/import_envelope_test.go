@@ -3,9 +3,9 @@ package cmd
 import (
 	"testing"
 
-	"pudl/internal/database"
-	"pudl/internal/mubridge"
-	"pudl/internal/muschemas"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/muschemas"
 )
 
 func newTestCache(t *testing.T) *muschemas.Cache {

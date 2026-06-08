@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/streaming"
+	"github.com/chazu/pudl/internal/streaming"
 )
 
 func main() {

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 func setupIngestTestDB(t *testing.T) (*database.CatalogDB, string) {

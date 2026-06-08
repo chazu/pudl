@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // DatabaseTestSuite provides bulletproof database testing with guaranteed cleanup

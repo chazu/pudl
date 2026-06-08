@@ -8,12 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/errors"
-	"pudl/internal/inference"
-	"pudl/internal/schemagen"
-	"pudl/internal/ui"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schemagen"
+	"github.com/chazu/pudl/internal/ui"
 )
 
 var (

@@ -3,7 +3,7 @@ package inference
 import (
 	"testing"
 
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 func TestExtractTopLevelFields(t *testing.T) {

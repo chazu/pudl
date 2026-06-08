@@ -1,6 +1,6 @@
 package datalog
 
-import "pudl/internal/database"
+import "github.com/chazu/pudl/internal/database"
 
 // builtinEDBTables maps built-in EDB relation names to the SQL table/view that
 // backs them. Body atoms referencing these relations compile to a join against

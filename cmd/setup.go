@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 var (

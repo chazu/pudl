@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 // schemaShowCmd represents the schema show command

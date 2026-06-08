@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/test/testutil"
+	"github.com/chazu/pudl/test/testutil"
 )
 
 func TestDetectFormat(t *testing.T) {

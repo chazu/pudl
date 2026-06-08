@@ -7,8 +7,8 @@ import (
 
 	"cuelang.org/go/cue"
 
-	"pudl/internal/schemaname"
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // SchemaInferrer determines the best matching schema for data by attempting

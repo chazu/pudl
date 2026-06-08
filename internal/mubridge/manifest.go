@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/idgen"
 )
 
 // ManifestInput represents a mu build manifest.

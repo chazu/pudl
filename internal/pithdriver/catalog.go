@@ -3,7 +3,7 @@ package pithdriver
 import (
 	"github.com/chazu/pith"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // catalogWords returns the catalog driver vocabulary.

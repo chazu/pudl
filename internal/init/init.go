@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"pudl/internal/config"
-	"pudl/internal/importer"
-	"pudl/internal/skills"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/skills"
 )
 
 // InitOptions contains options for initialization

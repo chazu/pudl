@@ -1,6 +1,6 @@
 package factstore
 
-import "pudl/internal/database"
+import "github.com/chazu/pudl/internal/database"
 
 // CatalogEntry is a catalog record describing an imported or derived artifact.
 type CatalogEntry = database.CatalogEntry

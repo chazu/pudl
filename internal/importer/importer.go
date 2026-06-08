@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/inference"
-	"pudl/internal/schemagen"
-	"pudl/internal/schemaname"
-	"pudl/internal/streaming"
-	"pudl/internal/typepattern"
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schemagen"
+	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/streaming"
+	"github.com/chazu/pudl/internal/typepattern"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // Importer handles data import operations

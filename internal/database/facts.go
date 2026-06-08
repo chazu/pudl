@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // Fact represents a single fact in the bitemporal fact store.

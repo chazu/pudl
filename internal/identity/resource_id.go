@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // ComputeResourceID returns a deterministic resource_id.

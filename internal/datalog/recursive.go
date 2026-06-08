@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 const maxFixpointIterations = 100

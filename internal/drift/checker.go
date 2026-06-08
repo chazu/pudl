@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/definition"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/definition"
 )
 
 // Checker performs drift detection by comparing declared definition state

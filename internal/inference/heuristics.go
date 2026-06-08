@@ -3,7 +3,7 @@ package inference
 import (
 	"strings"
 
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // InferenceHints provides optional context to improve candidate selection.

@@ -3,7 +3,7 @@ package definition
 import (
 	"fmt"
 
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // Validator validates definitions using the CUE module loader.

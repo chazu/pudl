@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 func TestListItem(t *testing.T) {

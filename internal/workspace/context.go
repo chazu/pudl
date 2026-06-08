@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"pudl/internal/config"
+	"github.com/chazu/pudl/internal/config"
 )
 
 // Context holds the resolved workspace state for the current invocation.

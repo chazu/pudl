@@ -9,9 +9,9 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
-	"pudl/internal/errors"
-	"pudl/internal/idgen"
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // CatalogDB handles SQLite database operations for the catalog

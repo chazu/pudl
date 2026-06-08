@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/inference"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
 )
 
 // MockProgressReporter implements a mock progress reporter for testing

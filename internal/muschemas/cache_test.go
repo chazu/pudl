@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"pudl/internal/muschemas"
+	"github.com/chazu/pudl/internal/muschemas"
 )
 
 func newCache(t *testing.T) *muschemas.Cache {

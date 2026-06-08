@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/internal/typepattern"
+	"github.com/chazu/pudl/internal/typepattern"
 )
 
 func TestSchemaExistsError(t *testing.T) {

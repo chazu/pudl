@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/idgen"
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 // completeProquintIDs returns a completion function for proquint entry IDs

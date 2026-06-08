@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 // RunInteractiveList runs the bubbletea interactive list interface

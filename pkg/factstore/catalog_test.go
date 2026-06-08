@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // White-box test: seed catalog entries through the internal handle (catalog

@@ -8,14 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/errors"
-	"pudl/internal/importer"
-	"pudl/internal/mubridge"
-	"pudl/internal/muschemas"
-	"pudl/internal/streaming"
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/muschemas"
+	"github.com/chazu/pudl/internal/streaming"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 var (

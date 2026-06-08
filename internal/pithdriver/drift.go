@@ -3,7 +3,7 @@ package pithdriver
 import (
 	"github.com/chazu/pith"
 
-	"pudl/internal/drift"
+	"github.com/chazu/pudl/internal/drift"
 )
 
 // driftWords returns the drift driver vocabulary.

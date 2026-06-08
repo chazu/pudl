@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/internal/schemagen"
-	"pudl/internal/typepattern"
+	"github.com/chazu/pudl/internal/schemagen"
+	"github.com/chazu/pudl/internal/typepattern"
 )
 
 // TypeDetectionTestSuite provides isolated PUDL environments for type detection tests.

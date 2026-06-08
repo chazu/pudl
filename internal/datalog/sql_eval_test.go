@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 func setupTestDB(t *testing.T) *database.CatalogDB {

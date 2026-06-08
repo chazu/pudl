@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // ensureCurrentFactsTable creates the materialized current-state view of facts.

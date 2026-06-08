@@ -1,4 +1,4 @@
-module pudl
+module github.com/chazu/pudl
 
 go 1.25.8
 

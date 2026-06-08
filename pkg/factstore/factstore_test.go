@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"pudl/pkg/eval"
-	"pudl/pkg/factstore"
+	"github.com/chazu/pudl/pkg/eval"
+	"github.com/chazu/pudl/pkg/factstore"
 )
 
 func openStore(t *testing.T) *factstore.Store {

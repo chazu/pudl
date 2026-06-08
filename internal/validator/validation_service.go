@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // ValidationService handles CUE validation for data validation workflows
