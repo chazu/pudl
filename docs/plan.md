@@ -115,14 +115,66 @@ Done 2026-06-07 — see `implog/2026_06_07_public_api_extraction.md`. Also fixed
 latent recursion-routing bug in the query path: relations with both a base and a
 recursive rule previously returned only the base tuples.
 
-### Phase 2 — Catalog-as-datalog bridge (deferred)
+### Phase 2 — Catalog-as-datalog bridge (done)
 
-Let datalog query the catalog alongside facts via one `Store.Query` API. Facts use a
-JSON `args` blob; the catalog uses native columns — bridge with a SQL view that
-projects `catalog_entries` into fact shape, wired through the compiler's existing
-`CompileOptions.TableOverrides`. Must thread overrides through both `sql_eval.go` and
-`recursive.go`; the view is atemporal so the override must win over the temporal
-table swap. View column set deferred to Phase 2 start.
+Done 2026-06-08 — see `implog/2026_06_08_catalog_datalog_bridge.md`. `catalog_entry`
+is a built-in EDB relation (backed by the `catalog_entry_edb` view) usable as a rule
+body atom; rules can join facts against catalog data through `Store.Query`. The
+relation name is reserved at `AddFact`. Direct querying of `catalog_entry` (no rule)
+is not supported yet — body-atom use only. Design notes below.
+
+
+
+Let datalog query the catalog alongside facts via one `Store.Query` API: expose the
+catalog as a `catalog_entry` relation usable as a rule body atom, so rules can join
+facts against catalog data.
+
+**Mechanism.** The compiler already handles native-column tables via
+`CompileOptions.TableOverrides`: for an overridden relation it accesses
+`alias."col"` directly (no `json_extract`), skips the `relation = ?` filter, and
+skips temporal filters. So no JSON re-shaping is needed for column access — the
+earlier "facts are JSON / catalog is columns → need a view" reasoning was wrong on
+that point. The recursive path (`fixpointLoop`) already threads `TableOverrides` for
+`_delta_` temp tables; the catalog override just merges in.
+
+**Design decisions (locked):**
+
+- **Q1 — Curated SQL view, not a raw table override.** Point `catalog_entry` at a
+  view (e.g. `catalog_entry_edb`), not at `catalog_entries` directly. Reason is
+  interface design, not column access: the physical columns are too internal/unstable
+  (`item_id`, `stored_path`, `metadata_path`, `record_count`) to be the public
+  datalog interface. The view renames (`item_id`→`resource_id`), hides internals, and
+  pins the exposed/migrated column set explicitly.
+- **Q2 — Rule-body-only first.** `catalog_entry` works as a body atom inside rules,
+  not as a direct query target. A bare `Store.Query{Relation:"catalog_entry"}` with
+  no rule hits `fallbackEDB` (facts table) and returns nothing; direct-query support
+  (a `fallbackEDB` branch selecting from the view) is a later add if wanted.
+- **Q3 — Built-in override map, hardcoded.** A package-level
+  `builtinEDBTables = {"catalog_entry": "catalog_entry_edb"}` injected at the three
+  compile sites: `sql_eval.Query` (switch `Compile` → `CompileWithOptions`),
+  `recursive.seedBase`, and `recursive.fixpointLoop` (merge into the existing
+  `_delta_` override map — no key conflict, since `catalog_entry` is never a derived
+  relation).
+- **Q4 — Reserve the relation name; owner `database`.** Keep the clean name
+  `catalog_entry`; `database` owns a `builtinEDBRelations` set and `AddFact` rejects
+  those relations with a clear error (prevents silent shadowing of user facts by the
+  view). The datalog override map must reference the same names — a test asserts the
+  two stay in sync.
+
+**Implementation outline:**
+
+1. `database`: add `catalog_entry_edb` view to the idempotent migrations (renaming
+   `item_id`→`resource_id`, excluding internal columns); add `builtinEDBRelations`
+   set + guard in `AddFact`.
+2. `datalog`: `builtinEDBTables` map; inject at the three compile sites; sync test
+   against `database.builtinEDBRelations`.
+3. Tests: rule with a `catalog_entry` body atom joined against a fact relation;
+   recursive rule referencing `catalog_entry`; temporal query with a catalog atom
+   present (catalog atemporal, facts scoped); `AddFact` rejects reserved relation.
+
+**Edge items to handle/doc:** nullable view columns bind to nil (joins on NULL never
+match — expected); numeric constraints from the CLI are strings, rely on SQLite type
+affinity for numeric view columns.
 
 ## What's Next
 

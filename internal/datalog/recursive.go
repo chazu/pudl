@@ -94,7 +94,7 @@ func seedBase(tx *sql.Tx, baseRules []Rule, derived map[string]bool, headCols ma
 		if !derived[rule.Head.Rel] {
 			continue
 		}
-		cq, err := Compile(rule, scope)
+		cq, err := CompileWithOptions(rule, scope, CompileOptions{TableOverrides: builtinEDBTables})
 		if err != nil {
 			return fmt.Errorf("compile base rule %s: %w", rule.Name, err)
 		}
@@ -130,7 +130,7 @@ func fixpointLoop(tx *sql.Tx, recRules []Rule, derived map[string]bool, headCols
 				}
 			}
 
-			cq, err := CompileWithOptions(rule, scope, CompileOptions{TableOverrides: overrides})
+			cq, err := CompileWithOptions(rule, scope, CompileOptions{TableOverrides: withBuiltinEDB(overrides)})
 			if err != nil {
 				return fmt.Errorf("compile recursive rule %s: %w", rule.Name, err)
 			}

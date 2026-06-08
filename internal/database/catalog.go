@@ -215,6 +215,12 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure item_schemas table: %w", err)
 	}
 
+	// Create the catalog_entry_edb view exposing catalog_entries to Datalog.
+	// Must run last: it references migration-added columns.
+	if err := c.ensureCatalogEntryView(); err != nil {
+		return fmt.Errorf("failed to ensure catalog_entry view: %w", err)
+	}
+
 	return nil
 }
 
