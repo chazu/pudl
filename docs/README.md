@@ -14,7 +14,8 @@ Start with the [root README](../README.md) for a project overview.
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |
-| [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, performance |
+| [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |
+| [library-api.md](library-api.md) | Public Go API (`pkg/factstore`, `pkg/eval`) for external programs |
 | [VISION.md](VISION.md) | Project vision and roadmap |
 | [pith-vm.md](pith-vm.md) | Pith VM: vocabulary reference, `pudl exec`, driver words, examples |
 | [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |

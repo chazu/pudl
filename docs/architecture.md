@@ -179,7 +179,8 @@ ImportFileWithFriendlyIDs(opts)
 | Package | Path | Responsibility |
 |---------|------|----------------|
 | `config` | `internal/config/` | YAML configuration loading and defaults |
-| `database` | `internal/database/` | SQLite catalog: CRUD, migrations, queries |
+| `database` | `internal/database/` | SQLite catalog + bitemporal fact store: CRUD, migrations, queries |
+| `datalog` | `internal/datalog/` | Datalog engine: rule loader, SQL compiler, recursive fixpoint, `Evaluate` orchestrator, `catalog_entry` built-in relation |
 | `definition` | `internal/definition/` | Definition loader, validator, socket wiring, dependency graph |
 | `doctor` | `internal/doctor/` | Workspace health checks |
 | `drift` | `internal/drift/` | State comparator, report generator and storage |
@@ -203,6 +204,15 @@ ImportFileWithFriendlyIDs(opts)
 | `ui` | `internal/ui/` | Output formatting, interactive TUI (bubbletea) |
 | `validator` | `internal/validator/` | CUE module loader, cascade validator, validation service |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
+
+### Public API (`pkg/`)
+
+The only packages importable by external Go programs (everything under `internal/` is import-restricted by the compiler). See [library-api.md](library-api.md).
+
+| Package | Path | Responsibility |
+|---------|------|----------------|
+| `factstore` | `pkg/factstore/` | `Store`: fact CRUD, Datalog `Query`, `ListCatalog`, store/workspace resolution. No `internal/` types in its API. |
+| `eval` | `pkg/eval/` | Datalog rule loading/parsing and rule types (`Rule/Atom/Term/Tuple`, `Var/Val`) |
 
 ## Core Data Flow
 

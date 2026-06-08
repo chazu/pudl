@@ -400,16 +400,17 @@ RULES
 
 HOW RULES WORK
 
-  Each rule defines a head (the derived relation) and a body
-  (conditions over existing facts):
+  Each rule is a CUE field with a head (the derived relation) and a
+  body (conditions over existing facts). Arguments are named; variables
+  use the $-prefix convention:
 
     package rules
 
-    rules: stale_items: {
-        head: ["stale_item", "$Entity", "$Age"]
+    stale_item: {
+        head: { rel: "stale_item", args: { entity: "$E", age: "$A" } }
         body: [
-            ["observation", "$Entity", "$Desc", "$Time"],
-            ["older_than", "$Time", "7d"],
+            { rel: "observation", args: { entity: "$E", time: "$T" } },
+            { rel: "older_than",  args: { time: "$T", age: "$A" } },
         ]
     }
 
@@ -429,13 +430,32 @@ SQL COMPILATION
 
   Each body atom becomes a self-join on current_facts:
 
-    ["observation", "$Entity", "$Desc"]
+    { rel: "observation", args: { entity: "$E", desc: "$D" } }
     →
-    SELECT cf1.args->>'$[0]' AS Entity, cf1.args->>'$[1]' AS Desc
-    FROM current_facts cf1
-    WHERE cf1.relation = 'observation'
+    SELECT json_extract(t0.args, '$.entity') AS entity,
+           json_extract(t0.args, '$.desc')   AS desc
+    FROM current_facts t0
+    WHERE t0.relation = 'observation'
 
   Shared variables across atoms produce equi-joins.
+
+CATALOG AS A RELATION
+
+  The catalog is exposed as the built-in 'catalog_entry' relation, so
+  rules can join facts against catalog data (fields: id, schema, origin,
+  format, status, entry_type, definition, resource_id, ...):
+
+    owned: {
+        head: { rel: "owned", args: { id: "$I", team: "$T" } }
+        body: [
+            { rel: "catalog_entry", args: { id: "$I", origin: "$O" } },
+            { rel: "team_owns",     args: { origin: "$O", team: "$T" } },
+        ]
+    }
+
+  catalog_entry is join-only (use it in a rule body, not as a direct
+  query target) and reserved (facts cannot be asserted under that name).
+  To list catalog entries directly, use 'pudl list'.
 
 SEE ALSO
 

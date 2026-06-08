@@ -148,6 +148,18 @@ func TestCatalogEDBTemporalScope(t *testing.T) {
 	}
 }
 
+// Querying a built-in EDB relation directly (no producing rule) is a join-only
+// error, not a silent empty result.
+func TestCatalogEDBDirectQueryRejected(t *testing.T) {
+	db := setupTestDB(t)
+	addTestEntry(t, db, "a", "prod")
+
+	_, err := Evaluate(db, nil, "catalog_entry", nil, TemporalScope{})
+	if err == nil {
+		t.Fatal("expected error querying join-only catalog_entry directly")
+	}
+}
+
 // The datalog override map must reference only relation names the database
 // package reserves, so reserved-name enforcement and overrides stay aligned.
 func TestBuiltinEDBTablesAreReserved(t *testing.T) {
