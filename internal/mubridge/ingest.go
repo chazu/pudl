@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/identity"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/identity"
 )
 
 // ObserveResult matches mu's coordinator.ObserveResult exactly.

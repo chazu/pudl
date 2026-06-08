@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // schemaEditCmd represents the schema edit command

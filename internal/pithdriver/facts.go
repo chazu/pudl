@@ -6,7 +6,7 @@ import (
 
 	"github.com/chazu/pith"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // factWords returns the fact driver vocabulary.

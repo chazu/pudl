@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // GetManifestActions returns all manifest-action entries for a given run_id.

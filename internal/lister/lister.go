@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/errors"
-	"pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/idgen"
 )
 
 // Lister handles data listing and querying operations

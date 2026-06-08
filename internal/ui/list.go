@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"gopkg.in/yaml.v3"
 
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 // Model represents the bubbletea model for the list UI

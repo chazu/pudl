@@ -3,7 +3,7 @@ package mubridge
 import (
 	"strings"
 
-	"pudl/internal/drift"
+	"github.com/chazu/pudl/internal/drift"
 )
 
 // MuConfig represents a mu.json configuration file.

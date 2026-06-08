@@ -3,7 +3,7 @@ package eval_test
 import (
 	"testing"
 
-	"pudl/pkg/eval"
+	"github.com/chazu/pudl/pkg/eval"
 )
 
 func TestParseRulesFromSource(t *testing.T) {

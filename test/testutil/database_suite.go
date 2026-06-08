@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // Global cleanup registry for process-level safety

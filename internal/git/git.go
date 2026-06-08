@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // Repository represents a git repository

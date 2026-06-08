@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/doctor"
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/doctor"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // doctorCmd represents the doctor command

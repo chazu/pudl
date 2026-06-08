@@ -3,7 +3,7 @@ package inference
 import (
 	"sort"
 
-	"pudl/internal/validator"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // InheritanceGraph tracks schema inheritance relationships for specificity ordering.

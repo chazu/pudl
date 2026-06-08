@@ -4,8 +4,8 @@
 package factstore
 
 import (
-	"pudl/internal/database"
-	"pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/datalog"
 )
 
 // Fact is a typed assertion in the bitemporal store.

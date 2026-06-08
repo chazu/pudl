@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // GetLatestArtifact returns the most recent artifact for a definition+method pair.

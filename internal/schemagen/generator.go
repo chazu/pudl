@@ -12,8 +12,8 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/parser"
 
-	"pudl/internal/inference"
-	"pudl/internal/typepattern"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/typepattern"
 )
 
 // Generator handles schema generation from data.

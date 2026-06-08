@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 // CUESchemaDetector integrates schema detection with PUDL's CUE schema system

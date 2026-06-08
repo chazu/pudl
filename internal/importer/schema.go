@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // updateCatalog updates the main data catalog with the new import

@@ -6,11 +6,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
-	"pudl/internal/idgen"
-	"pudl/internal/lister"
-	"pudl/internal/ui"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/lister"
+	"github.com/chazu/pudl/internal/ui"
 )
 
 var (

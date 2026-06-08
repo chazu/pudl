@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // TestDataGenerator provides methods to generate realistic test data

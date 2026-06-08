@@ -4,7 +4,7 @@
 package eval
 
 import (
-	"pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/datalog"
 )
 
 // Types re-exported for external consumers. All are plain data structures, so

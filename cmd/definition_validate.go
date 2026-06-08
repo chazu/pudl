@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/definition"
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/definition"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 var definitionValidateCmd = &cobra.Command{

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // FindByContentHash returns entry with matching content hash, or nil.

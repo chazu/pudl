@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 func TestDetailViewToggle(t *testing.T) {

@@ -3,7 +3,7 @@ package datalog
 import (
 	"fmt"
 
-	"pudl/internal/database"
+	"github.com/chazu/pudl/internal/database"
 )
 
 // Evaluate runs the full Datalog query path for a single relation:

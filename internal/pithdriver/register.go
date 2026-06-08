@@ -3,9 +3,9 @@ package pithdriver
 import (
 	"github.com/chazu/pith"
 
-	"pudl/internal/database"
-	"pudl/internal/inference"
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 // Register adds all pudl driver words to a pith VM.

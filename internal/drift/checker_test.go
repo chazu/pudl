@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/definition"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/definition"
 )
 
 func TestChecker_MissingArtifact(t *testing.T) {

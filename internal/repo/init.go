@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"pudl/internal/skills"
+	"github.com/chazu/pudl/internal/skills"
 )
 
 const pudlDirName = ".pudl"

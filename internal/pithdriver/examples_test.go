@@ -10,8 +10,8 @@ import (
 
 	"github.com/chazu/pith"
 
-	"pudl/internal/database"
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 func setupTestDB(t *testing.T) (*database.CatalogDB, string) {

@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
-	"pudl/internal/git"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/git"
 )
 
 // schemaStatusCmd represents the schema status command

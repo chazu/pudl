@@ -10,7 +10,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
 
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // CUEModuleLoader handles loading CUE modules with proper cross-reference support

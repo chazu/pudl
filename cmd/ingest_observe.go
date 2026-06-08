@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/mubridge"
 )
 
 var (

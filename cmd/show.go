@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"pudl/internal/config"
-	"pudl/internal/errors"
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 var (

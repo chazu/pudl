@@ -3,8 +3,8 @@ package factstore
 import (
 	"path/filepath"
 
-	"pudl/internal/config"
-	"pudl/internal/workspace"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/workspace"
 )
 
 // GlobalDir returns the global pudl config directory (~/.pudl).

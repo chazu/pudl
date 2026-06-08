@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"pudl/internal/database"
-	"pudl/internal/importer"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/importer"
 )
 
 // IntegrationValidators provides comprehensive validation for integration tests

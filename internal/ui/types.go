@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	"pudl/internal/idgen"
-	"pudl/internal/lister"
+	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/lister"
 )
 
 // ListItem represents an item in the bubbletea list

@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/idgen"
-	"pudl/internal/identity"
-	"pudl/internal/inference"
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/identity"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // EnhancedImporter extends the base importer with content-based ID generation

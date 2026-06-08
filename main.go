@@ -1,7 +1,7 @@
 package main
 
 import (
-	"pudl/cmd"
+	"github.com/chazu/pudl/cmd"
 )
 
 func main() {

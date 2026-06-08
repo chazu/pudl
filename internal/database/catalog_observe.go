@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"pudl/internal/errors"
+	"github.com/chazu/pudl/internal/errors"
 )
 
 // GetLatestObserve returns the most recent observe entry for a definition.

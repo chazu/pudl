@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"testing"
 
-	"pudl/internal/database"
-	"pudl/internal/importer"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/importer"
 )
 
 // Global cleanup registry for process-level safety

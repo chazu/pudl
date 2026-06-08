@@ -8,9 +8,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/drift"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/drift"
 )
 
 // StatusOutput represents JSON output for the status command.

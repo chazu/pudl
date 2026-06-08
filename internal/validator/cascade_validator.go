@@ -10,7 +10,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 
-	"pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // CascadeValidator handles cascading schema validation with full CUE module support

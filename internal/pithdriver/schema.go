@@ -3,7 +3,7 @@ package pithdriver
 import (
 	"github.com/chazu/pith"
 
-	"pudl/internal/schema"
+	"github.com/chazu/pudl/internal/schema"
 )
 
 // schemaWords returns the schema driver vocabulary.

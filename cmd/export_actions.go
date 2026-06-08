@@ -8,11 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"pudl/internal/config"
-	"pudl/internal/database"
-	"pudl/internal/definition"
-	"pudl/internal/drift"
-	"pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/definition"
+	"github.com/chazu/pudl/internal/drift"
+	"github.com/chazu/pudl/internal/mubridge"
 )
 
 var (

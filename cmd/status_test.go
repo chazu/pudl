@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"pudl/internal/database"
-	"pudl/internal/drift"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/drift"
 )
 
 func TestColorForStatus(t *testing.T) {

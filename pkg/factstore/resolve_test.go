@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"pudl/pkg/factstore"
+	"github.com/chazu/pudl/pkg/factstore"
 )
 
 func TestGlobalDir(t *testing.T) {

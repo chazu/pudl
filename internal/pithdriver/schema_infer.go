@@ -3,7 +3,7 @@ package pithdriver
 import (
 	"github.com/chazu/pith"
 
-	"pudl/internal/inference"
+	"github.com/chazu/pudl/internal/inference"
 )
 
 // schemaInferWords returns schema/match and schema/infer driver words.
