@@ -53,9 +53,16 @@ func TestAddFactDedup(t *testing.T) {
 	got1, err := db.AddFact(f)
 	require.NoError(t, err)
 
-	// Same content produces same ID — insert fails (PK conflict)
-	_, err = db.AddFact(f)
-	assert.Error(t, err, "duplicate fact should fail on PK")
+	// Same content produces same ID — re-adding is an idempotent no-op
+	// (INSERT OR IGNORE), not an error.
+	got1b, err := db.AddFact(f)
+	require.NoError(t, err, "duplicate fact should dedup, not error")
+	assert.Equal(t, got1.ID, got1b.ID)
+
+	// Only one row should exist for that content.
+	hist, err := db.FactHistory("observation")
+	require.NoError(t, err)
+	assert.Len(t, hist, 1, "duplicate add should not create a second row")
 
 	// Different source → different ID
 	f.Source = "agent-2"
