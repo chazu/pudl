@@ -128,8 +128,11 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	}
 	defer tx.Rollback()
 
+	// INSERT OR IGNORE: facts are content-addressed by ID, so re-adding an
+	// identical fact is a no-op (natural deduplication), making replays and
+	// imports idempotent.
 	_, err = tx.Exec(
-		`INSERT INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
+		`INSERT OR IGNORE INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		f.ID, f.Relation, f.Args, f.ValidStart, f.ValidEnd,
 		f.TxStart, f.TxEnd, f.Source, f.Provenance)
