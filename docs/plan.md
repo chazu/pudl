@@ -77,6 +77,53 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 
 ---
 
+## Public API Extraction (fact store + datalog)
+
+Goal: let external Go applications interact with pudl data stores (global `~/.pudl`
+and repo-scoped `.pudl/`) through `pkg/factstore` and `pkg/eval` **without importing
+`pudl/internal/*`**. The `internal/` rule already blocks external import of internal
+packages; the work is making the `pkg/` facade complete and non-leaky.
+
+### Phase 1 — Extraction + dead-code nuke (done)
+
+The live query path (partition → SQL → recursive fallback) is currently inline in
+`cmd/query.go` and not reusable. `pkg/eval` only exposes the legacy in-memory
+evaluator, which is dead code. Plan:
+
+1. `internal/datalog/match.go` — move shared helpers (`matchConstraints`,
+   `valuesEqual`, `toFloat64`) out of `eval.go` before deletion (`sql_eval.go` uses
+   `matchConstraints`).
+2. `internal/datalog/query.go` — `Evaluate(db, rules, relation, constraints, scope)`,
+   the single orchestrator; `cmd/query.go` calls it (behavior unchanged).
+3. Delete dead code: `eval.go`, `eval_test.go`, `edb.go`, `index.go`; trim
+   `Binding`/`Apply` from `types.go` (keep `ParseTerm` — loader uses it).
+4. `pkg/eval` — strip to rules + types: `Rule/Atom/Term/Tuple/Var/Val`,
+   `LoadRulesFromPaths`, `ParseRulesFromSource`. Remove `EDB`/`NewEvaluator`/
+   `New*EDB`.
+5. `pkg/factstore` — drop leaky `DB()`; add `QueryOptions` + `Store.Query` (calls
+   `datalog.Evaluate`); re-export `Rule`/`Tuple` so query-only callers need only
+   `factstore`.
+6. `pkg/factstore/resolve.go` — `GlobalDir()`, `DiscoverWorkspace(cwd)` →
+   `{RepoDir, RulePaths}`, wrapping `internal/config` + `internal/workspace` (no
+   internal types in signatures).
+7. Tests (factstore query covering SQL + recursive, eval parse, resolve), full
+   suite green, implog.
+
+Decisions locked: `Query` lives on `factstore.Store`; Phase 1 ships before Phase 2.
+
+Done 2026-06-07 — see `implog/2026_06_07_public_api_extraction.md`. Also fixed a
+latent recursion-routing bug in the query path: relations with both a base and a
+recursive rule previously returned only the base tuples.
+
+### Phase 2 — Catalog-as-datalog bridge (deferred)
+
+Let datalog query the catalog alongside facts via one `Store.Query` API. Facts use a
+JSON `args` blob; the catalog uses native columns — bridge with a SQL view that
+projects `catalog_entries` into fact shape, wired through the compiler's existing
+`CompileOptions.TableOverrides`. Must thread overrides through both `sql_eval.go` and
+`recursive.go`; the view is atemporal so the override must win over the temporal
+table swap. View column set deferred to Phase 2 start.
+
 ## What's Next
 
 Potential future work, roughly ordered by value.
