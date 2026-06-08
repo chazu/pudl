@@ -56,6 +56,13 @@ func (s *Store) RetractFact(id string) error {
 	return s.db.RetractFact(id)
 }
 
+// FactHistory returns every fact ever recorded for a relation, including
+// retracted and invalidated ones, ordered by transaction time. This is the
+// audit trail; QueryFacts returns only live facts.
+func (s *Store) FactHistory(relation string) ([]Fact, error) {
+	return s.db.FactHistory(relation)
+}
+
 // InvalidateFact marks a fact as no longer valid (sets valid_end).
 func (s *Store) InvalidateFact(id string) error {
 	return s.db.InvalidateFact(id)
