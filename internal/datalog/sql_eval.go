@@ -28,8 +28,9 @@ func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}
 	var queries []string
 	var allParams []interface{}
 
+	opts := CompileOptions{TableOverrides: builtinEDBTables}
 	for _, rule := range matching {
-		cq, err := Compile(rule, e.scope)
+		cq, err := CompileWithOptions(rule, e.scope, opts)
 		if err != nil {
 			return nil, fmt.Errorf("compile rule %s: %w", rule.Name, err)
 		}

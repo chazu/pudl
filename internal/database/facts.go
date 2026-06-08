@@ -102,6 +102,10 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	if f.Relation == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact relation is required", nil)
 	}
+	if IsReservedRelation(f.Relation) {
+		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput,
+			fmt.Sprintf("relation %q is reserved for the built-in catalog EDB and cannot be used for facts", f.Relation), nil)
+	}
 	if f.Args == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact args is required", nil)
 	}
