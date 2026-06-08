@@ -441,3 +441,45 @@ func scanFact(row *sql.Row) (*Fact, error) {
 
 	return &f, nil
 }
+
+// FactHistory returns every fact ever recorded for a relation — including those
+// since retracted (tx_end set) or invalidated (valid_end set) — ordered by
+// transaction time. This is the audit trail; QueryFacts only sees live facts.
+func (c *CatalogDB) FactHistory(relation string) ([]Fact, error) {
+	if relation == "" {
+		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "fact history requires a relation", nil)
+	}
+	rows, err := c.db.Query(
+		`SELECT id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance
+		 FROM facts WHERE relation = ? ORDER BY tx_start ASC, valid_start ASC`, relation)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query fact history", err)
+	}
+	defer rows.Close()
+
+	var facts []Fact
+	for rows.Next() {
+		var f Fact
+		var validEnd, txEnd sql.NullInt64
+		var source, provenance sql.NullString
+		if err := rows.Scan(&f.ID, &f.Relation, &f.Args,
+			&f.ValidStart, &validEnd, &f.TxStart, &txEnd,
+			&source, &provenance); err != nil {
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan fact", err)
+		}
+		if validEnd.Valid {
+			f.ValidEnd = &validEnd.Int64
+		}
+		if txEnd.Valid {
+			f.TxEnd = &txEnd.Int64
+		}
+		if source.Valid {
+			f.Source = source.String
+		}
+		if provenance.Valid {
+			f.Provenance = provenance.String
+		}
+		facts = append(facts, f)
+	}
+	return facts, rows.Err()
+}
