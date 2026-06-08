@@ -1,19 +1,19 @@
-// Package eval provides public access to pudl's Datalog evaluator.
-// This is the external API for consumers like nous.
+// Package eval provides public access to pudl's Datalog rule types and loaders.
+// This is the external API for consumers; the query execution path lives on
+// factstore.Store.Query.
 package eval
 
 import (
-	"pudl/internal/database"
 	"pudl/internal/datalog"
 )
 
-// Types re-exported for external consumers.
+// Types re-exported for external consumers. All are plain data structures, so
+// the aliases are usable without importing internal packages.
 type (
-	Rule    = datalog.Rule
-	Atom    = datalog.Atom
-	Term    = datalog.Term
-	Tuple   = datalog.Tuple
-	EDB     = datalog.EDB
+	Rule  = datalog.Rule
+	Atom  = datalog.Atom
+	Term  = datalog.Term
+	Tuple = datalog.Tuple
 )
 
 // Var creates a variable term.
@@ -21,26 +21,6 @@ func Var(name string) Term { return datalog.Var(name) }
 
 // Val creates a ground value term.
 func Val(v interface{}) Term { return datalog.Val(v) }
-
-// NewEvaluator creates a Datalog evaluator.
-func NewEvaluator(rules []Rule, edb EDB) *datalog.Evaluator {
-	return datalog.NewEvaluator(rules, edb)
-}
-
-// NewMultiEDB combines multiple EDB sources.
-func NewMultiEDB(sources ...EDB) *datalog.MultiEDB {
-	return datalog.NewMultiEDB(sources...)
-}
-
-// NewFactsEDB creates an EDB backed by the facts table.
-func NewFactsEDB(db *database.CatalogDB) *datalog.FactsEDB {
-	return datalog.NewFactsEDB(db)
-}
-
-// NewCatalogEDB creates an EDB backed by the catalog_entries table.
-func NewCatalogEDB(db *database.CatalogDB) *datalog.CatalogEDB {
-	return datalog.NewCatalogEDB(db)
-}
 
 // LoadRulesFromPaths loads rules from CUE files in the given directories.
 func LoadRulesFromPaths(paths ...string) ([]Rule, error) {

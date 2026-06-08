@@ -83,27 +83,6 @@ func (t Tuple) Key() string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-// Binding maps variable names to ground values.
-type Binding map[string]interface{}
-
-// Apply substitutes variables in an atom using the binding, returning a tuple.
-// Returns an error if any variable is unbound.
-func (b Binding) Apply(a Atom) (Tuple, error) {
-	args := make(map[string]interface{}, len(a.Args))
-	for k, term := range a.Args {
-		if term.IsVariable() {
-			val, ok := b[term.Variable]
-			if !ok {
-				return Tuple{}, fmt.Errorf("unbound variable %s", term.Variable)
-			}
-			args[k] = val
-		} else {
-			args[k] = term.Value
-		}
-	}
-	return Tuple{Relation: a.Rel, Args: args}, nil
-}
-
 // ParseTerm converts a raw value (from CUE or JSON) into a Term.
 // Strings starting with "$" are treated as variables.
 func ParseTerm(v interface{}) Term {

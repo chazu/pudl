@@ -114,25 +114,11 @@ Examples:
 			rules = append(rules, fileRules...)
 		}
 
-		// Partition rules: use SQL for non-recursive, in-memory for recursive
+		// Evaluate: SQL for non-recursive rules, recursive fixpoint fallback.
 		scope := datalog.TemporalScope{ValidAt: validAt, TxAt: txAt}
-		recursive, nonRecursive := datalog.PartitionRules(rules)
-
-		var results []datalog.Tuple
-
-		if len(nonRecursive) > 0 || len(recursive) == 0 {
-			sqlEval := datalog.NewSQLEvaluator(db, nonRecursive, scope)
-			results, err = sqlEval.Query(relation, constraints)
-			if err != nil {
-				return fmt.Errorf("sql query failed: %w", err)
-			}
-		}
-
-		if len(results) == 0 && len(recursive) > 0 {
-			results, err = datalog.EvalRecursive(db, rules, relation, constraints, scope)
-			if err != nil {
-				return fmt.Errorf("recursive query failed: %w", err)
-			}
+		results, err := datalog.Evaluate(db, rules, relation, constraints, scope)
+		if err != nil {
+			return err
 		}
 
 		if jsonOutput {
