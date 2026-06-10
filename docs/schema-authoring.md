@@ -121,6 +121,59 @@ This means:
 - **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
 - **Data is never rejected** -- the catchall always accepts
 
+## Resource Identity and Schema Families
+
+A schema's role is *classification*; it is distinct from a resource's *identity*.
+The same logical resource (a repo, an instance) may be classified under several
+schemas in an inheritance family and may be reclassified over time, but it should
+keep one stable `resource_id` so data from different sources can be linked and
+deduplicated.
+
+To make that true, `resource_id` is namespaced by the **root of the schema's
+inheritance family**, not the assigned (leaf) schema:
+
+```
+resource_id = SHA256( normalize(family_root) + "\x00" + identity_component )
+```
+
+where `identity_component` is the canonical JSON of the identity field values
+(or, for catchall schemas with no identity fields, the content hash). Because the
+family root is invariant under reinference and policy/specialization refinement
+(those move the assigned leaf, never the root), a resource's identity stays
+stable even as its classification changes.
+
+### The family identity invariant
+
+For dedup to be correct, every schema a single resource can be classified under
+must extract the **same identity values from the same fields**. Therefore:
+
+> `identity_fields` must be identical across an inheritance family. Declare them
+> at the family root and inherit them unchanged. Descendants may *tighten
+> constraints* on those fields (e.g. narrow `id: string` to a pattern) but must
+> not change the field set or the values extracted.
+
+When you build a family with CUE unification (`#Child: #Base & {...}`), CUE
+enforces this automatically — divergent `identity_fields` lists fail to unify.
+`pudl doctor` includes an **Identity Fields** check that backstops `base_schema`
+references which bypass CUE inheritance, warning when a schema's
+`identity_fields` differ from its base's.
+
+Choose identity fields that are globally unique where possible (URLs, ARNs,
+UUIDs, fully-qualified paths). The family-root namespace prevents cross-family
+collisions even when identity fields are weak, but good identity fields make
+identity robust regardless.
+
+### After upgrading to family-root namespacing
+
+Family-root namespacing changes every `resource_id`. Run the recompute migration
+once after upgrading to bring existing entries onto the new scheme (it also
+re-sequences versions per resource):
+
+```bash
+pudl migrate identity --recompute --dry-run   # preview
+pudl migrate identity --recompute             # apply (idempotent)
+```
+
 ## Creating a Schema from Data
 
 The fastest way to start is generating a schema from an existing import:

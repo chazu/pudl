@@ -8,6 +8,7 @@ import (
 
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
 )
 
@@ -57,8 +58,15 @@ Examples:
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
+		// Build the inheritance graph so resource identity is namespaced by the
+		// family root (stable when routed records resolve to non-root schemas).
+		inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+		if err != nil {
+			return fmt.Errorf("failed to initialize schema inferrer: %w", err)
+		}
+
 		// Ingest observe results
-		count, err := mubridge.IngestObserveResults(db, reader, ingestObserveOrigin, cfg.DataPath)
+		count, err := mubridge.IngestObserveResults(db, reader, ingestObserveOrigin, cfg.DataPath, inferrer.GetInheritanceGraph())
 		if err != nil {
 			return fmt.Errorf("ingest failed: %w", err)
 		}

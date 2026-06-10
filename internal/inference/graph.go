@@ -129,6 +129,19 @@ func (g *InheritanceGraph) GetCascadeChain(schema string) []string {
 	return chain
 }
 
+// IdentityRoot returns the topmost ancestor of schema in its inheritance
+// family -- the schema used to namespace resource identity. Resource identity
+// is keyed on the family root (not the assigned leaf schema) so that a
+// resource's identity is stable under reinference and policy/specialization
+// refinement: those operations move the assigned leaf, never the root.
+//
+// Returns schema itself when it has no parent (it is its own root) or when it
+// is unknown to the graph.
+func (g *InheritanceGraph) IdentityRoot(schema string) string {
+	chain := g.GetCascadeChain(schema)
+	return chain[len(chain)-1]
+}
+
 // GetChildren returns the direct children (more specific schemas) of a schema
 func (g *InheritanceGraph) GetChildren(schema string) []string {
 	children := g.children[schema]

@@ -39,7 +39,7 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 		}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 		}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 
 	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"box","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
 
-	count1, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count1, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("first ingest failed: %v", err)
 	}
@@ -158,7 +158,7 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 	}
 
 	// Same data again — should deduplicate
-	count2, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count2, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("second ingest failed: %v", err)
 	}
@@ -171,7 +171,7 @@ func TestIngestObserveResults_EmptyInput(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	count, err := IngestObserveResults(db, strings.NewReader(""), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(""), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestIngestObserveResults_TargetError(t *testing.T) {
 		{"target":"//ok","current":{"records":[{"_schema":"linux.host","hostname":"good","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestIngestObserveResults_NoRecordsKey(t *testing.T) {
 	// current without records key — treat whole current as single record
 	input := `[{"target":"//simple","current":{"status":"healthy","uptime":42}}]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -236,7 +236,7 @@ func TestIngestObserveResults_MultipleTargets(t *testing.T) {
 		{"target":"//host/b","current":{"records":[{"_schema":"linux.host","hostname":"b","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":2}]}}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestIngestObserveResults_CustomOrigin(t *testing.T) {
 
 	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"x","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "custom-origin", dataDir)
+	count, err := IngestObserveResults(db, strings.NewReader(input), "custom-origin", dataDir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

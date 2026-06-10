@@ -24,6 +24,7 @@ is properly configured and healthy. It checks:
 - Git repository initialization
 - Directory structure validation
 - Schema namespace (no user schemas under reserved pudl/)
+- Identity fields (consistent across schema inheritance families)
 - Orphaned files
 
 Use this command to diagnose issues with your PUDL installation.`,
@@ -66,6 +67,10 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		{
 			Name:      "Schema Namespace",
 			CheckFunc: doctor.CheckPudlNamespaceSchemas,
+		},
+		{
+			Name:      "Identity Fields",
+			CheckFunc: doctor.CheckIdentityFieldConsistency,
 		},
 		{
 			Name:      "Orphaned Files",

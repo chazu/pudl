@@ -10,10 +10,17 @@ import (
 )
 
 // ComputeResourceID returns a deterministic resource_id.
-// For schemas with identity_fields: SHA256(normalized_schema + "\x00" + canonical_json(values))
-// For catchall (empty identityValues): SHA256(normalized_schema + "\x00" + contentHash)
-func ComputeResourceID(schema string, identityValues map[string]interface{}, contentHash string) string {
-	normalized := schemaname.Normalize(schema)
+//
+// identityNamespace is the schema name that namespaces the identity. Callers
+// pass the root of the assigned schema's inheritance family (see
+// inference.InheritanceGraph.IdentityRoot), not the assigned leaf schema, so a
+// resource's identity is stable under reinference and policy/specialization
+// refinement.
+//
+// For schemas with identity_fields: SHA256(normalized_namespace + "\x00" + canonical_json(values))
+// For catchall (empty identityValues): SHA256(normalized_namespace + "\x00" + contentHash)
+func ComputeResourceID(identityNamespace string, identityValues map[string]interface{}, contentHash string) string {
+	normalized := schemaname.Normalize(identityNamespace)
 
 	var identityComponent string
 	if len(identityValues) == 0 {

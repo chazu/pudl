@@ -125,6 +125,35 @@ func TestGetCascadeChain(t *testing.T) {
 	}
 }
 
+func TestIdentityRoot(t *testing.T) {
+	metadata := map[string]validator.SchemaMetadata{
+		"aws.#Resource":             {},
+		"aws.#EC2Instance":          {BaseSchema: "aws.#Resource"},
+		"aws.#CompliantEC2Instance": {BaseSchema: "aws.#EC2Instance"},
+	}
+
+	g := BuildInheritanceGraph(metadata)
+
+	tests := []struct {
+		name     string
+		schema   string
+		expected string
+	}{
+		{"leaf resolves to root", "aws.#CompliantEC2Instance", "aws.#Resource"},
+		{"mid resolves to root", "aws.#EC2Instance", "aws.#Resource"},
+		{"root resolves to itself", "aws.#Resource", "aws.#Resource"},
+		{"unknown schema resolves to itself", "other.#Thing", "other.#Thing"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := g.IdentityRoot(tc.schema); got != tc.expected {
+				t.Errorf("IdentityRoot(%q) = %q, want %q", tc.schema, got, tc.expected)
+			}
+		})
+	}
+}
+
 func TestCalculateDepth(t *testing.T) {
 	metadata := map[string]validator.SchemaMetadata{
 		"root":   {},
