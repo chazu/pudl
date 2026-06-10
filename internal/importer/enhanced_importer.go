@@ -161,8 +161,8 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		identityValues = nil
 	}
 
-	// Compute resource_id
-	resourceID := identity.ComputeResourceID(schema, identityValues, contentHash)
+	// Compute resource_id (namespaced by the family root, not the assigned leaf)
+	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, contentHash)
 
 	// Compute canonical identity JSON
 	identityJSON := ""
@@ -310,6 +310,16 @@ func (e *EnhancedImporter) getSchemaIdentityFields(schema string) []string {
 	return meta.IdentityFields
 }
 
+// identityNamespace returns the schema used to namespace resource identity for
+// the given assigned schema: the root of its inheritance family. Falls back to
+// the schema itself when the inferrer/graph is unavailable.
+func (e *EnhancedImporter) identityNamespace(schema string) string {
+	if e.inferrer == nil {
+		return schema
+	}
+	return e.inferrer.GetInheritanceGraph().IdentityRoot(schema)
+}
+
 // createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
 func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
 	schema := "pudl.schemas/pudl/core:#Collection"
@@ -317,7 +327,7 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 	contentHash := collectionID // For collections, content hash is the collection ID (file hash)
 
 	// Collections use catchall identity (no identity fields)
-	resourceID := identity.ComputeResourceID(schema, nil, contentHash)
+	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), nil, contentHash)
 	version := 1
 
 	metadata := &ImportMetadata{
@@ -455,7 +465,7 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		identityValues = nil
 	}
 
-	resourceID := identity.ComputeResourceID(schema, identityValues, itemContentHash)
+	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, itemContentHash)
 
 	identityJSON := ""
 	if identityValues != nil && len(identityValues) > 0 {

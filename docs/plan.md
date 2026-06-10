@@ -11,7 +11,9 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - Collection support with wrapper detection and unwrapping
 - SQLite catalog with query, filter, pagination, and provenance tracking
 - Content-based identity (SHA256, proquint display) for deduplication
-- Resource identity from schema identity fields with version tracking
+- Resource identity from schema identity fields with version tracking, namespaced
+  by the inheritance-family root (stable under reinference and policy refinement;
+  `pudl migrate identity --recompute` migrates existing entries)
 
 ### Schema System
 - CUE-based schema inference using heuristics and CUE unification

@@ -6,11 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	_ "modernc.org/sqlite"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/inference"
 )
 
 // CheckResult represents the result of a health check
@@ -463,6 +465,98 @@ func CheckPudlNamespaceSchemas() *CheckResult {
 		Message: "No user schemas in the reserved pudl/ namespace",
 		Details: fmt.Sprintf("Only built-in bootstrap packages found under %s", pudlNS),
 	}
+}
+
+// CheckIdentityFieldConsistency verifies that identity_fields are consistent
+// across each schema inheritance family. Resource identity is namespaced by the
+// family root, and dedup requires every schema a resource can be classified
+// under to extract the same identity values from the same fields. Therefore a
+// schema's identity_fields must match its base schema's; they are declared at
+// the family root and inherited unchanged (CUE unification enforces this when
+// families are built with `#Child: #Base & {...}`; this check backstops
+// base_schema references that bypass CUE inheritance). See docs/schema-authoring.md.
+func CheckIdentityFieldConsistency() *CheckResult {
+	cfg, err := config.Load()
+	if err != nil {
+		return &CheckResult{
+			Status:  "warning",
+			Message: "Failed to load configuration",
+			Details: err.Error(),
+			Fix:     "Check config file at " + config.GetConfigPath(),
+		}
+	}
+
+	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	if err != nil {
+		return &CheckResult{
+			Status:  "warning",
+			Message: "Failed to load schemas",
+			Details: err.Error(),
+			Fix:     "Run 'pudl doctor' after fixing schema load errors",
+		}
+	}
+
+	graph := inferrer.GetInheritanceGraph()
+
+	var violations []string
+	for _, schemaName := range inferrer.GetAvailableSchemas() {
+		parentName, hasParent := graph.GetParent(schemaName)
+		if !hasParent {
+			continue
+		}
+
+		childMeta, childOK := inferrer.GetSchemaMetadata(schemaName)
+		parentMeta, parentOK := inferrer.GetSchemaMetadata(parentName)
+		if !childOK || !parentOK {
+			continue
+		}
+
+		if !sameStringSet(childMeta.IdentityFields, parentMeta.IdentityFields) {
+			violations = append(violations, fmt.Sprintf(
+				"%s %v differs from base %s %v",
+				schemaName, childMeta.IdentityFields, parentName, parentMeta.IdentityFields,
+			))
+		}
+	}
+
+	if len(violations) > 0 {
+		sort.Strings(violations)
+		return &CheckResult{
+			Status:  "warning",
+			Message: "Inconsistent identity_fields within schema families",
+			Details: "Each schema's identity_fields must match its base schema's:\n  " +
+				strings.Join(violations, "\n  "),
+			Fix: "Declare identity_fields at the family root and inherit them unchanged (e.g. `#Child: #Base & {...}`). See docs/schema-authoring.md.",
+		}
+	}
+
+	return &CheckResult{
+		Status:  "ok",
+		Message: "identity_fields are consistent within schema families",
+		Details: "Every schema's identity_fields match its base schema's",
+	}
+}
+
+// sameStringSet reports whether two string slices contain the same elements,
+// ignoring order and duplicates.
+func sameStringSet(a, b []string) bool {
+	seen := make(map[string]bool, len(a))
+	for _, s := range a {
+		seen[s] = true
+	}
+	other := make(map[string]bool, len(b))
+	for _, s := range b {
+		other[s] = true
+	}
+	if len(seen) != len(other) {
+		return false
+	}
+	for s := range seen {
+		if !other[s] {
+			return false
+		}
+	}
+	return true
 }
 
 // CheckOrphanedFiles finds files not in catalog

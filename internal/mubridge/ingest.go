@@ -12,7 +12,18 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
+	"github.com/chazu/pudl/internal/inference"
 )
+
+// identityNamespace returns the schema used to namespace resource identity:
+// the root of the assigned schema's inheritance family. A nil graph (e.g. in
+// tests) falls back to the schema itself.
+func identityNamespace(graph *inference.InheritanceGraph, schema string) string {
+	if graph == nil {
+		return schema
+	}
+	return graph.IdentityRoot(schema)
+}
 
 // ObserveResult matches mu's coordinator.ObserveResult exactly.
 // mu observe --json emits a JSON array of these.
@@ -30,7 +41,7 @@ type ObserveResult struct {
 // snapshot. Records with a _schema field are routed to their specific schema.
 //
 // Returns the number of records ingested and any error.
-func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin string, dataDir string) (int, error) {
+func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin string, dataDir string, graph *inference.InheritanceGraph) (int, error) {
 	if origin == "" {
 		origin = "mu-observe"
 	}
@@ -125,7 +136,7 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 	// Ingest each record as a member of the snapshot.
 	ingested := 0
 	for i, tr := range allRecords {
-		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID)
+		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID, graph)
 		if err != nil {
 			return ingested, err
 		}
@@ -188,6 +199,7 @@ func createObserveSnapshot(
 		return contentHash, nil
 	}
 
+	// ObserveSnapshot is a family root, so it is its own identity namespace.
 	schema := "pudl/mu.#ObserveSnapshot"
 	resourceID := identity.ComputeResourceID(schema, map[string]any{"snapshot_id": snapshotID}, contentHash)
 	entryType := "observe"
@@ -227,6 +239,7 @@ func ingestObserveRecord(
 	now time.Time,
 	index int,
 	collectionID string,
+	graph *inference.InheritanceGraph,
 ) (int, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
 	schema := "pudl/mu.#ObserveResult"
@@ -269,7 +282,7 @@ func ingestObserveRecord(
 			identityValues[key] = v
 		}
 	}
-	resourceID := identity.ComputeResourceID(schema, identityValues, contentHash)
+	resourceID := identity.ComputeResourceID(identityNamespace(graph, schema), identityValues, contentHash)
 
 	entryType := "observe"
 	collectionType := "item"

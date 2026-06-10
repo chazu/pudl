@@ -395,8 +395,10 @@ func recomputeEntryIdentity(entry *database.CatalogEntry, data interface{}, infe
 		identityValues = nil
 	}
 
-	// Compute new resource_id
-	resourceID := identity.ComputeResourceID(entry.Schema, identityValues, contentHash)
+	// Compute new resource_id, namespaced by the family root so that moving the
+	// assigned (leaf) schema during reinference does not change the resource_id.
+	identityNamespace := inferrer.GetInheritanceGraph().IdentityRoot(entry.Schema)
+	resourceID := identity.ComputeResourceID(identityNamespace, identityValues, contentHash)
 	entry.ResourceID = &resourceID
 
 	// Compute new identity_json
