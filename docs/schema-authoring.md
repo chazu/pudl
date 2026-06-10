@@ -129,8 +129,8 @@ The fastest way to start is generating a schema from an existing import:
 # Import some data first
 pudl import --path my-data.json
 
-# Generate a schema from it
-pudl schema new --from mivof-duhij --path mypackage/#MyResource
+# Generate a schema from it (under the recommended `user` namespace)
+pudl schema new --from mivof-duhij --path user/#MyResource
 ```
 
 This creates a CUE file with fields inferred from the data. You will want to edit it to:
@@ -144,7 +144,7 @@ This creates a CUE file with fields inferred from the data. You will want to edi
 If a field has a small set of known values, you can infer it as an enum:
 
 ```bash
-pudl schema new --from mivof-duhij --path mypackage/#MyResource --infer status=enum
+pudl schema new --from mivof-duhij --path user/#MyResource --infer status=enum
 ```
 
 This generates a CUE disjunction like `status: "active" | "pending" | "inactive"` based on the values seen in the data.
@@ -154,7 +154,7 @@ This generates a CUE disjunction like `status: "active" | "pending" | "inactive"
 When generating a schema from a collection entry, use `--collection` to generate a schema for the item type rather than the collection wrapper:
 
 ```bash
-pudl schema new --from govim-nupab --collection --path mypackage/#MyItem
+pudl schema new --from govim-nupab --collection --path user/#MyItem
 ```
 
 ## Schema File Location
@@ -164,21 +164,33 @@ Schemas live in `~/.pudl/schema/` organized by package (directory). The schema n
 ```
 ~/.pudl/schema/
 +-- cue.mod/module.cue
-+-- pudl/
-    +-- core/core.cue              # pudl/core.#Item, pudl/core.#Collection
-    +-- aws/
-    |   +-- ec2.cue                # aws/ec2.#Instance
-    |   +-- s3.cue                 # aws/s3.#Bucket
-    +-- k8s/
-    |   +-- resources.cue          # k8s.#Pod, k8s.#Service, etc.
-    +-- mypackage/
-        +-- myresource.cue         # mypackage.#MyResource
++-- pudl/                          # reserved for built-in schemas (see below)
+|   +-- core/core.cue             # pudl/core.#Item, pudl/core.#Collection
+|   +-- aws/
+|   |   +-- ec2.cue               # pudl/aws/ec2.#Instance
+|   |   +-- s3.cue                # pudl/aws/s3.#Bucket
+|   +-- k8s/
+|       +-- resources.cue         # pudl/k8s.#Pod, pudl/k8s.#Service, etc.
++-- user/                         # recommended namespace for your schemas
+    +-- git.cue                   # user/git.#Repository
+    +-- k8s.cue                   # user/k8s.#CustomResource
 ```
+
+### Namespace Convention
+
+PUDL does not enforce any particular package path for your own schemas -- the package path is simply the directory you place a `.cue` file under. To keep things organized and avoid collisions, follow this convention:
+
+- **Use `user` as your top-level package by default.** Put bespoke schemas under `~/.pudl/schema/user/`, producing names like `user/git.#Repository` or `user/k8s.#CustomResource`. This namespaces all of your schemas together and keeps them clearly separated from PUDL's built-ins.
+- **Any name of your choice is valid.** If `user` does not fit, pick something meaningful -- an org or team name (`acme/`, `platform/`), a domain (`finance/`), or a product (`myapi/`). PUDL applies no restrictions to the package path beyond it being a valid CUE package.
+- **Use multiple top-level names freely.** You are not limited to one. Mix `user/`, `acme/`, and `experimental/` side by side; each is an independent package path.
+- **Avoid the `pudl/` namespace.** It is reserved for built-in schemas, and the legacy short form `core.#Item` auto-normalizes to `pudl/core.#Item`. Placing your schemas under `pudl/` risks shadowing built-ins (first-found-wins), so keep your packages outside it.
+
+Whatever names you choose, the CUE `package` declaration inside each file must match its package directory.
 
 When adding a schema manually:
 
 ```bash
-pudl schema add mypackage.my-resource my-schema.cue
+pudl schema add user.my-resource my-schema.cue
 ```
 
 The CUE `package` declaration in the file must match the target package directory.
