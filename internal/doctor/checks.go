@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	_ "modernc.org/sqlite"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/importer"
 )
 
 // CheckResult represents the result of a health check
@@ -391,6 +393,76 @@ func isNumericDir(name string, expectedLen int) bool {
 		}
 	}
 	return true
+}
+
+// CheckPudlNamespaceSchemas warns when user-authored schemas are placed under
+// the reserved `pudl/` namespace. The `pudl/` package path is reserved for
+// built-in bootstrap schemas (and is the auto-normalization target for legacy
+// short names like `core.#Item`), so user schemas there risk shadowing
+// built-ins. Users should namespace their own schemas elsewhere -- `user/` by
+// convention. See docs/schema-authoring.md.
+func CheckPudlNamespaceSchemas() *CheckResult {
+	cfg, err := config.Load()
+	if err != nil {
+		return &CheckResult{
+			Status:  "warning",
+			Message: "Failed to load configuration",
+			Details: err.Error(),
+			Fix:     "Check config file at " + config.GetConfigPath(),
+		}
+	}
+
+	pudlNS := filepath.Join(cfg.SchemaPath, "pudl")
+	if _, err := os.Stat(pudlNS); os.IsNotExist(err) {
+		return &CheckResult{
+			Status:  "ok",
+			Message: "No pudl/ namespace to check",
+			Details: fmt.Sprintf("Directory %s does not exist", pudlNS),
+		}
+	}
+
+	builtin := importer.BootstrapPackages()
+
+	// Collect package directories under pudl/ that contain .cue files but are
+	// not part of the built-in bootstrap set.
+	unexpected := map[string]bool{}
+	filepath.Walk(pudlNS, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".cue" {
+			return nil
+		}
+		rel, relErr := filepath.Rel(cfg.SchemaPath, filepath.Dir(path))
+		if relErr != nil {
+			return nil
+		}
+		pkg := filepath.ToSlash(rel)
+		if !builtin[pkg] {
+			unexpected[pkg] = true
+		}
+		return nil
+	})
+
+	if len(unexpected) > 0 {
+		pkgs := make([]string, 0, len(unexpected))
+		for pkg := range unexpected {
+			pkgs = append(pkgs, pkg)
+		}
+		sort.Strings(pkgs)
+		return &CheckResult{
+			Status:  "warning",
+			Message: "User schemas found under the reserved pudl/ namespace",
+			Details: fmt.Sprintf("Non-built-in packages under %s: %v", pudlNS, pkgs),
+			Fix:     "Move these schemas to your own namespace (e.g. user/) to avoid shadowing built-ins. See docs/schema-authoring.md.",
+		}
+	}
+
+	return &CheckResult{
+		Status:  "ok",
+		Message: "No user schemas in the reserved pudl/ namespace",
+		Details: fmt.Sprintf("Only built-in bootstrap packages found under %s", pudlNS),
+	}
 }
 
 // CheckOrphanedFiles finds files not in catalog

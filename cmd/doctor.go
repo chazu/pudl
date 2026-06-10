@@ -23,6 +23,7 @@ is properly configured and healthy. It checks:
 - Schema repository setup
 - Git repository initialization
 - Directory structure validation
+- Schema namespace (no user schemas under reserved pudl/)
 - Orphaned files
 
 Use this command to diagnose issues with your PUDL installation.`,
@@ -61,6 +62,10 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		{
 			Name:      "Directory Structure",
 			CheckFunc: doctor.CheckDirectoryStructure,
+		},
+		{
+			Name:      "Schema Namespace",
+			CheckFunc: doctor.CheckPudlNamespaceSchemas,
 		},
 		{
 			Name:      "Orphaned Files",
