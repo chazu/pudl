@@ -237,6 +237,20 @@ func (c *CatalogDB) Close() error {
 	return nil
 }
 
+// catalogTimeLayout is the canonical text layout for DATETIME columns. Binding
+// a raw time.Time lets the modernc/sqlite driver store Go's Time.String() output
+// (e.g. "... -0400 -0400" for a fixed-offset/parsed time, or "... MDT m=+..."
+// for a monotonic-clock time), which the driver cannot scan back into time.Time.
+// Formatting to this layout (the format existing rows already use) keeps
+// timestamps round-trippable.
+const catalogTimeLayout = "2006-01-02 15:04:05.999999999-07:00"
+
+// formatCatalogTime renders a timestamp for storage in a DATETIME column in a
+// form the driver can scan back into time.Time.
+func formatCatalogTime(t time.Time) string {
+	return t.Format(catalogTimeLayout)
+}
+
 // AddEntry adds a new entry to the catalog
 func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 	// Normalize schema name to canonical format before storing
@@ -262,12 +276,12 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 	}
 
 	_, err := c.db.Exec(insertSQL,
-		entry.ID, entry.StoredPath, entry.MetadataPath, entry.ImportTimestamp,
+		entry.ID, entry.StoredPath, entry.MetadataPath, formatCatalogTime(entry.ImportTimestamp),
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
 		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
 		entry.CollectionType, entry.ItemID, entry.ResourceID, entry.ContentHash,
 		entry.IdentityJSON, entry.Version, entry.EntryType, entry.Definition,
-		entry.Method, entry.RunID, entry.Tags, entry.Status, entry.CreatedAt, entry.UpdatedAt)
+		entry.Method, entry.RunID, entry.Tags, entry.Status, formatCatalogTime(entry.CreatedAt), formatCatalogTime(entry.UpdatedAt))
 
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
@@ -658,11 +672,11 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 	entry.UpdatedAt = time.Now()
 
 	result, err := c.db.Exec(updateSQL,
-		entry.StoredPath, entry.MetadataPath, entry.ImportTimestamp, entry.Format,
+		entry.StoredPath, entry.MetadataPath, formatCatalogTime(entry.ImportTimestamp), entry.Format,
 		entry.Origin, entry.Schema, entry.Confidence, entry.RecordCount, entry.SizeBytes,
 		entry.ResourceID, entry.ContentHash, entry.IdentityJSON, entry.Version,
 		entry.EntryType, entry.Definition, entry.Method, entry.RunID, entry.Tags,
-		entry.UpdatedAt, entry.ID)
+		formatCatalogTime(entry.UpdatedAt), entry.ID)
 
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update catalog entry", err)
