@@ -117,6 +117,18 @@ Done 2026-06-07 — see `implog/2026_06_07_public_api_extraction.md`. Also fixed
 latent recursion-routing bug in the query path: relations with both a base and a
 recursive rule previously returned only the base tuples.
 
+### Phase 3 — Transactional check-and-write (done)
+
+Done 2026-06-12 — see `implog/2026_06_12_fact_tx_and_dlktk_schema.md`.
+`factstore.Store.Transact(fn func(*Tx) error)` runs reads and writes inside one
+immediate-mode SQLite transaction (write lock held from BEGIN), closing the
+TOCTOU race between an invariant check and its write for external consumers
+(dlktk's multi-process move legality being the motivating case). The `Tx`
+handle exposes `AddFact`/`RetractFact`/`InvalidateFact`/`QueryFacts`/
+`FactHistory`; an error from the callback rolls everything back. The same
+change registered `pudl/dlktk` as a built-in bootstrap schema package typing
+the args of every `dlktk/*` relation.
+
 ### Phase 2 — Catalog-as-datalog bridge (done)
 
 Done 2026-06-08 — see `implog/2026_06_08_catalog_datalog_bridge.md`. `catalog_entry`

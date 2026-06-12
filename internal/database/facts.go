@@ -99,6 +99,27 @@ func (c *CatalogDB) ensureFactsTable() error {
 // TxStart is set to now if zero.
 // Also inserts into current_facts if the fact is currently valid (no valid_end or tx_end).
 func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
+	tx, err := c.db.Begin()
+	if err != nil {
+		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
+	}
+	defer tx.Rollback()
+
+	f, err = addFactIn(tx, f)
+	if err != nil {
+		return Fact{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to commit", err)
+	}
+
+	return f, nil
+}
+
+// addFactIn validates a fact, fills defaults, and inserts it (plus its
+// current_facts row) on q. The caller owns the transaction boundary.
+func addFactIn(q dbtx, f Fact) (Fact, error) {
 	if f.Relation == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact relation is required", nil)
 	}
@@ -122,16 +143,10 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 		f.ID = ComputeFactID(f.Relation, f.Args, f.ValidStart, f.Source)
 	}
 
-	tx, err := c.db.Begin()
-	if err != nil {
-		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
-	}
-	defer tx.Rollback()
-
 	// INSERT OR IGNORE: facts are content-addressed by ID, so re-adding an
 	// identical fact is a no-op (natural deduplication), making replays and
 	// imports idempotent.
-	_, err = tx.Exec(
+	_, err := q.Exec(
 		`INSERT OR IGNORE INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		f.ID, f.Relation, f.Args, f.ValidStart, f.ValidEnd,
@@ -141,13 +156,9 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	}
 
 	if f.ValidEnd == nil && f.TxEnd == nil {
-		if err := c.insertCurrentFact(tx, f); err != nil {
+		if err := insertCurrentFact(q, f); err != nil {
 			return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to commit", err)
 	}
 
 	return f, nil
@@ -157,15 +168,25 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 // Facts are never deleted — retraction preserves the full audit trail.
 // Also removes from current_facts.
 func (c *CatalogDB) RetractFact(id string) error {
-	now := time.Now().Unix()
-
 	tx, err := c.db.Begin()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec(
+	if err := retractFactIn(tx, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// retractFactIn sets a fact's tx_end and removes its current_facts row on q.
+// The caller owns the transaction boundary.
+func retractFactIn(q dbtx, id string) error {
+	now := time.Now().Unix()
+
+	result, err := q.Exec(
 		"UPDATE facts SET tx_end = ? WHERE id = ? AND tx_end IS NULL",
 		now, id)
 	if err != nil {
@@ -180,26 +201,36 @@ func (c *CatalogDB) RetractFact(id string) error {
 		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("fact not found or already retracted: %s", id), nil)
 	}
 
-	if err := c.deleteCurrentFact(tx, id); err != nil {
+	if err := deleteCurrentFact(q, id); err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // InvalidateFact marks a fact as no longer valid by setting valid_end to now.
 // This is distinct from retraction: the fact was true but is no longer.
 // Also removes from current_facts.
 func (c *CatalogDB) InvalidateFact(id string) error {
-	now := time.Now().Unix()
-
 	tx, err := c.db.Begin()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec(
+	if err := invalidateFactIn(tx, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// invalidateFactIn sets a fact's valid_end and removes its current_facts row
+// on q. The caller owns the transaction boundary.
+func invalidateFactIn(q dbtx, id string) error {
+	now := time.Now().Unix()
+
+	result, err := q.Exec(
 		"UPDATE facts SET valid_end = ? WHERE id = ? AND valid_end IS NULL",
 		now, id)
 	if err != nil {
@@ -214,11 +245,11 @@ func (c *CatalogDB) InvalidateFact(id string) error {
 		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("fact not found or already invalidated: %s", id), nil)
 	}
 
-	if err := c.deleteCurrentFact(tx, id); err != nil {
+	if err := deleteCurrentFact(q, id); err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // GetFact retrieves a single fact by ID.
@@ -248,30 +279,9 @@ func (c *CatalogDB) GetFactByPrefix(prefix string) (*Fact, error) {
 	}
 	defer rows.Close()
 
-	var facts []Fact
-	for rows.Next() {
-		var f Fact
-		var validEnd, txEnd sql.NullInt64
-		var source, provenance sql.NullString
-		err := rows.Scan(&f.ID, &f.Relation, &f.Args,
-			&f.ValidStart, &validEnd, &f.TxStart, &txEnd,
-			&source, &provenance)
-		if err != nil {
-			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan fact", err)
-		}
-		if validEnd.Valid {
-			f.ValidEnd = &validEnd.Int64
-		}
-		if txEnd.Valid {
-			f.TxEnd = &txEnd.Int64
-		}
-		if source.Valid {
-			f.Source = source.String
-		}
-		if provenance.Valid {
-			f.Provenance = provenance.String
-		}
-		facts = append(facts, f)
+	facts, err := scanFactRows(rows)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(facts) == 0 {
@@ -287,6 +297,11 @@ func (c *CatalogDB) GetFactByPrefix(prefix string) (*Fact, error) {
 
 // QueryFacts returns facts matching the filter with bitemporal scoping.
 func (c *CatalogDB) QueryFacts(filter FactFilter) ([]Fact, error) {
+	return queryFactsIn(c.db, filter)
+}
+
+// queryFactsIn runs the bitemporal fact query on q.
+func queryFactsIn(q dbtx, filter FactFilter) ([]Fact, error) {
 	if filter.Relation == "" {
 		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "fact filter requires a relation", nil)
 	}
@@ -336,46 +351,13 @@ func (c *CatalogDB) QueryFacts(filter FactFilter) ([]Fact, error) {
 		 FROM facts WHERE %s ORDER BY valid_start DESC`,
 		strings.Join(conditions, " AND "))
 
-	rows, err := c.db.Query(query, args...)
+	rows, err := q.Query(query, args...)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query facts", err)
 	}
 	defer rows.Close()
 
-	var facts []Fact
-	for rows.Next() {
-		var f Fact
-		var validEnd, txEnd sql.NullInt64
-		var source, provenance sql.NullString
-
-		err := rows.Scan(&f.ID, &f.Relation, &f.Args,
-			&f.ValidStart, &validEnd, &f.TxStart, &txEnd,
-			&source, &provenance)
-		if err != nil {
-			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to scan fact", err)
-		}
-
-		if validEnd.Valid {
-			f.ValidEnd = &validEnd.Int64
-		}
-		if txEnd.Valid {
-			f.TxEnd = &txEnd.Int64
-		}
-		if source.Valid {
-			f.Source = source.String
-		}
-		if provenance.Valid {
-			f.Provenance = provenance.String
-		}
-
-		facts = append(facts, f)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "error iterating facts", err)
-	}
-
-	return facts, nil
+	return scanFactRows(rows)
 }
 
 // GetDistinctRelations returns all distinct relation names from current facts.
@@ -449,10 +431,15 @@ func scanFact(row *sql.Row) (*Fact, error) {
 // since retracted (tx_end set) or invalidated (valid_end set) — ordered by
 // transaction time. This is the audit trail; QueryFacts only sees live facts.
 func (c *CatalogDB) FactHistory(relation string) ([]Fact, error) {
+	return factHistoryIn(c.db, relation)
+}
+
+// factHistoryIn runs the fact history query on q.
+func factHistoryIn(q dbtx, relation string) ([]Fact, error) {
 	if relation == "" {
 		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "fact history requires a relation", nil)
 	}
-	rows, err := c.db.Query(
+	rows, err := q.Query(
 		`SELECT id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance
 		 FROM facts WHERE relation = ? ORDER BY tx_start ASC, valid_start ASC`, relation)
 	if err != nil {
@@ -460,6 +447,12 @@ func (c *CatalogDB) FactHistory(relation string) ([]Fact, error) {
 	}
 	defer rows.Close()
 
+	return scanFactRows(rows)
+}
+
+// scanFactRows collects facts from rows produced by a full nine-column fact
+// SELECT, handling the nullable columns.
+func scanFactRows(rows *sql.Rows) ([]Fact, error) {
 	var facts []Fact
 	for rows.Next() {
 		var f Fact
@@ -484,5 +477,8 @@ func (c *CatalogDB) FactHistory(relation string) ([]Fact, error) {
 		}
 		facts = append(facts, f)
 	}
-	return facts, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "error iterating facts", err)
+	}
+	return facts, nil
 }
