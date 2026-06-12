@@ -68,6 +68,23 @@ func (s *Store) InvalidateFact(id string) error {
 	return s.db.InvalidateFact(id)
 }
 
+// Tx is a fact-store transaction handle, passed to the Transact callback. It
+// offers AddFact, RetractFact, InvalidateFact, QueryFacts, and FactHistory
+// with the same semantics as the Store methods, all inside one transaction.
+type Tx = database.FactTx
+
+// Transact runs fn inside a single store transaction that holds the write
+// lock from the start: every read fn performs and every write it lands form
+// one atomic, serialized unit. Use it for check-then-write sequences — read
+// the current facts, validate an invariant, then append — that must not
+// interleave with concurrent writers (the classic TOCTOU race between a
+// legality check and its write). Concurrent transactions block until the
+// holder finishes, bounded by the store's busy timeout. If fn returns an
+// error, every write made through the Tx is rolled back.
+func (s *Store) Transact(fn func(tx *Tx) error) error {
+	return s.db.WithFactTx(fn)
+}
+
 // QueryOptions specifies a Datalog query against the store.
 type QueryOptions struct {
 	// Relation is the head relation to query (required).

@@ -174,6 +174,7 @@ func (s *TempDirSetup) AddBootstrapSchemas(workspace *PUDLWorkspace) {
 		{"schema/pudl/aws", "aws.cue", "aws"},
 		{"schema/pudl/mu", "mu.cue", "mu"},
 		{"schema/pudl/brick", "brick.cue", "brick"},
+		{"schema/pudl/dlktk", "dlktk.cue", "dlktk"},
 	}
 	for _, stub := range stubs {
 		s.CreateSubDir(stub.dir)

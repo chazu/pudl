@@ -23,6 +23,10 @@ func (s *Store) AddFact(f Fact) (Fact, error)
 func (s *Store) QueryFacts(filter FactFilter) ([]Fact, error)
 func (s *Store) RetractFact(id string) error
 func (s *Store) InvalidateFact(id string) error
+func (s *Store) FactHistory(relation string) ([]Fact, error)
+
+// Atomic check-and-write
+func (s *Store) Transact(fn func(tx *Tx) error) error
 
 // Datalog query
 func (s *Store) Query(opts QueryOptions) ([]Tuple, error)
@@ -31,8 +35,35 @@ func (s *Store) Query(opts QueryOptions) ([]Tuple, error)
 func (s *Store) ListCatalog(filter CatalogFilter, query CatalogQuery) (*CatalogResult, error)
 ```
 
-Re-exported types: `Fact`, `FactFilter`, `Rule`, `Tuple`, `CatalogEntry`,
+Re-exported types: `Fact`, `FactFilter`, `Rule`, `Tuple`, `Tx`, `CatalogEntry`,
 `CatalogFilter`, `CatalogQuery`, `CatalogResult`.
+
+### `Transact`
+
+`Transact` runs its callback inside a single store transaction that holds the
+write lock from the start: every read the callback performs and every write it
+lands form one atomic, serialized unit. Use it for check-then-write sequences —
+read the current facts, validate an invariant, then append — that must not
+interleave with concurrent writers (the classic TOCTOU race between a legality
+check and its write). The `Tx` handle offers `AddFact`, `RetractFact`,
+`InvalidateFact`, `QueryFacts`, and `FactHistory` with the same semantics as
+the `Store` methods. Returning an error rolls back every write made through
+the `Tx`; concurrent transactions block until the holder finishes, bounded by
+the store's busy timeout.
+
+```go
+err := st.Transact(func(tx *factstore.Tx) error {
+    facts, err := tx.QueryFacts(factstore.FactFilter{Relation: "dlktk/preference"})
+    if err != nil {
+        return err
+    }
+    if wouldCreateCycle(facts, winner, loser) {
+        return fmt.Errorf("preference would create a cycle")
+    }
+    _, err = tx.AddFact(factstore.Fact{Relation: "dlktk/preference", Args: args})
+    return err
+})
+```
 
 ### `QueryOptions`
 
