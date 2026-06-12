@@ -114,6 +114,36 @@ facts, err := db.QueryFacts(database.FactFilter{
 })
 ```
 
+### Atomic check-and-write (transactions)
+
+Tools that enforce invariants over the store — "add this preference only if it
+doesn't create a cycle", "decide only if no decision stands" — must not check
+and write in separate operations: another writer can land between the check
+and the write (a TOCTOU race). `WithFactTx` (exposed publicly as
+`factstore.Store.Transact`) runs a callback inside one SQLite transaction that
+holds the write lock from the start (`BEGIN IMMEDIATE`), so the whole
+read–check–write span is serialized against every other writer, in this
+process or another:
+
+```go
+err := db.WithFactTx(func(tx *database.FactTx) error {
+    facts, err := tx.QueryFacts(database.FactFilter{Relation: "dlktk/preference"})
+    if err != nil {
+        return err
+    }
+    if wouldCreateCycle(facts, winner, loser) {
+        return fmt.Errorf("preference would create a cycle")
+    }
+    _, err = tx.AddFact(database.Fact{Relation: "dlktk/preference", Args: args})
+    return err // non-nil rolls back every write
+})
+```
+
+The transaction handle offers `AddFact`, `RetractFact`, `InvalidateFact`,
+`QueryFacts`, and `FactHistory` with the same semantics as the standalone
+operations (current_facts stays in sync). Concurrent transactions block until
+the holder commits, bounded by the connection's busy timeout (5s).
+
 ## Content-Addressed IDs
 
 Fact IDs are deterministic: `SHA256(relation + "\x00" + canonical_args + "\x00" + valid_start + "\x00" + source)`. This means:
@@ -137,7 +167,7 @@ Args are stored as JSON objects with meaningful keys. There is no enforced schem
 {"key": "timeout", "value": "30s", "service": "api"}
 ```
 
-As specific relations stabilize, their args structure can be formalized with CUE schemas (e.g., `pudl/nous.#Observation` for the observation relation).
+As specific relations stabilize, their args structure can be formalized with CUE schemas (e.g., `pudl/nous.#Observation` for the observation relation, or the built-in `pudl/dlktk` package, which types the args of every `dlktk/*` relation written by the dlktk dialectic toolkit).
 
 ## CLI Commands
 

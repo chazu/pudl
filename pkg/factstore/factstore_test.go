@@ -1,6 +1,7 @@
 package factstore_test
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -145,5 +146,53 @@ func TestQueryFactsRoundTrip(t *testing.T) {
 	}
 	if len(facts) != 1 {
 		t.Fatalf("expected 1 fact, got %d", len(facts))
+	}
+}
+
+// Transact gives check-then-write atomicity: reads and writes inside the
+// callback are one transaction, and an error rolls every write back.
+func TestTransactCommitAndRollback(t *testing.T) {
+	s := openStore(t)
+
+	err := s.Transact(func(tx *factstore.Tx) error {
+		existing, err := tx.QueryFacts(factstore.FactFilter{Relation: "claim"})
+		if err != nil {
+			return err
+		}
+		if len(existing) != 0 {
+			t.Fatalf("expected empty relation, got %d facts", len(existing))
+		}
+		_, err = tx.AddFact(factstore.Fact{Relation: "claim", Args: `{"owner":"a"}`})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	facts, err := s.QueryFacts(factstore.FactFilter{Relation: "claim"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(facts) != 1 {
+		t.Fatalf("expected 1 committed fact, got %d", len(facts))
+	}
+
+	boom := errors.New("invariant violated")
+	err = s.Transact(func(tx *factstore.Tx) error {
+		if _, err := tx.AddFact(factstore.Fact{Relation: "claim", Args: `{"owner":"b"}`}); err != nil {
+			return err
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("expected callback error to propagate, got %v", err)
+	}
+
+	facts, err = s.QueryFacts(factstore.FactFilter{Relation: "claim"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(facts) != 1 {
+		t.Fatalf("expected rollback to keep 1 fact, got %d", len(facts))
 	}
 }
