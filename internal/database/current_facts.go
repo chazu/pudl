@@ -179,8 +179,8 @@ func (c *CatalogDB) CountCurrentFacts(relation string) (int, error) {
 }
 
 // insertCurrentFact adds a fact to the current_facts materialized view.
-func (c *CatalogDB) insertCurrentFact(tx *sql.Tx, f Fact) error {
-	_, err := tx.Exec(
+func insertCurrentFact(q dbtx, f Fact) error {
+	_, err := q.Exec(
 		`INSERT OR REPLACE INTO current_facts (id, relation, args, source, provenance)
 		 VALUES (?, ?, ?, ?, ?)`,
 		f.ID, f.Relation, f.Args, f.Source, f.Provenance)
@@ -188,8 +188,8 @@ func (c *CatalogDB) insertCurrentFact(tx *sql.Tx, f Fact) error {
 }
 
 // deleteCurrentFact removes a fact from the current_facts materialized view.
-func (c *CatalogDB) deleteCurrentFact(tx *sql.Tx, id string) error {
-	_, err := tx.Exec("DELETE FROM current_facts WHERE id = ?", id)
+func deleteCurrentFact(q dbtx, id string) error {
+	_, err := q.Exec("DELETE FROM current_facts WHERE id = ?", id)
 	return err
 }
 
