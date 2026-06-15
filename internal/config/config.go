@@ -18,10 +18,17 @@ type ToolchainMapping struct {
 }
 
 type Config struct {
-	SchemaPath         string             `yaml:"schema_path"`
-	DataPath           string             `yaml:"data_path"`
-	Version            string             `yaml:"version"`
-	ToolchainMappings  []ToolchainMapping `yaml:"toolchain_mappings,omitempty"`
+	SchemaPath        string             `yaml:"schema_path"`
+	DataPath          string             `yaml:"data_path"`
+	Version           string             `yaml:"version"`
+	ToolchainMappings []ToolchainMapping `yaml:"toolchain_mappings,omitempty"`
+
+	// ReflectCommand is the agent command the memory cycle's reflect target
+	// invokes (the prompt is appended as a quoted argument). Empty means use the
+	// built-in default ("claude -p"). It must be a tool-calling coding agent, not
+	// a raw completion API — reflect works by having the agent call `pudl facts
+	// observe` itself.
+	ReflectCommand string `yaml:"reflect_command,omitempty"`
 }
 
 func DefaultConfig() *Config {
