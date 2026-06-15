@@ -9,6 +9,7 @@ import "github.com/chazu/pudl/internal/database"
 // a sync test asserts the two stay aligned.
 var builtinEDBTables = map[string]string{
 	database.CatalogEntryRelation: database.CatalogEntryView,
+	database.FactScoredRelation:   database.FactScoredView,
 }
 
 // withBuiltinEDB returns a copy of overrides with the built-in EDB table
