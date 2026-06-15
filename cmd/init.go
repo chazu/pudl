@@ -87,6 +87,10 @@ func runInitCommand(cmd *cobra.Command, args []string) error {
 	fmt.Println("   - Update dependencies: pudl module tidy")
 	fmt.Println("   - Module information: pudl module info")
 	fmt.Println()
+	fmt.Println("🧠 Self-improvement loop (optional):")
+	fmt.Println("   Run 'pudl memory init' to enable the agent memory cycle, then")
+	fmt.Println("   'pudl hooks install' to wire it into Claude Code.")
+	fmt.Println()
 	fmt.Println("For help with any command, use: pudl <command> --help")
 
 	return nil
