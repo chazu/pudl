@@ -202,6 +202,28 @@ entries: {
 	}
 }
 
+// Git repository types
+entries: {
+	"pudl/git.#GitRepository": {
+		schema:        "pudl/git.#GitRepository"
+		schema_type:   "base"
+		resource_type: "git.repository"
+		description:   "Platform-agnostic git repository (inline remotes and branches)"
+	}
+	"pudl/git.#GitHubRepository": {
+		schema:        "pudl/git.#GitHubRepository"
+		schema_type:   "base"
+		resource_type: "git.repository.github"
+		description:   "Git repository hosted on github.com"
+	}
+	"pudl/git.#GitLabRepository": {
+		schema:        "pudl/git.#GitLabRepository"
+		schema_type:   "base"
+		resource_type: "git.repository.gitlab"
+		description:   "Git repository hosted on gitlab.com"
+	}
+}
+
 // Registry types
 entries: {
 	"pudl/registry.#Entry": {

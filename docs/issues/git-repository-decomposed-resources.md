@@ -1,7 +1,9 @@
 # System changes to support decomposed resources (the git-repository example)
 
 **Priority:** Medium
-**Status:** Proposed — scoped 2026-06-15: branches are inline for now (see D3); C1–C4 deferred.
+**Status:** Implemented (scoped) 2026-06-15 — D1 + D2/D3 schemas done with branches
+inline; C1–C4 deferred. See `implog/2026_06_15_component_schema_boundary.md` and
+`implog/2026_06_15_git_repository_schema_family.md`.
 **Date:** 2026-06-15
 
 ## Summary
