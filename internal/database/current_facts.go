@@ -178,19 +178,25 @@ func (c *CatalogDB) CountCurrentFacts(relation string) (int, error) {
 	return count, nil
 }
 
-// insertCurrentFact adds a fact to the current_facts materialized view.
+// insertCurrentFact adds a fact to the current_facts materialized view and keeps
+// the FTS search index in sync.
 func insertCurrentFact(q dbtx, f Fact) error {
-	_, err := q.Exec(
+	if _, err := q.Exec(
 		`INSERT OR REPLACE INTO current_facts (id, relation, args, source, provenance)
 		 VALUES (?, ?, ?, ?, ?)`,
-		f.ID, f.Relation, f.Args, f.Source, f.Provenance)
-	return err
+		f.ID, f.Relation, f.Args, f.Source, f.Provenance); err != nil {
+		return err
+	}
+	return syncFactFTS(q, f)
 }
 
-// deleteCurrentFact removes a fact from the current_facts materialized view.
+// deleteCurrentFact removes a fact from the current_facts materialized view and
+// its FTS search index row.
 func deleteCurrentFact(q dbtx, id string) error {
-	_, err := q.Exec("DELETE FROM current_facts WHERE id = ?", id)
-	return err
+	if _, err := q.Exec("DELETE FROM current_facts WHERE id = ?", id); err != nil {
+		return err
+	}
+	return deleteFactFTS(q, id)
 }
 
 // canonicalArgs re-serializes args JSON for consistent comparison.

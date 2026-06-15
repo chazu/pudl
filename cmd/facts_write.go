@@ -23,6 +23,9 @@ var (
 	factsPromoteTo     string
 	factsPromoteRule   string
 	factsPromoteSource string
+
+	factsSearchRelation string
+	factsSearchLimit    int
 )
 
 // defaultFactSource returns the current OS username, or "human" if unavailable.
@@ -267,9 +270,58 @@ Examples:
 	},
 }
 
+var factsSearchCmd = &cobra.Command{
+	Use:   "search <query>",
+	Short: "Full-text search over currently-valid facts",
+	Long: `Keyword search over the indexed text of currently-valid facts, best matches
+first. The index covers the values of each fact's args (not the JSON keys).
+
+The query uses SQLite FTS5 syntax: bare terms are ANDed, "quoted phrases" match
+in order, a trailing * is a prefix match, and AND/OR/NOT combine terms.
+
+Examples:
+    pudl facts search "rate limiting"
+    pudl facts search "circular dependency" --relation observation
+    pudl facts search "auth*" --limit 10`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		configDir := config.GetPudlDir()
+		db, err := database.NewCatalogDB(configDir)
+		if err != nil {
+			return fmt.Errorf("failed to open catalog: %w", err)
+		}
+		defer db.Close()
+
+		facts, err := db.SearchCurrentFacts(args[0], factsSearchRelation, factsSearchLimit)
+		if err != nil {
+			return fmt.Errorf("search failed: %w", err)
+		}
+
+		if jsonOutput {
+			out, _ := json.MarshalIndent(facts, "", "  ")
+			fmt.Println(string(out))
+			return nil
+		}
+		if len(facts) == 0 {
+			fmt.Println("No matching facts.")
+			return nil
+		}
+		for _, f := range facts {
+			printFact(f, false)
+		}
+		fmt.Printf("\n%d match(es)\n", len(facts))
+		return nil
+	},
+}
+
 func init() {
 	factsCmd.AddCommand(factsAddCmd)
 	factsCmd.AddCommand(factsPromoteCmd)
+	factsCmd.AddCommand(factsSearchCmd)
+
+	factsSearchCmd.Flags().StringVar(&factsSearchRelation, "relation", "", "Limit search to a relation")
+	factsSearchCmd.Flags().IntVar(&factsSearchLimit, "limit", 20, "Maximum results (0 = no limit)")
+	factsSearchCmd.RegisterFlagCompletionFunc("relation", completeRelations)
 
 	factsAddCmd.Flags().StringVar(&factsAddRelation, "relation", "", "Relation to write (required)")
 	factsAddCmd.Flags().StringVar(&factsAddArgs, "args", "", "Fact body as a JSON object (required)")

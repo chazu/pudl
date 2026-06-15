@@ -423,7 +423,10 @@ Remaining pith work (NOT "open integration questions"):
    **Follow-up DONE:** Datalog comparison operators (`>`,`<`,`>=`,`<=`,`!=`) so the
    recall gate `decayed_worth > X` lives in the rule. See
    `implog/2026_06_14_cass_memory_comparison_operators.md`.
-6. **pudl substrate Phase D (optional):** FTS5 + `facts search` (after probe).
+6. **pudl substrate Phase D — DONE (2026-06-14):** FTS5 `current_facts_fts` index
+   (values-only, synced at the current_facts mutation points) + `pudl facts search`
+   (ranked, relation filter, limit). Keyword only; embeddings out of scope. Tests +
+   CLI e2e green. See `implog/2026_06_14_cass_memory_phase_d_fts.md`.
 7. **Curator:** `pudl facts curate` (Datalog dedup/conflict/promote rules).
 8. **Orchestration:** ship `pudl/memory/*.cue` ACE targets; `pudl memory cycle`
    wrapper; Generator read-time hook template (Claude Code first).
