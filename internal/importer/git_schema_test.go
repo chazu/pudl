@@ -25,13 +25,6 @@ func gitSchemaDir(t *testing.T) string {
 	if err := CopyBootstrapSchemas(root); err != nil {
 		t.Fatalf("CopyBootstrapSchemas: %v", err)
 	}
-	// The bootstrap `definitions/` tree carries a stale import of the removed
-	// pudl/model package and fails to load; it holds definition specs, not
-	// schemas, so it is irrelevant to schema inference. Drop it so the loader
-	// sees a clean schema module.
-	if err := os.RemoveAll(filepath.Join(root, "definitions")); err != nil {
-		t.Fatalf("remove definitions: %v", err)
-	}
 	return root
 }
 
