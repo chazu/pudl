@@ -23,8 +23,8 @@ var ingestManifestCmd = &cobra.Command{
 This records what mu did during convergence, enabling status tracking.
 
 Examples:
-    mu build --emit-manifest | pudl ingest-manifest
-    pudl ingest-manifest --path manifest.json`,
+    mu build --emit-manifest | pudl mu ingest-manifest
+    pudl mu ingest-manifest --path manifest.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Determine input source
 		var reader *os.File
@@ -66,8 +66,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(ingestManifestCmd)
-
+	// Registered under `pudl mu` (see cmd/mu.go).
 	ingestManifestCmd.Flags().StringVar(&manifestPath, "path", "", "Path to manifest JSON file (reads stdin if omitted)")
 	ingestManifestCmd.Flags().StringVar(&manifestOrigin, "origin", "mu-build", "Origin label for catalog entries")
 

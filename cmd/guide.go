@@ -122,7 +122,7 @@ THE DAY-TO-DAY VERBS
   pudl show <id>              Inspect an entry's content and metadata.
   pudl facts list             Query the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
-  pudl observe "<text>"       Record a structured observation.
+  pudl facts observe "<text>"       Record a structured observation.
   pudl status                 Show convergence status of definitions.
   pudl doctor                 Health check the workspace.
 
@@ -310,17 +310,26 @@ OVERVIEW
   This lets you ask both "what was true at time X" and "what did
   we believe at time X."
 
-RECORDING OBSERVATIONS
+WRITING FACTS — ONE DOOR
 
-  pudl observe "<description>" --kind <kind> --scope <scope>
+  pudl facts add --relation <rel> --args '<json-object>'   The canonical write.
+  pudl facts observe "<text>" --kind <kind> --scope <s>    Sugar for observations.
 
-  Kinds: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity
+  Every fact write goes through facts add (observe is just the ergonomic
+  observation path). Import data with 'pudl import'; bridge to mu with
+  'pudl mu …' — those are different doors, not fact writes.
 
-  Scope format: repo:path (e.g. pudl:internal/database, myapp:pkg/auth)
+  Known agent relations are validated on write against their built-in schema:
 
-  Example:
-    pudl observe "auth module has no rate limiting" \
+    observation   kind ∈ {fact, obstacle, pattern, antipattern, suggestion,
+                  bug, opportunity}; scope is repo:path
+    feedback      verdict ∈ {helpful, harmful, neutral}; target = fact/rule id
+
+  Examples:
+    pudl facts observe "auth module has no rate limiting" \
       --kind suggestion --scope myapp:pkg/auth --source claude-code
+    pudl facts add --relation feedback \
+      --args '{"target":"<fact-id>","verdict":"helpful","source":"claude-code"}'
 
 QUERYING FACTS
 
@@ -334,13 +343,16 @@ FACT LIFECYCLE
 
   Facts are append-only. You never update a fact — instead:
 
+  pudl facts promote <id> --to reviewed     Advance maturity
+                               (raw → reviewed → promoted | rejected)
+  pudl facts promote <id> --to promoted --rule <ref>
   pudl facts retract <id>      Mark as no longer asserted
                                (we were wrong about this)
   pudl facts invalidate <id>   Mark as no longer true
                                (it was true but isn't anymore)
 
-  Both operations set tx_end or valid_end, preserving the original
-  assertion for historical queries.
+  promote, retract, and invalidate set tx_end/valid_end and append a new
+  version, preserving the original assertion for historical queries.
 
 TIME-TRAVEL QUERIES
 
@@ -542,7 +554,7 @@ WORKFLOW
 
 EXPORTING ACTIONS
 
-  pudl export-actions --definition <name>
+  pudl mu export-actions --definition <name>
 
   Generates a mu.json config that mu can execute to converge
   the drifted resource. See 'pudl guide mu' for the full loop.
@@ -646,7 +658,7 @@ THE ACUTE LOOP
 
   2. CONVERGE: Export actions and run mu
 
-     pudl export-actions --definition nginx_conf > converge.json
+     pudl mu export-actions --definition nginx_conf > converge.json
      mu build --config converge.json //nginx_conf
 
   3. UNIFY: Re-observe and verify
@@ -663,8 +675,8 @@ OBSERVATION PIPELINE
 
 INGESTING MU ARTIFACTS
 
-  pudl ingest-manifest <manifest.json>     Ingest build manifests
-  pudl ingest-observe <results.json>       Ingest observe results
+  pudl mu ingest-manifest <manifest.json>  Ingest build manifests
+  pudl mu ingest-observe <results.json>    Ingest observe results
 
   These commands understand mu's output formats natively.
 
@@ -700,7 +712,7 @@ RECORDING OBSERVATIONS
 
   Always pass --source with your agent name:
 
-    pudl observe "auth module lacks rate limiting" \
+    pudl facts observe "auth module lacks rate limiting" \
       --kind suggestion \
       --scope myapp:pkg/auth \
       --source claude-code
@@ -750,7 +762,7 @@ RECOMMENDED WORKFLOWS
 
   Explore a codebase and record findings:
     1. Analyze code
-    2. pudl observe "<finding>" --kind <kind> --scope <repo:path>
+    2. pudl facts observe "<finding>" --kind <kind> --scope <repo:path>
     3. pudl facts list --source claude-code  (review what you've recorded)
 
   Query existing knowledge:

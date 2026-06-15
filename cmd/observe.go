@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os/user"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -52,11 +51,11 @@ Scope format:
   unambiguous and joinable by Datalog rules across repositories.
 
 Examples:
-    pudl observe "auth has circular dep with user" --kind obstacle --scope pudl:pkg/auth
-    pudl observe "all database calls use single pool" --kind pattern --scope pudl:internal/db
-    pudl observe "error handling is inconsistent" --kind antipattern --scope pudl:cmd/api
-    pudl observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config
-    pudl observe "all repos should use golangci-lint" --kind suggestion`,
+    pudl facts observe "auth has circular dep with user" --kind obstacle --scope pudl:pkg/auth
+    pudl facts observe "all database calls use single pool" --kind pattern --scope pudl:internal/db
+    pudl facts observe "error handling is inconsistent" --kind antipattern --scope pudl:cmd/api
+    pudl facts observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config
+    pudl facts observe "all repos should use golangci-lint" --kind suggestion`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		description := args[0]
@@ -74,6 +73,13 @@ Examples:
 		}
 		if observeScope != "" {
 			obs["scope"] = observeScope
+		}
+
+		// Validate against the built-in #Observation definition (e.g. rejects an
+		// unknown --kind) before writing, so the sugar path is held to the same
+		// schema as `facts add --relation observation`.
+		if err := validateKnownRelation("observation", obs); err != nil {
+			return fmt.Errorf("observation %w", err)
 		}
 
 		argsJSON, err := json.Marshal(obs)
@@ -115,15 +121,11 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(observeCmd)
+	// Sugar for `facts add --relation observation`; lives under the facts group
+	// so there is one obvious place to write facts.
+	factsCmd.AddCommand(observeCmd)
 
 	observeCmd.Flags().StringVar(&observeKind, "kind", "fact", "Observation kind (fact, obstacle, pattern, antipattern, suggestion, bug, opportunity)")
 	observeCmd.Flags().StringVar(&observeScope, "scope", "", "Scope as repo:path (e.g. pudl:internal/database, nous:internal/engine)")
-
-	// Default source to current OS user
-	defaultSource := "human"
-	if u, err := user.Current(); err == nil {
-		defaultSource = u.Username
-	}
-	observeCmd.Flags().StringVar(&observeSource, "source", defaultSource, "Source of the observation (agent name or username)")
+	observeCmd.Flags().StringVar(&observeSource, "source", defaultFactSource(), "Source of the observation (agent name or username)")
 }

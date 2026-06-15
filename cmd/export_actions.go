@@ -29,9 +29,9 @@ The toolchain is inferred from the definition's schema reference. mu plugins
 for each resource type handle the actual convergence.
 
 Examples:
-    pudl export-actions --definition my_instance
-    pudl export-actions --all
-    pudl export-actions --all | mu build --config /dev/stdin //...`,
+    pudl mu export-actions --definition my_instance
+    pudl mu export-actions --all
+    pudl mu export-actions --all | mu build --config /dev/stdin //...`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		defFlag, _ := cmd.Flags().GetString("definition")
 
@@ -50,7 +50,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(exportActionsCmd)
+	// Registered under `pudl mu` (see cmd/mu.go).
 	exportActionsCmd.Flags().String("definition", "", "Definition name to export actions for")
 	exportActionsCmd.Flags().BoolVar(&exportActionsAll, "all", false, "Export actions for all definitions with drift reports")
 }
