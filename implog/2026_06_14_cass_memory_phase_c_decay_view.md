@@ -71,15 +71,12 @@ scored: {
   join-only.
 - `CGO_ENABLED=0 go test ./...` full suite green.
 
-## Known limitation / follow-up
+## Follow-up — RESOLVED (2026-06-14): comparison operators
 
-The Datalog compiler supports only equality constraints — there is **no comparison
-operator** (`>`, `<`, `>=`). So a rule cannot yet express a threshold like
-`decayed_worth > 0.25` directly; the plan's `... , $W > 0.25` recall gate must be
-applied in the consumer (the Generator hook already ranks + takes top-N, so it
-thresholds there). Adding comparison operators to the compiler (parse + emit SQL
-`WHERE expr > ?`) is a clean, separable follow-up that would let the gate live in
-the rule. Tracked here; not part of Phase C (decay view) scope.
+The threshold gate (`decayed_worth > 0.25`) is now expressible in a rule. See
+`implog/2026_06_14_cass_memory_comparison_operators.md`: the Datalog compiler gained
+numeric comparison constraints (`>`, `<`, `>=`, `<=`, `!=`) as body-atom terms, so
+recency-weighted recall lives in the rule rather than the consumer.
 
 Next: Phase D (FTS5 `facts search`; probe already green), then the Curator
 (`pudl facts curate`) and the pith-target orchestration.
