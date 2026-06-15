@@ -57,6 +57,9 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		keys := sortedArgKeys(atom.Args)
 		for _, key := range keys {
 			term := atom.Args[key]
+			if term.IsAggregate() {
+				return nil, fmt.Errorf("rule %s: aggregate %s() not allowed in rule body", rule.Name, term.Agg)
+			}
 			var expr string
 			if hasOverride {
 				expr = fmt.Sprintf("%s.\"%s\"", alias, key)
@@ -98,6 +101,8 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 	}
 
 	var selectParts []string
+	var groupParts []string
+	hasAgg := false
 	headKeys := sortedArgKeys(rule.Head.Args)
 	for _, key := range headKeys {
 		term := rule.Head.Args[key]
@@ -108,18 +113,40 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		if !ok {
 			return nil, fmt.Errorf("head variable %s not bound in body", term.Variable)
 		}
-		selectParts = append(selectParts, fmt.Sprintf("%s AS \"%s\"", expr, key))
+		if term.IsAggregate() {
+			hasAgg = true
+			selectParts = append(selectParts, fmt.Sprintf("%s(%s) AS \"%s\"", strings.ToUpper(term.Agg), expr, key))
+		} else {
+			selectParts = append(selectParts, fmt.Sprintf("%s AS \"%s\"", expr, key))
+			groupParts = append(groupParts, expr)
+		}
 	}
 
 	if len(selectParts) == 0 {
 		return nil, fmt.Errorf("rule %s head has no variable projections", rule.Name)
 	}
 
-	sql := fmt.Sprintf("SELECT DISTINCT\n    %s\nFROM %s\nWHERE %s",
-		strings.Join(selectParts, ",\n    "),
-		strings.Join(fromParts, ", "),
-		strings.Join(whereParts, "\n  AND "),
-	)
+	var sql string
+	if hasAgg {
+		// Aggregated rule: non-aggregate head vars become GROUP BY keys; the
+		// aggregate functions reduce within each group. No DISTINCT (the GROUP BY
+		// already collapses rows). A head with only aggregates and no group keys
+		// reduces over the whole relation (single row, no GROUP BY clause).
+		sql = fmt.Sprintf("SELECT\n    %s\nFROM %s\nWHERE %s",
+			strings.Join(selectParts, ",\n    "),
+			strings.Join(fromParts, ", "),
+			strings.Join(whereParts, "\n  AND "),
+		)
+		if len(groupParts) > 0 {
+			sql += "\nGROUP BY " + strings.Join(groupParts, ", ")
+		}
+	} else {
+		sql = fmt.Sprintf("SELECT DISTINCT\n    %s\nFROM %s\nWHERE %s",
+			strings.Join(selectParts, ",\n    "),
+			strings.Join(fromParts, ", "),
+			strings.Join(whereParts, "\n  AND "),
+		)
+	}
 
 	return &CompiledQuery{
 		SQL:    sql,

@@ -24,6 +24,14 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 
 	recursive, nonRecursive := PartitionRules(rules)
 
+	// Aggregation is compiled to SQL GROUP BY and is only defined for
+	// non-recursive rules; aggregating across a fixpoint needs stratification the
+	// recursive evaluator does not implement. Reject rather than return a wrong
+	// answer.
+	if relationHasRecursiveRule(relation, recursive) && relationHasAggregateRule(relation, rules) {
+		return nil, fmt.Errorf("relation %q uses aggregation in a recursive rule, which is not supported", relation)
+	}
+
 	// If the queried relation is derived by a recursive rule, the fixpoint
 	// evaluator is authoritative: it seeds the base (non-recursive) rules and
 	// computes the full closure. The SQL path alone would return only the base
@@ -46,7 +54,10 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 	// Safety net: a non-recursive relation may transitively depend on a
 	// recursive relation that the SQL compiler cannot expand. If SQL found
 	// nothing and recursive rules exist, retry through the fixpoint evaluator.
-	if len(results) == 0 && len(recursive) > 0 {
+	// Aggregate relations are excluded: an empty aggregate result (e.g. a count
+	// over no matching facts) is a legitimate answer, not a miss to retry — and
+	// the recursive evaluator cannot aggregate anyway.
+	if len(results) == 0 && len(recursive) > 0 && !relationHasAggregateRule(relation, rules) {
 		results, err = EvalRecursive(db, rules, relation, constraints, scope)
 		if err != nil {
 			return nil, fmt.Errorf("recursive query failed: %w", err)
@@ -72,6 +83,22 @@ func relationHasAnyRule(relation string, rules []Rule) bool {
 	for _, r := range rules {
 		if r.Head.Rel == relation {
 			return true
+		}
+	}
+	return false
+}
+
+// relationHasAggregateRule reports whether the given relation is the head of any
+// rule that uses an aggregate function.
+func relationHasAggregateRule(relation string, rules []Rule) bool {
+	for _, r := range rules {
+		if r.Head.Rel != relation {
+			continue
+		}
+		for _, t := range r.Head.Args {
+			if t.IsAggregate() {
+				return true
+			}
 		}
 	}
 	return false
