@@ -73,6 +73,11 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 				} else {
 					varExprs[term.Variable] = expr
 				}
+			} else if term.IsComparison() {
+				// Numeric comparison constraint, e.g. decayed_worth > 0.25. The
+				// operator is validated by cmpTermPattern, so it is safe to inline.
+				whereParts = append(whereParts, fmt.Sprintf("%s %s ?", expr, term.Cmp))
+				params = append(params, term.Value)
 			} else {
 				whereParts = append(whereParts, fmt.Sprintf("%s = ?", expr))
 				params = append(params, term.Value)

@@ -418,10 +418,11 @@ Remaining pith work (NOT "open integration questions"):
    `implog/2026_06_14_cass_memory_phase_b_aggregation.md`.
 5. **pudl substrate Phase C — DONE (2026-06-14):** `fact_scored_edb` view (join of
    current_facts+facts; age + 90-day half-life `decayed_worth` via `pow()`) +
-   `fact_scored` join-only EDB relation. Tests + CLI e2e green. Follow-up: Datalog
-   has no comparison operator yet, so rule-level `decayed_worth > X` thresholding
-   isn't expressible — consumer thresholds for now. See
+   `fact_scored` join-only EDB relation. Tests + CLI e2e green. See
    `implog/2026_06_14_cass_memory_phase_c_decay_view.md`.
+   **Follow-up DONE:** Datalog comparison operators (`>`,`<`,`>=`,`<=`,`!=`) so the
+   recall gate `decayed_worth > X` lives in the rule. See
+   `implog/2026_06_14_cass_memory_comparison_operators.md`.
 6. **pudl substrate Phase D (optional):** FTS5 + `facts search` (after probe).
 7. **Curator:** `pudl facts curate` (Datalog dedup/conflict/promote rules).
 8. **Orchestration:** ship `pudl/memory/*.cue` ACE targets; `pudl memory cycle`

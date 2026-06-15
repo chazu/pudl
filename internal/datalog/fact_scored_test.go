@@ -80,39 +80,33 @@ func TestFactScoredJoinOnly(t *testing.T) {
 	}
 }
 
-// TestFactScoredThreshold verifies a rule can filter by decayed_worth as a
-// recency-weighted recall gate.
+// TestFactScoredThreshold verifies a rule can gate on decayed_worth with a
+// comparison constraint as a recency-weighted recall filter.
 func TestFactScoredThreshold(t *testing.T) {
 	db := setupTestDB(t)
 	now := time.Now().Unix()
 
 	// Fresh fact (decayed ~1.0) and a very old fact (~3 half-lives, decayed ~0.125).
 	fresh, _ := db.AddFact(database.Fact{Relation: "playbook", Args: `{"worth":1.0,"bullet":"fresh"}`, ValidStart: now, TxStart: now})
-	_, _ = db.AddFact(database.Fact{Relation: "playbook", Args: `{"worth":1.0,"bullet":"stale"}`, ValidStart: now - 3*halfLife, TxStart: now})
+	stale, _ := db.AddFact(database.Fact{Relation: "playbook", Args: `{"worth":1.0,"bullet":"stale"}`, ValidStart: now - 3*halfLife, TxStart: now})
 
 	rules, _ := ParseRulesFromSource(`
 live: {
   head: {rel: "live", args: {id: "$I"}}
-  body: [{rel: "fact_scored", args: {id: "$I", relation: "playbook", decayed_worth: "$W"}}]
+  body: [{rel: "fact_scored", args: {id: "$I", relation: "playbook", decayed_worth: ">0.25"}}]
 }`)
-	// Note: threshold is applied below in Go since the compiler has no comparison
-	// operator yet; this still exercises the view end-to-end. Replace with a rule
-	// constraint once comparison support lands.
 	results, err := Evaluate(db, rules, "live", nil, TemporalScope{})
 	if err != nil {
 		t.Fatalf("evaluate: %v", err)
 	}
-	if len(results) != 2 {
-		t.Fatalf("expected 2 playbook facts surfaced, got %d", len(results))
+	if len(results) != 1 {
+		t.Fatalf("expected only the fresh fact above threshold, got %d: %v", len(results), results)
 	}
-	// The fresh fact must be present (sanity that ids round-trip through the view).
-	found := false
-	for _, r := range results {
-		if id, _ := r.Args["id"].(string); id == fresh.ID {
-			found = true
-		}
+	id, _ := results[0].Args["id"].(string)
+	if id != fresh.ID {
+		t.Errorf("expected fresh fact %s above threshold, got %s", fresh.ID[:8], id)
 	}
-	if !found {
-		t.Errorf("fresh fact id not found in fact_scored results")
+	if id == stale.ID {
+		t.Errorf("stale fact should be filtered out by decayed_worth > 0.25")
 	}
 }
