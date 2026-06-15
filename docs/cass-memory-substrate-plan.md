@@ -402,10 +402,12 @@ Remaining pith work (NOT "open integration questions"):
 
 ## 13. Master worklist
 
-1. **pith close-out:** publish module + drop `replace`; add `llm/complete` word; add
-   `internal/pithvm` unit tests.
-2. **mu:** generic `-C/--root` flag. (Per-target no-cache NOT needed — build-level
-   `--no-cache` on the dedicated `~/.pudl` workspace covers it; see §15.)
+1. **pith close-out:** publish module + drop `replace`. (`llm/complete` word NOT
+   needed for v1 — reflect uses `exec/shell claude`; `internal/pithvm` shim tests
+   still a nice-to-have.)
+2. **mu: nothing required.** The `-C/--root` flag is unnecessary — mu's existing
+   `--config <mu.cue>` roots the build at that file's directory. `pudl memory cycle`
+   uses `mu build --config ~/.pudl/mu.cue --no-cache //memory:cycle`.
 3. **pudl substrate Phase A — DONE (2026-06-14):** `#Feedback` schema; `facts add`
    (JSON-shape + auto strict validation of known relations via embedded-def
    unification + opt-in `--schema` + `--no-validate`); `facts observe` (moved under
@@ -427,9 +429,12 @@ Remaining pith work (NOT "open integration questions"):
    (values-only, synced at the current_facts mutation points) + `pudl facts search`
    (ranked, relation filter, limit). Keyword only; embeddings out of scope. Tests +
    CLI e2e green. See `implog/2026_06_14_cass_memory_phase_d_fts.md`.
-7. **Curator:** `pudl facts curate` (Datalog dedup/conflict/promote rules).
-8. **Orchestration:** ship `pudl/memory/*.cue` ACE targets; `pudl memory cycle`
-   wrapper; Generator read-time hook template (Claude Code first).
+7. **Curator — DONE (2026-06-14):** `pudl facts curate` (feedback-threshold maturity
+   transitions + prevVersion lineage). See `implog/2026_06_14_cass_memory_curator.md`.
+8. **Orchestration — DONE (2026-06-14):** `pudl memory context|init|cycle`,
+   `pudl hooks print|install` (Claude Code), ACE cycle template (reflect via
+   `claude -p`, curate deterministic). Stop hook runs curate not the reflect cycle
+   (recursion/cost). See `implog/2026_06_14_cass_memory_orchestration.md`.
 9. **Docs:** ~~update `prime`/`guide` (§11)~~ DONE; still TODO: update VISION.md
    (loop now external pith targets, not "nous medium loop").
 

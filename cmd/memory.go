@@ -127,10 +127,11 @@ Customize the reflect prompt/scope for your workflow. Use --force to overwrite.`
 
 var memoryCycleCmd = &cobra.Command{
 	Use:   "cycle",
-	Short: "Run the mu memory cycle (mu -C <pudl dir> build //memory:cycle)",
-	Long: `Run the memory cycle by invoking mu rooted at the pudl config directory:
+	Short: "Run the mu memory cycle (mu build --config <pudl dir>/mu.cue //memory:cycle)",
+	Long: `Run the memory cycle by invoking mu rooted at the pudl config directory via
+mu's --config flag (which roots the build at that mu.cue's directory):
 
-    mu -C <pudl dir> build //memory:cycle --no-cache
+    mu build --config <pudl dir>/mu.cue --no-cache //memory:cycle
 
 Requires mu on PATH and a cycle workspace (run 'pudl memory init' first). The
 cycle is non-hermetic (it reads session files and the live store), so it always
@@ -140,13 +141,14 @@ Scheduling is out of scope: trigger this from a hook ('pudl hooks'), cron, or a
 scheduled agent.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dir := config.GetPudlDir()
-		if _, err := os.Stat(filepath.Join(dir, "mu.cue")); err != nil {
-			return fmt.Errorf("no cycle workspace at %s/mu.cue — run 'pudl memory init' first", dir)
+		muCue := filepath.Join(dir, "mu.cue")
+		if _, err := os.Stat(muCue); err != nil {
+			return fmt.Errorf("no cycle workspace at %s — run 'pudl memory init' first", muCue)
 		}
 		if _, err := exec.LookPath("mu"); err != nil {
 			return fmt.Errorf("mu not found on PATH; install mu to run the cycle")
 		}
-		muArgs := []string{"-C", dir, "build", "//memory:cycle", "--no-cache"}
+		muArgs := []string{"build", "--config", muCue, "--no-cache", "//memory:cycle"}
 		c := exec.Command("mu", muArgs...)
 		c.Stdout = os.Stdout
 		c.Stderr = os.Stderr
@@ -163,7 +165,7 @@ scheduled agent.`,
 // API key is required; curate is fully deterministic. Customize freely.
 const memoryCycleTemplate = `// pudl memory cycle — starter targets written by ` + "`pudl memory init`" + `.
 //
-// Run with: pudl memory cycle   (= mu -C ~/.pudl build //memory:cycle --no-cache)
+// Run with: pudl memory cycle   (= mu build --config ~/.pudl/mu.cue --no-cache //memory:cycle)
 //
 // reflect -> curate. Customize the reflect prompt and scope for your workflow.
 package mu
