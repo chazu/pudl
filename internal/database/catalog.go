@@ -221,6 +221,12 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure catalog_entry view: %w", err)
 	}
 
+	// Create the fact_scored_edb view exposing current facts with read-time decay
+	// scoring to Datalog. Must run after the facts and current_facts tables exist.
+	if err := c.ensureFactScoredView(); err != nil {
+		return fmt.Errorf("failed to ensure fact_scored view: %w", err)
+	}
+
 	return nil
 }
 

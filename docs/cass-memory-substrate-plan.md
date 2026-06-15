@@ -416,8 +416,12 @@ Remaining pith work (NOT "open integration questions"):
    (`count`/`sum`/`max`/`min`) via `agg($Var)` head syntax → SQL `GROUP BY`;
    non-recursive only (recursive aggregation rejected). Tests + CLI e2e green. See
    `implog/2026_06_14_cass_memory_phase_b_aggregation.md`.
-5. **pudl substrate Phase C:** `current_facts_scored` view + `fact_scored` EDB
-   relation (after `pow()` probe).
+5. **pudl substrate Phase C — DONE (2026-06-14):** `fact_scored_edb` view (join of
+   current_facts+facts; age + 90-day half-life `decayed_worth` via `pow()`) +
+   `fact_scored` join-only EDB relation. Tests + CLI e2e green. Follow-up: Datalog
+   has no comparison operator yet, so rule-level `decayed_worth > X` thresholding
+   isn't expressible — consumer thresholds for now. See
+   `implog/2026_06_14_cass_memory_phase_c_decay_view.md`.
 6. **pudl substrate Phase D (optional):** FTS5 + `facts search` (after probe).
 7. **Curator:** `pudl facts curate` (Datalog dedup/conflict/promote rules).
 8. **Orchestration:** ship `pudl/memory/*.cue` ACE targets; `pudl memory cycle`
