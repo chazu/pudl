@@ -336,6 +336,7 @@ QUERYING FACTS
   pudl facts list                           List all current facts
   pudl facts list --relation observation    Filter by relation
   pudl facts list --source claude-code      Filter by source
+  pudl facts search "<text>"                Full-text search (FTS5, ranked)
   pudl facts show <id>                      Full fact details
   pudl facts stats                          Aggregate statistics
 

@@ -207,6 +207,11 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to backfill current_facts: %w", err)
 	}
 
+	// Create + backfill the FTS5 keyword index over current facts.
+	if err := c.ensureFactsFTSTable(); err != nil {
+		return fmt.Errorf("failed to ensure facts FTS index: %w", err)
+	}
+
 	// Create item_schemas junction table (idempotent).
 	// Tracks declared/inferred/unresolved schema references per item;
 	// supports an item satisfying multiple schemas. See

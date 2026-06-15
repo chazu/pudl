@@ -113,6 +113,7 @@ Feedback verdict is helpful | harmful | neutral; target is the fact/rule it conc
 ` + "```" + `
 pudl facts list --relation observation       # list observations
 pudl facts list --relation observation --source claude-code
+pudl facts search "<text>"                   # full-text search (FTS5; best matches first)
 pudl facts show <id>                         # full fact details
 pudl facts promote <id> --to reviewed        # advance maturity (raw→reviewed→promoted|rejected)
 pudl facts promote <id> --to promoted --rule <ref>
