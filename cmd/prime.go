@@ -109,6 +109,19 @@ pudl facts add --relation feedback \
 ` + "```" + `
 Feedback verdict is helpful | harmful | neutral; target is the fact/rule it concerns.
 
+### Self-improvement loop
+
+pudl runs a memory loop: observations you record mature from feedback, and the most
+useful promoted ones are recalled into future sessions.
+` + "```" + `
+pudl memory context [--task "<text>"]        # ranked promoted knowledge (recall)
+pudl facts curate                            # advance maturity from feedback (deterministic)
+pudl memory cycle                            # run the full mu cycle (reflect → curate)
+pudl hooks install                           # wire the loop into Claude Code (SessionStart/Stop)
+` + "```" + `
+Record feedback on facts/rules you act on so the curator can promote what works and
+reject what doesn't.
+
 ### Querying and curating facts
 ` + "```" + `
 pudl facts list --relation observation       # list observations
