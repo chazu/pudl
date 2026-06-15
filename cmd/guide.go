@@ -347,6 +347,8 @@ FACT LIFECYCLE
   pudl facts promote <id> --to reviewed     Advance maturity
                                (raw → reviewed → promoted | rejected)
   pudl facts promote <id> --to promoted --rule <ref>
+  pudl facts curate            Auto-advance maturity from feedback
+                               (deterministic, no LLM; --dry-run to preview)
   pudl facts retract <id>      Mark as no longer asserted
                                (we were wrong about this)
   pudl facts invalidate <id>   Mark as no longer true

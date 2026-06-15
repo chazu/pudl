@@ -16,6 +16,7 @@ package nous
 	status:      "raw" | "reviewed" | "promoted" | "rejected" | *"raw"
 	worth:       number & >=0 & <=1 | *0.5
 	promotedTo?: string // if promoted, what rule/convention it became
+	prevVersion?: string // fact ID of the prior maturity version (set on transition)
 }
 
 // Feedback is a reinforcement signal about another fact or rule, recorded by an

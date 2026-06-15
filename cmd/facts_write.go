@@ -192,82 +192,93 @@ Examples:
 		}
 		defer db.Close()
 
-		// Resolve the full ID and relation outside the tx (cheap lookup); the
-		// TOCTOU-safe status re-read happens inside the tx below.
-		target, err := db.GetFactByPrefix(idArg)
-		if err != nil {
-			if exact, e2 := db.GetFact(idArg); e2 == nil {
-				target = exact
-			} else {
-				return fmt.Errorf("fact not found: %s", idArg)
-			}
-		}
-
-		var newID string
-		err = db.WithFactTx(func(tx *database.FactTx) error {
-			// Re-read current facts for this relation under the write lock.
-			current, qerr := tx.QueryFacts(database.FactFilter{Relation: target.Relation})
-			if qerr != nil {
-				return fmt.Errorf("failed to read current facts: %w", qerr)
-			}
-			var f *database.Fact
-			for i := range current {
-				if current[i].ID == target.ID {
-					f = &current[i]
-					break
-				}
-			}
-			if f == nil {
-				return fmt.Errorf("fact %s is not currently valid (already retracted, invalidated, or promoted)", target.ID[:12])
-			}
-
-			var obj map[string]interface{}
-			if err := json.Unmarshal([]byte(f.Args), &obj); err != nil {
-				return fmt.Errorf("fact args are not a JSON object: %w", err)
-			}
-			from, _ := obj["status"].(string)
-			if from == "" {
-				from = "raw"
-			}
-			if from == factsPromoteTo {
-				return fmt.Errorf("fact is already %s", from)
-			}
-			if !transitionAllowed(from, factsPromoteTo) {
-				return fmt.Errorf("illegal transition %s → %s", from, factsPromoteTo)
-			}
-
-			obj["status"] = factsPromoteTo
-			if factsPromoteRule != "" {
-				obj["promotedTo"] = factsPromoteRule
-			}
-			newArgs, merr := json.Marshal(obj)
-			if merr != nil {
-				return fmt.Errorf("failed to marshal updated args: %w", merr)
-			}
-
-			// Invalidate the old version, append the new one. Same relation and
-			// source preserve provenance; the differing args yield a new ID.
-			if err := tx.InvalidateFact(f.ID); err != nil {
-				return fmt.Errorf("failed to invalidate prior version: %w", err)
-			}
-			nf, aerr := tx.AddFact(database.Fact{
-				Relation: f.Relation,
-				Args:     string(newArgs),
-				Source:   f.Source,
-			})
-			if aerr != nil {
-				return fmt.Errorf("failed to write new version: %w", aerr)
-			}
-			newID = nf.ID
-			return nil
-		})
+		oldID, newID, err := promoteFact(db, idArg, factsPromoteTo, factsPromoteRule)
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("Promoted %s → %s (new version %s)\n", target.ID[:12], factsPromoteTo, newID[:12])
+		fmt.Printf("Promoted %s → %s (new version %s)\n", oldID[:12], factsPromoteTo, newID[:12])
 		return nil
 	},
+}
+
+// promoteFact advances a fact's maturity status to `to` (optionally recording a
+// promotedTo rule reference), atomically under the fact-store write lock. It
+// resolves idArg (full ID or unique prefix), validates the transition against the
+// current status, then invalidates the prior version and appends the updated one.
+// Returns the resolved old ID and the new version's ID. Shared by `facts promote`
+// and the curator.
+func promoteFact(db *database.CatalogDB, idArg, to, rule string) (oldID, newID string, err error) {
+	target, err := db.GetFactByPrefix(idArg)
+	if err != nil {
+		if exact, e2 := db.GetFact(idArg); e2 == nil {
+			target = exact
+		} else {
+			return "", "", fmt.Errorf("fact not found: %s", idArg)
+		}
+	}
+
+	err = db.WithFactTx(func(tx *database.FactTx) error {
+		// Re-read current facts for this relation under the write lock.
+		current, qerr := tx.QueryFacts(database.FactFilter{Relation: target.Relation})
+		if qerr != nil {
+			return fmt.Errorf("failed to read current facts: %w", qerr)
+		}
+		var f *database.Fact
+		for i := range current {
+			if current[i].ID == target.ID {
+				f = &current[i]
+				break
+			}
+		}
+		if f == nil {
+			return fmt.Errorf("fact %s is not currently valid (already retracted, invalidated, or promoted)", target.ID[:12])
+		}
+
+		var obj map[string]interface{}
+		if err := json.Unmarshal([]byte(f.Args), &obj); err != nil {
+			return fmt.Errorf("fact args are not a JSON object: %w", err)
+		}
+		from, _ := obj["status"].(string)
+		if from == "" {
+			from = "raw"
+		}
+		if from == to {
+			return fmt.Errorf("fact is already %s", from)
+		}
+		if !transitionAllowed(from, to) {
+			return fmt.Errorf("illegal transition %s → %s", from, to)
+		}
+
+		obj["status"] = to
+		obj["prevVersion"] = f.ID // lineage pointer so feedback on prior versions stays reachable
+		if rule != "" {
+			obj["promotedTo"] = rule
+		}
+		newArgs, merr := json.Marshal(obj)
+		if merr != nil {
+			return fmt.Errorf("failed to marshal updated args: %w", merr)
+		}
+
+		// Invalidate the old version, append the new one. Same relation and source
+		// preserve provenance; the differing args yield a new ID.
+		if err := tx.InvalidateFact(f.ID); err != nil {
+			return fmt.Errorf("failed to invalidate prior version: %w", err)
+		}
+		nf, aerr := tx.AddFact(database.Fact{
+			Relation: f.Relation,
+			Args:     string(newArgs),
+			Source:   f.Source,
+		})
+		if aerr != nil {
+			return fmt.Errorf("failed to write new version: %w", aerr)
+		}
+		newID = nf.ID
+		return nil
+	})
+	if err != nil {
+		return "", "", err
+	}
+	return target.ID, newID, nil
 }
 
 var factsSearchCmd = &cobra.Command{
