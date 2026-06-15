@@ -17,3 +17,19 @@ package nous
 	worth:       number & >=0 & <=1 | *0.5
 	promotedTo?: string // if promoted, what rule/convention it became
 }
+
+// Feedback is a reinforcement signal about another fact or rule, recorded by an
+// agent or human after acting on it. Feedback is append-only and stored as a
+// fact in the bitemporal store; corroboration is preserved as signal (multiple
+// sources giving the same verdict produce distinct facts, not an aggregated
+// count). Downstream scoring (decay, harmful-weighting) reads feedback at query
+// time — feedback ingestion itself carries no weighting.
+//
+// The target field is the ID (or rule reference) the feedback is about.
+#Feedback: {
+	target:   string                                // fact/rule ID this feedback concerns
+	verdict:  "helpful" | "harmful" | "neutral"     // direction of the signal
+	outcome?: "success" | "failure"                 // task result, if the feedback follows an action
+	source:   string                                // agent name or "human"
+	note?:    string                                // optional free-text rationale
+}

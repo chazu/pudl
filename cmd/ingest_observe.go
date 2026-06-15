@@ -28,8 +28,8 @@ Each target's current.records are stored as individual observe entries,
 routed to the correct schema via the _schema field.
 
 Examples:
-    mu observe --json //home/odroid | pudl ingest-observe
-    pudl ingest-observe --path observe-results.json`,
+    mu observe --json //home/odroid | pudl mu ingest-observe
+    pudl mu ingest-observe --path observe-results.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Determine input source
 		var reader *os.File
@@ -77,8 +77,7 @@ Examples:
 }
 
 func init() {
-	rootCmd.AddCommand(ingestObserveCmd)
-
+	// Registered under `pudl mu` (see cmd/mu.go).
 	ingestObserveCmd.Flags().StringVar(&ingestObservePath, "path", "", "Read from file instead of stdin")
 	ingestObserveCmd.Flags().StringVar(&ingestObserveOrigin, "origin", "mu-observe", "Override origin")
 

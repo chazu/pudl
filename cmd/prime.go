@@ -82,26 +82,42 @@ pudl definition validate                     # validate all definitions
 pudl definition graph                        # show dependency graph
 ` + "```" + `
 
-### Recording observations
+### Writing data — three doors (do not confuse them)
+
+There is exactly one door for each kind of write:
+
+- **Assert a fact** (observation, feedback, any relation) → ` + "`pudl facts add`" + `
+  (or the sugar ` + "`pudl facts observe`" + ` for observations).
+- **Import data** into the lake (JSON/YAML/CSV files) → ` + "`pudl import`" + `.
+- **Bridge to mu** (export drift as actions, ingest mu results) → ` + "`pudl mu …`" + `.
+
+### Recording observations and facts
 ` + "```" + `
-pudl observe "<description>" --kind <kind> --scope <repo:path>
+pudl facts observe "<description>" --kind <kind> --scope <repo:path>   # sugar
+pudl facts add --relation <rel> --args '<json-object>'                 # canonical
 ` + "```" + `
 Kinds: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity
 Scope format: repo:path (e.g. pudl:internal/database, myapp:pkg/auth)
 
-As an agent, use this to record structured observations about the codebase:
+` + "`facts add`" + ` is the one low-level write for any relation. Known agent
+relations (observation, feedback) are validated against their built-in schema on
+write (bad --kind or verdict is rejected). Examples:
 ` + "```" + `
-pudl observe "auth module has no rate limiting" --kind suggestion --scope myapp:pkg/auth --source claude-code
-pudl observe "circular dependency between user and auth" --kind obstacle --scope myapp:pkg --source claude-code
+pudl facts observe "auth has no rate limiting" --kind suggestion --scope myapp:pkg/auth --source claude-code
+pudl facts add --relation feedback \
+    --args '{"target":"<fact-id>","verdict":"helpful","source":"claude-code"}'
 ` + "```" + `
+Feedback verdict is helpful | harmful | neutral; target is the fact/rule it concerns.
 
-### Querying facts
+### Querying and curating facts
 ` + "```" + `
 pudl facts list --relation observation       # list observations
 pudl facts list --relation observation --source claude-code
 pudl facts show <id>                         # full fact details
-pudl facts retract <id>                      # mark as wrong
-pudl facts invalidate <id>                   # mark as no longer true
+pudl facts promote <id> --to reviewed        # advance maturity (raw→reviewed→promoted|rejected)
+pudl facts promote <id> --to promoted --rule <ref>
+pudl facts retract <id>                      # mark as wrong (we erred)
+pudl facts invalidate <id>                   # mark as no longer true (reality changed)
 ` + "```" + `
 
 ### Datalog queries
@@ -124,7 +140,7 @@ pudl repo validate                           # validate all schemas + definition
 
 ## Conventions for agents
 
-1. **Always pass --source** when using ` + "`pudl observe`" + ` so observations are
+1. **Always pass --source** when using ` + "`pudl facts observe/add`" + ` so facts are
    attributable. Use your agent name (e.g. "claude-code").
 
 2. **Use --scope with repo:path format** for observations so they are globally
