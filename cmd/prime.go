@@ -117,6 +117,7 @@ pudl facts search "<text>"                   # full-text search (FTS5; best matc
 pudl facts show <id>                         # full fact details
 pudl facts promote <id> --to reviewed        # advance maturity (raw→reviewed→promoted|rejected)
 pudl facts promote <id> --to promoted --rule <ref>
+pudl facts curate                            # auto-advance maturity from feedback (no LLM)
 pudl facts retract <id>                      # mark as wrong (we erred)
 pudl facts invalidate <id>                   # mark as no longer true (reality changed)
 ` + "```" + `
