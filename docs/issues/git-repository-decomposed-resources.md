@@ -1,7 +1,7 @@
 # System changes to support decomposed resources (the git-repository example)
 
 **Priority:** Medium
-**Status:** Proposed
+**Status:** Proposed — scoped 2026-06-15: branches are inline for now (see D3); C1–C4 deferred.
 **Date:** 2026-06-15
 
 ## Summary
@@ -29,6 +29,14 @@ This doc records the decisions reached and the concrete changes each implies. It
 uses the git-repository schemas as the motivating example but the mechanisms are
 general.
 
+> **Decision (2026-06-15):** for this swing we do **not** need per-branch
+> bitemporal history. `GitBranch` becomes an **inline component** alongside
+> `GitRemote` (see D3), which makes capabilities 2 and 3 above unnecessary.
+> C1–C4 are **deferred** until per-branch tip history is a concrete ask;
+> promoting an inline component to a separate tracked resource later is a
+> contained migration. Only **D1** (component/schema boundary) and authoring the
+> schemas per D2/D3 are in scope now.
+
 ## Motivating shapes
 
 ```cue
@@ -37,6 +45,12 @@ general.
     name: string          // "origin"
     url:  string
     push_url?: string
+}
+
+// component — no _pudl. Inline for this swing (no per-branch history needed).
+#GitBranch: {
+    name: string          // "main", "release/1.2"
+    sha:  string          // current tip
 }
 
 // tracked resource — has _pudl.
@@ -51,25 +65,14 @@ general.
     default_branch: string
     bare?:          bool
     root_commit?:   string          // first (parentless) commit; OPTIONAL ⇒ tracked, not identity
-    remotes: [...#GitRemote]        // zero or more, inline component
-}
-
-// tracked resource — its OWN _pudl resource, not inline.
-#GitBranch: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "git.branch"
-        identity_fields: ["repo", "name"]              // composite; repo is the FK
-        tracked_fields:  ["sha"]
-    }
-    repo: string          // == the parent GitRepository's `name`
-    name: string          // "main", "release/1.2"
-    sha:  string          // current tip
+    remotes:  [...#GitRemote]       // zero or more, inline component
+    branches: [...#GitBranch]       // zero or more, inline component
 }
 ```
 
-Two structural decisions are baked in here and explained below: `GitRemote` is an
-**inline component**, `GitBranch` is a **separate tracked resource**.
+Both `GitRemote` and `GitBranch` are **inline components** for this swing. The
+deferred alternative — `GitBranch` as a separate tracked resource for per-branch
+bitemporal history — is preserved in D3 and C1–C4 below.
 
 ## Decisions
 
@@ -117,23 +120,37 @@ No code change — this is a design rule for authoring the schemas, and the
 existing `pudl doctor` Identity Fields check already backstops divergence within
 a family.
 
-### D3. `GitRemote` is an inline component; `GitBranch` is a separate resource
+### D3. Both `GitRemote` and `GitBranch` are inline components (this swing)
 
-These are deliberately different, and the difference is the crux of the doc.
+**Decided: both inline.** Neither needs independent bitemporal history right now,
+so both are inline components and the whole fan-out/reconcile machinery (C1–C4)
+is avoided.
 
 - **`GitRemote` inline** because a remote has no independent lifecycle worth
   tracking and no need for its own version history. Re-importing the repository
   simply replaces the whole `remotes` array. No fan-out, no foreign key, no
   referential-integrity gap, no reconcile step.
 
-- **`GitBranch` separate** because we *do* want independent bitemporal history
-  per branch — to track how each branch tip (`sha`) moves over time, which an
-  inline array cannot give us (the array is one value on the repo, versioned as a
-  whole). This benefit is the entire justification for the machinery in D4–D6.
-  If per-branch tip history is not actually needed, `GitBranch` should be an
-  inline component too, and D4–D6 disappear.
+- **`GitBranch` inline (this swing)** because we do **not** currently need
+  per-branch tip history. Re-importing the repository replaces the whole
+  `branches` array, so deleted branches drop implicitly — no stale
+  `current_facts`, no orphan FK. We lose only the *time-series* of each branch
+  tip, which nobody has asked for yet.
 
-## Required system changes (only if D3 keeps `GitBranch` separate)
+  **Deferred alternative:** if independent bitemporal history per branch becomes
+  a real need — tracking how each branch tip (`sha`) moves over time, which an
+  inline array cannot give (the array is one value on the repo, versioned as a
+  whole) — `GitBranch` would become a *separate tracked resource* with its own
+  `_pudl` block (`identity_fields: ["repo", "name"]`, `tracked_fields: ["sha"]`).
+  That is the only thing that justifies C1–C4 below, which is why they are
+  deferred, not deleted. Promotion is a contained migration when the need is
+  concrete.
+
+## Deferred system changes (only if `GitBranch` is later promoted to a separate resource)
+
+> **Status: deferred.** None of C1–C4 are in scope for this swing — they apply
+> only if the D3 deferred alternative (separate `GitBranch` resource) is adopted.
+> Retained here so the cost is documented when that decision is revisited.
 
 ### C1. Ingestion fan-out
 
@@ -199,20 +216,20 @@ same problem recurs for any decomposed resource.
   branch the default?" is derived via the join `repo.default_branch ==
   branch.name`, not modeled as a flag on the branch.
 
-## Sequencing
+## Sequencing (this swing)
 
 1. **D1** (component/schema filter) — small, independently useful, unblocks clean
    authoring. Do first.
-2. Author the schemas per D2/D3 (CUE only, no engine change).
-3. If `GitBranch` stays separate: **C1** (fan-out + FK stamping) and **C4**
-   (reconcile) are the load-bearing changes; **C3** (integrity check) follows.
-   **C2** is mostly authoring + an origin convention.
+2. Author the schemas per D2/D3 (CUE only, no engine change) — `GitRepository`
+   plus the platform family, with `remotes` and `branches` both inline.
+3. **C1–C4 are out of scope** — deferred until per-branch history is a concrete
+   need (see D3 deferred alternative).
 
 ## Open questions
 
-- Is per-branch tip history (D3) actually wanted now, or is inline-component the
-  right call until there's a concrete need? This single decision gates all of
-  C1–C4.
-- For C1/C4: build a general "complete-set import for a parent scope" primitive,
-  or handle git specifically? The general primitive is more work but pays off for
-  every future decomposed resource.
+- ~~Is per-branch tip history (D3) actually wanted now?~~ **Resolved 2026-06-15:
+  no. `GitBranch` is an inline component for this swing; C1–C4 deferred.** Revisit
+  if per-branch tip time-series becomes a concrete need.
+- (Deferred, only if C1/C4 are revived) Build a general "complete-set import for a
+  parent scope" primitive, or handle git specifically? The general primitive is
+  more work but pays off for every future decomposed resource.
