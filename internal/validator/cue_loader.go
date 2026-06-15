@@ -169,10 +169,6 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 		}
 
 		schemaValue := iter.Value()
-		// Use canonical schema naming: "aws/ec2.#Instance"
-		// The schemaname.Format function strips version suffixes like @v0
-		canonicalName := schemaname.Format(moduleName, label)
-		schemas[canonicalName] = schemaValue
 
 		// Detect if schema is structurally a list type using CUE's IncompleteKind.
 		// This allows us to identify collection schemas like `#CatchAllCollection: [...]`
@@ -181,10 +177,12 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 
 		// Extract PUDL metadata if present
 		var meta SchemaMetadata
+		hasPudl := false
 		innerIter, err := schemaValue.Fields(cue.Hidden(true))
 		if err == nil {
 			for innerIter.Next() {
 				if innerIter.Label() == "_pudl" {
+					hasPudl = true
 					if err := innerIter.Value().Decode(&meta); err == nil {
 						// Metadata decoded successfully
 					}
@@ -192,6 +190,21 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 				}
 			}
 		}
+
+		// A definition carrying no `_pudl` block is a *component* -- a reusable
+		// shape meant to be embedded in a schema (e.g. `#Tag`, `#ServiceBinding`),
+		// inert to inference -- not a tracked schema. Skip registering it so
+		// components do not appear as phantom schemas in listings or inference
+		// candidates. List-type schemas (collections) legitimately carry no
+		// `_pudl` because arrays have no fields, so they are exempt.
+		if !hasPudl && !isListType {
+			continue
+		}
+
+		// Use canonical schema naming: "aws/ec2.#Instance"
+		// The schemaname.Format function strips version suffixes like @v0
+		canonicalName := schemaname.Format(moduleName, label)
+		schemas[canonicalName] = schemaValue
 
 		// Set the IsListType field based on structural detection
 		meta.IsListType = isListType

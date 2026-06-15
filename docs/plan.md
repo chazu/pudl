@@ -22,6 +22,10 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - Bootstrap schemas (`pudl/core.#Item`, `pudl/core.#Collection`)
 - Git-backed schema repository with status/commit/log
 - Pluggable type patterns (AWS, Kubernetes, GitLab)
+- Component/schema boundary: `#`-definitions with no `_pudl` block are treated as
+  reusable *components* (inert to inference, not phantom schemas); list-type
+  collection schemas are exempt. See `implog/2026_06_15_component_schema_boundary.md`
+  and `docs/issues/git-repository-decomposed-resources.md` (D1).
 
 ### Validation and Verification
 - CUE structural validation (`pudl validate`)
@@ -206,6 +210,11 @@ Potential future work, roughly ordered by value.
 - Richer action types beyond field-level drift (create, delete, reconcile)
 
 ### More Type Patterns
+- Built-in git-repository schema family: base `pudl/git.#GitRepository` (identity
+  `["name"]`, inline `#GitRemote`/`#GitBranch` components) plus `#GitHubRepository`
+  and `#GitLabRepository` specializations. D1 (component/schema boundary) is done;
+  authoring the CUE is the next step. C1–C4 (fan-out/reconcile for separate child
+  resources) deferred — see `docs/issues/git-repository-decomposed-resources.md`.
 - Azure, GCP, Terraform state files
 - Docker Compose, Helm values, CI/CD pipeline configs
 - User-defined pattern registration
