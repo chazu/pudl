@@ -111,3 +111,67 @@ package mu
 	network?:  bool
 	work_dir?: string
 }
+
+// Target is a fully-specified mu build target, as authored in mu.cue and
+// emitted by `mu target list --json`. Unlike pudl/brick.#Target (a closed
+// classification projection carrying only name/kind/toolchain/config), this
+// mirrors mu's complete target shape: dependency edges, sealed input/output
+// declarations, and inline pith programs (plan/transform).
+//
+// Identity is `target` — mu's own field name for the fully-qualified label
+// ("//path/to/name"), which is globally unique within a project. This is also
+// what distinguishes a mu Target from a brick Target during inference: brick
+// keys on `name`, mu keys on `target`, so a real `mu target list --json`
+// record scores against this schema and not brick's.
+//
+// Build *status* (cached/failed/drifted) is deliberately NOT modeled here:
+// that is a temporal judgement and belongs in the bitemporal fact store, not
+// in the identity-bearing resource. Keeping status out prevents resource_id
+// fragmentation when a target's build outcome changes.
+#Target: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "mu.target"
+		identity_fields: ["target"]
+		tracked_fields:  ["toolchain", "sources", "deps", "config", "sealed_inputs", "sealed_outputs"]
+	}
+
+	// Fully-qualified target label, e.g. "//cmd/mu". Globally unique handle.
+	target: string
+
+	// mu toolchain ("go", "shell", "file", ...). Optional: pith-planned targets
+	// (those carrying a `plan` program) need no toolchain.
+	toolchain?: string
+
+	// Source file paths / globs.
+	sources?: [...string]
+
+	// Target names this depends on.
+	deps?: [...string]
+
+	// Toolchain-specific configuration (opaque here, validated by the mu plugin).
+	config?: {...}
+
+	// Sealed-input declarations: NAME -> "scheme:path" secret ref. Values are
+	// never present in the catalog — only the non-secret refs are recorded.
+	sealed_inputs?: {[string]: string}
+
+	// Per-name sealed-input delivery mode.
+	sealed_input_modes?: {[string]: "env" | "file"}
+
+	// Sealed-output declarations: NAME -> "scheme:path" destination ref.
+	sealed_outputs?: {[string]: string}
+
+	// Inline pith programs (alternatives to / complements of plugin planning).
+	// Opaque arrays here; the program grammar is validated by mu, not pudl.
+	plan?:      [...]
+	transform?: [...]
+
+	// BRICK classification metadata, when present (set by pudl export-actions).
+	kind?:       "relationship" | "interface" | "component" | "kit" | ""
+	implements?: string
+
+	// Open: tolerate forward-compatible fields mu may add to a target.
+	...
+}
+
