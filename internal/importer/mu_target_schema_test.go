@@ -66,6 +66,20 @@ func TestMuTargetInference(t *testing.T) {
 			},
 			want: "pudl/mu.#Target",
 		},
+		{
+			// mu target list --json emits JSON null (not an absent key) for a
+			// target with no sources. The schema must tolerate null on optional
+			// list fields or CUE unification drops #Target as a candidate.
+			label: "sources-null-from-cli",
+			data: map[string]interface{}{
+				"target":             "//inventory/gitlab-repos",
+				"sources":            nil,
+				"sealed_inputs":      map[string]interface{}{"GITLAB_TOKEN": "env:GITLAB_TOKEN"},
+				"sealed_input_modes": map[string]interface{}{"GITLAB_TOKEN": "env"},
+				"plan":               []interface{}{map[string]interface{}{"body": []interface{}{}}},
+			},
+			want: "pudl/mu.#Target",
+		},
 	}
 
 	for _, tc := range cases {

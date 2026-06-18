@@ -49,11 +49,16 @@ package mu
 	_pudl: {
 		schema_type:     "base"
 		resource_type:   "mu.observe"
-		identity_fields: ["target"]
+		// Identity includes `current` (the observed-state payload) so a full
+		// target *definition* — which has no `current` — does not tie with this
+		// fallback observe-record schema during inference. See pudl/mu.#Target.
+		identity_fields: ["target", "current"]
 		tracked_fields:  []
 	}
 
-	target?: string
+	target?:  string
+	current?: {...}
+	error?:   string
 	...
 }
 
@@ -143,14 +148,15 @@ package mu
 	// (those carrying a `plan` program) need no toolchain.
 	toolchain?: string
 
-	// Source file paths / globs.
-	sources?: [...string]
+	// Source file paths / globs. `mu target list --json` emits JSON null (not
+	// an absent key) for a target with no sources, so null is permitted.
+	sources?: [...string] | null
 
-	// Target names this depends on.
-	deps?: [...string]
+	// Target names this depends on. Null permitted for the same reason.
+	deps?: [...string] | null
 
 	// Toolchain-specific configuration (opaque here, validated by the mu plugin).
-	config?: {...}
+	config?: {...} | null
 
 	// Sealed-input declarations: NAME -> "scheme:path" secret ref. Values are
 	// never present in the catalog — only the non-secret refs are recorded.
