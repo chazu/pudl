@@ -20,6 +20,11 @@ import (
 //go:embed schema.cue
 var schemaCUE string
 
+// SchemaCUE returns the canonical #SystemModel schema source (package
+// systemmodel). The importer installs it into the schema repository so
+// `pudl schema list` shows #SystemModel alongside the other built-in schemas.
+func SchemaCUE() string { return schemaCUE }
+
 // SystemModel is the decoded run unit. Orchestration-relevant fields only;
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {

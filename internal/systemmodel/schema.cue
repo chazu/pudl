@@ -8,6 +8,17 @@ package systemmodel
 // V1-narrowed: populate is #PluginObserve | #EweTarget; converge is #PluginPlan
 // only (ewe-converge deferred).
 #SystemModel: {
+	// Catalog classification: a #SystemModel instance is itself a catalog
+	// resource (so `pudl schema list` shows the schema and instances can be
+	// inventoried). Hidden + concrete, so loading/validating an instance never
+	// has to supply it.
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "system_model"
+		identity_fields: ["name"]
+		tracked_fields: ["populate", "desired", "converge", "checks", "plugins"]
+	}
+
 	name: string
 
 	// PLUGINS — the plugins this model's arms reference, declared mu-natively so
