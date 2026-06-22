@@ -16,7 +16,8 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 |-------|------|--------|
 | `#SystemModel` schema + loader | `internal/systemmodel/` | ✅ schema.cue (pudl-owned, embedded); LoadModel/LoadModelFile |
 | CLI contract (`--converge` gate, `--only`, `--dry-run`, `--max-iters`, `--from-catalog`, `--mu-root`) | `cmd/run.go` | ✅ + validateRunFlags |
-| **populate** (inventory observe → ingest) | `cmd/run_populate.go` | ✅ project-embedded (see below); live-tested vs k8s |
+| **populate — plugin-observe** (inventory observe → ingest) | `cmd/run_populate.go` | ✅ project-embedded (see below); live-tested vs k8s |
+| **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.0): `pudl run` → 2 records ingested. Secret reveal proven at the mu level (sealed env input; token absent from output). |
 | **drift — differential** (k8s: desired→sources, plugin diffs) | `cmd/run_drift.go` | ✅ live-tested vs k8s cluster |
 | **drift — inventory** (host: set-diff desired vs catalog records) | `cmd/run_inventory.go` | ✅ via `--from-catalog`; validated vs real catalog (canned records) |
 | **converge loop** (drift→apply→re-observe; converged/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
@@ -50,18 +51,24 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   end-to-end (real `mu observe`/`mu build --plan`).
 - **inventory**: `HOME`-isolated catalog seeded with **canned host records** via
   `pudl mu ingest-observe`, then `pudl run … --from-catalog` → correct missing/changed/clean.
+- **ewe-populate (built 2026-06-22):** the full chain works end-to-end under the
+  real binaries — `pudl run` → render ewe target → `mu build` (executeEwe) →
+  #HttpAll fetch + in-sink secret reveal → records file → wrap → ingest. Released
+  as **ewe v0.1.0 / mu v0.3.0 / pudl v0.3.0**. Validated against a local HTTP
+  fixture (no external infra). See "What's built" above.
 - **Environment limits (why other paths aren't e2e-validated here):** the host
   (odroid `192.168.1.104`) SSH is **unreachable**; **no local inventory observer**
-  (docker not running; aws/terraform need cloud); **ewe runtime unbuilt**. Don't
-  build paths you can't validate — mock at the data layer (canned records) instead.
+  (docker not running; aws/terraform need cloud). Don't build paths you can't
+  validate — mock at the data layer (canned records / local HTTP fixture) instead.
 
 ## Not built (the frontier)
 
-- **ewe-populate** — custom HTTP-fetch observers (examples 3/4/5: TLS/DNS/GitLab).
-  The big one: ~3-repo build (ewe engine fix + `#Secret` + `#HttpAll` + the `ewe`
-  body-kind in mu + the small pudl ingest seam). Designed in `mu/docs/design/system-models/ewe-*-spec.md`
-  + `ewe-populate-spec.md`. **Only needed where no plugin exists** — plugin-based
-  observers (k8s/host/aws…) need zero ewe. Do as a dedicated multi-session push.
+- **secret plugins via a pudl model** — pudl's `#PluginDef` is script/url-only (no
+  `command`), so a `command`-based secret provider (e.g. the `envsecret` Go binary)
+  can't be declared in a model's `plugins:` block. The ewe arm now passes the
+  plugins block through correctly; closing this needs a `command` field on pudl's
+  `#PluginDef` (mirror mu's). Until then, sealed inputs over pudl-driven ewe need a
+  script-based provider (`pass`/`sops`). The reveal mechanism itself is proven.
 - **host.plan** — example 1's converge plugin: complete the `host` plugin's stub
   `plan` op (`mu/plugins/host/main.go:71`); spec: `mu/.../host-converge-spec.md`.
 - **Real converge apply** — wired (`mu build`), not auto-run (mutates live systems).
@@ -77,7 +84,9 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 1. **Catalog status persistence** (§8) — write/read-back the run verdict; no infra.
 2. **Schema-driven identity** for inventory drift — replace the name|path|id
    heuristic with `identity_fields` from the inference graph; validatable vs catalog.
-3. **ewe-populate** — the real frontier; needs dedicated effort + spans repos.
+3. **`command` on pudl `#PluginDef`** — unblocks `command`-based secret/observer
+   plugins in a model; small, validatable with the `envsecret` binary + a local
+   HTTP fixture (the secret-over-pudl ewe dogfood).
 
 ## Repro / smoke commands
 
