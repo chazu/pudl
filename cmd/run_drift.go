@@ -39,16 +39,16 @@ type observeResultRaw struct {
 
 // ResourceDrift is a single drifted resource and why.
 type ResourceDrift struct {
-	Resource string // "Kind/name"
-	Reason   string // "missing" | "changed"
-	Diff     string // present for "changed"
+	Resource string `json:"resource"` // "Kind/name"
+	Reason   string `json:"reason"`   // "missing" | "changed"
+	Diff     string `json:"diff,omitempty"`
 }
 
 // ModelDriftResult is the instance-level drift verdict over a differential
 // observe: clean iff every desired resource exists and matches.
 type ModelDriftResult struct {
-	Clean   bool
-	Drifted []ResourceDrift
+	Clean   bool            `json:"clean"`
+	Drifted []ResourceDrift `json:"drifted,omitempty"`
 }
 
 // interpretDifferentialObserve turns a differential observer's `observe --json`

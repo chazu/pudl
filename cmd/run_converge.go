@@ -53,20 +53,24 @@ const (
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
-func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIters int, dryRun bool) error {
+func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIters int, dryRun bool) (*ConvergeReport, error) {
 	w, err := setupReconcileWorkspace(m, muRoot, modelDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer w.Cleanup()
 
+	live := !jsonOutput // suppress progress chatter when emitting machine JSON
 	var outcome convergeOutcome
+	applies := 0
 	for i := 0; ; i++ {
 		drift, err := w.observeDrift()
 		if err != nil {
-			return err
+			return nil, err
 		}
-		printModelDrift(drift)
+		if live {
+			printModelDrift(drift)
+		}
 
 		if drift.Clean {
 			outcome = outcomeConverged
@@ -75,9 +79,11 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIte
 		if dryRun {
 			plan, err := w.planConverge()
 			if err != nil {
-				return err
+				return nil, err
 			}
-			fmt.Print("\nplan (dry-run — nothing applied):\n", plan)
+			if live {
+				fmt.Print("\nplan (dry-run — nothing applied):\n", plan)
+			}
 			outcome = outcomeDryRun
 			break
 		}
@@ -85,18 +91,23 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIte
 			outcome = outcomeCap
 			break
 		}
-		fmt.Printf("iteration %d: applying converge…\n", i+1)
+		if live {
+			fmt.Printf("iteration %d: applying converge…\n", i+1)
+		}
 		if err := w.applyConverge(); err != nil {
-			fmt.Printf("converge apply failed: %v\n", err)
-			fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
+			if live {
+				fmt.Printf("converge apply failed: %v\n", err)
+				fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
+			}
 			outcome = outcomeExecErr
 			break
 		}
+		applies++
 	}
 
-	fmt.Printf("\nresult: %s\n", outcome)
+	rep := &ConvergeReport{Outcome: string(outcome), Iterations: applies}
 	if outcome == outcomeCap || outcome == outcomeExecErr {
-		return fmt.Errorf("convergence %s", outcome)
+		return rep, fmt.Errorf("convergence %s", outcome)
 	}
-	return nil
+	return rep, nil
 }
