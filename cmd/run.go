@@ -74,28 +74,38 @@ Examples:
 			}
 		}
 
-		// A model with `desired` reconciles via the differential path (the
-		// converge plugin diffs desired-as-sources vs live, §5.5):
-		//   --converge       -> the ACUTE loop (mutates; closes drift)
-		//   bare (read-only) -> observe drift once, flag, don't fire (observe-only)
-		// Without `desired` it's an inventory model: populate -> ingest.
-		switch {
-		case flags.converge && model.Convergent():
+		// Convergence is its own loop (mutates; closes drift) — return early.
+		if flags.converge && model.Convergent() {
 			fmt.Println("\n— converge —")
 			return runConvergeLoop(model, muRoot, modelDir, flags.maxIters, flags.dryRun)
-		case len(model.Desired) > 0:
+		}
+
+		// Observe-only paths. A model with `desired` flags drift via the
+		// differential path (read-only here); without it, inventory populate.
+		if len(model.Desired) > 0 {
 			fmt.Println("\n— drift —")
 			res, err := runDrift(model, muRoot, modelDir)
 			if err != nil {
 				return err
 			}
 			printModelDrift(res)
-		default:
+		} else {
 			fmt.Println("\n— populate —")
 			if err := runPopulate(model, muRoot, modelDir); err != nil {
 				return err
 			}
-			fmt.Println("\n(checks/report not yet implemented)")
+		}
+
+		// CHECK — evaluate the model's Datalog checks over the catalog.
+		if len(model.Checks) > 0 {
+			fmt.Println("\n— checks —")
+			results, err := runChecks(model, modelDir)
+			if err != nil {
+				return err
+			}
+			if printChecks(results) {
+				return fmt.Errorf("one or more fail-severity checks did not pass")
+			}
 		}
 		return nil
 	},
