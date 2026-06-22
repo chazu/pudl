@@ -1,0 +1,75 @@
+package cmd
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/systemmodel"
+)
+
+func TestValidateRunFlags(t *testing.T) {
+	cases := []struct {
+		name    string
+		f       runFlags
+		wantErr string
+	}{
+		{"bare observe", runFlags{}, ""},
+		{"converge alone", runFlags{converge: true, maxIters: 5}, ""},
+		{"only without converge", runFlags{onlySet: true}, "--only requires --converge"},
+		{"dry-run without converge", runFlags{dryRunSet: true}, "--dry-run requires --converge"},
+		{"max-iters without converge", runFlags{maxItersSet: true}, "--max-iters requires --converge"},
+		{"only with converge", runFlags{converge: true, onlySet: true, maxIters: 5}, ""},
+		{"bad max-iters", runFlags{converge: true, maxIters: 0}, "--max-iters must be >= 1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateRunFlags(tc.f)
+			if tc.wantErr == "" {
+				assert.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestBuildRunPlan_ObserveOnly(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name:     "k8s-policy",
+		Populate: systemmodel.Populate{Plugin: "k8s", Input: map[string]any{"namespace": "default"}},
+		Checks:   []systemmodel.Check{{Name: "pdb"}},
+	}
+	plan := buildRunPlan(m, runFlags{})
+	assert.Contains(t, plan, "model:    k8s-policy")
+	assert.Contains(t, plan, "populate: observe (k8s)")
+	assert.Contains(t, plan, "checks:   1")
+	assert.Contains(t, plan, "mode:     observe-only")
+}
+
+func TestBuildRunPlan_ConvergeNoOpWhenNotConvergent(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name:     "k8s-policy",
+		Populate: systemmodel.Populate{Plugin: "k8s"},
+	}
+	// --converge on an observe-only model is a no-op, said so explicitly.
+	plan := buildRunPlan(m, runFlags{converge: true, maxIters: 5})
+	assert.Contains(t, plan, "no-op")
+}
+
+func TestBuildRunPlan_Converge(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name:     "k8s-converge",
+		Populate: systemmodel.Populate{Plugin: "k8s"},
+		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
+	}
+	plan := buildRunPlan(m, runFlags{converge: true, maxIters: 3, dryRun: true, only: []string{"web"}})
+	assert.Contains(t, plan, `converge via "k8s"`)
+	assert.Contains(t, plan, "max-iters 3")
+	assert.Contains(t, plan, "dry-run")
+	assert.Contains(t, plan, "only: web")
+	assert.True(t, strings.Contains(plan, "loop:"), "converge plan should show the loop phase")
+}
