@@ -24,12 +24,34 @@ var schemaCUE string
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {
 	Name      string            `json:"name"`
+	Plugins   []PluginDef       `json:"plugins,omitempty"`
 	Populate  Populate          `json:"populate"`
 	Checks    []Check           `json:"checks,omitempty"`
 	Desired   []map[string]any  `json:"desired,omitempty"`
 	Converge  *PluginPlan       `json:"converge,omitempty"`
 	Freshness *Freshness        `json:"freshness,omitempty"`
 	Vault     map[string]string `json:"vault,omitempty"`
+}
+
+// PluginDef is a plugin source declared in the model, mirroring mu's #PluginDef
+// (one of script / digest / url+sha256). pudl emits these into the generated
+// mu.cue so mu's resolver can find the plugin an arm references by name.
+type PluginDef struct {
+	Name   string `json:"name"`
+	Script string `json:"script,omitempty"`
+	Digest string `json:"digest,omitempty"`
+	URL    string `json:"url,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+// PluginByName returns the declared plugin source for an arm's `plugin:` name.
+func (m *SystemModel) PluginByName(name string) (PluginDef, bool) {
+	for _, p := range m.Plugins {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return PluginDef{}, false
 }
 
 // Populate carries both populate kinds (the #PluginObserve | #EweTarget union);

@@ -13,13 +13,14 @@ import (
 
 func TestRenderPopulateMuCue_K8s(t *testing.T) {
 	m := &systemmodel.SystemModel{
-		Name: "k8s-policy",
+		Name:    "k8s-policy",
+		Plugins: []systemmodel.PluginDef{{Name: "k8s", Script: "/abs/plugins/k8s/plugin.bb"}},
 		Populate: systemmodel.Populate{
 			Plugin: "k8s",
 			Input:  map[string]any{"namespace": "default", "context": "prod"},
 		},
 	}
-	src, err := renderPopulateMuCue(m, "/abs/plugins/k8s/plugin.bb")
+	src, err := renderPopulateMuCue(m)
 	require.NoError(t, err)
 
 	// Must be valid CUE.
@@ -27,7 +28,7 @@ func TestRenderPopulateMuCue_K8s(t *testing.T) {
 	v := ctx.CompileString(src, cue.Filename("mu.cue"))
 	require.NoError(t, v.Err(), "generated mu.cue must compile:\n%s", src)
 
-	// Plugin declared (form-2 local script).
+	// Plugin source passed through from the model's plugins: block.
 	pluginName, err := v.LookupPath(cue.ParsePath("plugins[0].name")).String()
 	require.NoError(t, err)
 	assert.Equal(t, "k8s", pluginName)
@@ -46,12 +47,24 @@ func TestRenderPopulateMuCue_K8s(t *testing.T) {
 func TestRenderPopulateMuCue_EmptyInput(t *testing.T) {
 	m := &systemmodel.SystemModel{
 		Name:     "m",
+		Plugins:  []systemmodel.PluginDef{{Name: "host", Script: "p.bb"}},
 		Populate: systemmodel.Populate{Plugin: "host"},
 	}
-	src, err := renderPopulateMuCue(m, "p.bb")
+	src, err := renderPopulateMuCue(m)
 	require.NoError(t, err)
 	v := cuecontext.New().CompileString(src, cue.Filename("mu.cue"))
 	require.NoError(t, v.Err())
+}
+
+func TestRenderPopulateMuCue_UndeclaredPlugin(t *testing.T) {
+	// arm references a plugin not in the plugins: block -> error.
+	m := &systemmodel.SystemModel{
+		Name:     "m",
+		Populate: systemmodel.Populate{Plugin: "k8s"},
+	}
+	_, err := renderPopulateMuCue(m)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not declared")
 }
 
 func TestRenderPopulateMuCue_RejectsEwe(t *testing.T) {
@@ -59,7 +72,7 @@ func TestRenderPopulateMuCue_RejectsEwe(t *testing.T) {
 		Name:     "m",
 		Populate: systemmodel.Populate{EweSource: "populate.cue"},
 	}
-	_, err := renderPopulateMuCue(m, "p.bb")
+	_, err := renderPopulateMuCue(m)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ewe")
 }

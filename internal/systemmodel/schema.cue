@@ -10,6 +10,13 @@ package systemmodel
 #SystemModel: {
 	name: string
 
+	// PLUGINS — the plugins this model's arms reference, declared mu-natively so
+	// the model is self-contained. Mirrors mu.cue's `plugins:` (#PluginDef): an
+	// arm names a plugin (`plugin: "k8s"`), this block says where it comes from.
+	// pudl passes these straight into the generated mu.cue. Declare once; reuse
+	// across populate + converge.
+	plugins?: [...#PluginDef]
+
 	// schema — definition references the model's records bind to (validation /
 	// catalog binding). Opaque to orchestration; carried, not interpreted here.
 	schema?: [...]
@@ -37,8 +44,21 @@ package systemmodel
 	vault?: {[string]: string}
 }
 
+// #PluginDef — a plugin source, mirroring mu's #PluginDef forms. `name` matches
+// what an arm references via `plugin:`; one of script (local), digest (from the
+// ~/.mu/plugins CAS cache), or url+sha256 (remote) says where it comes from.
+// pudl emits these verbatim into the generated mu.cue.
+#PluginDef: {
+	name:    string & !=""
+	script?: string // local .bb / binary path (relative to the model dir, or abs)
+	digest?: string // content digest, resolved from the mu plugin cache
+	url?:    string // remote bundle
+	sha256?: string // required with url
+}
+
 // #PluginObserve — reuse a shipped observer plugin (the `host`/`k8s` case). Its
-// observe op runs and its output is ingested as the live side.
+// observe op runs and its output is ingested as the live side. `plugin` names a
+// #PluginDef declared in the model's `plugins:` block.
 #PluginObserve: {
 	plugin: string
 	input: {...}
