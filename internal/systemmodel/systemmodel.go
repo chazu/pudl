@@ -138,7 +138,48 @@ func LoadModel(src []byte, name string) (*SystemModel, error) {
 	if m.Name == "" {
 		return nil, fmt.Errorf("model %q has no name", name)
 	}
+
+	// Decode drops CUE hidden fields, so `desired` records lose their `_schema`
+	// tag (D4). Re-extract desired with hidden fields included so identity (the
+	// schema + key) survives.
+	desired, err := decodeDesired(inst)
+	if err != nil {
+		return nil, fmt.Errorf("decode desired for %q: %w", name, err)
+	}
+	if desired != nil {
+		m.Desired = desired
+	}
 	return &m, nil
+}
+
+// decodeDesired extracts the `desired` list with hidden fields (e.g. `_schema`)
+// preserved — Decode alone drops them.
+func decodeDesired(inst cue.Value) ([]map[string]any, error) {
+	dv := inst.LookupPath(cue.ParsePath("desired"))
+	if !dv.Exists() {
+		return nil, nil
+	}
+	iter, err := dv.List()
+	if err != nil {
+		return nil, err
+	}
+	var out []map[string]any
+	for iter.Next() {
+		rec := map[string]any{}
+		fields, err := iter.Value().Fields(cue.Hidden(true), cue.Optional(true))
+		if err != nil {
+			return nil, err
+		}
+		for fields.Next() {
+			var val any
+			if err := fields.Value().Decode(&val); err != nil {
+				return nil, err
+			}
+			rec[fields.Selector().String()] = val
+		}
+		out = append(out, rec)
+	}
+	return out, nil
 }
 
 // LoadModelFile reads a model file and loads the named instance from it.
