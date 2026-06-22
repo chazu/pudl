@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 //go:embed bootstrap
@@ -20,7 +22,7 @@ func CopyBootstrapSchemas(schemaPath string) error {
 // copyBootstrapSchemasTo copies bootstrap CUE schema files to the specified directory
 func copyBootstrapSchemasTo(schemaPath string) error {
 	// Walk the embedded bootstrap schemas and copy them to the schema path
-	return fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
+	if err := fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -54,7 +56,18 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 
 		// Write to target
 		return os.WriteFile(targetPath, content, 0644)
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Install the #SystemModel schema (single-sourced from the systemmodel
+	// package, which also uses it to load/validate instances) so it shows up in
+	// `pudl schema list` alongside the other built-ins.
+	smDir := filepath.Join(schemaPath, "pudl", "systemmodel")
+	if err := os.MkdirAll(smDir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(smDir, "systemmodel.cue"), []byte(systemmodel.SchemaCUE()), 0644)
 }
 
 // BootstrapPackages returns the set of package paths (e.g. "pudl/core") that
@@ -69,6 +82,9 @@ func BootstrapPackages() map[string]bool {
 		packages[rel] = true
 		return nil
 	})
+	// Installed programmatically (single-sourced from the systemmodel package),
+	// not from the embedded bootstrap tree — but still a built-in.
+	packages["pudl/systemmodel"] = true
 	return packages
 }
 
@@ -111,6 +127,7 @@ func (i *Importer) ensureBasicSchemas() error {
 		filepath.Join(i.schemaPath, "pudl", "brick", "brick.cue"),
 		filepath.Join(i.schemaPath, "pudl", "linux", "linux.cue"),
 		filepath.Join(i.schemaPath, "pudl", "dlktk", "dlktk.cue"),
+		filepath.Join(i.schemaPath, "pudl", "systemmodel", "systemmodel.cue"),
 	}
 	for _, checkPath := range bootstrapChecks {
 		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
