@@ -189,6 +189,15 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, muRoot, modelDir string)
 
 	var b strings.Builder
 	b.WriteString("package mu\n\n")
+	// Emit the model's plugins block (paths absolutized) so secret-provider
+	// plugins are available to resolve sealed-input refs (env:/pass:/sops:).
+	if len(m.Plugins) > 0 {
+		pluginsJSON, err := json.Marshal(absolutizePlugins(m.Plugins, modelDir))
+		if err != nil {
+			return "", fmt.Errorf("marshal plugins: %w", err)
+		}
+		fmt.Fprintf(&b, "plugins: %s\n\n", pluginsJSON)
+	}
 	b.WriteString("targets: [{\n")
 	fmt.Fprintf(&b, "\ttarget: %q\n", populateTargetName(m.Name))
 	if len(p.SealedInputs) > 0 {
