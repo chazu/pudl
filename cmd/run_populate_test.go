@@ -128,3 +128,25 @@ func TestRenderEwePopulateMuCue_EscapeRejected(t *testing.T) {
 	_, err := renderEwePopulateMuCue(m, "/proj", "/proj/models/x")
 	require.Error(t, err)
 }
+
+func TestRenderEwePopulateMuCue_CommandPlugin(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name:    "gitlab",
+		Plugins: []systemmodel.PluginDef{{Name: "env", Command: []string{"/abs/envsecret"}}},
+		Populate: systemmodel.Populate{
+			EweSource:    "populate.cue",
+			Outputs:      []string{"repos.json"},
+			SealedInputs: map[string]string{"GITLAB_TOKEN": "env:GITLAB_TOKEN"},
+		},
+	}
+	src, err := renderEwePopulateMuCue(m, "/proj", "/proj/models/gitlab")
+	require.NoError(t, err)
+
+	ctx := cuecontext.New()
+	v := ctx.CompileString(src, cue.Filename("mu.cue"))
+	require.NoError(t, v.Err(), "generated mu.cue must compile:\n%s", src)
+
+	cmd0, err := v.LookupPath(cue.ParsePath("plugins[0].command[0]")).String()
+	require.NoError(t, err)
+	assert.Equal(t, "/abs/envsecret", cmd0)
+}

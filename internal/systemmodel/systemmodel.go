@@ -37,11 +37,12 @@ type SystemModel struct {
 // (one of script / digest / url+sha256). pudl emits these into the generated
 // mu.cue so mu's resolver can find the plugin an arm references by name.
 type PluginDef struct {
-	Name   string `json:"name"`
-	Script string `json:"script,omitempty"`
-	Digest string `json:"digest,omitempty"`
-	URL    string `json:"url,omitempty"`
-	SHA256 string `json:"sha256,omitempty"`
+	Name    string   `json:"name"`
+	Command []string `json:"command,omitempty"`
+	Script  string   `json:"script,omitempty"`
+	Digest  string   `json:"digest,omitempty"`
+	URL     string   `json:"url,omitempty"`
+	SHA256  string   `json:"sha256,omitempty"`
 }
 
 // PluginByName returns the declared plugin source for an arm's `plugin:` name.
