@@ -77,12 +77,14 @@ func interpretDifferentialObserve(observeJSON []byte) (ModelDriftResult, error) 
 	return ModelDriftResult{Clean: len(drifted) == 0, Drifted: drifted}, nil
 }
 
-// renderDriftMuCue emits a mu.cue that observes the converge plugin with the
-// model's desired rendered to sources (the §5.5 apply path: pudl routes desired
-// to the plugin, the plugin diffs vs live). manifestPaths are absolute.
-func renderDriftMuCue(m *systemmodel.SystemModel, manifestPaths []string) (string, error) {
+// renderReconcileMuCue emits a mu.cue with one converge-plugin target whose
+// sources are the model's desired (rendered as manifests). The SAME target
+// serves both `mu observe` (drift) and `mu build` (converge) — the §5.5 apply
+// path. manifestNames are bare filenames (the manifests sit beside this mu.cue;
+// mu resolves sources relative to the package dir, for both observe and build).
+func renderReconcileMuCue(m *systemmodel.SystemModel, manifestNames []string) (string, error) {
 	if !m.Convergent() {
-		return "", fmt.Errorf("renderDriftMuCue: model has no converge arm")
+		return "", fmt.Errorf("renderReconcileMuCue: model has no converge arm")
 	}
 	plugin := m.Converge.Plugin
 	if _, ok := m.PluginByName(plugin); !ok {
@@ -92,7 +94,7 @@ func renderDriftMuCue(m *systemmodel.SystemModel, manifestPaths []string) (strin
 	if err != nil {
 		return "", fmt.Errorf("marshal plugins: %w", err)
 	}
-	srcJSON, err := json.Marshal(manifestPaths)
+	srcJSON, err := json.Marshal(manifestNames)
 	if err != nil {
 		return "", fmt.Errorf("marshal sources: %w", err)
 	}
@@ -118,59 +120,88 @@ func renderDriftMuCue(m *systemmodel.SystemModel, manifestPaths []string) (strin
 }
 
 // writeDesiredManifests writes each desired entry as a JSON manifest file in dir
-// (JSON is valid input for k8s' source parser) and returns their absolute paths.
+// (JSON is valid input for k8s' source parser) and returns their bare filenames
+// (sources resolve relative to the mu.cue's dir, which is dir).
 func writeDesiredManifests(desired []map[string]any, dir string) ([]string, error) {
-	var paths []string
+	var names []string
 	for i, d := range desired {
 		data, err := json.MarshalIndent(d, "", "  ")
 		if err != nil {
 			return nil, fmt.Errorf("marshal desired[%d]: %w", i, err)
 		}
-		p := filepath.Join(dir, fmt.Sprintf("desired_%d.json", i))
-		if err := os.WriteFile(p, data, 0o644); err != nil {
+		name := fmt.Sprintf("desired_%d.json", i)
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
 			return nil, fmt.Errorf("write desired[%d]: %w", i, err)
 		}
-		paths = append(paths, p)
+		names = append(names, name)
 	}
-	return paths, nil
+	return names, nil
 }
 
-// runDrift executes the drift phase for a convergent model: render desired to
-// sources, observe the converge plugin (which diffs desired vs live), and
-// interpret the result. Differential observers (k8s) do the diff; pudl reads the
-// verdict. Returns the model-level drift result.
-func runDrift(m *systemmodel.SystemModel, muRoot, modelDir string) (ModelDriftResult, error) {
+// reconcileWorkspace is a prepared temp mu project (under muRoot) with the
+// desired manifests + a converge-plugin target. Both observe (drift) and build
+// (converge) run against Target. Call Cleanup when done.
+type reconcileWorkspace struct {
+	MuRoot  string
+	Target  string
+	Cleanup func()
+}
+
+// setupReconcileWorkspace renders the desired manifests + mu.cue into a
+// non-hidden temp subdir under muRoot (so mu merges it and inherits the project's
+// toolchains/cache).
+func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir string) (*reconcileWorkspace, error) {
 	if len(m.Desired) == 0 {
-		return ModelDriftResult{}, fmt.Errorf("drift needs desired state; model %q declares none", m.Name)
+		return nil, fmt.Errorf("reconcile needs desired state; model %q declares none", m.Name)
 	}
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
 
 	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
 	if err != nil {
-		return ModelDriftResult{}, fmt.Errorf("create drift workspace: %w", err)
+		return nil, fmt.Errorf("create reconcile workspace: %w", err)
 	}
-	defer os.RemoveAll(dir)
-
-	manifestPaths, err := writeDesiredManifests(m.Desired, dir)
+	names, err := writeDesiredManifests(m.Desired, dir)
 	if err != nil {
-		return ModelDriftResult{}, err
+		os.RemoveAll(dir)
+		return nil, err
 	}
-	src, err := renderDriftMuCue(&rm, manifestPaths)
+	src, err := renderReconcileMuCue(&rm, names)
 	if err != nil {
-		return ModelDriftResult{}, err
+		os.RemoveAll(dir)
+		return nil, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
-		return ModelDriftResult{}, fmt.Errorf("write drift mu.cue: %w", err)
+		os.RemoveAll(dir)
+		return nil, fmt.Errorf("write reconcile mu.cue: %w", err)
 	}
+	return &reconcileWorkspace{
+		MuRoot:  muRoot,
+		Target:  driftTargetName(m.Name),
+		Cleanup: func() { os.RemoveAll(dir) },
+	}, nil
+}
 
-	target := driftTargetName(m.Name)
-	cmd := exec.Command("mu", "observe", "--config", filepath.Join(muRoot, "mu.cue"), "--json", target)
+// observeDrift runs `mu observe` against the workspace target and interprets the
+// differential result.
+func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
+	cmd := exec.Command("mu", "observe", "--config", filepath.Join(w.MuRoot, "mu.cue"), "--json", w.Target)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return ModelDriftResult{}, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
+		return ModelDriftResult{}, fmt.Errorf("mu observe %s: %w: %s", w.Target, err, strings.TrimSpace(stderr.String()))
 	}
 	return interpretDifferentialObserve(stdout.Bytes())
+}
+
+// runDrift is the read-only drift phase (observe-only on a convergent model):
+// set up the workspace, observe once, report.
+func runDrift(m *systemmodel.SystemModel, muRoot, modelDir string) (ModelDriftResult, error) {
+	w, err := setupReconcileWorkspace(m, muRoot, modelDir)
+	if err != nil {
+		return ModelDriftResult{}, err
+	}
+	defer w.Cleanup()
+	return w.observeDrift()
 }
