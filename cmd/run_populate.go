@@ -111,23 +111,23 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) error {
+func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*PopulateReport, error) {
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
 	src, err := renderPopulateMuCue(&rm)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Non-hidden temp subdir under the project root so mergeSubdirConfigs picks
 	// it up (it skips hidden dirs, mu/internal/config/loader.go:105).
 	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
 	if err != nil {
-		return fmt.Errorf("create populate workspace: %w", err)
+		return nil, fmt.Errorf("create populate workspace: %w", err)
 	}
 	defer os.RemoveAll(dir)
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
-		return fmt.Errorf("write populate mu.cue: %w", err)
+		return nil, fmt.Errorf("write populate mu.cue: %w", err)
 	}
 
 	target := populateTargetName(m.Name)
@@ -136,15 +136,14 @@ func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) error {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
 	}
 
 	count, err := ingestObserveOutput(stdout.Bytes())
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Printf("populate: observed %s, ingested %d record(s)\n", target, count)
-	return nil
+	return &PopulateReport{Target: target, Records: count}, nil
 }
 
 // ingestObserveOutput feeds `mu observe --json` output into the catalog as

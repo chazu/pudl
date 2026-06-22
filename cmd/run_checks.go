@@ -14,12 +14,12 @@ import (
 // CheckResult is the outcome of one model check (a Datalog relation evaluated
 // over the catalog, asserted empty/nonempty).
 type CheckResult struct {
-	Name     string
-	Query    string
-	Severity string
-	Count    int
-	Passed   bool
-	Message  string
+	Name     string `json:"name"`
+	Query    string `json:"query"`
+	Severity string `json:"severity"`
+	Count    int    `json:"count"`
+	Passed   bool   `json:"passed"`
+	Message  string `json:"message,omitempty"`
 }
 
 // checkPasses is the pure expect-vs-count verdict: "empty" passes on no tuples,
