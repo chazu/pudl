@@ -1,10 +1,18 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -60,4 +68,102 @@ func renderPopulateMuCue(m *systemmodel.SystemModel) (string, error) {
 	fmt.Fprintf(&b, "\tconfig:    %s\n", cfgJSON)
 	b.WriteString("}]\n")
 	return b.String(), nil
+}
+
+// absolutizePlugins resolves each plugin's relative `script` path against baseDir
+// (the model file's directory). mu resolves a per-package mu.cue's plugin script
+// relative to that package dir; emitting absolute paths makes the generated
+// config location-independent (verified: relative paths resolve against the
+// merged subdir, absolute paths just work).
+func absolutizePlugins(plugins []systemmodel.PluginDef, baseDir string) []systemmodel.PluginDef {
+	out := make([]systemmodel.PluginDef, len(plugins))
+	for i, p := range plugins {
+		if p.Script != "" && !filepath.IsAbs(p.Script) {
+			p.Script = filepath.Join(baseDir, p.Script)
+		}
+		out[i] = p
+	}
+	return out
+}
+
+// findMuRoot walks up from startDir for a directory containing mu.cue (mu's
+// project-root convention, mu/internal/config/loader.go:30).
+func findMuRoot(startDir string) (string, error) {
+	dir, err := filepath.Abs(startDir)
+	if err != nil {
+		return "", err
+	}
+	for {
+		if st, err := os.Stat(filepath.Join(dir, "mu.cue")); err == nil && !st.IsDir() {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no mu.cue in %s or any parent (set --mu-root)", startDir)
+		}
+		dir = parent
+	}
+}
+
+// runPopulate executes the populate phase: render a per-package mu.cue under the
+// mu project root, run `mu observe --json` (inheriting the project's toolchains
+// and cache), and ingest the result as catalog observe entries.
+//
+// muRoot is the mu project to run within (B: project-embedded). modelDir is the
+// model file's directory, the base for resolving relative plugin scripts.
+func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) error {
+	rm := *m
+	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
+	src, err := renderPopulateMuCue(&rm)
+	if err != nil {
+		return err
+	}
+
+	// Non-hidden temp subdir under the project root so mergeSubdirConfigs picks
+	// it up (it skips hidden dirs, mu/internal/config/loader.go:105).
+	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
+	if err != nil {
+		return fmt.Errorf("create populate workspace: %w", err)
+	}
+	defer os.RemoveAll(dir)
+	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
+		return fmt.Errorf("write populate mu.cue: %w", err)
+	}
+
+	target := populateTargetName(m.Name)
+	cmd := exec.Command("mu", "observe", "--config", filepath.Join(muRoot, "mu.cue"), "--json", target)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
+	}
+
+	count, err := ingestObserveOutput(stdout.Bytes())
+	if err != nil {
+		return err
+	}
+	fmt.Printf("populate: observed %s, ingested %d record(s)\n", target, count)
+	return nil
+}
+
+// ingestObserveOutput feeds `mu observe --json` output into the catalog as
+// observe entries, reusing the shipped IngestObserveResults (the same path
+// `pudl mu ingest-observe` uses).
+func ingestObserveOutput(observeJSON []byte) (int, error) {
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return 0, fmt.Errorf("open catalog: %w", err)
+	}
+	defer db.Close()
+
+	cfg, err := config.Load()
+	if err != nil {
+		return 0, fmt.Errorf("load config: %w", err)
+	}
+	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	if err != nil {
+		return 0, fmt.Errorf("init schema inferrer: %w", err)
+	}
+	return mubridge.IngestObserveResults(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph())
 }
