@@ -63,7 +63,10 @@ Examples:
 			return fmt.Errorf("load model: %w", err)
 		}
 
-		fmt.Print(buildRunPlan(model, flags))
+		live := !jsonOutput
+		if live {
+			fmt.Print(buildRunPlan(model, flags))
+		}
 
 		modelDir := filepath.Dir(file)
 		muRoot := runMuRoot
@@ -74,41 +77,75 @@ Examples:
 			}
 		}
 
-		// Convergence is its own loop (mutates; closes drift) — return early.
-		if flags.converge && model.Convergent() {
-			fmt.Println("\n— converge —")
-			return runConvergeLoop(model, muRoot, modelDir, flags.maxIters, flags.dryRun)
+		report := &RunReport{Model: model.Name, OK: true}
+		var runErr error
+
+		switch {
+		case flags.converge && model.Convergent():
+			report.Mode = "converge"
+			if flags.dryRun {
+				report.Mode = "dry-run"
+			}
+			if live {
+				fmt.Println("\n— converge —")
+			}
+			cr, err := runConvergeLoop(model, muRoot, modelDir, flags.maxIters, flags.dryRun)
+			report.Converge = cr
+			if err != nil {
+				report.OK = false
+				runErr = err
+			}
+
+		default:
+			report.Mode = "observe-only"
+			// A model with `desired` flags drift via the differential path
+			// (read-only); without it, inventory populate.
+			if len(model.Desired) > 0 {
+				res, err := runDrift(model, muRoot, modelDir)
+				if err != nil {
+					return err
+				}
+				report.Drift = &res
+			} else {
+				pr, err := runPopulate(model, muRoot, modelDir)
+				if err != nil {
+					return err
+				}
+				report.Populate = pr
+			}
+			if len(model.Checks) > 0 {
+				results, err := runChecks(model, modelDir)
+				if err != nil {
+					return err
+				}
+				report.Checks = results
+				if anyFailSeverityFailed(results) {
+					report.OK = false
+					runErr = fmt.Errorf("one or more fail-severity checks did not pass")
+				}
+			}
 		}
 
-		// Observe-only paths. A model with `desired` flags drift via the
-		// differential path (read-only here); without it, inventory populate.
-		if len(model.Desired) > 0 {
-			fmt.Println("\n— drift —")
-			res, err := runDrift(model, muRoot, modelDir)
-			if err != nil {
-				return err
-			}
-			printModelDrift(res)
-		} else {
-			fmt.Println("\n— populate —")
-			if err := runPopulate(model, muRoot, modelDir); err != nil {
-				return err
-			}
+		out, err := report.render(jsonOutput)
+		if err != nil {
+			return err
 		}
-
-		// CHECK — evaluate the model's Datalog checks over the catalog.
-		if len(model.Checks) > 0 {
-			fmt.Println("\n— checks —")
-			results, err := runChecks(model, modelDir)
-			if err != nil {
-				return err
-			}
-			if printChecks(results) {
-				return fmt.Errorf("one or more fail-severity checks did not pass")
-			}
+		if live {
+			fmt.Print("\n")
 		}
-		return nil
+		fmt.Print(out)
+		return runErr
 	},
+}
+
+// anyFailSeverityFailed reports whether any severity:"fail" check did not pass.
+func anyFailSeverityFailed(results []CheckResult) bool {
+	for _, c := range results {
+		if !c.Passed && c.Severity == "fail" {
+			return true
+		}
+	}
+	return false
 }
 
 // printModelDrift renders a model-level drift verdict.
