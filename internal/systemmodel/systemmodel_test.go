@@ -11,6 +11,7 @@ import (
 const k8sObserveModel = `
 k8sPolicy: #SystemModel & {
 	name: "k8s-policy"
+	plugins: [{name: "k8s", script: "./plugins/k8s/plugin.bb"}]
 	populate: #PluginObserve & {
 		plugin: "k8s"
 		input: {namespace: "default", context: "prod"}
@@ -48,6 +49,12 @@ func TestLoadModel_ObserveOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "k8s-policy", m.Name)
+
+	// plugins: block decodes; the arm's plugin resolves to a declared source.
+	require.Len(t, m.Plugins, 1)
+	def, ok := m.PluginByName("k8s")
+	require.True(t, ok)
+	assert.Equal(t, "./plugins/k8s/plugin.bb", def.Script)
 
 	// populate dispatches to the observe arm.
 	assert.Equal(t, KindPluginObserve, m.Populate.Kind())
