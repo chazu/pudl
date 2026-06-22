@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 
 var (
 	runFile     string
+	runMuRoot   string
 	runConverge bool
 	runOnly     []string
 	runDryRun   bool
@@ -63,11 +65,23 @@ Examples:
 
 		fmt.Print(buildRunPlan(model, flags))
 
-		// Phase execution (populate -> drift -> checks -> report, then the
-		// converge loop) is the next build slice. It needs the mu-config
-		// consumption path grounded first (does `mu observe` read the MuConfig
-		// pudl emits, and how are targets named) before any exec is wired.
-		return fmt.Errorf("phase execution not yet implemented (plan shown above)")
+		modelDir := filepath.Dir(file)
+		muRoot := runMuRoot
+		if muRoot == "" {
+			muRoot, err = findMuRoot(modelDir)
+			if err != nil {
+				return err
+			}
+		}
+
+		fmt.Println("\n— populate —")
+		if err := runPopulate(model, muRoot, modelDir); err != nil {
+			return err
+		}
+
+		// drift -> checks -> report (and the converge loop) are the next slices.
+		fmt.Println("\n(drift/checks/report not yet implemented)")
+		return nil
 	},
 }
 
@@ -152,6 +166,7 @@ func populateRef(p systemmodel.Populate) string {
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringVar(&runFile, "file", "", "model source file (default: models/<model>.cue)")
+	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
 	runCmd.Flags().BoolVar(&runConverge, "converge", false, "opt into the convergence loop (mutates the target)")
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these definitions (requires --converge)")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
