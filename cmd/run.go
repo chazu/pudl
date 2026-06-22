@@ -7,16 +7,19 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 var (
-	runFile     string
-	runMuRoot   string
-	runConverge bool
-	runOnly     []string
-	runDryRun   bool
-	runMaxIters int
+	runFile        string
+	runMuRoot      string
+	runConverge    bool
+	runOnly        []string
+	runDryRun      bool
+	runMaxIters    int
+	runFromCatalog bool
 )
 
 var runCmd = &cobra.Command{
@@ -41,10 +44,11 @@ Examples:
 		name := args[0]
 
 		flags := runFlags{
-			converge: runConverge,
-			only:     runOnly,
-			dryRun:   runDryRun,
-			maxIters: runMaxIters,
+			converge:    runConverge,
+			only:        runOnly,
+			dryRun:      runDryRun,
+			maxIters:    runMaxIters,
+			fromCatalog: runFromCatalog,
 			// whether a convergence flag was explicitly set (for the gate rules)
 			onlySet:     cmd.Flags().Changed("only"),
 			dryRunSet:   cmd.Flags().Changed("dry-run"),
@@ -69,8 +73,10 @@ Examples:
 		}
 
 		modelDir := filepath.Dir(file)
+		// --from-catalog drifts over already-ingested records — no live observe,
+		// so no mu project needed. Every other path runs mu.
 		muRoot := runMuRoot
-		if muRoot == "" {
+		if muRoot == "" && !flags.fromCatalog {
 			muRoot, err = findMuRoot(modelDir)
 			if err != nil {
 				return err
@@ -95,6 +101,24 @@ Examples:
 				report.OK = false
 				runErr = err
 			}
+
+		case flags.fromCatalog:
+			// Inventory drift over already-ingested records (host-style): no live
+			// observe — set-diff the model's desired vs what's in the catalog.
+			report.Mode = "observe-only (from-catalog)"
+			if len(model.Desired) == 0 {
+				return fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
+			}
+			db, err := database.NewCatalogDB(config.GetPudlDir())
+			if err != nil {
+				return fmt.Errorf("open catalog: %w", err)
+			}
+			defer db.Close()
+			res, err := runInventoryDrift(db, "", model.Desired)
+			if err != nil {
+				return err
+			}
+			report.Drift = &res
 
 		default:
 			report.Mode = "observe-only"
@@ -166,10 +190,11 @@ func printModelDrift(r ModelDriftResult) {
 
 // runFlags is the validated CLI surface for `pudl run`.
 type runFlags struct {
-	converge bool
-	only     []string
-	dryRun   bool
-	maxIters int
+	converge    bool
+	only        []string
+	dryRun      bool
+	maxIters    int
+	fromCatalog bool
 
 	onlySet     bool
 	dryRunSet   bool
@@ -250,4 +275,5 @@ func init() {
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these definitions (requires --converge)")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
 	runCmd.Flags().IntVar(&runMaxIters, "max-iters", 5, "loop iteration cap (requires --converge)")
+	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe)")
 }
