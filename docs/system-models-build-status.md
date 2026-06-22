@@ -17,7 +17,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 | `#SystemModel` schema + loader | `internal/systemmodel/` | ✅ schema.cue (pudl-owned, embedded); LoadModel/LoadModelFile |
 | CLI contract (`--converge` gate, `--only`, `--dry-run`, `--max-iters`, `--from-catalog`, `--mu-root`) | `cmd/run.go` | ✅ + validateRunFlags |
 | **populate — plugin-observe** (inventory observe → ingest) | `cmd/run_populate.go` | ✅ project-embedded (see below); live-tested vs k8s |
-| **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.0): `pudl run` → 2 records ingested. Secret reveal proven at the mu level (sealed env input; token absent from output). |
+| **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.1): `pudl run` → 2 records ingested, incl. a **sealed env secret** revealed in-sink for an auth-required endpoint (via a `command`-based `envsecret` plugin declared in the model). |
 | **drift — differential** (k8s: desired→sources, plugin diffs) | `cmd/run_drift.go` | ✅ live-tested vs k8s cluster |
 | **drift — inventory** (host: set-diff desired vs catalog records) | `cmd/run_inventory.go` | ✅ via `--from-catalog`; validated vs real catalog (canned records) |
 | **converge loop** (drift→apply→re-observe; converged/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
@@ -63,12 +63,6 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 
 ## Not built (the frontier)
 
-- **secret plugins via a pudl model** — pudl's `#PluginDef` is script/url-only (no
-  `command`), so a `command`-based secret provider (e.g. the `envsecret` Go binary)
-  can't be declared in a model's `plugins:` block. The ewe arm now passes the
-  plugins block through correctly; closing this needs a `command` field on pudl's
-  `#PluginDef` (mirror mu's). Until then, sealed inputs over pudl-driven ewe need a
-  script-based provider (`pass`/`sops`). The reveal mechanism itself is proven.
 - **host.plan** — example 1's converge plugin: complete the `host` plugin's stub
   `plan` op (`mu/plugins/host/main.go:71`); spec: `mu/.../host-converge-spec.md`.
 - **Real converge apply** — wired (`mu build`), not auto-run (mutates live systems).
@@ -84,9 +78,8 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 1. **Catalog status persistence** (§8) — write/read-back the run verdict; no infra.
 2. **Schema-driven identity** for inventory drift — replace the name|path|id
    heuristic with `identity_fields` from the inference graph; validatable vs catalog.
-3. **`command` on pudl `#PluginDef`** — unblocks `command`-based secret/observer
-   plugins in a model; small, validatable with the `envsecret` binary + a local
-   HTTP fixture (the secret-over-pudl ewe dogfood).
+3. **host.plan** — complete the `host` plugin's stub plan op for example 1's
+   converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
 
 ## Repro / smoke commands
 

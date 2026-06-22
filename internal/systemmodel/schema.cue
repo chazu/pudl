@@ -45,15 +45,17 @@ package systemmodel
 }
 
 // #PluginDef — a plugin source, mirroring mu's #PluginDef forms. `name` matches
-// what an arm references via `plugin:`; one of script (local), digest (from the
-// ~/.mu/plugins CAS cache), or url+sha256 (remote) says where it comes from.
-// pudl emits these verbatim into the generated mu.cue.
+// what an arm references via `plugin:`; one of command (run this argv directly),
+// script (local source, built/cached), digest (from the ~/.mu/plugins CAS
+// cache), or url+sha256 (remote) says where it comes from. pudl emits these
+// verbatim into the generated mu.cue.
 #PluginDef: {
-	name:    string & !=""
-	script?: string // local .bb / binary path (relative to the model dir, or abs)
-	digest?: string // content digest, resolved from the mu plugin cache
-	url?:    string // remote bundle
-	sha256?: string // required with url
+	name:     string & !=""
+	command?: [...string] // run this argv directly (e.g. ["bb", "p.bb"] or ["/abs/binary"])
+	script?:  string      // local .bb / binary path (relative to the model dir, or abs)
+	digest?:  string      // content digest, resolved from the mu plugin cache
+	url?:     string      // remote bundle
+	sha256?:  string      // required with url
 }
 
 // #PluginObserve — reuse a shipped observer plugin (the `host`/`k8s` case). Its
