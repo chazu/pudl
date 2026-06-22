@@ -74,18 +74,23 @@ Examples:
 			}
 		}
 
-		// A model with `desired` drifts via the differential path (the converge
-		// plugin diffs desired-as-sources vs live, §5.5). Without `desired` it's
-		// an inventory model: populate -> ingest (drift-vs-desired N/A; checks
-		// flag, a later slice).
-		if len(model.Desired) > 0 {
+		// A model with `desired` reconciles via the differential path (the
+		// converge plugin diffs desired-as-sources vs live, §5.5):
+		//   --converge       -> the ACUTE loop (mutates; closes drift)
+		//   bare (read-only) -> observe drift once, flag, don't fire (observe-only)
+		// Without `desired` it's an inventory model: populate -> ingest.
+		switch {
+		case flags.converge && model.Convergent():
+			fmt.Println("\n— converge —")
+			return runConvergeLoop(model, muRoot, modelDir, flags.maxIters, flags.dryRun)
+		case len(model.Desired) > 0:
 			fmt.Println("\n— drift —")
 			res, err := runDrift(model, muRoot, modelDir)
 			if err != nil {
 				return err
 			}
 			printModelDrift(res)
-		} else {
+		default:
 			fmt.Println("\n— populate —")
 			if err := runPopulate(model, muRoot, modelDir); err != nil {
 				return err
