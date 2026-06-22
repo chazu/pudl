@@ -74,15 +74,42 @@ Examples:
 			}
 		}
 
-		fmt.Println("\n— populate —")
-		if err := runPopulate(model, muRoot, modelDir); err != nil {
-			return err
+		// A model with `desired` drifts via the differential path (the converge
+		// plugin diffs desired-as-sources vs live, §5.5). Without `desired` it's
+		// an inventory model: populate -> ingest (drift-vs-desired N/A; checks
+		// flag, a later slice).
+		if len(model.Desired) > 0 {
+			fmt.Println("\n— drift —")
+			res, err := runDrift(model, muRoot, modelDir)
+			if err != nil {
+				return err
+			}
+			printModelDrift(res)
+		} else {
+			fmt.Println("\n— populate —")
+			if err := runPopulate(model, muRoot, modelDir); err != nil {
+				return err
+			}
+			fmt.Println("\n(checks/report not yet implemented)")
 		}
-
-		// drift -> checks -> report (and the converge loop) are the next slices.
-		fmt.Println("\n(drift/checks/report not yet implemented)")
 		return nil
 	},
+}
+
+// printModelDrift renders a model-level drift verdict.
+func printModelDrift(r ModelDriftResult) {
+	if r.Clean {
+		fmt.Println("drift: ∅ (converged — all desired resources exist and match)")
+		return
+	}
+	fmt.Printf("drift: %d resource(s)\n", len(r.Drifted))
+	for _, d := range r.Drifted {
+		if d.Diff != "" {
+			fmt.Printf("  ~ %s (%s): %s\n", d.Resource, d.Reason, d.Diff)
+		} else {
+			fmt.Printf("  ~ %s (%s)\n", d.Resource, d.Reason)
+		}
+	}
 }
 
 // runFlags is the validated CLI surface for `pudl run`.
