@@ -61,9 +61,12 @@ type Populate struct {
 	Plugin string         `json:"plugin,omitempty"`
 	Input  map[string]any `json:"input,omitempty"`
 	// #EweTarget
-	EweSource string   `json:"eweSource,omitempty"`
-	Outputs   []string `json:"outputs,omitempty"`
-	Network   bool     `json:"network,omitempty"`
+	EweSource        string            `json:"eweSource,omitempty"`
+	Outputs          []string          `json:"outputs,omitempty"`
+	Network          bool              `json:"network,omitempty"`
+	Impure           bool              `json:"impure,omitempty"`
+	SealedInputs     map[string]string `json:"sealed_inputs,omitempty"`
+	SealedInputModes map[string]string `json:"sealed_input_modes,omitempty"`
 }
 
 // PopulateKind enumerates the populate union arms.

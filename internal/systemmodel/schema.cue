@@ -65,7 +65,14 @@ package systemmodel
 }
 
 // #EweTarget — a custom ewe fetch program (the GitLab case). See
-// ewe-populate-spec.md. (Schema present for the union; ewe internals unbuilt.)
+// ewe-populate-spec.md. `pudl run` renders a mu target with an inline plan that
+// emits an `ewe`-body action, runs `mu build`, then wraps each declared output
+// (a records array) as an ObserveResult and ingests it (ewe-populate-spec §3).
+//
+// Convention: each emitted record self-tags with a QUOTED "_schema" label
+// (e.g. {"_schema": "git.repository.gitlab", ...}). The quote matters — a bare
+// _schema is a hidden CUE field and json.Marshal drops it, so the routing tag
+// would never reach the records file.
 #EweTarget: {
 	eweSource: string
 	outputs: [...string]

@@ -76,3 +76,55 @@ func TestRenderPopulateMuCue_RejectsEwe(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ewe")
 }
+
+func TestRenderEwePopulateMuCue(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name: "gitlab",
+		Populate: systemmodel.Populate{
+			EweSource:        "populate.cue",
+			Outputs:          []string{"repos.json"},
+			Network:          true,
+			Impure:           true,
+			SealedInputs:     map[string]string{"GITLAB_TOKEN": "env:GITLAB_TOKEN"},
+			SealedInputModes: map[string]string{"GITLAB_TOKEN": "env"},
+		},
+	}
+	// modelDir under muRoot: muRoot/models/gitlab, populate.cue beside the model.
+	muRoot := "/proj"
+	modelDir := "/proj/models/gitlab"
+
+	src, err := renderEwePopulateMuCue(m, muRoot, modelDir)
+	require.NoError(t, err)
+
+	ctx := cuecontext.New()
+	v := ctx.CompileString(src, cue.Filename("mu.cue"))
+	require.NoError(t, v.Err(), "generated mu.cue must compile:\n%s", src)
+
+	// eweSource is project-root-relative.
+	es, err := v.LookupPath(cue.ParsePath("targets[0].plan[0].eweSource")).String()
+	require.NoError(t, err)
+	assert.Equal(t, "models/gitlab/populate.cue", es)
+
+	// Plan emits via action/emit.
+	emit, err := v.LookupPath(cue.ParsePath("targets[0].plan[1]")).String()
+	require.NoError(t, err)
+	assert.Equal(t, "action/emit", emit)
+
+	// Sealed inputs declared at the target level.
+	si, err := v.LookupPath(cue.ParsePath(`targets[0].sealed_inputs.GITLAB_TOKEN`)).String()
+	require.NoError(t, err)
+	assert.Equal(t, "env:GITLAB_TOKEN", si)
+
+	net, err := v.LookupPath(cue.ParsePath("targets[0].plan[0].network")).Bool()
+	require.NoError(t, err)
+	assert.True(t, net)
+}
+
+func TestRenderEwePopulateMuCue_EscapeRejected(t *testing.T) {
+	m := &systemmodel.SystemModel{
+		Name:     "x",
+		Populate: systemmodel.Populate{EweSource: "../../../../etc/populate.cue", Outputs: []string{"o.json"}},
+	}
+	_, err := renderEwePopulateMuCue(m, "/proj", "/proj/models/x")
+	require.Error(t, err)
+}
