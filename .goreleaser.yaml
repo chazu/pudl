@@ -16,9 +16,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X pudl/cmd.version={{.Version}}
-      - -X pudl/cmd.commit={{.Commit}}
-      - -X pudl/cmd.date={{.Date}}
+      - -X github.com/chazu/pudl/cmd.version={{.Version}}
+      - -X github.com/chazu/pudl/cmd.commit={{.Commit}}
+      - -X github.com/chazu/pudl/cmd.date={{.Date}}
 
 archives:
   - id: pudl-archive

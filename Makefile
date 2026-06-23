@@ -5,7 +5,16 @@ BINARY_NAME := pudl
 # Build flags
 GO := go
 GOFLAGS := -v
-LDFLAGS := -s -w
+
+# Version info embedded into pudl/cmd via -X ldflags.
+# Mirrors the values goreleaser injects so `make`-built binaries report a real version.
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE    := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS := -s -w \
+	-X github.com/chazu/pudl/cmd.version=$(VERSION) \
+	-X github.com/chazu/pudl/cmd.commit=$(COMMIT) \
+	-X github.com/chazu/pudl/cmd.date=$(DATE)
 
 INSTALL_PATH := $(shell $(GO) env GOBIN)
 ifeq ($(strip $(INSTALL_PATH)),)
