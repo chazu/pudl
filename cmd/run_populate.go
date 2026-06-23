@@ -111,10 +111,10 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*PopulateReport, error) {
+func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
 		// Self-staged; no external mu root needed (works for project + global).
-		return runEwePopulate(m, modelDir)
+		return runEwePopulate(m, modelDir, pudlRoot)
 	}
 
 	rm := *m
@@ -204,6 +204,39 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName 
 	return b.String(), nil
 }
 
+// resolveEweSource locates a model's populator program. eweSource is, in order:
+// an absolute path; a path under the owning pudl repo's populators/ dir
+// (e.g. "github/populate.cue" -> <pudlRoot>/populators/github/populate.cue);
+// a path relative to the pudl root (covers a "populators/..."-prefixed value);
+// or a path relative to the model's own directory (co-located fallback).
+func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
+	if eweSource == "" {
+		return "", fmt.Errorf("ewe populate: eweSource is empty")
+	}
+	if filepath.IsAbs(eweSource) {
+		if _, err := os.Stat(eweSource); err != nil {
+			return "", fmt.Errorf("eweSource %q: %w", eweSource, err)
+		}
+		return eweSource, nil
+	}
+	var candidates []string
+	if pudlRoot != "" {
+		candidates = append(candidates,
+			filepath.Join(pudlRoot, "populators", eweSource),
+			filepath.Join(pudlRoot, eweSource),
+		)
+	}
+	if modelDir != "" {
+		candidates = append(candidates, filepath.Join(modelDir, eweSource))
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c, nil
+		}
+	}
+	return "", fmt.Errorf("eweSource %q not found (looked in: %s)", eweSource, strings.Join(candidates, ", "))
+}
+
 // runEwePopulate executes an #EweTarget populate arm in a self-contained,
 // staged mu project (so it works whether the model is registered in a project
 // .pudl/schema or in the global ~/.pudl — neither needs a pre-existing mu
@@ -214,14 +247,10 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName 
 // #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
 // schema was loaded from (the base for resolving the eweSource + relative plugin
 // scripts).
-func runEwePopulate(m *systemmodel.SystemModel, modelDir string) (*PopulateReport, error) {
-	// Resolve the populator program path against the model's directory.
-	srcPath := m.Populate.EweSource
-	if srcPath == "" {
-		return nil, fmt.Errorf("ewe populate: eweSource is empty")
-	}
-	if !filepath.IsAbs(srcPath) {
-		srcPath = filepath.Join(modelDir, srcPath)
+func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot string) (*PopulateReport, error) {
+	srcPath, err := resolveEweSource(m.Populate.EweSource, modelDir, pudlRoot)
+	if err != nil {
+		return nil, err
 	}
 	eweName := filepath.Base(srcPath)
 

@@ -59,7 +59,7 @@ Examples:
 		// Resolve the model from the registered schemas (project .pudl/schema
 		// wins over global ~/.pudl/schema). modelDir is where it was loaded from
 		// — the base for eweSource + relative plugin paths.
-		model, modelDir, err := resolveModel(name)
+		model, modelDir, pudlRoot, err := resolveModel(name)
 		if err != nil {
 			return err
 		}
@@ -133,7 +133,7 @@ Examples:
 				}
 				report.Drift = &res
 			} else {
-				pr, err := runPopulate(model, muRoot, modelDir)
+				pr, err := runPopulate(model, muRoot, modelDir, pudlRoot)
 				if err != nil {
 					return err
 				}
