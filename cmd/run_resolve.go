@@ -49,7 +49,10 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 // and that decodes to a concrete instance whose `name` (or short definition
 // name) matches. Returns the decoded model and the directory it was loaded from
 // (the base for resolving eweSource + relative plugin paths).
-func resolveModel(name string) (*systemmodel.SystemModel, string, error) {
+// resolveModel returns the decoded model, the directory its schema was loaded
+// from (modelDir), and the pudl root that owns it (the .pudl dir, parent of the
+// schema dir) — the base for resolving a populators/ path.
+func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot string, err error) {
 	var dirs []string
 	if ws, _ := workspace.Discover("."); ws != nil && ws.SchemaPath != "" {
 		dirs = append(dirs, ws.SchemaPath)
@@ -58,22 +61,22 @@ func resolveModel(name string) (*systemmodel.SystemModel, string, error) {
 
 	var searched []string
 	for _, dir := range dirs {
-		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		if st, statErr := os.Stat(dir); statErr != nil || !st.IsDir() {
 			continue
 		}
 		searched = append(searched, dir)
-		m, modelDir, err := resolveModelIn(dir, name)
-		if err != nil {
-			return nil, "", err
+		found, md, rerr := resolveModelIn(dir, name)
+		if rerr != nil {
+			return nil, "", "", rerr
 		}
-		if m != nil {
-			return m, modelDir, nil
+		if found != nil {
+			return found, md, filepath.Dir(dir), nil // pudlRoot = parent of schema dir
 		}
 	}
 	if len(searched) == 0 {
-		return nil, "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
+		return nil, "", "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
 	}
-	return nil, "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
+	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
 }
 
 // resolveModelIn searches one schema directory for a system-model definition
