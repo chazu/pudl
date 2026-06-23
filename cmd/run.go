@@ -69,6 +69,13 @@ Examples:
 			fmt.Print(buildRunPlan(model, flags))
 		}
 
+		// Record the instance in the catalog (identity = name) so every model
+		// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
+		// a recording failure must not fail the run.
+		if err := recordModelInstance(model); err != nil && live {
+			fmt.Printf("warning: could not record model instance: %v\n", err)
+		}
+
 		// muRoot is only needed by paths that run mu within an existing project
 		// (plugin-observe live observe; differential drift). The ewe populate
 		// path self-stages its own mu project, and --from-catalog runs no mu.
