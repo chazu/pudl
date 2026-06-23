@@ -113,7 +113,8 @@ func findMuRoot(startDir string) (string, error) {
 // model file's directory, the base for resolving relative plugin scripts.
 func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
-		return runEwePopulate(m, muRoot, modelDir)
+		// Self-staged; no external mu root needed (works for project + global).
+		return runEwePopulate(m, modelDir)
 	}
 
 	rm := *m
@@ -150,25 +151,15 @@ func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*Populate
 	return &PopulateReport{Target: target, Records: count}, nil
 }
 
-// renderEwePopulateMuCue emits a mu.cue project whose single target carries an
-// inline plan that emits one `ewe`-body action (eweSource/outputs/network/
-// impure). The populator program path is made relative to the mu project root so
-// mu's plan-time CAS hashing (Resolve) can find it. Sealed inputs are declared
-// at the target level; mu propagates them to the emitted action and resolves the
-// refs, and the ewe sink reveals them only in-sink.
-func renderEwePopulateMuCue(m *systemmodel.SystemModel, muRoot, modelDir string) (string, error) {
+// renderEwePopulateMuCue emits a standalone mu.cue project (written at the root
+// of a staged temp dir) whose single target carries an inline plan that emits
+// one `ewe`-body action. eweSourceName is the populator file's name within that
+// staged root (copied there by runEwePopulate), so it resolves regardless of
+// where the model is registered (project or global ~/.pudl). Sealed inputs are
+// declared at the target level; mu propagates them to the emitted action and
+// resolves the refs, and the ewe sink reveals them only in-sink.
+func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName string) (string, error) {
 	p := m.Populate
-	abs := p.EweSource
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(modelDir, p.EweSource)
-	}
-	rel, err := filepath.Rel(muRoot, abs)
-	if err != nil {
-		return "", fmt.Errorf("ewe_source path: %w", err)
-	}
-	if strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("ewe_source %q is outside the mu project root %q", p.EweSource, muRoot)
-	}
 
 	outputs := p.Outputs
 	if len(outputs) == 0 {
@@ -177,7 +168,7 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, muRoot, modelDir string)
 
 	action := map[string]any{
 		"id":        "populate",
-		"eweSource": rel,
+		"eweSource": eweSourceName,
 		"outputs":   outputs,
 		"network":   p.Network,
 		"impure":    p.Impure,
@@ -213,29 +204,52 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, muRoot, modelDir string)
 	return b.String(), nil
 }
 
-// runEwePopulate executes an #EweTarget populate arm: render a per-package
-// mu.cue with an ewe-body action, run `mu build` (which runs the populator —
-// HTTP fetch, in-sink secret reveal — and writes the declared records files to
-// the project root), then wrap each records file as an ObserveResult and reuse
-// the shipped catalog ingester. After ingest the catalog cannot tell an ewe
-// record from a #PluginObserve one (ewe-populate-spec §3).
-func runEwePopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*PopulateReport, error) {
-	src, err := renderEwePopulateMuCue(m, muRoot, modelDir)
-	if err != nil {
-		return nil, err
+// runEwePopulate executes an #EweTarget populate arm in a self-contained,
+// staged mu project (so it works whether the model is registered in a project
+// .pudl/schema or in the global ~/.pudl — neither needs a pre-existing mu
+// project). It stages a temp dir as the mu root, copies the populator program
+// in, runs `mu build` (HTTP fetch + in-sink secret reveal -> records files),
+// then wraps each records file as an ObserveResult and reuses the shipped
+// catalog ingester. After ingest the catalog cannot tell an ewe record from a
+// #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
+// schema was loaded from (the base for resolving the eweSource + relative plugin
+// scripts).
+func runEwePopulate(m *systemmodel.SystemModel, modelDir string) (*PopulateReport, error) {
+	// Resolve the populator program path against the model's directory.
+	srcPath := m.Populate.EweSource
+	if srcPath == "" {
+		return nil, fmt.Errorf("ewe populate: eweSource is empty")
 	}
+	if !filepath.IsAbs(srcPath) {
+		srcPath = filepath.Join(modelDir, srcPath)
+	}
+	eweName := filepath.Base(srcPath)
 
-	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
+	// Stage a standalone mu project: mu.cue (root config) + the populator file.
+	dir, err := os.MkdirTemp("", "pudl_ewe_")
 	if err != nil {
 		return nil, fmt.Errorf("create populate workspace: %w", err)
 	}
 	defer os.RemoveAll(dir)
+
+	progData, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("read eweSource %q: %w", m.Populate.EweSource, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, eweName), progData, 0o644); err != nil {
+		return nil, fmt.Errorf("stage eweSource: %w", err)
+	}
+
+	src, err := renderEwePopulateMuCue(m, modelDir, eweName)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
 		return nil, fmt.Errorf("write populate mu.cue: %w", err)
 	}
 
 	target := populateTargetName(m.Name)
-	cmd := exec.Command("mu", "build", "--config", filepath.Join(muRoot, "mu.cue"), target)
+	cmd := exec.Command("mu", "build", "--config", filepath.Join(dir, "mu.cue"), target)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -244,16 +258,15 @@ func runEwePopulate(m *systemmodel.SystemModel, muRoot, modelDir string) (*Popul
 	}
 
 	// Wrap each declared output (a JSON records array) as an ObserveResult and
-	// feed the shipped ingester. The output lands in the action's WorkDir (the
+	// feed the shipped ingester. Outputs land in the action's WorkDir (the staged
 	// project root) per mu's bare-output staging.
 	var results []mubridge.ObserveResult
 	for _, out := range m.Populate.Outputs {
-		outPath := filepath.Join(muRoot, out)
+		outPath := filepath.Join(dir, out)
 		data, err := os.ReadFile(outPath)
 		if err != nil {
 			return nil, fmt.Errorf("read ewe output %q: %w", out, err)
 		}
-		_ = os.Remove(outPath) // don't leave build artifacts in the project root
 		var arr []any
 		if err := json.Unmarshal(data, &arr); err != nil {
 			return nil, fmt.Errorf("ewe output %q is not a JSON records array: %w", out, err)
