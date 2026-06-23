@@ -89,21 +89,18 @@ func TestRenderEwePopulateMuCue(t *testing.T) {
 			SealedInputModes: map[string]string{"GITLAB_TOKEN": "env"},
 		},
 	}
-	// modelDir under muRoot: muRoot/models/gitlab, populate.cue beside the model.
-	muRoot := "/proj"
-	modelDir := "/proj/models/gitlab"
-
-	src, err := renderEwePopulateMuCue(m, muRoot, modelDir)
+	// eweSource is staged into the temp root by its basename.
+	src, err := renderEwePopulateMuCue(m, "/proj/models/gitlab", "populate.cue")
 	require.NoError(t, err)
 
 	ctx := cuecontext.New()
 	v := ctx.CompileString(src, cue.Filename("mu.cue"))
 	require.NoError(t, v.Err(), "generated mu.cue must compile:\n%s", src)
 
-	// eweSource is project-root-relative.
+	// eweSource is the staged file name (resolved within the staged mu root).
 	es, err := v.LookupPath(cue.ParsePath("targets[0].plan[0].eweSource")).String()
 	require.NoError(t, err)
-	assert.Equal(t, "models/gitlab/populate.cue", es)
+	assert.Equal(t, "populate.cue", es)
 
 	// Plan emits via action/emit.
 	emit, err := v.LookupPath(cue.ParsePath("targets[0].plan[1]")).String()
@@ -120,15 +117,6 @@ func TestRenderEwePopulateMuCue(t *testing.T) {
 	assert.True(t, net)
 }
 
-func TestRenderEwePopulateMuCue_EscapeRejected(t *testing.T) {
-	m := &systemmodel.SystemModel{
-		Name:     "x",
-		Populate: systemmodel.Populate{EweSource: "../../../../etc/populate.cue", Outputs: []string{"o.json"}},
-	}
-	_, err := renderEwePopulateMuCue(m, "/proj", "/proj/models/x")
-	require.Error(t, err)
-}
-
 func TestRenderEwePopulateMuCue_CommandPlugin(t *testing.T) {
 	m := &systemmodel.SystemModel{
 		Name:    "gitlab",
@@ -139,7 +127,7 @@ func TestRenderEwePopulateMuCue_CommandPlugin(t *testing.T) {
 			SealedInputs: map[string]string{"GITLAB_TOKEN": "env:GITLAB_TOKEN"},
 		},
 	}
-	src, err := renderEwePopulateMuCue(m, "/proj", "/proj/models/gitlab")
+	src, err := renderEwePopulateMuCue(m, "/proj/models/gitlab", "populate.cue")
 	require.NoError(t, err)
 
 	ctx := cuecontext.New()
