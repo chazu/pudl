@@ -56,8 +56,8 @@ func TestIngestManifest_Basic(t *testing.T) {
 
 	// Verify manifest entry exists
 	manifestEntries, err := db.QueryEntries(database.FilterOptions{
-		Schema:    "pudl/mu.#Manifest",
-		EntryType: "manifest",
+		Schema:     "pudl/mu.#Manifest",
+		EntryTypes: []string{"manifest"},
 	}, database.QueryOptions{})
 	if err != nil {
 		t.Fatalf("QueryEntries failed: %v", err)

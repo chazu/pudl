@@ -121,7 +121,7 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 
 	// Query observe item entries (not the snapshot collection) and check schema routing
 	entries, err := db.QueryEntries(
-		database.FilterOptions{EntryType: "observe", CollectionType: "item"},
+		database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"},
 		database.QueryOptions{Limit: 100},
 	)
 	if err != nil {
