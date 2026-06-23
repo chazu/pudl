@@ -1,16 +1,46 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 	"github.com/chazu/pudl/internal/workspace"
 )
+
+// recordModelInstance upserts the run's #SystemModel instance into the catalog
+// (schema pudl/systemmodel.#SystemModel, identity = name) so every model that
+// has been run is inventoriable via `pudl list`/`query`. It reuses the shipped
+// observe ingester — the instance lands as an ordinary catalog record.
+func recordModelInstance(m *systemmodel.SystemModel) error {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(b, &rec); err != nil {
+		return err
+	}
+	rec["name"] = m.Name
+	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
+
+	results := []mubridge.ObserveResult{{
+		Target:  "//models/" + m.Name,
+		Current: map[string]any{"records": []any{rec}},
+	}}
+	wrapped, err := json.Marshal(results)
+	if err != nil {
+		return err
+	}
+	_, err = ingestObserveOutput(wrapped)
+	return err
+}
 
 // resolveModel finds a registered #SystemModel-derived schema by name. It
 // searches the project-level .pudl/schema first (if a workspace is found by
