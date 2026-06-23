@@ -24,8 +24,8 @@ type FilterOptions struct {
 	Format         string // Filter by file format
 	CollectionID   string // Filter by collection ID
 	CollectionType string // Filter by collection type ('collection', 'item')
-	ItemID         string // Filter by item ID
-	EntryType      string // Filter by entry type ("import", "artifact")
+	ItemID         string   // Filter by item ID
+	EntryTypes     []string // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
 }
 
 // DisplayOptions contains display preferences for listing data
@@ -179,7 +179,7 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 		CollectionID:   filters.CollectionID,
 		CollectionType: filters.CollectionType,
 		ItemID:         filters.ItemID,
-		EntryType:      filters.EntryType,
+		EntryTypes:     filters.EntryTypes,
 	}
 
 	// Query database

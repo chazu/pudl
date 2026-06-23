@@ -30,7 +30,6 @@ var (
 	listPage          int
 	listPerPage       int
 	listArtifacts     bool
-	listAll           bool
 	listAllWorkspaces bool
 )
 
@@ -98,13 +97,13 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer l.Close()
 
-	// Determine entry type filter
-	entryType := "import" // default: imports only
+	// Determine entry type filter.
+	// Live entry_type taxonomy: "observe" (ingested/observed data),
+	// "manifest" + "manifest-action" (run outputs). Default shows everything;
+	// --artifacts narrows to run outputs.
+	var entryTypes []string // default: no filter (show everything)
 	if listArtifacts {
-		entryType = "artifact"
-	}
-	if listAll {
-		entryType = "" // no filter
+		entryTypes = []string{"manifest", "manifest-action"}
 	}
 
 	// Default origin to workspace name when inside a workspace,
@@ -122,7 +121,7 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		CollectionID:   listCollectionID,
 		CollectionType: determineCollectionType(),
 		ItemID:         listItemID,
-		EntryType:      entryType,
+		EntryTypes:     entryTypes,
 	}
 
 	// Set up display options
@@ -261,9 +260,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listItemsOnly, "items-only", false, "Show only individual items")
 
 	// Entry type flags
-	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only artifacts (method outputs)")
-	listCmd.Flags().BoolVar(&listAll, "all", false, "Show both imports and artifacts")
-	listCmd.MarkFlagsMutuallyExclusive("artifacts", "all")
+	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only run outputs (manifest, manifest-action)")
 
 	// Workspace flags
 	listCmd.Flags().BoolVar(&listAllWorkspaces, "all-workspaces", false,

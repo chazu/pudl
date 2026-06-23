@@ -43,7 +43,7 @@ type CatalogEntry struct {
 	IdentityJSON *string `json:"identity_json,omitempty"` // Canonical JSON of identity field values
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
-	EntryType  *string `json:"entry_type,omitempty"`  // "import" or "artifact"
+	EntryType  *string `json:"entry_type,omitempty"`  // e.g. "observe", "manifest", "manifest-action"
 	Definition *string `json:"definition,omitempty"`  // Definition name (for artifacts)
 	Method     *string `json:"method,omitempty"`      // Method name (for artifacts)
 	RunID      *string `json:"run_id,omitempty"`      // Unique run identifier
@@ -61,8 +61,8 @@ type FilterOptions struct {
 	Format         string // Filter by file format
 	CollectionID   string // Filter by collection ID
 	CollectionType string // Filter by collection type ('collection', 'item')
-	ItemID         string // Filter by item ID
-	EntryType      string // Filter by entry type ("import", "artifact")
+	ItemID         string   // Filter by item ID
+	EntryTypes     []string // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
 }
 
 // QueryOptions contains query configuration
@@ -432,9 +432,13 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 		whereConditions = append(whereConditions, "item_id = ?")
 		args = append(args, filters.ItemID)
 	}
-	if filters.EntryType != "" {
-		whereConditions = append(whereConditions, "entry_type = ?")
-		args = append(args, filters.EntryType)
+	if len(filters.EntryTypes) > 0 {
+		placeholders := make([]string, len(filters.EntryTypes))
+		for i, t := range filters.EntryTypes {
+			placeholders[i] = "?"
+			args = append(args, t)
+		}
+		whereConditions = append(whereConditions, "entry_type IN ("+strings.Join(placeholders, ",")+")")
 	}
 
 	whereClause := ""

@@ -81,7 +81,7 @@ func inventorySetDiff(desired, observed []map[string]any) []ResourceDrift {
 // catalog (observe items by origin) and returns them as maps.
 func loadObservedRecords(db *database.CatalogDB, origin string) ([]map[string]any, error) {
 	res, err := db.QueryEntries(database.FilterOptions{
-		EntryType:      "observe",
+		EntryTypes:     []string{"observe"},
 		CollectionType: "item",
 		Origin:         origin,
 	}, database.QueryOptions{})
