@@ -32,7 +32,6 @@ archives:
     files:
       - README.md
       - docs/*
-      - LICENSE
 
 checksum:
   name_template: "{{ .ProjectName }}_{{ .Version }}_checksums.txt"
