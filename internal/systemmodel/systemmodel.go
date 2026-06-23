@@ -136,24 +136,32 @@ func LoadModel(src []byte, name string) (*SystemModel, error) {
 	if !inst.Exists() {
 		return nil, fmt.Errorf("model instance %q not found in source", name)
 	}
-	if err := inst.Validate(cue.Concrete(false)); err != nil {
-		return nil, fmt.Errorf("validate model %q: %w", name, err)
+	m, err := DecodeValue(inst)
+	if err != nil {
+		return nil, fmt.Errorf("model %q: %w", name, err)
 	}
+	return m, nil
+}
 
+// DecodeValue validates and decodes a CUE value (a #SystemModel instance or a
+// #SystemModel-derived definition) into a SystemModel. It re-extracts `desired`
+// with hidden fields preserved so each record's `_schema` identity survives the
+// Decode (which drops hidden fields). Used by LoadModel and the registry
+// resolver.
+func DecodeValue(inst cue.Value) (*SystemModel, error) {
+	if err := inst.Validate(cue.Concrete(false)); err != nil {
+		return nil, fmt.Errorf("validate: %w", err)
+	}
 	var m SystemModel
 	if err := inst.Decode(&m); err != nil {
-		return nil, fmt.Errorf("decode model %q: %w", name, err)
+		return nil, fmt.Errorf("decode: %w", err)
 	}
 	if m.Name == "" {
-		return nil, fmt.Errorf("model %q has no name", name)
+		return nil, fmt.Errorf("model has no name")
 	}
-
-	// Decode drops CUE hidden fields, so `desired` records lose their `_schema`
-	// tag (D4). Re-extract desired with hidden fields included so identity (the
-	// schema + key) survives.
 	desired, err := decodeDesired(inst)
 	if err != nil {
-		return nil, fmt.Errorf("decode desired for %q: %w", name, err)
+		return nil, fmt.Errorf("decode desired: %w", err)
 	}
 	if desired != nil {
 		m.Desired = desired

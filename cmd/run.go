@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,7 +12,6 @@ import (
 )
 
 var (
-	runFile        string
 	runMuRoot      string
 	runConverge    bool
 	runOnly        []string
@@ -27,15 +25,15 @@ var runCmd = &cobra.Command{
 	Short: "Run a #SystemModel instance (observe-only, or --converge)",
 	Long: `Run a #SystemModel instance through the ACUTE cycle.
 
-<model> is the instance name (the CUE field), loaded from --file
-(default: models/<model>.cue). Default is OBSERVE-ONLY: populate -> drift ->
-checks -> report, no mutation. Pass --converge to close drift; see the V1
-build spec.
+<model> is a registered #SystemModel — a definition inheriting #SystemModel,
+resolved by name (its name field or short definition name) from the project
+.pudl/schema first, then the global ~/.pudl/schema. Register one with
+"pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
+report, no mutation. Pass --converge to close drift; see the V1 build spec.
 
 Examples:
-    pudl run k8sPolicy
-    pudl run k8sPolicy --file models/k8s.cue
-    pudl run k8sConverge --converge
+    pudl run github-chazu
+    pudl run k8sPolicy --converge
     pudl run k8sConverge --converge --only web,api
     pudl run k8sConverge --converge --dry-run`,
 	Args:         cobra.ExactArgs(1),
@@ -58,13 +56,12 @@ Examples:
 			return err
 		}
 
-		file := runFile
-		if file == "" {
-			file = fmt.Sprintf("models/%s.cue", name)
-		}
-		model, err := systemmodel.LoadModelFile(file, name)
+		// Resolve the model from the registered schemas (project .pudl/schema
+		// wins over global ~/.pudl/schema). modelDir is where it was loaded from
+		// — the base for eweSource + relative plugin paths.
+		model, modelDir, err := resolveModel(name)
 		if err != nil {
-			return fmt.Errorf("load model: %w", err)
+			return err
 		}
 
 		live := !jsonOutput
@@ -72,15 +69,13 @@ Examples:
 			fmt.Print(buildRunPlan(model, flags))
 		}
 
-		modelDir := filepath.Dir(file)
-		// --from-catalog drifts over already-ingested records — no live observe,
-		// so no mu project needed. Every other path runs mu.
+		// muRoot is only needed by paths that run mu within an existing project
+		// (plugin-observe live observe; differential drift). The ewe populate
+		// path self-stages its own mu project, and --from-catalog runs no mu.
+		// Best-effort: phases that genuinely need it validate when they run.
 		muRoot := runMuRoot
 		if muRoot == "" && !flags.fromCatalog {
-			muRoot, err = findMuRoot(modelDir)
-			if err != nil {
-				return err
-			}
+			muRoot, _ = findMuRoot(modelDir)
 		}
 
 		report := &RunReport{Model: model.Name, OK: true}
@@ -269,7 +264,6 @@ func populateRef(p systemmodel.Populate) string {
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().StringVar(&runFile, "file", "", "model source file (default: models/<model>.cue)")
 	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
 	runCmd.Flags().BoolVar(&runConverge, "converge", false, "opt into the convergence loop (mutates the target)")
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these definitions (requires --converge)")
