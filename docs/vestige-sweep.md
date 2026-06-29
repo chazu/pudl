@@ -134,13 +134,31 @@ left for the §3 doc-cleanup pass; implog history kept as-is.
 
 ### Tier 1 — whole-feature vestiges, high confidence (recommend delete)
 
-| Cluster | What / why dead | ~lines |
-|---|---|---|
-| ✅ **`internal/typepattern/` (vendor type detection)** | **DONE 2026-06-29** — removed; see below. | (done) |
-| **Legacy base-`Importer` path** — `Importer.{New, ImportFile, GetAvailableSchemas, ReloadSchemas, importNDJSONCollection, importWrappedCollection, createCollection*}`, `metadata.go {loadCatalog, saveCatalog, getCatalogDir, getCatalogPath}`, `schema.go updateCatalog` | Pre-SQLite, file-catalog importer. `cmd/import.go` uses **only** `NewEnhancedImporter`; `importer.New`'s sole caller is the (dead) integration suite. EnhancedImporter embeds `*Importer` via `NewWithSchemaPaths`/`ImportFileWithFriendlyIDs`, not these. **Care: embedding** — verify each method. | ~350 |
-| **`internal/importer/wrapper.go`** (entire — `DetectCollectionWrapper` + 11 helpers) | Collection-wrapper detection. Only caller was `Importer.ImportFile` — itself dead. Dead-calls-dead. | 308 |
-| **`internal/streaming/cue_integration.go`** (entire — `CUESchemaDetector` + ~14 methods) | `NewCUESchemaDetector` has zero callers. | 275 |
-| **`systemmodel.{LoadModel, LoadModelFile}`** | Superseded by `resolveModel`; zero callers. | ~80 |
+**Status: ✅ ALL Tier 1 clusters DONE (2026-06-29).** See
+`implog/2026_06_29_dead_code_tier1_sweep.md`.
+
+| Cluster | What / why dead | ~lines | Status |
+|---|---|---|---|
+| **`internal/typepattern/` (vendor type detection)** | removed; see below. | (done) | ✅ done |
+| **Legacy base-`Importer` path** — `Importer.{New, ImportFile, GetAvailableSchemas, ReloadSchemas, importNDJSONCollection, importWrappedCollection, createCollection*}`, `metadata.go {loadCatalog, saveCatalog, getCatalogDir, getCatalogPath}` + the orphaned `Catalog` type, `schema.go updateCatalog` | Pre-SQLite, file-catalog importer. `cmd/import.go` uses **only** `NewEnhancedImporter`. | ~580 | ✅ **DONE** — `1647f10`. See below. |
+| **`internal/importer/wrapper.go`** (entire — `DetectCollectionWrapper` + 11 helpers) | Collection-wrapper detection. Only caller was `Importer.ImportFile` — itself dead. Dead-calls-dead. | 308 | ✅ **DONE** — `1647f10` (with the importer path). |
+| **`internal/streaming/cue_integration.go`** (entire — `CUESchemaDetector` + ~14 methods) | `NewCUESchemaDetector` has zero callers. | 275 | ✅ **DONE** — `1e017a3`. |
+| **`systemmodel.{LoadModel, LoadModelFile}`** | Superseded by `resolveModel`; zero callers (`LoadModel` was test-only → moved into the test file). | ~80 | ✅ **DONE** — `22e74c7`. |
+
+### ✅ legacy base-Importer path removal (2026-06-29, `1647f10`) — port-then-delete
+
+The cluster the §4 caution flagged. Finding before deleting: the base `ImportFile`
+path was the **only** full-pipeline import test harness (`importer_test.go`), and the
+live `ImportFileWithFriendlyIDs` had **zero** direct coverage. Decision (user):
+**port the tests to the live path, confirm green, then delete.** Ported tests live in
+`enhanced_importer_test.go` (JSON/YAML/NDJSON routing, k8s/AWS detection, linux
+`_schema` collection routing, error cases). Repointed the remaining test-only callers
+(`detection_test`, `config_test`, the `test/integration` suite + workflow tests) to
+`NewEnhancedImporter`/`ImportFileWithFriendlyIDs`, which made `importer.New` fully dead
+(also deleted). **Behavior change:** collection-**wrapper** auto-detection
+(`{"items":[...]}`) is removed — it existed only in the dead path (the live path
+handles NDJSON collections, not wrapped-array unwrapping); already CLI-unreachable, so
+no command lost a feature.
 
 ### Tier 2 — smaller orphans, verify each (medium confidence)
 - `errors/handlers.go`: **`TUIErrorHandler`** (no TUI exists) + `FormatErrorForUser`/`FormatErrorForLogging` — no live callers. (`TestErrorHandler` is test infra in a non-test file.)
@@ -153,12 +171,15 @@ left for the §3 doc-cleanup pass; implog history kept as-is.
   `ChainValidator`/`CUEModuleLoader` getters, `SchemaInferrer.Reload` (test-covered →
   keep unless the inference tests change).
 
-**How to proceed (deferred — circle back):** Tier 1 is ~1,000 lines of cleanly-severable
-dead features. Do **one cluster per commit**, rebuilding + re-running `deadcode` after each
-(deletions cascade — e.g. removing `ImportFile` newly-orphans its private helpers). Tier 2
-is a follow-up. Two cautions, since §4 is where the earlier false positives lived: the
-importer cluster needs care from the `EnhancedImporter` embedding, and `schemaname`'s pure
-utils deserve an "is this intended API?" check, not blind deletion.
+**How it went:** Tier 1 done one cluster per commit, rebuilding + re-running `deadcode`
+after each (deletions cascaded as expected — removing the legacy importer path orphaned
+the file-catalog helpers + `Catalog` type, and made `importer.New` dead once its only
+caller, the integration suite, was repointed). The importer cluster's `EnhancedImporter`
+embedding caution held: the live path shares no helpers with the dead one, confirmed by
+`deadcode` marking the whole base path unreachable.
+
+**Tier 2 (follow-up, deferred):** the small orphans below. `schemaname`'s pure utils
+deserve an "is this intended API?" check, not blind deletion.
 
 ### ✅ typepattern removal (2026-06-29) — vendor data-model logic out of Go
 
