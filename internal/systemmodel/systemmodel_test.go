@@ -1,11 +1,38 @@
 package systemmodel
 
 import (
+	"fmt"
 	"testing"
 
+	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// loadModel compiles a model source (CUE referencing #SystemModel) together with
+// the embedded schema, looks up the named instance, and decodes it via the
+// production DecodeValue path. Test-only harness; the live resolver loads
+// instances from the schema repo (cmd/run_resolve.go).
+func loadModel(src []byte, name string) (*SystemModel, error) {
+	ctx := cuecontext.New()
+
+	combined := schemaCUE + "\n" + string(src)
+	v := ctx.CompileString(combined, cue.Filename("model.cue"))
+	if v.Err() != nil {
+		return nil, fmt.Errorf("compile model: %w", v.Err())
+	}
+
+	inst := v.LookupPath(cue.ParsePath(name))
+	if !inst.Exists() {
+		return nil, fmt.Errorf("model instance %q not found in source", name)
+	}
+	m, err := DecodeValue(inst)
+	if err != nil {
+		return nil, fmt.Errorf("model %q: %w", name, err)
+	}
+	return m, nil
+}
 
 // observe-only k8s model — the V1 demo-path populate case.
 const k8sObserveModel = `
@@ -28,7 +55,7 @@ k8sPolicy: #SystemModel & {
 
 func TestDifferentialDrift(t *testing.T) {
 	// #PluginObserve without `differential` defaults to true (k8s differential path).
-	m, err := LoadModel([]byte(k8sConvergeModel), "k8sConverge")
+	m, err := loadModel([]byte(k8sConvergeModel), "k8sConverge")
 	require.NoError(t, err)
 	assert.True(t, m.Populate.Differential, "differential should default to true")
 	assert.True(t, m.DifferentialDrift())
@@ -40,7 +67,7 @@ inv: #SystemModel & {
 	populate: #PluginObserve & {plugin: "host", differential: false}
 	desired: [{_schema: "pudl/linux.#Package", name: "podman"}]
 }`
-	mi, err := LoadModel([]byte(hostInv), "inv")
+	mi, err := loadModel([]byte(hostInv), "inv")
 	require.NoError(t, err)
 	assert.False(t, mi.Populate.Differential)
 	assert.False(t, mi.DifferentialDrift())
@@ -52,7 +79,7 @@ e: #SystemModel & {
 	populate: #EweTarget & {eweSource: "p.cue", outputs: ["recs"]}
 	desired: [{_schema: "git.repo", name: "r"}]
 }`
-	me, err := LoadModel([]byte(eweModel), "e")
+	me, err := loadModel([]byte(eweModel), "e")
 	require.NoError(t, err)
 	assert.False(t, me.DifferentialDrift(), "ewe populate is inventory")
 }
@@ -76,7 +103,7 @@ k8sConverge: #SystemModel & {
 `
 
 func TestLoadModel_ObserveOnly(t *testing.T) {
-	m, err := LoadModel([]byte(k8sObserveModel), "k8sPolicy")
+	m, err := loadModel([]byte(k8sObserveModel), "k8sPolicy")
 	require.NoError(t, err)
 
 	assert.Equal(t, "k8s-policy", m.Name)
@@ -106,7 +133,7 @@ func TestLoadModel_ObserveOnly(t *testing.T) {
 }
 
 func TestLoadModel_Convergent(t *testing.T) {
-	m, err := LoadModel([]byte(k8sConvergeModel), "k8sConverge")
+	m, err := loadModel([]byte(k8sConvergeModel), "k8sConverge")
 	require.NoError(t, err)
 
 	assert.Equal(t, "k8s-converge", m.Name)
@@ -124,7 +151,7 @@ func TestLoadModel_Convergent(t *testing.T) {
 }
 
 func TestLoadModel_MissingInstance(t *testing.T) {
-	_, err := LoadModel([]byte(k8sObserveModel), "nope")
+	_, err := loadModel([]byte(k8sObserveModel), "nope")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -132,6 +159,6 @@ func TestLoadModel_MissingInstance(t *testing.T) {
 func TestLoadModel_RejectsInvalid(t *testing.T) {
 	// populate is required; a model without it must not load.
 	const bad = `bad: #SystemModel & {name: "x"}`
-	_, err := LoadModel([]byte(bad), "bad")
+	_, err := loadModel([]byte(bad), "bad")
 	require.Error(t, err)
 }
