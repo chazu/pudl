@@ -27,7 +27,7 @@ type PopulateReport struct {
 
 // ConvergeReport summarizes a convergence loop.
 type ConvergeReport struct {
-	Outcome    string `json:"outcome"` // converged | failed (cap_exhausted) | failed (execute_error) | dry-run …
+	Outcome    string `json:"outcome"` // clean | failed (cap_exhausted) | failed (execute_error) | dry-run …
 	Iterations int    `json:"iterations"`
 }
 
@@ -60,7 +60,7 @@ func (r *RunReport) markdown() string {
 	if r.Drift != nil {
 		fmt.Fprintf(&b, "\n## drift\n")
 		if r.Drift.Clean {
-			fmt.Fprintf(&b, "- ∅ (converged — all desired resources exist and match)\n")
+			fmt.Fprintf(&b, "- ∅ (clean — all desired resources exist and match)\n")
 		} else {
 			fmt.Fprintf(&b, "- %d drifted resource(s):\n", len(r.Drift.Drifted))
 			for _, d := range r.Drift.Drifted {

@@ -64,7 +64,7 @@ catalog_entries (
     method            TEXT,              -- Producing method name (run artifacts)
     run_id            TEXT,              -- pudl run identifier (run artifacts)
     tags              TEXT,              -- JSON-encoded key-value tags
-    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/converged/failed)
+    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed)
     created_at        DATETIME,
     updated_at        DATETIME
 )

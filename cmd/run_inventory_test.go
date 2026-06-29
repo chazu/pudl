@@ -23,7 +23,7 @@ func TestInventorySetDiff(t *testing.T) {
 		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},    // missing
 		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},   // changed
 	}
-	drift := inventorySetDiff(desired, observed)
+	drift := inventorySetDiff(desired, observed, nil) // nil resolver -> name|path|id fallback
 	require.Len(t, drift, 2)
 
 	byReason := map[string]ResourceDrift{}
@@ -35,9 +35,38 @@ func TestInventorySetDiff(t *testing.T) {
 	assert.Contains(t, byReason["changed"].Diff, "state")
 }
 
+// schema-driven identity: match on declared identity_fields (composite), not the
+// name|path|id fallback (these records carry none of those).
+func TestInventorySetDiff_SchemaDrivenIdentity(t *testing.T) {
+	identity := func(schema string) []string {
+		if schema == "pudl/artifact.#ImageRef" {
+			return []string{"source", "tag"}
+		}
+		return nil
+	}
+	observed := []map[string]any{
+		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v1", "digest": "sha256:aaa"},
+	}
+	desired := []map[string]any{
+		// same (source,tag) identity, differing non-identity field -> changed
+		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v1", "digest": "sha256:bbb"},
+		// different tag -> different identity -> missing
+		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v2", "digest": "sha256:aaa"},
+	}
+	drift := inventorySetDiff(desired, observed, identity)
+	require.Len(t, drift, 2)
+
+	byReason := map[string]ResourceDrift{}
+	for _, d := range drift {
+		byReason[d.Reason] = d
+	}
+	assert.Contains(t, byReason["changed"].Diff, "digest")
+	assert.Contains(t, byReason["missing"].Resource, "v2")
+}
+
 func TestInventorySetDiff_AllSatisfied(t *testing.T) {
 	recs := []map[string]any{{"_schema": "s", "name": "a", "x": "1"}}
-	drift := inventorySetDiff(recs, recs)
+	drift := inventorySetDiff(recs, recs, nil)
 	assert.Empty(t, drift)
 }
 
@@ -47,7 +76,7 @@ func TestInventorySetDiff_ExtrasIgnored(t *testing.T) {
 		{"_schema": "s", "name": "a"}, {"_schema": "s", "name": "extra"},
 	}
 	desired := []map[string]any{{"_schema": "s", "name": "a"}}
-	assert.Empty(t, inventorySetDiff(desired, observed))
+	assert.Empty(t, inventorySetDiff(desired, observed, nil))
 }
 
 // end-to-end against a real catalog seeded with CANNED host-style records (the
@@ -71,7 +100,7 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},    // missing
 		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},   // changed
 	}
-	res, err := runInventoryDrift(db, "pudl-run", desired)
+	res, err := runInventoryDrift(db, "pudl-run", desired, nil)
 	require.NoError(t, err)
 
 	assert.False(t, res.Clean)

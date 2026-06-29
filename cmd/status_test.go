@@ -10,7 +10,6 @@ func TestColorForStatus(t *testing.T) {
 		status string
 	}{
 		{"clean"},
-		{"converged"},
 		{"drifted"},
 		{"converging"},
 		{"failed"},

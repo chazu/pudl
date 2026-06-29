@@ -81,11 +81,11 @@ func TestRunVerdict(t *testing.T) {
 		flags  runFlags
 		want   string
 	}{
-		{"converged", &RunReport{Converge: &ConvergeReport{Outcome: "converged"}}, runFlags{converge: true}, "converged"},
+		{"converge reaches clean", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true}, "clean"},
 		{"converge cap failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (cap_exhausted)"}}, runFlags{converge: true}, "failed"},
 		{"converge exec failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)"}}, runFlags{converge: true}, "failed"},
-		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "converged"}}, runFlags{converge: true, dryRun: true}, ""},
-		{"drift clean", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{}, "clean"},
+		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true, dryRun: true}, ""},
+		{"drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{}, "clean"},
 		{"drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false}}, runFlags{}, "drifted"},
 		{"pure populate has no verdict", &RunReport{Populate: &PopulateReport{}}, runFlags{}, ""},
 	}

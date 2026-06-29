@@ -18,7 +18,7 @@ type DefinitionStatus struct {
 func (c *CatalogDB) UpdateStatus(definitionName string, status string) error {
 	validStatuses := map[string]bool{
 		"unknown": true, "clean": true, "drifted": true,
-		"converging": true, "converged": true, "failed": true,
+		"converging": true, "failed": true,
 	}
 	if !validStatuses[status] {
 		return fmt.Errorf("invalid status: %s", status)

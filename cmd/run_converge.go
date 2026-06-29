@@ -41,14 +41,14 @@ func (w *reconcileWorkspace) applyConverge() error {
 type convergeOutcome string
 
 const (
-	outcomeConverged convergeOutcome = "converged"
-	outcomeCap       convergeOutcome = "failed (cap_exhausted)"
-	outcomeExecErr   convergeOutcome = "failed (execute_error)"
-	outcomeDryRun    convergeOutcome = "dry-run (no changes applied)"
+	outcomeClean   convergeOutcome = "clean"
+	outcomeCap     convergeOutcome = "failed (cap_exhausted)"
+	outcomeExecErr convergeOutcome = "failed (execute_error)"
+	outcomeDryRun  convergeOutcome = "dry-run (no changes applied)"
 )
 
 // runConvergeLoop runs the ACUTE convergence loop against a model: observe drift,
-// stop at ∅ (converged) or the iteration cap (failed), otherwise apply and
+// stop at ∅ (clean) or the iteration cap (failed), otherwise apply and
 // re-observe. --dry-run shows the plan and stops (single pass, no mutation).
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
@@ -73,7 +73,7 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIte
 		}
 
 		if drift.Clean {
-			outcome = outcomeConverged
+			outcome = outcomeClean
 			break
 		}
 		if dryRun {

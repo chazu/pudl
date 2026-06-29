@@ -20,7 +20,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 | **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.1): `pudl run` → 2 records ingested, incl. a **sealed env secret** revealed in-sink for an auth-required endpoint (via a `command`-based `envsecret` plugin declared in the model). |
 | **drift — differential** (k8s: desired→sources, plugin diffs) | `cmd/run_drift.go` | ✅ live-tested vs k8s cluster |
 | **drift — inventory** (host: set-diff desired vs catalog records) | `cmd/run_inventory.go` | ✅ via `--from-catalog`; validated vs real catalog (canned records) |
-| **converge loop** (drift→apply→re-observe; converged/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
+| **converge loop** (drift→apply→re-observe; clean/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
 | **checks** (Datalog relations over catalog, severity-gated) | `cmd/run_checks.go` | ✅ live-tested |
 | **report** (RunReport → markdown / `--json`) | `cmd/run_report.go` | ✅ both renderings |
 
@@ -67,9 +67,14 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   `plan` op (`mu/plugins/host/main.go:71`); spec: `mu/.../host-converge-spec.md`.
 - **Real converge apply** — wired (`mu build`), not auto-run (mutates live systems).
 - **`cloudflare-dns`** — post-V1, deliberately deferred (per the DNS disposition).
-- **Catalog status persistence** — write the run verdict (drifted/converged/failed)
-  to the catalog status (`UpdateStatus`); narrow `ingest-manifest` `converged→converging`
-  (build-spec §5/§8). Self-contained + validatable; good next step.
+- ~~**Catalog status persistence**~~ — ✅ **DONE (2026-06-29).** The run verdict is
+  written to the catalog status (`persistRunStatus`/`runVerdict` → `UpdateStatus`);
+  `ingest-manifest` writes `converging` on apply (the in-flight state). The terminal
+  in-sync status was collapsed to a single value: **`clean`** = drift == ∅ (verified
+  by the drift re-check), written whether the model is observe-only or was just
+  converged. The redundant `converged` status was removed (it and `clean` named the
+  same state); the status vocabulary is now `unknown | drifted | converging | clean |
+  failed`. `clean` is only ever written off an actual ∅ observation.
 - **run.go dispatch** — inventory-vs-differential is currently explicit
   (`--from-catalog` = inventory). Auto-detect by observer style is a follow-up.
 - **cross-model data dependencies** — `pudl run` is single-instance; there is no
@@ -81,9 +86,11 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 
 ## Good next steps (self-contained, validatable here)
 
-1. **Catalog status persistence** (§8) — write/read-back the run verdict; no infra.
-2. **Schema-driven identity** for inventory drift — replace the name|path|id
-   heuristic with `identity_fields` from the inference graph; validatable vs catalog.
+1. ✅ **Catalog status persistence** (§8) — DONE 2026-06-29 (see frontier above).
+2. ✅ **Schema-driven identity** for inventory drift — DONE 2026-06-29. `recordIdentity`
+   (`cmd/run_inventory.go`) now keys records by the schema's declared `identity_fields`
+   (from the inference graph via `schemaIdentityResolver`), falling back to the
+   name|path|id heuristic only when a schema declares none or a field is absent.
 3. **host.plan** — complete the `host` plugin's stub plan op for example 1's
    converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
 

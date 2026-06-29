@@ -28,10 +28,9 @@ status the run loop writes (a model run's verdict is recorded on its instance ro
 
 Status values:
   unknown     — no status recorded yet
-  clean       — observed == desired (no drift)
+  clean       — observed == desired, drift re-check confirmed (in sync)
   drifted     — observed != desired
   converging  — actions applied, pending re-verification
-  converged   — drift re-check confirmed observed == desired
   failed      — a converge run failed (cap exhausted or execute error)
 
 Examples:
@@ -54,7 +53,7 @@ func init() {
 // colorForStatus returns a lipgloss style for the given status string.
 func colorForStatus(status string) lipgloss.Style {
 	switch status {
-	case "clean", "converged":
+	case "clean":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
 	case "drifted", "converging":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow

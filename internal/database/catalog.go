@@ -48,7 +48,7 @@ type CatalogEntry struct {
 	RunID      *string `json:"run_id,omitempty"`      // Unique run identifier
 	Tags       *string `json:"tags,omitempty"`        // JSON-encoded map[string]string
 	// Convergence status tracking
-	Status     *string `json:"status,omitempty"`      // Convergence status (unknown/clean/drifted/converging/converged/failed)
+	Status     *string `json:"status,omitempty"`      // Convergence status (unknown/clean/drifted/converging/failed)
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
