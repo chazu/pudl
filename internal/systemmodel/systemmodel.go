@@ -8,10 +8,8 @@ package systemmodel
 import (
 	_ "embed"
 	"fmt"
-	"os"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
 )
 
 // schemaCUE is the canonical #SystemModel schema, compiled into every load so a
@@ -131,31 +129,6 @@ func (m *SystemModel) Convergent() bool {
 	return m.Converge != nil && m.Converge.Plugin != ""
 }
 
-// LoadModel compiles a model source (CUE referencing #SystemModel) together with
-// the embedded schema, looks up the named instance, and decodes it. `name` is
-// the CUE field holding the instance, e.g. "k8sPolicy".
-func LoadModel(src []byte, name string) (*SystemModel, error) {
-	ctx := cuecontext.New()
-
-	// Compile schema + instance in one unit so `#SystemModel` resolves without
-	// the instance needing an import. The instance is validated by unification.
-	combined := schemaCUE + "\n" + string(src)
-	v := ctx.CompileString(combined, cue.Filename("model.cue"))
-	if v.Err() != nil {
-		return nil, fmt.Errorf("compile model: %w", v.Err())
-	}
-
-	inst := v.LookupPath(cue.ParsePath(name))
-	if !inst.Exists() {
-		return nil, fmt.Errorf("model instance %q not found in source", name)
-	}
-	m, err := DecodeValue(inst)
-	if err != nil {
-		return nil, fmt.Errorf("model %q: %w", name, err)
-	}
-	return m, nil
-}
-
 // DecodeValue validates and decodes a CUE value (a #SystemModel instance or a
 // #SystemModel-derived definition) into a SystemModel. It re-extracts `desired`
 // with hidden fields preserved so each record's `_schema` identity survives the
@@ -210,13 +183,4 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 		out = append(out, rec)
 	}
 	return out, nil
-}
-
-// LoadModelFile reads a model file and loads the named instance from it.
-func LoadModelFile(path, name string) (*SystemModel, error) {
-	src, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read model file %s: %w", path, err)
-	}
-	return LoadModel(src, name)
 }
