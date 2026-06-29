@@ -7,11 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/validator"
-	"github.com/chazu/pudl/internal/workspace"
 )
 
 // recordModelInstance upserts the run's #SystemModel instance into the catalog
@@ -53,14 +50,8 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 // from (modelDir), and the pudl root that owns it (the .pudl dir, parent of the
 // schema dir) — the base for resolving a populators/ path.
 func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot string, err error) {
-	var dirs []string
-	if ws, _ := workspace.Discover("."); ws != nil && ws.SchemaPath != "" {
-		dirs = append(dirs, ws.SchemaPath)
-	}
-	dirs = append(dirs, filepath.Join(config.GetPudlDir(), "schema"))
-
 	var searched []string
-	for _, dir := range dirs {
+	for _, dir := range modelSearchDirs() {
 		if st, statErr := os.Stat(dir); statErr != nil || !st.IsDir() {
 			continue
 		}
@@ -80,41 +71,29 @@ func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot s
 }
 
 // resolveModelIn searches one schema directory for a system-model definition
-// matching name. Returns (nil, "", nil) if none matched here.
+// matching name (by instance `name:` or short definition name). Returns
+// (nil, "", nil) if none matched here. Shares the per-dir iterator with
+// listModelsIn (model_list.go).
 func resolveModelIn(dir, name string) (*systemmodel.SystemModel, string, error) {
-	loader := validator.NewCUEModuleLoader(dir)
-	modules, err := loader.LoadAllModules()
+	found, err := listModelsIn(dir)
 	if err != nil {
-		return nil, "", fmt.Errorf("load schemas in %s: %w", dir, err)
+		return nil, "", err
 	}
-
-	var matchModel *systemmodel.SystemModel
-	var matchDir, matchName string
-	for _, mod := range modules {
-		for schemaName, meta := range mod.Metadata {
-			if meta.ResourceType != "system_model" {
-				continue
-			}
-			val, ok := mod.Schemas[schemaName]
-			if !ok {
-				continue
-			}
-			m, derr := systemmodel.DecodeValue(val)
-			if derr != nil {
-				// The abstract base #SystemModel (no concrete name) and any
-				// incomplete def land here — skip, they aren't runnable models.
-				continue
-			}
-			if m.Name != name && shortDefName(schemaName) != name {
-				continue
-			}
-			if matchModel != nil && matchName != schemaName {
-				return nil, "", fmt.Errorf("system model %q is ambiguous in %s (matches %s and %s)", name, dir, matchName, schemaName)
-			}
-			matchModel, matchDir, matchName = m, mod.LoadPath, schemaName
+	var match *ModelInfo
+	for i := range found {
+		mi := &found[i]
+		if mi.Name != name && mi.DefName != name {
+			continue
 		}
+		if match != nil && match.SchemaName != mi.SchemaName {
+			return nil, "", fmt.Errorf("system model %q is ambiguous in %s (matches %s and %s)", name, dir, match.SchemaName, mi.SchemaName)
+		}
+		match = mi
 	}
-	return matchModel, matchDir, nil
+	if match == nil {
+		return nil, "", nil
+	}
+	return match.Model, match.Dir, nil
 }
 
 // shortDefName strips the package prefix and leading '#' from a canonical schema
