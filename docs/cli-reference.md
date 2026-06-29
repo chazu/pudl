@@ -287,14 +287,6 @@ pudl schema reinfer
 
 Migrate schema names to canonical `<package-path>.#<Definition>` format.
 
-### `pudl schema generate-type`
-
-Generate a schema from a type registry (Kubernetes, AWS, GitLab).
-
-```bash
-pudl schema generate-type --kind Pod --api-version v1
-```
-
 ### Schema Version Control
 
 The schema directory is a git repository:

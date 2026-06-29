@@ -13,7 +13,6 @@ Overview of the testing strategy for PUDL.
 | Definition | `internal/definition/` | Discovery, schema reference parsing, dependency graph, validation |
 | Drift | `internal/drift/` | JSON deep diff, drift checker, report storage |
 | Mubridge | `internal/mubridge/` | Drift-to-action export, plan response generation |
-| Type Patterns | `internal/typepattern/` | AWS, Kubernetes, GitLab pattern detection |
 | Identity | `internal/identity/` | Resource identity extraction, content hashing |
 | Schema Name | `internal/schemaname/` | Normalization, canonical format |
 | Integration | `test/integration/` | End-to-end import-to-catalog workflows |
@@ -49,9 +48,6 @@ go test ./internal/drift -v
 # Mu bridge
 go test ./internal/mubridge -v
 
-# Type patterns
-go test ./internal/typepattern -v
-
 # Integration
 go test ./test/integration/... -v
 
@@ -82,7 +78,6 @@ internal/
   definition/     *_test.go   -- Definition discovery, graph, validation
   drift/          *_test.go   -- Deep diff, checker, reports
   mubridge/       *_test.go   -- Action export
-  typepattern/    *_test.go   -- Type detection patterns
   identity/       *_test.go   -- Resource identity
   schemaname/     *_test.go   -- Name normalization
   schemagen/      *_test.go   -- Schema generation
