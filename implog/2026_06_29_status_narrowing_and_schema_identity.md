@@ -27,10 +27,23 @@ the status enum. So they were **collapsed into a single in-sync status, `clean`*
   and the **canonical mu spec** `V1-BUILD-SPEC.md` §5/§8 (records the 2026-06-29
   collapse decision).
 
-**Note on scope:** `ingest-manifest`'s `converging` is written per *resource*
-(`targetToDefinition(action.Target)`, e.g. `web`), a separate axis from the
-model-instance verdict (`//models/<name>`). Per-resource `converging→clean` promotion
-(what the deleted World A `checker.go` once did) is not part of this change.
+### Per-resource `converging → clean` promotion (the drift re-check closes the loop)
+
+`ingest-manifest` writes `converging` per *resource* (`targetToDefinition(action.Target)`,
+e.g. `web`) — a separate axis from the model-instance verdict (`//models/<name>`).
+Nothing previously promoted those rows once the apply was verified. Now, when a
+`pudl run` drift re-check is **clean**, `promoteConvergingResources` (`cmd/run.go`)
+flips this model's resources from `converging` to `clean` via the new
+`CatalogDB.PromoteConvergingToClean(defs)` (`internal/database/catalog_status.go`).
+
+Scoping: the manifest action targets are bare resource names with no model linkage,
+so the promotion is scoped to the **definition names derivable from the model's own
+desired records** (`modelResourceDefs` — each record's identity_fields, else
+name/path/id). It only flips rows currently in `converging`, so it can never touch
+another model's pending resources, and a resource whose defName can't be derived is
+simply left as-is (never wrongly promoted). Best-effort: a missing catalog/resolver
+never fails the run. Unit test: `TestPromoteConvergingToClean` (in-scope converging →
+clean; non-converging untouched; out-of-scope model untouched).
 
 ## 2. Schema-driven identity for inventory drift
 

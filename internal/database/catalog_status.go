@@ -34,6 +34,33 @@ func (c *CatalogDB) UpdateStatus(definitionName string, status string) error {
 	return err
 }
 
+// PromoteConvergingToClean flips status converging -> clean for the latest entry
+// of each named definition that is currently "converging", returning the number
+// promoted. It is the drift re-check verifying a pending apply: when a model's
+// drift is ∅, its resources that ingest-manifest left "applied, pending
+// verification" (converging) are now confirmed in sync. Definitions not currently
+// converging (or absent) are untouched, so it is safe to call with a superset of
+// candidate names.
+func (c *CatalogDB) PromoteConvergingToClean(definitions []string) (int, error) {
+	promoted := 0
+	for _, def := range definitions {
+		res, err := c.db.Exec(
+			`UPDATE catalog_entries SET status = 'clean', updated_at = CURRENT_TIMESTAMP
+			 WHERE definition = ? AND status = 'converging' AND id = (
+			     SELECT id FROM catalog_entries WHERE definition = ?
+			     ORDER BY import_timestamp DESC LIMIT 1
+			 )`,
+			def, def,
+		)
+		if err != nil {
+			return promoted, fmt.Errorf("promote %q: %w", def, err)
+		}
+		n, _ := res.RowsAffected()
+		promoted += int(n)
+	}
+	return promoted, nil
+}
+
 // GetDefinitionStatuses returns the latest status for each definition that has entries.
 func (c *CatalogDB) GetDefinitionStatuses() ([]DefinitionStatus, error) {
 	rows, err := c.db.Query(`

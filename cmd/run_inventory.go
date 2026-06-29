@@ -52,6 +52,45 @@ func recordIdentity(rec map[string]any, identity identityResolver) (key string, 
 	return "", "", false
 }
 
+// modelResourceDefs returns the candidate catalog definition names for a model's
+// desired resources — the bare resource names that `ingest-manifest` keys
+// per-resource status on (targetToDefinition(action.Target)). Each desired record
+// contributes the values of its declared identity_fields, else the first present
+// of name | path | id. The set is a superset used only to scope a converging->clean
+// promotion, so extra candidates that match nothing are harmless.
+func modelResourceDefs(desired []map[string]any, identity identityResolver) []string {
+	seen := map[string]bool{}
+	var defs []string
+	add := func(v any) {
+		s := fmt.Sprintf("%v", v)
+		if s != "" && !seen[s] {
+			seen[s] = true
+			defs = append(defs, s)
+		}
+	}
+	for _, d := range desired {
+		schema, _ := d["_schema"].(string)
+		matched := false
+		if identity != nil {
+			for _, f := range identity(schema) {
+				if v, ok := d[f]; ok {
+					add(v)
+					matched = true
+				}
+			}
+		}
+		if !matched {
+			for _, k := range []string{"name", "path", "id"} {
+				if v, ok := d[k]; ok {
+					add(v)
+					break
+				}
+			}
+		}
+	}
+	return defs
+}
+
 // schemaIdentityResolver builds an identityResolver backed by the schema inferrer:
 // each schema's declared identity_fields from the inference graph. Records whose
 // schema is unknown or declares none fall back to the name|path|id heuristic.

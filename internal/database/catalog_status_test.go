@@ -91,6 +91,39 @@ func TestUpdateStatus_Valid(t *testing.T) {
 	}
 }
 
+func TestPromoteConvergingToClean(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	mk := func(id, def, status string) {
+		d := def
+		et := "manifest-action"
+		require.NoError(t, db.AddEntry(CatalogEntry{
+			ID: id, StoredPath: id + ".json", MetadataPath: id + ".meta",
+			ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+			Schema: "pudl/core.#Item", Definition: &d, EntryType: &et,
+		}))
+		require.NoError(t, db.UpdateStatus(def, status))
+	}
+	mk("a", "web", "converging") // this model, pending
+	mk("b", "api", "drifted")    // this model, not converging -> untouched
+	mk("c", "other", "converging") // another model -> must NOT be promoted
+
+	n, err := db.PromoteConvergingToClean([]string{"web", "api", "absent"})
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "only the converging in-scope def is promoted")
+
+	statuses, err := db.GetDefinitionStatuses()
+	require.NoError(t, err)
+	got := map[string]string{}
+	for _, s := range statuses {
+		got[s.Definition] = s.Status
+	}
+	assert.Equal(t, "clean", got["web"], "converging in-scope -> clean")
+	assert.Equal(t, "drifted", got["api"], "non-converging untouched")
+	assert.Equal(t, "converging", got["other"], "out-of-scope model untouched")
+}
+
 func TestUpdateStatus_Invalid(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
