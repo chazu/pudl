@@ -40,11 +40,11 @@ and that directory currently holds only stale mu build/lint configs.
 
 | # | Item | Evidence | Notes | Status |
 |---|------|----------|-------|--------|
-| 1.1 | `~/.pudl/schema/definitions/build.cue`, `lint.cue` | both are `brick.#Target`/`brick.#Interface` mu build+lint configs, not models | This is literally what `pudl definition list` surfaces today | open |
-| 1.2 | `Vault` field + `vault?:` schema field | `internal/systemmodel/systemmodel.go:38`, `internal/systemmodel/schema.cue:54`; never read anywhere; vault subsystem removed in commit `bfaaf03` | also a stale `vault` entry in tab-completion (`cmd` completion, commit `5a7be14`) | open |
+| 1.1 | `~/.pudl/schema/definitions/build.cue`, `lint.cue` | both are `brick.#Target`/`brick.#Interface` mu build+lint configs, not models | This is literally what `pudl definition list` surfaces today | ✅ **DONE (2026-06-26)** — deleted (backed up to scratchpad; outside git) |
+| 1.2 | `Vault` field + `vault?:` schema field | `internal/systemmodel/systemmodel.go:38`, `internal/systemmodel/schema.cue:55`; never read anywhere; vault subsystem removed in commit `bfaaf03` (secrets now via `sealed_inputs`) | no other refs (the "tab-completion vault" was already gone) | ✅ **DONE (2026-06-26)** — removed field + schema entry; build+tests green |
 | 1.3 | `entry_type='import'` / `entry_type='artifact'` taxonomy | nothing writes them (commit `ddd5030`); see §5 for the full lineage | **NOT a standalone delete** — `artifact` is entangled with Cluster A; `import` is a harmless migration default | analysed → see §5 |
-| 1.4 | `cmd/migrate.go` | empty parent stub; real logic now lives under `identity migrate` | | open |
-| 1.5 | `datalog.Compile` / `datalog.CompileWithOptions` | `internal/datalog/compile.go:25,29` flagged unreachable by `deadcode` | verify the query orchestrator isn't an intended caller before cutting | open |
+| 1.4 | ~~`cmd/migrate.go`~~ | ❌ **FALSE POSITIVE** — not a stub. `cmd/identity_migrate.go:49` attaches `identityMigrateCmd` to `migrateCmd`; `pudl migrate identity` is the live command and this is its parent. | **KEEP** | rejected |
+| 1.5 | ~~`datalog.Compile` / `datalog.CompileWithOptions`~~ | ❌ **MOSTLY FALSE** — `CompileWithOptions` is heavily used (`recursive.go:97,133`, `sql_eval.go:33`); only the thin bare `Compile` wrapper (`compile.go:25`) is uncalled, and it's a reasonable public convenience API. | **KEEP** | rejected |
 
 ---
 
@@ -95,50 +95,6 @@ probably fall *out of* this decision rather than precede it.
 **Status:** open — highest-value decision.
 
 ### Cluster B — pith-in-pudl: `pudl exec` + `internal/pithdriver`
-
-**What it is.** `cmd/exec.go` ("Run a pith VM program against the pudl data
-lake") + `internal/pithdriver/` (8 files: catalog / facts / schema / drift /
-convert / register / schema_infer) + the external `github.com/chazu/pith`
-dependency. A May-2026 experiment to query the lake via a pith concatenative VM
-(commits `3143e67`, `35166c8`).
-
-**Why it's a clean excision candidate.** Self-contained: nothing else imports
-`pithdriver`. pith was subsequently absorbed into **mu** (`mu/internal/pithvm`),
-and the cass-memory loop (`memory cycle`) runs by shelling **mu**, not this path.
-
-**The decision.** Almost a pure judgment call on whether you want a pith-query
-power tool in pudl at all. If not, excising it removes one command, one package,
-and one external dependency.
-
-**Analysis (resolved — removable, no functionality lost):**
-- "pith datalog layer" is a misnomer. The real query layer is `internal/datalog`
-  (rules→SQL, recursive fixpoint), surfaced by `pudl query` + `pkg/factstore.Query`
-  with CUE-authored rules. It is **pith-free** (no pith import in `internal/datalog`
-  or `pkg/`). pithdriver is a separate concatenative *scripting* surface, not
-  datalog.
-- Every pith word is a thin delegate to an existing method, all already exposed
-  elsewhere:
-  - `catalog/query`,`catalog/count` → `db.QueryEntries` (= `pudl list`)
-  - `catalog/get` → `db.GetEntry`/`GetEntryByProquint` (= `pudl show`)
-  - `fact/query` → `db.QueryFacts` (= `pudl facts`, `factstore.QueryFacts`)
-  - `fact/assert`/`fact/retract` → `db.AddFact`/`RetractFact` (= `pudl facts add`)
-  - `schema/list`,`schema/match`,`schema/infer` → `mgr.ListSchemas`,`inferrer.Infer`
-  - `drift/diff` → pure in-VM list diff (no DB)
-- The datalog engine is **strictly more capable** for querying (rules/joins/
-  recursion) than `catalog/query`'s flat `FilterOptions`.
-- The ONLY pith-exclusive thing is *programmability* (compose query + arithmetic
-  + quotations in one program). It appears unused — the cass-memory loop runs on
-  **mu** (`memory cycle`), not `pudl exec` — and pith-as-execution now lives in mu
-  (`mu/internal/pithvm`). If programmable composition is ever wanted, it belongs
-  there over the mu bridge, not as a second VM embedded in pudl.
-
-**Blast radius (verified — nothing else depends on it):** `cmd/exec.go` +
-`internal/pithdriver/` (8 files) + `examples_test.go`. Removal also drops
-`github.com/chazu/pith` from `go.mod:26` **and** the `replace … => ../pith`
-(`go.mod:72`) — clearing a local-replace that blocks clean external builds.
-Net: ~−660 lines, −1 external dep, −1 replace directive, zero functionality lost.
-Also: remove `exec`/pith pieces from tab-completion and the pith example
-programs/implog references.
 
 **Status:** ✅ **DONE (2026-06-26)** — removed `cmd/exec.go` +
 `internal/pithdriver/` (8 files) + the `pith` dep/replace; cleaned the live
