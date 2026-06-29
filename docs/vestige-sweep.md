@@ -42,7 +42,7 @@ and that directory currently holds only stale mu build/lint configs.
 |---|------|----------|-------|--------|
 | 1.1 | `~/.pudl/schema/definitions/build.cue`, `lint.cue` | both are `brick.#Target`/`brick.#Interface` mu build+lint configs, not models | This is literally what `pudl definition list` surfaces today | ✅ **DONE (2026-06-26)** — deleted (backed up to scratchpad; outside git) |
 | 1.2 | `Vault` field + `vault?:` schema field | `internal/systemmodel/systemmodel.go:38`, `internal/systemmodel/schema.cue:55`; never read anywhere; vault subsystem removed in commit `bfaaf03` (secrets now via `sealed_inputs`) | no other refs (the "tab-completion vault" was already gone) | ✅ **DONE (2026-06-26)** — removed field + schema entry; build+tests green |
-| 1.3 | `entry_type='import'` / `entry_type='artifact'` taxonomy | nothing writes them (commit `ddd5030`); see §5 for the full lineage | `artifact`: ✅ **DONE** — `catalog_artifacts.go` + `GetLatestArtifact*` deleted with Cluster A; `import` left (harmless migration default). Residual: the `Method` column (artifact-model leftover, nullable, low priority). | partly done |
+| 1.3 | `entry_type='import'` / `entry_type='artifact'` taxonomy | nothing writes them (commit `ddd5030`); see §5 for the full lineage | `artifact`: ✅ **DONE** — `catalog_artifacts.go` + `GetLatestArtifact*` deleted with Cluster A; `import` left (harmless migration default). `Method` column: ✅ **DONE (2026-06-29)** — see Residual below. | ✅ done |
 | 1.4 | ~~`cmd/migrate.go`~~ | ❌ **FALSE POSITIVE** — not a stub. `cmd/identity_migrate.go:49` attaches `identityMigrateCmd` to `migrateCmd`; `pudl migrate identity` is the live command and this is its parent. | **KEEP** | rejected |
 | 1.5 | ~~`datalog.Compile` / `datalog.CompileWithOptions`~~ | ❌ **MOSTLY FALSE** — `CompileWithOptions` is heavily used (`recursive.go:97,133`, `sql_eval.go:33`); only the thin bare `Compile` wrapper (`compile.go:25`) is uncalled, and it's a reasonable public convenience API. | **KEEP** | rejected |
 
@@ -113,7 +113,7 @@ left for the §3 doc-cleanup pass; implog history kept as-is.
 | # | Item | Evidence | Fix | Status |
 |---|------|----------|-----|--------|
 | 3.1 | Module-name bug | `CLAUDE.md:13` and `docs/library-api.md:10` say module is `pudl`; `go.mod` says `github.com/chazu/pudl` | correct the docs | ✅ **DONE (2026-06-26)** — fixed CLAUDE.md + library-api.md (incl. example imports) |
-| 3.2 | `cascade_validator.go` naming | code is LIVE (intended→base→catchall unification) but the name carries the removed "cascade priority" concept ("no cascade priority" per memory) | rename, don't delete — see §5 | open (code rename, not a doc fix) |
+| 3.2 | `cascade_validator.go` naming | code is LIVE (intended→base→catchall unification) but the name carries the removed "cascade priority" concept ("no cascade priority" per memory) | rename, don't delete — see §5 | ✅ **DONE (2026-06-29)** — `cascade_validator.go`→`chain_validator.go`; `CascadeValidator`→`ChainValidator`, `ValidateWithCascade`→`ValidateChain`, `CascadeAttempt(s)`→`ChainAttempt(s)`, `ServiceCascadeAttempt`→`ServiceChainAttempt`, json `cascade_attempts`→`chain_attempts` (never marshaled to output), + callers in `importer.go`/`cmd/import.go`/`importer_test.go` and comments. Build+tests green. Left alone (distinct concerns): `--cascade` delete (`cmd/delete.go`, lister) and `internal/inference` `CascadePath`/`GetCascadeChain`. |
 | 3.3 | Doc sweep after the World A deletion | every live doc that referenced the deleted commands/concepts (definitions/sockets/drift/export-actions/pith/exec, `pudl method`/`workflow`, `model search/scaffold`) | reframe to `#SystemModel`/`pudl model`/`pudl run` | ✅ **DONE (2026-06-26)** — README, FEATURES, cli-reference, concepts, getting-started, mu-integration, architecture, TESTING, docs/README index, both skill files (root + embedded). Deleted `docs/pith-vm.md`. Historical docs (research/, chats/, VISION, plan, cass-memory, issues/) left as snapshots. |
 
 ---
@@ -185,12 +185,25 @@ method/artifact model.
   - `entry_type='artifact'` + `catalog_artifacts.go` + the `method` column are
     remnants of the definition→method→artifact model, load-bearing **only** for
     the standalone (World A) drift checker. Remove them **with the Cluster A
-    decision** (§2), not standalone.
+    decision** (§2), not standalone. ✅ **DONE** — `catalog_artifacts.go` deleted
+    with Cluster A; the **`method` column removed 2026-06-29** (struct field, all
+    SELECT/INSERT/UPDATE SQL, the `catalog_entry_edb` view, the `lister`
+    `CatalogEntry` mirror, `docs/datalog.md`, and the migration's ADD COLUMN +
+    `idx_definition_method`; existing DBs drop it idempotently via
+    `dropLegacyMethodColumn`, drop-view-first so SQLite permits the DROP COLUMN —
+    regression test `TestDropLegacyMethodColumn`). Verified `Method` was never
+    written non-nil. `Definition` is **kept** (live: run verdicts write
+    `definition='//models/<name>'`).
   - `entry_type='import'` (migration default + NULL backfill) is harmless and
-    idempotent — cosmetic cleanup at most.
+    idempotent — cosmetic cleanup at most. **Left as-is.**
   - `resource_type` `artifact` / `artifact.image` + the embedded
-    `pudl/artifact/artifact.cue` (`cue_schemas.go:123`) are a separate check —
-    don't conflate with the dead entry_type.
+    `pudl/artifact/artifact.cue` — ✅ **CHECKED → KEEP (false positive)**.
+    `artifact.cue` is a legitimate standalone **data** schema (`#ImageRef` =
+    container-image refs, `#ArtifactRef` = content-addressed artifacts; both
+    `schema_type:"base"` with identity/tracked fields), registered in
+    `catalog.cue`. The `resource_type` axis is data classification — distinct
+    from, and only name-colliding with, the dead `entry_type='artifact'`. Nothing
+    ties it to the removed execution model.
 
 ## 6. Cluster A decision — grounded in SystemModel design intent
 

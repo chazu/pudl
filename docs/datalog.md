@@ -182,9 +182,8 @@ Available fields (view columns):
 | `origin` | Data origin / workspace |
 | `format` | File format |
 | `status` | Convergence status |
-| `entry_type` | import, artifact, observe, manifest |
-| `definition` | Definition name (if applicable) |
-| `method` | Method name (for artifacts) |
+| `entry_type` | import, observe, manifest, manifest-action |
+| `definition` | Definition name / run target `//models/<name>` |
 | `run_id` | Run identifier |
 | `resource_id` | Stable resource identity |
 | `content_hash` | SHA256 of stored data |

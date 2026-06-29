@@ -10,7 +10,7 @@ import "fmt"
 // details.
 //
 // Must run after all catalog_entries column migrations, since the view
-// references migration-added columns (status, entry_type, definition, method,
+// references migration-added columns (status, entry_type, definition,
 // run_id, resource_id, content_hash, version). It is dropped and recreated on
 // every open so the definition always matches this source.
 func (c *CatalogDB) ensureCatalogEntryView() error {
@@ -27,7 +27,6 @@ func (c *CatalogDB) ensureCatalogEntryView() error {
 			status,
 			entry_type,
 			definition,
-			method,
 			run_id,
 			resource_id,
 			content_hash,

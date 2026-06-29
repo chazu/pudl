@@ -49,6 +49,52 @@ func TestEnsureIdentityColumns_Idempotent(t *testing.T) {
 	}
 }
 
+func TestDropLegacyMethodColumn(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Simulate a pre-cleanup database: re-add the `method` column, its index,
+	// and a catalog_entry_edb view that references it. The view reference is the
+	// reason cleanup must drop the view before the column (SQLite blocks
+	// DROP COLUMN while a view references it).
+	for _, stmt := range []string{
+		"ALTER TABLE catalog_entries ADD COLUMN method TEXT",
+		"CREATE INDEX idx_definition_method ON catalog_entries(definition, method)",
+		"DROP VIEW IF EXISTS " + CatalogEntryView,
+		"CREATE VIEW " + CatalogEntryView + " AS SELECT id, definition, method FROM catalog_entries",
+	} {
+		if _, err := db.db.Exec(stmt); err != nil {
+			t.Fatalf("legacy-state setup %q failed: %v", stmt, err)
+		}
+	}
+
+	if exists, err := db.columnExists("catalog_entries", "method"); err != nil || !exists {
+		t.Fatalf("precondition: method column should exist (exists=%v, err=%v)", exists, err)
+	}
+
+	if err := db.dropLegacyMethodColumn(); err != nil {
+		t.Fatalf("dropLegacyMethodColumn failed: %v", err)
+	}
+
+	exists, err := db.columnExists("catalog_entries", "method")
+	if err != nil {
+		t.Fatalf("column check failed: %v", err)
+	}
+	if exists {
+		t.Error("method column should be dropped after cleanup")
+	}
+
+	// Idempotent: a second run on the already-cleaned DB is a no-op.
+	if err := db.dropLegacyMethodColumn(); err != nil {
+		t.Fatalf("second dropLegacyMethodColumn run failed: %v", err)
+	}
+
+	// Leave the DB consistent: recreate the real view (no method column).
+	if err := db.ensureCatalogEntryView(); err != nil {
+		t.Fatalf("ensureCatalogEntryView failed: %v", err)
+	}
+}
+
 func TestBackfillDefaults(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pudl-test-backfill-*")
 	if err != nil {
