@@ -19,7 +19,10 @@ pudl show mivof-duhij --raw
 
 # Check schema health
 pudl verify
-pudl drift check my-server
+
+# Run a system model: populate, detect drift, run checks, report
+pudl model list
+pudl run my-server
 ```
 
 ## What Happens When You Import
@@ -45,10 +48,10 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **Schema inference**: Heuristic scoring narrows candidates, then CUE unification validates matches -- most specific schema wins
 - **Resource identity**: Same logical resource tracked across re-imports via `resource_id` (schema + identity fields hash)
 - **Collections**: NDJSON files and JSON API wrappers are automatically split into individual items with parent references
-- **Definitions**: Named configurations validated against CUE schemas, with socket-based wiring between them
-- **Drift detection**: Compare declared definition state against imported data using deep diff
+- **System models**: A `#SystemModel` instance declares the desired state of a system as a set of `desired` entries (each entry is a "definition"); `pudl run` drives it
+- **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
 - **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
-- **mu bridge**: Export drift reports as action specs for the [mu](https://github.com/...) build tool
+- **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
 
 See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas.
 
@@ -78,17 +81,16 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl schema migrate` | Run schema migrations |
 | `pudl schema reinfer` | Re-infer schemas for existing entries |
 
-### Definitions and Drift
+### Models
 
 | Command | Description |
 |---------|-------------|
-| `pudl definition list` | List definitions |
-| `pudl definition show <name>` | Show definition details |
-| `pudl definition validate` | Validate definitions against their schemas |
-| `pudl definition graph` | Show dependency graph |
-| `pudl drift check` | Compare declared vs live state |
-| `pudl drift report` | Show last drift report |
-| `pudl export-actions` | Bridge drift reports to mu action specs |
+| `pudl model list` | List registered `#SystemModel` instances with last-run status |
+| `pudl model show <name>` | Show a model's desired entries and details |
+| `pudl model validate <name>` | Validate a model against its schema |
+| `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
+| `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
+| `pudl status` | Read catalog convergence status recorded by the last model run |
 
 ### Observations and Facts
 
@@ -118,7 +120,6 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 | `pudl verify` | Fixed-point check: re-run inference on all entries, confirm stability |
 | `pudl doctor` | Workspace health checks |
 | `pudl repo init` | Initialize `.pudl/` in a repository, install Claude skills |
-| `pudl repo validate` | Validate all schemas and definitions |
 | `pudl config` | Show current configuration |
 | `pudl validate` | Validate data against schemas |
 
@@ -149,14 +150,14 @@ See [docs/schema-authoring.md](docs/schema-authoring.md) for the full guide.
 
 ## The mu Integration
 
-PUDL knows what has drifted but does not execute changes itself. The `pudl export-actions` command emits JSON action specs that the mu build tool can consume and execute. This separation keeps PUDL focused on data and schema correctness while mu handles orchestration.
+PUDL knows what has drifted but does not execute changes itself. When you run a model with `--converge`, PUDL renders the desired state to sources; the mu build tool's plugin then reconciles reality to match. This separation keeps PUDL focused on data and schema correctness while mu handles execution.
 
 ```bash
-# Check what drifted
-pudl drift check my-server
+# Observe-only: populate, detect drift, run checks, report
+pudl run my-server
 
-# Export as mu-compatible action plan
-pudl export-actions --definition my-server
+# Close drift: pudl renders desired -> sources, mu reconciles
+pudl run my-server --converge
 ```
 
 ## Documentation
@@ -165,7 +166,7 @@ See [docs/README.md](docs/README.md) for the full documentation index.
 
 ## Project Status
 
-PUDL's data pipeline (import, catalog, schema inference, drift detection, mu bridge) is stable. The execution layer (models, methods, workflows, Glojure runtime) was removed in a major refactoring to focus PUDL on what it does best: ingesting data, inferring schemas, and detecting drift. Execution is now delegated to mu.
+PUDL's data pipeline (import, catalog, schema inference, drift detection, mu bridge) is stable. The old execution runtime (Glojure-based methods and workflows) was removed in a major refactoring to focus PUDL on what it does best: ingesting data, inferring schemas, and detecting drift. Execution is delegated to mu; PUDL declares desired/observed state and converges it through `#SystemModel` instances run with `pudl run`.
 
 See [docs/VISION.md](docs/VISION.md) for the roadmap.
 

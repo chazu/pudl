@@ -52,31 +52,29 @@ See [architecture.md](docs/architecture.md)
 ## Validation & Verification — CORE
 
 - CUE structural validation against assigned schemas (`pudl validate`)
-- Repository-wide validation (`pudl repo validate`)
 - Fixed-point verification: confirms schema inference is stable (`pudl verify`)
 - Cascade validation: intended schema → base schema → catchall fallback via CUE unification
 
-## Definitions — CORE
+## System Models — CORE
 
-- Named instances of schemas discovered from CUE files
-- Dependency graph with cycle detection (`pudl definition graph`)
-- Definition validation against schema interfaces (`pudl definition validate`)
-- Interface checking: verifies definitions conform to schema constraints
-- Multi-path discovery with per-repo workspace shadowing
+- `#SystemModel` instances declare a system's desired state as a set of `desired` entries (each entry is a "definition")
+- Model registry with last-run status (`pudl model list`)
+- Inspect a model's desired entries and details (`pudl model show <name>`)
+- Validate a model against its schema (`pudl model validate <name>`)
+- Models discovered from CUE files with per-repo workspace shadowing
 
-## Drift Detection — CORE
+## Run & Drift — CORE
 
-- JSON deep diff comparing declared (definition) vs actual (catalog) state
-- Field-level diffing: added, removed, changed fields
-- Drift report storage and retrieval (`pudl drift check`, `pudl drift report`)
-- Convergence status tracking per definition: unknown → clean → drifted → converging → converged → failed (`pudl status`)
+- `pudl run <name>` drives the observe-only ACUTE loop: populate → drift → checks → report
+- Drift is a phase of `pudl run`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed)
+- `pudl run <name> --converge` closes drift: pudl renders desired → sources and the mu plugin reconciles
+- Convergence status tracking per model instance: unknown → clean → drifted → converging → converged → failed; a run records its verdict on the instance row, read back via `pudl status`
 
 ## Mu Integration — CORE
 
-- Export drift reports as mu-compatible action specs (`pudl export-actions`)
-- BRICK-aware: reads `brick.#Target` toolchain and config from definitions
-- Ingest mu build manifests (`pudl ingest-manifest`)
-- Ingest mu observe results as live state for drift detection (`pudl ingest-observe`)
+- pudl declares desired/observed state; mu executes — pudl shells out to mu, with no execution layer of its own
+- Ingest mu build manifests (`pudl mu ingest-manifest`)
+- Ingest mu observe results as live state for drift detection (`pudl mu ingest-observe`)
 - Envelope JSON import with schema sidecar from mu plugins
 - Schema cache for mu plugin output
 
@@ -111,7 +109,7 @@ See [datalog.md](docs/datalog.md)
 - Per-repo schema and definition paths shadow global paths
 - Imports within a workspace auto-tagged with workspace name
 
-Known gap: workspace context infrastructure exists but most CLI commands still use only the global schema path. Per-repo `definitions/` and `schema/` directories are not yet wired into definition, drift, export-actions, or schema commands. See [workspace-context-cli-wiring.md](docs/issues/workspace-context-cli-wiring.md).
+Known gap: workspace context infrastructure exists but most CLI commands still use only the global schema path. Per-repo `models/` and `schema/` directories are not yet wired into model, run, or schema commands. See [workspace-context-cli-wiring.md](docs/issues/workspace-context-cli-wiring.md).
 
 ## Observations — EXPERIMENTAL
 

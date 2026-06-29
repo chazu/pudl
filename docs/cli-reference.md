@@ -323,81 +323,73 @@ pudl catalog --verbose    # Show identity fields, tracked fields, etc.
 |------|-------------|
 | `--verbose` / `-v` | Show additional metadata fields (identity_fields, tracked_fields) |
 
-## Definition Management
+## Models
 
-### `pudl definition list`
+A model is a registered `#SystemModel` describing a `desired` state and the sources that populate observed state. A "definition" is a `desired` entry within a model — a per-status unit. Drift detection is a phase of `pudl run`, not a standalone command.
 
-List available definitions.
+### `pudl model list`
 
-```bash
-pudl definition list
-pudl definition list --verbose
-```
-
-Aliases: `pudl def list`, `pudl d list`
-
-### `pudl definition show <name>`
-
-Display detailed definition information including socket bindings and dependencies.
+List registered `#SystemModel`s along with the status of each model's last run.
 
 ```bash
-pudl definition show my_definition
-pudl def show prod_instance
+pudl model list
+pudl model list --json
 ```
 
-### `pudl definition validate [name]`
+### `pudl model show <name>`
 
-Validate definitions against their schemas and enforce BRICK interface contracts.
-
-When run without arguments, validates all definitions in two passes:
-
-1. **Schema validation** — each definition conforms to its declared CUE schema
-2. **Interface enforcement** — components with `implements` satisfy their interface's `contract` via CUE unification
+Display detailed information about a single model.
 
 ```bash
-pudl definition validate              # Validate all + check interfaces
-pudl definition validate prod_instance  # Validate one
+pudl model show my_model
+pudl model show my_model --json
 ```
 
-Interface violations show which fields conflict:
+### `pudl model validate <name>`
 
-```
-  FAIL  //lint/bad (implements //interface/lint)
-        field "toolchain": conflicting values "lint" and "wrong"
-```
-
-### `pudl definition graph`
-
-Show the dependency graph between definitions based on socket wiring.
+Validate a model against its schema.
 
 ```bash
-pudl definition graph
+pudl model validate my_model
+pudl model validate my_model --json
 ```
 
-## Drift Detection
+## Convergence
 
-### `pudl drift check [definition]`
+### `pudl run <name>`
 
-Compare declared definition state against live state from imported data.
+Run a model's ACUTE loop. By default this is observe-only: it populates observed state, detects drift, runs checks, and prints a report without making changes.
+
+With `--converge` it closes drift: pudl renders the desired state to sources and the mu plugin reconciles the live system toward it.
 
 ```bash
-pudl drift check my_instance
-pudl drift check --all
+pudl run my_model                 # observe-only: populate -> drift -> checks -> report
+pudl run my_model --converge      # close drift (render desired -> sources, mu reconciles)
+pudl run my_model --only foo      # restrict to a single definition
+pudl run my_model --dry-run       # show planned actions without applying
 ```
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--all` | Check all definitions |
+| `--converge` | Close drift instead of only observing |
+| `--only` | Restrict the run to a single definition |
+| `--dry-run` | Show planned actions without applying them |
+| `--max-iters` | Maximum convergence iterations |
+| `--from-catalog` | Source observed state from the catalog |
+| `--mu-root` | Path to the mu workspace root used for reconciliation |
 
-### `pudl drift report <definition>`
+### `pudl status [definition]`
 
-Display the last saved drift report without re-running detection.
+Read convergence status from the catalog. A model run records its verdict on the instance row `//models/<name>`. With no argument, reports status for all definitions; with a definition name, reports just that one.
 
 ```bash
-pudl drift report my_instance
+pudl status
+pudl status my_definition
 ```
+
+Statuses: `unknown`, `clean`, `drifted`, `converging`, `converged`, `failed`.
 
 ## Repository Operations
 
@@ -410,33 +402,16 @@ pudl repo init
 pudl repo init --force    # Force reinitialize
 ```
 
-### `pudl repo validate`
-
-Validate all schemas and definitions workspace-wide.
-
-```bash
-pudl repo validate
-```
-
-Reports total definitions, validation errors, and broken socket wiring.
-
 ## Interoperability
 
-### `pudl export-actions`
+### `pudl mu`
 
-Export drift reports as mu-compatible action specs (JSON to stdout).
+The `pudl mu` bridge exchanges state with the mu reconciliation plugin.
 
 ```bash
-pudl export-actions --definition my_instance
-pudl export-actions --all
+pudl mu ingest-observe     # Ingest observed state from a mu run
+pudl mu ingest-manifest    # Ingest a mu manifest
 ```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--definition` | Definition name to export actions for |
-| `--all` | Export actions for all definitions with drift reports |
 
 ### `pudl data search`
 

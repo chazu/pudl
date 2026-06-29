@@ -9,16 +9,12 @@ CLI tool for infrastructure data management and automation.
   config.yaml          # workspace configuration
   schema/              # CUE schema repository (git-tracked)
     cue.mod/           # CUE module metadata
-    pudl/              # local schema definitions
-    models/            # model CUE files (schema + behavior)
-    definitions/       # named instances of models
-    methods/           # Glojure .clj method implementations
-    extensions/models/ # user extension models
-    examples/          # usage examples
-  data/                # imported data + artifacts
+    pudl/              # built-in + local schema defs (incl. #SystemModel)
+    pudl/rules/        # Datalog rules
+    populators/        # populator programs for #EweTarget models
+  data/
     sqlite/catalog.db  # SQLite catalog
-    .runs/             # workflow run manifests
-    .drift/            # drift detection reports
+    .runs/             # run manifests
 ```
 
 ## Common Commands
@@ -36,27 +32,15 @@ CLI tool for infrastructure data management and automation.
 - `pudl schema show <name>` — Show schema details
 - `pudl schema new <name>` — Generate schema from data
 
-### Models & Definitions
-- `pudl model list` — List available models
-- `pudl model show <name>` — Show model details
-- `pudl model search <query>` — Search models by keyword
-- `pudl model scaffold <name>` — Generate model boilerplate
-- `pudl definition list` — List definitions
-- `pudl definition show <name>` — Show definition details
-- `pudl definition validate` — Validate all definitions
+### Models (`#SystemModel`)
+- `pudl model list` — List registered models (+ last-run status)
+- `pudl model show <name>` — Show populate/converge/desired/checks
+- `pudl model validate <name>` — Structural validation without running
 
-### Method Execution
-- `pudl method run <definition> <method>` — Execute a method
-- `pudl method run --dry-run <def> <method>` — Dry run (qualifications only)
-- `pudl method list <definition>` — List methods for a definition
-
-### Workflows
-- `pudl workflow run <name>` — Execute a workflow DAG
-- `pudl workflow list` — List workflows
-- `pudl workflow validate <name>` — Validate workflow
-
-### Infrastructure
-- `pudl drift check <definition>` — Compare declared vs live state
+### Convergence (`pudl run`)
+- `pudl run <name>` — Observe-only ACUTE loop for a `#SystemModel`: populate, drift, checks, report
+- `pudl run <name> --converge` — Close drift: render the model's `desired` state to a sources file and run `mu build` (the mu plugin reconciles)
+- `pudl status` — Read catalog convergence status (a model run records its verdict on `//models/<name>`)
 
 ### Utilities
 - `pudl init` — Initialize workspace
