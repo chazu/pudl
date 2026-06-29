@@ -14,16 +14,14 @@ var muCmd = &cobra.Command{
 	Short: "Bridge commands between pudl and the mu execution layer",
 	Long: `Commands that move data across the pudl/mu boundary.
 
-pudl knows; mu acts. These subcommands export pudl's drift as mu-executable
-action specs, and ingest mu's execution results back into the catalog.
+pudl knows; mu acts. These subcommands ingest mu's execution results back into
+the catalog.
 
 Available subcommands:
-- export-actions:  Emit drift as mu-compatible action specs
 - ingest-observe:  Store mu observe results as live catalog state
 - ingest-manifest: Record a mu build manifest in the catalog
 
 Examples:
-    pudl mu export-actions --all
     mu observe --json //home/odroid | pudl mu ingest-observe
     mu build --emit-manifest | pudl mu ingest-manifest`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -33,7 +31,6 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(muCmd)
-	muCmd.AddCommand(exportActionsCmd)
 	muCmd.AddCommand(ingestObserveCmd)
 	muCmd.AddCommand(ingestManifestCmd)
 }
