@@ -74,7 +74,11 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   by the drift re-check), written whether the model is observe-only or was just
   converged. The redundant `converged` status was removed (it and `clean` named the
   same state); the status vocabulary is now `unknown | drifted | converging | clean |
-  failed`. `clean` is only ever written off an actual ∅ observation.
+  failed`. `clean` is only ever written off an actual ∅ observation. A clean drift
+  re-check also promotes this model's per-resource `converging` rows (from
+  `ingest-manifest`) to `clean` — `promoteConvergingResources` →
+  `CatalogDB.PromoteConvergingToClean`, scoped to the model's own desired-resource
+  definition names.
 - **run.go dispatch** — inventory-vs-differential is currently explicit
   (`--from-catalog` = inventory). Auto-detect by observer style is a follow-up.
 - **cross-model data dependencies** — `pudl run` is single-instance; there is no

@@ -168,6 +168,12 @@ Examples:
 		// Persist the run's terminal verdict on the model instance row so
 		// `pudl model list` / `pudl status` surface last-run state.
 		persistRunStatus(model.Name, runVerdict(report, flags))
+
+		// A clean drift re-check verifies any pending apply: promote this model's
+		// resources from `converging` (written by ingest-manifest) to `clean`.
+		if report.Drift != nil && report.Drift.Clean && !flags.dryRun {
+			promoteConvergingResources(model)
+		}
 		return runErr
 	},
 }
@@ -214,6 +220,31 @@ func persistRunStatus(name, status string) {
 	}
 	defer db.Close()
 	_ = db.UpdateStatus(modelTarget(name), status)
+}
+
+// promoteConvergingResources flips this model's resources from `converging` to
+// `clean` after a verified clean drift (the drift re-check confirming a pending
+// apply). Best-effort: a missing catalog/resolver never fails the run. Scoped to
+// the model's own resource definition names, so it cannot touch another model's
+// pending resources.
+func promoteConvergingResources(m *systemmodel.SystemModel) {
+	if len(m.Desired) == 0 {
+		return
+	}
+	identity, err := schemaIdentityResolver()
+	if err != nil {
+		return
+	}
+	defs := modelResourceDefs(m.Desired, identity)
+	if len(defs) == 0 {
+		return
+	}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	_, _ = db.PromoteConvergingToClean(defs)
 }
 
 // anyFailSeverityFailed reports whether any severity:"fail" check did not pass.
