@@ -26,6 +26,37 @@ k8sPolicy: #SystemModel & {
 }
 `
 
+func TestDifferentialDrift(t *testing.T) {
+	// #PluginObserve without `differential` defaults to true (k8s differential path).
+	m, err := LoadModel([]byte(k8sConvergeModel), "k8sConverge")
+	require.NoError(t, err)
+	assert.True(t, m.Populate.Differential, "differential should default to true")
+	assert.True(t, m.DifferentialDrift())
+
+	// #PluginObserve with differential:false → inventory.
+	const hostInv = `
+inv: #SystemModel & {
+	name: "inv"
+	populate: #PluginObserve & {plugin: "host", differential: false}
+	desired: [{_schema: "pudl/linux.#Package", name: "podman"}]
+}`
+	mi, err := LoadModel([]byte(hostInv), "inv")
+	require.NoError(t, err)
+	assert.False(t, mi.Populate.Differential)
+	assert.False(t, mi.DifferentialDrift())
+
+	// EweTarget populate → always inventory, regardless of any field.
+	const eweModel = `
+e: #SystemModel & {
+	name: "e"
+	populate: #EweTarget & {eweSource: "p.cue", outputs: ["recs"]}
+	desired: [{_schema: "git.repo", name: "r"}]
+}`
+	me, err := LoadModel([]byte(eweModel), "e")
+	require.NoError(t, err)
+	assert.False(t, me.DifferentialDrift(), "ewe populate is inventory")
+}
+
 // convergence k8s model — adds desired + a #PluginPlan converge arm.
 const k8sConvergeModel = `
 k8sConverge: #SystemModel & {

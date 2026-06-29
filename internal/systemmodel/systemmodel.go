@@ -63,8 +63,9 @@ func (m *SystemModel) PluginByName(name string) (PluginDef, bool) {
 // Kind() reports which one this instance is, by which fields are set.
 type Populate struct {
 	// #PluginObserve
-	Plugin string         `json:"plugin,omitempty"`
-	Input  map[string]any `json:"input,omitempty"`
+	Plugin       string         `json:"plugin,omitempty"`
+	Input        map[string]any `json:"input,omitempty"`
+	Differential bool           `json:"differential,omitempty"` // observer reports per-resource exists/matches (k8s); false → inventory set-diff
 	// #EweTarget
 	EweSource        string            `json:"eweSource,omitempty"`
 	Outputs          []string          `json:"outputs,omitempty"`
@@ -88,6 +89,19 @@ func (p Populate) Kind() PopulateKind {
 		return KindEweTarget
 	}
 	return KindPluginObserve
+}
+
+// DifferentialDrift reports whether drift should be computed from a differential
+// observe (the observer reads `desired` as sources and reports per-resource
+// exists/matches, k8s-style) rather than an inventory set-diff. EweTarget populate
+// always produces a record set → inventory; a #PluginObserve uses its
+// `differential` field (default true). Observe-only models (no desired) never reach
+// a drift path, so the value is moot there.
+func (m *SystemModel) DifferentialDrift() bool {
+	if m.Populate.Kind() == KindEweTarget {
+		return false
+	}
+	return m.Populate.Differential
 }
 
 // PluginPlan is the converge arm: a declarative-apply plugin + its input.

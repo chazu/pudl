@@ -85,6 +85,10 @@ Examples:
 			muRoot, _ = findMuRoot(modelDir)
 		}
 
+		if flags.fromCatalog && len(model.Desired) == 0 {
+			return fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
+		}
+
 		report := &RunReport{Model: model.Name, OK: true}
 		var runErr error
 
@@ -104,39 +108,38 @@ Examples:
 				runErr = err
 			}
 
-		case flags.fromCatalog:
-			// Inventory drift over already-ingested records (host-style): no live
-			// observe — set-diff the model's desired vs what's in the catalog.
-			report.Mode = "observe-only (from-catalog)"
-			if len(model.Desired) == 0 {
-				return fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
-			}
-			db, err := database.NewCatalogDB(config.GetPudlDir())
-			if err != nil {
-				return fmt.Errorf("open catalog: %w", err)
-			}
-			defer db.Close()
-			identity, err := schemaIdentityResolver()
-			if err != nil {
-				return err
-			}
-			res, err := runInventoryDrift(db, "", model.Desired, identity)
-			if err != nil {
-				return err
-			}
-			report.Drift = &res
-
 		default:
 			report.Mode = "observe-only"
-			// A model with `desired` flags drift via the differential path
-			// (read-only); without it, inventory populate.
-			if len(model.Desired) > 0 {
+			// A model with `desired` flags drift; without it, populate.
+			switch {
+			case len(model.Desired) > 0 && useInventoryDrift(model, flags.fromCatalog):
+				// Inventory: set-diff desired vs already-ingested catalog records
+				// (no live observe). Auto-selected for inventory observers
+				// (EweTarget, or #PluginObserve differential:false); --from-catalog
+				// forces it for any model.
+				report.Mode = "observe-only (inventory)"
+				db, err := database.NewCatalogDB(config.GetPudlDir())
+				if err != nil {
+					return fmt.Errorf("open catalog: %w", err)
+				}
+				defer db.Close()
+				identity, err := schemaIdentityResolver()
+				if err != nil {
+					return err
+				}
+				res, err := runInventoryDrift(db, "", model.Desired, identity)
+				if err != nil {
+					return err
+				}
+				report.Drift = &res
+			case len(model.Desired) > 0:
+				// Differential: live observe with desired-as-sources (k8s-style).
 				res, err := runDrift(model, muRoot, modelDir)
 				if err != nil {
 					return err
 				}
 				report.Drift = &res
-			} else {
+			default:
 				pr, err := runPopulate(model, muRoot, modelDir, pudlRoot)
 				if err != nil {
 					return err
@@ -245,6 +248,14 @@ func promoteConvergingResources(m *systemmodel.SystemModel) {
 	}
 	defer db.Close()
 	_, _ = db.PromoteConvergingToClean(defs)
+}
+
+// useInventoryDrift decides the drift computation for a model with desired state:
+// inventory set-diff (against catalog records, no live observe) vs a differential
+// live observe. Inventory when --from-catalog is forced, or the model's observer is
+// not differential (EweTarget, or #PluginObserve differential:false).
+func useInventoryDrift(m *systemmodel.SystemModel, fromCatalog bool) bool {
+	return fromCatalog || !m.DifferentialDrift()
 }
 
 // anyFailSeverityFailed reports whether any severity:"fail" check did not pass.

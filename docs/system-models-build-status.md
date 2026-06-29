@@ -79,8 +79,12 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   `ingest-manifest`) to `clean` — `promoteConvergingResources` →
   `CatalogDB.PromoteConvergingToClean`, scoped to the model's own desired-resource
   definition names.
-- **run.go dispatch** — inventory-vs-differential is currently explicit
-  (`--from-catalog` = inventory). Auto-detect by observer style is a follow-up.
+- ~~**run.go dispatch**~~ — ✅ **DONE (2026-06-29).** Drift mode is auto-detected by
+  observer style: EweTarget populate → inventory; `#PluginObserve` uses its
+  `differential` field (default true → differential live observe; false → inventory
+  set-diff from the catalog). `--from-catalog` remains an explicit override
+  (`useInventoryDrift` / `SystemModel.DifferentialDrift`). A plain `pudl run` now
+  routes inventory observers correctly without the flag.
 - **cross-model data dependencies** — `pudl run` is single-instance; there is no
   way to declare or query that one model's state depends on another's output. Both
   the system (run ordering, impact/blast-radius, downstream re-runs) and the user
