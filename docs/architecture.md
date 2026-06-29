@@ -13,17 +13,13 @@ This document describes PUDL's internal architecture: storage layout, streaming 
 |   +-- metadata/                  # Per-import JSON metadata sidecar files
 |   |   +-- YYYYMMDD_HHMMSS_origin.ext.meta
 |   +-- sqlite/catalog.db          # SQLite catalog database
-|   +-- .drift/                    # Drift detection reports
-|       +-- <definition>/<timestamp>.json
 +-- schema/                        # Git-tracked CUE schema repository
-|   +-- .git/                      # Full git repository
-|   +-- cue.mod/module.cue         # CUE module definition
-|   +-- pudl/
-|   |   +-- core/core.cue          # Bootstrap schemas (catchall, collection)
-|   |   +-- <user packages>/       # Custom schema packages
-|   +-- definitions/               # Named schema instances
-|   +-- extensions/
-|       +-- models/                # User extension models
+    +-- .git/                      # Full git repository
+    +-- cue.mod/module.cue         # CUE module definition
+    +-- pudl/
+    |   +-- core/core.cue          # Bootstrap schemas (catchall, collection)
+    |   +-- rules/                 # Datalog rules (*.cue)
+    |   +-- <user packages>/       # Custom schema packages + #SystemModel instances
 ```
 
 ### Raw Data
@@ -63,11 +59,12 @@ catalog_entries (
     item_index        INTEGER,           -- Position in collection (NULL for collections)
     collection_type   TEXT,              -- 'collection', 'item', or NULL
     item_id           TEXT,              -- Unique item identifier within collection
-    entry_type        TEXT,              -- 'import' or 'artifact'
-    definition        TEXT,              -- Definition name (artifacts only)
-    method            TEXT,              -- Method name (artifacts only)
-    run_id            TEXT,              -- Execution run ID (artifacts only)
+    entry_type        TEXT,              -- e.g. 'observe', 'manifest', 'manifest-action' (run artifacts)
+    definition        TEXT,              -- Definition name: a model's per-status unit (run artifacts)
+    method            TEXT,              -- Producing method name (run artifacts)
+    run_id            TEXT,              -- pudl run identifier (run artifacts)
     tags              TEXT,              -- JSON-encoded key-value tags
+    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/converged/failed)
     created_at        DATETIME,
     updated_at        DATETIME
 )
@@ -181,9 +178,8 @@ ImportFileWithFriendlyIDs(opts)
 | `config` | `internal/config/` | YAML configuration loading and defaults |
 | `database` | `internal/database/` | SQLite catalog + bitemporal fact store: CRUD, migrations, queries |
 | `datalog` | `internal/datalog/` | Datalog engine: rule loader, SQL compiler, recursive fixpoint, `Evaluate` orchestrator, `catalog_entry` built-in relation |
-| `definition` | `internal/definition/` | Definition loader, validator, socket wiring, dependency graph |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema (pudl-owned) and model instance loading for `pudl run`/`pudl model` |
 | `doctor` | `internal/doctor/` | Workspace health checks |
-| `drift` | `internal/drift/` | State comparator, report generator and storage |
 | `errors` | `internal/errors/` | Typed error codes for CLI error handling |
 | `git` | `internal/git/` | Git operations on schema repository |
 | `identity` | `internal/identity/` | Resource identity: field extraction, ID computation (pure functions) |
@@ -193,8 +189,10 @@ ImportFileWithFriendlyIDs(opts)
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
 | `lister` | `internal/lister/` | List/query with filters and display options |
-| `mubridge` | `internal/mubridge/` | Drift-to-mu action spec export bridge |
-| `repo` | `internal/repo/` | Repository-level init and validation |
+| `mubridge` | `internal/mubridge/` | mu/pudl interchange: typed envelopes and manifest ingest for `pudl run` |
+| `muschemas` | `internal/muschemas/` | Cache of mu-provided schemas |
+| `repo` | `internal/repo/` | Repository-level init |
+| `workspace` | `internal/workspace/` | Workspace discovery and schema-path resolution |
 | `schema` | `internal/schema/` | Schema file management and discovery |
 | `schemagen` | `internal/schemagen/` | Schema generation from imported data |
 | `schemaname` | `internal/schemaname/` | Schema name normalization (canonical format) |
@@ -261,7 +259,9 @@ After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
 - **Validated** against assigned schemas via `pudl validate`
 - **Exported** in various formats via `pudl export`
-- **Monitored for drift** via `pudl drift check` against definition state
+- **Reconciled** by `pudl run <model>`: a `#SystemModel` declares desired and observed
+  state, `pudl run` computes drift as one phase (and converges with `--converge`, with
+  mu executing the actions); inspect status via `pudl status`
 - **Re-classified** when schemas change via `pudl schema reinfer`
 
 ## Technology Stack

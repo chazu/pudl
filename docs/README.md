@@ -17,7 +17,6 @@ Start with the [root README](../README.md) for a project overview.
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |
 | [library-api.md](library-api.md) | Public Go API (`pkg/factstore`, `pkg/eval`) for external programs |
 | [VISION.md](VISION.md) | Project vision and roadmap |
-| [pith-vm.md](pith-vm.md) | Pith VM: vocabulary reference, `pudl exec`, driver words, examples |
 | [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |
 | [inference-algorithm.md](inference-algorithm.md) | Schema inference engine: heuristics, CUE unification, scoring |
 | [plan.md](plan.md) | Living development plan: what's built, what's next |

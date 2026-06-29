@@ -41,22 +41,20 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
 - `pudl schema add` — register a definition (e.g. a `#SystemModel`)
 - `pudl module add <module@version>` — add CUE module deps
 
-### Definitions & facts
-- `pudl definition list|show <name>|validate` — named instances of schemas
+### Facts
 - `pudl facts` — query the bitemporal fact store
 - `pudl query` — derived facts via Datalog rules; `pudl rule` manages rules
 - `pudl pull <scope|entity>` — retrieve all related facts
 
 ### #SystemModel loop
-- `pudl run <model>` — run a registered `#SystemModel` (OBSERVE-ONLY by default)
-- `pudl run <model> --converge` — close drift (mutates the target via mu)
-- `pudl run <model> --from-catalog` — drift over ingested records, no live observe
 - `pudl model list` — list registered `#SystemModel` definitions + last-run status
 - `pudl model show <model>` — show a model's populate/converge/desired/checks
 - `pudl model validate <model>` — structural validation without running
+- `pudl run <model>` — run a registered `#SystemModel` (OBSERVE-ONLY by default)
+- `pudl run <model> --converge` — close drift (mutates the target via mu)
+- `pudl run <model> --from-catalog` — drift over ingested records, no live observe
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
-- `pudl status` — convergence status of definitions
-- `pudl drift check <definition>` — declared vs live state
+- `pudl status [definition]` — recorded convergence status (a run records its verdict)
 
 ### Utilities
 - `pudl init` / `pudl doctor` / `pudl config show` / `pudl version`
@@ -90,7 +88,9 @@ mu writes its results back into the pudl catalog via:
 - `pudl mu ingest-observe` — ingest observe results (`entry_type=observe`)
 - `pudl mu ingest-manifest` — ingest a build manifest (`entry_type=manifest`,
   per-action `manifest-action`)
-- `pudl mu export-actions` — export drift reports as a `mu.json` config
+
+`pudl run --converge` renders the model's `desired` state to sources and runs
+`mu build`; the mu plugin reconciles. pudl computes no domain ops.
 
 These `entry_type` values are what `pudl list --artifacts` surfaces (run
 outputs), vs ingested/observed data.

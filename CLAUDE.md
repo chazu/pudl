@@ -10,7 +10,7 @@ When completing a task, add a file to the `implog` directory summarizing the wor
 
 ## Architecture
 
-- **Go module:** `pudl` (not `github.com/...`)
+- **Go module:** `github.com/chazu/pudl` (per go.mod; imports use the full path)
 - **SQLite:** `modernc.org/sqlite` (pure Go, no CGo) via `database/sql`
 - **Catalog DB:** `~/.pudl/data/sqlite/catalog.db`
 - **Schema system:** CUE-based inference with heuristics + native CUE unification

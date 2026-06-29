@@ -152,37 +152,30 @@ This ensures data is always accepted at some level. If the intended schema rejec
 
 PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl schema reinfer` to re-classify existing entries.
 
-## Definitions
+## System Models
 
-Definitions are named CUE values that conform to schemas and carry concrete configuration. While a schema describes the shape of a resource type, a definition assigns specific values.
+A model is a `#SystemModel` instance -- a named CUE value that declares the desired shape of a slice of your system. Where a schema describes the shape of a resource type, a model declares concrete intent: how to observe the world (`populate`), what the world should look like (`desired`), and what invariants must hold (`checks`).
 
-### Socket Wiring
+A model's `desired` block is a set of named entries. Each entry -- a *definition* -- is the per-status unit: it declares the intended state for one thing the model is responsible for.
 
-Definitions connect to each other through socket wiring -- one definition's field references another definition's output:
+Use `pudl model list` to see available models, `pudl model show <name>` to inspect one, and `pudl model validate <name>` to check that a model parses and conforms to `#SystemModel`.
 
-```cue
-prod_instance: examples.#EC2Instance & {
-    VpcId: prod_vpc.outputs.vpc_id  // wired to VPC definition
-}
-```
+## Running a Model
 
-CUE validates type compatibility at parse time. The dependency graph is built automatically from these cross-references.
+`pudl run <name>` drives a model through an observe-only ACUTE loop:
 
-### Dependency Graph
+1. **Populate** -- imports the model's declared sources into the catalog, refreshing observations.
+2. **Drift** -- compares the model's `desired` state against the latest observation, producing a deep diff of added, removed, and changed fields with dot-notation paths.
+3. **Checks** -- evaluates the model's invariants against current facts.
+4. **Report** -- records a verdict for the run.
 
-Definitions form a directed acyclic graph (DAG) based on socket wiring. `pudl definition graph` shows the topological ordering -- the order in which definitions should be processed so that dependencies are resolved first.
+By default `pudl run` observes only: it computes drift but changes nothing in the world.
 
-## Drift Detection
+### Convergence
 
-Drift detection compares a definition's declared state (its socket bindings and field values) against the actual state from imported data. The comparison produces a JSON deep diff reporting added, removed, and changed fields with dot-notation paths.
+`pudl run <name> --converge` closes drift instead of merely reporting it. pudl renders the model's `desired` state to sources, and the mu plugin reconciles those sources against the real system. pudl declares state; mu executes. There is no separate export step.
 
-Use `pudl drift check <definition>` to check one definition, or `--all` to check everything.
-
-Drift reports are stored in `.pudl/data/.drift/<definition>/<timestamp>.json`.
-
-### mu Bridge
-
-Drift reports can be exported as mu-compatible action specs using `pudl export-actions`. Each field difference in a drift report becomes an ActionSpec, bridging pudl's drift knowledge to mu's execution engine.
+`pudl status` reads convergence status from the catalog -- each model run records its verdict, so `pudl status` reflects whether the system last converged or drifted.
 
 ## Fixed-Point Verification
 

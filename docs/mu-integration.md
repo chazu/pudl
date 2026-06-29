@@ -2,319 +2,93 @@
 
 The two tools collaborate in two directions:
 
-- **pudl → mu** (drift convergence): pudl models desired state in CUE,
-  imports actual state, computes diffs, and emits a `mu.json` for mu to
-  consume and converge.
+- **pudl → mu** (drift convergence): pudl declares desired state in a
+  `#SystemModel`, observes actual state, and computes drift as a phase of
+  `pudl run`. To close drift, pudl renders the model's `desired` state to a
+  sources file and invokes `mu build`; the mu plugin reconciles.
 - **mu → pudl** (data import): mu plugins produce structured data; that
   data flows into pudl's catalog, optionally tagged with a CUE schema
   reference declared by the plugin.
 
 There is no code-level dependency between the two binaries — they
-communicate through files (mu.json, plugin output, schema sidecars)
+communicate through files (rendered sources, plugin output, schema sidecars)
 that either side can author independently.
 
 ## Direction 1: drift convergence (pudl → mu)
 
 ## The Flow
 
+`pudl run <name>` evaluates a `#SystemModel` through an observe-only ACUTE
+loop: populate the catalog, compute drift against `desired`, run checks, and
+report. Adding `--converge` closes drift — pudl renders `desired` to a sources
+file and runs `mu build`, and the mu plugin reconciles (e.g. k8s/kubectl).
+
 ```
-CUE definitions (desired state)
+#SystemModel (desired state)
         │
         ▼
-pudl import (observe actual state)
+pudl run <name>          (populate → drift → checks → report)
+        │
+        ▼  --converge
+pudl renders desired → sources file
         │
         ▼
-pudl drift check (compute diff)
+mu build                 (plugin reconciles)
         │
         ▼
-pudl export-actions (emit mu.json)
-        │
-        ▼
-mu build --config (converge via plugins)
-```
-
-## Example: Converging a Config File
-
-### 1. Define desired state
-
-Create a CUE definition in `~/.pudl/schemas/definitions/`:
-
-```cue
-package definitions
-
-import "file"
-
-app_config: file.#Config & {
-    path:    "/tmp/myapp/config.toml"
-    content: """
-        [server]
-        port = 8080
-        host = "0.0.0.0"
-
-        [database]
-        url = "postgres://localhost:5432/myapp"
-        """
-    mode: "0644"
-}
+pudl re-observes and re-checks drift
 ```
 
-### 2. Import actual state and check drift
+pudl declares desired/observed state; mu executes. There is no separate
+export step — `pudl run --converge` renders sources and drives `mu build`
+in one command.
+
+## Example: Converging Kubernetes State
+
+### 1. Declare desired state
+
+Define a `#SystemModel` whose `desired` block describes the target state.
+`pudl model show <name>` renders the model; `pudl model validate <name>`
+checks its CUE.
+
+### 2. Observe and check drift
 
 ```bash
-# Import the current file (or note it doesn't exist yet)
-pudl import --path /tmp/myapp/config.toml
-
-# Check for drift
-pudl drift check app_config
+pudl run myapp
 ```
+
+`pudl run` populates the catalog with observed state, computes drift against
+the model's `desired`, runs the model's checks, and reports a verdict.
 
 Output:
 ```
-Definition: app_config
-Status: drifted
-Differences:
-  content: changed
-  mode: changed
+model: myapp
+drift: 2 differences
+  //k8s/deployment/myapp replicas: 1 → 3
+  //k8s/deployment/myapp image: v1 → v2
+status: drifted
 ```
 
-### 3. Export mu config
+### 3. Converge
 
 ```bash
-pudl export-actions --definition app_config > /tmp/converge.json
+pudl run myapp --converge
 ```
 
-This produces:
+pudl renders the model's `desired` state to a sources file and runs
+`mu build`. The mu plugin (e.g. kubectl) reconciles the live system. pudl
+then re-observes and re-checks drift, recording the verdict on
+`//models/myapp`.
 
-```json
-{
-  "targets": [
-    {
-      "target": "//app_config",
-      "toolchain": "file",
-      "sources": ["/Users/you/.pudl/schemas/definitions/app.cue"],
-      "config": {
-        "path": "/tmp/myapp/config.toml",
-        "content": "[server]\nport = 8080\nhost = \"0.0.0.0\"\n\n[database]\nurl = \"postgres://localhost:5432/myapp\"",
-        "mode": "0644"
-      }
-    }
-  ]
-}
-```
-
-Note: the config contains the **desired state**, not the drift diff. The mu
-plugin doesn't need to know what changed — it just makes the file match.
-
-### 4. Converge with mu
+### 4. Check status
 
 ```bash
-mu build --config /tmp/converge.json //app_config
+pudl status
 ```
 
-Output:
-```
-mu build //app_config
-  building...
-  ✓ 2 completed (0 cached), 0 failed in 0.2s
-```
-
-The file is now written with the correct content and permissions.
-
-### 5. Verify convergence
-
-```bash
-# Re-import and check drift
-pudl import --path /tmp/myapp/config.toml
-pudl drift check app_config
-```
-
-Output:
-```
-Definition: app_config
-Status: clean
-```
-
-## Export All Drifted Definitions
-
-```bash
-pudl export-actions --all > /tmp/converge.json
-mu build --config /tmp/converge.json //...
-```
-
-This exports targets for every definition that has drifted, then mu converges
-them all in a single build (with parallel execution where possible).
-
-## How Schema Refs Map to Toolchains
-
-pudl infers the mu toolchain from the CUE schema reference:
-
-| Schema prefix | mu toolchain | What it does |
-|--------------|-------------|-------------|
-| `file.*`, `config.*` | `file` | Write files, set permissions |
-| `ec2.*`, `s3.*`, `aws.*` | `aws` | AWS resource convergence |
-| `k8s.*`, `kubernetes.*` | `k8s` | Kubernetes resource convergence |
-| (unknown) | `generic` | Fallback |
-
-Custom mappings can be provided to `ExportMuConfig()` in the Go API.
-
-## BRICK Interface Enforcement
-
-pudl validates that BRICK components satisfy the contracts defined by their
-interfaces. This runs automatically as part of `pudl definition validate`.
-
-### Defining an Interface
-
-An interface declares a contract — the fields any implementing component must have:
-
-```cue
-package definitions
-
-import "pudl.schemas/pudl/brick"
-
-lint_interface: brick.#Interface & {
-    name: "//interface/lint"
-    kind: "interface"
-    desc: "Contract for code linting targets"
-    contract: {
-        toolchain: "lint"
-        config: {
-            command: [...string]
-        }
-    }
-}
-```
-
-### Implementing an Interface
-
-Components declare which interface they implement via the `implements` field:
-
-```cue
-lint_go_vet: brick.#Target & {
-    name:       "//lint/go-vet"
-    kind:       "component"
-    toolchain:  "lint"
-    implements: "//interface/lint"
-    config: {
-        command: ["go", "vet", "./..."]
-    }
-}
-```
-
-### Validation
-
-`pudl definition validate` checks two things:
-
-1. **Schema validation** — each definition conforms to its CUE schema
-   (e.g., `brick.#Target` fields are correct)
-2. **Interface enforcement** — each component's fields unify with its
-   interface's contract via CUE unification
-
-```bash
-$ pudl definition validate
-  PASS  lint_go_vet
-  PASS  lint_gofmt
-  PASS  lint_interface
-
-Results: 3 passed, 0 failed, 3 total
-
-Interface enforcement: 1 interfaces, 2 components
-  All components satisfy their interfaces.
-```
-
-When a component violates its interface:
-
-```
-  FAIL  //lint/bad (implements //interface/lint)
-        field "toolchain": conflicting values "lint" and "wrong"
-```
-
-### How It Works
-
-The interface checker:
-
-1. Loads all definitions as CUE values
-2. Identifies interfaces (`kind: "interface"` with a `contract` field)
-3. Identifies components (targets with an `implements` field)
-4. For each component, unifies it with its interface's contract
-5. CUE unification naturally catches mismatches — conflicting values,
-   missing required fields, and type errors
-
-Components referencing non-existent interfaces produce warnings (orphans).
-
-### The Split
-
-- **pudl enforces** that components satisfy interface contracts (pre-deploy)
-- **mu carries** `kind` and `implements` through build manifests (metadata)
-- **mu does not enforce** contracts — it executes targets regardless of BRICK classification
-
-This keeps mu simple (execute everything, ask no questions) while pudl
-provides the safety net (validate before exporting to mu).
-
-## Shared Language: pith VM
-
-pudl and mu share a concatenative virtual machine called
-[pith](pith-vm.md). Programs are JSON arrays of words, interpreted
-against a stack. The VM is a standalone Go module — both tools import
-it, neither depends on the other.
-
-### How It Bridges pudl and mu
-
-The same program syntax works in both contexts. Only the registered
-driver words differ:
-
-| Context | Available drivers | Purpose |
-|---------|-------------------|---------|
-| pudl | `catalog/*`, `fact/*`, `schema/*`, `drift/*` | Read-only knowledge queries |
-| mu plan phase | `action/emit`, `target/config` | Declare actions into the DAG |
-| mu transform phase | `target/output`, `target/config` | Reshape dependency outputs |
-| mu execute phase | `http/*`, `exec/*`, `cas/*`, `format/*`, `target/output` | Perform side effects |
-
-### pudl Side
-
-`pudl exec` runs pith programs against the catalog, fact store, and
-schemas. Use it for ad-hoc queries, testing agent-authored programs,
-and composing data views:
-
-```bash
-pudl exec '[{"schema": "aws.#EC2Instance"}, "catalog/query", "len"]'
-```
-
-Driver words: `catalog/query`, `catalog/get`, `catalog/count`,
-`fact/query`, `fact/assert`, `fact/retract`, `schema/list`,
-`schema/match`, `schema/infer`, `drift/diff`.
-
-### mu Side
-
-mu uses pith for inline programs in three target fields:
-
-- **`plan`** — emits actions into the DAG (replaces simple plugins)
-- **`transform`** — reshapes dependency outputs before own actions run
-- **`body`** — on actions, replaces shell commands with VM programs
-
-```cue
-target: {
-    name: "//infra/dns"
-    plan: [
-        "target/config",
-        "dup", "'record_type", "get", "'A", "eq",
-        [["'host", "get"], ["'ip", "get"], "dns/create-a"],
-        [["'host", "get"], ["'target", "get"], "dns/create-cname"],
-        "if",
-        "action/emit",
-    ]
-}
-```
-
-Transform results automatically propagate to subsequent actions via
-`target/output` under the `_result` key — no file-based output
-declarations needed.
-
-### The Payoff
-
-An agent that learns to write `["catalog/query", ["'status", "get"],
-"map"]` for pudl also knows the syntax for mu actions. The vocabulary
-is the only difference, and it is introspectable from CUE via
-`pith.#Program`.
+`pudl status` reads catalog convergence status — each model run records its
+verdict on `//models/<name>`, so `status` reports whether the system is
+currently converged.
 
 ## Design Principles
 

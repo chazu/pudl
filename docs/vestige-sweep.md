@@ -112,9 +112,9 @@ left for the §3 doc-cleanup pass; implog history kept as-is.
 
 | # | Item | Evidence | Fix | Status |
 |---|------|----------|-----|--------|
-| 3.1 | Module-name bug | `CLAUDE.md:13` and `docs/library-api.md:10` say module is `pudl`; `go.mod` says `github.com/chazu/pudl` | correct the docs | open |
-| 3.2 | `cascade_validator.go` naming | code is LIVE (intended→base→catchall unification) but the name carries the removed "cascade priority" concept ("no cascade priority" per memory) | rename, don't delete — see §5 | analysed → see §5 |
-| 3.3 | `skills/pudl-core/SKILL.md` | accurate as written | no action (ignore the agent that flagged it) | n/a |
+| 3.1 | Module-name bug | `CLAUDE.md:13` and `docs/library-api.md:10` say module is `pudl`; `go.mod` says `github.com/chazu/pudl` | correct the docs | ✅ **DONE (2026-06-26)** — fixed CLAUDE.md + library-api.md (incl. example imports) |
+| 3.2 | `cascade_validator.go` naming | code is LIVE (intended→base→catchall unification) but the name carries the removed "cascade priority" concept ("no cascade priority" per memory) | rename, don't delete — see §5 | open (code rename, not a doc fix) |
+| 3.3 | Doc sweep after the World A deletion | every live doc that referenced the deleted commands/concepts (definitions/sockets/drift/export-actions/pith/exec, `pudl method`/`workflow`, `model search/scaffold`) | reframe to `#SystemModel`/`pudl model`/`pudl run` | ✅ **DONE (2026-06-26)** — README, FEATURES, cli-reference, concepts, getting-started, mu-integration, architecture, TESTING, docs/README index, both skill files (root + embedded). Deleted `docs/pith-vm.md`. Historical docs (research/, chats/, VISION, plan, cass-memory, issues/) left as snapshots. |
 
 ---
 

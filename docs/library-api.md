@@ -7,7 +7,8 @@ the Go compiler; only `pkg/factstore` and `pkg/eval` are importable, and neither
 exposes an `internal/` type in its API (plain-data types are re-exported as
 aliases).
 
-The module path is `pudl`, so imports are `pudl/pkg/factstore` and `pudl/pkg/eval`.
+The module path is `github.com/chazu/pudl`, so imports are
+`github.com/chazu/pudl/pkg/factstore` and `github.com/chazu/pudl/pkg/eval`.
 
 ## `pkg/factstore`
 
@@ -121,8 +122,8 @@ import (
     "fmt"
     "os"
 
-    "pudl/pkg/eval"
-    "pudl/pkg/factstore"
+    "github.com/chazu/pudl/pkg/eval"
+    "github.com/chazu/pudl/pkg/factstore"
 )
 
 func main() {

@@ -123,22 +123,13 @@ test/
 - CUE unification with schema candidates
 - Inheritance graph traversal and specificity ordering
 
-### Definition Tests
-- Discovery of definitions via CUE schema reference patterns
-- Dependency graph construction from socket wiring
-- Cycle detection and topological sort
-- Self-contained test fixtures (no external schema dependencies)
-
-### Drift Tests
-- JSON deep diff with recursive field comparison
-- Numeric type coercion and dot-notation paths
-- Drift checker comparing definitions against catalog state
-- Report storage: save, list, get, getLatest
+### System Model Tests
+- `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
+- Run verdict mapping and the `pudl run` phase plan (`cmd` run tests)
 
 ### Mubridge Tests
-- Drift report to action spec conversion
-- Plan response generation for single and multiple definitions
-- ListDefinitions enumeration
+- Observe-result ingestion into the catalog (content-hash dedup, schema routing)
+- Build-manifest ingestion + per-action catalog entries and status
 
 ### Integration Tests
 - End-to-end file-to-database import workflows

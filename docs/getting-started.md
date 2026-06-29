@@ -174,46 +174,41 @@ pudl validate --all --verbose
 
 Validation uses native CUE unification. If the assigned schema rejects the data, PUDL falls through to the base schema, then to the catchall. Data is never rejected outright.
 
-## 6. Create a Definition
+## 6. Work with System Models
 
-Definitions are named CUE values that conform to schemas with concrete configuration and socket wiring to other definitions.
+A model is a `#SystemModel` instance -- a named CUE value declaring how to observe the world, the `desired` shape it should have, and the `checks` that must hold. Each entry in a model's `desired` block is a definition: the per-status unit of intended state.
 
 ```bash
-# List definitions
-pudl definition list
+# List models
+pudl model list
 
-# Show a specific definition
-pudl definition show prod_instance
+# Show a specific model
+pudl model show prod_stack
 
-# Validate all definitions against their schemas
-pudl definition validate
-
-# View the dependency graph
-pudl definition graph
+# Validate a model against #SystemModel
+pudl model validate prod_stack
 ```
 
 See [definition-authoring.md](definition-authoring.md) for the full guide.
 
-## 7. Check for Drift
+## 7. Run a Model
 
-Compare a definition's declared state against the actual imported data:
+`pudl run` drives a model through an observe-only ACUTE loop -- populate, drift, checks, report:
 
 ```bash
-# Check a single definition
-pudl drift check prod_instance
+# Observe only: populate sources, compute drift, run checks, record a verdict
+pudl run prod_stack
 
-# Check all definitions
-pudl drift check --all
-
-# View a saved drift report
-pudl drift report prod_instance
+# Converge: close drift by rendering desired state to sources (the mu plugin reconciles)
+pudl run prod_stack --converge
 ```
 
-Drift reports can be exported as mu-compatible action specs:
+By default `pudl run` changes nothing in the world; it computes drift and reports. `--converge` closes that drift -- pudl declares state, mu executes.
+
+Check the latest convergence verdict recorded in the catalog:
 
 ```bash
-pudl export-actions --definition prod_instance
-pudl export-actions --all
+pudl status
 ```
 
 ## 8. Run Verification
