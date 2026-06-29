@@ -28,12 +28,57 @@ func setupTestDB(t *testing.T) (*database.CatalogDB, string) {
 	return db, tmpDir
 }
 
+func TestIngestManifest_ModelTag(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	result, err := IngestManifest(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "mymodel")
+	if err != nil {
+		t.Fatalf("IngestManifest failed: %v", err)
+	}
+	actions, err := db.GetManifestActions(result.RunID)
+	if err != nil {
+		t.Fatalf("GetManifestActions failed: %v", err)
+	}
+	if len(actions) != 3 {
+		t.Fatalf("expected 3 actions, got %d", len(actions))
+	}
+	for _, a := range actions {
+		if a.Tags == nil {
+			t.Fatalf("expected tags on %v", a.Definition)
+		}
+		var tags map[string]interface{}
+		if err := json.Unmarshal([]byte(*a.Tags), &tags); err != nil {
+			t.Fatalf("unmarshal tags: %v", err)
+		}
+		if tags["model"] != "mymodel" {
+			t.Errorf("expected tags.model=mymodel, got %v", tags["model"])
+		}
+	}
+
+	// Without --model, no model tag is written.
+	db2, tmp2 := setupTestDB(t)
+	defer db2.Close()
+	r2, err := IngestManifest(db2, strings.NewReader(sampleManifest), "mu-build", tmp2, "")
+	if err != nil {
+		t.Fatalf("IngestManifest failed: %v", err)
+	}
+	a2, _ := db2.GetManifestActions(r2.RunID)
+	for _, a := range a2 {
+		var tags map[string]interface{}
+		_ = json.Unmarshal([]byte(*a.Tags), &tags)
+		if _, ok := tags["model"]; ok {
+			t.Errorf("expected no model tag without --model, got %v", tags["model"])
+		}
+	}
+}
+
 func TestIngestManifest_Basic(t *testing.T) {
 	db, tmpDir := setupTestDB(t)
 	defer db.Close()
 
 	reader := strings.NewReader(sampleManifest)
-	result, err := IngestManifest(db, reader, "mu-build", tmpDir)
+	result, err := IngestManifest(db, reader, "mu-build", tmpDir, "")
 	if err != nil {
 		t.Fatalf("IngestManifest failed: %v", err)
 	}
@@ -136,7 +181,7 @@ func TestIngestManifest_Dedup(t *testing.T) {
 
 	// First ingestion
 	reader1 := strings.NewReader(sampleManifest)
-	result1, err := IngestManifest(db, reader1, "mu-build", tmpDir)
+	result1, err := IngestManifest(db, reader1, "mu-build", tmpDir, "")
 	if err != nil {
 		t.Fatalf("first IngestManifest failed: %v", err)
 	}
@@ -146,7 +191,7 @@ func TestIngestManifest_Dedup(t *testing.T) {
 
 	// Second ingestion of the same manifest
 	reader2 := strings.NewReader(sampleManifest)
-	result2, err := IngestManifest(db, reader2, "mu-build", tmpDir)
+	result2, err := IngestManifest(db, reader2, "mu-build", tmpDir, "")
 	if err != nil {
 		t.Fatalf("second IngestManifest failed: %v", err)
 	}
@@ -176,7 +221,7 @@ func TestIngestManifest_EmptyActions(t *testing.T) {
 	}`
 
 	reader := strings.NewReader(emptyManifest)
-	result, err := IngestManifest(db, reader, "mu-build", tmpDir)
+	result, err := IngestManifest(db, reader, "mu-build", tmpDir, "")
 	if err != nil {
 		t.Fatalf("IngestManifest failed: %v", err)
 	}
@@ -229,7 +274,7 @@ func TestGetLatestManifestAction(t *testing.T) {
 	defer db.Close()
 
 	reader := strings.NewReader(sampleManifest)
-	_, err := IngestManifest(db, reader, "mu-build", tmpDir)
+	_, err := IngestManifest(db, reader, "mu-build", tmpDir, "")
 	if err != nil {
 		t.Fatalf("IngestManifest failed: %v", err)
 	}

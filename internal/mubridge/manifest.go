@@ -48,8 +48,12 @@ type IngestManifestResult struct {
 }
 
 // IngestManifest processes a mu build manifest and stores results in the catalog.
-// Returns the run_id assigned to this manifest and any error.
-func IngestManifest(db *database.CatalogDB, reader io.Reader, origin string, configDir string) (*IngestManifestResult, error) {
+// Returns the run_id assigned to this manifest and any error. When model is
+// non-empty, each per-action entry is tagged with it (`tags.model`), so a later
+// drift re-check can promote exactly that model's `converging` resources to `clean`
+// (see CatalogDB.PromoteConvergingToCleanByModel) without reconstructing the
+// resource→model mapping from desired records.
+func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir, model string) (*IngestManifestResult, error) {
 	// Read entire JSON from reader
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -133,10 +137,14 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin string, con
 		defName := targetToDefinition(action.Target)
 
 		// Build tags JSON
-		tags, err := json.Marshal(map[string]interface{}{
+		tagMap := map[string]interface{}{
 			"exit_code": action.ExitCode,
 			"cached":    action.Cached,
-		})
+		}
+		if model != "" {
+			tagMap["model"] = model
+		}
+		tags, err := json.Marshal(tagMap)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal action tags: %w", err)
 		}

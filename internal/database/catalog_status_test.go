@@ -124,6 +124,50 @@ func TestPromoteConvergingToClean(t *testing.T) {
 	assert.Equal(t, "converging", got["other"], "out-of-scope model untouched")
 }
 
+func TestPromoteConvergingToCleanByModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	mk := func(id, def, model, status string) {
+		d := def
+		et := "manifest-action"
+		tags := fmt.Sprintf(`{"exit_code":0,"model":%q}`, model)
+		if model == "" {
+			tags = `{"exit_code":0}`
+		}
+		require.NoError(t, db.AddEntry(CatalogEntry{
+			ID: id, StoredPath: id + ".json", MetadataPath: id + ".meta",
+			ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+			Schema: "pudl/core.#Item", Definition: &d, EntryType: &et, Tags: &tags,
+		}))
+		require.NoError(t, db.UpdateStatus(def, status))
+	}
+	mk("a", "Deployment/web", "mymodel", "converging") // this model, pending
+	mk("b", "Service/api", "mymodel", "drifted")       // this model, not converging -> untouched
+	mk("c", "Deployment/x", "othermodel", "converging") // another model -> must NOT promote
+	mk("d", "untagged", "", "converging")               // untagged -> must NOT promote by model
+
+	n, err := db.PromoteConvergingToCleanByModel("mymodel")
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "only mymodel's converging row promotes")
+
+	got := map[string]string{}
+	statuses, err := db.GetDefinitionStatuses()
+	require.NoError(t, err)
+	for _, s := range statuses {
+		got[s.Definition] = s.Status
+	}
+	assert.Equal(t, "clean", got["Deployment/web"], "tagged converging -> clean (k8s Kind/name target)")
+	assert.Equal(t, "drifted", got["Service/api"], "non-converging untouched")
+	assert.Equal(t, "converging", got["Deployment/x"], "other model untouched")
+	assert.Equal(t, "converging", got["untagged"], "untagged untouched by model promote")
+
+	// empty model is a no-op
+	n, err = db.PromoteConvergingToCleanByModel("")
+	require.NoError(t, err)
+	assert.Equal(t, 0, n)
+}
+
 func TestUpdateStatus_Invalid(t *testing.T) {
 	db, cleanup := setupTestDB(t)
 	defer cleanup()
