@@ -289,11 +289,9 @@ func (d *SimpleSchemaDetector) getValueType(value interface{}) string {
 }
 
 // loadDefaultPatterns initializes the pattern list.
-// Patterns should be loaded dynamically from CUE schemas using LoadPatternsFromCUE()
-// or added manually using AddPattern().
+// Patterns are added manually using AddPattern().
 func (d *SimpleSchemaDetector) loadDefaultPatterns() {
 	// No default patterns - patterns should come from CUE schemas
-	// Use CUESchemaDetector.LoadPatternsFromCUE() to populate patterns from schema repository
 }
 
 // AddPattern adds a custom schema pattern
