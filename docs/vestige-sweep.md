@@ -42,7 +42,7 @@ and that directory currently holds only stale mu build/lint configs.
 |---|------|----------|-------|--------|
 | 1.1 | `~/.pudl/schema/definitions/build.cue`, `lint.cue` | both are `brick.#Target`/`brick.#Interface` mu build+lint configs, not models | This is literally what `pudl definition list` surfaces today | ✅ **DONE (2026-06-26)** — deleted (backed up to scratchpad; outside git) |
 | 1.2 | `Vault` field + `vault?:` schema field | `internal/systemmodel/systemmodel.go:38`, `internal/systemmodel/schema.cue:55`; never read anywhere; vault subsystem removed in commit `bfaaf03` (secrets now via `sealed_inputs`) | no other refs (the "tab-completion vault" was already gone) | ✅ **DONE (2026-06-26)** — removed field + schema entry; build+tests green |
-| 1.3 | `entry_type='import'` / `entry_type='artifact'` taxonomy | nothing writes them (commit `ddd5030`); see §5 for the full lineage | **NOT a standalone delete** — `artifact` is entangled with Cluster A; `import` is a harmless migration default | analysed → see §5 |
+| 1.3 | `entry_type='import'` / `entry_type='artifact'` taxonomy | nothing writes them (commit `ddd5030`); see §5 for the full lineage | `artifact`: ✅ **DONE** — `catalog_artifacts.go` + `GetLatestArtifact*` deleted with Cluster A; `import` left (harmless migration default). Residual: the `Method` column (artifact-model leftover, nullable, low priority). | partly done |
 | 1.4 | ~~`cmd/migrate.go`~~ | ❌ **FALSE POSITIVE** — not a stub. `cmd/identity_migrate.go:49` attaches `identityMigrateCmd` to `migrateCmd`; `pudl migrate identity` is the live command and this is its parent. | **KEEP** | rejected |
 | 1.5 | ~~`datalog.Compile` / `datalog.CompileWithOptions`~~ | ❌ **MOSTLY FALSE** — `CompileWithOptions` is heavily used (`recursive.go:97,133`, `sql_eval.go:33`); only the thin bare `Compile` wrapper (`compile.go:25`) is uncalled, and it's a reasonable public convenience API. | **KEEP** | rejected |
 
@@ -92,8 +92,9 @@ instances") into the ACUTE loop and delete the socket/BRICK/export machinery —
 **vs** keep it as a separate path. The desired `pudl model list` command should
 probably fall *out of* this decision rather than precede it.
 
-**Status:** ✅ **DECIDED (2026-06-26)** — see §6 for the analysis and disposition.
-Salvage 3 of 8 capabilities as ideas re-homed on the World B spine; kill the rest.
+**Status:** ✅ **DONE (2026-06-26)** — decided + executed in 3 commits (see §6).
+Salvaged 3 of 8 capabilities (model list/show/validate + run-status); killed the
+rest (definition/sockets/graph/BRICK/standalone-drift/status-store/export-actions).
 
 ### Cluster B — pith-in-pudl: `pudl exec` + `internal/pithdriver`
 
@@ -255,9 +256,13 @@ fetch path only.
    verdict written to the instance row (`modelTarget(name)`); surfaced in
    `pudl model list` (STATUS col) and `pudl status`. Includes the build-spec §5 fix
    (`ingest-manifest` exit-0 → `converging`, not a false `converged`).
-3. **Delete the killed surfaces** (definition*/drift*/export-actions/repo-socket-check
-   + `internal/definition`/`drift.Checker`/`catalog_artifacts`), untangling the shared
-   `drift` diff types. Do last, once the replacements exist. ← NEXT
+3. ✅ **Delete the killed surfaces** (DONE) — removed `cmd/definition*`, `cmd/drift*`,
+   `cmd/export_actions.go`, `internal/definition/`, `internal/drift/`,
+   `internal/mubridge/export.go`, `internal/database/catalog_artifacts.go`, and
+   `repo validate` / `mu export-actions`. The run loop never imported `internal/drift`
+   so no diff-type untangle was needed; `status.go` was reduced to a pure catalog
+   reader; `guide`/`prime` reframed `definitions`→`models`, dropped the stale `drift`
+   topic, and the `mu` guide lost its dead `export-actions`/pith content.
 
 ## Suggested order of attack
 

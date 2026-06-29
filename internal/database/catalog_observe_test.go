@@ -29,8 +29,42 @@ func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string) {
 	}
 }
 
+// setupTestCatalog creates an empty temp catalog for a test.
+func setupTestCatalog(t *testing.T) *CatalogDB {
+	t.Helper()
+	db, err := NewCatalogDB(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create test db: %v", err)
+	}
+	return db
+}
+
+// addTestManifestEntry adds a non-observe (manifest) entry — used to prove the
+// observe queries filter by entry_type and ignore other kinds.
+func addTestManifestEntry(t *testing.T, db *CatalogDB, id, def string) {
+	t.Helper()
+	entryType := "manifest"
+	entry := CatalogEntry{
+		ID:              id,
+		StoredPath:      "/tmp/test/" + id + ".json",
+		MetadataPath:    "/tmp/test/" + id + ".json.meta",
+		ImportTimestamp: time.Now(),
+		Format:          "json",
+		Origin:          "mu-build",
+		Schema:          "pudl/mu.#Manifest",
+		Confidence:      1.0,
+		RecordCount:     1,
+		SizeBytes:       100,
+		EntryType:       &entryType,
+		Definition:      &def,
+	}
+	if err := db.AddEntry(entry); err != nil {
+		t.Fatalf("failed to add test manifest entry: %v", err)
+	}
+}
+
 func TestGetLatestObserve(t *testing.T) {
-	db := setupArtifactTestDB(t)
+	db := setupTestCatalog(t)
 	defer db.Close()
 
 	addTestObserve(t, db, "obs111obs111obs111obs111obs111obs111obs111obs111obs111obs111obs1", "my_app", "hash1")
@@ -54,7 +88,7 @@ func TestGetLatestObserve(t *testing.T) {
 }
 
 func TestGetLatestObserve_NoResults(t *testing.T) {
-	db := setupArtifactTestDB(t)
+	db := setupTestCatalog(t)
 	defer db.Close()
 
 	entry, err := db.GetLatestObserve("nonexistent")
@@ -66,24 +100,24 @@ func TestGetLatestObserve_NoResults(t *testing.T) {
 	}
 }
 
-func TestGetLatestObserve_DoesNotReturnArtifacts(t *testing.T) {
-	db := setupArtifactTestDB(t)
+func TestGetLatestObserve_DoesNotReturnOtherTypes(t *testing.T) {
+	db := setupTestCatalog(t)
 	defer db.Close()
 
-	// Add an artifact, not an observe
-	addTestArtifact(t, db, "art111art111art111art111art111art111art111art111art111art111art1", "my_app", "list")
+	// Add a non-observe (manifest) entry — GetLatestObserve must ignore it.
+	addTestManifestEntry(t, db, "man111man111man111man111man111man111man111man111man111man111man1", "my_app")
 
 	entry, err := db.GetLatestObserve("my_app")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
-		t.Error("expected nil entry — artifacts should not be returned by GetLatestObserve")
+		t.Error("expected nil entry — non-observe entries should not be returned by GetLatestObserve")
 	}
 }
 
 func TestGetLatestObserveByContentHash(t *testing.T) {
-	db := setupArtifactTestDB(t)
+	db := setupTestCatalog(t)
 	defer db.Close()
 
 	addTestObserve(t, db, "obs333obs333obs333obs333obs333obs333obs333obs333obs333obs333obs3", "my_app", "abcdef1234")

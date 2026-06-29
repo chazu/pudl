@@ -38,8 +38,9 @@ provides a bitemporal fact store with Datalog query support.
   imported entries with metadata, schema assignments, and content-addressed IDs.
 - **Schemas**: CUE files in ~/.pudl/schema/ that define structure and validation
   rules. Organized by package (aws, k8s, etc.). Schema inference is automatic.
-- **Definitions**: Named instances of schemas with concrete configuration and
-  socket wiring to other definitions.
+- **Models**: ` + "`#SystemModel`" + ` definitions packaging a system's shape, how to
+  populate (observe) it, optional desired state, and how to converge. Run with
+  ` + "`pudl run`" + `.
 - **Fact store**: Bitemporal store for structured assertions (observations,
   dependencies, derived facts) with valid-time and transaction-time tracking.
 - **Datalog rules**: CUE-defined rules evaluated over the fact store and catalog
@@ -74,12 +75,13 @@ pudl schema add <name> <file>                # add schema file
 pudl schema reinfer                          # re-run inference on entries
 ` + "```" + `
 
-### Definitions
+### Models (#SystemModel)
 ` + "```" + `
-pudl definition list                         # list definitions
-pudl definition show <name>                  # show definition details
-pudl definition validate                     # validate all definitions
-pudl definition graph                        # show dependency graph
+pudl model list                              # list registered models (+ last-run status)
+pudl model show <name>                       # show populate/converge/desired/checks
+pudl model validate <name>                   # structural validation without running
+pudl run <name>                              # observe-only run (populate → drift → checks)
+pudl run <name> --converge                   # close drift via mu
 ` + "```" + `
 
 ### Writing data — three doors (do not confuse them)
@@ -89,7 +91,7 @@ There is exactly one door for each kind of write:
 - **Assert a fact** (observation, feedback, any relation) → ` + "`pudl facts add`" + `
   (or the sugar ` + "`pudl facts observe`" + ` for observations).
 - **Import data** into the lake (JSON/YAML/CSV files) → ` + "`pudl import`" + `.
-- **Bridge to mu** (export drift as actions, ingest mu results) → ` + "`pudl mu …`" + `.
+- **Bridge to mu** (ingest mu observe/build results into the catalog) → ` + "`pudl mu …`" + `.
 
 ### Recording observations and facts
 ` + "```" + `
@@ -149,8 +151,7 @@ Rules are CUE files in .pudl/schema/pudl/rules/ (repo) or ~/.pudl/schema/pudl/ru
 pudl init                                    # initialize ~/.pudl/
 pudl repo init                               # initialize .pudl/ in current repo
 pudl doctor                                  # health check
-pudl status                                  # workspace status
-pudl repo validate                           # validate all schemas + definitions
+pudl status                                  # recorded convergence status
 ` + "```" + `
 
 ## Conventions for agents

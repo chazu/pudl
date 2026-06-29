@@ -3,9 +3,6 @@ package cmd
 import (
 	"testing"
 	"time"
-
-	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/drift"
 )
 
 func TestColorForStatus(t *testing.T) {
@@ -59,42 +56,14 @@ func TestFormatStatusTime(t *testing.T) {
 	}
 }
 
-func TestEnrichDiffCounts_NilStore(t *testing.T) {
-	statuses := []database.DefinitionStatus{
-		{Definition: "test", Status: "drifted", DiffCount: 0},
-	}
-	// Should not panic with nil store
-	enrichDiffCounts(statuses, nil)
-	if statuses[0].DiffCount != 0 {
-		t.Errorf("expected DiffCount to remain 0 with nil store, got %d", statuses[0].DiffCount)
-	}
-}
-
 func TestStatusOutput_JSONFields(t *testing.T) {
 	// Verify struct fields exist and are assignable
 	out := StatusOutput{
 		Definition: "test_def",
 		Status:     "clean",
 		UpdatedAt:  "2026-03-24T10:15:00Z",
-		DiffCount:  0,
 	}
 	if out.Definition != "test_def" {
 		t.Error("unexpected Definition value")
-	}
-}
-
-func TestStatusDetailOutput_WithDifferences(t *testing.T) {
-	out := StatusDetailOutput{
-		Definition: "monitoring",
-		Status:     "drifted",
-		UpdatedAt:  "2026-03-24T10:12:00Z",
-		DiffCount:  2,
-		Differences: []drift.FieldDiff{
-			{Path: "threshold", Type: "changed", Declared: 80, Live: 90},
-			{Path: "new_field", Type: "added", Live: "value"},
-		},
-	}
-	if len(out.Differences) != 2 {
-		t.Errorf("expected 2 differences, got %d", len(out.Differences))
 	}
 }

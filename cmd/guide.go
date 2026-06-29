@@ -47,8 +47,7 @@ var guideTopics = map[string]func(){
 	"schemas":     printGuideSchemas,
 	"facts":       printGuideFacts,
 	"datalog":     printGuideDatalog,
-	"definitions": printGuideDefinitions,
-	"drift":       printGuideDrift,
+	"models":      printGuideModels,
 	"mu":          printGuideMu,
 	"agents":      printGuideAgents,
 }
@@ -73,12 +72,11 @@ Reasoning and state:
 
   pudl guide facts          Bitemporal fact store: observations, retraction, time-travel
   pudl guide datalog        Datalog query engine: rules, recursive evaluation
-  pudl guide definitions    Named schema instances, sockets, dependency graphs
 
 Convergence:
 
-  pudl guide drift          Drift detection between declared and live state
-  pudl guide mu             How pudl and mu work together (ACUTE loop)
+  pudl guide models         #SystemModels: list, show, run, converge
+  pudl guide mu             How pudl drives mu (the ACUTE loop)
 
 For agents:
 
@@ -104,7 +102,7 @@ THE MENTAL MODEL
 
   - catalog.db       stores all imported entries with metadata
   - schemas          CUE files that define structure and validation
-  - definitions      named instances of schemas with concrete config
+  - models           #SystemModels: declared shape + populate/converge
   - fact store       bitemporal assertions (valid-time + transaction-time)
   - datalog rules    CUE-defined rules for derived queries
   - workspace        .pudl/ (repo-local) + ~/.pudl/ (global)
@@ -117,7 +115,8 @@ THE DAY-TO-DAY VERBS
   pudl facts list             Query the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
   pudl facts observe "<text>"       Record a structured observation.
-  pudl status                 Show convergence status of definitions.
+  pudl run <model>            Run a #SystemModel (observe-only, or --converge).
+  pudl status                 Show recorded convergence status.
   pudl doctor                 Health check the workspace.
 
 WHERE DATA LIVES
@@ -131,7 +130,7 @@ WHAT TO READ NEXT
 
   Getting started:     pudl guide import → pudl guide schemas
   Recording state:     pudl guide facts → pudl guide datalog
-  Infrastructure:      pudl guide definitions → pudl guide drift
+  Convergence:         pudl guide models → pudl guide mu
   Integration with mu: pudl guide mu
   For AI agents:       pudl guide agents
 `)
@@ -285,7 +284,7 @@ MODULES
 SEE ALSO
 
   pudl guide import        How schemas are assigned during import
-  pudl guide definitions   Named instances of schemas
+  pudl guide models        #SystemModels built on schemas
 `)
 }
 
@@ -471,93 +470,44 @@ SEE ALSO
 `)
 }
 
-func printGuideDefinitions() {
-	fmt.Print(`pudl guide definitions — named schema instances
+func printGuideModels() {
+	fmt.Print(`pudl guide models — declaring and running #SystemModels
 
 OVERVIEW
 
-  Definitions are named instances of schemas with concrete
-  configuration values. They declare the desired state of
-  resources and can wire to other definitions via sockets.
+  A #SystemModel packages a system's shape, how to populate it (observe
+  live state), optional desired state, and how to converge — in one
+  declaration. 'pudl run <model>' drives it through the ACUTE cycle:
+  populate → drift → checks → report (and, with --converge, applies
+  changes via mu).
 
 COMMANDS
 
-  pudl definition list                 List all definitions
-  pudl definition show <name>          Show definition details
-  pudl definition validate             Validate all definitions
-  pudl definition graph                Show dependency graph
+  pudl model list                      List registered models (+ last-run status)
+  pudl model show <name>               Show populate/converge/desired/checks
+  pudl model validate <name>           Structurally validate without running
+  pudl run <name>                      Observe-only run (populate → drift → checks)
+  pudl run <name> --converge           Close drift (mutates the target via mu)
+  pudl status                          Show recorded convergence status
 
-WHAT DEFINITIONS DO
+WHAT A MODEL DECLARES
 
-  A definition binds a schema to concrete values:
+  A model is a CUE definition inheriting #SystemModel, registered in the
+  schema repo (project .pudl/schema shadows global ~/.pudl/schema):
 
-    package definitions
-
-    nginx_conf: file.#Config & {
-        path:    "/etc/nginx/nginx.conf"
-        content: "server { listen 80; }"
-        mode:    "0644"
+    githubChazu: #SystemModel & {
+        name: "github-chazu"
+        populate: { eweSource: "github-chazu/populate.cue", outputs: ["repos.json"] }
+        // optional: desired: [...], converge: { plugin: "k8s" }, checks: [...]
     }
 
-  Definitions are:
-  - Named (globally unique within the workspace)
-  - Typed (must satisfy their schema)
-  - Composable (can reference other definitions via sockets)
-  - Observable (pudl can check if reality matches)
-
-VALIDATION
-
-  pudl definition validate checks all definitions against their
-  schemas using CUE unification. Errors report which fields
-  fail validation and why.
-
-DEPENDENCY GRAPH
-
-  pudl definition graph renders the dependency graph between
-  definitions. Definitions reference each other through socket
-  fields, creating a DAG of desired state.
+  Register with 'pudl schema add'; resolve and run it by name (its 'name'
+  field or short definition name).
 
 SEE ALSO
 
-  pudl guide schemas       The schema system definitions build on
-  pudl guide drift         Detecting divergence from desired state
-  pudl guide mu            Using mu to converge drifted definitions
-`)
-}
-
-func printGuideDrift() {
-	fmt.Print(`pudl guide drift — detecting state divergence
-
-OVERVIEW
-
-  Drift detection compares declared state (definitions) against
-  observed reality (imported data, facts). When they diverge,
-  pudl reports the drift so you can converge.
-
-COMMANDS
-
-  pudl drift check [<definition>]      Check for drift
-  pudl drift report                    Generate a drift report
-  pudl status                          Show convergence status
-
-WORKFLOW
-
-  1. Define desired state (CUE definitions)
-  2. Import or observe actual state
-  3. Run drift check to compare
-  4. Export actions for mu to converge (or fix manually)
-
-EXPORTING ACTIONS
-
-  pudl mu export-actions --definition <name>
-
-  Generates a mu.json config that mu can execute to converge
-  the drifted resource. See 'pudl guide mu' for the full loop.
-
-SEE ALSO
-
-  pudl guide definitions   Declaring desired state
-  pudl guide mu            The ACUTE convergence loop
+  pudl guide schemas       The schema system models build on
+  pudl guide mu            How pudl drives mu (the ACUTE loop)
 `)
 }
 
@@ -566,60 +516,39 @@ func printGuideMu() {
 
 OVERVIEW
 
-  pudl and mu are decoupled tools that communicate through mu.cue.
+  pudl and mu are decoupled tools. pudl declares desired state, observes
+  actual state, and computes drift; mu takes desired-state targets and
+  converges them using plugins. Neither imports the other — they
+  communicate through a generated mu.cue and JSON results.
 
-    pudl: defines desired state, observes actual state, computes drift.
-    mu:   takes desired-state targets and converges them using plugins.
+THE ACUTE LOOP (driven by 'pudl run')
 
-  Neither tool imports or depends on the other.
+  populate → drift → checks → report, repeated under --converge until
+  observed == desired (or an iteration cap):
 
-THE ACUTE LOOP
+  1. populate: pudl runs 'mu observe' (or an ewe fetch) and ingests the
+               records into the catalog.
+  2. drift:    pudl compares the model's desired state against the latest
+               observation.
+  3. converge: (--converge) pudl renders desired → sources and runs
+               'mu build'; the plugin reconciles. pudl re-observes to
+               verify, looping to a fixed point.
 
-  Assess → Converge → Unify → Test → Emit
+  pudl run github-chazu                 # observe-only
+  pudl run k8sPolicy --converge         # close drift via mu
 
-  1. ASSESS: Import actual state, check drift
+INGESTING MU RESULTS
 
-     pudl import --path state.json
-     pudl drift check nginx_conf
+  pudl mu ingest-observe  <results.json>   Store observe results as live state
+  pudl mu ingest-manifest <manifest.json>  Record a build manifest
 
-  2. CONVERGE: Export actions and run mu
-
-     pudl mu export-actions --definition nginx_conf > converge.json
-     mu build --config converge.json //nginx_conf
-
-  3. UNIFY: Re-observe and verify
-
-     mu observe --ndjson //nginx_conf | pudl import --stdin
-     pudl drift check nginx_conf    # should report no drift
-
-OBSERVATION PIPELINE
-
-  mu observe --ndjson <targets> | pudl import --stdin
-
-  mu's observe output streams records with _schema fields. pudl
-  routes each record by schema to the appropriate definition.
-
-INGESTING MU ARTIFACTS
-
-  pudl mu ingest-manifest <manifest.json>  Ingest build manifests
-  pudl mu ingest-observe <results.json>    Ingest observe results
-
-  These commands understand mu's output formats natively.
-
-SHARED PITH VM
-
-  pudl and mu share the same pith VM and data model (JSON on stack).
-  pudl registers read-only words (catalog/query, fact/list). mu
-  registers effectful words (http/get, exec/run, action/emit).
-
-  An agent that writes pith programs for pudl can immediately
-  write programs for mu — only the driver vocabulary differs.
+  These understand mu's output formats natively. 'pudl run' calls them
+  for you, but they're also usable standalone.
 
 SEE ALSO
 
-  pudl guide drift         Drift detection (the "Assess" step)
-  pudl guide pith          Pith VM shared between pudl and mu
-  mu guide pudl            mu's perspective on the integration
+  pudl guide models        Declaring and running #SystemModels
+  pudl guide datalog       Querying the catalog and derived facts
 `)
 }
 
