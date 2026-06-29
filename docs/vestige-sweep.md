@@ -250,11 +250,14 @@ fetch path only.
 
 ### Sequencing (proposed)
 
-1. **Add `pudl model list/show`** (additive; fills the gap; no deletions yet).
-2. **Wire run-loop status persistence** + `pudl model validate` (additive).
+1. ✅ **`pudl model list/show`** (DONE, commit `fb0f8d1`) — additive; fills the gap.
+2. ✅ **run-loop status persistence + `pudl model validate`** (DONE) — per-model run
+   verdict written to the instance row (`modelTarget(name)`); surfaced in
+   `pudl model list` (STATUS col) and `pudl status`. Includes the build-spec §5 fix
+   (`ingest-manifest` exit-0 → `converging`, not a false `converged`).
 3. **Delete the killed surfaces** (definition*/drift*/export-actions/repo-socket-check
    + `internal/definition`/`drift.Checker`/`catalog_artifacts`), untangling the shared
-   `drift` diff types. Do last, once the replacements exist.
+   `drift` diff types. Do last, once the replacements exist. ← NEXT
 
 ## Suggested order of attack
 

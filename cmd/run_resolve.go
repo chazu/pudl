@@ -28,7 +28,7 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
 
 	results := []mubridge.ObserveResult{{
-		Target:  "//models/" + m.Name,
+		Target:  modelTarget(m.Name),
 		Current: map[string]any{"records": []any{rec}},
 	}}
 	wrapped, err := json.Marshal(results)
@@ -38,6 +38,11 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 	_, err = ingestObserveOutput(wrapped)
 	return err
 }
+
+// modelTarget is the catalog `definition` key for a model instance row — the
+// same string recordModelInstance ingests under, so run-status writes (and the
+// `pudl model list` / `pudl status` reads) all address that one row.
+func modelTarget(name string) string { return "//models/" + name }
 
 // resolveModel finds a registered #SystemModel-derived schema by name. It
 // searches the project-level .pudl/schema first (if a workspace is found by

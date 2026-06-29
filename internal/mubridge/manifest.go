@@ -179,8 +179,11 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin string, con
 			return nil, fmt.Errorf("failed to add action entry for %s: %w", defName, err)
 		}
 
-		// Update convergence status based on action exit code
-		status := "converged"
+		// Status from the action exit code. Exit 0 means the apply COMMAND ran,
+		// not that observed==desired — so write "converging" (applied, pending
+		// verification). Only the drift re-check writes verified "converged"
+		// (build-spec §5). Exit≠0 is a real failure.
+		status := "converging"
 		if action.ExitCode != 0 {
 			status = "failed"
 		}

@@ -73,3 +73,25 @@ func TestBuildRunPlan_Converge(t *testing.T) {
 	assert.Contains(t, plan, "only: web")
 	assert.True(t, strings.Contains(plan, "loop:"), "converge plan should show the loop phase")
 }
+
+func TestRunVerdict(t *testing.T) {
+	cases := []struct {
+		name   string
+		report *RunReport
+		flags  runFlags
+		want   string
+	}{
+		{"converged", &RunReport{Converge: &ConvergeReport{Outcome: "converged"}}, runFlags{converge: true}, "converged"},
+		{"converge cap failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (cap_exhausted)"}}, runFlags{converge: true}, "failed"},
+		{"converge exec failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)"}}, runFlags{converge: true}, "failed"},
+		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "converged"}}, runFlags{converge: true, dryRun: true}, ""},
+		{"drift clean", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{}, "clean"},
+		{"drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false}}, runFlags{}, "drifted"},
+		{"pure populate has no verdict", &RunReport{Populate: &PopulateReport{}}, runFlags{}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, runVerdict(c.report, c.flags))
+		})
+	}
+}
