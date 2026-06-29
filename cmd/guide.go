@@ -49,7 +49,6 @@ var guideTopics = map[string]func(){
 	"datalog":     printGuideDatalog,
 	"definitions": printGuideDefinitions,
 	"drift":       printGuideDrift,
-	"pith":        printGuidePith,
 	"mu":          printGuideMu,
 	"agents":      printGuideAgents,
 }
@@ -81,10 +80,6 @@ Convergence:
   pudl guide drift          Drift detection between declared and live state
   pudl guide mu             How pudl and mu work together (ACUTE loop)
 
-Programmability:
-
-  pudl guide pith           Pith VM: stack-based programs against the data lake
-
 For agents:
 
   pudl guide agents         Conventions, best practices, and tips for AI agents
@@ -112,7 +107,6 @@ THE MENTAL MODEL
   - definitions      named instances of schemas with concrete config
   - fact store       bitemporal assertions (valid-time + transaction-time)
   - datalog rules    CUE-defined rules for derived queries
-  - pith VM          stack-based programs for data lake operations
   - workspace        .pudl/ (repo-local) + ~/.pudl/ (global)
 
 THE DAY-TO-DAY VERBS
@@ -138,7 +132,6 @@ WHAT TO READ NEXT
   Getting started:     pudl guide import → pudl guide schemas
   Recording state:     pudl guide facts → pudl guide datalog
   Infrastructure:      pudl guide definitions → pudl guide drift
-  Programmability:     pudl guide pith
   Integration with mu: pudl guide mu
   For AI agents:       pudl guide agents
 `)
@@ -475,7 +468,6 @@ CATALOG AS A RELATION
 SEE ALSO
 
   pudl guide facts         The underlying fact store
-  pudl guide pith          Stack-based programs (alternative to Datalog)
 `)
 }
 
@@ -566,75 +558,6 @@ SEE ALSO
 
   pudl guide definitions   Declaring desired state
   pudl guide mu            The ACUTE convergence loop
-`)
-}
-
-func printGuidePith() {
-	fmt.Print(`pudl guide pith — stack-based programs against the data lake
-
-OVERVIEW
-
-  pith is a concatenative (stack-based) VM. Programs are JSON
-  arrays of words interpreted against a stack. pudl and mu share
-  the same VM — programs written for one transfer to the other.
-
-RUNNING PROGRAMS
-
-  pudl exec '<program>'                    Run a program
-  pudl exec --trace '<program>'            Run with trace output
-  echo '<program>' | pudl exec --stdin     Read program from stdin
-
-PROGRAM SYNTAX
-
-  Programs are JSON arrays. Each element is:
-
-    word       dispatched immediately (e.g. "dup", "add")
-    literal    pushed to stack (numbers, booleans)
-    'string    string literal (single-quote prefix avoids dispatch)
-    [...]      quotation (pushed for deferred execution)
-
-  Example:
-    ["'hello", "'world", "concat"]    → "helloworld"
-    [2, 3, "add"]                     → 5
-    [[1,2,3], ["dup", "mul"], "map"]  → [1,4,9]
-
-CORE VOCABULARY
-
-  Stack:      dup drop swap over nip rot tuck 2dup 2drop
-  Combs:      apply dip keep bi bi* bi@ each map filter reduce
-  Control:    if when unless
-  Objects:    get set has? keys values path pick omit merge
-  Compare:    eq neq lt gt lte gte
-  Logic:      and or not null?
-  Arith:      add sub mul div mod
-  Strings:    concat len split
-  Sequences:  group-by flatten
-
-DRIVER WORDS (pudl-specific)
-
-  catalog/query    Query the catalog
-  schema/match     Match data against schemas
-  fact/list        Query the fact store
-
-  These are registered by pudl at startup and are not available
-  in mu's pith environment (mu has its own driver words).
-
-HEREDOC INPUT
-
-  For complex programs, use heredoc syntax:
-
-    pudl exec --stdin <<'EOF'
-    [
-      "'hello",
-      "'world",
-      "concat"
-    ]
-    EOF
-
-SEE ALSO
-
-  pudl guide datalog       Alternative query approach (declarative)
-  pudl guide mu            mu's pith integration (plan/transform/execute)
 `)
 }
 
