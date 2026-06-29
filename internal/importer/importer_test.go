@@ -85,7 +85,7 @@ func TestImportFile_JSON(t *testing.T) {
 		UseStreaming:     false,
 		ManualSchema:     "",
 		StreamingConfig:  nil,
-		CascadeValidator: nil,
+		ChainValidator: nil,
 	}
 
 	result, err := importer.ImportFile(opts)
@@ -359,7 +359,7 @@ func TestImportFile_ManualSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	// Verify manual schema was used (when CascadeValidator is nil, it falls back to rule engine)
+	// Verify manual schema was used (when ChainValidator is nil, it falls back to rule engine)
 	assert.Equal(t, "json", result.DetectedFormat)
 	assert.NotEmpty(t, result.AssignedSchema)
 }

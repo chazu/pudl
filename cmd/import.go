@@ -47,9 +47,9 @@ Data Storage:
 - Catalog: ~/.pudl/data/catalog/ (inventory, schema assignments, etc.)
 
 Schema Assignment:
-- Manual schema specification with --schema flag (cascading validation)
+- Manual schema specification with --schema flag (chained validation)
 - Automatic schema inference from CUE schemas in the schema repository
-- Cascading validation: policy → base → generic → catchall
+- Chained validation: policy → base → generic → catchall
 - Never rejects data - always finds appropriate schema
 - Envelope wire format: a JSON file shaped like
     {"schema": {"module": "mu/aws", "version": "v1"},
@@ -147,14 +147,14 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer imp.Close()
 
-	var cascadeValidator *validator.CascadeValidator
+	var chainValidator *validator.ChainValidator
 	if importSchema != "" {
-		// Create cascade validator for manual schema specification
-		cv, err := validator.NewCascadeValidator(cfg.SchemaPath)
+		// Create chain validator for manual schema specification
+		cv, err := validator.NewChainValidator(cfg.SchemaPath)
 		if err != nil {
-			return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create cascade validator", err)
+			return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create chain validator", err)
 		}
-		cascadeValidator = cv
+		chainValidator = cv
 
 		// Resolve schema name
 		resolvedSchema, err := cv.ResolveSchemaName(importSchema)
@@ -220,7 +220,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		SourcePath:       importPath,
 		Origin:           effectiveImportOrigin, // Will be auto-detected if empty
 		ManualSchema:     importSchema,
-		CascadeValidator: cascadeValidator,
+		ChainValidator: chainValidator,
 		UseStreaming:     true, // Always use streaming for optimal performance
 		StreamingConfig:  streamingConfig,
 	}
@@ -400,7 +400,7 @@ func init() {
 	importCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }
 
-// displayImportResults shows the results of data import with cascading validation info
+// displayImportResults shows the results of data import with chained validation info
 func displayImportResults(result *importer.ImportResult) {
 	// Check if import was skipped due to duplicate
 	if result.Skipped {
@@ -522,12 +522,12 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	}
 	defer imp.Close()
 
-	// Set up cascade validator if schema is specified
-	var cascadeValidator *validator.CascadeValidator
+	// Set up chain validator if schema is specified
+	var chainValidator *validator.ChainValidator
 	if importSchema != "" {
-		cascadeValidator, err = validator.NewCascadeValidator(cfg.SchemaPath)
+		chainValidator, err = validator.NewChainValidator(cfg.SchemaPath)
 		if err != nil {
-			return errors.NewSystemError("Failed to initialize cascade validator", err)
+			return errors.NewSystemError("Failed to initialize chain validator", err)
 		}
 	}
 
@@ -569,7 +569,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 			SourcePath:       filePath,
 			Origin:           batchEffectiveOrigin, // Will be auto-detected if empty
 			ManualSchema:     importSchema,
-			CascadeValidator: cascadeValidator,
+			ChainValidator: chainValidator,
 			UseStreaming:     true, // Always use streaming for optimal performance
 			StreamingConfig:  streamingConfig,
 		}

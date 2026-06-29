@@ -9,14 +9,14 @@ import (
 
 // ValidationService handles CUE validation for data validation workflows
 type ValidationService struct {
-	cascadeValidator *CascadeValidator
+	chainValidator *ChainValidator
 	schemaPaths      []string
 }
 
 // NewValidationService creates a new validation service.
 // Accepts one or more schema paths; earlier paths take priority for shadowing.
 func NewValidationService(schemaPaths ...string) (*ValidationService, error) {
-	cascadeValidator, err := NewCascadeValidator(schemaPaths...)
+	chainValidator, err := NewChainValidator(schemaPaths...)
 	if err != nil {
 		return nil, errors.WrapError(
 			errors.ErrCodeValidationFailed,
@@ -26,14 +26,14 @@ func NewValidationService(schemaPaths ...string) (*ValidationService, error) {
 	}
 
 	return &ValidationService{
-		cascadeValidator: cascadeValidator,
+		chainValidator: chainValidator,
 		schemaPaths:      schemaPaths,
 	}, nil
 }
 
 // ValidateDataAgainstSchema validates data against a specific schema using CUE
 func (vs *ValidationService) ValidateDataAgainstSchema(data interface{}, schemaName string) *ServiceValidationResult {
-	result, err := vs.cascadeValidator.ValidateWithCascade(data, schemaName)
+	result, err := vs.chainValidator.ValidateChain(data, schemaName)
 	if err != nil {
 		return &ServiceValidationResult{
 			Valid:        false,
@@ -60,7 +60,7 @@ func (vs *ValidationService) convertResult(vr *ValidationResult, intendedSchema 
 	}
 
 	result.Errors = vs.convertValidationErrors(vr.ValidationErrors)
-	result.CascadeAttempts = vs.convertCascadeAttempts(vr.CascadeAttempts)
+	result.ChainAttempts = vs.convertChainAttempts(vr.ChainAttempts)
 
 	return result
 }
@@ -78,9 +78,9 @@ func (vs *ValidationService) buildFallbackMessage(vr *ValidationResult) string {
 }
 
 // convertValidationErrors converts validation errors to string errors
-func (vs *ValidationService) convertValidationErrors(cascadeErrors []ValidationError) []string {
+func (vs *ValidationService) convertValidationErrors(chainErrors []ValidationError) []string {
 	var errs []string
-	for _, err := range cascadeErrors {
+	for _, err := range chainErrors {
 		errorMsg := fmt.Sprintf("Path '%s': %s", err.Path, err.Message)
 		if err.Constraint != "" {
 			errorMsg += fmt.Sprintf(" (constraint: %s)", err.Constraint)
@@ -90,11 +90,11 @@ func (vs *ValidationService) convertValidationErrors(cascadeErrors []ValidationE
 	return errs
 }
 
-// convertCascadeAttempts converts cascade attempts to service format
-func (vs *ValidationService) convertCascadeAttempts(cascadeAttempts []CascadeAttempt) []ServiceCascadeAttempt {
-	var attempts []ServiceCascadeAttempt
-	for _, attempt := range cascadeAttempts {
-		serviceAttempt := ServiceCascadeAttempt{
+// convertChainAttempts converts chain attempts to service format
+func (vs *ValidationService) convertChainAttempts(chainAttempts []ChainAttempt) []ServiceChainAttempt {
+	var attempts []ServiceChainAttempt
+	for _, attempt := range chainAttempts {
+		serviceAttempt := ServiceChainAttempt{
 			SchemaName: attempt.SchemaName,
 			Success:    attempt.Success,
 			Reason:     attempt.Reason,
@@ -145,11 +145,11 @@ type ServiceValidationResult struct {
 	ErrorMessage    string                  `json:"error_message"`
 	Errors          []string                `json:"errors"`
 	FallbackReason  string                  `json:"fallback_reason"`
-	CascadeAttempts []ServiceCascadeAttempt  `json:"cascade_attempts"`
+	ChainAttempts []ServiceChainAttempt  `json:"chain_attempts"`
 }
 
-// ServiceCascadeAttempt represents a single validation attempt
-type ServiceCascadeAttempt struct {
+// ServiceChainAttempt represents a single validation attempt
+type ServiceChainAttempt struct {
 	SchemaName string   `json:"schema_name"`
 	Success    bool     `json:"success"`
 	Reason     string   `json:"reason"`

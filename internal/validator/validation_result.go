@@ -13,7 +13,7 @@ type ValidationResult struct {
 	ValidationErrors []ValidationError `json:"validation_errors,omitempty"`
 	FallbackReason   string            `json:"fallback_reason,omitempty"`
 	Success          bool              `json:"success"`           // Always true (never reject data)
-	CascadeAttempts  []CascadeAttempt  `json:"cascade_attempts"`  // All validation attempts
+	ChainAttempts  []ChainAttempt  `json:"chain_attempts"`  // All validation attempts
 }
 
 // ValidationError represents a specific validation failure
@@ -25,8 +25,8 @@ type ValidationError struct {
 	Constraint string      `json:"constraint"`
 }
 
-// CascadeAttempt represents a single validation attempt
-type CascadeAttempt struct {
+// ChainAttempt represents a single validation attempt
+type ChainAttempt struct {
 	SchemaName string            `json:"schema_name"`
 	Success    bool              `json:"success"`
 	Errors     []ValidationError `json:"errors,omitempty"`
@@ -66,9 +66,9 @@ func (vr *ValidationResult) GetDetailedReport() string {
 		report.WriteString(fmt.Sprintf("Fallback Reason: %s\n", vr.FallbackReason))
 	}
 
-	if len(vr.CascadeAttempts) > 1 {
+	if len(vr.ChainAttempts) > 1 {
 		report.WriteString("\nValidation Attempts:\n")
-		for i, attempt := range vr.CascadeAttempts {
+		for i, attempt := range vr.ChainAttempts {
 			status := "FAIL"
 			if attempt.Success {
 				status = "OK"
@@ -121,20 +121,20 @@ func NewValidationResult(intendedSchema string) *ValidationResult {
 	return &ValidationResult{
 		IntendedSchema:   intendedSchema,
 		Success:          true, // Never reject data
-		CascadeAttempts:  []CascadeAttempt{},
+		ChainAttempts:  []ChainAttempt{},
 		ValidationErrors: []ValidationError{},
 	}
 }
 
-// AddCascadeAttempt adds a validation attempt to the result
-func (vr *ValidationResult) AddCascadeAttempt(schemaName string, success bool, errors []ValidationError, reason string) {
-	attempt := CascadeAttempt{
+// AddChainAttempt adds a validation attempt to the result
+func (vr *ValidationResult) AddChainAttempt(schemaName string, success bool, errors []ValidationError, reason string) {
+	attempt := ChainAttempt{
 		SchemaName: schemaName,
 		Success:    success,
 		Errors:     errors,
 		Reason:     reason,
 	}
-	vr.CascadeAttempts = append(vr.CascadeAttempts, attempt)
+	vr.ChainAttempts = append(vr.ChainAttempts, attempt)
 
 	// Add errors to the main error list
 	for _, err := range errors {

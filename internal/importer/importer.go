@@ -36,7 +36,7 @@ type ImportOptions struct {
 	SourcePath       string
 	Origin           string                      // Optional origin override
 	ManualSchema     string                      // Manual schema specification
-	CascadeValidator *validator.CascadeValidator // Validator for manual schema
+	ChainValidator *validator.ChainValidator // Validator for manual schema
 	UseStreaming     bool                        // Whether to use streaming parser
 	StreamingConfig  *streaming.StreamingConfig  // Configuration for streaming parser
 }
@@ -239,16 +239,16 @@ func (i *Importer) ImportFile(opts ImportOptions) (*ImportResult, error) {
 		return nil, fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	// Assign schema using cascading validation or inference
+	// Assign schema using chained validation or inference
 	var schema string
 	var confidence float64
 	var validationResult *validator.ValidationResult
 
-	if opts.ManualSchema != "" && opts.CascadeValidator != nil {
-		// Use cascading validation for manual schema specification
-		vr, err := opts.CascadeValidator.ValidateWithCascade(data, opts.ManualSchema)
+	if opts.ManualSchema != "" && opts.ChainValidator != nil {
+		// Use chained validation for manual schema specification
+		vr, err := opts.ChainValidator.ValidateChain(data, opts.ManualSchema)
 		if err != nil {
-			return nil, fmt.Errorf("failed to perform cascading validation: %w", err)
+			return nil, fmt.Errorf("failed to perform chained validation: %w", err)
 		}
 		validationResult = vr
 		schema = vr.AssignedSchema

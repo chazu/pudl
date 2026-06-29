@@ -13,8 +13,8 @@ import (
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
-// CascadeValidator handles cascading schema validation with full CUE module support
-type CascadeValidator struct {
+// ChainValidator handles chained schema validation with full CUE module support
+type ChainValidator struct {
 	ctx         *cue.Context
 	loaders     []*CUEModuleLoader
 	modules     map[string]*LoadedModule
@@ -23,7 +23,7 @@ type CascadeValidator struct {
 	schemaPaths []string
 }
 
-// NewCascadeValidator creates a new cascade validator with full CUE module support.
+// NewChainValidator creates a new chain validator with full CUE module support.
 // When multiple paths are provided, schemas are loaded in order; the first occurrence
 // of a schema name wins (per-repo shadows global).
 //
@@ -37,7 +37,7 @@ type CascadeValidator struct {
 // 2. Uses CUE's load.Instances to load each package as a unified module
 // 3. Extracts all schema definitions and metadata from loaded modules
 // 4. Validates module integrity including cross-reference consistency
-func NewCascadeValidator(schemaPaths ...string) (*CascadeValidator, error) {
+func NewChainValidator(schemaPaths ...string) (*ChainValidator, error) {
 	if len(schemaPaths) == 0 {
 		return nil, fmt.Errorf("at least one schema path is required")
 	}
@@ -86,7 +86,7 @@ func NewCascadeValidator(schemaPaths ...string) (*CascadeValidator, error) {
 		}
 	}
 
-	cv := &CascadeValidator{
+	cv := &ChainValidator{
 		ctx:         ctx,
 		loaders:     allLoaders,
 		modules:     allModules,
@@ -100,7 +100,7 @@ func NewCascadeValidator(schemaPaths ...string) (*CascadeValidator, error) {
 
 // findFallbackSchemaName finds the actual schema name for the Item/catchall schema
 // from the loaded schemas map. Returns canonical format (e.g., "pudl/core.#Item").
-func (cv *CascadeValidator) findFallbackSchemaName() string {
+func (cv *ChainValidator) findFallbackSchemaName() string {
 	// Canonical fallback schema name
 	const fallbackCanonical = "pudl/core.#Item"
 
@@ -120,9 +120,9 @@ func (cv *CascadeValidator) findFallbackSchemaName() string {
 	return fallbackCanonical
 }
 
-// ValidateWithCascade validates data against the intended schema using CUE unification.
+// ValidateChain validates data against the intended schema using CUE unification.
 // If the intended schema fails, it tries the base schema (if any), then the catchall.
-func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema string) (*ValidationResult, error) {
+func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string) (*ValidationResult, error) {
 	// Normalize the intended schema to canonical format
 	intendedSchema = schemaname.Normalize(intendedSchema)
 	result := NewValidationResult(intendedSchema)
@@ -145,7 +145,7 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 	for _, schemaName := range chain {
 		schema, exists := cv.schemas[schemaName]
 		if !exists {
-			result.AddCascadeAttempt(schemaName, false, nil, "Schema not found")
+			result.AddChainAttempt(schemaName, false, nil, "Schema not found")
 			continue
 		}
 
@@ -156,12 +156,12 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 				fallbackReason = fmt.Sprintf("Failed validation against %s", intendedSchema)
 			}
 			result.SetFinalAssignment(schemaName, fallbackReason)
-			result.AddCascadeAttempt(schemaName, true, nil, "Validation successful")
+			result.AddChainAttempt(schemaName, true, nil, "Validation successful")
 			return result, nil
 		} else {
 			validationErrors := cv.extractValidationErrors(err, schemaName)
 			reason := fmt.Sprintf("Validation failed: %d errors", len(validationErrors))
-			result.AddCascadeAttempt(schemaName, false, validationErrors, reason)
+			result.AddChainAttempt(schemaName, false, validationErrors, reason)
 		}
 	}
 
@@ -174,7 +174,7 @@ func (cv *CascadeValidator) ValidateWithCascade(data interface{}, intendedSchema
 
 // buildValidationChain builds the validation chain: intended → base (if any) → catchall.
 // Uses CUE's natural inheritance via base_schema references.
-func (cv *CascadeValidator) buildValidationChain(intendedSchema string) []string {
+func (cv *ChainValidator) buildValidationChain(intendedSchema string) []string {
 	fallbackSchema := cv.findFallbackSchemaName()
 
 	chain := []string{intendedSchema}
@@ -201,7 +201,7 @@ func (cv *CascadeValidator) buildValidationChain(intendedSchema string) []string
 }
 
 // extractValidationErrors converts CUE validation errors to structured format
-func (cv *CascadeValidator) extractValidationErrors(err error, schemaName string) []ValidationError {
+func (cv *ChainValidator) extractValidationErrors(err error, schemaName string) []ValidationError {
 	var errors []ValidationError
 
 	// Use CUEErrorParser to parse errors into structured format
@@ -233,7 +233,7 @@ func (cv *CascadeValidator) extractValidationErrors(err error, schemaName string
 }
 
 // GetAvailableSchemas returns all loaded schemas
-func (cv *CascadeValidator) GetAvailableSchemas() []string {
+func (cv *ChainValidator) GetAvailableSchemas() []string {
 	var schemas []string
 	for name := range cv.schemas {
 		schemas = append(schemas, name)
@@ -243,13 +243,13 @@ func (cv *CascadeValidator) GetAvailableSchemas() []string {
 }
 
 // GetSchemaMetadata returns metadata for a specific schema
-func (cv *CascadeValidator) GetSchemaMetadata(schemaName string) (SchemaMetadata, bool) {
+func (cv *ChainValidator) GetSchemaMetadata(schemaName string) (SchemaMetadata, bool) {
 	meta, exists := cv.metadata[schemaName]
 	return meta, exists
 }
 
 // GetSchemasByType returns schemas filtered by type
-func (cv *CascadeValidator) GetSchemasByType(schemaType string) []string {
+func (cv *ChainValidator) GetSchemasByType(schemaType string) []string {
 	var schemas []string
 	for name, meta := range cv.metadata {
 		if meta.SchemaType == schemaType {
@@ -261,7 +261,7 @@ func (cv *CascadeValidator) GetSchemasByType(schemaType string) []string {
 }
 
 // GetSchemasByResourceType returns schemas for a specific resource type
-func (cv *CascadeValidator) GetSchemasByResourceType(resourceType string) []string {
+func (cv *ChainValidator) GetSchemasByResourceType(resourceType string) []string {
 	var schemas []string
 	for name, meta := range cv.metadata {
 		if meta.ResourceType == resourceType {
@@ -273,7 +273,7 @@ func (cv *CascadeValidator) GetSchemasByResourceType(resourceType string) []stri
 }
 
 // ResolveSchemaName attempts to resolve user-friendly schema names to full names
-func (cv *CascadeValidator) ResolveSchemaName(userInput string) (string, error) {
+func (cv *ChainValidator) ResolveSchemaName(userInput string) (string, error) {
 	// If it's already a full schema name, return as-is
 	if _, exists := cv.schemas[userInput]; exists {
 		return userInput, nil
@@ -367,12 +367,12 @@ func contains(slice []string, item string) bool {
 }
 
 // GetLoadedModules returns the loaded CUE modules for inspection
-func (cv *CascadeValidator) GetLoadedModules() map[string]*LoadedModule {
+func (cv *ChainValidator) GetLoadedModules() map[string]*LoadedModule {
 	return cv.modules
 }
 
 // GetModuleInfo returns information about a specific loaded module
-func (cv *CascadeValidator) GetModuleInfo(packageName string) (*LoadedModule, error) {
+func (cv *ChainValidator) GetModuleInfo(packageName string) (*LoadedModule, error) {
 	// Search through all loaders
 	for _, loader := range cv.loaders {
 		mod, err := loader.GetModuleInfo(cv.modules, packageName)
@@ -384,7 +384,7 @@ func (cv *CascadeValidator) GetModuleInfo(packageName string) (*LoadedModule, er
 }
 
 // ReloadModules reloads all CUE modules (useful for development/testing)
-func (cv *CascadeValidator) ReloadModules() error {
+func (cv *ChainValidator) ReloadModules() error {
 	allSchemas := make(map[string]cue.Value)
 	allMetadata := make(map[string]SchemaMetadata)
 	allModules := make(map[string]*LoadedModule)
