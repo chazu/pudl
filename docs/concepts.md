@@ -165,7 +165,7 @@ Use `pudl model list` to see available models, `pudl model show <name>` to inspe
 `pudl run <name>` drives a model through an observe-only ACUTE loop:
 
 1. **Populate** -- imports the model's declared sources into the catalog, refreshing observations.
-2. **Drift** -- compares the model's `desired` state against the latest observation, producing a deep diff of added, removed, and changed fields with dot-notation paths.
+2. **Drift** -- compares the model's `desired` state against observed state. The mode is auto-detected from the observer: a *differential* observer (k8s) reads `desired` as sources and reports per-resource exists/matches, while an *inventory* observer (a `host`-style plugin or an `#EweTarget` fetcher) dumps records that pudl set-diffs against `desired`. A `#PluginObserve` arm defaults to differential; set `differential: false` for inventory observers. `--from-catalog` forces inventory drift from already-ingested records.
 3. **Checks** -- evaluates the model's invariants against current facts.
 4. **Report** -- records a verdict for the run.
 
@@ -175,7 +175,7 @@ By default `pudl run` observes only: it computes drift but changes nothing in th
 
 `pudl run <name> --converge` closes drift instead of merely reporting it. pudl renders the model's `desired` state to sources, and the mu plugin reconciles those sources against the real system. pudl declares state; mu executes. There is no separate export step.
 
-`pudl status` reads convergence status from the catalog -- each model run records its verdict, so `pudl status` reflects whether the system last converged or drifted.
+`pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it.
 
 ## Fixed-Point Verification
 
