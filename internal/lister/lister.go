@@ -65,7 +65,6 @@ type ListEntry struct {
 	// Artifact tracking fields
 	EntryType  *string `json:"entry_type,omitempty"`
 	Definition *string `json:"definition,omitempty"`
-	Method     *string `json:"method,omitempty"`
 	RunID      *string `json:"run_id,omitempty"`
 	Tags       *string `json:"tags,omitempty"`
 }
@@ -359,7 +358,6 @@ func dbEntryToListEntry(e database.CatalogEntry) ListEntry {
 		Version:         e.Version,
 		EntryType:       e.EntryType,
 		Definition:      e.Definition,
-		Method:          e.Method,
 		RunID:           e.RunID,
 		Tags:            e.Tags,
 	}

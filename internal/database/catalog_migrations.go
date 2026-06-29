@@ -58,7 +58,6 @@ func (c *CatalogDB) ensureArtifactColumns() error {
 	}{
 		{"entry_type", "ALTER TABLE catalog_entries ADD COLUMN entry_type TEXT DEFAULT 'import'"},
 		{"definition", "ALTER TABLE catalog_entries ADD COLUMN definition TEXT"},
-		{"method", "ALTER TABLE catalog_entries ADD COLUMN method TEXT"},
 		{"run_id", "ALTER TABLE catalog_entries ADD COLUMN run_id TEXT"},
 		{"tags", "ALTER TABLE catalog_entries ADD COLUMN tags TEXT"},
 	}
@@ -78,7 +77,6 @@ func (c *CatalogDB) ensureArtifactColumns() error {
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_entry_type ON catalog_entries(entry_type)",
 		"CREATE INDEX IF NOT EXISTS idx_definition ON catalog_entries(definition)",
-		"CREATE INDEX IF NOT EXISTS idx_definition_method ON catalog_entries(definition, method)",
 		"CREATE INDEX IF NOT EXISTS idx_run_id ON catalog_entries(run_id)",
 	}
 	for _, idx := range indexes {
@@ -88,11 +86,42 @@ func (c *CatalogDB) ensureArtifactColumns() error {
 	}
 
 	// Backfill entry_type for existing rows
-	_, err := c.db.Exec(`UPDATE catalog_entries SET entry_type = 'import' WHERE entry_type IS NULL`)
-	if err != nil {
+	if _, err := c.db.Exec(`UPDATE catalog_entries SET entry_type = 'import' WHERE entry_type IS NULL`); err != nil {
 		return fmt.Errorf("failed to backfill entry_type: %w", err)
 	}
 
+	// Drop the legacy `method` column + its index. They are leftovers of the
+	// removed definition→method→artifact model (the executor moved to mu); the
+	// column has always been NULL. Drop the catalog_entry_edb view first since
+	// it references the column (SQLite blocks DROP COLUMN otherwise);
+	// ensureCatalogEntryView recreates the view later in the open sequence.
+	if err := c.dropLegacyMethodColumn(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// dropLegacyMethodColumn removes the orphaned `method` column and its index
+// from pre-existing databases. Idempotent — a no-op once the column is gone.
+func (c *CatalogDB) dropLegacyMethodColumn() error {
+	exists, err := c.columnExists("catalog_entries", "method")
+	if err != nil {
+		return fmt.Errorf("failed to check method column: %w", err)
+	}
+	if !exists {
+		return nil
+	}
+
+	if _, err := c.db.Exec("DROP VIEW IF EXISTS " + CatalogEntryView); err != nil {
+		return fmt.Errorf("failed to drop %s for method cleanup: %w", CatalogEntryView, err)
+	}
+	if _, err := c.db.Exec("DROP INDEX IF EXISTS idx_definition_method"); err != nil {
+		return fmt.Errorf("failed to drop legacy method index: %w", err)
+	}
+	if _, err := c.db.Exec("ALTER TABLE catalog_entries DROP COLUMN method"); err != nil {
+		return fmt.Errorf("failed to drop legacy method column: %w", err)
+	}
 	return nil
 }
 

@@ -13,7 +13,7 @@ func (c *CatalogDB) GetManifestActions(runID string) ([]CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags, status,
+		   entry_type, definition, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE entry_type = 'manifest-action' AND run_id = ?
@@ -34,7 +34,7 @@ func (c *CatalogDB) GetManifestActions(runID string) ([]CatalogEntry, error) {
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-			&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan manifest action", err)
 		}
@@ -54,7 +54,7 @@ func (c *CatalogDB) GetLatestManifestAction(definitionName string) (*CatalogEntr
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, method, run_id, tags, status,
+		   entry_type, definition, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE entry_type = 'manifest-action' AND definition = ?
@@ -68,7 +68,7 @@ func (c *CatalogDB) GetLatestManifestAction(definitionName string) (*CatalogEntr
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
-		&entry.Method, &entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound,
