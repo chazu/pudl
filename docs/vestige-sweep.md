@@ -92,7 +92,8 @@ instances") into the ACUTE loop and delete the socket/BRICK/export machinery —
 **vs** keep it as a separate path. The desired `pudl model list` command should
 probably fall *out of* this decision rather than precede it.
 
-**Status:** open — highest-value decision.
+**Status:** ✅ **DECIDED (2026-06-26)** — see §6 for the analysis and disposition.
+Salvage 3 of 8 capabilities as ideas re-homed on the World B spine; kill the rest.
 
 ### Cluster B — pith-in-pudl: `pudl exec` + `internal/pithdriver`
 
@@ -189,6 +190,71 @@ method/artifact model.
   - `resource_type` `artifact` / `artifact.image` + the embedded
     `pudl/artifact/artifact.cue` (`cue_schemas.go:123`) are a separate check —
     don't conflate with the dead entry_type.
+
+## 6. Cluster A decision — grounded in SystemModel design intent
+
+Analysis (2026-06-26) across pudl + the mu/ewe sibling repos: the SystemModel run
+loop, the pudl↔mu contract, the ewe populate path, and a per-capability audit of
+World A.
+
+### The decisive insight
+
+World A's **sockets + dependency graph** answer two questions — *"in what order do
+these named instances apply?"* and *"how do they relate?"* The SystemModel design
+**deliberately relocated both**, and recorded it:
+
+- **Ordering → the mu DAG, not pudl.** issue-ledger **E5** (cut pure-ordering):
+  "Pure cross-effect ordering is the DAG's job… mu already sequences actions by
+  dependency. If you need A before B, split them into two mu DAG actions." Within a
+  model, resource ordering is pushed to the plugin (k8s/kubectl).
+- **Relating → Datalog, not sockets.** issue-ledger **P2**: cross-source joins are
+  "pudl Datalog relations, not in-body plugin calls."
+- **Capabilities → mu plugins, not interface contracts.** README two-axis rule:
+  logic extends in CUE, capabilities extend as sandboxed mu plugins. No room for
+  BRICK interface enforcement between definitions.
+
+So World A is the **pre-decision model** — built before ordering/relating/capability
+were assigned to the DAG, Datalog, and plugins. That makes most of it superseded by
+construction, not merely old.
+
+ewe / `#EweTarget` confirmed **irrelevant** to definitions/sockets — a populate-phase
+fetch path only.
+
+### Per-capability disposition
+
+| World A capability | Maps to a real SystemModel gap? | Disposition |
+|---|---|---|
+| **Discovery / listing** | ✅ gap: no `pudl model list` (the trigger for this whole audit) | **SALVAGE THE IDEA** — build `pudl model list/show` on the existing `resolveModel` / `validator.CUEModuleLoader` (proper CUE load, `resource_type=system_model`), **not** the regex `Discoverer`. |
+| **Per-definition status** | ✅ gap: run verdict not persisted; #1 convergence-roadmap item | **KEEP + WIRE IN** — `internal/database/catalog_status.go` is already catalog-native (zero World-A coupling). The run loop should *write* status (V1 §5/§8); `pudl status` is the read side. |
+| **Pre-run validation** | ✅ gap: can't validate a model without running it | **REPLACE (small)** — `pudl model validate` over the real loader. |
+| Socket bindings | ❌ ordering relocated to mu DAG (E5) | **KILL** |
+| Dependency graph | ❌ relating relocated to Datalog (P2) | **KILL** — endorsed analog is a Datalog rule + `pudl query`, not `definition graph`. |
+| Interface / BRICK enforcement | ❌ capabilities = plugins, not contracts | **KILL** (pudl-side `interface_checker`; brick.* as a mu build schema is mu's domain). |
+| Standalone drift (`internal/drift.Checker`, `drift check/report`) | ❌ run loop has its own drift off `m.Desired`; Checker reads dead `entry_type='artifact'` | **KILL** — untangle: `run_drift.go` imports the `drift` pkg, so keep shared diff types (`Compare`/`FieldDiff`), drop the `Checker` + `.drift/` report store. |
+| `export-actions` | ❌ render-`desired`→sources supersedes it | **KILL** |
+
+### Collapses to
+
+- **Build:** `pudl model list / show / validate` on the World B loader — fills the
+  original gap.
+- **Wire:** per-definition status into the run loop (convergence roadmap); keep
+  `pudl status` as its reader (reframe its help away from World-A "definitions").
+- **Delete:** `internal/definition/` (Discoverer, sockets, graph, interface_checker,
+  validator); `cmd/definition*`; `cmd/drift*` + `internal/drift.Checker` (+ `.drift/`
+  store); `cmd/export_actions.go`; `cmd/repo.go`'s socket-health check; and the
+  now-orphaned `internal/database/catalog_artifacts.go` + `entry_type='artifact'`
+  (unblocks §1.3) + the dead `GetLatestArtifact*` reads.
+- **Vocabulary falls out:** "definition" stops meaning two things — the socket-instance
+  sense dies; surviving "definition" = a `desired` entry / per-status unit; "model" =
+  the SystemModel instance.
+
+### Sequencing (proposed)
+
+1. **Add `pudl model list/show`** (additive; fills the gap; no deletions yet).
+2. **Wire run-loop status persistence** + `pudl model validate` (additive).
+3. **Delete the killed surfaces** (definition*/drift*/export-actions/repo-socket-check
+   + `internal/definition`/`drift.Checker`/`catalog_artifacts`), untangling the shared
+   `drift` diff types. Do last, once the replacements exist.
 
 ## Suggested order of attack
 
