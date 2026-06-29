@@ -381,7 +381,10 @@ pudl status
 pudl status my_definition
 ```
 
-Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`.
+Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`. Lifecycle:
+`drifted → converging` (apply, via `ingest-manifest`) `→ clean` (verified ∅ by the drift
+re-check) `| failed`. `clean` is the single in-sync state (drift == ∅), written only off
+an actual observation — never a bare apply.
 
 ## Repository Operations
 
@@ -401,9 +404,21 @@ pudl repo init --force    # Force reinitialize
 The `pudl mu` bridge exchanges state with the mu reconciliation plugin.
 
 ```bash
-pudl mu ingest-observe     # Ingest observed state from a mu run
-pudl mu ingest-manifest    # Ingest a mu manifest
+pudl mu ingest-observe                        # Ingest observed state from a mu run
+mu build --emit-manifest | pudl mu ingest-manifest --model my_model
 ```
+
+`ingest-manifest` records each applied action and sets the affected resources to
+`converging` (applied, pending verification). Passing `--model <name>` tags those rows
+with the model so a later clean `pudl run <name>` drift re-check promotes exactly that
+model's resources from `converging` to `clean`. Without `--model`, promotion falls back
+to matching the model's desired-resource names.
+
+| Flag (`ingest-manifest`) | Description |
+|------|-------------|
+| `--path` | Read manifest JSON from a file (default: stdin) |
+| `--origin` | Origin label for catalog entries (default `mu-build`) |
+| `--model` | Tag entries with this `#SystemModel` name for exact converging→clean promotion |
 
 ### `pudl data search`
 
