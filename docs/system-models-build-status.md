@@ -72,6 +72,12 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   (build-spec §5/§8). Self-contained + validatable; good next step.
 - **run.go dispatch** — inventory-vs-differential is currently explicit
   (`--from-catalog` = inventory). Auto-detect by observer style is a follow-up.
+- **cross-model data dependencies** — `pudl run` is single-instance; there is no
+  way to declare or query that one model's state depends on another's output. Both
+  the system (run ordering, impact/blast-radius, downstream re-runs) and the user
+  need to reason over these dependencies — at the Datalog/catalog layer, not a
+  bespoke graph. See the design note in the canonical spec (mu V1-BUILD-SPEC §12),
+  which also records why the legacy "socket" wiring stays retired.
 
 ## Good next steps (self-contained, validatable here)
 
