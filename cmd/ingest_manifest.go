@@ -14,6 +14,7 @@ import (
 var (
 	manifestPath   string
 	manifestOrigin string
+	manifestModel  string
 )
 
 var ingestManifestCmd = &cobra.Command{
@@ -48,7 +49,7 @@ Examples:
 		defer db.Close()
 
 		// Ingest the manifest
-		result, err := mubridge.IngestManifest(db, reader, manifestOrigin, pudlDir)
+		result, err := mubridge.IngestManifest(db, reader, manifestOrigin, pudlDir, manifestModel)
 		if err != nil {
 			return fmt.Errorf("failed to ingest manifest: %w", err)
 		}
@@ -69,6 +70,7 @@ func init() {
 	// Registered under `pudl mu` (see cmd/mu.go).
 	ingestManifestCmd.Flags().StringVar(&manifestPath, "path", "", "Path to manifest JSON file (reads stdin if omitted)")
 	ingestManifestCmd.Flags().StringVar(&manifestOrigin, "origin", "mu-build", "Origin label for catalog entries")
+	ingestManifestCmd.Flags().StringVar(&manifestModel, "model", "", "Tag entries with this #SystemModel name so a later clean drift re-check promotes its converging resources to clean")
 
 	ingestManifestCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }

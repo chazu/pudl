@@ -61,6 +61,28 @@ func (c *CatalogDB) PromoteConvergingToClean(definitions []string) (int, error) 
 	return promoted, nil
 }
 
+// PromoteConvergingToCleanByModel flips status converging -> clean for every entry
+// tagged with the given model (`tags.model`, set by `ingest-manifest --model`). This
+// is the exact form of the drift re-check verifying a pending apply: when the model's
+// drift is ∅, all its resources that ingest-manifest left "converging" are confirmed
+// in sync — without reconstructing the resource→model mapping from desired records.
+// Returns the number promoted.
+func (c *CatalogDB) PromoteConvergingToCleanByModel(model string) (int, error) {
+	if model == "" {
+		return 0, nil
+	}
+	res, err := c.db.Exec(
+		`UPDATE catalog_entries SET status = 'clean', updated_at = CURRENT_TIMESTAMP
+		 WHERE status = 'converging' AND json_extract(tags, '$.model') = ?`,
+		model,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("promote converging for model %q: %w", model, err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
 // GetDefinitionStatuses returns the latest status for each definition that has entries.
 func (c *CatalogDB) GetDefinitionStatuses() ([]DefinitionStatus, error) {
 	rows, err := c.db.Query(`

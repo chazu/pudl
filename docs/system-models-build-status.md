@@ -76,9 +76,11 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   same state); the status vocabulary is now `unknown | drifted | converging | clean |
   failed`. `clean` is only ever written off an actual ∅ observation. A clean drift
   re-check also promotes this model's per-resource `converging` rows (from
-  `ingest-manifest`) to `clean` — `promoteConvergingResources` →
-  `CatalogDB.PromoteConvergingToClean`, scoped to the model's own desired-resource
-  definition names.
+  `ingest-manifest`) to `clean` — `promoteConvergingResources`. Exact path:
+  `ingest-manifest --model <name>` tags rows (`tags.model`) and
+  `CatalogDB.PromoteConvergingToCleanByModel` flips them regardless of action-target
+  naming (k8s `Kind/name` included); falls back to a desired-resource-name heuristic for
+  manifests ingested without `--model`. (End-to-end k8s validation still pending infra.)
 - ~~**run.go dispatch**~~ — ✅ **DONE (2026-06-29).** Drift mode is auto-detected by
   observer style: EweTarget populate → inventory; `#PluginObserve` uses its
   `differential` field (default true → differential live observe; false → inventory

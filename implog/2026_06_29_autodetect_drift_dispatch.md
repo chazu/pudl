@@ -47,13 +47,23 @@ default decodes as `true`. EweTarget instances unify with the other union arm (n
 `TestDifferentialDrift` (CUE default → true; `differential:false` → inventory; ewe →
 inventory) and `TestUseInventoryDrift` (dispatch matrix). Build + full suite green.
 
-## Tier 1 #2 (harden the converging→clean promotion) — deferred, with rationale
+## Tier 1 #2 (harden the converging→clean promotion) — BUILT (exact model-tag path)
 
-The promotion's resource→defName scoping (`modelResourceDefs`) is **already correct for
-every case validatable here**: inventory converge targets (host/ewe) key `converging` by
-resource name = the desired record's name, which the heuristic matches. The only gap is
-k8s, where the manifest action target may be `Kind/name` rather than the bare desired
-name — and k8s convergence is **infra-gated to validate** anyway. Per "don't build what
-you can't validate," the airtight version (a manifest→model linkage, e.g. `pudl mu
-ingest-manifest --model` tagging rows) should ride with k8s convergence validation, not
-be built speculatively now.
+Implemented the exact linkage rather than reconstructing resource→model from desired
+records:
+
+- `pudl mu ingest-manifest --model <name>` tags each per-action entry with `tags.model`
+  (`mubridge.IngestManifest` gained a `model` param; `cmd/ingest_manifest.go` gained the
+  flag).
+- `CatalogDB.PromoteConvergingToCleanByModel(name)` flips `converging → clean` for all
+  rows where `json_extract(tags,'$.model') = name` — exact, regardless of how mu named
+  the action targets (`Deployment/web` etc.).
+- `promoteConvergingResources` (`cmd/run.go`) tries the exact model-tag path first; if it
+  promotes nothing (manifest ingested without `--model`), it falls back to the
+  desired-record-name heuristic (`modelResourceDefs`) for back-compat.
+
+Tests (no cluster needed): `TestPromoteConvergingToCleanByModel` (tagged model promotes,
+other-model / non-converging / untagged untouched, incl. `Kind/name` defs) and
+`TestIngestManifest_ModelTag` (--model tags rows; absent → no tag). **Still to validate
+with real infra:** that a live k8s converge + `ingest-manifest --model` + `pudl run`
+drift promotes end-to-end (the action-target format is asserted, not yet observed).

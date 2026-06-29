@@ -234,6 +234,19 @@ func promoteConvergingResources(m *systemmodel.SystemModel) {
 	if len(m.Desired) == 0 {
 		return
 	}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	// Exact path: rows tagged with this model by `ingest-manifest --model <name>`.
+	if n, err := db.PromoteConvergingToCleanByModel(m.Name); err == nil && n > 0 {
+		return
+	}
+
+	// Fallback (manifests ingested without --model): derive candidate resource
+	// definition names from the model's desired records and promote matches.
 	identity, err := schemaIdentityResolver()
 	if err != nil {
 		return
@@ -242,11 +255,6 @@ func promoteConvergingResources(m *systemmodel.SystemModel) {
 	if len(defs) == 0 {
 		return
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
-	if err != nil {
-		return
-	}
-	defer db.Close()
 	_, _ = db.PromoteConvergingToClean(defs)
 }
 
