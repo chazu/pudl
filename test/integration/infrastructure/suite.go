@@ -65,7 +65,7 @@ type IntegrationTestSuite struct {
 	SchemaDir     string // Schema definitions directory
 	
 	// Component Instances
-	Importer    *importer.Importer    // File import engine
+	Importer    *importer.EnhancedImporter // File import engine
 	Database    *database.CatalogDB   // Data catalog database
 	
 	// Test Data Management
@@ -163,7 +163,7 @@ func (s *IntegrationTestSuite) Initialize() error {
 	s.Database = db
 
 	// Initialize importer
-	imp, err := importer.New(s.DataDir, s.SchemaDir, s.PUDLHome)
+	imp, err := importer.NewEnhancedImporter(s.DataDir, s.SchemaDir, s.PUDLHome)
 	if err != nil {
 		return fmt.Errorf("failed to initialize importer: %w", err)
 	}
@@ -261,7 +261,7 @@ func (s *IntegrationTestSuite) ImportTestDataSet(dataSetName string) ([]*importe
 			SourcePath: file.Name,
 		}
 		
-		result, err := s.Importer.ImportFile(opts)
+		result, err := s.Importer.ImportFileWithFriendlyIDs(opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to import file %s: %w", file.Name, err)
 		}

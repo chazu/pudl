@@ -15,7 +15,7 @@ func TestDetectFormat(t *testing.T) {
 	fixtures := testutil.NewTestDataFixtures()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -98,7 +98,7 @@ func TestDetectFormat_ErrorCases(t *testing.T) {
 	workspace := setup.CreatePUDLWorkspace()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -142,7 +142,7 @@ func TestIsNewlineDelimitedJSON(t *testing.T) {
 	fixtures := testutil.NewTestDataFixtures()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -212,7 +212,7 @@ func TestDetectOrigin(t *testing.T) {
 	workspace := setup.CreatePUDLWorkspace()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	// detectOrigin now simply returns the filename without extension.
@@ -279,7 +279,7 @@ func TestAnalyzeData_JSON(t *testing.T) {
 	fixtures := testutil.NewTestDataFixtures()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -352,7 +352,7 @@ func TestAnalyzeData_YAML(t *testing.T) {
 	fixtures := testutil.NewTestDataFixtures()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -399,7 +399,7 @@ func TestAnalyzeData_CSV(t *testing.T) {
 	fixtures := testutil.NewTestDataFixtures()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	// Create test file
@@ -424,7 +424,7 @@ func TestAnalyzeData_UnknownFormat(t *testing.T) {
 	workspace := setup.CreatePUDLWorkspace()
 
 	// Create importer
-	importer, err := New(workspace.DataDir, workspace.SchemaDir, workspace.Root)
+	importer, err := NewEnhancedImporter(workspace.DataDir, workspace.SchemaDir, workspace.Root)
 	require.NoError(t, err)
 
 	// Create test file with unknown format

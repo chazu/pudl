@@ -266,7 +266,7 @@ func TestImportWorkflow_MemoryEfficiency(t *testing.T) {
 		suite.Metrics.StartImportTimer()
 		
 		// Note: We'll simulate the import since we don't have direct access to ImportFile
-		// In a real scenario, this would be: result, err := suite.Importer.ImportFile(...)
+		// In a real scenario, this would be: result, err := suite.Importer.ImportFileWithFriendlyIDs(...)
 		// For now, we'll test the database operations that would result from import
 		
 		// Simulate what would happen during import by adding entries directly

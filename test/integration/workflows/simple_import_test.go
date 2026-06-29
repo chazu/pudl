@@ -44,7 +44,7 @@ func TestSimpleImportWorkflow(t *testing.T) {
 			SourcePath: filePath,
 		}
 
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 		require.NoError(t, err, "Simple JSON import should succeed")
 		require.NotNil(t, result, "Import result should not be nil")
 
@@ -99,7 +99,7 @@ func TestSimpleImportWorkflow(t *testing.T) {
 				SourcePath: file.Name,
 			}
 
-			result, err := suite.Importer.ImportFile(opts)
+			result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 			if err != nil {
 				importErrors = append(importErrors, err)
 				suite.LogInfo("Import error for %s: %v", file.Name, err)
@@ -169,7 +169,7 @@ func TestSimpleImportWorkflow(t *testing.T) {
 				SourcePath: filePath,
 			}
 
-			result, err := suite.Importer.ImportFile(opts)
+			result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 			if err != nil {
 				suite.LogInfo("Import failed for %s: %v", file.name, err)
 				continue
