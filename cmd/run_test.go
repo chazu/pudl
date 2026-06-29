@@ -74,6 +74,17 @@ func TestBuildRunPlan_Converge(t *testing.T) {
 	assert.True(t, strings.Contains(plan, "loop:"), "converge plan should show the loop phase")
 }
 
+func TestUseInventoryDrift(t *testing.T) {
+	diff := &systemmodel.SystemModel{Populate: systemmodel.Populate{Plugin: "k8s", Differential: true}}
+	inv := &systemmodel.SystemModel{Populate: systemmodel.Populate{Plugin: "host", Differential: false}}
+	ewe := &systemmodel.SystemModel{Populate: systemmodel.Populate{EweSource: "populate.cue"}}
+
+	assert.False(t, useInventoryDrift(diff, false), "differential observer -> differential drift")
+	assert.True(t, useInventoryDrift(diff, true), "--from-catalog forces inventory")
+	assert.True(t, useInventoryDrift(inv, false), "non-differential observer -> inventory")
+	assert.True(t, useInventoryDrift(ewe, false), "ewe populate -> inventory")
+}
+
 func TestRunVerdict(t *testing.T) {
 	cases := []struct {
 		name   string

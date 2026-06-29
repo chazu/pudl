@@ -369,7 +369,7 @@ pudl run my_model --dry-run       # show planned actions without applying
 | `--only` | Restrict the run to a single definition |
 | `--dry-run` | Show planned actions without applying them |
 | `--max-iters` | Maximum convergence iterations |
-| `--from-catalog` | Source observed state from the catalog |
+| `--from-catalog` | Force inventory drift from the catalog (override; inventory observers — EweTarget or `#PluginObserve` `differential: false` — auto-route here) |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
 
 ### `pudl status [definition]`

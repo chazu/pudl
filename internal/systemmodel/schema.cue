@@ -72,6 +72,13 @@ package systemmodel
 #PluginObserve: {
 	plugin: string
 	input: {...}
+	// differential: this observer reads `desired` as sources and reports
+	// per-resource exists/matches (the k8s case) — drift is interpreted from its
+	// output. false → inventory: the observer dumps current records and pudl
+	// set-diffs them against `desired` from the catalog. Default true preserves the
+	// k8s differential path; inventory observers (e.g. host) set false so a plain
+	// `pudl run` routes to inventory drift without needing --from-catalog.
+	differential: bool | *true
 }
 
 // #EweTarget — a custom ewe fetch program (the GitLab case). See
