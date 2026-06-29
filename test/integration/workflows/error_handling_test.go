@@ -33,7 +33,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 				SourcePath: file.Name,
 			}
 
-			result, err := suite.Importer.ImportFile(opts)
+			result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 			if err != nil {
 				importErrors = append(importErrors, err)
 				suite.LogInfo("Expected import error for %s: %v", file.Name, err)
@@ -81,7 +81,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 
 		// Import good file first
 		goodOpts := importer.ImportOptions{SourcePath: goodFile}
-		goodResult, err := suite.Importer.ImportFile(goodOpts)
+		goodResult, err := suite.Importer.ImportFileWithFriendlyIDs(goodOpts)
 		require.NoError(t, err, "Good file should import successfully")
 		require.NotNil(t, goodResult)
 
@@ -91,7 +91,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 
 		// Attempt to import bad file
 		badOpts := importer.ImportOptions{SourcePath: badFile}
-		_, badErr := suite.Importer.ImportFile(badOpts)
+		_, badErr := suite.Importer.ImportFileWithFriendlyIDs(badOpts)
 
 		// Validate that bad import failed but didn't corrupt database
 		assert.Error(t, badErr, "Bad file should fail to import")
@@ -108,7 +108,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		opts := importer.ImportOptions{SourcePath: emptyFile}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		// Empty files should be handled gracefully
 		if err != nil {
@@ -126,7 +126,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 	t.Run("invalid file path handling", func(t *testing.T) {
 		// Test non-existent file handling
 		opts := importer.ImportOptions{SourcePath: "/nonexistent/path/file.json"}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		// Should handle non-existent files gracefully
 		assert.Error(t, err, "Non-existent file should cause error")
@@ -143,7 +143,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		opts := importer.ImportOptions{SourcePath: unsupportedFile}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		// Should handle unsupported formats gracefully
 		if err != nil {
@@ -182,7 +182,7 @@ func TestImportWorkflow_EdgeCases(t *testing.T) {
 
 		// Import large record
 		opts := importer.ImportOptions{SourcePath: largeFile}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		if err != nil {
 			suite.LogInfo("Large record import failed: %v", err)
@@ -226,7 +226,7 @@ func TestImportWorkflow_EdgeCases(t *testing.T) {
 
 		// Import deeply nested structure
 		opts := importer.ImportOptions{SourcePath: nestedFile}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		if err != nil {
 			suite.LogInfo("Deeply nested structure import failed: %v", err)
@@ -251,7 +251,7 @@ func TestImportWorkflow_EdgeCases(t *testing.T) {
 
 		// Import unicode content
 		opts := importer.ImportOptions{SourcePath: unicodeFile}
-		result, err := suite.Importer.ImportFile(opts)
+		result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 		if err != nil {
 			suite.LogInfo("Unicode content import failed: %v", err)
@@ -282,7 +282,7 @@ func TestImportWorkflow_EdgeCases(t *testing.T) {
 				require.NoError(t, err)
 
 				opts := importer.ImportOptions{SourcePath: file}
-				result, err := suite.Importer.ImportFile(opts)
+				result, err := suite.Importer.ImportFileWithFriendlyIDs(opts)
 
 				if err != nil {
 					suite.LogInfo("Minimal %s import failed: %v", testCase.name, err)

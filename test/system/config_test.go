@@ -184,7 +184,7 @@ func TestSystemConfiguration(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				imp, err := importer.New(tc.dataDir, tc.schemaDir, tc.pudelHome)
+				imp, err := importer.NewEnhancedImporter(tc.dataDir, tc.schemaDir, tc.pudelHome)
 				
 				if tc.expectErr {
 					assert.Error(t, err, "Should fail for %s", tc.name)

@@ -3,7 +3,6 @@ package importer
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 )
 
 // ImportMetadata represents the metadata structure for imported data
@@ -66,13 +65,6 @@ type CatalogEntry struct {
 	SizeBytes       int64   `json:"size_bytes"`
 }
 
-// Catalog represents the main data catalog
-type Catalog struct {
-	Entries     []CatalogEntry `json:"entries"`
-	LastUpdated string         `json:"last_updated"`
-	Version     string         `json:"version"`
-}
-
 // SchemaAssignment represents a schema assignment in the catalog
 type SchemaAssignment struct {
 	DataID               string  `json:"data_id"`
@@ -108,55 +100,3 @@ func (i *Importer) saveMetadata(metadata ImportMetadata, path string) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// loadCatalog loads the catalog from disk, creating it if it doesn't exist
-func (i *Importer) loadCatalog() (*Catalog, error) {
-	catalogPath := i.getCatalogPath()
-	
-	// If catalog doesn't exist, create empty one
-	if _, err := os.Stat(catalogPath); os.IsNotExist(err) {
-		return &Catalog{
-			Entries: []CatalogEntry{},
-			Version: "1.0",
-		}, nil
-	}
-
-	data, err := os.ReadFile(catalogPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var catalog Catalog
-	if err := json.Unmarshal(data, &catalog); err != nil {
-		return nil, err
-	}
-
-	return &catalog, nil
-}
-
-// saveCatalog saves the catalog to disk
-func (i *Importer) saveCatalog(catalog *Catalog) error {
-	catalogPath := i.getCatalogPath()
-	
-	// Ensure catalog directory exists
-	catalogDir := i.getCatalogDir()
-	if err := os.MkdirAll(catalogDir, 0755); err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(catalog, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(catalogPath, data, 0644)
-}
-
-// getCatalogDir returns the catalog directory path
-func (i *Importer) getCatalogDir() string {
-	return filepath.Join(i.dataPath, "catalog")
-}
-
-// getCatalogPath returns the catalog file path
-func (i *Importer) getCatalogPath() string {
-	return filepath.Join(i.getCatalogDir(), "inventory.json")
-}
