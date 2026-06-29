@@ -50,9 +50,6 @@ package systemmodel
 
 	// FRESHNESS — loop cadence.
 	freshness?: #Freshness
-
-	// VAULT — sealed inputs the populator/converger needs (NAME → secret ref).
-	vault?: {[string]: string}
 }
 
 // #PluginDef — a plugin source, mirroring mu's #PluginDef forms. `name` matches

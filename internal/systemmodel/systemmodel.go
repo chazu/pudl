@@ -35,7 +35,6 @@ type SystemModel struct {
 	Desired   []map[string]any  `json:"desired,omitempty"`
 	Converge  *PluginPlan       `json:"converge,omitempty"`
 	Freshness *Freshness        `json:"freshness,omitempty"`
-	Vault     map[string]string `json:"vault,omitempty"`
 }
 
 // PluginDef is a plugin source declared in the model, mirroring mu's #PluginDef
