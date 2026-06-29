@@ -198,7 +198,6 @@ ImportFileWithFriendlyIDs(opts)
 | `schemaname` | `internal/schemaname/` | Schema name normalization (canonical format) |
 | `skills` | `internal/skills/` | Agent skill file management and embedding |
 | `streaming` | `internal/streaming/` | CDC chunkers, format-specific chunk processors |
-| `typepattern` | `internal/typepattern/` | Type detection for K8s, AWS, GitLab registries |
 | `ui` | `internal/ui/` | Output formatting, interactive TUI (bubbletea) |
 | `validator` | `internal/validator/` | CUE module loader, cascade validator, validation service |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |

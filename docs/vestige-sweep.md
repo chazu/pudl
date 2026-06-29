@@ -118,15 +118,64 @@ left for the §3 doc-cleanup pass; implog history kept as-is.
 
 ---
 
-## 4. Background noise (low priority)
+## 4. Dead-code assessment (`deadcode ./...`)
 
-~60 unreachable production functions plus a large pile of test-util dead code
-(per `deadcode`). Mechanical, independent of everything above. Examples flagged:
-`database.EntryExists`, `CatalogDB.GetDistinctOrigins`, `importer.New` /
-`GetAvailableSchemas` / `ReloadSchemas` / `ImportFile`, several
-`inference.graph` accessors, `schemaname.Parse` / `IsEquivalent`. Worth a
-dedicated pass once the structural decisions (§2) are settled, since those will
-delete some of this for free.
+`deadcode ./...` reports **348 non-test unreachable funcs** (2026-06-29). Most are
+*not* vestigial — the signal is in a few clusters.
+
+### Not vestigial — keep
+- **`pkg/factstore` + `pkg/eval` (~16 funcs)** — the public library API for external
+  Go consumers (`docs/library-api.md`). Unreachable from the CLI by design. **Keep.**
+- **`test/testutil/*`, `test/integration/infrastructure/*`,
+  `internal/database/testutil.go` (~170 funcs)** — test scaffolding. Dead, but a
+  separate, lower-stakes category; sometimes kept as a harness. Decide separately.
+- **`datalog.Compile`** — already adjudicated **KEEP** in §1.5 (thin public wrapper
+  over the heavily-used `CompileWithOptions`).
+
+### Tier 1 — whole-feature vestiges, high confidence (recommend delete)
+
+| Cluster | What / why dead | ~lines |
+|---|---|---|
+| ✅ **`internal/typepattern/` (vendor type detection)** | **DONE 2026-06-29** — removed; see below. | (done) |
+| **Legacy base-`Importer` path** — `Importer.{New, ImportFile, GetAvailableSchemas, ReloadSchemas, importNDJSONCollection, importWrappedCollection, createCollection*}`, `metadata.go {loadCatalog, saveCatalog, getCatalogDir, getCatalogPath}`, `schema.go updateCatalog` | Pre-SQLite, file-catalog importer. `cmd/import.go` uses **only** `NewEnhancedImporter`; `importer.New`'s sole caller is the (dead) integration suite. EnhancedImporter embeds `*Importer` via `NewWithSchemaPaths`/`ImportFileWithFriendlyIDs`, not these. **Care: embedding** — verify each method. | ~350 |
+| **`internal/importer/wrapper.go`** (entire — `DetectCollectionWrapper` + 11 helpers) | Collection-wrapper detection. Only caller was `Importer.ImportFile` — itself dead. Dead-calls-dead. | 308 |
+| **`internal/streaming/cue_integration.go`** (entire — `CUESchemaDetector` + ~14 methods) | `NewCUESchemaDetector` has zero callers. | 275 |
+| **`systemmodel.{LoadModel, LoadModelFile}`** | Superseded by `resolveModel`; zero callers. | ~80 |
+
+### Tier 2 — smaller orphans, verify each (medium confidence)
+- `errors/handlers.go`: **`TUIErrorHandler`** (no TUI exists) + `FormatErrorForUser`/`FormatErrorForLogging` — no live callers. (`TestErrorHandler` is test infra in a non-test file.)
+- `internal/ui/output.go`: `OutputWriter.{WriteText, WriteLine, Write}`
+- `internal/inference/graph.go`: `GetChildren/GetRoots/GetLeaves/IsLeaf/IsRoot`
+- `internal/schemaname`: `Parse, IsEquivalent, StripDefinition, GetDefinition` — pure utils; judgment call (intended API surface even though `internal/`?)
+- Singletons: `idgen.HashToUint32`, `inference.GetFieldList`, `muschemas.Cache.Files`,
+  `schema.{NewManagerWithPaths, ListAllSchemas}`,
+  `schema/validator.{ValidateSchemaContent, ValidatePackageConsistency}`, a few unused
+  `ChainValidator`/`CUEModuleLoader` getters, `SchemaInferrer.Reload` (test-covered →
+  keep unless the inference tests change).
+
+**How to proceed (deferred — circle back):** Tier 1 is ~1,000 lines of cleanly-severable
+dead features. Do **one cluster per commit**, rebuilding + re-running `deadcode` after each
+(deletions cascade — e.g. removing `ImportFile` newly-orphans its private helpers). Tier 2
+is a follow-up. Two cautions, since §4 is where the earlier false positives lived: the
+importer cluster needs care from the `EnhancedImporter` embedding, and `schemaname`'s pure
+utils deserve an "is this intended API?" check, not blind deletion.
+
+### ✅ typepattern removal (2026-06-29) — vendor data-model logic out of Go
+
+Decision (user): Go should not carry business logic for specific vendor data models /
+schemas — that includes Kubernetes, not just the dead AWS/GitLab. Removed the whole
+`internal/typepattern/` package (generic `Registry`/`TypePattern`/`DetectedType`/
+`PudlMetadata` + the k8s/aws/gitlab patterns), the `pudl schema generate-type` CLI
+command (`cmd/schema_generate_type.go`), the importer's detect path
+(`Importer.handleUnmatchedData` + `isCatchall` + the `typeRegistry`/`schemaGen` fields —
+detection was its only purpose; callers now use the inference result directly), and the
+schemagen vendor-import cluster (`GenerateFromDetectedType`, `generateCUEContentWithImport`,
+`deriveImportAlias`, `WriteSchemaWithSyntaxCheck`, `ValidateCUESyntax`, `sanitizeIdentifier`
+— all orphaned by the removal) + their tests and `test/integration/type_detection_test.go`.
+Live docs updated (cli-reference, architecture, TESTING). `SchemaInferrer.Reload` kept
+(test-covered). Behavior change: import no longer auto-generates a CUE schema for detected
+k8s resources — unmatched data keeps its inference (catchall) result. Build + full tests
+green; no new dead code introduced.
 
 ---
 

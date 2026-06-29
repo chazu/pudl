@@ -13,7 +13,6 @@ import (
 	"cuelang.org/go/cue/parser"
 
 	"github.com/chazu/pudl/internal/inference"
-	"github.com/chazu/pudl/internal/typepattern"
 )
 
 // Generator handles schema generation from data.
@@ -96,134 +95,6 @@ func (g *Generator) Generate(data interface{}, opts GenerateOptions) (*GenerateR
 		Content:               content,
 	}, nil
 }
-
-// GenerateFromDetectedType generates a CUE schema from a detected type.
-// If the detected type has an ImportPath (canonical schema available), it generates
-// a schema that imports and extends the canonical type. Otherwise, it falls back
-// to standard Generate() behavior.
-func (g *Generator) GenerateFromDetectedType(
-	detected *typepattern.DetectedType,
-	sampleData interface{},
-) (*GenerateResult, error) {
-	if detected == nil {
-		return nil, fmt.Errorf("detected type is nil")
-	}
-
-	if detected.Pattern == nil {
-		return nil, fmt.Errorf("detected type has no pattern")
-	}
-
-	// Get ecosystem and definition name for file path
-	ecosystem := detected.Pattern.Ecosystem
-	definition := detected.Definition
-
-	// If no import path, fall back to standard generation
-	if detected.ImportPath == "" {
-		opts := GenerateOptions{
-			PackagePath:    fmt.Sprintf("pudl/%s", ecosystem),
-			DefinitionName: definition,
-			IsCollection:   false,
-		}
-		return g.Generate(sampleData, opts)
-	}
-
-	// Get PUDL metadata from pattern
-	var metadata *typepattern.PudlMetadata
-	if detected.Pattern.MetadataDefaults != nil {
-		metadata = detected.Pattern.MetadataDefaults(detected.TypeID)
-	}
-
-	// Generate schema with import
-	content := g.generateCUEContentWithImport(
-		detected.ImportPath,
-		definition,
-		metadata,
-		ecosystem,
-	)
-
-	// Determine file path: ~/.pudl/schema/pudl/<ecosystem>/<definition>.cue
-	fileName := strings.ToLower(definition) + ".cue"
-	filePath := filepath.Join(g.SchemaPath, "pudl", ecosystem, fileName)
-
-	return &GenerateResult{
-		FilePath:       filePath,
-		PackageName:    ecosystem,
-		DefinitionName: definition,
-		FieldCount:     0, // Import-based schemas don't track field count
-		Content:        content,
-	}, nil
-}
-
-// generateCUEContentWithImport generates CUE content that imports and extends a canonical type.
-// It creates proper CUE syntax with import statement and PUDL metadata block.
-func (g *Generator) generateCUEContentWithImport(
-	importPath string,
-	definition string,
-	metadata *typepattern.PudlMetadata,
-	ecosystem string,
-) string {
-	var b strings.Builder
-
-	// Package declaration
-	b.WriteString(fmt.Sprintf("package %s\n\n", ecosystem))
-
-	// Import statement with alias
-	importAlias := g.deriveImportAlias(importPath)
-	b.WriteString(fmt.Sprintf("import %s \"%s\"\n\n", importAlias, importPath))
-
-	// Definition that extends the imported type
-	b.WriteString(fmt.Sprintf("#%s: %s.#%s & {\n", definition, importAlias, definition))
-
-	// Add _pudl metadata block
-	b.WriteString("\t_pudl: {\n")
-
-	if metadata != nil {
-		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"%s\"\n", metadata.SchemaType))
-		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s\"\n", metadata.ResourceType))
-		b.WriteString(fmt.Sprintf("\t\tidentity_fields:  %s\n", g.formatStringSlice(metadata.IdentityFields)))
-		b.WriteString(fmt.Sprintf("\t\ttracked_fields:   %s\n", g.formatStringSlice(metadata.TrackedFields)))
-	} else {
-		// Default metadata if none provided
-		b.WriteString(fmt.Sprintf("\t\tschema_type:      \"base\"\n"))
-		b.WriteString(fmt.Sprintf("\t\tresource_type:    \"%s.%s\"\n", ecosystem, strings.ToLower(definition)))
-		b.WriteString("\t\tidentity_fields:  []\n")
-		b.WriteString("\t\ttracked_fields:   []\n")
-	}
-
-	b.WriteString("\t}\n")
-	b.WriteString("}\n")
-
-	return b.String()
-}
-
-// deriveImportAlias extracts an appropriate alias from an import path.
-// For example, "cue.dev/x/k8s.io/api/batch/v1" returns "batch".
-func (g *Generator) deriveImportAlias(importPath string) string {
-	// Split by "/" and get the path segments
-	parts := strings.Split(importPath, "/")
-	if len(parts) == 0 {
-		return "pkg"
-	}
-
-	// Get the last meaningful segment (skip version suffixes like "v1")
-	for i := len(parts) - 1; i >= 0; i-- {
-		part := parts[i]
-		// Skip version-like suffixes
-		if strings.HasPrefix(part, "v") && len(part) <= 3 {
-			continue
-		}
-		// Skip common path components
-		if part == "api" || part == "apis" {
-			continue
-		}
-		// Use this as the alias
-		return sanitizeIdentifier(part)
-	}
-
-	// Fallback to last segment
-	return sanitizeIdentifier(parts[len(parts)-1])
-}
-
 
 // analyzeData analyzes the data structure and infers types.
 func (g *Generator) analyzeData(data interface{}, opts GenerateOptions) *FieldAnalysis {
@@ -578,40 +449,12 @@ func ValidateCUEContent(content string) error {
 	return nil
 }
 
-// ValidateCUESyntax validates only the syntax of CUE content without resolving imports.
-// This is useful for import-based schemas where dependencies aren't yet available.
-// Returns nil if syntax is valid, or a SchemaValidationError with details if invalid.
-func ValidateCUESyntax(content string) error {
-	// Parse the CUE content - this validates syntax without resolving imports
-	_, err := parser.ParseFile("generated.cue", content, parser.ParseComments)
-	if err != nil {
-		return &SchemaValidationError{
-			Content: content,
-			Errors:  []string{fmt.Sprintf("CUE syntax error: %v", err)},
-		}
-	}
-	return nil
-}
-
 // WriteSchema writes the generated schema to the schema repository.
 // It validates the CUE content before writing to prevent invalid schemas.
 // If force is true, existing files will be overwritten.
 func (g *Generator) WriteSchema(result *GenerateResult, content string, force bool) error {
 	// Validate CUE content before writing
 	if err := ValidateCUEContent(content); err != nil {
-		return err
-	}
-
-	return g.writeSchemaFile(result, content, force)
-}
-
-// WriteSchemaWithSyntaxCheck writes the generated schema with syntax-only validation.
-// This is useful for import-based schemas where dependencies aren't available until
-// after the file is written and `cue mod tidy` is run.
-// If force is true, existing files will be overwritten.
-func (g *Generator) WriteSchemaWithSyntaxCheck(result *GenerateResult, content string, force bool) error {
-	// Validate CUE syntax only (doesn't try to resolve imports)
-	if err := ValidateCUESyntax(content); err != nil {
 		return err
 	}
 
@@ -644,22 +487,6 @@ func (g *Generator) writeSchemaFile(result *GenerateResult, content string, forc
 	}
 
 	return nil
-}
-
-// Helper to ensure valid CUE identifier
-func sanitizeIdentifier(s string) string {
-	var result strings.Builder
-	for i, r := range s {
-		if i == 0 && unicode.IsDigit(r) {
-			result.WriteRune('_')
-		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
-			result.WriteRune(r)
-		} else {
-			result.WriteRune('_')
-		}
-	}
-	return result.String()
 }
 
 // GenerateSmartCollection generates a collection schema by inferring item schemas.
