@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 	"github.com/chazu/pudl/internal/workspace"
@@ -107,6 +108,25 @@ func (mi ModelInfo) convergeName() string {
 	return "-"
 }
 
+// modelRunStatuses returns the latest run verdict keyed by model target
+// (modelTarget(name)), best-effort — an empty map if the catalog is unavailable.
+func modelRunStatuses() map[string]string {
+	out := map[string]string{}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return out
+	}
+	defer db.Close()
+	sts, err := db.GetDefinitionStatuses()
+	if err != nil {
+		return out
+	}
+	for _, s := range sts {
+		out[s.Definition] = s.Status
+	}
+	return out
+}
+
 var modelListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List registered #SystemModel definitions",
@@ -134,15 +154,21 @@ resolve — independent of whether a model has been run yet.`,
 			fmt.Println("No registered models. Register one as a #SystemModel-derived definition, then `pudl schema add`.")
 			return nil
 		}
+		statuses := modelRunStatuses()
 		fmt.Printf("Registered models (%d):\n\n", len(models))
-		fmt.Printf("  %-24s %-9s %-12s %-8s %-7s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "DEFINITION")
+		fmt.Printf("  %-24s %-9s %-12s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
 		for _, mi := range models {
-			fmt.Printf("  %-24s %-9s %-12s %-8d %-7d %s\n",
+			status := statuses[modelTarget(mi.Name)]
+			if status == "" {
+				status = "-"
+			}
+			fmt.Printf("  %-24s %-9s %-12s %-8d %-7d %-10s %s\n",
 				mi.Name,
 				string(mi.Model.Populate.Kind()),
 				mi.convergeName(),
 				len(mi.Model.Desired),
 				len(mi.Model.Checks),
+				status,
 				mi.SchemaName,
 			)
 		}
@@ -158,6 +184,7 @@ type modelSummary struct {
 	Converge   string `json:"converge,omitempty"`
 	Desired    int    `json:"desired"`
 	Checks     int    `json:"checks"`
+	Status     string `json:"status,omitempty"`
 }
 
 func (mi ModelInfo) summary() modelSummary {
@@ -175,9 +202,12 @@ func (mi ModelInfo) summary() modelSummary {
 }
 
 func printModelsJSON(models []ModelInfo) error {
+	statuses := modelRunStatuses()
 	out := make([]modelSummary, 0, len(models))
 	for _, mi := range models {
-		out = append(out, mi.summary())
+		s := mi.summary()
+		s.Status = statuses[modelTarget(mi.Name)]
+		out = append(out, s)
 	}
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

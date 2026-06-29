@@ -160,8 +160,52 @@ Examples:
 			fmt.Print("\n")
 		}
 		fmt.Print(out)
+
+		// Persist the run's terminal verdict on the model instance row so
+		// `pudl model list` / `pudl status` surface last-run state.
+		persistRunStatus(model.Name, runVerdict(report, flags))
 		return runErr
 	},
+}
+
+// runVerdict maps a finished run to a catalog status, or "" when none applies:
+// dry-run writes nothing (build-spec §3) and a pure populate has no drift verdict.
+func runVerdict(r *RunReport, f runFlags) string {
+	if f.dryRun {
+		return ""
+	}
+	switch {
+	case r.Converge != nil:
+		if r.Converge.Outcome == "converged" {
+			return "converged"
+		}
+		if strings.HasPrefix(r.Converge.Outcome, "failed") {
+			return "failed"
+		}
+		return ""
+	case r.Drift != nil:
+		if r.Drift.Clean {
+			return "clean"
+		}
+		return "drifted"
+	default:
+		return ""
+	}
+}
+
+// persistRunStatus records a run verdict on the model instance row
+// (definition = modelTarget(name)). Best-effort: a status-write failure (or no
+// catalog) never fails the run.
+func persistRunStatus(name, status string) {
+	if status == "" {
+		return
+	}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	_ = db.UpdateStatus(modelTarget(name), status)
 }
 
 // anyFailSeverityFailed reports whether any severity:"fail" check did not pass.

@@ -51,8 +51,9 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
 - `pudl run <model>` — run a registered `#SystemModel` (OBSERVE-ONLY by default)
 - `pudl run <model> --converge` — close drift (mutates the target via mu)
 - `pudl run <model> --from-catalog` — drift over ingested records, no live observe
-- `pudl model list` — list registered `#SystemModel` definitions (the runnable registry)
+- `pudl model list` — list registered `#SystemModel` definitions + last-run status
 - `pudl model show <model>` — show a model's populate/converge/desired/checks
+- `pudl model validate <model>` — structural validation without running
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
 - `pudl status` — convergence status of definitions
 - `pudl drift check <definition>` — declared vs live state
