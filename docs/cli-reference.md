@@ -381,7 +381,7 @@ pudl status
 pudl status my_definition
 ```
 
-Statuses: `unknown`, `clean`, `drifted`, `converging`, `converged`, `failed`.
+Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`.
 
 ## Repository Operations
 

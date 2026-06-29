@@ -116,7 +116,11 @@ Examples:
 				return fmt.Errorf("open catalog: %w", err)
 			}
 			defer db.Close()
-			res, err := runInventoryDrift(db, "", model.Desired)
+			identity, err := schemaIdentityResolver()
+			if err != nil {
+				return err
+			}
+			res, err := runInventoryDrift(db, "", model.Desired, identity)
 			if err != nil {
 				return err
 			}
@@ -170,14 +174,18 @@ Examples:
 
 // runVerdict maps a finished run to a catalog status, or "" when none applies:
 // dry-run writes nothing (build-spec §3) and a pure populate has no drift verdict.
+//
+// "clean" is the single in-sync verdict (drift == ∅) — written whether the model
+// is observe-only or was just converged, since the convergence loop ends in the
+// same re-observed ∅ state. It is only ever written off an actual ∅ observation.
 func runVerdict(r *RunReport, f runFlags) string {
 	if f.dryRun {
 		return ""
 	}
 	switch {
 	case r.Converge != nil:
-		if r.Converge.Outcome == "converged" {
-			return "converged"
+		if r.Converge.Outcome == string(outcomeClean) {
+			return "clean"
 		}
 		if strings.HasPrefix(r.Converge.Outcome, "failed") {
 			return "failed"
@@ -221,7 +229,7 @@ func anyFailSeverityFailed(results []CheckResult) bool {
 // printModelDrift renders a model-level drift verdict.
 func printModelDrift(r ModelDriftResult) {
 	if r.Clean {
-		fmt.Println("drift: ∅ (converged — all desired resources exist and match)")
+		fmt.Println("drift: ∅ (clean — all desired resources exist and match)")
 		return
 	}
 	fmt.Printf("drift: %d resource(s)\n", len(r.Drifted))
@@ -299,7 +307,7 @@ func buildRunPlan(m *systemmodel.SystemModel, f runFlags) string {
 	fmt.Fprintln(&b, "  3. checks            (flag)")
 	fmt.Fprintln(&b, "  4. report")
 	if f.converge && m.Convergent() {
-		fmt.Fprintln(&b, "  loop: drift==∅ -> converged | cap -> failed | else converge->execute->re-observe")
+		fmt.Fprintln(&b, "  loop: drift==∅ -> clean | cap -> failed | else converge->execute->re-observe")
 	}
 	return b.String()
 }

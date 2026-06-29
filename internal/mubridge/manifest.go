@@ -181,8 +181,8 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin string, con
 
 		// Status from the action exit code. Exit 0 means the apply COMMAND ran,
 		// not that observed==desired — so write "converging" (applied, pending
-		// verification). Only the drift re-check writes verified "converged"
-		// (build-spec §5). Exit≠0 is a real failure.
+		// verification). Only the drift re-check writes the verified in-sync
+		// status "clean" (build-spec §5). Exit≠0 is a real failure.
 		status := "converging"
 		if action.ExitCode != 0 {
 			status = "failed"

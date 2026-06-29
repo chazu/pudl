@@ -78,7 +78,7 @@ func TestUpdateStatus_Valid(t *testing.T) {
 	require.NoError(t, db.AddEntry(entry))
 
 	// Test each valid status value
-	validStatuses := []string{"unknown", "clean", "drifted", "converging", "converged", "failed"}
+	validStatuses := []string{"unknown", "clean", "drifted", "converging", "failed"}
 	for _, status := range validStatuses {
 		err := db.UpdateStatus(defName, status)
 		require.NoError(t, err, "UpdateStatus should succeed for %q", status)
@@ -113,7 +113,7 @@ func TestGetDefinitionStatuses(t *testing.T) {
 	}{
 		{"app_a", "clean"},
 		{"app_b", "drifted"},
-		{"app_c", "converged"},
+		{"app_c", "converging"},
 	}
 
 	for i, d := range defs {
@@ -148,5 +148,5 @@ func TestGetDefinitionStatuses(t *testing.T) {
 
 	assert.Equal(t, "clean", statusMap["app_a"])
 	assert.Equal(t, "drifted", statusMap["app_b"])
-	assert.Equal(t, "converged", statusMap["app_c"])
+	assert.Equal(t, "converging", statusMap["app_c"])
 }
