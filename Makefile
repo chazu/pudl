@@ -42,6 +42,12 @@ clean:
 test:
 	$(GO) test ./...
 
+# Gated end-to-end smoke tests (convergence + cross-model deps). They skip
+# cleanly when docker/k3d/kubectl/mu/bb/jq are missing and clean up after
+# themselves. Set PUDL_SMOKE_MU_ROOT to point the infra tests at a mu project.
+smoke:
+	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -v -timeout 20m
+
 release:
 	goreleaser release --clean
 

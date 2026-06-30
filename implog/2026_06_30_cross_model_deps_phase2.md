@@ -88,7 +88,17 @@ invalidates its `derived:` edge; the declared pass adds the `model:` edge).
   detected), cross-model deps on the inventory class (`pudl model deps`,
   `impacted_by`, `--topo`), and the `--check-upstream` stale-upstream warning
   firing when `base-host` drifted. Demonstrates the feature is convergence-class
-  agnostic. Test harness: scratch scripts (not committed).
+  agnostic.
+
+These were promoted to **committed, gated smoke tests** under `test/smoke/`
+(build tag `smoke`; `make smoke` / `go test -tags=smoke ./test/smoke/`). They
+skip cleanly when docker/k3d/kubectl/mu/bb/jq are missing and clean up clusters,
+containers, and temp dirs via `t.Cleanup`. `go test ./...` is unaffected (an
+untagged `doc.go` keeps the package buildable with no tests). Three tests:
+`TestSmoke_CrossModelDeps` (no infra), `TestSmoke_K3sConvergence` (k3d),
+`TestSmoke_DockerHostInventory` (docker-as-host). The infra tests borrow
+toolchains from a mu project (`PUDL_SMOKE_MU_ROOT`, default `~/dev/go/mu`) and
+generate a disk-cache-only mu root to bypass the private OCI cache.
 
 ## Still deferred
 
