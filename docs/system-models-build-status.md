@@ -102,7 +102,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   set-diff from the catalog). `--from-catalog` remains an explicit override
   (`useInventoryDrift` / `SystemModel.DifferentialDrift`). A plain `pudl run` now
   routes inventory observers correctly without the flag.
-- ~~**cross-model data dependencies (Phase 1)**~~ — ✅ **DONE (2026-06-30).**
+- ~~**cross-model data dependencies (Phase 1 + Phase 2)**~~ — ✅ **DONE (2026-06-30).**
   `#SystemModel.depends_on?: [...string]` (model names) → `pudl run` reconciles
   `model_depends_on(from,to)` facts (add new / invalidate removed — idempotent,
   no churn) → built-in recursive rules `depends_transitive` / `impacted_by` /
@@ -115,8 +115,13 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   `depends_on` edge; cross-model queries, idempotency, retraction, and the
   stale-upstream warning all confirmed. Design + arg-key contract:
   [`docs/cross-model-dependencies.md`](cross-model-dependencies.md); see
-  `implog/2026_06_30_cross_model_dependencies.md`. **Phase 2** (derived deps via
-  a desired-identity EDB projection) remains future.
+  `implog/2026_06_30_cross_model_dependencies.md`. **Phase 2 + leftovers also
+  DONE:** `pudl model deps` (no-run discovery pass — closes the coverage gap),
+  completion now lists derived/EDB relations, and `pudl model deps --derive`
+  (Go-side value-based derivation — `desired` isn't SQL-queryable so a Datalog
+  join was impractical; emits the same relation). Validated additionally against
+  a Docker container as a fake remote host (inventory class). Implog
+  `2026_06_30_cross_model_deps_phase2.md`.
 
 ## Good next steps (self-contained, validatable here)
 
@@ -125,12 +130,13 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
    (`cmd/run_inventory.go`) now keys records by the schema's declared `identity_fields`
    (from the inference graph via `schemaIdentityResolver`), falling back to the
    name|path|id heuristic only when a schema declares none or a field is absent.
-3. ✅ **Cross-model data dependencies — Phase 1** — DONE 2026-06-30 (see frontier
-   above). Built + validated on k3d. Next here: **Phase 2** (derive
-   `model_depends_on` from `desired`-resource identities matching produced catalog
-   rows — needs a new EDB projection of desired identities, not free), and
-   optionally a `pudl model` discovery pass that emits edges without a full run
-   (closes the run-time-only coverage gap).
+3. ✅ **Cross-model data dependencies — Phase 1 + Phase 2** — DONE 2026-06-30 (see
+   frontier above). Phase 1 + both leftovers (`pudl model deps` no-run discovery
+   pass; completion lists derived/EDB relations) + Phase 2 (`pudl model deps
+   --derive`, Go-side value-based derivation — `desired` isn't SQL-queryable so a
+   Datalog join was impractical; emits the same relation). Validated on k3d (real
+   convergence + derivation) and against a Docker container as a fake remote host
+   (inventory class). Implog `2026_06_30_cross_model_deps_phase2.md`.
 4. **Validate `--only` subset converge** — never exercised on real infra; small.
 5. **host.plan** — complete the `host` plugin's stub plan op for example 1's
    converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
