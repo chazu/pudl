@@ -17,32 +17,26 @@ import (
 // {from: <declaring model>, to: <dependency>}. See docs/cross-model-dependencies.md.
 const modelDependsRelation = "model_depends_on"
 
-// reconcileModelDependencies brings the model_depends_on facts for this model in
-// line with its declared depends_on, then returns any warnings (e.g. a dep that
-// does not resolve to a known model). It is a DIFF, not a blind append:
-//
-//   - declared edge not currently valid  -> AddFact
-//   - currently-valid edge not declared  -> InvalidateFact (valid-time end)
-//   - declared edge already valid         -> no-op
-//
-// This keeps re-runs idempotent (no per-run fact churn — AddFact's valid_start
-// defaults to now, so a blind re-add would mint a new fact every run) and keeps
-// blast-radius answers truthful when an author removes a dependency.
-//
-// Edges are keyed on the instance NAME (never a //models/<name> target or a
-// :populate sub-target), so model-level names join cleanly across the closure.
-// A dep that does not resolve via resolveModel is still recorded (so forward
-// references to a not-yet-created model register), but is reported as a warning.
-func reconcileModelDependencies(m *systemmodel.SystemModel) (warnings []string, err error) {
-	// Canonicalize the declared set: map each dep to the resolved instance name
-	// so the `to` we record matches the `from` that dep records for its own
-	// edges. Unresolved deps keep their literal name and earn a warning.
+// Fact Source tags partition model_depends_on edges by provenance so the
+// declared reconcile and the Phase-2 derived reconcile never clobber each
+// other: each only manages edges carrying its own source.
+func declaredSource(model string) string { return "model:" + model }
+func derivedSource(model string) string  { return "derived:" + model }
+
+// declaredDepsOf canonicalizes a model's declared depends_on into a set of
+// resolved instance names (so the `to` recorded matches the `from` that dep
+// records for its own edges) and returns warnings for self-deps and deps that
+// don't resolve to a known model (the edge is still recorded — forward
+// references register — but impact answers stay partial until it exists).
+func declaredDepsOf(m *systemmodel.SystemModel) (map[string]struct{}, []string) {
 	declared := make(map[string]struct{}, len(m.DependsOn))
+	var warnings []string
 	for _, dep := range m.DependsOn {
-		if dep == "" || dep == m.Name {
-			if dep == m.Name {
-				warnings = append(warnings, fmt.Sprintf("model %q declares a dependency on itself; ignored", m.Name))
-			}
+		if dep == "" {
+			continue
+		}
+		if dep == m.Name {
+			warnings = append(warnings, fmt.Sprintf("model %q declares a dependency on itself; ignored", m.Name))
 			continue
 		}
 		canonical := dep
@@ -53,50 +47,72 @@ func reconcileModelDependencies(m *systemmodel.SystemModel) (warnings []string, 
 		}
 		declared[canonical] = struct{}{}
 	}
+	return declared, warnings
+}
 
+// reconcileEdges brings the model_depends_on edges for one model+source in line
+// with the wanted set. It is a DIFF, not a blind append:
+//
+//   - wanted edge not currently valid  -> AddFact
+//   - currently-valid edge not wanted  -> InvalidateFact (valid-time end)
+//   - wanted edge already valid          -> no-op
+//
+// Scoping by Source keeps re-runs idempotent (no per-run fact churn — AddFact's
+// valid_start defaults to now, so a blind re-add would mint a new fact every
+// run) and keeps the declared graph and the derived graph independent. Edges are
+// keyed on the instance NAME, so model-level names join cleanly across the
+// closure.
+func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[string]struct{}) error {
+	facts, err := db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
+	if err != nil {
+		return err
+	}
+	current := make(map[string]string) // to -> fact ID, scoped to this source+from
+	for _, f := range facts {
+		if f.Source != source {
+			continue
+		}
+		ff, to := edgeArgs(f.Args)
+		if ff == from && to != "" {
+			current[to] = f.ID
+		}
+	}
+
+	add, invalidate := dependencyDiff(wanted, current)
+	for _, id := range invalidate {
+		if ierr := db.InvalidateFact(id); ierr != nil {
+			return fmt.Errorf("invalidate stale dependency for %s: %w", from, ierr)
+		}
+	}
+	for _, to := range add {
+		args, merr := json.Marshal(map[string]string{"from": from, "to": to})
+		if merr != nil {
+			return merr
+		}
+		if _, aerr := db.AddFact(database.Fact{
+			Relation: modelDependsRelation,
+			Args:     string(args),
+			Source:   source,
+		}); aerr != nil {
+			return fmt.Errorf("add dependency %s->%s: %w", from, to, aerr)
+		}
+	}
+	return nil
+}
+
+// reconcileModelDependencies reconciles a model's DECLARED depends_on into
+// model_depends_on facts (source model:<name>) and returns any warnings. Runs on
+// every `pudl run`.
+func reconcileModelDependencies(m *systemmodel.SystemModel) (warnings []string, err error) {
+	declared, warnings := declaredDepsOf(m)
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
 		return warnings, err
 	}
 	defer db.Close()
-
-	// Currently-valid edges originating at this model (from == m.Name).
-	facts, err := db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
-	if err != nil {
-		return warnings, err
+	if rerr := reconcileEdges(db, m.Name, declaredSource(m.Name), declared); rerr != nil {
+		return warnings, rerr
 	}
-	current := make(map[string]string) // to -> fact ID
-	for _, f := range facts {
-		from, to := edgeArgs(f.Args)
-		if from == m.Name && to != "" {
-			current[to] = f.ID
-		}
-	}
-
-	add, invalidate := dependencyDiff(declared, current)
-
-	// Removed: currently valid but no longer declared -> invalidate.
-	for _, id := range invalidate {
-		if ierr := db.InvalidateFact(id); ierr != nil {
-			return warnings, fmt.Errorf("invalidate stale dependency for %s: %w", m.Name, ierr)
-		}
-	}
-
-	// Added: declared but not currently valid -> add.
-	for _, to := range add {
-		args, merr := json.Marshal(map[string]string{"from": m.Name, "to": to})
-		if merr != nil {
-			return warnings, merr
-		}
-		if _, aerr := db.AddFact(database.Fact{
-			Relation: modelDependsRelation,
-			Args:     string(args),
-			Source:   "model:" + m.Name,
-		}); aerr != nil {
-			return warnings, fmt.Errorf("add dependency %s->%s: %w", m.Name, to, aerr)
-		}
-	}
-
 	return warnings, nil
 }
 
