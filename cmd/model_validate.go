@@ -60,12 +60,17 @@ func validateModel(m *systemmodel.SystemModel) []string {
 		problems = append(problems, "converge: declared but desired is empty (nothing to reconcile)")
 	}
 
-	// Each desired entry must carry a quoted "_schema" tag — a bare _schema is a
-	// hidden CUE field that json.Marshal drops, so routing would never reach the
-	// records (schema.cue #EweTarget note).
-	for i, d := range m.Desired {
-		if _, ok := d["_schema"].(string); !ok {
-			problems = append(problems, fmt.Sprintf("desired[%d]: missing quoted \"_schema\" routing tag", i))
+	// Inventory-style models set-diff desired against catalog records by _schema
+	// identity, so each desired entry must carry a quoted "_schema" tag (a bare
+	// _schema is a hidden CUE field json.Marshal drops — schema.cue #EweTarget
+	// note). Differential models (k8s) instead route desired verbatim to the
+	// converge plugin as its native manifests (raw k8s objects, no _schema), so
+	// the tag does not apply there.
+	if !m.DifferentialDrift() {
+		for i, d := range m.Desired {
+			if _, ok := d["_schema"].(string); !ok {
+				problems = append(problems, fmt.Sprintf("desired[%d]: missing quoted \"_schema\" routing tag", i))
+			}
 		}
 	}
 
