@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -23,18 +26,38 @@ func (w *reconcileWorkspace) planConverge() (string, error) {
 	return out.String(), nil
 }
 
-// applyConverge runs `mu build` against the workspace target: the converge plugin
-// applies desired to the live system (kubectl apply, for k8s). A non-zero exit is
-// an execute_error (V1.4).
-func (w *reconcileWorkspace) applyConverge() error {
-	cmd := exec.Command("mu", "build", "--config", filepath.Join(w.MuRoot, "mu.cue"), w.Target)
+// applyConverge runs `mu build --emit-manifest` against the workspace target: the
+// converge plugin applies desired to the live system (kubectl apply, for k8s) and
+// the build manifest is emitted as JSON on stdout (chatter + subprocess output go
+// to stderr). Returns the manifest bytes so the caller can record per-resource
+// status. A non-zero exit is an execute_error (V1.4).
+func (w *reconcileWorkspace) applyConverge() ([]byte, error) {
+	cmd := exec.Command("mu", "build", "--emit-manifest", "--config", filepath.Join(w.MuRoot, "mu.cue"), w.Target)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
+		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
 	}
-	return nil
+	return out.Bytes(), nil
+}
+
+// ingestConvergeManifest records the apply's build manifest in the catalog,
+// tagged with the model name. Each action lands as a per-resource entry with
+// status `converging` (applied, pending verification, build-spec §5); a later
+// clean drift re-check promotes those to `clean` via
+// promoteConvergingResources -> CatalogDB.PromoteConvergingToCleanByModel. This
+// is what wires `pudl run --converge`'s apply into the per-resource lifecycle —
+// without it, only the model-level verdict is recorded.
+func ingestConvergeManifest(modelName string, manifestJSON []byte) error {
+	pudlDir := config.GetPudlDir()
+	db, err := database.NewCatalogDB(pudlDir)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = mubridge.IngestManifest(db, bytes.NewReader(manifestJSON), "mu-build", pudlDir, modelName)
+	return err
 }
 
 // convergeOutcome is the terminal verdict of a converge run.
@@ -94,13 +117,20 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIte
 		if live {
 			fmt.Printf("iteration %d: applying converge…\n", i+1)
 		}
-		if err := w.applyConverge(); err != nil {
+		manifest, err := w.applyConverge()
+		if err != nil {
 			if live {
 				fmt.Printf("converge apply failed: %v\n", err)
 				fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
 			}
 			outcome = outcomeExecErr
 			break
+		}
+		// Record the apply's per-resource status (`converging`); promoted to
+		// `clean` after the loop's re-observe confirms ∅. Best-effort: the apply
+		// already happened, so a recording failure must not fail the run.
+		if ingErr := ingestConvergeManifest(m.Name, manifest); ingErr != nil && live {
+			fmt.Printf("warning: per-resource status not recorded: %v\n", ingErr)
 		}
 		applies++
 	}
