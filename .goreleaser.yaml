@@ -22,12 +22,14 @@ builds:
 
 archives:
   - id: pudl-archive
-    builds:
+    ids:
       - pudl
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
