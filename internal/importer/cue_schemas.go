@@ -128,6 +128,7 @@ func (i *Importer) ensureBasicSchemas() error {
 		filepath.Join(i.schemaPath, "pudl", "linux", "linux.cue"),
 		filepath.Join(i.schemaPath, "pudl", "dlktk", "dlktk.cue"),
 		filepath.Join(i.schemaPath, "pudl", "systemmodel", "systemmodel.cue"),
+		filepath.Join(i.schemaPath, "pudl", "rules", "convergence.cue"),
 	}
 	for _, checkPath := range bootstrapChecks {
 		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
