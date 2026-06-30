@@ -10,9 +10,9 @@ import "fmt"
 // details.
 //
 // Must run after all catalog_entries column migrations, since the view
-// references migration-added columns (status, entry_type, definition,
+// references migration-added columns (status, entry_type, target,
 // run_id, resource_id, content_hash, version). It is dropped and recreated on
-// every open so the definition always matches this source.
+// every open so the view definition always matches this source.
 func (c *CatalogDB) ensureCatalogEntryView() error {
 	if _, err := c.db.Exec("DROP VIEW IF EXISTS " + CatalogEntryView); err != nil {
 		return fmt.Errorf("drop view %s: %w", CatalogEntryView, err)
@@ -26,7 +26,7 @@ func (c *CatalogDB) ensureCatalogEntryView() error {
 			format,
 			status,
 			entry_type,
-			definition,
+			target,
 			run_id,
 			resource_id,
 			content_hash,

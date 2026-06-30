@@ -317,7 +317,7 @@ pudl catalog --verbose    # Show identity fields, tracked fields, etc.
 
 ## Models
 
-A model is a registered `#SystemModel` describing a `desired` state and the sources that populate observed state. A "definition" is a `desired` entry within a model — a per-status unit. Drift detection is a phase of `pudl run`, not a standalone command.
+A model is a registered `#SystemModel` describing a `desired` state and the sources that populate observed state. Catalog rows carry a `target` — the mu target / run target that produced them (e.g. `//models/<name>`, a populate phase `//models/<name>:populate`, or a standalone observe like `home/odroid`); status is recorded per target. Drift detection is a phase of `pudl run`, not a standalone command.
 
 ### `pudl model list`
 
@@ -372,13 +372,13 @@ pudl run my_model --dry-run       # show planned actions without applying
 | `--from-catalog` | Force inventory drift from the catalog (override; inventory observers — EweTarget or `#PluginObserve` `differential: false` — auto-route here) |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
 
-### `pudl status [definition]`
+### `pudl status [target]`
 
-Read convergence status from the catalog. A model run records its verdict on the instance row `//models/<name>`. With no argument, reports status for all definitions; with a definition name, reports just that one.
+Read convergence status from the catalog. A model run records its verdict on the instance row, keyed by target `models/<name>`. With no argument, reports status for all targets; with a target name, reports just that one.
 
 ```bash
 pudl status
-pudl status my_definition
+pudl status models/my-model
 ```
 
 Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`. Lifecycle:

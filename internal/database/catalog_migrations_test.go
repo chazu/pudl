@@ -59,9 +59,11 @@ func TestDropLegacyMethodColumn(t *testing.T) {
 	// DROP COLUMN while a view references it).
 	for _, stmt := range []string{
 		"ALTER TABLE catalog_entries ADD COLUMN method TEXT",
-		"CREATE INDEX idx_definition_method ON catalog_entries(definition, method)",
+		// idx_definition_method keeps its historical name (the index
+		// dropLegacyMethodColumn drops); its columns are the post-rename `target`.
+		"CREATE INDEX idx_definition_method ON catalog_entries(target, method)",
 		"DROP VIEW IF EXISTS " + CatalogEntryView,
-		"CREATE VIEW " + CatalogEntryView + " AS SELECT id, definition, method FROM catalog_entries",
+		"CREATE VIEW " + CatalogEntryView + " AS SELECT id, target, method FROM catalog_entries",
 	} {
 		if _, err := db.db.Exec(stmt); err != nil {
 			t.Fatalf("legacy-state setup %q failed: %v", stmt, err)
@@ -90,6 +92,68 @@ func TestDropLegacyMethodColumn(t *testing.T) {
 	}
 
 	// Leave the DB consistent: recreate the real view (no method column).
+	if err := db.ensureCatalogEntryView(); err != nil {
+		t.Fatalf("ensureCatalogEntryView failed: %v", err)
+	}
+}
+
+func TestRenameLegacyDefinitionColumn(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Seed a row through the normal API (column is `target` post-migration), so
+	// the value rides along when we rename the column to simulate a legacy DB.
+	target := "models/foo"
+	if err := db.AddEntry(CatalogEntry{
+		ID: "id-foo", StoredPath: "/raw/foo", MetadataPath: "/meta/foo",
+		ImportTimestamp: time.Now(), Format: "json", Origin: "test",
+		Schema: "pudl/core.#Item", Confidence: 1.0, RecordCount: 1, SizeBytes: 1,
+		Target: &target,
+	}); err != nil {
+		t.Fatalf("seed AddEntry failed: %v", err)
+	}
+
+	// Simulate a pre-rename database: drop the view + index that reference the
+	// column, then rename `target` back to `definition` (the legacy name). The
+	// seeded value moves with the column.
+	for _, stmt := range []string{
+		"DROP VIEW IF EXISTS " + CatalogEntryView,
+		"DROP INDEX IF EXISTS idx_target",
+		"ALTER TABLE catalog_entries RENAME COLUMN target TO definition",
+	} {
+		if _, err := db.db.Exec(stmt); err != nil {
+			t.Fatalf("legacy-state setup %q failed: %v", stmt, err)
+		}
+	}
+	if exists, _ := db.columnExists("catalog_entries", "definition"); !exists {
+		t.Fatal("precondition: definition column should exist")
+	}
+
+	if err := db.renameLegacyDefinitionColumn(); err != nil {
+		t.Fatalf("renameLegacyDefinitionColumn failed: %v", err)
+	}
+
+	// definition gone, target present, value preserved.
+	if exists, _ := db.columnExists("catalog_entries", "definition"); exists {
+		t.Error("definition column should be gone after rename")
+	}
+	if exists, _ := db.columnExists("catalog_entries", "target"); !exists {
+		t.Error("target column should exist after rename")
+	}
+	var got string
+	if err := db.db.QueryRow("SELECT target FROM catalog_entries WHERE id = 'id-foo'").Scan(&got); err != nil {
+		t.Fatalf("read back target failed: %v", err)
+	}
+	if got != target {
+		t.Errorf("target value not preserved: got %q, want %q", got, target)
+	}
+
+	// Idempotent: a second run on the already-renamed DB is a no-op.
+	if err := db.renameLegacyDefinitionColumn(); err != nil {
+		t.Fatalf("second renameLegacyDefinitionColumn run failed: %v", err)
+	}
+
+	// Leave the DB consistent.
 	if err := db.ensureCatalogEntryView(); err != nil {
 		t.Fatalf("ensureCatalogEntryView failed: %v", err)
 	}

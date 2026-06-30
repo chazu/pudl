@@ -5,17 +5,17 @@ import (
 	"time"
 )
 
-// DefinitionStatus represents the convergence status of a single definition.
-type DefinitionStatus struct {
-	Definition string
+// TargetStatus represents the convergence status of a single target.
+type TargetStatus struct {
+	Target string
 	Status     string
 	UpdatedAt  time.Time
 	DiffCount  int // from latest drift report, 0 if clean
 }
 
-// UpdateStatus sets the convergence status for entries matching a definition name.
-// Only updates the latest entry for the definition.
-func (c *CatalogDB) UpdateStatus(definitionName string, status string) error {
+// UpdateStatus sets the convergence status for entries matching a target name.
+// Only updates the latest entry for the target.
+func (c *CatalogDB) UpdateStatus(targetName string, status string) error {
 	validStatuses := map[string]bool{
 		"unknown": true, "clean": true, "drifted": true,
 		"converging": true, "failed": true,
@@ -25,29 +25,29 @@ func (c *CatalogDB) UpdateStatus(definitionName string, status string) error {
 	}
 	_, err := c.db.Exec(
 		`UPDATE catalog_entries SET status = ?, updated_at = CURRENT_TIMESTAMP
-		 WHERE definition = ? AND id = (
-		     SELECT id FROM catalog_entries WHERE definition = ?
+		 WHERE target = ? AND id = (
+		     SELECT id FROM catalog_entries WHERE target = ?
 		     ORDER BY import_timestamp DESC LIMIT 1
 		 )`,
-		status, definitionName, definitionName,
+		status, targetName, targetName,
 	)
 	return err
 }
 
 // PromoteConvergingToClean flips status converging -> clean for the latest entry
-// of each named definition that is currently "converging", returning the number
+// of each named target that is currently "converging", returning the number
 // promoted. It is the drift re-check verifying a pending apply: when a model's
 // drift is ∅, its resources that ingest-manifest left "applied, pending
-// verification" (converging) are now confirmed in sync. Definitions not currently
+// verification" (converging) are now confirmed in sync. Targets not currently
 // converging (or absent) are untouched, so it is safe to call with a superset of
 // candidate names.
-func (c *CatalogDB) PromoteConvergingToClean(definitions []string) (int, error) {
+func (c *CatalogDB) PromoteConvergingToClean(targets []string) (int, error) {
 	promoted := 0
-	for _, def := range definitions {
+	for _, def := range targets {
 		res, err := c.db.Exec(
 			`UPDATE catalog_entries SET status = 'clean', updated_at = CURRENT_TIMESTAMP
-			 WHERE definition = ? AND status = 'converging' AND id = (
-			     SELECT id FROM catalog_entries WHERE definition = ?
+			 WHERE target = ? AND status = 'converging' AND id = (
+			     SELECT id FROM catalog_entries WHERE target = ?
 			     ORDER BY import_timestamp DESC LIMIT 1
 			 )`,
 			def, def,
@@ -83,26 +83,26 @@ func (c *CatalogDB) PromoteConvergingToCleanByModel(model string) (int, error) {
 	return int(n), nil
 }
 
-// GetDefinitionStatuses returns the latest status for each definition that has entries.
-func (c *CatalogDB) GetDefinitionStatuses() ([]DefinitionStatus, error) {
+// GetTargetStatuses returns the latest status for each target that has entries.
+func (c *CatalogDB) GetTargetStatuses() ([]TargetStatus, error) {
 	rows, err := c.db.Query(`
-		SELECT definition, status, updated_at
+		SELECT target, status, updated_at
 		FROM catalog_entries
-		WHERE definition IS NOT NULL AND definition != ''
-		GROUP BY definition
+		WHERE target IS NOT NULL AND target != ''
+		GROUP BY target
 		HAVING import_timestamp = MAX(import_timestamp)
-		ORDER BY definition`)
+		ORDER BY target`)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query definition statuses: %w", err)
+		return nil, fmt.Errorf("failed to query target statuses: %w", err)
 	}
 	defer rows.Close()
 
-	var statuses []DefinitionStatus
+	var statuses []TargetStatus
 	for rows.Next() {
-		var ds DefinitionStatus
+		var ds TargetStatus
 		var statusVal *string
-		if err := rows.Scan(&ds.Definition, &statusVal, &ds.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan definition status: %w", err)
+		if err := rows.Scan(&ds.Target, &statusVal, &ds.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan target status: %w", err)
 		}
 		if statusVal != nil {
 			ds.Status = *statusVal
@@ -113,7 +113,7 @@ func (c *CatalogDB) GetDefinitionStatuses() ([]DefinitionStatus, error) {
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating definition statuses: %w", err)
+		return nil, fmt.Errorf("error iterating target statuses: %w", err)
 	}
 
 	return statuses, nil

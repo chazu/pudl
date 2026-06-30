@@ -44,7 +44,7 @@ type CatalogEntry struct {
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
 	EntryType  *string `json:"entry_type,omitempty"`  // e.g. "observe", "manifest", "manifest-action"
-	Definition *string `json:"definition,omitempty"`  // Definition name / run target (//models/<name>)
+	Target *string `json:"target,omitempty"`  // mu target / run target name (e.g. //models/<name>, home/odroid)
 	RunID      *string `json:"run_id,omitempty"`      // Unique run identifier
 	Tags       *string `json:"tags,omitempty"`        // JSON-encoded map[string]string
 	// Convergence status tracking
@@ -271,7 +271,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		id, stored_path, metadata_path, import_timestamp, format, origin,
 		schema, confidence, record_count, size_bytes, collection_id, item_index,
 		collection_type, item_id, resource_id, content_hash, identity_json, version,
-		entry_type, definition, run_id, tags, status,
+		entry_type, target, run_id, tags, status,
 		created_at, updated_at
 	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
@@ -290,7 +290,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
 		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
 		entry.CollectionType, entry.ItemID, entry.ResourceID, entry.ContentHash,
-		entry.IdentityJSON, entry.Version, entry.EntryType, entry.Definition,
+		entry.IdentityJSON, entry.Version, entry.EntryType, entry.Target,
 		entry.RunID, entry.Tags, entry.Status, formatCatalogTime(entry.CreatedAt), formatCatalogTime(entry.UpdatedAt))
 
 	if err != nil {
@@ -316,7 +316,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id = ?`
@@ -327,7 +327,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -357,7 +357,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id LIKE ?
@@ -377,7 +377,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
@@ -487,7 +487,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	%s
@@ -516,7 +516,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan catalog entry", err)
@@ -604,7 +604,7 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE collection_id = ? AND collection_type = 'item'
@@ -624,7 +624,7 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan collection item", err)
@@ -645,7 +645,7 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id = ? AND collection_type = 'collection'`
@@ -656,7 +656,7 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
@@ -679,7 +679,7 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 		stored_path = ?, metadata_path = ?, import_timestamp = ?, format = ?,
 		origin = ?, schema = ?, confidence = ?, record_count = ?, size_bytes = ?,
 		resource_id = ?, content_hash = ?, identity_json = ?, version = ?,
-		entry_type = ?, definition = ?, run_id = ?, tags = ?,
+		entry_type = ?, target = ?, run_id = ?, tags = ?,
 		updated_at = ?
 	WHERE id = ?`
 
@@ -689,7 +689,7 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 		entry.StoredPath, entry.MetadataPath, formatCatalogTime(entry.ImportTimestamp), entry.Format,
 		entry.Origin, entry.Schema, entry.Confidence, entry.RecordCount, entry.SizeBytes,
 		entry.ResourceID, entry.ContentHash, entry.IdentityJSON, entry.Version,
-		entry.EntryType, entry.Definition, entry.RunID, entry.Tags,
+		entry.EntryType, entry.Target, entry.RunID, entry.Tags,
 		formatCatalogTime(entry.UpdatedAt), entry.ID)
 
 	if err != nil {

@@ -183,7 +183,7 @@ Available fields (view columns):
 | `format` | File format |
 | `status` | Convergence status |
 | `entry_type` | import, observe, manifest, manifest-action |
-| `definition` | Definition name / run target `//models/<name>` |
+| `target` | mu target / run target name (e.g. `//models/<name>`, `home/odroid`) |
 | `run_id` | Run identifier |
 | `resource_id` | Stable resource identity |
 | `content_hash` | SHA256 of stored data |

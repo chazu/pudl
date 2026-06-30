@@ -298,7 +298,7 @@ func ingestObserveRecord(
 		RecordCount:     1,
 		SizeBytes:       int64(len(recordJSON)),
 		EntryType:       &entryType,
-		Definition:      &target,
+		Target:          &target,
 		ResourceID:      &resourceID,
 		ContentHash:     &contentHash,
 		CollectionID:    &collectionID,

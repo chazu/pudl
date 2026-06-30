@@ -14,15 +14,15 @@ import (
 
 // StatusOutput represents JSON output for the status command.
 type StatusOutput struct {
-	Definition string `json:"definition"`
+	Target string `json:"target"`
 	Status     string `json:"status"`
 	UpdatedAt  string `json:"updated_at"`
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status [definition]",
-	Short: "Show convergence status of models and definitions",
-	Long: `Display the convergence status recorded in the catalog — the per-definition
+	Use:   "status [target]",
+	Short: "Show convergence status of models and targets",
+	Long: `Display the convergence status recorded in the catalog — the per-target
 status the run loop writes (a model run's verdict is recorded on its instance row,
 "//models/<name>").
 
@@ -79,9 +79,9 @@ func runStatusAll() error {
 	}
 	defer db.Close()
 
-	statuses, err := db.GetDefinitionStatuses()
+	statuses, err := db.GetTargetStatuses()
 	if err != nil {
-		return fmt.Errorf("failed to get definition statuses: %w", err)
+		return fmt.Errorf("failed to get target statuses: %w", err)
 	}
 
 	if len(statuses) == 0 {
@@ -96,7 +96,7 @@ func runStatusAll() error {
 		jsonOut := make([]StatusOutput, len(statuses))
 		for i, s := range statuses {
 			jsonOut[i] = StatusOutput{
-				Definition: s.Definition,
+				Target: s.Target,
 				Status:     s.Status,
 				UpdatedAt:  formatStatusTime(s.UpdatedAt),
 			}
@@ -115,25 +115,25 @@ func runStatusDetail(name string) error {
 	}
 	defer db.Close()
 
-	statuses, err := db.GetDefinitionStatuses()
+	statuses, err := db.GetTargetStatuses()
 	if err != nil {
-		return fmt.Errorf("failed to get definition statuses: %w", err)
+		return fmt.Errorf("failed to get target statuses: %w", err)
 	}
 
-	var found *database.DefinitionStatus
+	var found *database.TargetStatus
 	for i := range statuses {
-		if statuses[i].Definition == name {
+		if statuses[i].Target == name {
 			found = &statuses[i]
 			break
 		}
 	}
 	if found == nil {
-		return fmt.Errorf("definition %q not found", name)
+		return fmt.Errorf("target %q not found", name)
 	}
 
 	if jsonOutput {
 		return GetOutputWriter().WriteJSON(StatusOutput{
-			Definition: found.Definition,
+			Target: found.Target,
 			Status:     found.Status,
 			UpdatedAt:  formatStatusTime(found.UpdatedAt),
 		})
@@ -143,19 +143,19 @@ func runStatusDetail(name string) error {
 	return nil
 }
 
-func printStatusTable(statuses []database.DefinitionStatus) {
-	defWidth := len("Definition")
+func printStatusTable(statuses []database.TargetStatus) {
+	defWidth := len("Target")
 	statusWidth := len("Status")
 	for _, s := range statuses {
-		if len(s.Definition) > defWidth {
-			defWidth = len(s.Definition)
+		if len(s.Target) > defWidth {
+			defWidth = len(s.Target)
 		}
 		if len(s.Status) > statusWidth {
 			statusWidth = len(s.Status)
 		}
 	}
 
-	fmt.Printf("%-*s  %-*s  %s\n", defWidth, "Definition", statusWidth, "Status", "Last Updated")
+	fmt.Printf("%-*s  %-*s  %s\n", defWidth, "Target", statusWidth, "Status", "Last Updated")
 	fmt.Printf("%s  %s  %s\n",
 		strings.Repeat("─", defWidth),
 		strings.Repeat("─", statusWidth),
@@ -172,17 +172,17 @@ func printStatusTable(statuses []database.DefinitionStatus) {
 		if len(s.Status) < statusWidth {
 			padding = strings.Repeat(" ", statusWidth-len(s.Status))
 		}
-		fmt.Printf("%-*s  %s%s  %s\n", defWidth, s.Definition, styledStatus, padding, ts)
+		fmt.Printf("%-*s  %s%s  %s\n", defWidth, s.Target, styledStatus, padding, ts)
 	}
 }
 
-func printStatusDetail(ds *database.DefinitionStatus) {
+func printStatusDetail(ds *database.TargetStatus) {
 	styledStatus := colorForStatus(ds.Status).Render(ds.Status)
 	ts := formatStatusTime(ds.UpdatedAt)
 	if ts == "" {
 		ts = "—"
 	}
-	fmt.Printf("Definition: %s\n", ds.Definition)
+	fmt.Printf("Target: %s\n", ds.Target)
 	fmt.Printf("Status:     %s\n", styledStatus)
 	fmt.Printf("Last Update: %s\n", ts)
 }

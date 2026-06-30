@@ -21,7 +21,7 @@ func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string) {
 		RecordCount:    1,
 		SizeBytes:      100,
 		EntryType:      &entryType,
-		Definition:     &def,
+		Target:     &def,
 		ContentHash:    &contentHash,
 	}
 	if err := db.AddEntry(entry); err != nil {
@@ -56,7 +56,7 @@ func addTestManifestEntry(t *testing.T, db *CatalogDB, id, def string) {
 		RecordCount:     1,
 		SizeBytes:       100,
 		EntryType:       &entryType,
-		Definition:      &def,
+		Target:      &def,
 	}
 	if err := db.AddEntry(entry); err != nil {
 		t.Fatalf("failed to add test manifest entry: %v", err)
@@ -96,7 +96,7 @@ func TestGetLatestObserve_NoResults(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if entry != nil {
-		t.Error("expected nil entry for nonexistent definition")
+		t.Error("expected nil entry for nonexistent target")
 	}
 }
 

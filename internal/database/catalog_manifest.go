@@ -13,7 +13,7 @@ func (c *CatalogDB) GetManifestActions(runID string) ([]CatalogEntry, error) {
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE entry_type = 'manifest-action' AND run_id = ?
@@ -33,7 +33,7 @@ func (c *CatalogDB) GetManifestActions(runID string) ([]CatalogEntry, error) {
 			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan manifest action", err)
@@ -48,31 +48,31 @@ func (c *CatalogDB) GetManifestActions(runID string) ([]CatalogEntry, error) {
 	return entries, nil
 }
 
-// GetLatestManifestAction returns the most recent manifest-action for a definition.
-func (c *CatalogDB) GetLatestManifestAction(definitionName string) (*CatalogEntry, error) {
+// GetLatestManifestAction returns the most recent manifest-action for a target.
+func (c *CatalogDB) GetLatestManifestAction(targetName string) (*CatalogEntry, error) {
 	selectSQL := `
 	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
 		   schema, confidence, record_count, size_bytes, collection_id, item_index,
 		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, definition, run_id, tags, status,
+		   entry_type, target, run_id, tags, status,
 		   created_at, updated_at
 	FROM catalog_entries
-	WHERE entry_type = 'manifest-action' AND definition = ?
+	WHERE entry_type = 'manifest-action' AND target = ?
 	ORDER BY import_timestamp DESC
 	LIMIT 1`
 
 	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, definitionName).Scan(
+	err := c.db.QueryRow(selectSQL, targetName).Scan(
 		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
 		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
 		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Definition,
+		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
 		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound,
-			fmt.Sprintf("No manifest action found for definition: %s", definitionName), nil)
+			fmt.Sprintf("No manifest action found for target: %s", targetName), nil)
 	}
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get latest manifest action", err)
