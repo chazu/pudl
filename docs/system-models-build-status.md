@@ -65,7 +65,17 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 
 - **host.plan** — example 1's converge plugin: complete the `host` plugin's stub
   `plan` op (`mu/plugins/host/main.go:71`); spec: `mu/.../host-converge-spec.md`.
-- **Real converge apply** — wired (`mu build`), not auto-run (mutates live systems).
+- ~~**Real converge apply**~~ — ✅ **VALIDATED LIVE (2026-06-30)** against a real k8s
+  cluster (throwaway ns + nginx Deployment). The full declarative-apply loop runs
+  end-to-end: drift → `kubectl apply --server-side` → re-observe → `clean`, idempotent,
+  and drift→reapply on a deleted resource. Still **not** auto-run (operator opts in via
+  `--converge`). See `implog/2026_06_30_k8s_convergence_live_validation.md`. Two real
+  bugs found + fixed in the process: run-verdict status never persisted (the `//`-prefix
+  key mismatch — `db86d13`) and `model validate` over-strict on differential `desired`
+  (`3584746`); plus the install needed `pudl init --force` to pick up the `differential`
+  schema field. **Caveat:** this exercised `pudl run --converge` (verdict via `runVerdict`),
+  **not** the `ingest-manifest --model` → `converging` → `PromoteConvergingToCleanByModel`
+  promotion path, which remains unit-tested only.
 - **`cloudflare-dns`** — post-V1, deliberately deferred (per the DNS disposition).
 - ~~**Catalog status persistence**~~ — ✅ **DONE (2026-06-29).** The run verdict is
   written to the catalog status (`persistRunStatus`/`runVerdict` → `UpdateStatus`);
