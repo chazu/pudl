@@ -120,8 +120,25 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
    (`cmd/run_inventory.go`) now keys records by the schema's declared `identity_fields`
    (from the inference graph via `schemaIdentityResolver`), falling back to the
    name|path|id heuristic only when a schema declares none or a field is absent.
-3. **host.plan** — complete the `host` plugin's stub plan op for example 1's
+3. **Cross-model data dependencies — Phase 1 (RECOMMENDED NEXT BUILD).** Design
+   written: [`docs/cross-model-dependencies.md`](cross-model-dependencies.md).
+   Add `depends_on` to `#SystemModel`; emit `model_depends_on` facts from
+   `recordModelInstance`; ship built-in recursive rules
+   (`depends_transitive`/`impacted_by`); query via `pudl query`. Self-contained,
+   no infra. This is the natural next architectural step now that the
+   declarative-apply loop is fully validated.
+4. **Validate `--only` subset converge** — never exercised on real infra; small.
+5. **host.plan** — complete the `host` plugin's stub plan op for example 1's
    converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
+
+### Resolved this session (2026-06-30)
+- ✅ Real converge apply **validated live on k8s** + the per-resource
+  `converging`→`clean` lifecycle wired (`cb4db50`) and validated.
+- ✅ Finding A (converge needs explicit `kubeconfig` — mu's hermetic env)
+  documented in the `#PluginPlan` schema + `cli-reference` (`3089cdd`).
+- ✅ `pudl init --force` skill-clobber fixed (embedded skill made canonical,
+  `62998c2`).
+- ✅ Catalog `definition` column renamed → `target` (`576e0cd`).
 
 ## Repro / smoke commands
 
