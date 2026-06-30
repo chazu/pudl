@@ -82,7 +82,25 @@ pudl model show <name>                       # show populate/converge/desired/ch
 pudl model validate <name>                   # structural validation without running
 pudl run <name>                              # observe-only run (populate → drift → checks)
 pudl run <name> --converge                   # close drift via mu
+pudl run <name> --check-upstream             # warn if a depends_on upstream is drifted/failed
+pudl model deps                              # show the cross-model dependency graph (no run)
+pudl model deps --derive                     # also derive edges from desired↔produced identities
 ` + "```" + `
+
+### Cross-model dependencies
+
+A ` + "`#SystemModel`" + ` can declare ` + "`depends_on: [\"<model>\", ...]`" + ` — the models whose
+output it needs. ` + "`pudl run`" + ` / ` + "`pudl model deps`" + ` record these as
+` + "`model_depends_on(from,to)`" + ` facts; built-in recursive rules reason over them:
+` + "```" + `
+pudl query depends_transitive from=<m>       # what <m> depends on (transitively)
+pudl query impacted_by changed=<m>           # blast radius: who depends on <m>
+pudl query cyclic                            # models in a dependency cycle
+pudl query --topo model_depends_on           # topological run order (deps first)
+` + "```" + `
+` + "`pudl model deps`" + ` records edges for every registered model without running them;
+` + "`--derive`" + ` adds heuristic edges from desired↔produced identity matching. pudl
+makes deps queryable but does not re-run downstream models (that is mu's job).
 
 ### Writing data — three doors (do not confuse them)
 
@@ -140,7 +158,8 @@ pudl facts invalidate <id>                   # mark as no longer true (reality c
 ### Datalog queries
 ` + "```" + `
 pudl query <relation>                        # query derived facts
-pudl query <relation> --field=value          # filter results
+pudl query <relation> key=value              # filter results (positional key=value, not --where)
+pudl query --list                            # list queryable relations + their arg keys
 pudl rule add <file.cue>                     # install a rule file
 pudl rule add <file.cue> --global            # install globally
 ` + "```" + `
