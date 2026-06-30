@@ -102,16 +102,21 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   set-diff from the catalog). `--from-catalog` remains an explicit override
   (`useInventoryDrift` / `SystemModel.DifferentialDrift`). A plain `pudl run` now
   routes inventory observers correctly without the flag.
-- **cross-model data dependencies** — `pudl run` is single-instance; there is no
-  way to declare or query that one model's state depends on another's output. Both
-  the system (run ordering, impact/blast-radius, downstream re-runs) and the user
-  need to reason over these dependencies — at the Datalog/catalog layer, not a
-  bespoke graph. See the design note in the canonical spec (mu V1-BUILD-SPEC §12),
-  which also records why the legacy "socket" wiring stays retired. **pudl-side
-  design proposal written:** [`docs/cross-model-dependencies.md`](cross-model-dependencies.md)
-  — a `depends_on` field → `model_depends_on` facts → recursive Datalog
-  (`depends_transitive`/`impacted_by`) over the catalog. Phase 1 is buildable
-  here with no infra; this is the recommended next build.
+- ~~**cross-model data dependencies (Phase 1)**~~ — ✅ **DONE (2026-06-30).**
+  `#SystemModel.depends_on?: [...string]` (model names) → `pudl run` reconciles
+  `model_depends_on(from,to)` facts (add new / invalidate removed — idempotent,
+  no churn) → built-in recursive rules `depends_transitive` / `impacted_by` /
+  `cyclic` (`bootstrap/pudl/rules/convergence.cue`) queryable via `pudl query`.
+  UX: `pudl query --list` (relation/arg-key discovery), `pudl query --topo`
+  (run order, errors on cycle), opt-in `pudl run --check-upstream` (stale-input
+  advisory). Fixed a latent datalog compiler bug (bare `WHERE` on a no-condition
+  body). **Validated end-to-end on a local k3d cluster:** real k8s convergence
+  (Namespace + Deployment, drift→apply→clean) across two models with a real
+  `depends_on` edge; cross-model queries, idempotency, retraction, and the
+  stale-upstream warning all confirmed. Design + arg-key contract:
+  [`docs/cross-model-dependencies.md`](cross-model-dependencies.md); see
+  `implog/2026_06_30_cross_model_dependencies.md`. **Phase 2** (derived deps via
+  a desired-identity EDB projection) remains future.
 
 ## Good next steps (self-contained, validatable here)
 
@@ -120,18 +125,21 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
    (`cmd/run_inventory.go`) now keys records by the schema's declared `identity_fields`
    (from the inference graph via `schemaIdentityResolver`), falling back to the
    name|path|id heuristic only when a schema declares none or a field is absent.
-3. **Cross-model data dependencies — Phase 1 (RECOMMENDED NEXT BUILD).** Design
-   written: [`docs/cross-model-dependencies.md`](cross-model-dependencies.md).
-   Add `depends_on` to `#SystemModel`; emit `model_depends_on` facts from
-   `recordModelInstance`; ship built-in recursive rules
-   (`depends_transitive`/`impacted_by`); query via `pudl query`. Self-contained,
-   no infra. This is the natural next architectural step now that the
-   declarative-apply loop is fully validated.
+3. ✅ **Cross-model data dependencies — Phase 1** — DONE 2026-06-30 (see frontier
+   above). Built + validated on k3d. Next here: **Phase 2** (derive
+   `model_depends_on` from `desired`-resource identities matching produced catalog
+   rows — needs a new EDB projection of desired identities, not free), and
+   optionally a `pudl model` discovery pass that emits edges without a full run
+   (closes the run-time-only coverage gap).
 4. **Validate `--only` subset converge** — never exercised on real infra; small.
 5. **host.plan** — complete the `host` plugin's stub plan op for example 1's
    converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
 
 ### Resolved this session (2026-06-30)
+- ✅ **Cross-model data dependencies Phase 1** built + validated end-to-end on
+  k3d (`depends_on` → `model_depends_on` → `depends_transitive`/`impacted_by`/
+  `cyclic`; `query --list`/`--topo`; `run --check-upstream`). Latent datalog
+  compiler bug fixed (bare `WHERE`).
 - ✅ Real converge apply **validated live on k8s** + the per-resource
   `converging`→`clean` lifecycle wired (`cb4db50`) and validated.
 - ✅ Finding A (converge needs explicit `kubeconfig` — mu's hermetic env)

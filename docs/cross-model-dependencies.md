@@ -1,6 +1,12 @@
 # Design: cross-model data dependencies
 
-**Status:** design proposal (not yet built). Origin: mu
+**Status:** **Phase 1 BUILT (2026-06-30).** `#SystemModel.depends_on` →
+reconciled `model_depends_on` facts → built-in recursive rules
+(`depends_transitive` / `impacted_by` / `cyclic`) → `pudl query`, plus
+`pudl query --list` / `--topo` and the opt-in `pudl run --check-upstream`.
+Validated end-to-end on a local k3d cluster (real k8s convergence + cross-model
+queries). Phase 2 (derived deps) remains future. See
+`implog/2026_06_30_cross_model_dependencies.md`. Origin: mu
 `docs/design/system-models/V1-BUILD-SPEC.md` §12, and the pudl-side convergence
 work (`docs/system-models-build-status.md`).
 
