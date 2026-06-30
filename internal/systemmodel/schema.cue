@@ -101,6 +101,13 @@ package systemmodel
 
 // #PluginPlan — converge via a declarative-apply plugin. pudl routes `desired`
 // to the plugin as sources; the plugin reconciles. See V1-BUILD-SPEC §5.5.
+//
+// HOST CREDENTIALS: mu executes the converge actions with a *hermetic*
+// environment (no inherited `HOME`/`KUBECONFIG`), so any host credential the
+// plugin needs must be passed explicitly through `input` — pudl carries no
+// domain knowledge to inject it. For the k8s plugin this means
+// `input.kubeconfig: "/abs/path/to/kubeconfig"`; without it `kubectl` cannot
+// find `~/.kube/config` and apply fails with `context "…" does not exist`.
 #PluginPlan: {
 	plugin: string
 	input?: {...}
