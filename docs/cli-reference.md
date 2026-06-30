@@ -361,6 +361,23 @@ pudl run my_model --only foo      # restrict to a single definition
 pudl run my_model --dry-run       # show planned actions without applying
 ```
 
+> **Host credentials for converge plugins.** mu runs converge actions with a
+> hermetic environment — it does **not** inherit your shell's `HOME` or
+> `KUBECONFIG`. A plugin that needs host credentials must get them through the
+> model's `converge.input`, since pudl carries no domain knowledge to inject
+> them. For the **k8s** plugin set `input.kubeconfig` to an absolute path:
+>
+> ```cue
+> converge: #PluginPlan & {
+>     plugin: "k8s"
+>     input: {namespace: "...", context: "...", kubeconfig: "/abs/path/kubeconfig"}
+> }
+> ```
+>
+> Without it, apply fails with `context "…" does not exist` (kubectl falls back
+> to an empty config because it can't find `~/.kube/config`). Observe is
+> unaffected — it runs inside the plugin process, which keeps the full env.
+
 **Flags:**
 
 | Flag | Description |
