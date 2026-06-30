@@ -108,8 +108,8 @@ func (mi ModelInfo) convergeName() string {
 	return "-"
 }
 
-// modelRunStatuses returns the latest run verdict keyed by model target
-// (modelTarget(name)), best-effort — an empty map if the catalog is unavailable.
+// modelRunStatuses returns the latest run verdict keyed by model definition
+// (modelDefinition(name)), best-effort — an empty map if the catalog is unavailable.
 func modelRunStatuses() map[string]string {
 	out := map[string]string{}
 	db, err := database.NewCatalogDB(config.GetPudlDir())
@@ -158,7 +158,7 @@ resolve — independent of whether a model has been run yet.`,
 		fmt.Printf("Registered models (%d):\n\n", len(models))
 		fmt.Printf("  %-24s %-9s %-12s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
 		for _, mi := range models {
-			status := statuses[modelTarget(mi.Name)]
+			status := statuses[modelDefinition(mi.Name)]
 			if status == "" {
 				status = "-"
 			}
@@ -206,7 +206,7 @@ func printModelsJSON(models []ModelInfo) error {
 	out := make([]modelSummary, 0, len(models))
 	for _, mi := range models {
 		s := mi.summary()
-		s.Status = statuses[modelTarget(mi.Name)]
+		s.Status = statuses[modelDefinition(mi.Name)]
 		out = append(out, s)
 	}
 	b, err := json.MarshalIndent(out, "", "  ")
