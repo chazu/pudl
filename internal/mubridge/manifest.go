@@ -133,8 +133,18 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 	actionSchema := "pudl/mu.#ManifestAction"
 
 	for _, action := range manifest.Actions {
-		// Normalize the action target to the catalog target key (strip //)
-		targetName := normalizeTarget(action.Target)
+		// Key the catalog `target` off the action's identifier. mu's build
+		// manifest carries the identifier under `id` (e.g.
+		// "//models/<m>:drift:apply"); the older `target` field may be empty, so
+		// fall back to `id`. Strip the leading "//".
+		actionRef := action.Target
+		if actionRef == "" {
+			actionRef = action.ID
+		}
+		targetName := normalizeTarget(actionRef)
+		// Filesystem-safe variant for the stored-action filename ("/" and ":"
+		// are not usable as path segments).
+		safeName := strings.NewReplacer("/", "_", ":", "_").Replace(targetName)
 
 		// Build tags JSON
 		tagMap := map[string]interface{}{
@@ -156,7 +166,7 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 			return nil, fmt.Errorf("failed to marshal action data: %w", err)
 		}
 
-		actionStoredPath, err := storeRawData(configDir, actionData, targetName+"_action.json")
+		actionStoredPath, err := storeRawData(configDir, actionData, safeName+"_action.json")
 		if err != nil {
 			return nil, fmt.Errorf("failed to store action data: %w", err)
 		}

@@ -172,9 +172,14 @@ Examples:
 		// `pudl model list` / `pudl status` surface last-run state.
 		persistRunStatus(model.Name, runVerdict(report, flags))
 
-		// A clean drift re-check verifies any pending apply: promote this model's
-		// resources from `converging` (written by ingest-manifest) to `clean`.
-		if report.Drift != nil && report.Drift.Clean && !flags.dryRun {
+		// A verified ∅ re-check promotes this model's resources from `converging`
+		// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
+		// to `clean`. The ∅ comes from the converge loop's final re-observe
+		// (report.Converge clean) or an observe-only drift (report.Drift clean).
+		verifiedClean := !flags.dryRun &&
+			((report.Drift != nil && report.Drift.Clean) ||
+				(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
+		if verifiedClean {
 			promoteConvergingResources(model)
 		}
 		return runErr
