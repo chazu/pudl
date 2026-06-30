@@ -38,9 +38,12 @@ same relation").
 
 **The match (`cmd/model_derive.go`, all pure/unit-tested):**
 - `producedIdentities(desired, identity)` = top-level identity values
-  (`modelResourceDefs`: identity_fields or name|path|id) ∪ nested `name` values
-  (the k8s `metadata.name` case).
-- `referencedValues(desired)` = all string leaves of the desired entries.
+  (`modelResourceDefs`: identity_fields or name|path|id) ∪ the k8s `metadata.name`
+  (scoped to a metadata sub-map — container/port/volume names are NOT treated as
+  produced identities).
+- `referencedValues(desired)` = string leaves of the desired entries, skipping
+  structural type tags (`kind`/`apiVersion`/`_schema`) so two models sharing a
+  kind can't mint a spurious edge.
 - `deriveDependencies(models, identity)`: B→A when `referencedValues(B)` minus
   B's own produced identities intersects `producedIdentities(A)`, A ≠ B, and B
   does not already **declare** A (declared wins — no duplicate).

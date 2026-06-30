@@ -296,10 +296,12 @@ separate `derived:` fact source) — the Phase-1 rules are therefore unchanged, 
 the original design required.
 
 The match is **value-based**: `producedIdentities(A)` = A's desired resource
-identities (top-level identity_fields / name|path|id, plus nested `name` for the
-k8s `metadata.name` case); `referencedValues(B)` = the string leaves of B's
-desired minus B's own identities; an edge is derived when they intersect, A ≠ B,
-and B does not already **declare** A (declared wins; no duplicate). Because it is
+identities (top-level identity_fields / name|path|id, plus the k8s
+`metadata.name` — scoped to metadata, so container/port names are not treated as
+identities); `referencedValues(B)` = the string leaves of B's desired (skipping
+structural type tags `kind`/`apiVersion`/`_schema`) minus B's own identities; an
+edge is derived when they intersect, A ≠ B, and B does not already **declare** A
+(declared wins; no duplicate). Because it is
 value-based it is **heuristic** (a coincidental string equality can over-match),
 so it is **opt-in** (`--derive`), **separately sourced** (auditable; never
 corrupts the declared graph), and reconciled independently (`reconcileEdges`
