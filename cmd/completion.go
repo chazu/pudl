@@ -220,11 +220,31 @@ func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
+	// Candidate set: stored fact relations + derived rule-head relations (which
+	// never appear in current_facts) + built-in EDB relations. Without the rule
+	// heads, query targets like depends_transitive/impacted_by are invisible to
+	// completion.
+	seen := map[string]bool{}
 	var completions []string
-	for _, r := range relations {
+	addCandidate := func(r string) {
+		if seen[r] {
+			return
+		}
+		seen[r] = true
 		if toComplete == "" || strings.HasPrefix(r, toComplete) {
 			completions = append(completions, r)
 		}
+	}
+	for _, r := range relations {
+		addCandidate(r)
+	}
+	if rules, rerr := loadQueryRules(config.GetPudlDir()); rerr == nil {
+		for _, ru := range rules {
+			addCandidate(ru.Head.Rel)
+		}
+	}
+	for _, r := range database.ReservedRelations() {
+		addCandidate(r)
 	}
 
 	return completions, cobra.ShellCompDirectiveNoFileComp
@@ -315,4 +335,3 @@ func completeObservationKinds(cmd *cobra.Command, args []string, toComplete stri
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
-
