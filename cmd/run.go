@@ -12,12 +12,13 @@ import (
 )
 
 var (
-	runMuRoot      string
-	runConverge    bool
-	runOnly        []string
-	runDryRun      bool
-	runMaxIters    int
-	runFromCatalog bool
+	runMuRoot        string
+	runConverge      bool
+	runOnly          []string
+	runDryRun        bool
+	runMaxIters      int
+	runFromCatalog   bool
+	runCheckUpstream bool
 )
 
 var runCmd = &cobra.Command{
@@ -85,6 +86,13 @@ Examples:
 			}
 		} else if live {
 			for _, w := range warns {
+				fmt.Printf("warning: %s\n", w)
+			}
+		}
+
+		// Opt-in stale-input guard: warn if any transitive upstream is drifted/failed.
+		if runCheckUpstream && live {
+			for _, w := range checkUpstreamFreshness(model) {
 				fmt.Printf("warning: %s\n", w)
 			}
 		}
@@ -397,4 +405,5 @@ func init() {
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
 	runCmd.Flags().IntVar(&runMaxIters, "max-iters", 5, "loop iteration cap (requires --converge)")
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe)")
+	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 }

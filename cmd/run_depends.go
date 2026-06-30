@@ -7,6 +7,7 @@ import (
 
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -118,6 +119,68 @@ func dependencyDiff(declared map[string]struct{}, current map[string]string) (ad
 	sort.Strings(add)
 	sort.Strings(invalidate)
 	return add, invalidate
+}
+
+// checkUpstreamFreshness is a read-only advisory: it warns when any model this
+// one transitively depends on is itself `drifted` or `failed` (a stale-input
+// guard). It evaluates depends_transitive over the shipped rules, then reads the
+// per-target status of each upstream.
+//
+// Coverage caveat (see docs/cross-model-dependencies.md): edges exist only for
+// upstreams that have been run, so silence is "no recorded stale upstream", not
+// a proof of freshness. Best-effort: any failure returns no warnings, never an
+// error — this never blocks a run.
+func checkUpstreamFreshness(m *systemmodel.SystemModel) []string {
+	configDir := config.GetPudlDir()
+	rules, err := loadQueryRules(configDir)
+	if err != nil {
+		return nil
+	}
+	db, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		return nil
+	}
+	defer db.Close()
+
+	ups, err := datalog.Evaluate(db, rules, "depends_transitive",
+		map[string]interface{}{"from": m.Name}, datalog.TemporalScope{})
+	if err != nil {
+		return nil
+	}
+	if len(ups) == 0 {
+		return nil
+	}
+
+	statuses, err := db.GetTargetStatuses()
+	if err != nil {
+		return nil
+	}
+	statusByTarget := make(map[string]string, len(statuses))
+	for _, s := range statuses {
+		statusByTarget[s.Target] = s.Status
+	}
+
+	var stale []string
+	seen := map[string]struct{}{}
+	for _, t := range ups {
+		to, ok := t.Args["to"].(string)
+		if !ok {
+			continue
+		}
+		if _, dup := seen[to]; dup {
+			continue
+		}
+		seen[to] = struct{}{}
+		switch statusByTarget[modelTargetKey(to)] {
+		case "drifted", "failed":
+			stale = append(stale, fmt.Sprintf("%s (%s)", to, statusByTarget[modelTargetKey(to)]))
+		}
+	}
+	if len(stale) == 0 {
+		return nil
+	}
+	sort.Strings(stale)
+	return []string{fmt.Sprintf("upstream(s) not clean: %v — this model may be converging against stale inputs", stale)}
 }
 
 // edgeArgs extracts the from/to of a model_depends_on fact's args JSON.
