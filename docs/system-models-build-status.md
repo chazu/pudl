@@ -107,7 +107,11 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   the system (run ordering, impact/blast-radius, downstream re-runs) and the user
   need to reason over these dependencies — at the Datalog/catalog layer, not a
   bespoke graph. See the design note in the canonical spec (mu V1-BUILD-SPEC §12),
-  which also records why the legacy "socket" wiring stays retired.
+  which also records why the legacy "socket" wiring stays retired. **pudl-side
+  design proposal written:** [`docs/cross-model-dependencies.md`](cross-model-dependencies.md)
+  — a `depends_on` field → `model_depends_on` facts → recursive Datalog
+  (`depends_transitive`/`impacted_by`) over the catalog. Phase 1 is buildable
+  here with no infra; this is the recommended next build.
 
 ## Good next steps (self-contained, validatable here)
 
