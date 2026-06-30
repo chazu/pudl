@@ -73,9 +73,14 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   bugs found + fixed in the process: run-verdict status never persisted (the `//`-prefix
   key mismatch — `db86d13`) and `model validate` over-strict on differential `desired`
   (`3584746`); plus the install needed `pudl init --force` to pick up the `differential`
-  schema field. **Caveat:** this exercised `pudl run --converge` (verdict via `runVerdict`),
-  **not** the `ingest-manifest --model` → `converging` → `PromoteConvergingToCleanByModel`
-  promotion path, which remains unit-tested only.
+  schema field. ~~**Caveat:** ... promotion path remains unit-tested only.~~ ✅ **CLOSED
+  (2026-06-30, `cb4db50`):** the converge loop now runs `mu build --emit-manifest` and
+  ingests the manifest (`--model`-tagged), so each apply writes a `converging` row and
+  the loop's re-observe ∅ promotes it to `clean` via `PromoteConvergingToCleanByModel`.
+  Validated live: `pudl status` shows both the model row and the apply-action target
+  (`models/<m>:drift:apply`) clean. Promotion trigger generalized to fire off a clean
+  converge (not just observe-only drift). See
+  `implog/2026_06_30_converge_ingest_wiring.md`.
 - **`cloudflare-dns`** — post-V1, deliberately deferred (per the DNS disposition).
 - ~~**Catalog status persistence**~~ — ✅ **DONE (2026-06-29).** The run verdict is
   written to the catalog status (`persistRunStatus`/`runVerdict` → `UpdateStatus`);
