@@ -26,13 +26,17 @@ func SchemaCUE() string { return schemaCUE }
 // SystemModel is the decoded run unit. Orchestration-relevant fields only;
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {
-	Name      string            `json:"name"`
-	Plugins   []PluginDef       `json:"plugins,omitempty"`
-	Populate  Populate          `json:"populate"`
-	Checks    []Check           `json:"checks,omitempty"`
-	Desired   []map[string]any  `json:"desired,omitempty"`
-	Converge  *PluginPlan       `json:"converge,omitempty"`
-	Freshness *Freshness        `json:"freshness,omitempty"`
+	Name      string           `json:"name"`
+	Plugins   []PluginDef      `json:"plugins,omitempty"`
+	Populate  Populate         `json:"populate"`
+	Checks    []Check          `json:"checks,omitempty"`
+	Desired   []map[string]any `json:"desired,omitempty"`
+	Converge  *PluginPlan      `json:"converge,omitempty"`
+	Freshness *Freshness       `json:"freshness,omitempty"`
+	// DependsOn names other #SystemModel instances this model depends on (by
+	// their `name:`). Drives the model_depends_on facts + cross-model reasoning;
+	// see docs/cross-model-dependencies.md.
+	DependsOn []string `json:"depends_on,omitempty"`
 }
 
 // PluginDef is a plugin source declared in the model, mirroring mu's #PluginDef

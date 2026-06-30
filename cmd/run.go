@@ -76,6 +76,19 @@ Examples:
 			fmt.Printf("warning: could not record model instance: %v\n", err)
 		}
 
+		// Reconcile this model's declared depends_on into model_depends_on facts
+		// (add new edges, invalidate removed ones). Best-effort: a reconcile
+		// failure must not fail the run. Warnings (e.g. unresolved deps) surface.
+		if warns, err := reconcileModelDependencies(model); err != nil {
+			if live {
+				fmt.Printf("warning: could not reconcile dependencies: %v\n", err)
+			}
+		} else if live {
+			for _, w := range warns {
+				fmt.Printf("warning: %s\n", w)
+			}
+		}
+
 		// muRoot is only needed by paths that run mu within an existing project
 		// (plugin-observe live observe; differential drift). The ewe populate
 		// path self-stages its own mu project, and --from-catalog runs no mu.

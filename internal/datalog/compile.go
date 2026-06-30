@@ -131,25 +131,35 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		return nil, fmt.Errorf("rule %s head has no variable projections", rule.Name)
 	}
 
+	// A body of a single override (derived/EDB) atom whose args are all
+	// first-occurrence variables yields no WHERE conditions — e.g. a reverse
+	// projection like impacted_by(changed,impacted) :- depends_transitive(from,to).
+	// Emitting a bare "WHERE" is a SQL syntax error, so the clause is omitted when
+	// there is nothing to filter (the FROM table itself bounds the rows).
+	whereClause := ""
+	if len(whereParts) > 0 {
+		whereClause = "\nWHERE " + strings.Join(whereParts, "\n  AND ")
+	}
+
 	var sql string
 	if hasAgg {
 		// Aggregated rule: non-aggregate head vars become GROUP BY keys; the
 		// aggregate functions reduce within each group. No DISTINCT (the GROUP BY
 		// already collapses rows). A head with only aggregates and no group keys
 		// reduces over the whole relation (single row, no GROUP BY clause).
-		sql = fmt.Sprintf("SELECT\n    %s\nFROM %s\nWHERE %s",
+		sql = fmt.Sprintf("SELECT\n    %s\nFROM %s%s",
 			strings.Join(selectParts, ",\n    "),
 			strings.Join(fromParts, ", "),
-			strings.Join(whereParts, "\n  AND "),
+			whereClause,
 		)
 		if len(groupParts) > 0 {
 			sql += "\nGROUP BY " + strings.Join(groupParts, ", ")
 		}
 	} else {
-		sql = fmt.Sprintf("SELECT DISTINCT\n    %s\nFROM %s\nWHERE %s",
+		sql = fmt.Sprintf("SELECT DISTINCT\n    %s\nFROM %s%s",
 			strings.Join(selectParts, ",\n    "),
 			strings.Join(fromParts, ", "),
-			strings.Join(whereParts, "\n  AND "),
+			whereClause,
 		)
 	}
 

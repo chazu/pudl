@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,11 +18,14 @@ var (
 	queryAllWorkspace bool
 	queryAsOfValid    string
 	queryAsOfTx       string
+	queryList         bool
+	queryTopo         bool
 )
 
 var queryCmd = &cobra.Command{
-	Use:   "query <relation> [--field=value ...]",
-	Short: "Query derived facts using Datalog rules",
+	Use:          "query <relation> [--field=value ...]",
+	Short:        "Query derived facts using Datalog rules",
+	SilenceUsage: true,
 	Long: `Evaluate Datalog rules over the fact store and catalog, then query results.
 
 Rules are loaded from CUE files in:
@@ -42,15 +44,29 @@ Temporal modes (determined by which flags are set):
   --as-of-tx       Evaluate over facts known at a point in time
   (both)           Evaluate over what was believed at --as-of-tx about --as-of-valid
 
+Use --list to see the relations (rule heads + EDB facts) you can query and the
+arg keys each expects. Use --topo to read a relation's from/to edges as a
+topological run order (dependencies first); it errors on a cycle.
+
 Examples:
+    pudl query --list
     pudl query depends_transitive
     pudl query depends_transitive from=api
-    pudl query at_risk
+    pudl query impacted_by changed=network
+    pudl query --topo model_depends_on
     pudl query -f my-analysis.cue corroborated_obstacle
     pudl query observation --as-of-valid 2026-04-01T14:30:00Z
     pudl query depends_transitive --json`,
-	Args: cobra.MinimumNArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if queryList {
+			return nil // --list takes no relation
+		}
+		return cobra.MinimumNArgs(1)(cmd, args)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if queryList {
+			return runQueryList()
+		}
 		relation := args[0]
 
 		// Parse field constraints from remaining args (key=value pairs)
@@ -87,31 +103,9 @@ Examples:
 			txAt = &t
 		}
 
-		// Load rules from workspace paths
-		var rulePaths []string
-
-		// Global rules
-		globalRules := filepath.Join(configDir, "schema", "pudl", "rules")
-		rulePaths = append(rulePaths, globalRules)
-
-		// Repo-scoped rules (if in a workspace)
-		if wsCtx != nil && wsCtx.Workspace != nil {
-			repoRules := filepath.Join(wsCtx.Workspace.PudlDir, "schema", "pudl", "rules")
-			rulePaths = append(rulePaths, repoRules)
-		}
-
-		rules, err := datalog.LoadRulesFromPaths(rulePaths...)
+		rules, err := loadQueryRules(configDir)
 		if err != nil {
-			return fmt.Errorf("failed to load rules: %w", err)
-		}
-
-		// Load ad-hoc rules from file if specified
-		if queryRuleFile != "" {
-			fileRules, err := loadRulesFromFile(queryRuleFile)
-			if err != nil {
-				return fmt.Errorf("failed to load rules from %s: %w", queryRuleFile, err)
-			}
-			rules = append(rules, fileRules...)
+			return err
 		}
 
 		// Evaluate: SQL for non-recursive rules, recursive fixpoint fallback.
@@ -119,6 +113,10 @@ Examples:
 		results, err := datalog.Evaluate(db, rules, relation, constraints, scope)
 		if err != nil {
 			return err
+		}
+
+		if queryTopo {
+			return printTopoOrder(relation, results)
 		}
 
 		if jsonOutput {
@@ -170,6 +168,8 @@ func init() {
 	queryCmd.Flags().BoolVar(&queryAllWorkspace, "all-workspaces", false, "Include global rules and all workspace data")
 	queryCmd.Flags().StringVar(&queryAsOfValid, "as-of-valid", "", "Evaluate over facts true at this time (RFC3339 or Unix)")
 	queryCmd.Flags().StringVar(&queryAsOfTx, "as-of-tx", "", "Evaluate over facts known at this time (RFC3339 or Unix)")
+	queryCmd.Flags().BoolVar(&queryList, "list", false, "List queryable relations (rule heads + EDB facts) and their arg keys")
+	queryCmd.Flags().BoolVar(&queryTopo, "topo", false, "Read the relation's from/to edges as a topological run order (errors on a cycle)")
 
 	queryCmd.ValidArgsFunction = completeRelations
 }

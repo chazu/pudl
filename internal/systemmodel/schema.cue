@@ -16,10 +16,20 @@ package systemmodel
 		schema_type:     "base"
 		resource_type:   "system_model"
 		identity_fields: ["name"]
-		tracked_fields: ["populate", "desired", "converge", "checks", "plugins"]
+		tracked_fields: ["populate", "desired", "converge", "checks", "plugins", "depends_on"]
 	}
 
 	name: string
+
+	// DEPENDS_ON — NAMES of other #SystemModel instances whose output this
+	// model's desired/observed state depends on. Model names (each dependency's
+	// `name:` field), not value references: this expresses ordering/impact, not
+	// value interpolation (Terraform-style ${vpc.id} stays parked behind
+	// ewe-converge), and not Datalog rule references (that is `relations?`).
+	// Emitted as `model_depends_on(from,to)` facts on every run; query the
+	// shipped recursive rules `depends_transitive` / `impacted_by` / `cyclic`.
+	// See docs/cross-model-dependencies.md.
+	depends_on?: [...string]
 
 	// PLUGINS — the plugins this model's arms reference, declared mu-natively so
 	// the model is self-contained. Mirrors mu.cue's `plugins:` (#PluginDef): an
