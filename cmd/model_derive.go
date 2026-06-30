@@ -20,24 +20,32 @@ import (
 // --derive`), separately sourced (auditable, never corrupts the declared graph),
 // and skips edges a model already declares.
 
+// structuralKeys are desired fields that name a TYPE, not a resource identity or
+// a cross-resource reference. Excluded from both produced identities and
+// referenced values so they can't mint spurious edges (e.g. two models both
+// declaring kind "Deployment" must not become a dependency).
+var structuralKeys = map[string]bool{"kind": true, "apiVersion": true, "_schema": true}
+
 // producedIdentities returns the resource identities a model manages/produces
 // from its desired: the top-level identity values (identity_fields or
-// name|path|id, via modelResourceDefs) UNION any nested "name" values (the k8s
-// case, where identity is metadata.name rather than a top-level field).
+// name|path|id, via modelResourceDefs) UNION the k8s `metadata.name` values.
+// It deliberately does NOT collect every nested "name" (container/port/volume
+// names are not resource identities) — only the name directly under a metadata
+// map, which is the k8s resource identity.
 func producedIdentities(desired []map[string]any, identity identityResolver) map[string]struct{} {
 	out := map[string]struct{}{}
 	for _, v := range modelResourceDefs(desired, identity) {
 		out[v] = struct{}{}
 	}
 	for _, d := range desired {
-		collectNamedValues(d, "name", out)
+		collectMetadataNames(d, out)
 	}
 	return out
 }
 
 // referencedValues collects the string leaf values appearing anywhere in a
-// model's desired entries — the candidate cross-resource references. `_schema`
-// tags are skipped.
+// model's desired entries — the candidate cross-resource references — skipping
+// structural type tags (kind/apiVersion/_schema).
 func referencedValues(desired []map[string]any) map[string]struct{} {
 	out := map[string]struct{}{}
 	for _, d := range desired {
@@ -46,7 +54,8 @@ func referencedValues(desired []map[string]any) map[string]struct{} {
 	return out
 }
 
-// collectStrings walks any JSON-like value and adds every non-empty string leaf.
+// collectStrings walks any JSON-like value and adds every non-empty string leaf,
+// skipping values under structural keys.
 func collectStrings(v any, out map[string]struct{}) {
 	switch t := v.(type) {
 	case string:
@@ -55,7 +64,7 @@ func collectStrings(v any, out map[string]struct{}) {
 		}
 	case map[string]any:
 		for k, vv := range t {
-			if k == "_schema" {
+			if structuralKeys[k] {
 				continue
 			}
 			collectStrings(vv, out)
@@ -67,22 +76,23 @@ func collectStrings(v any, out map[string]struct{}) {
 	}
 }
 
-// collectNamedValues walks any JSON-like value and adds the string value of
-// every field whose key == key (at any depth).
-func collectNamedValues(v any, key string, out map[string]struct{}) {
+// collectMetadataNames adds the value of `metadata.name` for every map (at any
+// depth) that has a metadata sub-map with a string name — the k8s resource
+// identity. It does NOT match a bare "name" elsewhere (e.g. a container's name).
+func collectMetadataNames(v any, out map[string]struct{}) {
 	switch t := v.(type) {
 	case map[string]any:
-		for k, vv := range t {
-			if k == key {
-				if s, ok := vv.(string); ok && s != "" {
-					out[s] = struct{}{}
-				}
+		if meta, ok := t["metadata"].(map[string]any); ok {
+			if name, ok := meta["name"].(string); ok && name != "" {
+				out[name] = struct{}{}
 			}
-			collectNamedValues(vv, key, out)
+		}
+		for _, vv := range t {
+			collectMetadataNames(vv, out)
 		}
 	case []any:
 		for _, vv := range t {
-			collectNamedValues(vv, key, out)
+			collectMetadataNames(vv, out)
 		}
 	}
 }

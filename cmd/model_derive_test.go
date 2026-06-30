@@ -45,10 +45,35 @@ func TestReferencedValues_RecursiveLeaves(t *testing.T) {
 		"metadata": map[string]any{"name": "nginx", "namespace": "foo"},
 	}}
 	got := referencedValues(dep)
-	for _, want := range []string{"nginx", "foo", "apps/v1", "Deployment"} {
+	// real reference values are collected...
+	for _, want := range []string{"nginx", "foo"} {
 		if _, ok := got[want]; !ok {
 			t.Errorf("referencedValues missing %q (got %v)", want, keys(got))
 		}
+	}
+	// ...but structural type tags must NOT be (they'd mint spurious edges).
+	for _, no := range []string{"apps/v1", "Deployment"} {
+		if _, ok := got[no]; ok {
+			t.Errorf("referencedValues must skip structural tag %q (got %v)", no, keys(got))
+		}
+	}
+}
+
+func TestProducedIdentities_IgnoresNonMetadataName(t *testing.T) {
+	// container "name" is NOT a produced resource identity; only metadata.name is.
+	dep := []map[string]any{{
+		"kind":     "Deployment",
+		"metadata": map[string]any{"name": "web"},
+		"spec": map[string]any{"template": map[string]any{"spec": map[string]any{
+			"containers": []any{map[string]any{"name": "sidecar", "image": "x"}},
+		}}},
+	}}
+	got := producedIdentities(dep, nilIdentity)
+	if _, ok := got["web"]; !ok {
+		t.Errorf("expected metadata.name 'web' (got %v)", keys(got))
+	}
+	if _, ok := got["sidecar"]; ok {
+		t.Errorf("container name 'sidecar' must NOT be a produced identity (got %v)", keys(got))
 	}
 }
 
