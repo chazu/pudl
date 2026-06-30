@@ -45,7 +45,7 @@ func TestIngestManifest_ModelTag(t *testing.T) {
 	}
 	for _, a := range actions {
 		if a.Tags == nil {
-			t.Fatalf("expected tags on %v", a.Definition)
+			t.Fatalf("expected tags on %v", a.Target)
 		}
 		var tags map[string]interface{}
 		if err := json.Unmarshal([]byte(*a.Tags), &tags); err != nil {
@@ -133,7 +133,7 @@ func TestIngestManifest_Basic(t *testing.T) {
 	// Verify tags contain correct exit_code and cached values
 	// Find the api_server action (exit_code=0, cached=false)
 	for _, a := range actions {
-		if a.Definition != nil && *a.Definition == "api_server" {
+		if a.Target != nil && *a.Target == "api_server" {
 			if a.Tags == nil {
 				t.Fatal("expected tags on api_server action")
 			}
@@ -148,7 +148,7 @@ func TestIngestManifest_Basic(t *testing.T) {
 				t.Errorf("expected cached=false for api_server, got %v", tags["cached"])
 			}
 		}
-		if a.Definition != nil && *a.Definition == "monitoring" {
+		if a.Target != nil && *a.Target == "monitoring" {
 			if a.Tags == nil {
 				t.Fatal("expected tags on monitoring action")
 			}
@@ -160,7 +160,7 @@ func TestIngestManifest_Basic(t *testing.T) {
 				t.Errorf("expected cached=true for monitoring, got %v", tags["cached"])
 			}
 		}
-		if a.Definition != nil && *a.Definition == "config_file" {
+		if a.Target != nil && *a.Target == "config_file" {
 			if a.Tags == nil {
 				t.Fatal("expected tags on config_file action")
 			}
@@ -249,7 +249,7 @@ func TestIngestManifest_EmptyActions(t *testing.T) {
 	}
 }
 
-func TestIngestManifest_TargetToDefinition(t *testing.T) {
+func TestIngestManifest_NormalizeTarget(t *testing.T) {
 	tests := []struct {
 		target   string
 		expected string
@@ -262,9 +262,9 @@ func TestIngestManifest_TargetToDefinition(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := targetToDefinition(tt.target)
+		got := normalizeTarget(tt.target)
 		if got != tt.expected {
-			t.Errorf("targetToDefinition(%q) = %q, want %q", tt.target, got, tt.expected)
+			t.Errorf("normalizeTarget(%q) = %q, want %q", tt.target, got, tt.expected)
 		}
 	}
 }
@@ -284,13 +284,13 @@ func TestGetLatestManifestAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLatestManifestAction failed: %v", err)
 	}
-	if latest.Definition == nil || *latest.Definition != "api_server" {
-		t.Errorf("expected definition=api_server, got %v", latest.Definition)
+	if latest.Target == nil || *latest.Target != "api_server" {
+		t.Errorf("expected target=api_server, got %v", latest.Target)
 	}
 
-	// Non-existent definition should return error
+	// Non-existent target should return error
 	_, err = db.GetLatestManifestAction("nonexistent")
 	if err == nil {
-		t.Error("expected error for nonexistent definition")
+		t.Error("expected error for nonexistent target")
 	}
 }

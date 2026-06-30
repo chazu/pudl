@@ -211,7 +211,7 @@ func runVerdict(r *RunReport, f runFlags) string {
 }
 
 // persistRunStatus records a run verdict on the model instance row
-// (definition = modelDefinition(name)). Best-effort: a status-write failure (or no
+// (target = modelTargetKey(name)). Best-effort: a status-write failure (or no
 // catalog) never fails the run.
 func persistRunStatus(name, status string) {
 	if status == "" {
@@ -222,7 +222,7 @@ func persistRunStatus(name, status string) {
 		return
 	}
 	defer db.Close()
-	_ = db.UpdateStatus(modelDefinition(name), status)
+	_ = db.UpdateStatus(modelTargetKey(name), status)
 }
 
 // promoteConvergingResources flips this model's resources from `converging` to

@@ -44,12 +44,12 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 // `pudl model list` / `pudl status` reads) all address that one row.
 func modelTarget(name string) string { return "//models/" + name }
 
-// modelDefinition is the catalog *definition* key for a model's instance row:
+// modelTargetKey is the catalog `target`-column key for a model's instance row:
 // the mu target with its "//" prefix stripped, matching how the observe ingester
-// stores it (mubridge ingest TrimPrefix). Status reads/writes MUST use this form
-// — keying on modelTarget (with "//") silently misses the row, so run verdicts
+// stores it (mubridge normalizeTarget). Status reads/writes MUST use this form —
+// keying on modelTarget (with "//") silently misses the row, so run verdicts
 // never persist.
-func modelDefinition(name string) string { return strings.TrimPrefix(modelTarget(name), "//") }
+func modelTargetKey(name string) string { return strings.TrimPrefix(modelTarget(name), "//") }
 
 // resolveModel finds a registered #SystemModel-derived schema by name. It
 // searches the project-level .pudl/schema first (if a workspace is found by

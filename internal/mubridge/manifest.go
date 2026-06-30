@@ -133,8 +133,8 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 	actionSchema := "pudl/mu.#ManifestAction"
 
 	for _, action := range manifest.Actions {
-		// Extract definition name from target (strip //)
-		defName := targetToDefinition(action.Target)
+		// Normalize the action target to the catalog target key (strip //)
+		targetName := normalizeTarget(action.Target)
 
 		// Build tags JSON
 		tagMap := map[string]interface{}{
@@ -156,7 +156,7 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 			return nil, fmt.Errorf("failed to marshal action data: %w", err)
 		}
 
-		actionStoredPath, err := storeRawData(configDir, actionData, defName+"_action.json")
+		actionStoredPath, err := storeRawData(configDir, actionData, targetName+"_action.json")
 		if err != nil {
 			return nil, fmt.Errorf("failed to store action data: %w", err)
 		}
@@ -178,13 +178,13 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 			SizeBytes:       int64(len(actionData)),
 			ContentHash:     &actionContentHash,
 			EntryType:       &actionEntryType,
-			Definition:      &defName,
+			Target:          &targetName,
 			RunID:           &runID,
 			Tags:            &tagsStr,
 		}
 
 		if err := db.AddEntry(actionEntry); err != nil {
-			return nil, fmt.Errorf("failed to add action entry for %s: %w", defName, err)
+			return nil, fmt.Errorf("failed to add action entry for %s: %w", targetName, err)
 		}
 
 		// Status from the action exit code. Exit 0 means the apply COMMAND ran,
@@ -195,8 +195,8 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 		if action.ExitCode != 0 {
 			status = "failed"
 		}
-		if err := db.UpdateStatus(defName, status); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update status for %s: %v\n", defName, err)
+		if err := db.UpdateStatus(targetName, status); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to update status for %s: %v\n", targetName, err)
 		}
 	}
 
@@ -208,9 +208,9 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 	}, nil
 }
 
-// targetToDefinition converts a mu target name to a definition name.
-// It strips the leading "//" prefix if present.
-func targetToDefinition(target string) string {
+// normalizeTarget converts a mu target name to the catalog `target` key,
+// stripping the leading "//" prefix if present.
+func normalizeTarget(target string) string {
 	return strings.TrimPrefix(target, "//")
 }
 

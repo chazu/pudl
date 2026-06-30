@@ -52,12 +52,19 @@ func (c *CatalogDB) ensureIdentityColumns() error {
 // ensureArtifactColumns adds artifact tracking columns if missing.
 // Idempotent — safe to run on every DB open.
 func (c *CatalogDB) ensureArtifactColumns() error {
+	// Rename the legacy `definition` column to `target` on pre-existing DBs
+	// (preserving data) before the add-column loop, so an old DB renames rather
+	// than getting a fresh empty `target` beside the old `definition`.
+	if err := c.renameLegacyDefinitionColumn(); err != nil {
+		return err
+	}
+
 	columns := []struct {
 		name string
 		ddl  string
 	}{
 		{"entry_type", "ALTER TABLE catalog_entries ADD COLUMN entry_type TEXT DEFAULT 'import'"},
-		{"definition", "ALTER TABLE catalog_entries ADD COLUMN definition TEXT"},
+		{"target", "ALTER TABLE catalog_entries ADD COLUMN target TEXT"},
 		{"run_id", "ALTER TABLE catalog_entries ADD COLUMN run_id TEXT"},
 		{"tags", "ALTER TABLE catalog_entries ADD COLUMN tags TEXT"},
 	}
@@ -76,7 +83,7 @@ func (c *CatalogDB) ensureArtifactColumns() error {
 
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_entry_type ON catalog_entries(entry_type)",
-		"CREATE INDEX IF NOT EXISTS idx_definition ON catalog_entries(definition)",
+		"CREATE INDEX IF NOT EXISTS idx_target ON catalog_entries(target)",
 		"CREATE INDEX IF NOT EXISTS idx_run_id ON catalog_entries(run_id)",
 	}
 	for _, idx := range indexes {
@@ -121,6 +128,43 @@ func (c *CatalogDB) dropLegacyMethodColumn() error {
 	}
 	if _, err := c.db.Exec("ALTER TABLE catalog_entries DROP COLUMN method"); err != nil {
 		return fmt.Errorf("failed to drop legacy method column: %w", err)
+	}
+	return nil
+}
+
+// renameLegacyDefinitionColumn renames the `definition` column to `target` on
+// pre-existing databases, preserving data. "definition" was a fossil of the
+// removed World-A subsystem; the column actually holds the mu target name that
+// produced the rows, so `target` names it for what it is. Idempotent — a no-op
+// once renamed (or on a fresh DB that never had `definition`). Drops the
+// catalog_entry_edb view first since it references the column (SQLite blocks the
+// rename otherwise); ensureCatalogEntryView recreates it later in the open
+// sequence. Also retires the old idx_definition (the rename leaves the index on
+// the renamed column but keeps its stale name).
+func (c *CatalogDB) renameLegacyDefinitionColumn() error {
+	hasOld, err := c.columnExists("catalog_entries", "definition")
+	if err != nil {
+		return fmt.Errorf("failed to check definition column: %w", err)
+	}
+	if !hasOld {
+		return nil // already renamed, or fresh DB
+	}
+	hasNew, err := c.columnExists("catalog_entries", "target")
+	if err != nil {
+		return fmt.Errorf("failed to check target column: %w", err)
+	}
+	if hasNew {
+		return nil // both present is unexpected; leave it for manual repair
+	}
+
+	if _, err := c.db.Exec("DROP VIEW IF EXISTS " + CatalogEntryView); err != nil {
+		return fmt.Errorf("failed to drop %s for definition rename: %w", CatalogEntryView, err)
+	}
+	if _, err := c.db.Exec("DROP INDEX IF EXISTS idx_definition"); err != nil {
+		return fmt.Errorf("failed to drop legacy definition index: %w", err)
+	}
+	if _, err := c.db.Exec("ALTER TABLE catalog_entries RENAME COLUMN definition TO target"); err != nil {
+		return fmt.Errorf("failed to rename definition column to target: %w", err)
 	}
 	return nil
 }

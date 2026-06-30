@@ -58,11 +58,11 @@ func TestFormatStatusTime(t *testing.T) {
 func TestStatusOutput_JSONFields(t *testing.T) {
 	// Verify struct fields exist and are assignable
 	out := StatusOutput{
-		Definition: "test_def",
+		Target: "test_def",
 		Status:     "clean",
 		UpdatedAt:  "2026-03-24T10:15:00Z",
 	}
-	if out.Definition != "test_def" {
-		t.Error("unexpected Definition value")
+	if out.Target != "test_def" {
+		t.Error("unexpected Target value")
 	}
 }
