@@ -20,11 +20,10 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
   schema/                # CUE schema repository (git-tracked)
     cue.mod/             # CUE module metadata
     pudl/                # built-in + local schema defs (incl. #SystemModel)
+    pudl/rules/          # Datalog rules
     populators/          # populator programs for #EweTarget models
   data/
     sqlite/catalog.db    # SQLite catalog (modernc, pure Go)
-    .runs/               # run manifests
-    .drift/              # drift reports
 ```
 
 ## Common Commands
@@ -54,7 +53,7 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
 - `pudl run <model> --converge` — close drift (mutates the target via mu)
 - `pudl run <model> --from-catalog` — drift over ingested records, no live observe
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
-- `pudl status [definition]` — recorded convergence status (a run records its verdict)
+- `pudl status [target]` — recorded convergence status by catalog target (a run records its verdict)
 
 ### Utilities
 - `pudl init` / `pudl doctor` / `pudl config show` / `pudl version`
@@ -77,8 +76,13 @@ ACUTE cycle:
   discovered via `mu.cue` from the model dir, override with `--mu-root`) or an
   `#EweTarget` whose populator self-stages its own temp mu project.
 - **Default is observe-only** — no mutation. `--converge` opts into the loop:
-  `drift==∅ -> converged | iteration cap -> failed | else converge -> execute -> re-observe`
+  `drift==∅ -> clean | iteration cap -> failed | else converge -> execute -> re-observe`
   (`--max-iters`, `--dry-run`, `--only <defs>`).
+- **Converge plugins run hermetically.** mu executes actions with a minimal
+  environment (no inherited `HOME`), so a converge plugin that needs host
+  credentials must receive them through the model's `converge.input` — e.g. the
+  k8s plugin needs `input.kubeconfig: "/path/to/kubeconfig"` or it cannot find
+  `~/.kube/config`.
 - Each run records the model instance in the catalog (identity = name) so it's
   inventoriable via `pudl list` / `pudl query`.
 
@@ -87,10 +91,13 @@ ACUTE cycle:
 mu writes its results back into the pudl catalog via:
 - `pudl mu ingest-observe` — ingest observe results (`entry_type=observe`)
 - `pudl mu ingest-manifest` — ingest a build manifest (`entry_type=manifest`,
-  per-action `manifest-action`)
+  per-action `manifest-action`); `--model <name>` tags rows so a later clean
+  drift re-check promotes the model's `converging` resources to `clean`
 
 `pudl run --converge` renders the model's `desired` state to sources and runs
-`mu build`; the mu plugin reconciles. pudl computes no domain ops.
+`mu build --emit-manifest`; the mu plugin reconciles, and pudl ingests the
+manifest (per-resource `converging` → `clean` on the re-observe). pudl computes
+no domain ops.
 
 These `entry_type` values are what `pudl list --artifacts` surfaces (run
 outputs), vs ingested/observed data.
