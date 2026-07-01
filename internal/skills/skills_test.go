@@ -1,10 +1,38 @@
 package skills
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// TestEmbeddedSkillsInSync guards against the embedded files/*.md copies (what
+// `pudl init` writes) drifting from the canonical skills/<name>/SKILL.md
+// sources. If this fails, run `go generate ./internal/skills` and commit.
+func TestEmbeddedSkillsInSync(t *testing.T) {
+	skills, err := ListSkills()
+	if err != nil {
+		t.Fatalf("ListSkills() error: %v", err)
+	}
+
+	for _, s := range skills {
+		embedded, err := skillFiles.ReadFile("files/" + s.Filename)
+		if err != nil {
+			t.Errorf("reading embedded %q: %v", s.Filename, err)
+			continue
+		}
+		src := filepath.Join("..", "..", "skills", s.Name, "SKILL.md")
+		source, err := os.ReadFile(src)
+		if err != nil {
+			t.Errorf("reading source %q: %v", src, err)
+			continue
+		}
+		if !bytes.Equal(embedded, source) {
+			t.Errorf("embedded skill %q is out of sync with %s; run `go generate ./internal/skills`", s.Name, src)
+		}
+	}
+}
 
 func TestListSkills(t *testing.T) {
 	skills, err := ListSkills()
