@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+// The embedded files below are generated from the canonical skill sources in
+// skills/<name>/SKILL.md. Never edit files/*.md by hand — edit the source and
+// run `go generate ./internal/skills` (or `make generate`). CI enforces sync.
+//
+//go:generate go run ./gen
+
 //go:embed files/*.md
 var skillFiles embed.FS
 

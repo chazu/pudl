@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean test release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci
+.PHONY: all build install uninstall clean test release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
 
 all: build
 
@@ -41,6 +41,16 @@ clean:
 
 test:
 	$(GO) test ./...
+
+# Sync embedded skill copies (internal/skills/files/*.md) from their canonical
+# sources in skills/<name>/SKILL.md.
+generate:
+	$(GO) generate ./...
+
+# Verify the embedded skill copies are in sync with their sources without
+# writing anything. Fails if `make generate` needs to be run and committed.
+check-skills:
+	$(GO) run ./internal/skills/gen -check
 
 # Gated end-to-end smoke tests (convergence + cross-model deps). They skip
 # cleanly when docker/k3d/kubectl/mu/bb/jq are missing and clean up after
@@ -86,6 +96,6 @@ coverage:
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-ci: lint test-race coverage
+ci: check-skills lint test-race coverage
 	@echo "All CI checks passed!"
 
