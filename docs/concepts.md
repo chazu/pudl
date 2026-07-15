@@ -184,7 +184,7 @@ By default `pudl run` observes only: it computes drift but changes nothing in th
 
 `pudl run <name> --converge` closes drift instead of merely reporting it. pudl renders the model's `desired` state to sources, and the mu plugin reconciles those sources against the real system. pudl declares state; mu executes. There is no separate export step.
 
-`pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it.
+`pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅ and the apply receipt was persisted; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it. `unknown` also covers an apply whose receipt could not be persisted and therefore needs verification.
 
 ## Fixed-Point Verification
 

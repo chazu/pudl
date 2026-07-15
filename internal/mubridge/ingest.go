@@ -51,6 +51,13 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 // compare a run with the records it just observed should use that ID rather
 // than querying the entire observe catalog.
 func IngestObserveResultsWithSnapshot(db *database.CatalogDB, reader io.Reader, origin string, dataDir string, graph *inference.InheritanceGraph) (int, string, error) {
+	return IngestObserveResultsWithSnapshotRunID(db, reader, origin, dataDir, graph, "")
+}
+
+// IngestObserveResultsWithSnapshotRunID is the run-identified form of
+// IngestObserveResultsWithSnapshot. When runID is non-empty it is attached to
+// the snapshot and each member so one PUDL run can be audited across phases.
+func IngestObserveResultsWithSnapshotRunID(db *database.CatalogDB, reader io.Reader, origin string, dataDir string, graph *inference.InheritanceGraph, runID string) (int, string, error) {
 	if origin == "" {
 		origin = "mu-observe"
 	}
@@ -133,7 +140,7 @@ func IngestObserveResultsWithSnapshot(db *database.CatalogDB, reader io.Reader, 
 
 	// Create the snapshot collection entry.
 	snapshotID := fmt.Sprintf("observe_%s", now.Format("20060102_150405.000000000"))
-	snapshotCollectionID, err := createObserveSnapshot(db, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir)
+	snapshotCollectionID, err := createObserveSnapshot(db, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir, runID)
 	if err != nil {
 		return 0, "", err
 	}
@@ -141,7 +148,7 @@ func IngestObserveResultsWithSnapshot(db *database.CatalogDB, reader io.Reader, 
 	// Ingest each record as a member of the snapshot.
 	ingested := 0
 	for i, tr := range allRecords {
-		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID, graph)
+		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID, graph, runID)
 		if err != nil {
 			return ingested, snapshotCollectionID, err
 		}
@@ -162,6 +169,7 @@ func createObserveSnapshot(
 	schemaCounts map[string]int,
 	errors []map[string]string,
 	rawDir string,
+	runID string,
 ) (string, error) {
 	// Build schema summary.
 	var schemaSummary []map[string]any
@@ -182,6 +190,9 @@ func createObserveSnapshot(
 	}
 	if len(errors) > 0 {
 		snapshot["errors"] = errors
+	}
+	if runID != "" {
+		snapshot["run_id"] = runID
 	}
 
 	snapshotJSON, err := json.Marshal(snapshot)
@@ -209,6 +220,10 @@ func createObserveSnapshot(
 	resourceID := identity.ComputeResourceID(schema, map[string]any{"snapshot_id": snapshotID}, contentHash)
 	entryType := "observe"
 	collectionType := "collection"
+	var runIDPtr *string
+	if runID != "" {
+		runIDPtr = &runID
+	}
 
 	entry := database.CatalogEntry{
 		ID:              contentHash,
@@ -224,6 +239,7 @@ func createObserveSnapshot(
 		ResourceID:      &resourceID,
 		ContentHash:     &contentHash,
 		CollectionType:  &collectionType,
+		RunID:           runIDPtr,
 	}
 
 	if err := db.AddEntry(entry); err != nil {
@@ -245,6 +261,7 @@ func ingestObserveRecord(
 	index int,
 	collectionID string,
 	graph *inference.InheritanceGraph,
+	runID string,
 ) (int, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
 	schema := "pudl/mu.#ObserveResult"
@@ -266,6 +283,11 @@ func ingestObserveRecord(
 		return 0, fmt.Errorf("dedup check failed for %s: %w", target, err)
 	}
 	if existing != nil {
+		if runID != "" {
+			if err := db.UpdateEntryRunID(existing.ID, runID); err != nil {
+				return 0, fmt.Errorf("update deduplicated observe run: %w", err)
+			}
+		}
 		if err := db.AddCollectionMembership(collectionID, existing.ID, index); err != nil {
 			return 0, fmt.Errorf("failed to link existing observe record to snapshot: %w", err)
 		}
@@ -295,6 +317,10 @@ func ingestObserveRecord(
 	entryType := "observe"
 	collectionType := "item"
 	itemID := fmt.Sprintf("%s_item_%d", safeTarget, index)
+	var runIDPtr *string
+	if runID != "" {
+		runIDPtr = &runID
+	}
 	entry := database.CatalogEntry{
 		ID:              contentHash,
 		StoredPath:      storedPath,
@@ -313,6 +339,7 @@ func ingestObserveRecord(
 		CollectionType:  &collectionType,
 		ItemIndex:       &index,
 		ItemID:          &itemID,
+		RunID:           runIDPtr,
 	}
 
 	if err := db.AddEntry(entry); err != nil {

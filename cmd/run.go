@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -64,20 +65,28 @@ Examples:
 		if err != nil {
 			return err
 		}
-		effectiveModel, err := scopeModelForRun(model, flags.only)
+		plan, err := acute.NewRunPlan(model, acute.RunRequest{
+			Converge:    flags.converge,
+			Only:        flags.only,
+			DryRun:      flags.dryRun,
+			MaxIters:    flags.maxIters,
+			FromCatalog: flags.fromCatalog,
+		})
 		if err != nil {
 			return err
 		}
+		session := acute.NewRunSession(plan)
+		effectiveModel := session.Plan.Effective
 
 		live := !jsonOutput
 		if live {
-			fmt.Print(buildRunPlan(model, flags))
+			fmt.Print(renderRunPlan(plan))
 		}
 
 		// Record the instance in the catalog (identity = name) so every model
 		// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
 		// a recording failure must not fail the run.
-		if err := recordModelInstance(model); err != nil && live {
+		if err := recordModelInstance(model, session.RunID); err != nil && live {
 			fmt.Printf("warning: could not record model instance: %v\n", err)
 		}
 
@@ -114,7 +123,7 @@ Examples:
 			return fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
 		}
 
-		report := &RunReport{Model: model.Name, OK: true}
+		report := &RunReport{RunID: session.RunID, Model: model.Name, OK: true}
 		var runErr error
 
 		switch {
@@ -126,7 +135,7 @@ Examples:
 			if live {
 				fmt.Println("\n— converge —")
 			}
-			cr, err := runConvergeLoop(effectiveModel, muRoot, modelDir, flags.maxIters, flags.dryRun)
+			cr, err := runConvergeLoop(effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun)
 			report.Converge = cr
 			if err != nil {
 				report.OK = false
@@ -154,7 +163,7 @@ Examples:
 				}
 				var scope string
 				if !flags.fromCatalog {
-					pr, err := runPopulate(model, muRoot, modelDir, pudlRoot)
+					pr, err := runPopulate(model, muRoot, modelDir, pudlRoot, session.RunID)
 					if err != nil {
 						return err
 					}
@@ -174,7 +183,7 @@ Examples:
 				}
 				report.Drift = &res
 			default:
-				pr, err := runPopulate(model, muRoot, modelDir, pudlRoot)
+				pr, err := runPopulate(model, muRoot, modelDir, pudlRoot, session.RunID)
 				if err != nil {
 					return err
 				}
@@ -234,6 +243,9 @@ func runVerdict(r *RunReport, f runFlags) string {
 	case r.Converge != nil:
 		if r.Converge.Outcome == string(outcomeClean) {
 			return "clean"
+		}
+		if r.Converge.Outcome == string(outcomeNeedsVerification) {
+			return "unknown"
 		}
 		if strings.HasPrefix(r.Converge.Outcome, "failed") {
 			return "failed"
@@ -371,6 +383,26 @@ func validateRunFlags(f runFlags) error {
 // Observe-only when --converge is absent (or the model declares no converge arm);
 // the converge loop otherwise.
 func buildRunPlan(m *systemmodel.SystemModel, f runFlags) string {
+	plan, err := acute.NewRunPlan(m, acute.RunRequest{
+		Converge: f.converge,
+		Only:     f.only,
+		DryRun:   f.dryRun,
+		MaxIters: f.maxIters,
+	})
+	if err != nil {
+		return fmt.Sprintf("error: %v\n", err)
+	}
+	return renderRunPlan(plan)
+}
+
+func renderRunPlan(plan *acute.RunPlan) string {
+	m := plan.Effective
+	f := runFlags{
+		converge: plan.Request.Converge,
+		only:     plan.Request.Only,
+		dryRun:   plan.Request.DryRun,
+		maxIters: plan.Request.MaxIters,
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "model:    %s\n", m.Name)
 	fmt.Fprintf(&b, "populate: %s (%s)\n", m.Populate.Kind(), populateRef(m.Populate))

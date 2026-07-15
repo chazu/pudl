@@ -74,7 +74,7 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 ### ACUTE Feedback Loop
 - `pudl ingest-observe` — ingest mu observe results as live state for drift detection
 - `pudl ingest-manifest` — ingest mu build manifests, track per-action results
-- `pudl status` — per-model/resource convergence status (unknown/drifted/converging/clean/failed)
+- `pudl status` — per-model/resource convergence status (unknown/drifted/converging/clean/failed); unknown also means an apply receipt needs verification
 - Status column on catalog entries, updated through the full ACUTE cycle
 - Architecture: [`docs/acute-loop-architecture.md`](acute-loop-architecture.md)
 

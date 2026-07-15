@@ -13,6 +13,7 @@ Start with the [root README](../README.md) for a project overview.
 | [collections.md](collections.md) | NDJSON collections, typed envelopes, membership, and queries |
 | [workspace.md](workspace.md) | Project-local schema resolution and global fallback |
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
+| [architecture-improvement-report.md](architecture-improvement-report.md) | Highest-leverage architecture improvements and design questions |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |

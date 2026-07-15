@@ -88,11 +88,15 @@ pudl status
 
 `pudl status` reads catalog convergence status — each model run records its
 verdict on `//models/<name>`, so `status` reports whether the system is
-currently `clean`, `drifted`, `converging`, or `failed`.
+currently `clean`, `drifted`, `converging`, `failed`, or `unknown`. `unknown`
+also means an external apply may have succeeded but its manifest receipt was not
+persisted, so the run requires verification.
 
 ## Design Principles
 
-**pudl doesn't execute.** It observes, models, and reports. Execution is mu's job.
+**pudl doesn't execute provider actions.** It observes, models, reports, and
+coordinates the ACUTE lifecycle. Execution of plugin/toolchain actions and
+provider mutations is mu's job.
 
 **mu doesn't observe.** It takes a config and converges. Observation is pudl's job.
 

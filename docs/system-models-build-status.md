@@ -5,8 +5,8 @@ repo: `mu/docs/design/system-models/` — `V1-BUILD-SPEC.md` is canonical, `issu
 is the rationale). This doc is the **pudl-side build state**: what's built, what's
 validated, what's next.
 
-Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
-`internal/systemmodel/`.
+Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go`,
+`internal/acute/`, and `internal/systemmodel/`.
 
 ## What's built (and on main)
 
@@ -20,7 +20,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 | **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.1): `pudl run` → 2 records ingested, incl. a **sealed env secret** revealed in-sink for an auth-required endpoint (via a `command`-based `envsecret` plugin declared in the model). |
 | **drift — differential** (k8s: desired→sources, plugin diffs) | `cmd/run_drift.go` | ✅ live-tested vs k8s cluster |
 | **drift — inventory** (host: set-diff desired vs the current observe snapshot) | `cmd/run_inventory.go` | ✅ normal inventory runs populate and compare their own snapshot; `--from-catalog` remains the explicit replay path |
-| **converge loop** (drift→apply→re-observe; clean/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
+| **converge loop** (drift→apply→re-observe; clean/cap/exec_err/dry-run/needs-verification) | `internal/acute/coordinator.go` + `cmd/run_converge.go` | ✅ coordinator unit-tested; real apply wired, not auto-run |
 | **checks** (Datalog relations over catalog, severity-gated) | `cmd/run_checks.go` | ✅ live-tested |
 | **report** (RunReport → markdown / `--json`) | `cmd/run_report.go` | ✅ both renderings |
 
@@ -89,7 +89,8 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
   by the drift re-check), written whether the model is observe-only or was just
   converged. The redundant `converged` status was removed (it and `clean` named the
   same state); the status vocabulary is now `unknown | drifted | converging | clean |
-  failed`. `clean` is only ever written off an actual ∅ observation. A clean drift
+  failed`; `unknown` also covers an apply whose manifest receipt could not be persisted.
+  `clean` is only ever written off an actual ∅ observation with successful receipt persistence. A clean drift
   re-check also promotes this model's per-resource `converging` rows (from
   `ingest-manifest`) to `clean` — `promoteConvergingResources`. Exact path:
   `ingest-manifest --model <name>` tags rows (`tags.model`) and

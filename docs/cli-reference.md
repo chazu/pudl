@@ -406,10 +406,12 @@ pudl status
 pudl status models/my-model
 ```
 
-Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`. Lifecycle:
+Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`. `unknown` means
+there is no verified terminal status, including when an external apply completed
+but PUDL could not persist its manifest receipt. Lifecycle:
 `drifted → converging` (apply, via `ingest-manifest`) `→ clean` (verified ∅ by the drift
 re-check) `| failed`. `clean` is the single in-sync state (drift == ∅), written only off
-an actual observation — never a bare apply.
+an actual observation with successful receipt persistence — never a bare apply.
 
 ## Repository Operations
 

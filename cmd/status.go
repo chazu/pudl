@@ -27,7 +27,7 @@ status the run loop writes (a model run's verdict is recorded on its instance ro
 "//models/<name>").
 
 Status values:
-  unknown     — no status recorded yet
+  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted
   clean       — observed == desired, drift re-check confirmed (in sync)
   drifted     — observed != desired
   converging  — actions applied, pending re-verification

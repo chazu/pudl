@@ -82,7 +82,8 @@ ACUTE cycle:
   discovered via `mu.cue` from the model dir, override with `--mu-root`) or an
   `#EweTarget` whose populator self-stages its own temp mu project.
 - **Default is observe-only** — no mutation. `--converge` opts into the loop:
-  `drift==∅ -> clean | iteration cap -> failed | else converge -> execute -> re-observe`
+  `drift==∅ -> clean | iteration cap -> failed | else converge -> execute -> re-observe`; the
+  PUDL coordinator owns this lifecycle while mu executes each operation.
   (`--max-iters`, `--dry-run`, `--only <selectors>`). `--only` is a converge-only
   preflight filter: selectors match desired resource names or schema paths and
   include transitive `depends_on` resources; unknown selectors fail before side effects.
@@ -104,8 +105,9 @@ mu writes its results back into the pudl catalog via:
 
 `pudl run --converge` renders the model's `desired` state to sources and runs
 `mu build --emit-manifest`; the mu plugin reconciles, and pudl ingests the
-manifest (per-resource `converging` → `clean` on the re-observe). pudl computes
-no domain ops.
+manifest (per-resource `converging` → `clean` on the re-observe). If the
+manifest cannot be persisted, the run is `unknown`/needs verification rather
+than clean. pudl computes no provider domain ops.
 
 These `entry_type` values are what `pudl list --artifacts` surfaces (run
 outputs), vs ingested/observed data.

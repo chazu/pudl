@@ -65,6 +65,7 @@ func TestBuildRunPlan_Converge(t *testing.T) {
 		Name:     "k8s-converge",
 		Populate: systemmodel.Populate{Plugin: "k8s"},
 		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
+		Desired:  []map[string]any{{"name": "web"}},
 	}
 	plan := buildRunPlan(m, runFlags{converge: true, maxIters: 3, dryRun: true, only: []string{"web"}})
 	assert.Contains(t, plan, `converge via "k8s"`)
@@ -123,6 +124,7 @@ func TestRunVerdict(t *testing.T) {
 		{"converge reaches clean", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true}, "clean"},
 		{"converge cap failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (cap_exhausted)"}}, runFlags{converge: true}, "failed"},
 		{"converge exec failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)"}}, runFlags{converge: true}, "failed"},
+		{"manifest persistence needs verification", &RunReport{Converge: &ConvergeReport{Outcome: "needs-verification"}}, runFlags{converge: true}, "unknown"},
 		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true, dryRun: true}, ""},
 		{"drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{}, "clean"},
 		{"drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false}}, runFlags{}, "drifted"},

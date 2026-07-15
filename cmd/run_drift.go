@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -37,19 +38,10 @@ type observeResultRaw struct {
 	Error string `json:"error,omitempty"`
 }
 
-// ResourceDrift is a single drifted resource and why.
-type ResourceDrift struct {
-	Resource string `json:"resource"` // "Kind/name"
-	Reason   string `json:"reason"`   // "missing" | "changed"
-	Diff     string `json:"diff,omitempty"`
-}
-
-// ModelDriftResult is the instance-level drift verdict over a differential
-// observe: clean iff every desired resource exists and matches.
-type ModelDriftResult struct {
-	Clean   bool            `json:"clean"`
-	Drifted []ResourceDrift `json:"drifted,omitempty"`
-}
+// These aliases preserve the command package's report surface while keeping
+// ACUTE lifecycle values independent of Cobra and subprocess adapters.
+type ResourceDrift = acute.ResourceDrift
+type ModelDriftResult = acute.ModelDriftResult
 
 // interpretDifferentialObserve turns a differential observer's `observe --json`
 // output (desired-as-sources -> per-resource exists/matches) into a model drift
