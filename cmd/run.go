@@ -64,6 +64,10 @@ Examples:
 		if err != nil {
 			return err
 		}
+		effectiveModel, err := scopeModelForRun(model, flags.only)
+		if err != nil {
+			return err
+		}
 
 		live := !jsonOutput
 		if live {
@@ -122,7 +126,7 @@ Examples:
 			if live {
 				fmt.Println("\n— converge —")
 			}
-			cr, err := runConvergeLoop(model, muRoot, modelDir, flags.maxIters, flags.dryRun)
+			cr, err := runConvergeLoop(effectiveModel, muRoot, modelDir, flags.maxIters, flags.dryRun)
 			report.Converge = cr
 			if err != nil {
 				report.OK = false
@@ -148,7 +152,16 @@ Examples:
 				if err != nil {
 					return err
 				}
-				res, err := runInventoryDrift(db, "", model.Desired, identity)
+				var scope string
+				if !flags.fromCatalog {
+					pr, err := runPopulate(model, muRoot, modelDir, pudlRoot)
+					if err != nil {
+						return err
+					}
+					report.Populate = pr
+					scope = pr.SnapshotID
+				}
+				res, err := runInventoryDrift(db, scope, model.Desired, identity)
 				if err != nil {
 					return err
 				}
@@ -201,7 +214,7 @@ Examples:
 			((report.Drift != nil && report.Drift.Clean) ||
 				(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
 		if verifiedClean {
-			promoteConvergingResources(model)
+			promoteConvergingResources(effectiveModel, len(flags.only) > 0)
 		}
 		return runErr
 	},
@@ -256,7 +269,7 @@ func persistRunStatus(name, status string) {
 // apply). Best-effort: a missing catalog/resolver never fails the run. Scoped to
 // the model's own resource definition names, so it cannot touch another model's
 // pending resources.
-func promoteConvergingResources(m *systemmodel.SystemModel) {
+func promoteConvergingResources(m *systemmodel.SystemModel, restricted bool) {
 	if len(m.Desired) == 0 {
 		return
 	}
@@ -267,8 +280,10 @@ func promoteConvergingResources(m *systemmodel.SystemModel) {
 	defer db.Close()
 
 	// Exact path: rows tagged with this model by `ingest-manifest --model <name>`.
-	if n, err := db.PromoteConvergingToCleanByModel(m.Name); err == nil && n > 0 {
-		return
+	if !restricted {
+		if n, err := db.PromoteConvergingToCleanByModel(m.Name); err == nil && n > 0 {
+			return
+		}
 	}
 
 	// Fallback (manifests ingested without --model): derive candidate resource
@@ -401,7 +416,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
 	runCmd.Flags().BoolVar(&runConverge, "converge", false, "opt into the convergence loop (mutates the target)")
-	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these definitions (requires --converge)")
+	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these resource selectors (requires --converge)")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
 	runCmd.Flags().IntVar(&runMaxIters, "max-iters", 5, "loop iteration cap (requires --converge)")
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe)")

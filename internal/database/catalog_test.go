@@ -29,7 +29,9 @@ func TestNewCatalogDB(t *testing.T) {
 				return "/nonexistent/path/that/does/not/exist"
 			},
 			expectError: true,
-			errorMsg:    "read-only file system",
+			// The exact errno varies by host and sandbox (for example,
+			// EROFS, EPERM, or EACCES); the contract is simply failure.
+			errorMsg: "",
 		},
 		{
 			name: "empty path",
@@ -389,7 +391,11 @@ func TestDatabaseConcurrency(t *testing.T) {
 			go func(writerID int) {
 				defer func() { done <- true }()
 
-				writerEntries := generator.GenerateGenericEntries(entriesPerWriter)
+				// Generate from a private counter: the catalog is the subject
+				// under test, not the fixture generator's mutable bookkeeping.
+				writerGenerator := *generator
+				writerGenerator.counter = writerID * entriesPerWriter
+				writerEntries := writerGenerator.GenerateGenericEntries(entriesPerWriter)
 				for j, entry := range writerEntries {
 					// Make IDs unique across writers
 					entry.ID = fmt.Sprintf("writer-%d-entry-%d", writerID, j)

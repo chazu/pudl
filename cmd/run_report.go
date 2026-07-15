@@ -10,19 +10,20 @@ import (
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
-	Model    string          `json:"model"`
-	Mode     string          `json:"mode"` // observe-only | converge | dry-run
-	Populate *PopulateReport `json:"populate,omitempty"`
+	Model    string            `json:"model"`
+	Mode     string            `json:"mode"` // observe-only | converge | dry-run
+	Populate *PopulateReport   `json:"populate,omitempty"`
 	Drift    *ModelDriftResult `json:"drift,omitempty"`
-	Checks   []CheckResult   `json:"checks,omitempty"`
-	Converge *ConvergeReport `json:"converge,omitempty"`
-	OK       bool            `json:"ok"` // overall: no fail-severity check failed, converge not failed
+	Checks   []CheckResult     `json:"checks,omitempty"`
+	Converge *ConvergeReport   `json:"converge,omitempty"`
+	OK       bool              `json:"ok"` // overall: no fail-severity check failed, converge not failed
 }
 
 // PopulateReport summarizes an inventory populate.
 type PopulateReport struct {
-	Target  string `json:"target"`
-	Records int    `json:"records"`
+	Target     string `json:"target"`
+	Records    int    `json:"records"`
+	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
 // ConvergeReport summarizes a convergence loop.

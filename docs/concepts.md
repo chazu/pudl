@@ -24,11 +24,19 @@ PUDL auto-detects file format from content and extension. Supported formats:
 
 PUDL handles multi-record data in two ways:
 
-**NDJSON files** are automatically detected and processed as collections. Each line becomes an individual catalog entry linked to a parent collection entry.
+**NDJSON files** are automatically detected and processed as collections. Each line
+becomes an individual catalog entry linked to a parent collection entry. Observe
+ingestion uses the same membership mechanism for a timestamped snapshot collection.
 
-**JSON API wrappers** -- objects that look like API responses (`{"items": [...], "count": 5, "next_token": "abc"}`) -- are automatically detected and unwrapped. Wrapper detection uses a scoring algorithm that looks for known key names (`items`, `data`, `results`), pagination siblings (`next_token`, `total_count`), count-matches-array-length, and homogeneous elements. A score of 0.50 or higher triggers unwrapping.
+**Typed envelopes** use the shape `{"schema": {"module": ..., "version": ...},
+"definitions": [...], "data": ...}`. The envelope metadata is recorded in
+`item_schemas`; inline CUE definitions are cached when present, and only the inner
+`data` payload is passed to normal import and inference. Ordinary JSON objects are
+not guessed to be collection wrappers.
 
-Collection items inherit provenance from their parent but get their own schema assignment, resource identity, and content hash. You can query items individually or filter by collection.
+Collection items get their own schema assignment, resource identity, and content hash.
+Memberships are stored separately, so a content-addressed item can belong to more than
+one collection without duplicating its catalog row.
 
 ### Streaming
 
@@ -156,7 +164,8 @@ PUDL never rejects data. If your data does not match any schema, it is assigned 
 
 A model is a `#SystemModel` instance -- a named CUE value that declares the desired shape of a slice of your system. Where a schema describes the shape of a resource type, a model declares concrete intent: how to observe the world (`populate`), what the world should look like (`desired`), and what invariants must hold (`checks`).
 
-A model's `desired` block is a set of named entries. Each entry -- a *definition* -- is the per-status unit: it declares the intended state for one thing the model is responsible for.
+A model's `desired` block is a set of named resources. Each resource is the per-status
+unit: it declares the intended state for one thing the model is responsible for.
 
 Use `pudl model list` to see available models, `pudl model show <name>` to inspect one, and `pudl model validate <name>` to check that a model parses and conforms to `#SystemModel`.
 

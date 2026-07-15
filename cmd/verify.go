@@ -54,7 +54,7 @@ func runVerifyCommand() error {
 	defer catalogDB.Close()
 
 	// Create schema inferrer
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}

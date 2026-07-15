@@ -99,7 +99,7 @@ func schemaIdentityResolver() (identityResolver, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return nil, fmt.Errorf("init schema inferrer: %w", err)
 	}
@@ -168,11 +168,22 @@ func inventorySetDiff(desired, observed []map[string]any, identity identityResol
 
 // loadObservedRecords reads the inventory records ingested for this run from the
 // catalog (observe items by origin) and returns them as maps.
-func loadObservedRecords(db *database.CatalogDB, origin string) ([]map[string]any, error) {
+func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any, error) {
+	filter := database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}
+	// A snapshot ID is the normal scope for a live inventory run. Keep origin
+	// filtering as a compatibility path for explicit catalog callers and tests.
+	if scope != "" {
+		if _, err := db.GetCollectionByID(scope); err == nil {
+			filter.CollectionID = scope
+		} else {
+			filter.Origin = scope
+		}
+	}
 	res, err := db.QueryEntries(database.FilterOptions{
-		EntryTypes:     []string{"observe"},
-		CollectionType: "item",
-		Origin:         origin,
+		EntryTypes:     filter.EntryTypes,
+		CollectionType: filter.CollectionType,
+		Origin:         filter.Origin,
+		CollectionID:   filter.CollectionID,
 	}, database.QueryOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("query observed records: %w", err)

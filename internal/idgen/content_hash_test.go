@@ -1,6 +1,7 @@
 package idgen
 
 import (
+	"bytes"
 	"regexp"
 	"testing"
 )
@@ -41,6 +42,17 @@ func TestComputeContentID(t *testing.T) {
 				t.Errorf("ComputeContentID() is not deterministic: %v != %v", id, id2)
 			}
 		})
+	}
+}
+
+func TestComputeContentIDReaderMatchesBytes(t *testing.T) {
+	data := []byte(`{"large":"payload","items":[1,2,3]}`)
+	id, err := ComputeContentIDReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != ComputeContentID(data) {
+		t.Fatalf("reader hash %q does not match byte hash %q", id, ComputeContentID(data))
 	}
 }
 

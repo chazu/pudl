@@ -120,7 +120,7 @@ func runSchemaStatusCommand() error {
 	}
 
 	// Create git repository instance
-	repo := git.NewRepository(cfg.SchemaPath)
+	repo := git.NewRepository(effectiveSchemaPath(cfg))
 
 	// Validate repository
 	if err := repo.ValidateRepository(); err != nil {
@@ -199,7 +199,7 @@ func runSchemaCommitCommand() error {
 	}
 
 	// Create git repository instance
-	repo := git.NewRepository(cfg.SchemaPath)
+	repo := git.NewRepository(effectiveSchemaPath(cfg))
 
 	// Validate repository
 	if err := repo.ValidateRepository(); err != nil {
@@ -278,7 +278,7 @@ func runSchemaLogCommand() error {
 	}
 
 	// Create git repository instance
-	repo := git.NewRepository(cfg.SchemaPath)
+	repo := git.NewRepository(effectiveSchemaPath(cfg))
 
 	// Validate repository
 	if err := repo.ValidateRepository(); err != nil {

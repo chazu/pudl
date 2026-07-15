@@ -5,8 +5,8 @@ import (
 )
 
 // muCmd groups the mu-bridge commands. mu is the execution layer ("pudl knows,
-// mu acts"); these subcommands move data across the boundary: exporting drift as
-// mu action specs, and ingesting mu's observe/build results back into the
+// mu acts"); these subcommands move data across the boundary: rendering desired
+// state through a model run, and ingesting mu's observe/build results back into the
 // catalog. Keeping them under one namespace separates the mu bridge from the
 // fact/agent-memory door (`pudl facts`) and the data-lake door (`pudl import`).
 var muCmd = &cobra.Command{

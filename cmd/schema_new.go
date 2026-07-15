@@ -100,7 +100,7 @@ func runSchemaNewCommand() error {
 	}
 
 	// Create the generator
-	generator := schemagen.NewGenerator(cfg.SchemaPath)
+	generator := schemagen.NewGenerator(effectiveSchemaPath(cfg))
 
 	// Check if this is a collection entry with --collection flag (smart collection generation)
 	if entry.CollectionType != nil && *entry.CollectionType == "collection" && schemaNewCollection {
@@ -227,7 +227,7 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 	}
 
 	// Initialize the schema inferrer
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to initialize schema inferrer", err)
 	}

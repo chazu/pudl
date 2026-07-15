@@ -53,11 +53,12 @@ func runSchemaEditCommand(pathArg string) error {
 	// 2. ~/.pudl/schema/<package_path>.cue (simple single-file schema)
 	var filePath string
 	var found bool
+	schemaPath := effectiveSchemaPath(cfg)
 
 	// If definition name is provided, first try the definition-based path
 	if definitionName != "" {
 		// Try: aws/ec2 + Instance -> aws/ec2/instance.cue
-		defPath := filepath.Join(cfg.SchemaPath, packagePath, strings.ToLower(definitionName)+".cue")
+		defPath := filepath.Join(schemaPath, packagePath, strings.ToLower(definitionName)+".cue")
 		if _, err := os.Stat(defPath); err == nil {
 			filePath = defPath
 			found = true
@@ -66,7 +67,7 @@ func runSchemaEditCommand(pathArg string) error {
 
 	// If not found, try the simple package path
 	if !found {
-		simplePath := filepath.Join(cfg.SchemaPath, packagePath+".cue")
+		simplePath := filepath.Join(schemaPath, packagePath+".cue")
 		if _, err := os.Stat(simplePath); err == nil {
 			filePath = simplePath
 			found = true
@@ -78,11 +79,11 @@ func runSchemaEditCommand(pathArg string) error {
 		if definitionName != "" {
 			return errors.NewFileNotFoundError(
 				fmt.Sprintf("%s/%s.cue or %s.cue",
-					filepath.Join(cfg.SchemaPath, packagePath),
+					filepath.Join(schemaPath, packagePath),
 					strings.ToLower(definitionName),
-					filepath.Join(cfg.SchemaPath, packagePath)))
+					filepath.Join(schemaPath, packagePath)))
 		}
-		return errors.NewFileNotFoundError(filepath.Join(cfg.SchemaPath, packagePath+".cue"))
+		return errors.NewFileNotFoundError(filepath.Join(schemaPath, packagePath+".cue"))
 	}
 
 	// Get the editor from $EDITOR environment variable

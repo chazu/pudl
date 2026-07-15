@@ -29,7 +29,7 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
 ## Common Commands
 
 ### Data pipeline
-- `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; `--path` takes globs and `-` for stdin)
+- `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` takes globs and `-` for stdin)
 - `pudl list` — list catalog entries (default shows all; `--artifacts` = run outputs)
 - `pudl show <id>` / `pudl export <id>` / `pudl delete <id>`
 - `pudl validate` — validate catalog data against assigned schemas
@@ -54,7 +54,7 @@ extracted to mu. pudl declares desired/observed state; mu mutates the world.
 - `pudl model validate <model>` — structural validation without running
 - `pudl run <model>` — run a registered `#SystemModel` (OBSERVE-ONLY by default)
 - `pudl run <model> --converge` — close drift (mutates the target via mu)
-- `pudl run <model> --from-catalog` — drift over ingested records, no live observe
+- `pudl run <model> --from-catalog` — explicitly replay ingested records for inventory drift; a normal inventory run populates and compares its own current snapshot
 - `pudl run <model> --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
 - `pudl model deps --derive` — also derive edges from desired↔produced identity matching
@@ -83,7 +83,9 @@ ACUTE cycle:
   `#EweTarget` whose populator self-stages its own temp mu project.
 - **Default is observe-only** — no mutation. `--converge` opts into the loop:
   `drift==∅ -> clean | iteration cap -> failed | else converge -> execute -> re-observe`
-  (`--max-iters`, `--dry-run`, `--only <defs>`).
+  (`--max-iters`, `--dry-run`, `--only <selectors>`). `--only` is a converge-only
+  preflight filter: selectors match desired resource names or schema paths and
+  include transitive `depends_on` resources; unknown selectors fail before side effects.
 - **Converge plugins run hermetically.** mu executes actions with a minimal
   environment (no inherited `HOME`), so a converge plugin that needs host
   credentials must receive them through the model's `converge.input` — e.g. the
@@ -107,6 +109,13 @@ no domain ops.
 
 These `entry_type` values are what `pudl list --artifacts` surfaces (run
 outputs), vs ingested/observed data.
+
+### Workspace schema precedence
+
+Inside a repository workspace, PUDL searches `<repo>/.pudl/schema/` before the
+global `~/.pudl/schema/`. The first matching definition wins, while unrelated
+global schemas remain available. `pudl config` reports the configured global
+path and effective search order. See `docs/workspace.md`.
 
 ## Cross-model dependencies
 

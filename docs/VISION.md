@@ -10,9 +10,10 @@ PUDL is the knowledge layer. It tells you what exists, what shape it has, what c
 
 ### The Split: pudl knows, mu acts
 
-- **pudl** detects drift, validates schemas, catalogs data, and exports action plans.
-- **mu** receives those action plans and executes them (plugin protocol, effect dispatch).
-- `pudl export-actions` bridges the two: it reads drift reports and emits mu-compatible JSON action specs.
+- **pudl** detects drift, validates schemas, catalogs data, and renders desired state.
+- **mu** receives desired-state sources and executes them (plugin protocol, effect dispatch).
+- `pudl run --converge` bridges the two: it renders the selected model and ingests
+  mu's observe and manifest results.
 
 This separation keeps pudl focused on data and knowledge while mu handles side effects and execution.
 
@@ -36,17 +37,17 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 
 ### Data Management
 - **Multi-format Import**: JSON, YAML, CSV, NDJSON with automatic format detection
-- **Collection Support**: Collections split into individual items with parent references; wrapper detection and unwrapping
+- **Collection Support**: NDJSON collections split into individual items with normalized memberships; typed envelopes preserve schema metadata around payloads
 - **Provenance Tracking**: Timestamp, origin, format, and schema assignment tracked per entry
 - **Content-based Identity**: SHA256 content hashing with proquint display format for resource deduplication
 - **Resource Identity**: Stable `resource_id` from schema identity fields; version tracking
 - **Export**: Multi-format output support
 
-### Definitions
-- **Definition Discovery**: Text-based parsing to find definitions that unify against CUE schema types
-- **Schema Reference Resolution**: Definitions reference schemas (not models) via CUE unification
-- **Socket Wiring & Dependency Graph**: DAG built from cross-definition CUE references with cycle detection and topological sort
-- **Validation**: Definitions validated via CUE module loader
+### System Models
+- **Model Loading**: `#SystemModel` instances resolve from workspace-first CUE schemas
+- **Desired Resources**: Models declare concrete resources to observe, compare, and optionally converge
+- **Dependency Graph**: Model `depends_on` declarations become queryable bitemporal facts
+- **Validation**: `pudl model validate` checks model structure before a run
 
 ### Catalog Layer
 - **Bootstrap `catalog.cue`**: Defines `#CatalogEntry` and registers core types
@@ -54,22 +55,22 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Extensible**: Users add their own catalog entries
 
 ### Drift Detection
-- **Declared vs Live State**: Compare what definitions declare against actual catalog state
+- **Desired vs Observed State**: Compare model resources against live observations or a current catalog snapshot
 - **JSON Deep Diff**: Field-level diffing with added/removed/changed tracking
-- **Drift Reports**: Reports stored in `.drift/` directory for historical tracking
+- **Run Reports**: Verdicts and reports are recorded with the model run and catalog entries
 
 ### Fixed-Point Verification
 - **`pudl verify`**: Re-runs inference on all catalog entries and confirms schema assignments are stable
 - **Schema Stability**: Detects when schema changes cause existing data to be classified differently
 
 ### Mu Bridge
-- **`pudl export-actions`**: Reads drift reports and emits mu-compatible JSON action specs
-- **Action Specs**: Each drift difference maps to a typed action with field, expected value, and actual value
-- **Plan Response**: Single JSON document covering one or all definitions
+- **Observe snapshots**: `pudl mu ingest-observe` stores a timestamped collection
+- **Build manifests**: `pudl mu ingest-manifest` records per-action results
+- **Convergence**: `pudl run --converge` renders desired state and delegates mutation to mu
 
 ### Structural Validation
 - **`pudl validate`**: Validates data against CUE schemas
-- **Repository Validation**: `pudl repo validate` checks schemas and definitions workspace-wide
+- **Workspace Resolution**: Schema and model commands search project-local CUE before global CUE
 
 ### CLI Commands
 - `pudl init` -- Initialize the data lake
@@ -84,15 +85,13 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl verify` -- Fixed-point verification of schema stability
 - `pudl catalog` -- Browse registered schema types
 - `pudl schema *` -- Full schema lifecycle (list, add, new, show, edit, reinfer, migrate, generate-type, status, commit, log)
-- `pudl definition list` -- List definitions
-- `pudl definition show` -- Show definition details
-- `pudl definition validate` -- Validate a definition
-- `pudl definition graph` -- Display dependency graph
+- `pudl model list/show/validate` -- Inspect registered system models
+- `pudl run` -- Populate, detect drift, check, report, and optionally converge
+- `pudl status` -- Read recorded model/resource convergence status
 - `pudl repo init` -- Initialize a repo with pudl config and Claude skills
-- `pudl repo validate` -- Workspace-wide validation
-- `pudl drift check` -- Compare declared vs live state (--all)
-- `pudl drift report` -- View stored drift reports
-- `pudl export-actions` -- Export drift as mu-compatible action specs
+- `pudl model validate` -- Validate a system model against its schema
+- `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
+- `pudl mu ingest-manifest` -- Ingest mu build manifests
 - `pudl module` -- Manage CUE module dependencies
 - `pudl migrate` -- Run database migrations
 - `pudl observe` -- Record structured observations about the codebase

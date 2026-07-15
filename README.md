@@ -32,7 +32,7 @@ pudl import --path data.json
     |
     +-- SHA256 content hash -> deduplicate (skip if already imported)
     +-- Detect format (json, yaml, csv, ndjson)
-    +-- Detect if it's a collection wrapper (e.g. {"items": [...], "count": 5})
+    +-- Detect NDJSON collections and unwrap typed envelopes when present
     +-- Infer schema via heuristics + CUE unification
     +-- Extract resource identity (stable ID across re-imports)
     +-- Store raw file in ~/.pudl/data/raw/YYYY/MM/DD/
@@ -47,8 +47,9 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **CUE schemas with `_pudl` metadata**: Schemas define both data shape and inference hints (identity fields, tracked fields)
 - **Schema inference**: Heuristic scoring narrows candidates, then CUE unification validates matches -- most specific schema wins
 - **Resource identity**: Same logical resource tracked across re-imports via `resource_id` (schema + identity fields hash)
-- **Collections**: NDJSON files and JSON API wrappers are automatically split into individual items with parent references
-- **System models**: A `#SystemModel` instance declares the desired state of a system as a set of `desired` entries (each entry is a "definition"); `pudl run` drives it
+- **Collections**: NDJSON files are split into individual items; normalized memberships allow one item to appear in multiple collections
+- **Envelopes**: Typed `{schema, definitions?, data}` JSON records preserve schema metadata while importing the inner payload
+- **System models**: A `#SystemModel` instance declares the desired state of a system as a set of desired resources; `pudl run` drives it
 - **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
 - **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
 - **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
@@ -172,6 +173,6 @@ See [docs/VISION.md](docs/VISION.md) for the roadmap.
 
 ## Requirements
 
-- Go 1.24+
+- Go 1.25.8+
 - Git (for schema version control)
 - CUE ([cuelang.org](https://cuelang.org)) for schema definitions

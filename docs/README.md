@@ -10,7 +10,8 @@ Start with the [root README](../README.md) for a project overview.
 | [concepts.md](concepts.md) | Core concepts: identity, schemas, inference, collections |
 | [cli-reference.md](cli-reference.md) | All commands, flags, and examples |
 | [schema-authoring.md](schema-authoring.md) | Writing custom CUE schemas with `_pudl` metadata |
-| [collections.md](collections.md) | NDJSON, wrapper detection, collection queries |
+| [collections.md](collections.md) | NDJSON collections, typed envelopes, membership, and queries |
+| [workspace.md](workspace.md) | Project-local schema resolution and global fallback |
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |

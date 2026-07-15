@@ -74,7 +74,7 @@ func runValidateCommand(cmd *cobra.Command, args []string) error {
 	defer catalogDB.Close()
 
 	// Create validation service
-	validationService, err := validator.NewValidationService(cfg.SchemaPath)
+	validationService, err := validator.NewValidationService(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize validation service", err)
 	}

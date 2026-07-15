@@ -91,7 +91,9 @@ pudl import --path "*.json"                       # Wildcard batch import
 
 - Duplicate files (same content hash) are skipped automatically
 - NDJSON files are split into collections with individual items
-- JSON API wrapper responses are detected and unwrapped (score >= 0.50)
+- Typed envelope JSON (`schema`, optional `definitions`, and `data`) is unwrapped;
+  its schema metadata is recorded and the inner payload follows normal import
+- Regular JSON objects are imported as-is; PUDL does not guess arbitrary API wrappers
 - Format is detected from extension and content analysis
 - Origin is inferred from filename patterns
 
@@ -180,7 +182,7 @@ Remove a catalog entry and its associated files (raw data + metadata).
 ```bash
 pudl delete mivof-duhij              # With confirmation prompt
 pudl delete mivof-duhij --force      # Skip confirmation
-pudl delete govim-nupab --cascade    # Delete collection + all items
+pudl delete govim-nupab --cascade    # Delete collection memberships and orphaned items
 pudl delete mivof-duhij --json       # JSON output for scripting
 ```
 
@@ -189,7 +191,7 @@ pudl delete mivof-duhij --json       # JSON output for scripting
 | Flag | Description |
 |------|-------------|
 | `--force` | Skip confirmation prompt |
-| `--cascade` | Delete collection and all its child items |
+| `--cascade` | Delete a collection and its memberships; orphaned items are removed |
 | `--json` | Output results as JSON |
 
 Collections with items cannot be deleted without `--cascade`. Individual items can always be deleted.
@@ -357,7 +359,7 @@ With `--converge` it closes drift: pudl renders the desired state to sources and
 ```bash
 pudl run my_model                 # observe-only: populate -> drift -> checks -> report
 pudl run my_model --converge      # close drift (render desired -> sources, mu reconciles)
-pudl run my_model --only foo      # restrict to a single definition
+pudl run my_model --converge --only foo  # converge only the selected resource
 pudl run my_model --dry-run       # show planned actions without applying
 ```
 
@@ -383,11 +385,17 @@ pudl run my_model --dry-run       # show planned actions without applying
 | Flag | Description |
 |------|-------------|
 | `--converge` | Close drift instead of only observing |
-| `--only` | Restrict the run to a single definition |
+| `--only` | During `--converge`, restrict desired-state reconciliation to named resource selectors; unknown selectors fail before side effects |
 | `--dry-run` | Show planned actions without applying them |
 | `--max-iters` | Maximum convergence iterations |
 | `--from-catalog` | Force inventory drift from the catalog (override; inventory observers — EweTarget or `#PluginObserve` `differential: false` — auto-route here) |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
+
+`--only` accepts one or more comma-separated exact selectors. A selector may be
+the desired resource name, schema/definition, `id`, `path`, `kind`, `target`, or
+`metadata.name`; the short name after a schema's `#` is also accepted. Matching
+resource dependencies are included transitively. The selector set is validated
+before convergence side effects begin.
 
 ### `pudl status [target]`
 
@@ -436,26 +444,6 @@ to matching the model's desired-resource names.
 | `--path` | Read manifest JSON from a file (default: stdin) |
 | `--origin` | Origin label for catalog entries (default `mu-build`) |
 | `--model` | Tag entries with this `#SystemModel` name for exact converging→clean promotion |
-
-### `pudl data search`
-
-Search stored artifacts by definition, method, or other criteria.
-
-```bash
-pudl data search
-pudl data search --definition prod_instance
-pudl data search --definition prod_instance --method list
-pudl data search --limit 10
-```
-
-### `pudl data latest <definition> <method>`
-
-Show the most recent artifact for a definition/method pair.
-
-```bash
-pudl data latest prod_instance list
-pudl data latest prod_instance list --raw
-```
 
 ## Migration
 

@@ -19,7 +19,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
 | **populate — plugin-observe** (inventory observe → ingest) | `cmd/run_populate.go` | ✅ project-embedded (see below); live-tested vs k8s |
 | **populate — ewe** (#EweTarget: render ewe target → `mu build` → wrap outputs → ingest) | `cmd/run_populate.go` (`runEwePopulate`) | ✅ e2e-validated vs a local HTTP fixture (mu v0.3.1): `pudl run` → 2 records ingested, incl. a **sealed env secret** revealed in-sink for an auth-required endpoint (via a `command`-based `envsecret` plugin declared in the model). |
 | **drift — differential** (k8s: desired→sources, plugin diffs) | `cmd/run_drift.go` | ✅ live-tested vs k8s cluster |
-| **drift — inventory** (host: set-diff desired vs catalog records) | `cmd/run_inventory.go` | ✅ via `--from-catalog`; validated vs real catalog (canned records) |
+| **drift — inventory** (host: set-diff desired vs the current observe snapshot) | `cmd/run_inventory.go` | ✅ normal inventory runs populate and compare their own snapshot; `--from-catalog` remains the explicit replay path |
 | **converge loop** (drift→apply→re-observe; clean/cap/exec_err/dry-run) | `cmd/run_converge.go` | ✅ dry-run live-tested; real apply wired, not auto-run |
 | **checks** (Datalog relations over catalog, severity-gated) | `cmd/run_checks.go` | ✅ live-tested |
 | **report** (RunReport → markdown / `--json`) | `cmd/run_report.go` | ✅ both renderings |
@@ -137,7 +137,7 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go` +
    Datalog join was impractical; emits the same relation). Validated on k3d (real
    convergence + derivation) and against a Docker container as a fake remote host
    (inventory class). Implog `2026_06_30_cross_model_deps_phase2.md`.
-4. **Validate `--only` subset converge** — never exercised on real infra; small.
+4. ~~**Validate `--only` subset converge** — never exercised on real infra; small.~~ ✅ selector scoping and unknown-selector preflight are unit-tested; live infrastructure validation remains optional.
 5. **host.plan** — complete the `host` plugin's stub plan op for example 1's
    converge arm (`mu/.../host-converge-spec.md`); needs the odroid reachable.
 

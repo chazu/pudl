@@ -60,7 +60,7 @@ Examples:
 
 		// Build the inheritance graph so resource identity is namespaced by the
 		// family root (stable when routed records resolve to non-root schemas).
-		inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+		inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 		if err != nil {
 			return fmt.Errorf("failed to initialize schema inferrer: %w", err)
 		}

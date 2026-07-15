@@ -65,7 +65,7 @@ func runIdentityMigrate() error {
 	}
 	defer catalogDB.Close()
 
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize schema inferrer", err)
 	}

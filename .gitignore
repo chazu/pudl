@@ -73,7 +73,12 @@ config.local.*
 *.db-wal
 
 # Beads issue tracker
-.beads/
+# Track the portable project configuration and JSONL export; keep the local
+# SQLite database, locks, and generated state machine files machine-local.
+.beads/*
+!.beads/README.md
+!.beads/config.yaml
+!.beads/issues.jsonl
 
 # OS generated files
 .DS_Store

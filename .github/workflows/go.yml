@@ -1,0 +1,53 @@
+name: Go quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: '1.25.8'
+
+jobs:
+  test:
+    name: test and vet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test ./...
+      - run: go run ./internal/skills/gen -check
+
+  race:
+    name: race tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      # go-cdc-chunkers uses unsafe pointer arithmetic that trips Go's
+      # checkptr instrumentation; the race detector itself remains enabled.
+      - run: go test -race -gcflags=all=-d=checkptr=0 ./...
+
+  smoke:
+    name: smoke (external tools/infrastructure)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go test -tags=smoke ./test/smoke -v -timeout 20m

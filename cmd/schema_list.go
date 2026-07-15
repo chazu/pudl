@@ -56,7 +56,7 @@ func runSchemaListCommand() error {
 	}
 
 	// Create schema manager
-	manager := schema.NewManager(cfg.SchemaPath)
+	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
 	manager.SetBuiltInPackages(importer.BootstrapPackages())
 
 	if schemaPackage != "" {

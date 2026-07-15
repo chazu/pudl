@@ -61,7 +61,7 @@ func runCatalogCommand() error {
 	}
 
 	// Load all CUE modules
-	loader := validator.NewCUEModuleLoader(cfg.SchemaPath)
+	loader := validator.NewCUEModuleLoader(effectiveSchemaPath(cfg))
 	modules, err := loader.LoadAllModules()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeValidationFailed,

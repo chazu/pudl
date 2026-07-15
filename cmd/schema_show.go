@@ -64,7 +64,7 @@ func runSchemaShowCommand(schemaArg string) error {
 	}
 
 	// Use schema manager to find the schema
-	manager := schema.NewManager(cfg.SchemaPath)
+	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
 	schemaInfo, err := manager.GetSchema(packagePath, definitionName)
 	if err != nil {
 		return errors.NewFileNotFoundError(

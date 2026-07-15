@@ -144,11 +144,11 @@ func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot string) 
 		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
 	}
 
-	count, err := ingestObserveOutput(stdout.Bytes())
+	count, snapshotID, err := ingestObserveOutputWithSnapshot(stdout.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	return &PopulateReport{Target: target, Records: count}, nil
+	return &PopulateReport{Target: target, Records: count, SnapshotID: snapshotID}, nil
 }
 
 // renderEwePopulateMuCue emits a standalone mu.cue project (written at the root
@@ -310,30 +310,35 @@ func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot string) (*Pop
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, err := ingestObserveOutput(wrapped)
+	count, snapshotID, err := ingestObserveOutputWithSnapshot(wrapped)
 	if err != nil {
 		return nil, err
 	}
-	return &PopulateReport{Target: target, Records: count}, nil
+	return &PopulateReport{Target: target, Records: count, SnapshotID: snapshotID}, nil
 }
 
 // ingestObserveOutput feeds `mu observe --json` output into the catalog as
 // observe entries, reusing the shipped IngestObserveResults (the same path
 // `pudl mu ingest-observe` uses).
 func ingestObserveOutput(observeJSON []byte) (int, error) {
+	count, _, err := ingestObserveOutputWithSnapshot(observeJSON)
+	return count, err
+}
+
+func ingestObserveOutputWithSnapshot(observeJSON []byte) (int, string, error) {
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
-		return 0, fmt.Errorf("open catalog: %w", err)
+		return 0, "", fmt.Errorf("open catalog: %w", err)
 	}
 	defer db.Close()
 
 	cfg, err := config.Load()
 	if err != nil {
-		return 0, fmt.Errorf("load config: %w", err)
+		return 0, "", fmt.Errorf("load config: %w", err)
 	}
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
-		return 0, fmt.Errorf("init schema inferrer: %w", err)
+		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}
-	return mubridge.IngestObserveResults(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph())
+	return mubridge.IngestObserveResultsWithSnapshot(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph())
 }
