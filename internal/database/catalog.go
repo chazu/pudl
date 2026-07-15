@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/schemaname"
+	_ "modernc.org/sqlite"
 )
 
 // CatalogDB handles SQLite database operations for the catalog
@@ -43,23 +43,23 @@ type CatalogEntry struct {
 	IdentityJSON *string `json:"identity_json,omitempty"` // Canonical JSON of identity field values
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
-	EntryType  *string `json:"entry_type,omitempty"`  // e.g. "observe", "manifest", "manifest-action"
-	Target *string `json:"target,omitempty"`  // mu target / run target name (e.g. //models/<name>, home/odroid)
-	RunID      *string `json:"run_id,omitempty"`      // Unique run identifier
-	Tags       *string `json:"tags,omitempty"`        // JSON-encoded map[string]string
+	EntryType *string `json:"entry_type,omitempty"` // e.g. "observe", "manifest", "manifest-action"
+	Target    *string `json:"target,omitempty"`     // mu target / run target name (e.g. //models/<name>, home/odroid)
+	RunID     *string `json:"run_id,omitempty"`     // Unique run identifier
+	Tags      *string `json:"tags,omitempty"`       // JSON-encoded map[string]string
 	// Convergence status tracking
-	Status     *string `json:"status,omitempty"`      // Convergence status (unknown/clean/drifted/converging/failed)
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	Status    *string   `json:"status,omitempty"` // Convergence status (unknown/clean/drifted/converging/failed)
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FilterOptions contains filtering criteria for catalog queries
 type FilterOptions struct {
-	Schema         string // Filter by CUE schema
-	Origin         string // Filter by data origin
-	Format         string // Filter by file format
-	CollectionID   string // Filter by collection ID
-	CollectionType string // Filter by collection type ('collection', 'item')
+	Schema         string   // Filter by CUE schema
+	Origin         string   // Filter by data origin
+	Format         string   // Filter by file format
+	CollectionID   string   // Filter by collection ID
+	CollectionType string   // Filter by collection type ('collection', 'item')
 	ItemID         string   // Filter by item ID
 	EntryTypes     []string // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
 }
@@ -74,9 +74,9 @@ type QueryOptions struct {
 
 // QueryResult contains the results of a catalog query
 type QueryResult struct {
-	Entries      []CatalogEntry `json:"entries"`
-	TotalCount   int            `json:"total_count"`
-	FilteredCount int           `json:"filtered_count"`
+	Entries       []CatalogEntry `json:"entries"`
+	TotalCount    int            `json:"total_count"`
+	FilteredCount int            `json:"filtered_count"`
 }
 
 // NewCatalogDB creates a new catalog database instance
@@ -193,6 +193,12 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure status column: %w", err)
 	}
 
+	// Collection membership is many-to-many: content-addressed items can be
+	// members of more than one imported collection.
+	if err := c.ensureCollectionMembershipsTable(); err != nil {
+		return fmt.Errorf("failed to ensure collection memberships: %w", err)
+	}
+
 	// Create facts table (idempotent)
 	if err := c.ensureFactsTable(); err != nil {
 		return fmt.Errorf("failed to ensure facts table: %w", err)
@@ -296,6 +302,15 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add catalog entry", err)
 	}
+	if entry.CollectionType != nil && *entry.CollectionType == "item" && entry.CollectionID != nil {
+		itemIndex := 0
+		if entry.ItemIndex != nil {
+			itemIndex = *entry.ItemIndex
+		}
+		if err := c.AddCollectionMembership(*entry.CollectionID, entry.ID, itemIndex); err != nil {
+			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add collection membership", err)
+		}
+	}
 
 	return nil
 }
@@ -361,7 +376,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 		   created_at, updated_at
 	FROM catalog_entries
 	WHERE id LIKE ?
-	LIMIT 2`  // Limit 2 to detect ambiguous matches
+	LIMIT 2` // Limit 2 to detect ambiguous matches
 
 	rows, err := c.db.Query(selectSQL, hexPrefix+"%")
 	if err != nil {
@@ -378,7 +393,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
 		}
@@ -420,7 +435,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 		args = append(args, "%"+filters.Format+"%")
 	}
 	if filters.CollectionID != "" {
-		whereConditions = append(whereConditions, "collection_id = ?")
+		whereConditions = append(whereConditions, "id IN (SELECT item_id FROM collection_memberships WHERE collection_id = ?)")
 		args = append(args, filters.CollectionID)
 	}
 	if filters.CollectionType != "" {
@@ -464,12 +479,12 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	orderBy := "import_timestamp DESC" // Default sort
 	if options.SortBy != "" {
 		validSortFields := map[string]string{
-			"timestamp": "import_timestamp",
-			"size":      "size_bytes",
-			"records":   "record_count",
-			"schema":    "schema",
-			"origin":    "origin",
-			"format":    "format",
+			"timestamp":  "import_timestamp",
+			"size":       "size_bytes",
+			"records":    "record_count",
+			"schema":     "schema",
+			"origin":     "origin",
+			"format":     "format",
 			"confidence": "confidence",
 		}
 
@@ -517,7 +532,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan catalog entry", err)
 		}
@@ -601,14 +616,15 @@ func (c *CatalogDB) GetDistinctOrigins() ([]string, error) {
 // GetCollectionItems retrieves all items belonging to a collection
 func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, error) {
 	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
-	FROM catalog_entries
-	WHERE collection_id = ? AND collection_type = 'item'
-	ORDER BY item_index ASC`
+	SELECT ce.id, ce.stored_path, ce.metadata_path, ce.import_timestamp, ce.format, ce.origin,
+		   ce.schema, ce.confidence, ce.record_count, ce.size_bytes, cm.collection_id, cm.item_index,
+		   'item', ce.item_id, ce.resource_id, ce.content_hash, ce.identity_json, ce.version,
+		   ce.entry_type, ce.target, ce.run_id, ce.tags, ce.status,
+		   ce.created_at, ce.updated_at
+	FROM collection_memberships cm
+	JOIN catalog_entries ce ON ce.id = cm.item_id
+	WHERE cm.collection_id = ?
+	ORDER BY cm.item_index ASC`
 
 	rows, err := c.db.Query(selectSQL, collectionID)
 	if err != nil {
@@ -625,7 +641,7 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan collection item", err)
 		}
@@ -710,6 +726,23 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 
 // DeleteEntry removes a catalog entry by ID
 func (c *CatalogDB) DeleteEntry(id string) error {
+	var collectionType string
+	err := c.db.QueryRow("SELECT COALESCE(collection_type, '') FROM catalog_entries WHERE id = ?", id).Scan(&collectionType)
+	if err == sql.ErrNoRows {
+		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
+	}
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to inspect catalog entry", err)
+	}
+	if collectionType == "collection" {
+		if err := c.RemoveCollectionMemberships(id); err != nil {
+			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to delete collection memberships", err)
+		}
+	} else {
+		if _, err := c.db.Exec("DELETE FROM collection_memberships WHERE item_id = ?", id); err != nil {
+			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to delete item memberships", err)
+		}
+	}
 	deleteSQL := "DELETE FROM catalog_entries WHERE id = ?"
 
 	result, err := c.db.Exec(deleteSQL, id)
@@ -728,7 +761,6 @@ func (c *CatalogDB) DeleteEntry(id string) error {
 
 	return nil
 }
-
 
 // MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
 // Returns the number of entries updated.

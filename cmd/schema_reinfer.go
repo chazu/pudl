@@ -12,8 +12,8 @@ import (
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
-	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/identity"
+	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 )
 
@@ -102,7 +102,7 @@ func runSchemaReinferCommand() error {
 	defer catalogDB.Close()
 
 	// Create schema inferrer
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize schema inferrer", err)
 	}

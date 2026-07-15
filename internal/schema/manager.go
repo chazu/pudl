@@ -10,9 +10,9 @@ import (
 
 // Manager handles schema file operations and organization
 type Manager struct {
-	schemaPath      string            // primary schema path
-	schemaPaths     []string          // all schema paths in priority order
-	builtInPackages map[string]bool   // packages shipped with pudl
+	schemaPath      string          // primary schema path
+	schemaPaths     []string        // all schema paths in priority order
+	builtInPackages map[string]bool // packages shipped with pudl
 }
 
 // NewManager creates a new schema manager with a single schema path.
@@ -51,17 +51,20 @@ func (m *Manager) isBuiltIn(packageName string) bool {
 
 // SchemaInfo represents information about a schema definition
 type SchemaInfo struct {
-	Package    string `json:"package"`
-	Name       string `json:"name"`        // The #Definition name (e.g., "#Item")
-	FullName   string `json:"full_name"`   // package.#Name format (e.g., "pudl/core.#Item")
-	FilePath   string `json:"file_path"`   // Source file containing this definition
-	FileName   string `json:"file_name"`
-	Size       int64  `json:"size"`        // Size of the source file
-	BuiltIn    bool   `json:"built_in"`
+	Package  string `json:"package"`
+	Name     string `json:"name"`      // The #Definition name (e.g., "#Item")
+	FullName string `json:"full_name"` // package.#Name format (e.g., "pudl/core.#Item")
+	FilePath string `json:"file_path"` // Source file containing this definition
+	FileName string `json:"file_name"`
+	Size     int64  `json:"size"` // Size of the source file
+	BuiltIn  bool   `json:"built_in"`
 }
 
 // ListSchemas returns all available schemas organized by package
 func (m *Manager) ListSchemas() (map[string][]SchemaInfo, error) {
+	if len(m.schemaPaths) > 1 {
+		return m.ListAllSchemas()
+	}
 	schemas := make(map[string][]SchemaInfo)
 
 	// Walk through the schema directory
@@ -154,7 +157,7 @@ func (m *Manager) ListAllSchemas() (map[string][]SchemaInfo, error) {
 	seen := make(map[string]bool) // track FullName to implement shadowing
 
 	for _, sp := range m.schemaPaths {
-		tempMgr := &Manager{schemaPath: sp, schemaPaths: []string{sp}}
+		tempMgr := &Manager{schemaPath: sp, schemaPaths: []string{sp}, builtInPackages: m.builtInPackages}
 		schemas, err := tempMgr.ListSchemas()
 		if err != nil {
 			// Skip inaccessible directories
@@ -223,6 +226,19 @@ func (m *Manager) GetSchema(packageName, schemaName string) (*SchemaInfo, error)
 		schemaName = "#" + schemaName
 	}
 
+	if len(m.schemaPaths) > 1 {
+		schemas, err := m.ListAllSchemas()
+		if err != nil {
+			return nil, err
+		}
+		for _, schema := range schemas[packageName] {
+			if schema.Name == schemaName {
+				return &schema, nil
+			}
+		}
+		return nil, fmt.Errorf("schema not found: %s.%s", packageName, schemaName)
+	}
+
 	// Search all files in the package for the definition
 	schemas, err := m.GetSchemasInPackage(packageName)
 	if err != nil {
@@ -287,7 +303,7 @@ func (m *Manager) copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return os.Chmod(dst, sourceInfo.Mode())
 }
 
@@ -321,6 +337,10 @@ func (m *Manager) extractAllDefinitions(filePath string) ([]string, error) {
 
 // SchemaExists checks if a schema already exists
 func (m *Manager) SchemaExists(packageName, schemaName string) bool {
+	if len(m.schemaPaths) > 1 {
+		_, err := m.GetSchema(packageName, schemaName)
+		return err == nil
+	}
 	schemaFile := filepath.Join(m.schemaPath, packageName, schemaName+".cue")
 	_, err := os.Stat(schemaFile)
 	return err == nil
@@ -328,6 +348,18 @@ func (m *Manager) SchemaExists(packageName, schemaName string) bool {
 
 // GetPackages returns all available packages
 func (m *Manager) GetPackages() ([]string, error) {
+	if len(m.schemaPaths) > 1 {
+		schemas, err := m.ListAllSchemas()
+		if err != nil {
+			return nil, err
+		}
+		packages := make([]string, 0, len(schemas))
+		for packageName := range schemas {
+			packages = append(packages, packageName)
+		}
+		sort.Strings(packages)
+		return packages, nil
+	}
 	var packages []string
 
 	entries, err := os.ReadDir(m.schemaPath)
@@ -347,6 +379,17 @@ func (m *Manager) GetPackages() ([]string, error) {
 
 // GetSchemasInPackage returns all schemas (definitions) in a specific package
 func (m *Manager) GetSchemasInPackage(packageName string) ([]SchemaInfo, error) {
+	if len(m.schemaPaths) > 1 {
+		schemas, err := m.ListAllSchemas()
+		if err != nil {
+			return nil, err
+		}
+		result, ok := schemas[packageName]
+		if !ok {
+			return nil, fmt.Errorf("package not found: %s", packageName)
+		}
+		return result, nil
+	}
 	packageDir := filepath.Join(m.schemaPath, packageName)
 
 	// Check if package directory exists

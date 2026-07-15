@@ -118,7 +118,8 @@ func runModuleTidyCommand() error {
 	}
 
 	// Check if module.cue exists
-	modulePath := filepath.Join(cfg.SchemaPath, "cue.mod", "module.cue")
+	schemaPath := effectiveSchemaPath(cfg)
+	modulePath := filepath.Join(schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
@@ -127,7 +128,7 @@ func runModuleTidyCommand() error {
 
 	// Run cue mod tidy
 	cmd := exec.Command("cue", "mod", "tidy")
-	cmd.Dir = cfg.SchemaPath
+	cmd.Dir = schemaPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -147,7 +148,8 @@ func runModuleListCommand() error {
 	}
 
 	// Check if module.cue exists
-	modulePath := filepath.Join(cfg.SchemaPath, "cue.mod", "module.cue")
+	schemaPath := effectiveSchemaPath(cfg)
+	modulePath := filepath.Join(schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
@@ -173,14 +175,15 @@ func runModuleInfoCommand() error {
 	}
 
 	// Check if module.cue exists
-	modulePath := filepath.Join(cfg.SchemaPath, "cue.mod", "module.cue")
+	schemaPath := effectiveSchemaPath(cfg)
+	modulePath := filepath.Join(schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
 
 	fmt.Printf("Module Information:\n")
 	fmt.Printf("==================\n")
-	fmt.Printf("Schema Directory: %s\n", cfg.SchemaPath)
+	fmt.Printf("Schema Directory: %s\n", effectiveSchemaPath(cfg))
 	fmt.Printf("Module File: %s\n", modulePath)
 
 	// Show additional module information if CUE is available
@@ -190,7 +193,7 @@ func runModuleInfoCommand() error {
 
 		// Try to show module dependencies using cue mod edit
 		cmd := exec.Command("cue", "mod", "edit", "--json")
-		cmd.Dir = cfg.SchemaPath
+		cmd.Dir = effectiveSchemaPath(cfg)
 		if output, err := cmd.Output(); err == nil {
 			fmt.Printf("%s\n", output)
 		} else {
@@ -216,7 +219,8 @@ func runModuleAddCommand(moduleSpec string) error {
 	}
 
 	// Check if module.cue exists
-	modulePath := filepath.Join(cfg.SchemaPath, "cue.mod", "module.cue")
+	schemaPath := effectiveSchemaPath(cfg)
+	modulePath := filepath.Join(schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
@@ -225,7 +229,7 @@ func runModuleAddCommand(moduleSpec string) error {
 
 	// Use cue mod get to add the dependency
 	cmd := exec.Command("cue", "mod", "get", moduleSpec)
-	cmd.Dir = cfg.SchemaPath
+	cmd.Dir = schemaPath
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

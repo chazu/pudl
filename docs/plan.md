@@ -4,11 +4,25 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Adversarial review closure (2026-07-14)
+
+- `pudl run --converge --only` now validates exact resource selectors before
+  side effects and includes declared resource dependencies.
+- Inventory runs compare against the current observe snapshot; `--from-catalog`
+  is the explicit replay override.
+- Content hashing, collection import, observe snapshots, and typed envelopes use
+  bounded or shared paths; collection membership is normalized and deletion is
+  safe for shared items.
+- Workspace schema resolution is local-first with global fallback, and the CI
+  workflow runs build, test, vet, generated-skill, race, and optional smoke gates.
+- Review tickets are tracked in Beads Rust under `.beads/`; all tickets from this
+  review are closed.
+
 The core pipeline is stable and tested. Execution-related features (models, methods, workflows, Glojure runtime, artifacts) were implemented in Phases 1-8, then extracted into **mu** as a separate tool. What remains in pudl is the knowledge layer. Residual execution CLI surface (`pudl data search/latest`, `drift check --method`, Glojure adapter) has been removed; some internal artifacts (database fields, CUE model schemas) remain for future cleanup.
 
 ### Data Lake
 - Multi-format import (JSON, YAML, CSV, NDJSON) with automatic format detection
-- Collection support with wrapper detection and unwrapping
+- Collection support for NDJSON plus typed envelope metadata
 - SQLite catalog with query, filter, pagination, and provenance tracking
 - Content-based identity (SHA256, proquint display) for deduplication
 - Resource identity from schema identity fields with version tracking, namespaced
@@ -34,19 +48,18 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 
 ### Validation and Verification
 - CUE structural validation (`pudl validate`)
-- Repository-wide validation (`pudl repo validate`)
+- Model validation (`pudl model validate`)
 - Fixed-point verification (`pudl verify`) confirming schema assignment stability
 
-### Definitions
-- Definition discovery via CUE schema reference patterns
-- Dependency graph from cross-definition references with cycle detection
-- Definition validation via CUE module loader
-- CLI: `pudl definition list/show/validate/graph`
+### System Models
+- `#SystemModel` loading and structural validation
+- Desired-state drift detection, checks, reporting, and optional convergence
+- Cross-model dependency facts and model/run commands
 
 ### Drift Detection
-- JSON deep diff comparing declared vs catalog state
-- Field-level diffing with added/removed/changed tracking
-- Drift report storage and retrieval
+- JSON deep diff comparing desired vs observed state
+- Inventory drift over the current observe snapshot, or explicit catalog replay
+- Field-level diffing with added/removed/changed tracking and run reports
 
 ### Catalog Layer
 - Bootstrap `catalog.cue` registering core types
@@ -54,14 +67,14 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - Extensible by user-defined entries
 
 ### Mu Bridge
-- `pudl export-actions` converts drift reports into mu-compatible JSON action specs
-- Supports single-definition and `--all` modes
-- BRICK-aware: `brick.#Target` toolchain and config fields used directly
+- `pudl mu ingest-observe` records timestamped observe snapshots
+- `pudl mu ingest-manifest` records per-action convergence results
+- `pudl run --converge` renders desired state and delegates execution to mu
 
 ### ACUTE Feedback Loop
 - `pudl ingest-observe` — ingest mu observe results as live state for drift detection
 - `pudl ingest-manifest` — ingest mu build manifests, track per-action results
-- `pudl status` — per-definition convergence status (unknown/clean/drifted/converging/converged/failed)
+- `pudl status` — per-model/resource convergence status (unknown/drifted/converging/clean/failed)
 - Status column on catalog entries, updated through the full ACUTE cycle
 - Architecture: [`docs/acute-loop-architecture.md`](acute-loop-architecture.md)
 
@@ -69,7 +82,6 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - `pudl repo init` creates `.pudl/workspace.cue` with schema/ and definitions/ directories
 - Workspace discovery walks up from cwd looking for `.pudl/workspace.cue`
 - Catalog queries scoped by workspace origin (--all-workspaces to bypass)
-- Multi-path definition discovery with per-repo shadowing of global definitions
 - Multi-path schema resolution with per-repo shadowing of global schemas
 - Imports within a workspace auto-tagged with workspace name as origin
 
@@ -233,15 +245,14 @@ Potential future work, roughly ordered by value.
 
 | Package | Path | Responsibility |
 |---------|------|----------------|
-| `importer` | `internal/importer/` | Import pipeline, format detection, collections, wrapper detection |
+| `importer` | `internal/importer/` | Import pipeline, format detection, streaming, and NDJSON collections |
 | `inference` | `internal/inference/` | Schema inference (heuristics + CUE unification) |
 | `identity` | `internal/identity/` | Resource identity extraction and computation |
 | `idgen` | `internal/idgen/` | Content IDs, SHA256, proquint encoding |
 | `database` | `internal/database/` | SQLite catalog CRUD and queries |
 | `validator` | `internal/validator/` | CUE validation |
-| `definition` | `internal/definition/` | Definition loader, validator, dependency graph |
-| `drift` | `internal/drift/` | State comparator, report store |
-| `mubridge` | `internal/mubridge/` | Drift-to-mu action export, manifest/observe ingestion |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema and model loading |
+| `mubridge` | `internal/mubridge/` | Typed envelope, manifest, and observe-snapshot ingestion |
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |

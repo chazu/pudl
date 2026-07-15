@@ -1,10 +1,13 @@
 # Collections
 
-PUDL handles multi-record data through its collection system. When you import a file containing multiple items, PUDL creates a parent **collection entry** linked to individual **item entries**.
+PUDL handles multi-record data through its collection system. When you import a file
+containing multiple items, PUDL creates a **collection entry** linked to individual
+**item entries**. Membership is normalized separately from the catalog item, so the
+same content-addressed item can be included in multiple collections.
 
 ## How Collections Are Created
 
-Collections are created automatically during import in two cases:
+Collections are created automatically during import for newline-delimited JSON:
 
 ### 1. NDJSON Files
 
@@ -22,49 +25,24 @@ pudl import --path cloud-inventory.json
 # Created collection with 832 items
 ```
 
-### 2. JSON API Wrapper Responses
+## Typed envelopes
 
-JSON objects that look like API response envelopes are automatically detected and unwrapped:
+Typed JSON emitted by mu or another producer can carry schema metadata around a
+payload:
 
 ```json
 {
-  "items": [
-    {"id": "i-abc", "type": "ec2"},
-    {"id": "i-def", "type": "ec2"}
-  ],
-  "count": 2,
-  "next_token": "eyJ..."
+  "schema": {"module": "mu/aws", "version": "v1", "definition": "#Instance"},
+  "definitions": [{"path": "aws.cue", "content": "..."}],
+  "data": {"id": "i-abc", "type": "ec2"}
 }
 ```
 
-```bash
-pudl import --path api-response.json
-# Detected collection wrapper (score: 0.75)
-# Created collection with 2 items
-```
-
-## Wrapper Detection
-
-The wrapper detection algorithm scores JSON objects for signals that they're collection envelopes rather than actual resource data:
-
-| Signal | Score | Condition |
-|--------|-------|-----------|
-| Known wrapper key | +0.35 | Array field named `items`, `data`, `results`, `records`, `entries`, `resources`, `hits`, `values`, etc. |
-| Pagination siblings | +0.25 | Sibling fields like `next_token`, `cursor`, `total_count`, `has_more`, `page`, `limit`, `_links` |
-| Count matches length | +0.20 | A numeric sibling field equals the array length |
-| Homogeneous elements | +0.15 | ≥80% of array elements share the same top-level keys |
-| Few top-level keys | +0.05 | Total keys ≤ 5 |
-| Dominant array | +0.05 | The array is the largest field by estimated size |
-
-Negative signals prevent false positives:
-
-| Signal | Score | Condition |
-|--------|-------|-----------|
-| Known attribute key | -0.30 | Array field named `tags`, `labels`, `permissions`, `roles`, `env`, `ports`, etc. |
-| Multiple similar arrays | -0.40 | ≥2 array fields of similar size |
-| Many scalar fields | -0.15 | >6 non-pagination scalar fields |
-
-**Threshold**: Score ≥ 0.50 triggers unwrapping. This requires at least two positive signals, preventing false positives on resources that happen to have a `data` or `items` field.
+PUDL recognizes an envelope only when `schema.module`, `schema.version`, and `data`
+are present. It records the canonical schema reference in `item_schemas`, caches
+inline definitions, and imports the inner `data` value. An envelope is metadata
+around a payload; it is not inferred to be a collection. Use NDJSON when each line
+should become a collection item.
 
 ## Collection Structure
 
@@ -79,13 +57,12 @@ Each item gets:
 - Its own catalog entry with a unique content hash and proquint ID
 - Its own schema assignment (inferred independently)
 - Its own resource identity (`resource_id` and `version`)
-- A reference back to the parent collection via `collection_id` and `item_index`
+- A membership row in `collection_memberships(collection_id, item_id, item_index)`
 
 The collection entry stores:
 - The original file (for provenance)
 - Item count and schema distribution
 - Source metadata (file size, import timestamp, origin)
-- Wrapper metadata (pagination info, counts) if detected as a wrapper
 
 ## Querying Collections
 
@@ -134,18 +111,20 @@ pudl show fusaf-gofag --raw
 
 ## Deleting Collections
 
-Collections have special deletion semantics to prevent accidental data loss:
+Collections have special deletion semantics to prevent accidental data loss. Cascade
+deletion removes the collection's membership rows. An item is deleted only when no
+other collection still references it:
 
 ```bash
 # Attempting to delete a collection with items fails by default
 pudl delete govim-nupab
 # Error: Collection 'govim-nupab' has 5 items
-# Use --cascade to delete the collection and all its items
+# Use --cascade to delete the collection and its memberships
 
-# Delete collection AND all its items
+# Delete collection and memberships; orphaned items are removed
 pudl delete govim-nupab --cascade --force
 
-# Delete a single item from a collection (always works)
+# Delete a single item entry (memberships are cleaned up)
 pudl delete fusaf-gofag --force
 ```
 
@@ -167,7 +146,7 @@ Collections and items are visually distinguished in `pudl list` output:
 When you want to create a schema for items within a collection:
 
 ```bash
-# Generate a schema for the item type (not the collection wrapper)
+# Generate a schema for the item type (not the collection entry)
 pudl schema new --from govim-nupab --collection --path mypackage/#MyItem
 ```
 

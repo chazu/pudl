@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math/big"
 )
 
@@ -13,6 +14,16 @@ import (
 func ComputeContentID(data []byte) string {
 	hash := sha256.Sum256(data)
 	return fmt.Sprintf("%x", hash)
+}
+
+// ComputeContentIDReader generates the same content ID as ComputeContentID
+// without requiring the complete input to be resident in memory.
+func ComputeContentIDReader(r io.Reader) (string, error) {
+	h := sha256.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return "", fmt.Errorf("hash content: %w", err)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 // HashToProquint converts the first 32 bits of a hex hash string to a proquint

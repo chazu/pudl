@@ -1,29 +1,39 @@
 # Wire workspace context into CLI for per-repo schemas and definitions
 
 **Priority:** High
-**Status:** Proposed
+**Status:** Implemented (2026-07-14)
 **Date:** 2026-03-25
 
 ## Summary
 
-The `WorkspaceContext` infrastructure exists in code and tests (`internal/workspace/context_test.go`, `internal/definition/discovery.go:NewMultiDiscoverer`) but the CLI commands don't use it. All commands currently use only `cfg.SchemaPath` (the global `~/.pudl/schema/` path), ignoring per-repo `.pudl/` directories.
+The CLI now uses `workspace.Context.SchemaSearchPaths` for schema inference,
+validation, import, observe ingestion, schema listing/showing, model resolution,
+and run commands. The project path is first, followed by the global path, so a
+project-local schema definition shadows a same-name global definition while unrelated
+global schemas remain available.
 
-This means definitions and schemas placed in a project's `.pudl/definitions/` and `.pudl/schema/` are not discovered by `pudl definition list`, `pudl definition validate`, `pudl drift check`, `pudl export-actions`, or `pudl schema list`.
+The historical command inventory below predates the removal of the old
+`internal/definition` and `internal/drift` packages; treat it as design history,
+not an outstanding implementation checklist.
+
+The old `definition`, `drift`, and `export-actions` command inventory below is
+retained only as design history. Those packages and commands are no longer live
+PUDL surfaces.
 
 ## What Exists
 
 **Working infrastructure:**
-- `workspace.Workspace` struct with `SchemaPath` and `DefinitionsPath` fields
-- `workspace.buildContext()` produces `SchemaSearchPaths` and `DefinitionSearchPaths` (per-repo first, global second)
-- `definition.NewMultiDiscoverer(schemaPaths)` searches multiple paths in order
-- Per-repo shadowing: per-repo schemas shadow global schemas with the same name
-- Tests: `TestMultiDiscoverer_PerRepoFirst`, `TestMultiDiscoverer_MergesBoth`, `TestInferrer_Shadowing`, `TestInferrer_FallbackToGlobal`
+- `workspace.Context` produces workspace-first schema search paths
+- Per-repo schemas shadow global schemas with the same name while unrelated global schemas remain visible
+- Import, validation, inference, schema commands, model loading, observe ingestion, and run commands use the resolved paths
+- Tests cover local-first shadowing and fallback to global schemas
 
-**Not wired up:**
-- `repo.go` uses `definition.NewDiscoverer(cfg.SchemaPath)` (single global path)
-- `export_actions.go` uses `definition.NewDiscoverer(cfg.SchemaPath)`
-- `validate.go`, `schema.go`, etc. all use single path
-- No command detects `.pudl/` in the current directory or walks up to find it
+**Implemented command surfaces:**
+- `pudl import`, `pudl validate`, `pudl verify`, and observe ingestion use the ordered schema paths
+- `pudl schema list|show|add|edit|validate|reinfer` use local-first schema resolution
+- `pudl model` and `pudl run` resolve models from the same local-first paths
+- `pudl module` and `pudl schema git` operate on the effective local schema repository
+- `pudl config` reports the configured global path and effective workspace search order
 
 ## Expected Directory Structure
 
@@ -45,7 +55,10 @@ my-project/
 └── data/                   # Catalog database
 ```
 
-## Required Changes
+## Historical Design Checklist
+
+The sections below record the original broader definition-command design. They are
+kept for traceability and are not an outstanding implementation checklist.
 
 ### 1. Workspace discovery in every command
 
@@ -126,11 +139,10 @@ Per-repo definitions should be committed to git (they're project-specific desire
 
 ## Documentation Updates
 
-- [ ] Update `docs/concepts.md` to explain global vs per-repo scope
-- [ ] Update `docs/mu-integration.md` to show per-repo workflow
-- [ ] Add a `docs/workspace.md` explaining the `.pudl/` directory structure, what goes where, and scoping rules
-- [ ] Update the pudl Claude skill (`.claude/skills/`) to be aware of per-repo definitions and guide users to put project-specific definitions in `.pudl/definitions/`
-- [ ] Update `pudl repo init` help text
+The implementation is documented in `docs/workspace.md`, the CLI reference, and
+the generated `pudl-core` skill file. The historical checklist is complete for
+the current schema/model command surfaces; old definition-command entries remain
+context only because those commands were removed.
 
 ## Motivation
 

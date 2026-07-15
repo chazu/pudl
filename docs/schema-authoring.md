@@ -204,7 +204,7 @@ This generates a CUE disjunction like `status: "active" | "pending" | "inactive"
 
 ### Collection Schemas
 
-When generating a schema from a collection entry, use `--collection` to generate a schema for the item type rather than the collection wrapper:
+When generating a schema from a collection entry, use `--collection` to generate a schema for the item type rather than the collection entry:
 
 ```bash
 pudl schema new --from govim-nupab --collection --path user/#MyItem

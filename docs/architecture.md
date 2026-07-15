@@ -55,13 +55,12 @@ catalog_entries (
     content_hash      TEXT,              -- SHA256 of file content
     resource_id       TEXT,              -- Logical resource identity hash
     version           INTEGER,           -- Version number for same resource_id
-    collection_id     TEXT,              -- Parent collection ID (NULL for standalone)
+    collection_id     TEXT,              -- Legacy parent ID (membership table is authoritative)
     item_index        INTEGER,           -- Position in collection (NULL for collections)
     collection_type   TEXT,              -- 'collection', 'item', or NULL
     item_id           TEXT,              -- Unique item identifier within collection
     entry_type        TEXT,              -- e.g. 'observe', 'manifest', 'manifest-action' (run artifacts)
-    definition        TEXT,              -- Definition name: a model's per-status unit (run artifacts)
-    method            TEXT,              -- Producing method name (run artifacts)
+    target            TEXT,              -- mu target that produced a run artifact
     run_id            TEXT,              -- pudl run identifier (run artifacts)
     tags              TEXT,              -- JSON-encoded key-value tags
     status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed)
@@ -72,7 +71,7 @@ catalog_entries (
 
 ### Indexes
 
-Optimized indexes on `schema`, `origin`, `format`, `collection_id`, `collection_type`, and `import_timestamp` for fast filtered queries.
+Optimized indexes on `schema`, `origin`, `format`, `collection_id`, `collection_type`, and `import_timestamp` for fast filtered queries. Collection membership is normalized in `collection_memberships(collection_id, item_id, item_index)`, allowing one content-addressed item to belong to many collections without duplicating its catalog row.
 
 ### Configuration
 
@@ -87,13 +86,13 @@ Database migrations run automatically on startup. Adding columns or indexes is d
 
 ## Streaming Pipeline
 
-All imports use Content-Defined Chunking (CDC) via `go-cdc-chunkers` for bounded-memory processing.
+Large imports hash and parse through bounded-memory/streaming paths. The parser still materializes the records needed for schema inference, while the unconditional whole-file read has been removed; the raw byte hash remains identical and deterministic.
 
 ```
 Input File
     |
     v
-CDC Chunker -- splits file into content-defined chunks
+Streaming reader / CDC chunker -- hashes and parses without an unconditional whole-file buffer
     |
     v
 Format Processor -- parses JSON/CSV/YAML across chunk boundaries
@@ -113,7 +112,7 @@ Catalog + Storage -- SQLite insert + file copy
 
 ### Content-Defined Chunking
 
-CDC boundaries are determined by the data content itself (not fixed offsets). This makes chunking shift-resilient -- inserting data at the beginning does not change all subsequent chunk boundaries.
+Where the format processor uses CDC, boundaries are determined by the data content itself (not fixed offsets). This makes chunking shift-resilient -- inserting data at the beginning does not change all subsequent chunk boundaries.
 
 ### Format Processors
 
@@ -140,22 +139,20 @@ The complete import path through `EnhancedImporter`:
 ```
 ImportFileWithFriendlyIDs(opts)
     |
-    +-- Read file, compute SHA256 -> contentHash
+    +-- Stream file through SHA256 -> contentHash
     +-- Check catalog: if contentHash exists -> skip (dedup)
     |
     +-- detectFormat(path, content) -> "json" | "yaml" | "csv" | "ndjson"
     |
     +-- If NDJSON -> importNDJSONCollection()
     |       +-- createCollectionEntry()
-    |       +-- createCollectionItems() -> individual entries
+    |       +-- createCollectionItems() + memberships (all-or-nothing)
     |
     +-- analyzeDataStreaming() -> parse via CDC
     |
-    +-- If JSON object -> DetectCollectionWrapper(data)
-    |       If wrapper detected (score >= 0.50):
-    |           +-- importWrappedCollection()
-    |                   +-- createCollectionEntry()
-    |                   +-- createCollectionItems()
+    +-- CLI envelope detection (regular, batch, stdin share one path)
+    |       +-- import inner data
+    |       +-- record inferred + declared/inline schema metadata
     |
     +-- SchemaInferrer.Infer(data, hints)
     |       +-- SelectCandidates() -> heuristic scoring
@@ -184,7 +181,7 @@ ImportFileWithFriendlyIDs(opts)
 | `git` | `internal/git/` | Git operations on schema repository |
 | `identity` | `internal/identity/` | Resource identity: field extraction, ID computation (pure functions) |
 | `idgen` | `internal/idgen/` | Content IDs: SHA256, proquint encoding/decoding |
-| `importer` | `internal/importer/` | Import pipeline: format detection, streaming, collections, wrapper detection |
+| `importer` | `internal/importer/` | Import pipeline: format detection, streaming, NDJSON collections |
 | `importer` (enhanced) | `internal/importer/enhanced_importer.go` | Content-hash dedup wrapper, proquint IDs |
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
@@ -265,9 +262,9 @@ After import, data can be:
 
 ## Technology Stack
 
-- **Go 1.24** -- core application
+- **Go 1.25.8** -- core application
 - **Cobra** -- CLI framework
-- **CUE** (`cuelang.org/go v0.14`) -- schema definition, validation, unification
+- **CUE** (`cuelang.org/go v0.16`) -- schema definition, validation, unification
 - **SQLite** (`modernc.org/sqlite`, pure Go) -- catalog database
 - **go-cdc-chunkers** -- Content-Defined Chunking for streaming
 - **Bubbletea + Bubbles + Lipgloss** -- interactive TUI (`pudl list --fancy`)

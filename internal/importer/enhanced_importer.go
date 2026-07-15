@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/identity"
+	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
 )
@@ -71,14 +71,21 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to detect format: %w", err)
 	}
 
-	// Read file data to compute content hash
-	fileData, err := os.ReadFile(opts.SourcePath)
+	// Compute the content-based ID through a streaming reader. This keeps the
+	// identity contract (SHA256 of the raw bytes) without loading large files
+	// into memory before the format-specific importer runs.
+	file, err := os.Open(opts.SourcePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("failed to open file for hashing: %w", err)
 	}
-
-	// Compute content-based ID (SHA256 hash) — this is both the entry ID and content_hash
-	contentHash := idgen.ComputeContentID(fileData)
+	contentHash, err := idgen.ComputeContentIDReader(file)
+	closeErr := file.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash file: %w", err)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("failed to close file after hashing: %w", closeErr)
+	}
 	mainID := contentHash
 
 	// Content hash dedup: check if this exact content exists anywhere in the catalog
@@ -122,7 +129,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 
 	// Handle NDJSON collections differently
 	if format == "ndjson" {
-		return e.importNDJSONCollectionWithContentHash(opts, mainID, timestamp, origin, filename, rawDir, metadataDir, fileInfo, fileData)
+		return e.importNDJSONCollectionWithContentHash(opts, mainID, timestamp, origin, filename, rawDir, metadataDir, fileInfo)
 	}
 
 	// Analyze data for schema assignment
@@ -199,8 +206,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
 
-
-			SchemaVersion:    "v1.0",
+			SchemaVersion: "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: schemaIdentityFields,
@@ -265,7 +271,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 }
 
 // importNDJSONCollectionWithContentHash handles NDJSON collections with content-based IDs
-func (e *EnhancedImporter) importNDJSONCollectionWithContentHash(opts ImportOptions, collectionID string, timestamp time.Time, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo, fileData []byte) (*ImportResult, error) {
+func (e *EnhancedImporter) importNDJSONCollectionWithContentHash(opts ImportOptions, collectionID string, timestamp time.Time, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo) (*ImportResult, error) {
 	// Parse NDJSON file
 	data, recordCount, err := e.analyzeDataStreaming(opts.SourcePath, "json", opts.StreamingConfig)
 	if err != nil {
@@ -286,6 +292,9 @@ func (e *EnhancedImporter) importNDJSONCollectionWithContentHash(opts ImportOpti
 
 	// Create individual item entries
 	if err := e.createCollectionItemsWithContentHash(collectionID, data, timestamp, rawDir, metadataDir, opts); err != nil {
+		if cleanupErr := e.cleanupFailedCollectionImport(collectionResult); cleanupErr != nil {
+			return nil, fmt.Errorf("%w (cleanup also failed: %v)", err, cleanupErr)
+		}
 		return nil, fmt.Errorf("failed to create collection items: %w", err)
 	}
 
@@ -348,8 +357,7 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
 
-
-			SchemaVersion:    "v1.0",
+			SchemaVersion: "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: []string{},
@@ -414,8 +422,11 @@ func (e *EnhancedImporter) createCollectionItemsWithContentHash(collectionID str
 
 	for index, item := range items {
 		if err := e.createCollectionItemWithContentHash(collectionID, item, index, timestamp, rawDir, metadataDir, opts); err != nil {
-			// Log error but continue with other items
-			fmt.Printf("Warning: failed to create collection item %d: %v\n", index, err)
+			// The failing item may have written its files before its catalog
+			// insert failed; remove those paths as part of the rollback.
+			_ = os.Remove(filepath.Join(rawDir, fmt.Sprintf("%s_item_%d.json", collectionID, index)))
+			_ = os.Remove(filepath.Join(metadataDir, fmt.Sprintf("%s_item_%d.meta", collectionID, index)))
+			return fmt.Errorf("failed to create collection item %d: %w", index, err)
 		}
 	}
 
@@ -438,7 +449,10 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		return fmt.Errorf("failed to check for existing item: %w", err)
 	}
 	if existingItem != nil {
-		return nil // Skip duplicate item
+		if err := e.catalogDB.AddCollectionMembership(collectionID, existingItem.ID, index); err != nil {
+			return fmt.Errorf("failed to add membership for existing item: %w", err)
+		}
+		return nil
 	}
 
 	// Create filename for individual item
@@ -474,7 +488,10 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		}
 	}
 
-	latestVersion, _ := e.catalogDB.GetLatestVersion(resourceID)
+	latestVersion, err := e.catalogDB.GetLatestVersion(resourceID)
+	if err != nil {
+		return fmt.Errorf("failed to get latest item version: %w", err)
+	}
 	version := latestVersion + 1
 
 	// Create item metadata
@@ -496,8 +513,7 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 			CueDefinition:    schema,
 			ValidationStatus: "auto-assigned",
 
-
-			SchemaVersion:    "v1.0",
+			SchemaVersion: "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: schemaIdentityFields,
@@ -543,5 +559,41 @@ func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID stri
 		Version:         &version,
 	}
 
-	return e.catalogDB.AddEntry(entry)
+	if err := e.catalogDB.AddEntry(entry); err != nil {
+		return err
+	}
+	if err := e.catalogDB.AddCollectionMembership(collectionID, itemID, index); err != nil {
+		return fmt.Errorf("failed to add collection membership: %w", err)
+	}
+	return nil
+}
+
+// cleanupFailedCollectionImport rolls back catalog relationships and newly
+// orphaned item artifacts when an item in an NDJSON collection cannot be
+// imported. A collection import is all-or-nothing from the catalog's point of
+// view, while shared content remains available to other collections.
+func (e *EnhancedImporter) cleanupFailedCollectionImport(collection *ImportResult) error {
+	items, err := e.catalogDB.GetCollectionItems(collection.ID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if err := e.catalogDB.RemoveCollectionMembership(collection.ID, item.ID); err != nil {
+			return err
+		}
+		count, err := e.catalogDB.ItemMembershipCount(item.ID)
+		if err != nil {
+			return err
+		}
+		if count == 0 {
+			_ = os.Remove(item.StoredPath)
+			_ = os.Remove(item.MetadataPath)
+			if err := e.catalogDB.DeleteEntry(item.ID); err != nil {
+				return err
+			}
+		}
+	}
+	_ = os.Remove(collection.StoredPath)
+	_ = os.Remove(collection.MetadataPath)
+	return e.catalogDB.DeleteEntry(collection.ID)
 }

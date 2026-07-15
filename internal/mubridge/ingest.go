@@ -42,29 +42,38 @@ type ObserveResult struct {
 //
 // Returns the number of records ingested and any error.
 func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin string, dataDir string, graph *inference.InheritanceGraph) (int, error) {
+	count, _, err := IngestObserveResultsWithSnapshot(db, reader, origin, dataDir, graph)
+	return count, err
+}
+
+// IngestObserveResultsWithSnapshot is IngestObserveResults plus the identity
+// of the snapshot collection created for this ingestion. Callers that need to
+// compare a run with the records it just observed should use that ID rather
+// than querying the entire observe catalog.
+func IngestObserveResultsWithSnapshot(db *database.CatalogDB, reader io.Reader, origin string, dataDir string, graph *inference.InheritanceGraph) (int, string, error) {
 	if origin == "" {
 		origin = "mu-observe"
 	}
 
 	data, err := io.ReadAll(reader)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read input: %w", err)
+		return 0, "", fmt.Errorf("failed to read input: %w", err)
 	}
 
 	data = []byte(strings.TrimSpace(string(data)))
 	if len(data) == 0 {
-		return 0, nil
+		return 0, "", nil
 	}
 
 	var results []ObserveResult
 	if err := json.Unmarshal(data, &results); err != nil {
-		return 0, fmt.Errorf("failed to parse observe results (expected JSON array from mu observe --json): %w", err)
+		return 0, "", fmt.Errorf("failed to parse observe results (expected JSON array from mu observe --json): %w", err)
 	}
 
 	now := time.Now()
 	rawDir := filepath.Join(dataDir, "raw", now.Format("2006"), now.Format("01"), now.Format("02"))
 	if err := os.MkdirAll(rawDir, 0755); err != nil {
-		return 0, fmt.Errorf("failed to create raw directory: %w", err)
+		return 0, "", fmt.Errorf("failed to create raw directory: %w", err)
 	}
 
 	// Collect all records across targets, tracking metadata for the snapshot.
@@ -122,15 +131,11 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 		}
 	}
 
-	if len(allRecords) == 0 {
-		return 0, nil
-	}
-
 	// Create the snapshot collection entry.
-	snapshotID := fmt.Sprintf("observe_%s", now.Format("20060102_150405"))
+	snapshotID := fmt.Sprintf("observe_%s", now.Format("20060102_150405.000000000"))
 	snapshotCollectionID, err := createObserveSnapshot(db, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 
 	// Ingest each record as a member of the snapshot.
@@ -138,12 +143,12 @@ func IngestObserveResults(db *database.CatalogDB, reader io.Reader, origin strin
 	for i, tr := range allRecords {
 		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID, graph)
 		if err != nil {
-			return ingested, err
+			return ingested, snapshotCollectionID, err
 		}
 		ingested += n
 	}
 
-	return ingested, nil
+	return ingested, snapshotCollectionID, nil
 }
 
 // createObserveSnapshot creates the collection entry for an observe run.
@@ -206,19 +211,19 @@ func createObserveSnapshot(
 	collectionType := "collection"
 
 	entry := database.CatalogEntry{
-		ID:             contentHash,
-		StoredPath:     storedPath,
+		ID:              contentHash,
+		StoredPath:      storedPath,
 		ImportTimestamp: now,
-		Format:         "json",
-		Origin:         origin,
-		Schema:         schema,
-		Confidence:     1.0,
-		RecordCount:    recordCount,
-		SizeBytes:      int64(len(snapshotJSON)),
-		EntryType:      &entryType,
-		ResourceID:     &resourceID,
-		ContentHash:    &contentHash,
-		CollectionType: &collectionType,
+		Format:          "json",
+		Origin:          origin,
+		Schema:          schema,
+		Confidence:      1.0,
+		RecordCount:     recordCount,
+		SizeBytes:       int64(len(snapshotJSON)),
+		EntryType:       &entryType,
+		ResourceID:      &resourceID,
+		ContentHash:     &contentHash,
+		CollectionType:  &collectionType,
 	}
 
 	if err := db.AddEntry(entry); err != nil {
@@ -261,6 +266,9 @@ func ingestObserveRecord(
 		return 0, fmt.Errorf("dedup check failed for %s: %w", target, err)
 	}
 	if existing != nil {
+		if err := db.AddCollectionMembership(collectionID, existing.ID, index); err != nil {
+			return 0, fmt.Errorf("failed to link existing observe record to snapshot: %w", err)
+		}
 		return 0, nil
 	}
 
@@ -290,7 +298,7 @@ func ingestObserveRecord(
 	entry := database.CatalogEntry{
 		ID:              contentHash,
 		StoredPath:      storedPath,
-		ImportTimestamp:  now,
+		ImportTimestamp: now,
 		Format:          "json",
 		Origin:          origin,
 		Schema:          schema,

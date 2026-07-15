@@ -57,7 +57,7 @@ func completeSchemaNames(cmd *cobra.Command, args []string, toComplete string) (
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	manager := schema.NewManager(cfg.SchemaPath)
+	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
 	schemasByPackage, err := manager.ListSchemas()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
@@ -95,7 +95,7 @@ func completeSchemaPackages(cmd *cobra.Command, args []string, toComplete string
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 
-	manager := schema.NewManager(cfg.SchemaPath)
+	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
 	packages, err := manager.GetPackages()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp

@@ -85,6 +85,34 @@ func TestUseInventoryDrift(t *testing.T) {
 	assert.True(t, useInventoryDrift(ewe, false), "ewe populate -> inventory")
 }
 
+func TestScopeModelForRun(t *testing.T) {
+	model := &systemmodel.SystemModel{
+		Name:     "example",
+		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
+		Desired: []map[string]any{
+			{"_schema": "pudl/k8s.#Deployment", "name": "web", "kind": "Deployment"},
+			{"_schema": "pudl/k8s.#Service", "name": "api", "kind": "Service", "depends_on": []any{"web"}},
+		},
+	}
+
+	scoped, err := scopeModelForRun(model, []string{"web", "Service"})
+	require.NoError(t, err)
+	require.Len(t, scoped.Desired, 2)
+
+	scoped, err = scopeModelForRun(model, []string{"web"})
+	require.NoError(t, err)
+	require.Len(t, scoped.Desired, 1)
+	assert.Equal(t, "web", scoped.Desired[0]["name"])
+
+	scoped, err = scopeModelForRun(model, []string{"api"})
+	require.NoError(t, err)
+	require.Len(t, scoped.Desired, 2)
+
+	_, err = scopeModelForRun(model, []string{"missing"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "did not match")
+}
+
 func TestRunVerdict(t *testing.T) {
 	cases := []struct {
 		name   string

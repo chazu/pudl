@@ -13,9 +13,8 @@ Designations:
 - Automatic format detection
 - Content-based deduplication via SHA256 → proquint IDs
 - Streaming parser with backpressure and memory monitoring
-- Collection support: NDJSON files and wrapped JSON arrays are split into individual items with a parent collection entry
-- Wrapper detection: identifies common API response wrappers (e.g. `{"items": [...]}`) and unwraps automatically
-- Envelope JSON: structured import from mu plugins with embedded schema refs
+- Collection support: NDJSON files are split into individual items, with normalized many-to-many collection memberships
+- Envelope JSON: typed `{schema, definitions?, data}` imports preserve schema refs and optionally cache inline CUE definitions
 - Reclassification of items with unresolved schema refs (`pudl reclassify`)
 
 See [collections.md](docs/collections.md), [concepts.md](docs/concepts.md)
@@ -57,7 +56,7 @@ See [architecture.md](docs/architecture.md)
 
 ## System Models — CORE
 
-- `#SystemModel` instances declare a system's desired state as a set of `desired` entries (each entry is a "definition")
+- `#SystemModel` instances declare a system's desired state as a set of desired resources
 - Model registry with last-run status (`pudl model list`)
 - Inspect a model's desired entries and details (`pudl model show <name>`)
 - Validate a model against its schema (`pudl model validate <name>`)
@@ -68,7 +67,7 @@ See [architecture.md](docs/architecture.md)
 - `pudl run <name>` drives the observe-only ACUTE loop: populate → drift → checks → report
 - Drift is a phase of `pudl run`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed)
 - `pudl run <name> --converge` closes drift: pudl renders desired → sources and the mu plugin reconciles
-- Convergence status tracking per model instance: unknown → clean → drifted → converging → converged → failed; a run records its verdict on the instance row, read back via `pudl status`
+- Convergence status tracking per model instance: unknown → drifted → converging → clean (or failed); a run records its verdict on the instance row, read back via `pudl status`
 
 ## Mu Integration — CORE
 
@@ -101,15 +100,14 @@ See [facts.md](docs/facts.md)
 
 See [datalog.md](docs/datalog.md)
 
-## Per-Repo Workspaces — IN PROGRESS
+## Per-Repo Workspaces — CORE
 
 - `pudl repo init` creates `.pudl/workspace.cue` with local `schema/` and `definitions/` directories
 - Workspace discovery walks up from cwd to find `.pudl/workspace.cue`
 - Catalog queries scoped by workspace origin (bypass with `--all-workspaces`)
-- Per-repo schema and definition paths shadow global paths
+- Per-repo schema paths shadow global paths while unrelated global schemas remain available
+- Schema, model, run, import, validation, and observe commands use the effective local-first paths
 - Imports within a workspace auto-tagged with workspace name
-
-Known gap: workspace context infrastructure exists but most CLI commands still use only the global schema path. Per-repo `models/` and `schema/` directories are not yet wired into model, run, or schema commands. See [workspace-context-cli-wiring.md](docs/issues/workspace-context-cli-wiring.md).
 
 ## Observations — EXPERIMENTAL
 

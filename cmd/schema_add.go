@@ -75,7 +75,7 @@ func runSchemaAddCommand(args []string) error {
 	}
 
 	// Create schema manager and validator
-	manager := schema.NewManager(cfg.SchemaPath)
+	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
 	validator := schema.NewValidator()
 
 	// Validate the source file first

@@ -10,15 +10,18 @@ Overview of the testing strategy for PUDL.
 | Importer | `internal/importer/` | Format detection, schema assignment, collections, streaming, error handling |
 | Inference | `internal/inference/` | Heuristic scoring, CUE unification, inheritance graph |
 | Validator | `internal/validator/` | CUE validation, validation service |
-| Definition | `internal/definition/` | Discovery, schema reference parsing, dependency graph, validation |
-| Drift | `internal/drift/` | JSON deep diff, drift checker, report storage |
-| Mubridge | `internal/mubridge/` | Drift-to-action export, plan response generation |
+| Run/CLI | `cmd/` | Run flags, scoped convergence, inventory snapshots, CLI orchestration |
+| Mubridge | `internal/mubridge/` | Observe snapshots, envelopes, and manifest ingest |
 | Identity | `internal/identity/` | Resource identity extraction, content hashing |
 | Schema Name | `internal/schemaname/` | Normalization, canonical format |
 | Integration | `test/integration/` | End-to-end import-to-catalog workflows |
 | System | `test/system/` | Reliability, config, edge cases, stress tests |
 
 ## Running Tests
+
+The repository targets Go 1.25.8. The CI quality gate also runs the generated
+skill check and uses the explicit `checkptr` exception below because the CDC
+dependency uses unsafe pointer arithmetic.
 
 ### All tests
 ```bash
@@ -39,12 +42,6 @@ go test ./internal/inference -v
 # Validator
 go test ./internal/validator -v
 
-# Definitions
-go test ./internal/definition -v
-
-# Drift detection
-go test ./internal/drift -v
-
 # Mu bridge
 go test ./internal/mubridge -v
 
@@ -57,7 +54,7 @@ go test ./test/system -v
 
 ### With race detection
 ```bash
-go test ./... -race
+go test -race -gcflags=all=-d=checkptr=0 ./...
 ```
 
 ### With coverage
@@ -75,9 +72,7 @@ internal/
   importer/       *_test.go   -- Import pipeline, format detection, collections
   inference/      *_test.go   -- Schema inference, heuristics, CUE unification
   validator/      *_test.go   -- CUE validation
-  definition/     *_test.go   -- Definition discovery, graph, validation
-  drift/          *_test.go   -- Deep diff, checker, reports
-  mubridge/       *_test.go   -- Action export
+  mubridge/       *_test.go   -- Typed envelopes, observe snapshots, manifest ingest
   identity/       *_test.go   -- Resource identity
   schemaname/     *_test.go   -- Name normalization
   schemagen/      *_test.go   -- Schema generation
@@ -103,6 +98,7 @@ test/
 - CRUD operations with validation and error handling
 - Query engine: filtering, sorting, pagination, complex combinations
 - Collection parent-child relationships and cascade operations
+- Many-to-many collection membership and shared-item deletion semantics
 - Concurrent multi-threaded safety
 - Migration idempotency
 
@@ -110,7 +106,8 @@ test/
 - Format detection (JSON, YAML, NDJSON, CSV)
 - Schema inference assignment and confidence scoring
 - Large file streaming and memory efficiency
-- Collection wrapper detection and unwrapping
+- Collection imports fail atomically when an item cannot be stored
+- Typed envelope detection, schema metadata, and inline definition caching
 - Error handling for corrupted and malformed input
 
 ### Inference Tests
@@ -120,7 +117,14 @@ test/
 
 ### System Model Tests
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
-- Run verdict mapping and the `pudl run` phase plan (`cmd` run tests)
+- Run verdict mapping, `--only` scope selection, and the `pudl run` phase plan (`cmd` run tests)
+
+### Environment-sensitive tests
+
+The database initialization test intentionally exercises an unwritable path;
+its assertion is about returning an error, not a particular host `errno` string.
+Integration tests that require external `mu`/plugin binaries are explicitly
+skipped when those tools are unavailable.
 
 ### Mubridge Tests
 - Observe-result ingestion into the catalog (content-hash dedup, schema routing)

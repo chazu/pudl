@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -57,6 +58,9 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 	fmt.Println("PUDL Configuration:")
 	fmt.Printf("  Workspace: %s\n", config.GetPudlDir())
 	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
+	if paths := effectiveSchemaPaths(cfg); len(paths) > 0 {
+		fmt.Printf("  Schema Search Paths: %s\n", strings.Join(paths, ", "))
+	}
 	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
 	fmt.Printf("  Config File: %s\n", config.GetConfigPath())
 	fmt.Printf("  Version: %s\n", cfg.Version)

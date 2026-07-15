@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.24+ (for building from source)
+- Go 1.25.8+ (for building from source)
 - Git (for schema version control)
 
 ## 1. Install and Initialize
@@ -56,7 +56,9 @@ pudl import --path data.json --origin my-custom-source
 pudl import --path data.json --schema aws/ec2.#Instance
 ```
 
-NDJSON files and JSON API wrappers are automatically detected and split into collections:
+NDJSON files are automatically detected and split into collections. Typed envelope JSON
+is handled by the same import path: its `{schema, definitions?, data}` metadata is
+recorded and the inner `data` payload is imported.
 
 ```bash
 pudl import --path cloud-inventory.json
@@ -176,7 +178,7 @@ Validation uses native CUE unification. If the assigned schema rejects the data,
 
 ## 6. Work with System Models
 
-A model is a `#SystemModel` instance -- a named CUE value declaring how to observe the world, the `desired` shape it should have, and the `checks` that must hold. Each entry in a model's `desired` block is a definition: the per-status unit of intended state.
+A model is a `#SystemModel` instance -- a named CUE value declaring how to observe the world, the `desired` shape it should have, and the `checks` that must hold. Each entry in a model's `desired` block is a desired resource: the per-status unit of intended state.
 
 ```bash
 # List models
@@ -228,7 +230,7 @@ Any mismatches indicate drift between the stored schema and the current inferenc
 ```bash
 pudl delete mivof-duhij
 pudl delete mivof-duhij --force
-pudl delete govim-nupab --cascade --force   # Delete collection and all items
+pudl delete govim-nupab --cascade --force   # Delete collection memberships and orphaned items
 ```
 
 ### Configuration

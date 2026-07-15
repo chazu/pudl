@@ -101,7 +101,7 @@ Examples:
 			if err != nil {
 				return fmt.Errorf("failed to load config for validation: %w", err)
 			}
-			vs, err := validator.NewValidationService(cfg.SchemaPath)
+			vs, err := validator.NewValidationService(effectiveSchemaPaths(cfg)...)
 			if err != nil {
 				return fmt.Errorf("failed to initialize validation: %w", err)
 			}

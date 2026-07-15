@@ -19,11 +19,11 @@ type Lister struct {
 
 // FilterOptions contains filtering criteria for listing data
 type FilterOptions struct {
-	Schema         string // Filter by CUE schema
-	Origin         string // Filter by data origin
-	Format         string // Filter by file format
-	CollectionID   string // Filter by collection ID
-	CollectionType string // Filter by collection type ('collection', 'item')
+	Schema         string   // Filter by CUE schema
+	Origin         string   // Filter by data origin
+	Format         string   // Filter by file format
+	CollectionID   string   // Filter by collection ID
+	CollectionType string   // Filter by collection type ('collection', 'item')
 	ItemID         string   // Filter by item ID
 	EntryTypes     []string // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
 }
@@ -63,10 +63,10 @@ type ListEntry struct {
 	IdentityJSON *string `json:"identity_json,omitempty"`
 	Version      *int    `json:"version,omitempty"`
 	// Artifact tracking fields
-	EntryType  *string `json:"entry_type,omitempty"`
-	Target     *string `json:"target,omitempty"`
-	RunID      *string `json:"run_id,omitempty"`
-	Tags       *string `json:"tags,omitempty"`
+	EntryType *string `json:"entry_type,omitempty"`
+	Target    *string `json:"target,omitempty"`
+	RunID     *string `json:"run_id,omitempty"`
+	Tags      *string `json:"tags,omitempty"`
 }
 
 // ListResults contains the results of a list operation
@@ -214,8 +214,6 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	return results, nil
 }
 
-
-
 // calculateSummaryStats calculates summary statistics for the results
 func (l *Lister) calculateSummaryStats(results *ListResults, entries []ListEntry) {
 	// Calculate totals from the provided entries
@@ -237,8 +235,6 @@ func (l *Lister) calculateSummaryStats(results *ListResults, entries []ListEntry
 		results.UniqueFormats = formats
 	}
 }
-
-
 
 // FindEntry finds a specific entry by ID (full hash) or proquint
 func (l *Lister) FindEntry(id string) (*ListEntry, error) {
@@ -303,16 +299,23 @@ func (l *Lister) DeleteEntry(entryID string, cascade bool) (*DeleteResult, error
 		}
 
 		for _, item := range items {
-			// Delete item files
-			_ = os.Remove(item.StoredPath)
-			_ = os.Remove(item.MetadataPath)
-
-			// Delete from database
-			if err := l.catalogDB.DeleteEntry(item.ID); err != nil {
-				return nil, errors.NewSystemError(fmt.Sprintf("Failed to delete item %s", item.ID), err)
+			// Remove only this collection's membership first. Content-addressed
+			// items may still be referenced by another collection.
+			if err := l.catalogDB.RemoveCollectionMembership(entry.ID, item.ID); err != nil {
+				return nil, errors.NewSystemError(fmt.Sprintf("Failed to remove membership for item %s", item.ID), err)
 			}
-
-			result.DeletedItemIDs = append(result.DeletedItemIDs, idgen.HashToProquint(item.ID))
+			memberships, err := l.catalogDB.ItemMembershipCount(item.ID)
+			if err != nil {
+				return nil, errors.NewSystemError(fmt.Sprintf("Failed to inspect memberships for item %s", item.ID), err)
+			}
+			if memberships == 0 {
+				_ = os.Remove(item.StoredPath)
+				_ = os.Remove(item.MetadataPath)
+				if err := l.catalogDB.DeleteEntry(item.ID); err != nil {
+					return nil, errors.NewSystemError(fmt.Sprintf("Failed to delete item %s", item.ID), err)
+				}
+				result.DeletedItemIDs = append(result.DeletedItemIDs, idgen.HashToProquint(item.ID))
+			}
 		}
 		result.ItemsDeleted = len(items)
 	}

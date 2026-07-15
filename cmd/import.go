@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -137,7 +139,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
@@ -150,7 +152,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	var chainValidator *validator.ChainValidator
 	if importSchema != "" {
 		// Create chain validator for manual schema specification
-		cv, err := validator.NewChainValidator(cfg.SchemaPath)
+		cv, err := validator.NewChainValidator(effectiveSchemaPaths(cfg)...)
 		if err != nil {
 			return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create chain validator", err)
 		}
@@ -200,49 +202,24 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		effectiveImportOrigin = wsCtx.EffectiveOrigin
 	}
 
-	// If the file is an envelope (JSON with top-level schema + data),
-	// extract the inner data to a temp file and import that. The
-	// envelope's schema portion is recorded in item_schemas after the
-	// import completes. Raw JSON / non-envelope inputs pass through
-	// untouched.
-	importPath := absPath
-	envelope, cleanup, err := extractEnvelopeIfPresent(absPath, effectiveImportOrigin)
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to unwrap envelope", err)
-	}
-	defer cleanup()
-	if envelope != nil {
-		importPath = envelope.dataPath
-	}
-
 	// Set up import options
 	opts := importer.ImportOptions{
-		SourcePath:       importPath,
-		Origin:           effectiveImportOrigin, // Will be auto-detected if empty
-		ManualSchema:     importSchema,
-		ChainValidator: chainValidator,
-		UseStreaming:     true, // Always use streaming for optimal performance
-		StreamingConfig:  streamingConfig,
+		SourcePath:      absPath,
+		Origin:          effectiveImportOrigin, // Will be auto-detected if empty
+		ManualSchema:    importSchema,
+		ChainValidator:  chainValidator,
+		UseStreaming:    true, // Always use streaming for optimal performance
+		StreamingConfig: streamingConfig,
 	}
 
 	// Perform the import with friendly IDs
-	result, err := imp.ImportFileWithFriendlyIDs(opts)
+	result, err := importOneWithEnvelope(imp, opts)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
 			fmt.Fprintf(os.Stderr, "DEBUG: Import error: %+v\n", err)
 		}
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
-	}
-
-	// Record the item's schema associations in the item_schemas junction
-	// table. Always records the inferred schema; if the input was an
-	// envelope, records the declared CUE ref too — auto-registering
-	// inline definitions if they were carried.
-	if !result.Skipped {
-		if err := recordItemSchemas(result, envelope); err != nil && os.Getenv("PUDL_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG: recordItemSchemas: %v\n", err)
-		}
 	}
 
 	// Display results
@@ -258,7 +235,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 //   - declared        — (module, version) already in pudl's schema cache
 //   - auto_registered — envelope carried inline definitions, written to cache
 //   - unresolved      — declared without definitions and not cached;
-//                       tag for `pudl reclassify`
+//     tag for `pudl reclassify`
 func recordItemSchemas(result *importer.ImportResult, env *unwrappedEnvelope) error {
 	if result == nil || result.ID == "" {
 		return nil
@@ -297,6 +274,35 @@ func recordItemSchemas(result *importer.ImportResult, env *unwrappedEnvelope) er
 		return fmt.Errorf("record envelope ref: %w", err)
 	}
 	return nil
+}
+
+// importOneWithEnvelope is the single import path shared by regular, batch,
+// and stdin imports. Envelope extraction, payload import, and schema metadata
+// recording must have identical behavior in all three modes.
+func importOneWithEnvelope(imp *importer.EnhancedImporter, opts importer.ImportOptions) (*importer.ImportResult, error) {
+	originalPath := opts.SourcePath
+	envelope, cleanup, err := extractEnvelopeIfPresent(originalPath, opts.Origin)
+	if err != nil {
+		return nil, fmt.Errorf("unwrap envelope: %w", err)
+	}
+	defer cleanup()
+	if envelope != nil {
+		opts.SourcePath = envelope.dataPath
+	}
+
+	result, err := imp.ImportFileWithFriendlyIDs(opts)
+	if err != nil {
+		return nil, err
+	}
+	if result != nil {
+		result.SourcePath = originalPath
+	}
+	if result != nil && !result.Skipped {
+		if err := recordItemSchemas(result, envelope); err != nil {
+			return nil, fmt.Errorf("record import schema metadata: %w", err)
+		}
+	}
+	return result, nil
 }
 
 // classifyEnvelopeSchema resolves an envelope's schema portion against
@@ -344,6 +350,26 @@ type unwrappedEnvelope struct {
 // (nil, noopCleanup, nil) for raw inputs.
 func extractEnvelopeIfPresent(absPath, origin string) (*unwrappedEnvelope, func(), error) {
 	noop := func() {}
+	// Avoid reading an ordinary large JSON document merely to discover that it
+	// is not an envelope. The supported wire format puts the schema key near the
+	// top-level object; only candidates are passed to the full envelope decoder,
+	// which then materializes the inner payload.
+	probeFile, err := os.Open(absPath)
+	if err != nil {
+		return nil, noop, err
+	}
+	prefix, readErr := io.ReadAll(io.LimitReader(probeFile, 64*1024))
+	closeErr := probeFile.Close()
+	if readErr != nil {
+		return nil, noop, readErr
+	}
+	if closeErr != nil {
+		return nil, noop, closeErr
+	}
+	if !bytes.Contains(prefix, []byte(`"schema"`)) {
+		return nil, noop, nil
+	}
+
 	f, err := os.Open(absPath)
 	if err != nil {
 		return nil, noop, err
@@ -512,7 +538,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	}
 
 	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
@@ -525,7 +551,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	// Set up chain validator if schema is specified
 	var chainValidator *validator.ChainValidator
 	if importSchema != "" {
-		chainValidator, err = validator.NewChainValidator(cfg.SchemaPath)
+		chainValidator, err = validator.NewChainValidator(effectiveSchemaPaths(cfg)...)
 		if err != nil {
 			return errors.NewSystemError("Failed to initialize chain validator", err)
 		}
@@ -566,16 +592,16 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 		// Set up import options for this file
 		opts := importer.ImportOptions{
-			SourcePath:       filePath,
-			Origin:           batchEffectiveOrigin, // Will be auto-detected if empty
-			ManualSchema:     importSchema,
-			ChainValidator: chainValidator,
-			UseStreaming:     true, // Always use streaming for optimal performance
-			StreamingConfig:  streamingConfig,
+			SourcePath:      filePath,
+			Origin:          batchEffectiveOrigin, // Will be auto-detected if empty
+			ManualSchema:    importSchema,
+			ChainValidator:  chainValidator,
+			UseStreaming:    true, // Always use streaming for optimal performance
+			StreamingConfig: streamingConfig,
 		}
 
 		// Perform the import
-		result, err := imp.ImportFileWithFriendlyIDs(opts)
+		result, err := importOneWithEnvelope(imp, opts)
 		if err != nil {
 			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))
 			fmt.Printf("   ❌ Failed: %v\n", err)
@@ -664,7 +690,7 @@ func importFromStdin(cmd *cobra.Command) error {
 	}
 
 	// Create importer
-	imp, err := importer.NewEnhancedImporter(cfg.DataPath, cfg.SchemaPath, config.GetPudlDir())
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize importer", err)
 	}
@@ -692,7 +718,7 @@ func importFromStdin(cmd *cobra.Command) error {
 	}
 
 	// Perform import
-	result, err := imp.ImportFileWithFriendlyIDs(opts)
+	result, err := importOneWithEnvelope(imp, opts)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import stdin data", err)
 	}

@@ -88,7 +88,7 @@ pudl status
 
 `pudl status` reads catalog convergence status — each model run records its
 verdict on `//models/<name>`, so `status` reports whether the system is
-currently converged.
+currently `clean`, `drifted`, `converging`, or `failed`.
 
 ## Design Principles
 
