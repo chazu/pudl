@@ -63,7 +63,7 @@ catalog_entries (
     target            TEXT,              -- mu target that produced a run artifact
     run_id            TEXT,              -- pudl run identifier (run artifacts)
     tags              TEXT,              -- JSON-encoded key-value tags
-    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed)
+    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed); unknown may require verification
     created_at        DATETIME,
     updated_at        DATETIME
 )

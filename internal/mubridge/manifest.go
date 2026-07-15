@@ -54,6 +54,17 @@ type IngestManifestResult struct {
 // (see CatalogDB.PromoteConvergingToCleanByModel) without reconstructing the
 // resource→model mapping from desired records.
 func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir, model string) (*IngestManifestResult, error) {
+	return ingestManifestWithRunID(db, reader, origin, configDir, model, "")
+}
+
+// IngestManifestWithRunID attaches an existing PUDL run identity to the
+// manifest and all of its action entries. An empty runID preserves the legacy
+// deterministic manifest-run behavior.
+func IngestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, configDir, model, runID string) (*IngestManifestResult, error) {
+	return ingestManifestWithRunID(db, reader, origin, configDir, model, runID)
+}
+
+func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, configDir, model, runIDOverride string) (*IngestManifestResult, error) {
 	// Read entire JSON from reader
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -88,10 +99,14 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 		}, nil
 	}
 
-	// Generate run_id from timestamp + content hash (deterministic)
-	runIDSource := manifest.Timestamp + ":" + contentHash
-	runIDHash := sha256.Sum256([]byte(runIDSource))
-	runID := fmt.Sprintf("%x", runIDHash)
+	// Generate a bridge-local run_id from timestamp + content hash unless the
+	// enclosing PUDL run supplied its audit identity.
+	runID := runIDOverride
+	if runID == "" {
+		runIDSource := manifest.Timestamp + ":" + contentHash
+		runIDHash := sha256.Sum256([]byte(runIDSource))
+		runID = fmt.Sprintf("%x", runIDHash)
+	}
 
 	// Store the raw manifest JSON in the data directory
 	manifestStoredPath, err := storeRawData(configDir, data, "manifest.json")
@@ -112,7 +127,7 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 		ID:              manifestID,
 		StoredPath:      manifestStoredPath,
 		MetadataPath:    manifestStoredPath + ".meta",
-		ImportTimestamp:  now,
+		ImportTimestamp: now,
 		Format:          format,
 		Origin:          origin,
 		Schema:          schema,
@@ -179,7 +194,7 @@ func IngestManifest(db *database.CatalogDB, reader io.Reader, origin, configDir,
 			ID:              actionID,
 			StoredPath:      actionStoredPath,
 			MetadataPath:    actionStoredPath + ".meta",
-			ImportTimestamp:  now,
+			ImportTimestamp: now,
 			Format:          format,
 			Origin:          origin,
 			Schema:          actionSchema,

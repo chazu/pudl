@@ -175,6 +175,31 @@ func TestIngestManifest_Basic(t *testing.T) {
 	}
 }
 
+func TestIngestManifestWithRunID_AttachesEnclosingRun(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	result, err := IngestManifestWithRunID(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "mymodel", "run_test")
+	if err != nil {
+		t.Fatalf("IngestManifestWithRunID failed: %v", err)
+	}
+	if result.RunID != "run_test" {
+		t.Fatalf("expected run_test, got %q", result.RunID)
+	}
+	actions, err := db.GetManifestActions(result.RunID)
+	if err != nil {
+		t.Fatalf("GetManifestActions failed: %v", err)
+	}
+	if len(actions) != 3 {
+		t.Fatalf("expected 3 actions, got %d", len(actions))
+	}
+	for _, action := range actions {
+		if action.RunID == nil || *action.RunID != "run_test" {
+			t.Errorf("expected action run_id=run_test, got %v", action.RunID)
+		}
+	}
+}
+
 func TestIngestManifest_Dedup(t *testing.T) {
 	db, tmpDir := setupTestDB(t)
 	defer db.Close()

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
@@ -49,26 +50,48 @@ func (w *reconcileWorkspace) applyConverge() ([]byte, error) {
 // promoteConvergingResources -> CatalogDB.PromoteConvergingToCleanByModel. This
 // is what wires `pudl run --converge`'s apply into the per-resource lifecycle —
 // without it, only the model-level verdict is recorded.
-func ingestConvergeManifest(modelName string, manifestJSON []byte) error {
+func ingestConvergeManifest(modelName, runID string, manifestJSON []byte) error {
 	pudlDir := config.GetPudlDir()
 	db, err := database.NewCatalogDB(pudlDir)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	_, err = mubridge.IngestManifest(db, bytes.NewReader(manifestJSON), "mu-build", pudlDir, modelName)
+	_, err = mubridge.IngestManifestWithRunID(db, bytes.NewReader(manifestJSON), "mu-build", pudlDir, modelName, runID)
 	return err
 }
 
-// convergeOutcome is the terminal verdict of a converge run.
-type convergeOutcome string
+// convergeOutcome remains a command-level alias for the ACUTE coordinator's
+// lifecycle vocabulary.
+type convergeOutcome = acute.Outcome
 
 const (
-	outcomeClean   convergeOutcome = "clean"
-	outcomeCap     convergeOutcome = "failed (cap_exhausted)"
-	outcomeExecErr convergeOutcome = "failed (execute_error)"
-	outcomeDryRun  convergeOutcome = "dry-run (no changes applied)"
+	outcomeClean             = acute.OutcomeClean
+	outcomeCap               = acute.OutcomeCapExhausted
+	outcomeExecErr           = acute.OutcomeExecuteError
+	outcomeDryRun            = acute.OutcomeDryRun
+	outcomeNeedsVerification = acute.OutcomeNeedsVerification
 )
+
+type muConvergeExecutor struct {
+	workspace *reconcileWorkspace
+}
+
+func (e *muConvergeExecutor) Observe() (acute.Observation, error) {
+	drift, err := e.workspace.observeDrift()
+	if err != nil {
+		return acute.Observation{}, err
+	}
+	return acute.Observation{Clean: drift.Clean, Details: drift}, nil
+}
+
+func (e *muConvergeExecutor) Plan() (string, error) {
+	return e.workspace.planConverge()
+}
+
+func (e *muConvergeExecutor) Apply() ([]byte, error) {
+	return e.workspace.applyConverge()
+}
 
 // runConvergeLoop runs the ACUTE convergence loop against a model: observe drift,
 // stop at ∅ (clean) or the iteration cap (failed), otherwise apply and
@@ -76,7 +99,7 @@ const (
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
-func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIters int, dryRun bool) (*ConvergeReport, error) {
+func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool) (*ConvergeReport, error) {
 	w, err := setupReconcileWorkspace(m, muRoot, modelDir)
 	if err != nil {
 		return nil, err
@@ -84,60 +107,43 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir string, maxIte
 	defer w.Cleanup()
 
 	live := !jsonOutput // suppress progress chatter when emitting machine JSON
-	var outcome convergeOutcome
-	applies := 0
-	for i := 0; ; i++ {
-		drift, err := w.observeDrift()
-		if err != nil {
-			return nil, err
-		}
-		if live {
-			printModelDrift(drift)
-		}
-
-		if drift.Clean {
-			outcome = outcomeClean
-			break
-		}
-		if dryRun {
-			plan, err := w.planConverge()
-			if err != nil {
-				return nil, err
+	result, runErr := acute.Converge(acute.ConvergeRequest{
+		Executor:      &muConvergeExecutor{workspace: w},
+		MaxIterations: maxIters,
+		DryRun:        dryRun,
+		RecordManifest: func(manifest []byte) error {
+			return ingestConvergeManifest(m.Name, runID, manifest)
+		},
+		OnObserve: func(observation acute.Observation) {
+			if !live {
+				return
 			}
+			if drift, ok := observation.Details.(ModelDriftResult); ok {
+				printModelDrift(drift)
+			}
+		},
+		OnPlan: func(plan string) {
 			if live {
 				fmt.Print("\nplan (dry-run — nothing applied):\n", plan)
 			}
-			outcome = outcomeDryRun
-			break
-		}
-		if i >= maxIters {
-			outcome = outcomeCap
-			break
-		}
-		if live {
-			fmt.Printf("iteration %d: applying converge…\n", i+1)
-		}
-		manifest, err := w.applyConverge()
-		if err != nil {
+		},
+		OnApply: func(iteration int) {
 			if live {
-				fmt.Printf("converge apply failed: %v\n", err)
-				fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
+				fmt.Printf("iteration %d: applying converge…\n", iteration)
 			}
-			outcome = outcomeExecErr
-			break
-		}
-		// Record the apply's per-resource status (`converging`); promoted to
-		// `clean` after the loop's re-observe confirms ∅. Best-effort: the apply
-		// already happened, so a recording failure must not fail the run.
-		if ingErr := ingestConvergeManifest(m.Name, manifest); ingErr != nil && live {
-			fmt.Printf("warning: per-resource status not recorded: %v\n", ingErr)
-		}
-		applies++
+		},
+		OnRecordFailure: func(err error) {
+			if live {
+				fmt.Printf("warning: per-resource status not recorded: %v\n", err)
+			}
+		},
+	})
+
+	if runErr != nil && result.Outcome == outcomeExecErr && live {
+		fmt.Printf("converge apply failed: %v\n", runErr)
+		fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
 	}
 
-	rep := &ConvergeReport{Outcome: string(outcome), Iterations: applies}
-	if outcome == outcomeCap || outcome == outcomeExecErr {
-		return rep, fmt.Errorf("convergence %s", outcome)
-	}
-	return rep, nil
+	rep := &ConvergeReport{Outcome: string(result.Outcome), Iterations: result.Iterations}
+	return rep, runErr
 }

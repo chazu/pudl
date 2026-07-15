@@ -5,6 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -141,6 +144,35 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 	if !schemas["pudl/linux.#Service"] {
 		t.Error("expected pudl/linux.#Service schema in results")
 	}
+}
+
+func TestIngestObserveResultsWithSnapshotRunID_AttachesAuditIdentity(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"box"}]}}]`
+	count, snapshotID, err := IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_test")
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	entry, err := db.GetLatestObserve("app")
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+	require.NotNil(t, entry.RunID)
+	assert.Equal(t, "run_test", *entry.RunID)
+
+	snapshot, err := db.GetCollectionByID(snapshotID)
+	require.NoError(t, err)
+	require.NotNil(t, snapshot)
+	require.NotNil(t, snapshot.RunID)
+	assert.Equal(t, "run_test", *snapshot.RunID)
+
+	_, _, err = IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_next")
+	require.NoError(t, err)
+	entry, err = db.GetLatestObserve("app")
+	require.NoError(t, err)
+	require.NotNil(t, entry.RunID)
+	assert.Equal(t, "run_next", *entry.RunID)
 }
 
 func TestIngestObserveResults_Dedup(t *testing.T) {
@@ -290,7 +322,7 @@ func TestResourceTypeToSchema(t *testing.T) {
 		{"linux.filesystem", "pudl/linux.#Filesystem"},
 		{"linux.user", "pudl/linux.#User"},
 		{"aws.ec2_instance", "pudl/aws.#Ec2Instance"},
-		{"unknown", "pudl/mu.#ObserveResult"},  // no dot separator
+		{"unknown", "pudl/mu.#ObserveResult"}, // no dot separator
 	}
 
 	for _, tt := range tests {

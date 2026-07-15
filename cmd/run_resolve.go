@@ -15,7 +15,7 @@ import (
 // (schema pudl/systemmodel.#SystemModel, identity = name) so every model that
 // has been run is inventoriable via `pudl list`/`query`. It reuses the shipped
 // observe ingester — the instance lands as an ordinary catalog record.
-func recordModelInstance(m *systemmodel.SystemModel) error {
+func recordModelInstance(m *systemmodel.SystemModel, runID string) error {
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func recordModelInstance(m *systemmodel.SystemModel) error {
 	if err != nil {
 		return err
 	}
-	_, err = ingestObserveOutput(wrapped)
+	_, _, err = ingestObserveOutputWithSnapshotRunID(wrapped, runID)
 	return err
 }
 

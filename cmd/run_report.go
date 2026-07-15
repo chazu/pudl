@@ -10,6 +10,7 @@ import (
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
+	RunID    string            `json:"run_id"`
 	Model    string            `json:"model"`
 	Mode     string            `json:"mode"` // observe-only | converge | dry-run
 	Populate *PopulateReport   `json:"populate,omitempty"`
@@ -48,6 +49,7 @@ func (r *RunReport) render(asJSON bool) (string, error) {
 func (r *RunReport) markdown() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# run: %s\n\n", r.Model)
+	fmt.Fprintf(&b, "- run_id: %s\n", r.RunID)
 	fmt.Fprintf(&b, "- mode: %s\n", r.Mode)
 	status := "OK"
 	if !r.OK {

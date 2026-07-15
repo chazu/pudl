@@ -111,10 +111,10 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot string) (*PopulateReport, error) {
+func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
 		// Self-staged; no external mu root needed (works for project + global).
-		return runEwePopulate(m, modelDir, pudlRoot)
+		return runEwePopulate(m, modelDir, pudlRoot, runID)
 	}
 
 	rm := *m
@@ -144,7 +144,7 @@ func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot string) 
 		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
 	}
 
-	count, snapshotID, err := ingestObserveOutputWithSnapshot(stdout.Bytes())
+	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(stdout.Bytes(), runID)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +247,7 @@ func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
 // #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
 // schema was loaded from (the base for resolving the eweSource + relative plugin
 // scripts).
-func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot string) (*PopulateReport, error) {
+func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
 	srcPath, err := resolveEweSource(m.Populate.EweSource, modelDir, pudlRoot)
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot string) (*Pop
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestObserveOutputWithSnapshot(wrapped)
+	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(wrapped, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -326,6 +326,10 @@ func ingestObserveOutput(observeJSON []byte) (int, error) {
 }
 
 func ingestObserveOutputWithSnapshot(observeJSON []byte) (int, string, error) {
+	return ingestObserveOutputWithSnapshotRunID(observeJSON, "")
+}
+
+func ingestObserveOutputWithSnapshotRunID(observeJSON []byte, runID string) (int, string, error) {
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
 		return 0, "", fmt.Errorf("open catalog: %w", err)
@@ -340,5 +344,5 @@ func ingestObserveOutputWithSnapshot(observeJSON []byte) (int, string, error) {
 	if err != nil {
 		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}
-	return mubridge.IngestObserveResultsWithSnapshot(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph())
+	return mubridge.IngestObserveResultsWithSnapshotRunID(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph(), runID)
 }
