@@ -100,49 +100,32 @@ func ScopeModelForRun(model *systemmodel.SystemModel, selectors []string) (*syst
 		}
 	}
 
-	matched := map[string]bool{}
-	for _, desired := range model.Desired {
-		values := desiredSelectorValues(desired)
-		for _, selector := range wanted {
-			if values[selector] {
-				matched[selector] = true
-			}
-		}
-	}
-
+	selectedIndexes := map[int]bool{}
 	var unknown []string
 	for _, selector := range wanted {
-		if !matched[selector] {
+		indexes, err := resolveSelector(model.Desired, selector)
+		if err != nil {
+			return nil, fmt.Errorf("--only %w", err)
+		}
+		if len(indexes) == 0 {
 			unknown = append(unknown, selector)
+			continue
+		}
+		for _, index := range indexes {
+			selectedIndexes[index] = true
 		}
 	}
 	if len(unknown) > 0 {
 		return nil, fmt.Errorf("--only selector(s) did not match desired resources: %s", strings.Join(unknown, ", "))
 	}
 
-	selectedIndexes := map[int]bool{}
-	for index, desired := range model.Desired {
-		values := desiredSelectorValues(desired)
-		for _, selector := range wanted {
-			if values[selector] {
-				selectedIndexes[index] = true
-			}
-		}
-	}
-
 	for changed := true; changed; {
 		changed = false
 		for index := range selectedIndexes {
 			for _, dependency := range desiredDependencies(model.Desired[index]) {
-				dependencyIndex := -1
-				for candidateIndex, candidate := range model.Desired {
-					if desiredSelectorValues(candidate)[dependency] {
-						dependencyIndex = candidateIndex
-						break
-					}
-				}
-				if dependencyIndex < 0 {
-					return nil, fmt.Errorf("--only dependency selector %q did not match a desired resource", dependency)
+				dependencyIndex, err := resolveDependency(model.Desired, dependency)
+				if err != nil {
+					return nil, err
 				}
 				if !selectedIndexes[dependencyIndex] {
 					selectedIndexes[dependencyIndex] = true
@@ -189,26 +172,180 @@ func desiredDependencies(desired map[string]any) []string {
 	return dependencies
 }
 
-func desiredSelectorValues(desired map[string]any) map[string]bool {
-	values := make(map[string]bool)
-	add := func(value any) {
-		s := strings.TrimSpace(fmt.Sprint(value))
-		if s == "" || s == "<nil>" {
-			return
+// selectorKind records how a selector string matched one desired resource. The
+// distinction matters because the two classes have different cardinality
+// contracts: an identity selector names exactly one resource, while a type
+// selector legitimately names a set (`--only Deployment`). Collapsing them into
+// one namespace lets a selector capture resources the operator never named.
+type selectorKind struct {
+	identity bool
+	typed    bool
+}
+
+// typeSelectorKeys name a resource's type, so matching several resources is the
+// documented intent. identitySelectorKeys name one resource.
+var (
+	typeSelectorKeys     = []string{"_schema", "schema", "definition", "kind"}
+	identitySelectorKeys = []string{"name", "id", "path", "target"}
+)
+
+// resolveSelector returns the indexes of the desired resources a selector names,
+// or nil when it matches nothing. A selector must resolve unambiguously: either
+// it identifies one resource by an identity key, or it selects a set by a type
+// key — never a mix of the two, and never several resources by identity.
+// Resolving an ambiguous selector silently would put resources the operator did
+// not name into converge scope.
+func resolveSelector(desired []map[string]any, selector string) ([]int, error) {
+	var identityMatches, typeMatches []int
+	for index, resource := range desired {
+		kind, ok := desiredSelectorValues(resource)[selector]
+		if !ok {
+			continue
 		}
-		values[s] = true
-		if hash := strings.LastIndexByte(s, '#'); hash >= 0 && hash+1 < len(s) {
-			values[s[hash+1:]] = true
+		if kind.identity {
+			identityMatches = append(identityMatches, index)
+		}
+		if kind.typed {
+			typeMatches = append(typeMatches, index)
 		}
 	}
-	for _, key := range []string{"_schema", "schema", "definition", "name", "id", "path", "kind", "target"} {
+
+	switch {
+	case len(identityMatches) == 0 && len(typeMatches) == 0:
+		return nil, nil
+	case len(identityMatches) > 1:
+		return nil, fmt.Errorf("selector %q matches %d resources by identity (%s); selectors must be unique",
+			selector, len(identityMatches), describeResources(desired, identityMatches, selector, identitySelectorKeys))
+	case len(identityMatches) == 1 && len(typeMatches) > 0 && !sameIndexes(identityMatches, typeMatches):
+		return nil, fmt.Errorf("selector %q is ambiguous: it names %s by identity and also matches %s by type",
+			selector,
+			describeResources(desired, identityMatches, selector, identitySelectorKeys),
+			describeResources(desired, typeMatches, selector, typeSelectorKeys))
+	case len(identityMatches) == 1:
+		return identityMatches, nil
+	default:
+		return typeMatches, nil
+	}
+}
+
+// resolveDependency resolves one declared dependency to exactly one desired
+// resource. Unlike a user-supplied selector, a dependency edge points at a
+// single resource, so a set match is an error rather than a set selection.
+func resolveDependency(desired []map[string]any, dependency string) (int, error) {
+	indexes, err := resolveSelector(desired, dependency)
+	if err != nil {
+		return 0, fmt.Errorf("--only dependency %w", err)
+	}
+	switch len(indexes) {
+	case 0:
+		return 0, fmt.Errorf("--only dependency selector %q did not match a desired resource", dependency)
+	case 1:
+		return indexes[0], nil
+	default:
+		return 0, fmt.Errorf("--only dependency selector %q matches %d resources (%s); a dependency must name exactly one",
+			dependency, len(indexes), describeResources(desired, indexes, dependency, append(append([]string{}, identitySelectorKeys...), typeSelectorKeys...)))
+	}
+}
+
+func sameIndexes(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// describeResources renders matched resources for an error message. Each label
+// names the resource by its most specific identifier, then states which key
+// produced the match when that is not already obvious — an operator reading
+// "matches name=decoy by type" needs to be told it was the `kind` field.
+func describeResources(desired []map[string]any, indexes []int, selector string, keys []string) string {
+	labels := make([]string, 0, len(indexes))
+	for _, index := range indexes {
+		label := describeResource(desired[index])
+		if key := matchingKey(desired[index], selector, keys); key != "" && !strings.HasPrefix(label, key+"=") {
+			label += " via " + key
+		}
+		labels = append(labels, label)
+	}
+	return strings.Join(labels, ", ")
+}
+
+// matchingKey reports which of keys on this resource yields the selector,
+// accounting for the short name accepted after a schema's '#'.
+func matchingKey(desired map[string]any, selector string, keys []string) string {
+	for _, key := range keys {
+		value, ok := desired[key]
+		if !ok {
+			continue
+		}
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if s == selector {
+			return key
+		}
+		if hash := strings.LastIndexByte(s, '#'); hash >= 0 && hash+1 < len(s) && s[hash+1:] == selector {
+			return key
+		}
+	}
+	return ""
+}
+
+func describeResource(desired map[string]any) string {
+	for _, key := range append(append([]string{}, identitySelectorKeys...), typeSelectorKeys...) {
 		if value, ok := desired[key]; ok {
-			add(value)
+			if s := strings.TrimSpace(fmt.Sprint(value)); s != "" && s != "<nil>" {
+				return key + "=" + s
+			}
 		}
 	}
 	if metadata, ok := desired["metadata"].(map[string]any); ok {
 		if name, ok := metadata["name"]; ok {
-			add(name)
+			if s := strings.TrimSpace(fmt.Sprint(name)); s != "" && s != "<nil>" {
+				return "metadata.name=" + s
+			}
+		}
+	}
+	return "<unnamed resource>"
+}
+
+func desiredSelectorValues(desired map[string]any) map[string]selectorKind {
+	values := make(map[string]selectorKind)
+	add := func(value any, typed bool) {
+		s := strings.TrimSpace(fmt.Sprint(value))
+		if s == "" || s == "<nil>" {
+			return
+		}
+		mark := func(v string) {
+			kind := values[v]
+			if typed {
+				kind.typed = true
+			} else {
+				kind.identity = true
+			}
+			values[v] = kind
+		}
+		mark(s)
+		if hash := strings.LastIndexByte(s, '#'); hash >= 0 && hash+1 < len(s) {
+			mark(s[hash+1:])
+		}
+	}
+	for _, key := range typeSelectorKeys {
+		if value, ok := desired[key]; ok {
+			add(value, true)
+		}
+	}
+	for _, key := range identitySelectorKeys {
+		if value, ok := desired[key]; ok {
+			add(value, false)
+		}
+	}
+	if metadata, ok := desired["metadata"].(map[string]any); ok {
+		if name, ok := metadata["name"]; ok {
+			add(name, false)
 		}
 	}
 	return values

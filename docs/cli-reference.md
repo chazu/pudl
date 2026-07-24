@@ -392,10 +392,20 @@ pudl run my_model --dry-run       # show planned actions without applying
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
 
 `--only` accepts one or more comma-separated exact selectors. A selector may be
-the desired resource name, schema/definition, `id`, `path`, `kind`, `target`, or
-`metadata.name`; the short name after a schema's `#` is also accepted. Matching
-resource dependencies are included transitively. The selector set is validated
-before convergence side effects begin.
+an **identity** key — the desired resource `name`, `id`, `path`, or `target`, or
+`metadata.name` — which names exactly one resource, or a **type** key —
+`_schema`, `schema`, `definition`, or `kind` — which selects every resource of
+that type. The short name after a schema's `#` is also accepted.
+
+A selector must resolve unambiguously. It is an error for one selector to match
+some resources by identity and others by type (for example `--only nginx` where
+one resource is *named* `nginx` and another has `kind: nginx`), or to match
+several resources by identity. Both cases would otherwise pull resources the
+operator never named into converge scope.
+
+Declared resource dependencies are included transitively. A dependency must
+resolve to exactly one resource, so a dependency naming a type is an error.
+The selector set is validated before convergence side effects begin.
 
 ### `pudl status [target]`
 
