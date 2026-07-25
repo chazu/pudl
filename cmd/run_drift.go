@@ -66,7 +66,9 @@ func interpretDifferentialObserve(observeJSON []byte) (ModelDriftResult, error) 
 			}
 		}
 	}
-	return ModelDriftResult{Clean: len(drifted) == 0, Drifted: drifted}, nil
+	// A differential observe always reads the live system, so the verdict is
+	// verified regardless of outcome.
+	return ModelDriftResult{Clean: len(drifted) == 0, Drifted: drifted, Verified: true}, nil
 }
 
 // renderReconcileMuCue emits a mu.cue with one converge-plugin target whose

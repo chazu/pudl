@@ -298,8 +298,10 @@ Two obligations come with this decision, neither optional:
 - **Re-running must stop destroying provenance.** See Defect 5.
 
 The narrower resume primitive already exists and should not be rebuilt:
-snapshots have durable IDs, and `--from-catalog` replays drift against a prior
-snapshot. Note that this path is currently unsound — see Defects 3 and 4.
+snapshots have durable IDs, and `--from-catalog --catalog-scope <id>` replays
+drift against a prior snapshot. That replay is now correctly scoped and
+correctly distrusted (Defect 3, fixed), but note it still compares against
+observations that were never persisted on the converge path — see Defect 4.
 
 **D2 — Post-apply persistence failure: `unknown` at the resource level, with the
 reason carried on the run record.**
@@ -549,7 +551,17 @@ A lesser aliasing issue sits alongside: `scoped := *model` with
 element maps are shared with the original, so a phase mutating a desired map
 mutates both. Confirmed, not currently exercised.
 
-#### Defect 3 — `--from-catalog` runs unscoped, and can manufacture a false `clean`
+#### Defect 3 — `--from-catalog` runs unscoped, and can manufacture a false `clean` — **FIXED 2026-07-24**
+
+Both halves are fixed. `--from-catalog` now requires an explicit `--catalog-scope`
+(a snapshot ID or ingest origin), rejected in `validateRunFlags` before any query;
+`runInventoryDrift` independently refuses an empty scope so the invariant does not
+depend on its caller. `ModelDriftResult` gained a `Verified` field, defaulting to
+false, which `verifiedClean` and `runVerdict` both require — so a replay neither
+promotes `converging` resources nor writes a model status. Regression tests cover
+scope validation, the empty-scope refusal, and cross-scope isolation. The original
+report follows.
+
 
 Two compounding bugs on the catalog-replay path, both reaching a `clean` verdict
 without a live observation.
@@ -769,9 +781,9 @@ currently mutate the wrong thing or claim a `clean` it did not verify:
 2. **False `clean`.** Defects 3 (unscoped `--from-catalog`, replay-driven
    promotion), 1 (no terminal marker, stale status survives), 4 (unpersisted
    observations) and 5 (masked lost receipt) all end in a `clean` or `failed`
-   verdict the evidence does not support. Defect 3 is first among them: it is a
-   missing scope argument and a missing `verifiedClean` predicate, not a design
-   change.
+   verdict the evidence does not support. ✅ **Defect 3 DONE 2026-07-24** — it was
+   a missing scope argument and a missing `verifiedClean` predicate, not a design
+   change. Defects 1, 4 and 5 remain.
 3. **Defect 1 then unblocks D2**, which cannot carry its reason until a run
    record exists, and closes invariants 6 and 8.
 4. **Defect 4 is part of item 3**, first-class snapshots, and should be fixed

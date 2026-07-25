@@ -19,6 +19,7 @@ var (
 	runDryRun        bool
 	runMaxIters      int
 	runFromCatalog   bool
+	runCatalogScope  string
 	runCheckUpstream bool
 )
 
@@ -44,11 +45,12 @@ Examples:
 		name := args[0]
 
 		flags := runFlags{
-			converge:    runConverge,
-			only:        runOnly,
-			dryRun:      runDryRun,
-			maxIters:    runMaxIters,
-			fromCatalog: runFromCatalog,
+			converge:     runConverge,
+			only:         runOnly,
+			dryRun:       runDryRun,
+			maxIters:     runMaxIters,
+			fromCatalog:  runFromCatalog,
+			catalogScope: runCatalogScope,
 			// whether a convergence flag was explicitly set (for the gate rules)
 			onlySet:     cmd.Flags().Changed("only"),
 			dryRunSet:   cmd.Flags().Changed("dry-run"),
@@ -161,19 +163,31 @@ Examples:
 				if err != nil {
 					return err
 				}
+				// Scope is mandatory on both arms: a live run compares against the
+				// snapshot it just populated, and a replay compares against the
+				// scope the operator named (validateRunFlags requires one). An
+				// empty scope would query every observe record in the catalog.
 				var scope string
-				if !flags.fromCatalog {
+				if flags.fromCatalog {
+					scope = strings.TrimSpace(flags.catalogScope)
+				} else {
 					pr, err := runPopulate(model, muRoot, modelDir, pudlRoot, session.RunID)
 					if err != nil {
 						return err
 					}
 					report.Populate = pr
 					scope = pr.SnapshotID
+					if scope == "" {
+						return fmt.Errorf("populate produced no snapshot to compare against")
+					}
 				}
 				res, err := runInventoryDrift(db, scope, model.Desired, identity)
 				if err != nil {
 					return err
 				}
+				// A replay is not an observation of the live system, so its verdict
+				// cannot promote resources or write a clean status.
+				res.Verified = !flags.fromCatalog
 				report.Drift = &res
 			case len(model.Desired) > 0:
 				// Differential: live observe with desired-as-sources (k8s-style).
@@ -219,8 +233,11 @@ Examples:
 		// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
 		// to `clean`. The ∅ comes from the converge loop's final re-observe
 		// (report.Converge clean) or an observe-only drift (report.Drift clean).
+		// Drift.Verified is load-bearing: a clean `--from-catalog` replay says the
+		// desired set matches *recorded* records, which may predate the last apply.
+		// Promoting off that would satisfy invariant 5 in name only.
 		verifiedClean := !flags.dryRun &&
-			((report.Drift != nil && report.Drift.Clean) ||
+			((report.Drift != nil && report.Drift.Clean && report.Drift.Verified) ||
 				(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
 		if verifiedClean {
 			promoteConvergingResources(effectiveModel, len(flags.only) > 0)
@@ -252,6 +269,13 @@ func runVerdict(r *RunReport, f runFlags) string {
 		}
 		return ""
 	case r.Drift != nil:
+		// An unverified verdict (a `--from-catalog` replay) observed nothing, so it
+		// records nothing: writing `clean` would be false, and writing `drifted`
+		// off records that may be stale would be no better. The model keeps the
+		// verdict of its last real observation.
+		if !r.Drift.Verified {
+			return ""
+		}
 		if r.Drift.Clean {
 			return "clean"
 		}
@@ -347,21 +371,34 @@ func printModelDrift(r ModelDriftResult) {
 
 // runFlags is the validated CLI surface for `pudl run`.
 type runFlags struct {
-	converge    bool
-	only        []string
-	dryRun      bool
-	maxIters    int
-	fromCatalog bool
+	converge     bool
+	only         []string
+	dryRun       bool
+	maxIters     int
+	fromCatalog  bool
+	catalogScope string
 
 	onlySet     bool
 	dryRunSet   bool
 	maxItersSet bool
 }
 
-// validateRunFlags enforces the gate rules: convergence flags require --converge.
-// One rule — convergence flags need the convergence gate — so a resource can't
-// be named (or a plan dry-run requested) without explicitly opting into mutation.
+// validateRunFlags enforces the gate rules: convergence flags require --converge,
+// and a catalog replay must name the records it replays. The first rule means a
+// resource can't be named (or a plan dry-run requested) without explicitly opting
+// into mutation. The second exists because there is no way to infer which
+// already-ingested records belong to a model: records ingested by
+// `pudl ingest-observe` carry whatever target their observer reported, so an
+// unscoped replay would set-diff `desired` against every observation in the
+// catalog — every model, every host, all time — and could report clean off
+// another model's records.
 func validateRunFlags(f runFlags) error {
+	if f.fromCatalog && strings.TrimSpace(f.catalogScope) == "" {
+		return fmt.Errorf("--from-catalog requires --catalog-scope (an observe snapshot ID, or the origin the records were ingested under)")
+	}
+	if !f.fromCatalog && strings.TrimSpace(f.catalogScope) != "" {
+		return fmt.Errorf("--catalog-scope requires --from-catalog")
+	}
 	if f.converge {
 		if f.maxIters < 1 {
 			return fmt.Errorf("--max-iters must be >= 1")
@@ -451,6 +488,7 @@ func init() {
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these resource selectors (requires --converge)")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
 	runCmd.Flags().IntVar(&runMaxIters, "max-iters", 5, "loop iteration cap (requires --converge)")
-	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe)")
+	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
+	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 }

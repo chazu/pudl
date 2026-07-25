@@ -207,8 +207,21 @@ func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any
 // observed records in the catalog (set-diff by identity). For inventory
 // observers (host) that dump records — distinct from the differential path
 // (k8s), where the plugin does the diff.
-func runInventoryDrift(db *database.CatalogDB, origin string, desired []map[string]any, identity identityResolver) (ModelDriftResult, error) {
-	observed, err := loadObservedRecords(db, origin)
+//
+// The scope is required. Without one the query returns every observation in the
+// catalog — every model, every host, all time — so a desired record could be
+// satisfied by an unrelated model's observation and the run could report clean
+// against records it has nothing to do with. Callers must pass either the
+// snapshot they just populated or an explicitly requested replay scope.
+//
+// Verified is deliberately left false here: this function cannot tell whether
+// its scope names a fresh snapshot or a stale replay, so the caller that chose
+// the scope is the one that gets to claim verification.
+func runInventoryDrift(db *database.CatalogDB, scope string, desired []map[string]any, identity identityResolver) (ModelDriftResult, error) {
+	if strings.TrimSpace(scope) == "" {
+		return ModelDriftResult{}, fmt.Errorf("inventory drift requires a catalog scope (snapshot ID or origin); refusing to compare against every observation in the catalog")
+	}
+	observed, err := loadObservedRecords(db, scope)
 	if err != nil {
 		return ModelDriftResult{}, err
 	}
