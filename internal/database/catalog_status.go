@@ -16,6 +16,12 @@ type TargetStatus struct {
 // UpdateStatus sets the convergence status for entries matching a target name.
 // Only updates the latest entry for the target.
 func (c *CatalogDB) UpdateStatus(targetName string, status string) error {
+	return updateStatusIn(c.db, targetName, status)
+}
+
+// updateStatusIn is the executor-parameterized form of UpdateStatus, so the
+// per-action statuses of one apply commit with the manifest that produced them.
+func updateStatusIn(q dbtx, targetName string, status string) error {
 	validStatuses := map[string]bool{
 		"unknown": true, "clean": true, "drifted": true,
 		"converging": true, "failed": true,
@@ -23,7 +29,7 @@ func (c *CatalogDB) UpdateStatus(targetName string, status string) error {
 	if !validStatuses[status] {
 		return fmt.Errorf("invalid status: %s", status)
 	}
-	_, err := c.db.Exec(
+	_, err := q.Exec(
 		`UPDATE catalog_entries SET status = ?, updated_at = CURRENT_TIMESTAMP
 		 WHERE target = ? AND id = (
 		     SELECT id FROM catalog_entries WHERE target = ?
@@ -101,36 +107,5 @@ func (c *CatalogDB) PromoteConvergingToCleanByModel(model string) (int, error) {
 
 // GetTargetStatuses returns the latest status for each target that has entries.
 func (c *CatalogDB) GetTargetStatuses() ([]TargetStatus, error) {
-	rows, err := c.db.Query(`
-		SELECT target, status, updated_at
-		FROM catalog_entries
-		WHERE target IS NOT NULL AND target != ''
-		GROUP BY target
-		HAVING import_timestamp = MAX(import_timestamp)
-		ORDER BY target`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query target statuses: %w", err)
-	}
-	defer rows.Close()
-
-	var statuses []TargetStatus
-	for rows.Next() {
-		var ds TargetStatus
-		var statusVal *string
-		if err := rows.Scan(&ds.Target, &statusVal, &ds.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan target status: %w", err)
-		}
-		if statusVal != nil {
-			ds.Status = *statusVal
-		} else {
-			ds.Status = "unknown"
-		}
-		statuses = append(statuses, ds)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating target statuses: %w", err)
-	}
-
-	return statuses, nil
+	return getTargetStatusesIn(c.db)
 }

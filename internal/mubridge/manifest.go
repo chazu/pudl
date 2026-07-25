@@ -86,6 +86,36 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 	hash := sha256.Sum256(data)
 	contentHash := fmt.Sprintf("%x", hash)
 
+	// One convergence step, recorded as one transaction: the manifest, its
+	// per-action entries and the statuses those actions imply commit together.
+	// Failing between the entries and the statuses used to leave an apply on
+	// record whose resources still read `unknown` — the hole
+	// repairMissingActionStatuses exists to patch up afterwards.
+	//
+	// The dedup check runs inside the same transaction, which also closes the
+	// race it had on its own: two concurrent ingests of the same manifest could
+	// both find nothing and both insert. BEGIN IMMEDIATE takes the write lock
+	// before the check, so the second one now sees the first's manifest.
+	var result *IngestManifestResult
+	err = db.WithCatalogTx(func(tx *database.CatalogTx) error {
+		var stepErr error
+		result, stepErr = ingestManifestIn(tx, data, manifest, contentHash, origin, configDir, model, runIDOverride)
+		return stepErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ingestManifestIn records one manifest and everything that belongs with it.
+// Called inside a CatalogTx, so either all of it lands or none of it does.
+func ingestManifestIn(
+	db database.CatalogWriter,
+	data []byte,
+	manifest ManifestInput,
+	contentHash, origin, configDir, model, runIDOverride string,
+) (*IngestManifestResult, error) {
 	// Content-hash dedup: skip if manifest with same content hash already ingested
 	existing, err := db.FindByContentHash(contentHash)
 	if err != nil {
@@ -225,8 +255,13 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 		// Status from the action exit code (see actionStatus): "converging" means
 		// applied, pending verification — only the drift re-check writes the
 		// verified in-sync status "clean" (build-spec §5).
+		//
+		// A failure here aborts the step rather than warning past it. Warning was
+		// what produced an apply on record whose resources still read `unknown`;
+		// now the manifest and its statuses land together or not at all, and the
+		// caller is told the step failed instead of discovering it later.
 		if err := db.UpdateStatus(targetName, actionStatus(action)); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update status for %s: %v\n", targetName, err)
+			return nil, fmt.Errorf("failed to update status for %s: %w", targetName, err)
 		}
 	}
 
@@ -270,7 +305,7 @@ func actionStatus(action ManifestAction) string {
 // duplicate is the *same apply* recorded twice, so rewriting statuses wholesale
 // would knock a resource the drift re-check has since promoted to `clean` back
 // to `converging`, undoing a verification with information older than it.
-func repairMissingActionStatuses(db *database.CatalogDB, manifest ManifestInput) (int, error) {
+func repairMissingActionStatuses(db database.CatalogWriter, manifest ManifestInput) (int, error) {
 	statuses, err := db.GetTargetStatuses()
 	if err != nil {
 		return 0, fmt.Errorf("failed to read target statuses: %w", err)

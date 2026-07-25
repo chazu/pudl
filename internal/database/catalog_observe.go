@@ -77,32 +77,20 @@ func (c *CatalogDB) GetLatestObserveByOrigin(targetName, origin string) (*Catalo
 // GetLatestObserveByContentHash checks if an observe entry with the given
 // content hash already exists for a target.
 func (c *CatalogDB) GetLatestObserveByContentHash(targetName, contentHash string) (*CatalogEntry, error) {
-	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
-	FROM catalog_entries
-	WHERE entry_type = 'observe' AND target = ? AND content_hash = ?
-	LIMIT 1`
+	return getLatestObserveByContentHashIn(c.db, targetName, contentHash)
+}
 
-	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, targetName, contentHash).Scan(
-		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+// getLatestObserveByContentHashIn is the executor-parameterized form. Inside a
+// transaction it also sees records this same step has already inserted, so a
+// batch containing the same record twice deduplicates against itself.
+func getLatestObserveByContentHashIn(q dbtx, targetName, contentHash string) (*CatalogEntry, error) {
+	entry, err := scanOptionalEntry(q.QueryRow(
+		`SELECT `+entryColumns+` FROM catalog_entries
+		 WHERE entry_type = 'observe' AND target = ? AND content_hash = ?
+		 LIMIT 1`,
+		targetName, contentHash))
 	if err != nil {
-		return nil, errors.WrapError(errors.ErrCodeDatabaseError,
-			"Failed to check observe dedup", err)
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to check observe dedup", err)
 	}
-
-	return &entry, nil
+	return entry, nil
 }

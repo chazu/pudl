@@ -273,8 +273,16 @@ func formatCatalogTime(t time.Time) string {
 	return t.Format(catalogTimeLayout)
 }
 
-// AddEntry adds a new entry to the catalog
+// AddEntry adds a new entry to the catalog.
 func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
+	return addEntryIn(c.db, entry)
+}
+
+// addEntryIn is the executor-parameterized form of AddEntry: the same insert,
+// run either standalone or inside a CatalogTx. When the entry is a collection
+// item its membership row is written too, and inside a transaction the pair
+// commits or rolls back together.
+func addEntryIn(q dbtx, entry CatalogEntry) error {
 	// Normalize schema name to canonical format before storing
 	entry.Schema = schemaname.Normalize(entry.Schema)
 
@@ -297,7 +305,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		entry.Status = &defaultStatus
 	}
 
-	_, err := c.db.Exec(insertSQL,
+	_, err := q.Exec(insertSQL,
 		entry.ID, entry.StoredPath, entry.MetadataPath, formatCatalogTime(entry.ImportTimestamp),
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
 		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
@@ -313,7 +321,7 @@ func (c *CatalogDB) AddEntry(entry CatalogEntry) error {
 		if entry.ItemIndex != nil {
 			itemIndex = *entry.ItemIndex
 		}
-		if err := c.AddCollectionMembership(*entry.CollectionID, entry.ID, itemIndex); err != nil {
+		if err := addCollectionMembershipIn(q, *entry.CollectionID, entry.ID, itemIndex); err != nil {
 			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to add collection membership", err)
 		}
 	}
@@ -333,32 +341,20 @@ func (c *CatalogDB) EntryExists(id string) (bool, error) {
 
 // GetEntry retrieves a specific entry by ID
 func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
-	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
-	FROM catalog_entries
-	WHERE id = ?`
+	return getEntryIn(c.db, id)
+}
 
-	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, id).Scan(
-		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
-
+// getEntryIn is the executor-parameterized form of GetEntry.
+func getEntryIn(q dbtx, id string) (*CatalogEntry, error) {
+	entry, err := scanEntry(q.QueryRow(
+		`SELECT `+entryColumns+` FROM catalog_entries WHERE id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
 	}
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to retrieve catalog entry", err)
 	}
-
-	return &entry, nil
+	return entry, nil
 }
 
 // GetEntryByProquint retrieves an entry by its proquint identifier

@@ -9,33 +9,20 @@ import (
 
 // FindByContentHash returns entry with matching content hash, or nil.
 func (c *CatalogDB) FindByContentHash(contentHash string) (*CatalogEntry, error) {
-	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
-	FROM catalog_entries
-	WHERE content_hash = ?
-	LIMIT 1`
+	return findByContentHashIn(c.db, contentHash)
+}
 
-	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, contentHash).Scan(
-		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+// findByContentHashIn is the executor-parameterized form, so a manifest step can
+// run its dedup check and its inserts in one transaction — the check and the
+// write it guards cannot then interleave with another writer.
+func findByContentHashIn(q dbtx, contentHash string) (*CatalogEntry, error) {
+	entry, err := scanOptionalEntry(q.QueryRow(
+		`SELECT `+entryColumns+` FROM catalog_entries WHERE content_hash = ? LIMIT 1`,
+		contentHash))
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to find entry by content hash", err)
 	}
-
-	return &entry, nil
+	return entry, nil
 }
 
 // FindByResourceID returns all versions of a resource, newest first.

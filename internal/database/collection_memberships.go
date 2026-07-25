@@ -31,7 +31,13 @@ func (c *CatalogDB) ensureCollectionMembershipsTable() error {
 // AddCollectionMembership associates an existing content-addressed item with
 // a collection. Re-adding an item updates its position deterministically.
 func (c *CatalogDB) AddCollectionMembership(collectionID, itemID string, itemIndex int) error {
-	_, err := c.db.Exec(`
+	return addCollectionMembershipIn(c.db, collectionID, itemID, itemIndex)
+}
+
+// addCollectionMembershipIn is the executor-parameterized form, so a membership
+// can be written inside the same transaction as the entry it belongs to.
+func addCollectionMembershipIn(q dbtx, collectionID, itemID string, itemIndex int) error {
+	_, err := q.Exec(`
 		INSERT INTO collection_memberships (collection_id, item_id, item_index)
 		VALUES (?, ?, ?)
 		ON CONFLICT(collection_id, item_id) DO UPDATE SET item_index = excluded.item_index`,
