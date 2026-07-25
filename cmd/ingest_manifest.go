@@ -56,7 +56,10 @@ Examples:
 
 		// Print summary
 		if result.Skipped {
-			fmt.Printf("Skipped duplicate manifest (run_id: %s)\n", result.RunID)
+			fmt.Printf("Skipped duplicate manifest (already recorded by run_id: %s)\n", result.RunID)
+			if result.StatusesRepaired > 0 {
+				fmt.Printf("Repaired %d resource status(es) the original ingest never recorded\n", result.StatusesRepaired)
+			}
 		} else {
 			fmt.Printf("Ingested manifest (run_id: %s): %d actions (%d cached, %d failed)\n",
 				result.RunID, result.Total, result.Cached, result.Failed)

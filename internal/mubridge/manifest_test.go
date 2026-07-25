@@ -235,6 +235,111 @@ func TestIngestManifest_Dedup(t *testing.T) {
 	}
 }
 
+// A duplicate manifest is the same apply recorded twice, so re-ingesting must not
+// rewrite statuses wholesale: a resource the drift re-check has since verified
+// would be knocked from `clean` back to `converging`, undoing the verification
+// with information older than it.
+func TestIngestManifest_DedupDoesNotRegressVerifiedStatus(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	_, err := IngestManifest(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "")
+	if err != nil {
+		t.Fatalf("first IngestManifest failed: %v", err)
+	}
+
+	// The drift re-check verifies the applied resource.
+	if err := db.UpdateStatus("api_server", "clean"); err != nil {
+		t.Fatalf("promote to clean failed: %v", err)
+	}
+
+	result, err := IngestManifest(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "")
+	if err != nil {
+		t.Fatalf("re-ingest failed: %v", err)
+	}
+	if !result.Skipped {
+		t.Fatal("re-ingest should be skipped as a duplicate")
+	}
+	if result.StatusesRepaired != 0 {
+		t.Errorf("nothing needed repair, got StatusesRepaired=%d", result.StatusesRepaired)
+	}
+
+	statuses := targetStatusMap(t, db)
+	if got := statuses["api_server"]; got != "clean" {
+		t.Errorf("verified status must survive a duplicate ingest, got %q", got)
+	}
+	if got := statuses["config_file"]; got != "failed" {
+		t.Errorf("failed action keeps its status, got %q", got)
+	}
+}
+
+// The first ingest treats an UpdateStatus failure as a warning, so an action's
+// apply can be recorded while its resource is left at the default `unknown`.
+// Re-ingesting is the repair path for exactly that, and only that.
+func TestIngestManifest_DedupRepairsUnwrittenStatus(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	if _, err := IngestManifest(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, ""); err != nil {
+		t.Fatalf("first IngestManifest failed: %v", err)
+	}
+
+	// Simulate the status write the first ingest never managed to land.
+	if err := db.UpdateStatus("monitoring", "unknown"); err != nil {
+		t.Fatalf("reset status failed: %v", err)
+	}
+
+	result, err := IngestManifest(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "")
+	if err != nil {
+		t.Fatalf("re-ingest failed: %v", err)
+	}
+	if result.StatusesRepaired != 1 {
+		t.Errorf("expected 1 repaired status, got %d", result.StatusesRepaired)
+	}
+	if got := targetStatusMap(t, db)["monitoring"]; got != "converging" {
+		t.Errorf("unwritten status should be repaired to converging, got %q", got)
+	}
+}
+
+// A duplicate reports the run that owns the manifest, not the caller's — the
+// entry is content-addressed and its run association is first-writer-wins.
+func TestIngestManifest_DedupReportsOwningRun(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	first, err := IngestManifestWithRunID(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "", "run_first")
+	if err != nil {
+		t.Fatalf("first ingest failed: %v", err)
+	}
+	if first.RunID != "run_first" {
+		t.Fatalf("expected run_first, got %q", first.RunID)
+	}
+
+	second, err := IngestManifestWithRunID(db, strings.NewReader(sampleManifest), "mu-build", tmpDir, "", "run_second")
+	if err != nil {
+		t.Fatalf("re-ingest failed: %v", err)
+	}
+	if !second.Skipped {
+		t.Fatal("re-ingest should be skipped")
+	}
+	if second.RunID != "run_first" {
+		t.Errorf("a duplicate names the run that owns the manifest, got %q", second.RunID)
+	}
+}
+
+func targetStatusMap(t *testing.T, db *database.CatalogDB) map[string]string {
+	t.Helper()
+	statuses, err := db.GetTargetStatuses()
+	if err != nil {
+		t.Fatalf("GetTargetStatuses failed: %v", err)
+	}
+	got := make(map[string]string, len(statuses))
+	for _, s := range statuses {
+		got[s.Target] = s.Status
+	}
+	return got
+}
+
 func TestIngestManifest_EmptyActions(t *testing.T) {
 	db, tmpDir := setupTestDB(t)
 	defer db.Close()

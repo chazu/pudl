@@ -167,12 +167,29 @@ func TestIngestObserveResultsWithSnapshotRunID_AttachesAuditIdentity(t *testing.
 	require.NotNil(t, snapshot.RunID)
 	assert.Equal(t, "run_test", *snapshot.RunID)
 
-	_, _, err = IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_next")
+	// A second run observing the same thing must NOT steal the record. The
+	// association is first-writer-wins: rewriting run_id here made it
+	// last-writer-wins, so a query for run_test under-reported what run_test saw
+	// and the entry's run disagreed with its snapshot membership about the same
+	// fact (invariant 3).
+	_, nextSnapshotID, err := IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_next")
 	require.NoError(t, err)
 	entry, err = db.GetLatestObserve("app")
 	require.NoError(t, err)
 	require.NotNil(t, entry.RunID)
-	assert.Equal(t, "run_next", *entry.RunID)
+	assert.Equal(t, "run_test", *entry.RunID, "the record keeps the run that first observed it")
+
+	// The second run's sighting is not lost — it is snapshot membership, which is
+	// the relationship that is legitimately many-to-many.
+	require.NotEqual(t, snapshotID, nextSnapshotID, "each run gets its own snapshot")
+	nextSnapshot, err := db.GetCollectionByID(nextSnapshotID)
+	require.NoError(t, err)
+	require.NotNil(t, nextSnapshot.RunID)
+	assert.Equal(t, "run_next", *nextSnapshot.RunID)
+
+	memberships, err := db.ItemMembershipCount(entry.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, memberships, "the shared record belongs to both runs' snapshots")
 }
 
 func TestIngestObserveResults_Dedup(t *testing.T) {

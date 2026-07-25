@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/mubridge"
 )
 
@@ -106,6 +108,36 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 	assert.False(t, res.Clean)
 	require.Len(t, res.Drifted, 2, "htop missing + restic changed; podman satisfied")
 	assert.False(t, res.Verified, "runInventoryDrift cannot know whether its scope is fresh")
+}
+
+// A failed snapshot lookup used to degrade into an origin filter regardless of
+// why it failed. For a genuine DB error that filter matches nothing, so the
+// set-diff sees no observed records and calls every desired resource `missing` —
+// under --converge, re-applying the whole model off a transient fault.
+func TestObserveScopeFilter(t *testing.T) {
+	t.Run("found scope filters by collection", func(t *testing.T) {
+		collectionID, origin, err := observeScopeFilter("snap-1", nil)
+		require.NoError(t, err)
+		assert.Equal(t, "snap-1", collectionID)
+		assert.Empty(t, origin)
+	})
+
+	t.Run("not-found scope falls back to origin", func(t *testing.T) {
+		notFound := errors.WrapError(errors.ErrCodeNotFound, "Collection not found: pudl-run", nil)
+		collectionID, origin, err := observeScopeFilter("pudl-run", notFound)
+		require.NoError(t, err)
+		assert.Empty(t, collectionID)
+		assert.Equal(t, "pudl-run", origin, "the compatibility path stays open for origin-scoped callers")
+	})
+
+	t.Run("database error is fatal, not an empty observed set", func(t *testing.T) {
+		dbErr := errors.WrapError(errors.ErrCodeDatabaseError, "Failed to retrieve collection", fmt.Errorf("disk I/O error"))
+		collectionID, origin, err := observeScopeFilter("snap-1", dbErr)
+		require.Error(t, err, "a DB fault must not silently become 'nothing observed'")
+		assert.Contains(t, err.Error(), "resolve observe scope")
+		assert.Empty(t, collectionID)
+		assert.Empty(t, origin)
+	})
 }
 
 // An empty scope previously queried every observation in the catalog, so a

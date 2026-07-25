@@ -317,18 +317,9 @@ func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot, runID string
 	return &PopulateReport{Target: target, Records: count, SnapshotID: snapshotID}, nil
 }
 
-// ingestObserveOutput feeds `mu observe --json` output into the catalog as
-// observe entries, reusing the shipped IngestObserveResults (the same path
-// `pudl mu ingest-observe` uses).
-func ingestObserveOutput(observeJSON []byte) (int, error) {
-	count, _, err := ingestObserveOutputWithSnapshot(observeJSON)
-	return count, err
-}
-
-func ingestObserveOutputWithSnapshot(observeJSON []byte) (int, string, error) {
-	return ingestObserveOutputWithSnapshotRunID(observeJSON, "")
-}
-
+// ingestObserveOutputWithSnapshotRunID feeds `mu observe --json` output into the
+// catalog as observe entries, reusing the shipped IngestObserveResults (the same
+// path `pudl mu ingest-observe` uses), and associates them with this run.
 func ingestObserveOutputWithSnapshotRunID(observeJSON []byte, runID string) (int, string, error) {
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {

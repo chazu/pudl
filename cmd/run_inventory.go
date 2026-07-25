@@ -8,6 +8,7 @@ import (
 
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/inference"
 )
 
@@ -166,18 +167,43 @@ func inventorySetDiff(desired, observed []map[string]any, identity identityResol
 	return drifted
 }
 
+// observeScopeFilter turns a scope string and the result of looking it up as a
+// snapshot collection into the filter the observe query should use: either a
+// collection ID (the scope names a snapshot) or an origin (the compatibility
+// path for explicit catalog callers and tests).
+//
+// Only a *not-found* may fall back to the origin filter. Any other lookup
+// failure is fatal, because falling back on a genuine database error filters by
+// an origin that matches nothing, hands the set-diff an empty observed set, and
+// reports every desired resource `missing` — a transient DB fault rendered as a
+// confident "everything is drifted", which under --converge means re-applying
+// the entire model.
+func observeScopeFilter(scope string, lookupErr error) (collectionID, origin string, err error) {
+	switch {
+	case lookupErr == nil:
+		return scope, "", nil
+	case errors.GetErrorCode(lookupErr) == errors.ErrCodeNotFound:
+		return "", scope, nil
+	default:
+		return "", "", fmt.Errorf("resolve observe scope %q: %w", scope, lookupErr)
+	}
+}
+
 // loadObservedRecords reads the inventory records ingested for this run from the
 // catalog (observe items by origin) and returns them as maps.
 func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any, error) {
 	filter := database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}
 	// A snapshot ID is the normal scope for a live inventory run. Keep origin
 	// filtering as a compatibility path for explicit catalog callers and tests.
+	//
+	// Only a *not-found* justifies that fallback — see observeScopeFilter.
 	if scope != "" {
-		if _, err := db.GetCollectionByID(scope); err == nil {
-			filter.CollectionID = scope
-		} else {
-			filter.Origin = scope
+		_, lookupErr := db.GetCollectionByID(scope)
+		collectionID, origin, err := observeScopeFilter(scope, lookupErr)
+		if err != nil {
+			return nil, err
 		}
+		filter.CollectionID, filter.Origin = collectionID, origin
 	}
 	res, err := db.QueryEntries(database.FilterOptions{
 		EntryTypes:     filter.EntryTypes,

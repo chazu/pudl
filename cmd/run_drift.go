@@ -160,22 +160,28 @@ func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir, runID
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
 
-	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
+	// Collect any workspace an earlier run died holding, before adding ours.
+	reportSweptWorkspaces(sweepStaleWorkspaces(muRoot, staleWorkspaceAge), !jsonOutput)
+
+	dir, err := os.MkdirTemp(muRoot, workspacePrefix)
 	if err != nil {
 		return nil, fmt.Errorf("create reconcile workspace: %w", err)
 	}
+	// From here on the directory exists in the user's project, so every failure
+	// path — and an interrupt — has to take it back out again.
+	cleanup := removeOnSignal(dir)
 	names, err := writeDesiredManifests(m.Desired, dir)
 	if err != nil {
-		os.RemoveAll(dir)
+		cleanup()
 		return nil, err
 	}
 	src, err := renderReconcileMuCue(&rm, names)
 	if err != nil {
-		os.RemoveAll(dir)
+		cleanup()
 		return nil, err
 	}
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
-		os.RemoveAll(dir)
+		cleanup()
 		return nil, fmt.Errorf("write reconcile mu.cue: %w", err)
 	}
 	return &reconcileWorkspace{
@@ -183,7 +189,7 @@ func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir, runID
 		Target:  driftTargetName(m.Name),
 		RunID:   runID,
 		DryRun:  dryRun,
-		Cleanup: func() { os.RemoveAll(dir) },
+		Cleanup: cleanup,
 	}, nil
 }
 
