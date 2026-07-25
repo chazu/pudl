@@ -109,7 +109,7 @@ func TestPromoteConvergingToClean(t *testing.T) {
 	mk("b", "api", "drifted")    // this model, not converging -> untouched
 	mk("c", "other", "converging") // another model -> must NOT be promoted
 
-	n, err := db.PromoteConvergingToClean([]string{"web", "api", "absent"})
+	n, err := db.PromoteConvergingToClean([]string{"web", "api", "absent"}, "mymodel")
 	require.NoError(t, err)
 	assert.Equal(t, 1, n, "only the converging in-scope def is promoted")
 
@@ -122,6 +122,63 @@ func TestPromoteConvergingToClean(t *testing.T) {
 	assert.Equal(t, "clean", got["web"], "converging in-scope -> clean")
 	assert.Equal(t, "drifted", got["api"], "non-converging untouched")
 	assert.Equal(t, "converging", got["other"], "out-of-scope model untouched")
+}
+
+// Two models declaring a resource with the same identity name share one target
+// key, so the name alone cannot say whose pending row it is. The tag can, when
+// there is one: a row tagged to another model must survive this model's clean
+// drift, while this model's own tagged rows and untagged rows still promote.
+func TestPromoteConvergingToClean_SkipsRowsTaggedToAnotherModel(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	mk := func(id, def, model, status string) {
+		d := def
+		et := "manifest-action"
+		tags := fmt.Sprintf(`{"exit_code":0,"model":%q}`, model)
+		if model == "" {
+			tags = `{"exit_code":0}`
+		}
+		require.NoError(t, db.AddEntry(CatalogEntry{
+			ID: id, StoredPath: id + ".json", MetadataPath: id + ".meta",
+			ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+			Schema: "pudl/core.#Item", Target: &d, EntryType: &et, Tags: &tags,
+		}))
+		require.NoError(t, db.UpdateStatus(def, status))
+	}
+	// The defect: `nginx` is declared by both models. Model A's drift going clean
+	// used to promote model B's row because they key on the same target name.
+	mk("a", "nginx", "modelB", "converging")
+	mk("b", "cache", "modelA", "converging")
+	mk("c", "untagged-db", "", "converging")
+
+	// A row with no tags column at all — json_extract over NULL must yield NULL
+	// rather than excluding the row, or the fallback stops promoting the very
+	// rows it exists for.
+	nullTagDef := "no-tags-queue"
+	nullTagEntryType := "manifest-action"
+	require.NoError(t, db.AddEntry(CatalogEntry{
+		ID: "d", StoredPath: "d.json", MetadataPath: "d.meta",
+		ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+		Schema: "pudl/core.#Item", Target: &nullTagDef, EntryType: &nullTagEntryType,
+	}))
+	require.NoError(t, db.UpdateStatus(nullTagDef, "converging"))
+
+	// modelA's promotion, with `nginx` in its candidate defs (both models declare it).
+	n, err := db.PromoteConvergingToClean([]string{"nginx", "cache", "untagged-db", nullTagDef}, "modelA")
+	require.NoError(t, err)
+	assert.Equal(t, 3, n, "modelA's own row and both untagged rows promote; modelB's does not")
+
+	got := map[string]string{}
+	statuses, err := db.GetTargetStatuses()
+	require.NoError(t, err)
+	for _, s := range statuses {
+		got[s.Target] = s.Status
+	}
+	assert.Equal(t, "converging", got["nginx"], "another model's pending row is not promoted by this model's clean drift")
+	assert.Equal(t, "clean", got["cache"], "this model's own tagged row promotes")
+	assert.Equal(t, "clean", got["untagged-db"], "an untagged row still promotes — the fallback exists for it")
+	assert.Equal(t, "clean", got[nullTagDef], "a row with a NULL tags column still promotes")
 }
 
 func TestPromoteConvergingToCleanByModel(t *testing.T) {

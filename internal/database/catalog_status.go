@@ -41,16 +41,32 @@ func (c *CatalogDB) UpdateStatus(targetName string, status string) error {
 // verification" (converging) are now confirmed in sync. Targets not currently
 // converging (or absent) are untouched, so it is safe to call with a superset of
 // candidate names.
-func (c *CatalogDB) PromoteConvergingToClean(targets []string) (int, error) {
+//
+// This is the fallback for manifests ingested without `--model`, where the rows
+// carry no model tag and the only key available is the bare target name. Target
+// names are not unique across models — two models each declaring a resource
+// named `nginx` produce the same key — so promoting on the name alone let one
+// model's clean drift promote another's pending rows. The model predicate keeps
+// the promotion to rows this model could plausibly own: its own tagged rows, and
+// untagged rows (the case this fallback exists for). Rows tagged to a *different*
+// model are never promoted.
+//
+// Untagged rows from two different models sharing a target name remain
+// indistinguishable — nothing in the row records which model applied it. Tag
+// them by ingesting with `ingest-manifest --model <name>`, which routes the
+// promotion through PromoteConvergingToCleanByModel and skips this path.
+func (c *CatalogDB) PromoteConvergingToClean(targets []string, model string) (int, error) {
 	promoted := 0
 	for _, def := range targets {
 		res, err := c.db.Exec(
 			`UPDATE catalog_entries SET status = 'clean', updated_at = CURRENT_TIMESTAMP
-			 WHERE target = ? AND status = 'converging' AND id = (
+			 WHERE target = ? AND status = 'converging'
+			   AND (json_extract(tags, '$.model') IS NULL OR json_extract(tags, '$.model') = ?)
+			   AND id = (
 			     SELECT id FROM catalog_entries WHERE target = ?
 			     ORDER BY import_timestamp DESC LIMIT 1
 			 )`,
-			def, def,
+			def, model, def,
 		)
 		if err != nil {
 			return promoted, fmt.Errorf("promote %q: %w", def, err)
