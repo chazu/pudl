@@ -82,7 +82,11 @@ func (e *muConvergeExecutor) Observe() (acute.Observation, error) {
 	if err != nil {
 		return acute.Observation{}, err
 	}
-	return acute.Observation{Clean: drift.Clean, Details: drift}, nil
+	return acute.Observation{
+		Clean:         drift.Clean,
+		ObservationID: drift.ObservationID,
+		Details:       drift,
+	}, nil
 }
 
 func (e *muConvergeExecutor) Plan() (string, error) {
@@ -100,7 +104,7 @@ func (e *muConvergeExecutor) Apply() ([]byte, error) {
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
 func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool) (*ConvergeReport, error) {
-	w, err := setupReconcileWorkspace(m, muRoot, modelDir)
+	w, err := setupReconcileWorkspace(m, muRoot, modelDir, runID, dryRun)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +148,10 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir, runID string,
 		fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
 	}
 
-	rep := &ConvergeReport{Outcome: string(result.Outcome), Iterations: result.Iterations}
+	rep := &ConvergeReport{
+		Outcome:           string(result.Outcome),
+		Iterations:        result.Iterations,
+		NeedsVerification: result.NeedsVerification,
+	}
 	return rep, runErr
 }

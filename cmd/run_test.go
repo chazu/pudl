@@ -131,6 +131,12 @@ func TestRunVerdict(t *testing.T) {
 		{"converge cap failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (cap_exhausted)"}}, runFlags{converge: true}, "failed"},
 		{"converge exec failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)"}}, runFlags{converge: true}, "failed"},
 		{"manifest persistence needs verification", &RunReport{Converge: &ConvergeReport{Outcome: "needs-verification"}}, runFlags{converge: true}, "unknown"},
+		// NeedsVerification dominates the outcome: reporting `failed` for an apply
+		// that succeeded invites re-applying it by hand.
+		{"lost receipt outranks cap exhausted", &RunReport{Converge: &ConvergeReport{Outcome: "failed (cap_exhausted)", NeedsVerification: true}}, runFlags{converge: true}, "unknown"},
+		{"lost receipt outranks execute error", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)", NeedsVerification: true}}, runFlags{converge: true}, "unknown"},
+		{"observe error after apply", &RunReport{Converge: &ConvergeReport{Outcome: "failed (observe_error)", NeedsVerification: true}}, runFlags{converge: true}, "unknown"},
+		{"observe error before any apply", &RunReport{Converge: &ConvergeReport{Outcome: "failed (observe_error)"}}, runFlags{converge: true}, "failed"},
 		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true, dryRun: true}, ""},
 		{"verified drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}, runFlags{}, "clean"},
 		{"verified drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}, runFlags{}, "drifted"},

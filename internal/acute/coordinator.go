@@ -6,8 +6,12 @@ import "fmt"
 // PUDL. mu supplies the raw observation; the adapter turns it into this
 // lifecycle signal and retains the detailed drift for reporting.
 type Observation struct {
-	Clean   bool
-	Details any
+	Clean bool
+	// ObservationID is the catalog entry recording this observation. Empty means
+	// the observation was not persisted, so any verdict derived from it cannot be
+	// traced to evidence afterwards.
+	ObservationID string
+	Details       any
 }
 
 // Executor is the narrow seam between PUDL's run policy and mu's execution
@@ -40,6 +44,7 @@ const (
 	OutcomeClean             Outcome = "clean"
 	OutcomeCapExhausted      Outcome = "failed (cap_exhausted)"
 	OutcomeExecuteError      Outcome = "failed (execute_error)"
+	OutcomeObserveError      Outcome = "failed (observe_error)"
 	OutcomeDryRun            Outcome = "dry-run (no changes applied)"
 	OutcomeNeedsVerification Outcome = "needs-verification"
 )
@@ -61,6 +66,14 @@ type ConvergeRequest struct {
 type ConvergeResult struct {
 	Outcome    Outcome
 	Iterations int
+
+	// NeedsVerification reports that the run changed the live system but cannot
+	// prove the resulting state — a manifest receipt was not recorded, or the
+	// re-observation after an apply failed. It is deliberately orthogonal to
+	// Outcome, because a lost receipt can accompany any terminal outcome, and it
+	// must dominate the caller's status decision: reporting `failed` for an apply
+	// that actually succeeded invites re-applying it by hand.
+	NeedsVerification bool
 }
 
 // Converge executes the PUDL-owned observe/apply/re-observe policy around mu.
@@ -76,10 +89,18 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 
 	result := ConvergeResult{}
 	manifestFailure := false
+
+	// Every exit is a `break` rather than a `return` so that the
+	// needs-verification verdict below is evaluated on all of them. Returning
+	// early from inside the loop is what previously let a lost receipt escape on
+	// three of the four exit routes.
+	var loopErr error
 	for i := 0; ; i++ {
 		observation, err := request.Executor.Observe()
 		if err != nil {
-			return result, fmt.Errorf("observe: %w", err)
+			result.Outcome = OutcomeObserveError
+			loopErr = fmt.Errorf("observe: %w", err)
+			break
 		}
 		if request.OnObserve != nil {
 			request.OnObserve(observation)
@@ -92,7 +113,8 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 		if request.DryRun {
 			plan, err := request.Executor.Plan()
 			if err != nil {
-				return result, fmt.Errorf("plan: %w", err)
+				loopErr = fmt.Errorf("plan: %w", err)
+				break
 			}
 			if request.OnPlan != nil {
 				request.OnPlan(plan)
@@ -102,6 +124,7 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 		}
 		if i >= request.MaxIterations {
 			result.Outcome = OutcomeCapExhausted
+			loopErr = fmt.Errorf("convergence %s", OutcomeCapExhausted)
 			break
 		}
 
@@ -112,7 +135,8 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 		manifest, err := request.Executor.Apply()
 		if err != nil {
 			result.Outcome = OutcomeExecuteError
-			return result, fmt.Errorf("apply: %w", err)
+			loopErr = fmt.Errorf("apply: %w", err)
+			break
 		}
 		result.Iterations++
 
@@ -126,12 +150,24 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 		}
 	}
 
-	if manifestFailure && result.Outcome == OutcomeClean {
-		result.Outcome = OutcomeNeedsVerification
-		return result, fmt.Errorf("convergence needs verification: an apply manifest was not recorded")
+	// Two distinct ways to end a run having mutated the system without being able
+	// to prove the result: the receipt was lost, or the verifying observation
+	// never came back. Both are the same operational state.
+	result.NeedsVerification = manifestFailure ||
+		(result.Outcome == OutcomeObserveError && result.Iterations > 0)
+
+	if result.NeedsVerification {
+		if result.Outcome == OutcomeClean {
+			result.Outcome = OutcomeNeedsVerification
+		}
+		reason := "an apply manifest was not recorded"
+		if !manifestFailure {
+			reason = "the re-observation after an apply failed"
+		}
+		if loopErr == nil {
+			return result, fmt.Errorf("convergence needs verification: %s", reason)
+		}
+		return result, fmt.Errorf("convergence needs verification (%s): %w", reason, loopErr)
 	}
-	if result.Outcome == OutcomeCapExhausted {
-		return result, fmt.Errorf("convergence %s", result.Outcome)
-	}
-	return result, nil
+	return result, loopErr
 }

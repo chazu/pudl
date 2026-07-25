@@ -31,6 +31,11 @@ type PopulateReport struct {
 type ConvergeReport struct {
 	Outcome    string `json:"outcome"` // clean | failed (cap_exhausted) | failed (execute_error) | dry-run …
 	Iterations int    `json:"iterations"`
+
+	// NeedsVerification is orthogonal to Outcome: the run mutated the system but
+	// cannot prove the result, whichever way the loop ended. It dominates the
+	// status verdict.
+	NeedsVerification bool `json:"needs_verification,omitempty"`
 }
 
 // render emits the report as JSON when machine output is requested, else markdown.
