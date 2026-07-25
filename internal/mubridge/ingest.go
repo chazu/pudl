@@ -138,21 +138,37 @@ func IngestObserveResultsWithSnapshotRunID(db *database.CatalogDB, reader io.Rea
 		}
 	}
 
-	// Create the snapshot collection entry.
+	// Everything above is parsing; nothing has touched the catalog yet. The
+	// writes below are one step and are recorded as one: the snapshot and every
+	// membership that makes it meaningful commit together, so a failure part-way
+	// through cannot leave a snapshot describing records that were never stored,
+	// or records belonging to a snapshot that does not exist. That partial state
+	// is exactly what a later run would read as an observation.
 	snapshotID := fmt.Sprintf("observe_%s", now.Format("20060102_150405.000000000"))
-	snapshotCollectionID, err := createObserveSnapshot(db, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir, runID)
-	if err != nil {
-		return 0, "", err
-	}
-
-	// Ingest each record as a member of the snapshot.
+	var snapshotCollectionID string
 	ingested := 0
-	for i, tr := range allRecords {
-		n, err := ingestObserveRecord(db, tr.record, tr.target, origin, rawDir, now, i, snapshotCollectionID, graph, runID)
+
+	err = db.WithCatalogTx(func(tx *database.CatalogTx) error {
+		collectionID, err := createObserveSnapshot(tx, snapshotID, now, origin, targets, len(allRecords), schemaCounts, errors, rawDir, runID)
 		if err != nil {
-			return ingested, snapshotCollectionID, err
+			return err
 		}
-		ingested += n
+		snapshotCollectionID = collectionID
+
+		ingested = 0
+		for i, tr := range allRecords {
+			n, err := ingestObserveRecord(tx, tr.record, tr.target, origin, rawDir, now, i, collectionID, graph, runID)
+			if err != nil {
+				return err
+			}
+			ingested += n
+		}
+		return nil
+	})
+	if err != nil {
+		// Nothing was recorded, so report nothing recorded — the old partial
+		// count and snapshot ID described rows that had just been rolled back.
+		return 0, "", err
 	}
 
 	return ingested, snapshotCollectionID, nil
@@ -160,7 +176,7 @@ func IngestObserveResultsWithSnapshotRunID(db *database.CatalogDB, reader io.Rea
 
 // createObserveSnapshot creates the collection entry for an observe run.
 func createObserveSnapshot(
-	db *database.CatalogDB,
+	db database.CatalogWriter,
 	snapshotID string,
 	now time.Time,
 	origin string,
@@ -260,7 +276,7 @@ func createObserveSnapshot(
 // ingestObserveRecord stores a single observe record in the catalog.
 // Returns 1 if ingested, 0 if deduplicated, or an error.
 func ingestObserveRecord(
-	db *database.CatalogDB,
+	db database.CatalogWriter,
 	record map[string]any,
 	target string,
 	origin string,

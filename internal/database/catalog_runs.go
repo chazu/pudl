@@ -150,11 +150,7 @@ func (c *CatalogDB) UnfinishedRuns(model string) ([]RunRecord, error) {
 	return records, rows.Err()
 }
 
-// rowScanner covers *sql.Row and *sql.Rows so one scan path serves both.
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
+// scanRunRecord maps one runs row. rowScanner lives in catalog_rows.go.
 func scanRunRecord(row rowScanner) (RunRecord, error) {
 	var (
 		record     RunRecord

@@ -721,7 +721,7 @@ exists to preserve.
 | ~~11~~ | ~~Snapshot content-hash dedup is dead code~~ — **fixed**: the dead lookup is removed rather than repaired. Hashing content only would collapse two observations into one row, leaving the second run without a snapshot of its own — the opposite of what invariant 3 and `--catalog-scope` need. Idempotency stays a record-level property. | `internal/mubridge/ingest.go` |
 | ~~12~~ | ~~Manifest re-ingest skips the status loop and discards the new run ID~~ — **fixed**: a duplicate now repairs per-action statuses the first ingest never wrote (rows still at `unknown`) and nothing else, since rewriting wholesale would knock a since-verified `clean` back to `converging`. The manifest keeps its owning run — rewriting it would be defect 7 again — and `Skipped` plus the CLI wording now say the reported run is the earlier one. | `internal/mubridge/manifest.go` |
 | ~~13~~ | ~~A failed `GetCollectionByID` degrades into an origin filter matching nothing~~ — **fixed**: only a not-found falls back; any other lookup failure is fatal. Classification is extracted as `observeScopeFilter` so the DB-error path is directly testable. | `cmd/run_inventory.go` |
-| 14 | **Partially fixed.** The recorded symptom is gone — the inventory path no longer holds a reader open across `runPopulate`'s writer, because the catalog is opened after populate rather than before. The recommendation itself is untouched: there is still no session/repository able to record an observation or convergence step atomically, no centralized row mapping, and no migration version table. See the note in Recommendation 4 on why the unit must be the *step*, not the run. | `cmd/run.go` |
+| ~~14~~ | ~~No shared transaction within a run~~ — **fixed 2026-07-25**: `CatalogTx`/`WithCatalogTx` make a step atomic, and both recorded steps now use it (observe ingest, manifest ingest). Row mapping is centralized in `catalog_rows.go`. Still outstanding from the recommendation, tracked separately: one run-owned handle, and a migration version table. | `internal/database/catalog_tx.go` |
 | ~~15~~ | ~~Dead code: `ingestObserveOutput` and `ingestObserveOutputWithSnapshot`~~ — **fixed**: both removed. `UpdateEntryRunID` went with defect 7. | `cmd/run_populate.go` |
 
 #### Invariants that hold
@@ -778,21 +778,51 @@ mapping and introduce an explicit migration version table. Once callers no longe
 depend on the legacy collection columns, those columns can be retired in favor of
 `collection_memberships` as the sole relationship source.
 
-**The unit is the step, not the run** (noted 2026-07-25, while closing defect 14's
-recorded symptom). "One transaction per run" is not the target and should not be
-built: a converge run shells out to mu for minutes at a time, so a write
-transaction spanning the run would hold the catalog locked for the whole of it —
-against other pudl invocations and against the run's own second handle. What
-wants to be atomic is each *step* that records a result: an observation and its
-snapshot membership, or a convergence step's manifest plus per-action statuses.
-Those are short, self-contained, and hold no lock across a subprocess.
+### Status: first slice delivered 2026-07-25
 
-A useful precondition, still outstanding, is a single catalog handle owned by the
-run and passed to the phases, replacing the six independent `NewCatalogDB` opens
-in `cmd/run.go`, `run_checks.go`, `run_populate.go` and `run_depends.go`. Those
-opens are currently what makes their best-effort "a missing catalog never fails
-the run" semantics work, so the handle has to carry that behaviour explicitly
-rather than inherit it by accident.
+**The unit is the step, not the run.** "One transaction per run" is not the target
+and was deliberately not built: a converge run shells out to mu for minutes at a
+time, so a write transaction spanning the run would hold the catalog locked for
+the whole of it — against other pudl invocations and against the run's own other
+handles. What wants to be atomic is each *step* that records a result, each of
+which is short and holds no lock across a subprocess.
+
+Delivered:
+
+- `CatalogTx` + `CatalogDB.WithCatalogTx` (`internal/database/catalog_tx.go`),
+  mirroring the existing `FactTx`/`WithFactTx` idiom — BEGIN IMMEDIATE, rollback
+  on error, reads see the transaction's own writes.
+- `CatalogWriter`, the operation set a step performs, satisfied by both
+  `*CatalogDB` and `*CatalogTx`, so ingest code is written once and runs either
+  way.
+- Both recorded steps wrapped: the observe ingest (snapshot + every membership)
+  and the manifest ingest (manifest + action entries + per-action statuses). The
+  manifest's status write was a warn-and-continue; inside a transaction that
+  would have committed the very hole it was papering over, so it now aborts the
+  step.
+- Centralized catalog row mapping (`internal/database/catalog_rows.go`):
+  `entryColumns` + `scanEntry` replace a dozen hand-copied column lists and
+  Scans — the footgun CLAUDE.md warns about ("all SQL SELECT/Scan operations
+  must be kept in sync when adding columns") is now one edit.
+
+Known cost: the write lock is held for a whole step rather than per row, and the
+observe ingest stages raw files inside that window. Hoisting file staging out of
+the transaction is the next improvement if a step ever approaches the 5s
+busy_timeout.
+
+Still outstanding:
+
+- **One run-owned handle.** The run path opens the catalog eleven times
+  (`cmd/run.go` ×5, `run_checks.go`, `run_depends.go` ×2, `run_populate.go`,
+  `run_converge.go`, `run_drift.go`), and every `NewCatalogDB` re-runs
+  `createTables` and all migrations. Consolidating is worthwhile on its own
+  merits, but it is lifecycle work rather than atomicity work and carries broad
+  signature churn, so it is tracked separately. Note those opens are currently
+  what makes the best-effort "a missing catalog never fails the run" semantics
+  work: a shared handle has to carry that behaviour explicitly rather than
+  inherit it by accident.
+- An explicit migration version table.
+- Retiring the legacy collection columns in favour of `collection_memberships`.
 
 ## Recommendation 5: make workspace policy one explicit dependency
 

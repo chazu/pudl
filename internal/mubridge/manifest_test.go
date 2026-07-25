@@ -327,6 +327,45 @@ func TestIngestManifest_DedupReportsOwningRun(t *testing.T) {
 	}
 }
 
+// A manifest ingest is one step. Failing part-way through must leave nothing —
+// not the manifest, not the actions that already landed, not their statuses.
+// A half-recorded apply is worse than none: the catalog shows work was done
+// while the resources it touched still read `unknown`.
+//
+// The failure is forced by two byte-identical actions, which compute the same
+// content-addressed entry ID and so collide on insert — the manifest entry and
+// the first action are already written by then.
+func TestIngestManifest_StepIsAtomic(t *testing.T) {
+	db, tmpDir := setupTestDB(t)
+	defer db.Close()
+
+	collidingManifest := `{
+  "timestamp": "2026-03-24T11:00:00Z",
+  "summary": {"total": 2, "cached": 0, "executed": 2, "failed": 0},
+  "actions": [
+    {"id": "dup", "target": "//web", "cached": false, "exit_code": 0, "outputs": {}},
+    {"id": "dup", "target": "//web", "cached": false, "exit_code": 0, "outputs": {}}
+  ]
+}`
+
+	_, err := IngestManifest(db, strings.NewReader(collidingManifest), "mu-build", tmpDir, "")
+	if err == nil {
+		t.Fatal("expected the colliding action to fail the step")
+	}
+
+	entries, qErr := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
+	if qErr != nil {
+		t.Fatalf("QueryEntries failed: %v", qErr)
+	}
+	if entries.FilteredCount != 0 {
+		t.Errorf("a failed step must record no entries, got %d", entries.FilteredCount)
+	}
+
+	if status, ok := targetStatusMap(t, db)["web"]; ok {
+		t.Errorf("a failed step must record no status, got %q", status)
+	}
+}
+
 func targetStatusMap(t *testing.T, db *database.CatalogDB) map[string]string {
 	t.Helper()
 	statuses, err := db.GetTargetStatuses()
