@@ -478,7 +478,16 @@ Found while settling the decisions above and during adversarial review. Each was
 confirmed against the code; those marked *(reproduced)* were demonstrated with a
 temporary probe test. Ranked by blast radius.
 
-#### Defect 1 — a crashed or interrupted run can leave a stale `clean`
+#### Defect 1 — a crashed or interrupted run can leave a stale `clean` — **FIXED 2026-07-24**
+
+A `runs` table now records every run: `StartRun` before any phase, `FinishRun`
+from a `defer` so an early error return is still a *recorded* termination, and
+`UnfinishedRuns` to surface rows left behind by a process that died without a
+word. A converge run marks its model `unknown` up front, so a crash mid-converge
+can no longer leave the previous run's `clean` standing. `persistRunStatus`
+reports its failures instead of swallowing them. The in-process sibling below is
+fixed by Defect 5's work: the observe-after-apply route now yields
+`NeedsVerification` rather than an empty verdict. The original report follows.
 
 *The earlier draft claimed a crashed run "records nothing at all." That is
 refuted.* `recordModelInstance` (`cmd/run.go:89`) runs before any phase and
@@ -584,7 +593,16 @@ apply flips every resource that apply left `converging` to `clean`, off a
 set-diff against records that may predate the apply. Invariant 5 requires a
 verified re-observation; catalog replay is not one.
 
-#### Defect 4 — observations that decide `clean` are never persisted
+#### Defect 4 — observations that decide `clean` are never persisted — **FIXED 2026-07-24**
+
+`observeDrift` now persists each differential observation via
+`mubridge.RecordDriftObservation` — the verdict, the drifted resources and mu's
+raw output — and `ModelDriftResult.ObservationID` / `acute.Observation.ObservationID`
+carry the entry ID so a `clean` claim can be traced to stored evidence. The entry
+type is `drift-observation`, deliberately **not** `observe`, so a drift verdict
+can never be mistaken for an observed record by inventory drift. This covers both
+the converge loop and the observe-only differential path. A dry run stores
+nothing. The original report follows.
 
 `observeDrift` (`cmd/run_drift.go:179-188`) execs `mu observe`, interprets drift
 via a pure function, and returns — no catalog write. `acute.Observation` is
@@ -603,7 +621,15 @@ a latent smell rather than a live bug: the only producer on this path
 (`cmd/run_converge.go:80-86`) sets a `ModelDriftResult` value, so the assertion
 at `run_converge.go:121` cannot currently fail.
 
-#### Defect 5 — a lost apply receipt is masked on three of four exit routes
+#### Defect 5 — a lost apply receipt is masked on three of four exit routes — **FIXED 2026-07-24**
+
+`ConvergeResult.NeedsVerification` is now orthogonal to `Outcome`, and every exit
+route reaches it: the loop `break`s instead of returning early, so the verdict is
+evaluated on all four. `runVerdict` checks it *before* the outcome, so a lost
+receipt yields `unknown` rather than `failed` whatever else happened. Applying and
+then failing to re-observe is treated as the same state, via a new
+`OutcomeObserveError`; an observe failure before any apply stays an ordinary
+failure. The original report follows.
 
 `coordinator.go:129` converts `manifestFailure` into `OutcomeNeedsVerification`
 only when the outcome is already `OutcomeClean`. On the cap-exhausted route the
@@ -618,7 +644,20 @@ N applies and N+1 observations, with no off-by-one at `i >= request.MaxIteration
 and a manifest failure on a *non-final* iteration latches correctly and
 downgrades a later clean observation *(both reproduced)*.
 
-#### Defect 6 — a dry run mutates catalog state, memberships and facts
+#### Defect 6 — a dry run mutates catalog state, memberships and facts — **PARTIALLY FIXED 2026-07-24**
+
+`recordModelInstance` and `reconcileModelDependencies` are now skipped on a dry
+run, so no catalog entries, collection memberships, raw files or
+`model_depends_on` facts are written; the run record and drift observations are
+skipped too. Four of the five nouns in invariant 4 are therefore covered.
+
+**Still open:** the scratch directory. `setupReconcileWorkspace` writes `mu.cue`
+and the desired manifests into a temp subdir under the mu project root, and a dry
+run genuinely needs them there — `mu build --plan` reads the config from disk, and
+the project-embedded design is deliberate. Cleanup is deferred, so a *killed* run
+leaves `pudl_run_*` behind, but that is equally true of a normal run and is not
+specific to `--dry-run`. Recording it as fixed would be overclaiming: what remains
+is a scratch-file lifecycle issue, not a catalog mutation.
 
 Invariant 4 requires that a dry run mutate nothing. Two unconditional writes run
 before the dry-run branch is reached:

@@ -199,6 +199,12 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure collection memberships: %w", err)
 	}
 
+	// Run audit rows, so an incomplete run is visible rather than leaving the
+	// previous run's verdict standing on the model row.
+	if err := c.ensureRunsTable(); err != nil {
+		return fmt.Errorf("failed to ensure runs table: %w", err)
+	}
+
 	// Create facts table (idempotent)
 	if err := c.ensureFactsTable(); err != nil {
 		return fmt.Errorf("failed to ensure facts table: %w", err)

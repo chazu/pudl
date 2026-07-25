@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -41,7 +42,7 @@ Examples:
     pudl run k8sConverge --converge --dry-run`,
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (runError error) {
 		name := args[0]
 
 		flags := runFlags{
@@ -85,24 +86,61 @@ Examples:
 			fmt.Print(renderRunPlan(plan))
 		}
 
-		// Record the instance in the catalog (identity = name) so every model
-		// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
-		// a recording failure must not fail the run.
-		if err := recordModelInstance(model, session.RunID); err != nil && live {
-			fmt.Printf("warning: could not record model instance: %v\n", err)
+		// Audit the run for real, from here on. A dry run is exempt because it must
+		// not touch catalog state at all.
+		mode := "observe-only"
+		if flags.converge && model.Convergent() {
+			mode = "converge"
+		}
+		// finishState is populated once the run concludes and read by the deferred
+		// finalizer below.
+		finishState := &runFinishState{}
+		if !flags.dryRun {
+			startRunRecord(session.RunID, model.Name, mode, live)
+
+			// The finalizer runs on every exit path, including an early `return err`,
+			// so a run that ends badly is still recorded as *ended*. A row left
+			// unfinished therefore means the process died without a word.
+			defer func() { finishRunRecord(session.RunID, *finishState, runError, live) }()
+
+			// A converge run can mutate before it is able to write a verdict, so the
+			// model's previous verdict stops being trustworthy the moment it starts.
+			// Clearing it to `unknown` up front means a crashed converge leaves
+			// `unknown` rather than a stale `clean`. Observe-only runs change nothing,
+			// so their model keeps its last real verdict.
+			if mode == "converge" {
+				persistRunStatus(model.Name, "unknown", live)
+			}
 		}
 
-		// Reconcile this model's declared depends_on into model_depends_on facts
-		// (add new edges, invalidate removed ones). Best-effort: a reconcile
-		// failure must not fail the run. Warnings (e.g. unresolved deps) surface.
-		if warns, err := reconcileModelDependencies(model); err != nil {
-			if live {
-				fmt.Printf("warning: could not reconcile dependencies: %v\n", err)
+		// A dry run must not mutate catalog state, memberships, facts or statuses:
+		// it is documented as showing what *would* happen. Both writes below are
+		// real mutations, and both used to run unconditionally — before the
+		// dry-run branch was ever reached — so `--dry-run` created snapshot
+		// entries, item entries, collection memberships, raw files and
+		// model_depends_on facts.
+		if !flags.dryRun {
+			// Record the instance in the catalog (identity = name) so every model
+			// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
+			// a recording failure must not fail the run.
+			if err := recordModelInstance(model, session.RunID); err != nil && live {
+				fmt.Printf("warning: could not record model instance: %v\n", err)
+			}
+
+			// Reconcile this model's declared depends_on into model_depends_on facts
+			// (add new edges, invalidate removed ones). Best-effort: a reconcile
+			// failure must not fail the run. Warnings (e.g. unresolved deps) surface.
+			if warns, err := reconcileModelDependencies(model); err != nil {
+				if live {
+					fmt.Printf("warning: could not reconcile dependencies: %v\n", err)
+				}
+			} else if live {
+				for _, w := range warns {
+					fmt.Printf("warning: %s\n", w)
+				}
 			}
 		} else if live {
-			for _, w := range warns {
-				fmt.Printf("warning: %s\n", w)
-			}
+			fmt.Println("dry-run: skipping model-instance and dependency-fact writes")
 		}
 
 		// Opt-in stale-input guard: warn if any transitive upstream is drifted/failed.
@@ -191,7 +229,7 @@ Examples:
 				report.Drift = &res
 			case len(model.Desired) > 0:
 				// Differential: live observe with desired-as-sources (k8s-style).
-				res, err := runDrift(model, muRoot, modelDir)
+				res, err := runDrift(model, muRoot, modelDir, session.RunID)
 				if err != nil {
 					return err
 				}
@@ -226,8 +264,17 @@ Examples:
 		fmt.Print(out)
 
 		// Persist the run's terminal verdict on the model instance row so
-		// `pudl model list` / `pudl status` surface last-run state.
-		persistRunStatus(model.Name, runVerdict(report, flags))
+		// `pudl model list` / `pudl status` surface last-run state, and record the
+		// same conclusion on the run row. The run row is what tells an `unknown`
+		// caused by a lost receipt apart from the `unknown` of a resource nobody has
+		// ever observed — they are the same value on the model row by design.
+		verdict := runVerdict(report, flags)
+		finishState.verdict = verdict
+		if report.Converge != nil {
+			finishState.outcome = report.Converge.Outcome
+			finishState.needsVerification = report.Converge.NeedsVerification
+		}
+		persistRunStatus(model.Name, verdict, live)
 
 		// A verified ∅ re-check promotes this model's resources from `converging`
 		// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
@@ -258,11 +305,15 @@ func runVerdict(r *RunReport, f runFlags) string {
 	}
 	switch {
 	case r.Converge != nil:
+		// Checked before the outcome: a run that mutated the system without being
+		// able to prove the result is `unknown` however the loop ended. Falling
+		// through to `failed` here would describe an apply that succeeded as one
+		// that did not, inviting a manual re-apply.
+		if r.Converge.NeedsVerification || r.Converge.Outcome == string(outcomeNeedsVerification) {
+			return "unknown"
+		}
 		if r.Converge.Outcome == string(outcomeClean) {
 			return "clean"
-		}
-		if r.Converge.Outcome == string(outcomeNeedsVerification) {
-			return "unknown"
 		}
 		if strings.HasPrefix(r.Converge.Outcome, "failed") {
 			return "failed"
@@ -287,17 +338,76 @@ func runVerdict(r *RunReport, f runFlags) string {
 
 // persistRunStatus records a run verdict on the model instance row
 // (target = modelTargetKey(name)). Best-effort: a status-write failure (or no
-// catalog) never fails the run.
-func persistRunStatus(name, status string) {
+// catalog) never fails the run, but it is reported rather than swallowed — a
+// silently dropped verdict leaves the previous run's status standing, which is
+// how a stale `clean` used to survive.
+func persistRunStatus(name, status string, live bool) {
 	if status == "" {
 		return
 	}
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	if err != nil {
+		if live {
+			fmt.Printf("warning: could not open catalog to record status %q: %v\n", status, err)
+		}
 		return
 	}
 	defer db.Close()
-	_ = db.UpdateStatus(modelTargetKey(name), status)
+	if err := db.UpdateStatus(modelTargetKey(name), status); err != nil && live {
+		fmt.Printf("warning: could not record status %q: %v\n", status, err)
+	}
+}
+
+// runFinishState is what a completed run concluded, handed to the deferred
+// finalizer so every exit path — including an early `return err` — records a
+// terminal run row.
+type runFinishState struct {
+	verdict           string
+	outcome           string
+	needsVerification bool
+}
+
+// startRunRecord opens the run's audit row before any phase runs, and reports any
+// earlier run of this model that never finished. An unfinished row means a prior
+// invocation died without recording a verdict, so the status that model currently
+// carries predates it. Best-effort: auditing must not fail the run.
+func startRunRecord(runID, model, mode string, live bool) {
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		if live {
+			fmt.Printf("warning: could not open catalog to record the run: %v\n", err)
+		}
+		return
+	}
+	defer db.Close()
+
+	if stale, err := db.UnfinishedRuns(model); err == nil && len(stale) > 0 && live {
+		fmt.Printf("warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
+			len(stale), model, stale[0].RunID, stale[0].StartedAt.Format(time.RFC3339))
+		fmt.Println("         that model's recorded status predates those runs and may be stale")
+	}
+	if err := db.StartRun(runID, model, mode); err != nil && live {
+		fmt.Printf("warning: could not record run start: %v\n", err)
+	}
+}
+
+// finishRunRecord marks the run terminal. It runs from a defer so that an early
+// error return is still a *recorded* termination — distinguishable from a process
+// that died without saying anything, which leaves the row unfinished.
+func finishRunRecord(runID string, state runFinishState, runErr error, live bool) {
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		return
+	}
+	defer db.Close()
+
+	note := ""
+	if runErr != nil {
+		note = runErr.Error()
+	}
+	if err := db.FinishRun(runID, state.verdict, state.outcome, state.needsVerification, note); err != nil && live {
+		fmt.Printf("warning: could not record run completion: %v\n", err)
+	}
 }
 
 // promoteConvergingResources flips this model's resources from `converging` to

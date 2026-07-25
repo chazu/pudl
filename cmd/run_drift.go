@@ -10,6 +10,9 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -136,15 +139,21 @@ func writeDesiredManifests(desired []map[string]any, dir string) ([]string, erro
 // desired manifests + a converge-plugin target. Both observe (drift) and build
 // (converge) run against Target. Call Cleanup when done.
 type reconcileWorkspace struct {
-	MuRoot  string
-	Target  string
+	MuRoot string
+	Target string
+	// RunID tags the observations this workspace records, so a verdict can be
+	// traced back to the run that produced it.
+	RunID string
+	// DryRun suppresses the observation write, since --dry-run promises no
+	// catalog mutation.
+	DryRun  bool
 	Cleanup func()
 }
 
 // setupReconcileWorkspace renders the desired manifests + mu.cue into a
 // non-hidden temp subdir under muRoot (so mu merges it and inherits the project's
 // toolchains/cache).
-func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir string) (*reconcileWorkspace, error) {
+func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir, runID string, dryRun bool) (*reconcileWorkspace, error) {
 	if len(m.Desired) == 0 {
 		return nil, fmt.Errorf("reconcile needs desired state; model %q declares none", m.Name)
 	}
@@ -172,6 +181,8 @@ func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir string
 	return &reconcileWorkspace{
 		MuRoot:  muRoot,
 		Target:  driftTargetName(m.Name),
+		RunID:   runID,
+		DryRun:  dryRun,
 		Cleanup: func() { os.RemoveAll(dir) },
 	}, nil
 }
@@ -186,13 +197,72 @@ func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
 	if err := cmd.Run(); err != nil {
 		return ModelDriftResult{}, fmt.Errorf("mu observe %s: %w: %s", w.Target, err, strings.TrimSpace(stderr.String()))
 	}
-	return interpretDifferentialObserve(stdout.Bytes())
+	res, err := interpretDifferentialObserve(stdout.Bytes())
+	if err != nil {
+		return res, err
+	}
+	// Persist the observation this verdict came from. Without it a `clean` claim
+	// rests on a value that only ever existed in memory, and the promotion it
+	// drives cannot be audited afterwards.
+	res.ObservationID = recordDriftObservation(w.Target, w.RunID, w.DryRun, res, stdout.Bytes())
+	return res, nil
+}
+
+// recordDriftObservation stores a differential observation and returns its
+// catalog entry ID, or "" when nothing was stored. Best-effort: failing to record
+// the evidence must not fail a run that observed successfully, but it is reported
+// and it leaves ObservationID empty rather than implying evidence exists.
+//
+// A dry run stores nothing, because --dry-run promises no catalog writes.
+func recordDriftObservation(target, runID string, dryRun bool, res ModelDriftResult, raw []byte) string {
+	if dryRun {
+		return ""
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		if !jsonOutput {
+			fmt.Printf("warning: could not load config to record the observation: %v\n", err)
+		}
+		return ""
+	}
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	if err != nil {
+		if !jsonOutput {
+			fmt.Printf("warning: could not open catalog to record the observation: %v\n", err)
+		}
+		return ""
+	}
+	defer db.Close()
+
+	drifted := make([]map[string]any, 0, len(res.Drifted))
+	for _, d := range res.Drifted {
+		drifted = append(drifted, map[string]any{
+			"resource": d.Resource,
+			"reason":   d.Reason,
+			"diff":     d.Diff,
+		})
+	}
+	id, err := mubridge.RecordDriftObservation(db, mubridge.DriftObservation{
+		Target:       target,
+		RunID:        runID,
+		Clean:        res.Clean,
+		DriftedCount: len(res.Drifted),
+		Drifted:      drifted,
+		Raw:          raw,
+	}, cfg.DataPath)
+	if err != nil {
+		if !jsonOutput {
+			fmt.Printf("warning: could not record the observation: %v\n", err)
+		}
+		return ""
+	}
+	return id
 }
 
 // runDrift is the read-only drift phase (observe-only on a convergent model):
 // set up the workspace, observe once, report.
-func runDrift(m *systemmodel.SystemModel, muRoot, modelDir string) (ModelDriftResult, error) {
-	w, err := setupReconcileWorkspace(m, muRoot, modelDir)
+func runDrift(m *systemmodel.SystemModel, muRoot, modelDir, runID string) (ModelDriftResult, error) {
+	w, err := setupReconcileWorkspace(m, muRoot, modelDir, runID, false)
 	if err != nil {
 		return ModelDriftResult{}, err
 	}

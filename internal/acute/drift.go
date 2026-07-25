@@ -20,4 +20,10 @@ type ModelDriftResult struct {
 	// that a path which forgets to claim verification stays untrusted rather
 	// than silently authoritative.
 	Verified bool `json:"verified"`
+
+	// ObservationID is the catalog entry recording the observation this verdict
+	// came from, so a `clean` claim can be traced to stored evidence rather than
+	// resting on a value that existed only in memory. Empty for a catalog replay,
+	// which observed nothing, and for a dry run, which persists nothing.
+	ObservationID string `json:"observation_id,omitempty"`
 }
