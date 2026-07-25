@@ -192,11 +192,6 @@ Examples:
 				// (EweTarget, or #PluginObserve differential:false); --from-catalog
 				// forces it for any model.
 				report.Mode = "observe-only (inventory)"
-				db, err := database.NewCatalogDB(config.GetPudlDir())
-				if err != nil {
-					return fmt.Errorf("open catalog: %w", err)
-				}
-				defer db.Close()
 				identity, err := schemaIdentityResolver()
 				if err != nil {
 					return err
@@ -219,6 +214,16 @@ Examples:
 						return fmt.Errorf("populate produced no snapshot to compare against")
 					}
 				}
+				// The catalog is opened *after* populate, not before. Opening it up
+				// front left this reader handle open across runPopulate, which opens
+				// its own handle and writes the very records this then reads —
+				// a second connection writing under an open reader, for no benefit,
+				// since nothing here reads the catalog until populate has finished.
+				db, err := database.NewCatalogDB(config.GetPudlDir())
+				if err != nil {
+					return fmt.Errorf("open catalog: %w", err)
+				}
+				defer db.Close()
 				res, err := runInventoryDrift(db, scope, model.Desired, identity)
 				if err != nil {
 					return err

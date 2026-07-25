@@ -40,11 +40,17 @@ type ManifestAction struct {
 
 // IngestManifestResult contains summary information about the ingestion.
 type IngestManifestResult struct {
+	// RunID is the run that *owns* the manifest entry. When Skipped is true that
+	// is the run which first recorded it, not the caller's — the manifest is
+	// content-addressed and its association is first-writer-wins.
 	RunID   string
 	Total   int
 	Cached  int
 	Failed  int
 	Skipped bool
+	// StatusesRepaired counts per-action statuses a duplicate ingest filled in
+	// because the original ingest never managed to write them.
+	StatusesRepaired int
 }
 
 // IngestManifest processes a mu build manifest and stores results in the catalog.
@@ -86,16 +92,28 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 		return nil, fmt.Errorf("failed to check for duplicate manifest: %w", err)
 	}
 	if existing != nil {
+		// The manifest's content hash covers its own `timestamp`, so two distinct
+		// applies never collide: a duplicate is the same apply being recorded a
+		// second time. The entry therefore keeps the run that first recorded it —
+		// rewriting run_id to runIDOverride here would be the same last-writer-wins
+		// association that made observe records unqueryable by their own run. The
+		// returned RunID names that owning run, and Skipped says it is not the
+		// caller's.
 		runID := ""
 		if existing.RunID != nil {
 			runID = *existing.RunID
 		}
+		repaired, err := repairMissingActionStatuses(db, manifest)
+		if err != nil {
+			return nil, err
+		}
 		return &IngestManifestResult{
-			RunID:   runID,
-			Total:   manifest.Summary.Total,
-			Cached:  manifest.Summary.Cached,
-			Failed:  manifest.Summary.Failed,
-			Skipped: true,
+			RunID:            runID,
+			Total:            manifest.Summary.Total,
+			Cached:           manifest.Summary.Cached,
+			Failed:           manifest.Summary.Failed,
+			Skipped:          true,
+			StatusesRepaired: repaired,
 		}, nil
 	}
 
@@ -148,15 +166,7 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 	actionSchema := "pudl/mu.#ManifestAction"
 
 	for _, action := range manifest.Actions {
-		// Key the catalog `target` off the action's identifier. mu's build
-		// manifest carries the identifier under `id` (e.g.
-		// "//models/<m>:drift:apply"); the older `target` field may be empty, so
-		// fall back to `id`. Strip the leading "//".
-		actionRef := action.Target
-		if actionRef == "" {
-			actionRef = action.ID
-		}
-		targetName := normalizeTarget(actionRef)
+		targetName := actionTargetName(action)
 		// Filesystem-safe variant for the stored-action filename ("/" and ":"
 		// are not usable as path segments).
 		safeName := strings.NewReplacer("/", "_", ":", "_").Replace(targetName)
@@ -212,15 +222,10 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 			return nil, fmt.Errorf("failed to add action entry for %s: %w", targetName, err)
 		}
 
-		// Status from the action exit code. Exit 0 means the apply COMMAND ran,
-		// not that observed==desired — so write "converging" (applied, pending
-		// verification). Only the drift re-check writes the verified in-sync
-		// status "clean" (build-spec §5). Exit≠0 is a real failure.
-		status := "converging"
-		if action.ExitCode != 0 {
-			status = "failed"
-		}
-		if err := db.UpdateStatus(targetName, status); err != nil {
+		// Status from the action exit code (see actionStatus): "converging" means
+		// applied, pending verification — only the drift re-check writes the
+		// verified in-sync status "clean" (build-spec §5).
+		if err := db.UpdateStatus(targetName, actionStatus(action)); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to update status for %s: %v\n", targetName, err)
 		}
 	}
@@ -231,6 +236,64 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 		Cached: manifest.Summary.Cached,
 		Failed: manifest.Summary.Failed,
 	}, nil
+}
+
+// actionTargetName is the catalog `target` key for one manifest action. mu's
+// build manifest carries the identifier under `id` (e.g.
+// "//models/<m>:drift:apply"); the older `target` field may be empty, so fall
+// back to `id`. The leading "//" is stripped.
+func actionTargetName(action ManifestAction) string {
+	actionRef := action.Target
+	if actionRef == "" {
+		actionRef = action.ID
+	}
+	return normalizeTarget(actionRef)
+}
+
+// actionStatus is the status one action implies: exit 0 means the apply COMMAND
+// ran, not that observed==desired, so it is "converging" (applied, pending
+// verification) rather than "clean". Only the drift re-check writes "clean".
+func actionStatus(action ManifestAction) string {
+	if action.ExitCode != 0 {
+		return "failed"
+	}
+	return "converging"
+}
+
+// repairMissingActionStatuses fills in per-action statuses that were never
+// recorded, and touches nothing else.
+//
+// The first ingest treats an UpdateStatus failure as a warning rather than an
+// error, so an action's apply can be recorded while its resource is left sitting
+// at the default `unknown`. Re-ingesting the same manifest is the natural repair
+// path for that, and it is the only thing a re-ingest may safely write: a
+// duplicate is the *same apply* recorded twice, so rewriting statuses wholesale
+// would knock a resource the drift re-check has since promoted to `clean` back
+// to `converging`, undoing a verification with information older than it.
+func repairMissingActionStatuses(db *database.CatalogDB, manifest ManifestInput) (int, error) {
+	statuses, err := db.GetTargetStatuses()
+	if err != nil {
+		return 0, fmt.Errorf("failed to read target statuses: %w", err)
+	}
+	current := make(map[string]string, len(statuses))
+	for _, s := range statuses {
+		current[s.Target] = s.Status
+	}
+
+	repaired := 0
+	for _, action := range manifest.Actions {
+		targetName := actionTargetName(action)
+		// Absent means the action has no catalog row to carry a status; only a row
+		// still at the default `unknown` is one the first ingest failed to write.
+		if status, ok := current[targetName]; !ok || status != "unknown" {
+			continue
+		}
+		if err := db.UpdateStatus(targetName, actionStatus(action)); err != nil {
+			return repaired, fmt.Errorf("failed to repair status for %s: %w", targetName, err)
+		}
+		repaired++
+	}
+	return repaired, nil
 }
 
 // normalizeTarget converts a mu target name to the catalog `target` key,

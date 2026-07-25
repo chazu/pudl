@@ -644,7 +644,19 @@ N applies and N+1 observations, with no off-by-one at `i >= request.MaxIteration
 and a manifest failure on a *non-final* iteration latches correctly and
 downgrades a later clean observation *(both reproduced)*.
 
-#### Defect 6 — a dry run mutates catalog state, memberships and facts — **PARTIALLY FIXED 2026-07-24**
+#### Defect 6 — a dry run mutates catalog state, memberships and facts — **FIXED 2026-07-25**
+
+The catalog half was closed 2026-07-24 (below). The remaining scratch-directory
+half is now closed as far as it can be: `setupReconcileWorkspace` installs a
+SIGINT/SIGTERM handler that removes the workspace before re-raising, and each run
+sweeps `pudl_run_*` directories older than 24h out of the mu project root first,
+so anything an earlier run leaked is eventually collected. A SIGKILL still cannot
+run cleanup — the sweep is what reclaims those. The age gate is what makes the
+sweep safe alongside a concurrently running pudl.
+
+The original entry follows.
+
+#### Defect 6 (original) — a dry run mutates catalog state, memberships and facts — **PARTIALLY FIXED 2026-07-24**
 
 `recordModelInstance` and `reconcileModelDependencies` are now skipped on a dry
 run, so no catalog entries, collection memberships, raw files or
@@ -675,7 +687,18 @@ sees `DryRun` and `os.MkdirTemp(muRoot, "pudl_run_")` writes into the user's rea
 mu project tree; cleanup is deferred, so a killed dry run leaves `pudl_run_*`
 behind.
 
-#### Defect 7 — run/observation association is last-writer-wins
+#### Defect 7 — run/observation association is last-writer-wins — **FIXED 2026-07-25**
+
+`UpdateEntryRunID` is gone, along with the call site: a deduplicated record now
+keeps the run that *first* observed it. The current run's sighting is recorded as
+snapshot membership, which is the relationship that is legitimately many-to-many,
+so nothing is lost and the two durable identifiers no longer disagree. Querying a
+run now returns what that run actually saw, and re-running no longer degrades the
+provenance D1 depends on.
+
+The original entry follows.
+
+#### Defect 7 (original) — run/observation association is last-writer-wins
 
 `ingestObserveRecord` (`internal/mubridge/ingest.go:286-289`) calls
 `UpdateEntryRunID` on every deduplicated record, a bare
@@ -695,11 +718,11 @@ exists to preserve.
 | ~~8~~ | ~~Model-level status is written unscoped under `--only`~~ — **fixed**: `modelRowVerdict` degrades a scoped `clean` to `unknown` before it reaches the model row, since a ∅ over the selected resources says nothing about the excluded ones. `drifted`/`failed` still generalize (a defect in a subset is a defect in the model). The run row keeps the real verdict plus a note naming the scope, so this `unknown` is distinguishable from a lost receipt. | `cmd/run.go` |
 | ~~9~~ | ~~`PromoteConvergingToClean`'s fallback promotes by bare `target` name with no model predicate~~ — **fixed**: the fallback now also requires `tags.model` to be absent or equal to this model, so a row tagged to another model survives this model's clean drift. Untagged rows from two models sharing a target name are still indistinguishable — nothing in the row records the applying model — and the comment now says so instead of over-claiming. | `internal/database/catalog_status.go` |
 | ~~10~~ | ~~Checks receive `model`, not `effectiveModel`~~ — **fixed**: both the guard and the call take the effective scoped model. | `cmd/run.go` |
-| 11 | Snapshot content-hash dedup is dead code: the hashed payload contains a nanosecond-formatted `snapshot_id` and an RFC3339 `timestamp`, so the `GetEntry(contentHash)` lookup can never hit. Invariant 9 holds only at record level. | `internal/mubridge/ingest.go:183-216` |
-| 12 | Manifest re-ingest is idempotent but returns before the per-action `UpdateStatus` loop and discards the new run ID, so the result carries the original run's ID. | `internal/mubridge/manifest.go:84-100` |
-| 13 | A failed `GetCollectionByID` — not-found *or* DB error — degrades into an origin `LIKE` filter matching nothing, so every desired resource is reported `missing`. A DB error becomes a confident "everything is drifted". | `cmd/run_inventory.go:176-180` |
-| 14 | No shared transaction within a run; the inventory path holds a reader open across a writer. Recommendation 4's target. | `cmd/run.go:155` / `cmd/run_populate.go:333` |
-| 15 | Dead code: `ingestObserveOutput` and `ingestObserveOutputWithSnapshot` have no callers. | `cmd/run_populate.go:323`, `:328` |
+| ~~11~~ | ~~Snapshot content-hash dedup is dead code~~ — **fixed**: the dead lookup is removed rather than repaired. Hashing content only would collapse two observations into one row, leaving the second run without a snapshot of its own — the opposite of what invariant 3 and `--catalog-scope` need. Idempotency stays a record-level property. | `internal/mubridge/ingest.go` |
+| ~~12~~ | ~~Manifest re-ingest skips the status loop and discards the new run ID~~ — **fixed**: a duplicate now repairs per-action statuses the first ingest never wrote (rows still at `unknown`) and nothing else, since rewriting wholesale would knock a since-verified `clean` back to `converging`. The manifest keeps its owning run — rewriting it would be defect 7 again — and `Skipped` plus the CLI wording now say the reported run is the earlier one. | `internal/mubridge/manifest.go` |
+| ~~13~~ | ~~A failed `GetCollectionByID` degrades into an origin filter matching nothing~~ — **fixed**: only a not-found falls back; any other lookup failure is fatal. Classification is extracted as `observeScopeFilter` so the DB-error path is directly testable. | `cmd/run_inventory.go` |
+| 14 | **Partially fixed.** The recorded symptom is gone — the inventory path no longer holds a reader open across `runPopulate`'s writer, because the catalog is opened after populate rather than before. The recommendation itself is untouched: there is still no session/repository able to record an observation or convergence step atomically, no centralized row mapping, and no migration version table. See the note in Recommendation 4 on why the unit must be the *step*, not the run. | `cmd/run.go` |
+| ~~15~~ | ~~Dead code: `ingestObserveOutput` and `ingestObserveOutputWithSnapshot`~~ — **fixed**: both removed. `UpdateEntryRunID` went with defect 7. | `cmd/run_populate.go` |
 
 #### Invariants that hold
 
@@ -754,6 +777,22 @@ record an observation or convergence step. It should also centralize catalog row
 mapping and introduce an explicit migration version table. Once callers no longer
 depend on the legacy collection columns, those columns can be retired in favor of
 `collection_memberships` as the sole relationship source.
+
+**The unit is the step, not the run** (noted 2026-07-25, while closing defect 14's
+recorded symptom). "One transaction per run" is not the target and should not be
+built: a converge run shells out to mu for minutes at a time, so a write
+transaction spanning the run would hold the catalog locked for the whole of it —
+against other pudl invocations and against the run's own second handle. What
+wants to be atomic is each *step* that records a result: an observation and its
+snapshot membership, or a convergence step's manifest plus per-action statuses.
+Those are short, self-contained, and hold no lock across a subprocess.
+
+A useful precondition, still outstanding, is a single catalog handle owned by the
+run and passed to the phases, replacing the six independent `NewCatalogDB` opens
+in `cmd/run.go`, `run_checks.go`, `run_populate.go` and `run_depends.go`. Those
+opens are currently what makes their best-effort "a missing catalog never fails
+the run" semantics work, so the handle has to carry that behaviour explicitly
+rather than inherit it by accident.
 
 ## Recommendation 5: make workspace policy one explicit dependency
 

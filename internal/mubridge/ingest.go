@@ -209,11 +209,19 @@ func createObserveSnapshot(
 		return "", fmt.Errorf("failed to write snapshot: %w", err)
 	}
 
-	// Dedup: if a snapshot with this content hash already exists, return it.
-	existingSnapshot, err := db.GetEntry(contentHash)
-	if err == nil && existingSnapshot != nil {
-		return contentHash, nil
-	}
+	// No snapshot-level dedup. The hashed payload carries this snapshot's own
+	// `snapshot_id` (nanosecond-formatted), `timestamp` and `run_id`, so two
+	// observations are never content-identical and the GetEntry(contentHash)
+	// lookup that used to sit here could not hit — it was dead code, not a
+	// working optimization.
+	//
+	// It is also not something to repair by hashing content only: a snapshot is
+	// the record of *one* observation by *one* run, which is what invariant 3
+	// requires and what `--catalog-scope` selects. Collapsing two observations
+	// into a shared row would leave the second run with no snapshot of its own.
+	// Idempotency (invariant 9) is served at the record level instead — see the
+	// content-hash dedup in ingestObserveRecord, which reuses the record entry and
+	// adds a membership rather than duplicating it.
 
 	// ObserveSnapshot is a family root, so it is its own identity namespace.
 	schema := "pudl/mu.#ObserveSnapshot"
@@ -283,11 +291,15 @@ func ingestObserveRecord(
 		return 0, fmt.Errorf("dedup check failed for %s: %w", target, err)
 	}
 	if existing != nil {
-		if runID != "" {
-			if err := db.UpdateEntryRunID(existing.ID, runID); err != nil {
-				return 0, fmt.Errorf("update deduplicated observe run: %w", err)
-			}
-		}
+		// The entry keeps the run that *first* observed it. Rewriting run_id to the
+		// current run made the association last-writer-wins: an entry first seen by
+		// run A silently moved to run B on the next identical observation, so a
+		// query for run A under-reported what run A actually saw. Invariant 3 wants
+		// exactly one run per observation, and re-running must not degrade the
+		// provenance that replay-by-durable-ID depends on.
+		//
+		// This run's sighting is not lost — it is recorded as snapshot membership
+		// below, which is the relationship that is legitimately many-to-many.
 		if err := db.AddCollectionMembership(collectionID, existing.ID, index); err != nil {
 			return 0, fmt.Errorf("failed to link existing observe record to snapshot: %w", err)
 		}
