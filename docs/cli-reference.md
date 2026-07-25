@@ -418,6 +418,19 @@ Declared resource dependencies are included transitively. A dependency must
 resolve to exactly one resource, so a dependency naming a type is an error.
 The selector set is validated before convergence side effects begin.
 
+The scoped model is what every phase consumes — planning, execution, report
+scope, resource promotion and checks all see the selected resources, not the
+model's full desired set.
+
+A scoped run does not write `clean` to the model's own status row. A ∅ over the
+named resources is a statement about those resources; the ones left out of scope
+were never observed, so generalizing it would let `pudl status`, `pudl model
+list` and `--check-upstream` read whole-model "in sync" off a partial run. The
+model row is left `unknown` instead, and the run row records the real verdict
+plus a note naming the scope. `drifted` and `failed` *are* written: a defect
+found in a subset is a defect in the model. Re-run without `--only` to establish
+a whole-model `clean`.
+
 ### `pudl status [target]`
 
 Read convergence status from the catalog. A model run records its verdict on the instance row, keyed by target `models/<name>`. With no argument, reports status for all targets; with a target name, reports just that one.
@@ -429,7 +442,10 @@ pudl status models/my-model
 
 Statuses: `unknown`, `clean`, `drifted`, `converging`, `failed`. `unknown` means
 there is no verified terminal status, including when an external apply completed
-but PUDL could not persist its manifest receipt. Lifecycle:
+but PUDL could not persist its manifest receipt, and when the only clean
+observation came from an `--only` run that covered part of the model. The run
+row (`runs`) distinguishes these: it carries the run's real verdict and a note.
+Lifecycle:
 `drifted → converging` (apply, via `ingest-manifest`) `→ clean` (verified ∅ by the drift
 re-check) `| failed`. `clean` is the single in-sync state (drift == ∅), written only off
 an actual observation with successful receipt persistence — never a bare apply.

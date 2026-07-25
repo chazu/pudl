@@ -1,12 +1,16 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -151,4 +155,154 @@ func TestRunVerdict(t *testing.T) {
 			assert.Equal(t, c.want, runVerdict(c.report, c.flags))
 		})
 	}
+}
+
+func TestModelRowVerdict(t *testing.T) {
+	cases := []struct {
+		name       string
+		verdict    string
+		restricted bool
+		want       string
+	}{
+		// Unrestricted: the run covered the model, so its verdict is the model's.
+		{"unscoped clean generalizes", "clean", false, "clean"},
+		{"unscoped drifted generalizes", "drifted", false, "drifted"},
+		{"unscoped failed generalizes", "failed", false, "failed"},
+		{"unscoped unknown generalizes", "unknown", false, "unknown"},
+		{"no verdict stays no verdict", "", false, ""},
+
+		// Restricted: only `clean` fails to generalize from a subset to the model.
+		// Writing it would let `pudl status`, `pudl model list` and
+		// checkUpstreamFreshness read whole-model "in sync" off a partial run.
+		{"scoped clean degrades to unknown", "clean", true, "unknown"},
+		// Drift or failure in a subset is drift or failure in the model, so these
+		// remain true statements about the whole and must not be weakened.
+		{"scoped drifted still generalizes", "drifted", true, "drifted"},
+		{"scoped failed still generalizes", "failed", true, "failed"},
+		{"scoped unknown is already weakest", "unknown", true, "unknown"},
+		{"scoped no verdict writes nothing", "", true, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			assert.Equal(t, c.want, modelRowVerdict(c.verdict, c.restricted))
+		})
+	}
+}
+
+// End-to-end over a real catalog: a scoped clean run must leave the model's own
+// status row `unknown` while the run row keeps the run's actual verdict and a
+// note naming the scope. Without both halves the degraded `unknown` would be
+// indistinguishable from the `unknown` of a lost manifest receipt.
+func TestScopedCleanRun_ModelRowUnknown_RunRowKeepsVerdict(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	require.NoError(t, err)
+
+	// The model instance row `persistRunStatus` addresses.
+	target := modelTargetKey("mymodel")
+	entryType := "model-instance"
+	require.NoError(t, db.AddEntry(database.CatalogEntry{
+		ID: "model-row", StoredPath: "m.json", MetadataPath: "m.meta",
+		ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+		Schema: "pudl/core.#SystemModel", Target: &target, EntryType: &entryType,
+	}))
+	db.Close()
+
+	// A converge run of a subset that came back ∅.
+	runID := "run_test_scoped"
+	flags := runFlags{converge: true, only: []string{"web"}, maxIters: 5, onlySet: true}
+	report := &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}
+
+	startRunRecord(runID, "mymodel", "converge", false)
+	verdict := runVerdict(report, flags)
+	require.Equal(t, "clean", verdict, "the run itself did reach ∅ over its scope")
+
+	restricted := len(flags.only) > 0
+	rowVerdict := modelRowVerdict(verdict, restricted)
+	state := runFinishState{verdict: verdict, outcome: report.Converge.Outcome}
+	if rowVerdict != verdict {
+		state.note = fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
+			verdict, strings.Join(flags.only, ","), rowVerdict)
+	}
+	persistRunStatus("mymodel", rowVerdict, false)
+	finishRunRecord(runID, state, nil, false)
+
+	db2, err := database.NewCatalogDB(config.GetPudlDir())
+	require.NoError(t, err)
+	defer db2.Close()
+
+	statuses, err := db2.GetTargetStatuses()
+	require.NoError(t, err)
+	got := map[string]string{}
+	for _, s := range statuses {
+		got[s.Target] = s.Status
+	}
+	assert.Equal(t, "unknown", got[target], "a scoped ∅ must not mark the whole model clean")
+
+	run, err := db2.GetRun(runID)
+	require.NoError(t, err)
+	require.NotNil(t, run)
+	assert.Equal(t, "clean", run.Verdict, "the run row keeps what the run actually concluded")
+	assert.True(t, run.Finished(), "the run is recorded terminal")
+	assert.Contains(t, run.Note, "--only scope (web)", "the note names the scope that caused the divergence")
+}
+
+// The same path unscoped: a clean run does mark the model clean, so the
+// degradation above is attributable to scope and not to a broken status write.
+func TestUnscopedCleanRun_ModelRowClean(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	db, err := database.NewCatalogDB(config.GetPudlDir())
+	require.NoError(t, err)
+	target := modelTargetKey("mymodel")
+	entryType := "model-instance"
+	require.NoError(t, db.AddEntry(database.CatalogEntry{
+		ID: "model-row", StoredPath: "m.json", MetadataPath: "m.meta",
+		ImportTimestamp: time.Now(), Format: "json", Origin: "t",
+		Schema: "pudl/core.#SystemModel", Target: &target, EntryType: &entryType,
+	}))
+	db.Close()
+
+	flags := runFlags{converge: true, maxIters: 5}
+	verdict := runVerdict(&RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, flags)
+	persistRunStatus("mymodel", modelRowVerdict(verdict, len(flags.only) > 0), false)
+
+	db2, err := database.NewCatalogDB(config.GetPudlDir())
+	require.NoError(t, err)
+	defer db2.Close()
+	statuses, err := db2.GetTargetStatuses()
+	require.NoError(t, err)
+	got := map[string]string{}
+	for _, s := range statuses {
+		got[s.Target] = s.Status
+	}
+	assert.Equal(t, "clean", got[target], "an unscoped ∅ does mark the model clean")
+}
+
+// Checks run off the effective scoped model (invariant 2), and the run guards on
+// `len(effectiveModel.Checks)`. Scoping must therefore carry checks through: if
+// it ever dropped them, that guard would silently skip every check on a scoped
+// run rather than run them against the wrong model.
+func TestScopeModelForRun_PreservesChecks(t *testing.T) {
+	model := &systemmodel.SystemModel{
+		Name:     "example",
+		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
+		Checks: []systemmodel.Check{
+			{Name: "no-orphans", Query: "orphan", Severity: "fail"},
+		},
+		Desired: []map[string]any{
+			{"_schema": "pudl/k8s.#Deployment", "name": "web", "kind": "Deployment"},
+			{"_schema": "pudl/k8s.#Service", "name": "api", "kind": "Service"},
+		},
+	}
+
+	scoped, err := scopeModelForRun(model, []string{"web"})
+	require.NoError(t, err)
+	require.Len(t, scoped.Desired, 1, "scoping restricts desired")
+	require.Len(t, scoped.Checks, 1, "scoping must not drop checks")
+	assert.Equal(t, "no-orphans", scoped.Checks[0].Name)
+	assert.Len(t, model.Checks, 1, "the original model is not mutated")
 }

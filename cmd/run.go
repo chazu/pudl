@@ -241,8 +241,12 @@ Examples:
 				}
 				report.Populate = pr
 			}
-			if len(model.Checks) > 0 {
-				results, err := runChecks(model, modelDir)
+			// Checks read the effective scoped model, not the original: invariant 2
+			// requires one model shape across planning, execution, report scope,
+			// promotion and scope-sensitive checks. Handing checks the unscoped
+			// model would let a check assert over resources this run excluded.
+			if len(effectiveModel.Checks) > 0 {
+				results, err := runChecks(effectiveModel, modelDir)
 				if err != nil {
 					return err
 				}
@@ -274,7 +278,22 @@ Examples:
 			finishState.outcome = report.Converge.Outcome
 			finishState.needsVerification = report.Converge.NeedsVerification
 		}
-		persistRunStatus(model.Name, verdict, live)
+
+		// The run row keeps the run's real verdict; the model instance row
+		// describes the *whole* model, so a scoped run's verdict may not be
+		// generalizable onto it. The note records the divergence so a reader can
+		// tell this `unknown` from one caused by a lost receipt.
+		restricted := len(flags.only) > 0
+		rowVerdict := modelRowVerdict(verdict, restricted)
+		if rowVerdict != verdict {
+			finishState.note = fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
+				verdict, strings.Join(flags.only, ","), rowVerdict)
+			if live {
+				fmt.Printf("\nnote: %s\n", finishState.note)
+				fmt.Println("      a scoped ∅ does not prove the whole model clean; re-run unscoped to establish it")
+			}
+		}
+		persistRunStatus(model.Name, rowVerdict, live)
 
 		// A verified ∅ re-check promotes this model's resources from `converging`
 		// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
@@ -287,7 +306,7 @@ Examples:
 			((report.Drift != nil && report.Drift.Clean && report.Drift.Verified) ||
 				(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
 		if verifiedClean {
-			promoteConvergingResources(effectiveModel, len(flags.only) > 0)
+			promoteConvergingResources(effectiveModel, restricted)
 		}
 		return runErr
 	},
@@ -336,6 +355,25 @@ func runVerdict(r *RunReport, f runFlags) string {
 	}
 }
 
+// modelRowVerdict maps a run's verdict onto the model instance row, which
+// describes the model as a whole.
+//
+// Under `--only` the run planned, executed and observed a subset, so its verdict
+// is a statement about that subset. Only `clean` fails to generalize: a ∅ over
+// the named resources says nothing about the ones excluded from scope, and
+// writing it to the model row would let `pudl status`, `pudl model list` and —
+// worst — checkUpstreamFreshness read a whole-model "in sync" off a partial run.
+// The remaining verdicts survive the generalization intact: drift or a failure in
+// a subset *is* drift or a failure in the model, and `unknown` is already the
+// weakest claim available. A non-generalizable `clean` therefore degrades to
+// `unknown`, which is what the model's whole-model state genuinely is.
+func modelRowVerdict(verdict string, restricted bool) string {
+	if restricted && verdict == "clean" {
+		return "unknown"
+	}
+	return verdict
+}
+
 // persistRunStatus records a run verdict on the model instance row
 // (target = modelTargetKey(name)). Best-effort: a status-write failure (or no
 // catalog) never fails the run, but it is reported rather than swallowed — a
@@ -365,6 +403,9 @@ type runFinishState struct {
 	verdict           string
 	outcome           string
 	needsVerification bool
+	// note explains a verdict whose meaning is not evident from the value alone
+	// — currently a scoped run whose model row diverges from its run row.
+	note string
 }
 
 // startRunRecord opens the run's audit row before any phase runs, and reports any
@@ -401,9 +442,14 @@ func finishRunRecord(runID string, state runFinishState, runErr error, live bool
 	}
 	defer db.Close()
 
-	note := ""
+	// Both notes matter and neither supersedes the other: the scope note explains
+	// the verdict, the error explains why the run ended.
+	note := state.note
 	if runErr != nil {
-		note = runErr.Error()
+		if note != "" {
+			note += "; "
+		}
+		note += runErr.Error()
 	}
 	if err := db.FinishRun(runID, state.verdict, state.outcome, state.needsVerification, note); err != nil && live {
 		fmt.Printf("warning: could not record run completion: %v\n", err)
@@ -412,9 +458,14 @@ func finishRunRecord(runID string, state runFinishState, runErr error, live bool
 
 // promoteConvergingResources flips this model's resources from `converging` to
 // `clean` after a verified clean drift (the drift re-check confirming a pending
-// apply). Best-effort: a missing catalog/resolver never fails the run. Scoped to
-// the model's own resource definition names, so it cannot touch another model's
-// pending resources.
+// apply). Best-effort: a missing catalog/resolver never fails the run.
+//
+// Both paths are model-scoped: the exact path matches the `tags.model` written by
+// `ingest-manifest --model`, and the fallback matches this model's own resource
+// definition names *and* excludes rows tagged to another model. The one case
+// neither can separate is two models applying untagged manifests that declare a
+// resource with the same identity name — those rows record no model at all. Tag
+// manifests with `--model` to stay on the exact path.
 func promoteConvergingResources(m *systemmodel.SystemModel, restricted bool) {
 	if len(m.Desired) == 0 {
 		return
@@ -442,7 +493,7 @@ func promoteConvergingResources(m *systemmodel.SystemModel, restricted bool) {
 	if len(defs) == 0 {
 		return
 	}
-	_, _ = db.PromoteConvergingToClean(defs)
+	_, _ = db.PromoteConvergingToClean(defs, m.Name)
 }
 
 // useInventoryDrift decides the drift computation for a model with desired state:
