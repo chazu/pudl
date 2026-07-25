@@ -12,4 +12,12 @@ type ResourceDrift struct {
 type ModelDriftResult struct {
 	Clean   bool            `json:"clean"`
 	Drifted []ResourceDrift `json:"drifted,omitempty"`
+
+	// Verified reports whether this verdict came from a fresh observation of the
+	// live system. A catalog replay leaves it false: the records it compares
+	// against may predate the last apply, so a clean replay must not promote
+	// resources to clean or write a clean model status. False is the default so
+	// that a path which forgets to claim verification stays untrusted rather
+	// than silently authoritative.
+	Verified bool `json:"verified"`
 }

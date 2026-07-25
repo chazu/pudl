@@ -105,4 +105,54 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 
 	assert.False(t, res.Clean)
 	require.Len(t, res.Drifted, 2, "htop missing + restic changed; podman satisfied")
+	assert.False(t, res.Verified, "runInventoryDrift cannot know whether its scope is fresh")
+}
+
+// An empty scope previously queried every observation in the catalog, so a
+// desired record could be satisfied by an unrelated model's records.
+func TestRunInventoryDriftRequiresAScope(t *testing.T) {
+	dir := t.TempDir()
+	db, err := database.NewCatalogDB(filepath.Join(dir, "db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	_, err = runInventoryDrift(db, "  ", []map[string]any{
+		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"},
+	}, nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "requires a catalog scope")
+}
+
+// Records ingested under one origin must not satisfy another scope's desired
+// state: that is the false-clean this scoping exists to prevent.
+func TestRunInventoryDriftDoesNotMatchAcrossScopes(t *testing.T) {
+	dir := t.TempDir()
+	db, err := database.NewCatalogDB(filepath.Join(dir, "db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	dataDir := filepath.Join(dir, "data")
+	other := `[{"target":"//host:other","current":{"records":[
+		{"_schema":"pudl/linux.#Package","name":"podman","state":"present"}
+	]}}]`
+	_, err = mubridge.IngestObserveResults(db, strings.NewReader(other), "other-model", dataDir, nil)
+	require.NoError(t, err)
+
+	desired := []map[string]any{
+		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"},
+	}
+
+	// Scoped to a model with no records of its own: the other model's matching
+	// record must not satisfy it.
+	res, err := runInventoryDrift(db, "this-model", desired, nil)
+	require.NoError(t, err)
+	assert.False(t, res.Clean)
+	require.Len(t, res.Drifted, 1)
+	assert.Equal(t, "missing", res.Drifted[0].Reason)
+
+	// Scoped to the origin that does hold the record, it is satisfied.
+	res, err = runInventoryDrift(db, "other-model", desired, nil)
+	require.NoError(t, err)
+	assert.True(t, res.Clean)
 }

@@ -361,7 +361,17 @@ pudl run my_model                 # observe-only: populate -> drift -> checks ->
 pudl run my_model --converge      # close drift (render desired -> sources, mu reconciles)
 pudl run my_model --converge --only foo  # converge only the selected resource
 pudl run my_model --dry-run       # show planned actions without applying
+pudl run my_model --from-catalog --catalog-scope pudl-run   # replay: no live observe
 ```
+
+**Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
+against records already in the catalog, so its verdict describes what was
+*recorded*, not what is live — the records may predate the last apply. A replay
+therefore never promotes resources to `clean` and never writes a model status;
+the model keeps the verdict of its last real observation. The scope is mandatory
+because there is no way to infer which ingested records belong to a model:
+records ingested by `pudl ingest-observe` carry whatever target their observer
+reported.
 
 > **Host credentials for converge plugins.** mu runs converge actions with a
 > hermetic environment — it does **not** inherit your shell's `HOME` or
@@ -388,7 +398,8 @@ pudl run my_model --dry-run       # show planned actions without applying
 | `--only` | During `--converge`, restrict desired-state reconciliation to named resource selectors; unknown selectors fail before side effects |
 | `--dry-run` | Show planned actions without applying them |
 | `--max-iters` | Maximum convergence iterations |
-| `--from-catalog` | Force inventory drift from the catalog (override; inventory observers — EweTarget or `#PluginObserve` `differential: false` — auto-route here) |
+| `--from-catalog` | Force inventory drift from already-ingested records, with no live observe. Requires `--catalog-scope`. Inventory observers — `#EweTarget` or `#PluginObserve` with `differential: false` — auto-route to inventory drift without this flag, and populate their own snapshot to compare against |
+| `--catalog-scope` | Which already-ingested records `--from-catalog` replays: an observe snapshot ID, or the origin they were ingested under |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
 
 `--only` accepts one or more comma-separated exact selectors. A selector may be

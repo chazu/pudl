@@ -23,6 +23,12 @@ func TestValidateRunFlags(t *testing.T) {
 		{"max-iters without converge", runFlags{maxItersSet: true}, "--max-iters requires --converge"},
 		{"only with converge", runFlags{converge: true, onlySet: true, maxIters: 5}, ""},
 		{"bad max-iters", runFlags{converge: true, maxIters: 0}, "--max-iters must be >= 1"},
+		// An unscoped replay would set-diff desired against every observation in
+		// the catalog, so it must be refused before any query runs.
+		{"from-catalog without scope", runFlags{fromCatalog: true}, "--from-catalog requires --catalog-scope"},
+		{"from-catalog with blank scope", runFlags{fromCatalog: true, catalogScope: "   "}, "--from-catalog requires --catalog-scope"},
+		{"from-catalog with scope", runFlags{fromCatalog: true, catalogScope: "snap-1"}, ""},
+		{"scope without from-catalog", runFlags{catalogScope: "snap-1"}, "--catalog-scope requires --from-catalog"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -126,8 +132,12 @@ func TestRunVerdict(t *testing.T) {
 		{"converge exec failed", &RunReport{Converge: &ConvergeReport{Outcome: "failed (execute_error)"}}, runFlags{converge: true}, "failed"},
 		{"manifest persistence needs verification", &RunReport{Converge: &ConvergeReport{Outcome: "needs-verification"}}, runFlags{converge: true}, "unknown"},
 		{"dry-run writes nothing", &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, runFlags{converge: true, dryRun: true}, ""},
-		{"drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{}, "clean"},
-		{"drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false}}, runFlags{}, "drifted"},
+		{"verified drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}, runFlags{}, "clean"},
+		{"verified drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}, runFlags{}, "drifted"},
+		// A catalog replay observed nothing, so it must not overwrite the verdict of
+		// the model's last real observation — in either direction.
+		{"replayed clean drift writes nothing", &RunReport{Drift: &ModelDriftResult{Clean: true}}, runFlags{fromCatalog: true, catalogScope: "snap"}, ""},
+		{"replayed dirty drift writes nothing", &RunReport{Drift: &ModelDriftResult{Clean: false}}, runFlags{fromCatalog: true, catalogScope: "snap"}, ""},
 		{"pure populate has no verdict", &RunReport{Populate: &PopulateReport{}}, runFlags{}, ""},
 	}
 	for _, c := range cases {
