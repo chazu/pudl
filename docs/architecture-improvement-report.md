@@ -886,10 +886,35 @@ now say so where they ignore the error. No `internal/` or `pkg/` signature
 changed: `runCatalog` is unexported and confined to `package cmd`. See
 `implog/2026_07_26_run_owned_catalog_handle.md`.
 
-Still outstanding:
+### Status: third slice delivered 2026-07-27 — recommendation complete
 
-- An explicit migration version table.
-- Retiring the legacy collection columns in favour of `collection_memberships`.
+**A migration version table.** `schema_migrations` records an ordered list of
+migrations, applied in order and recorded on success. A failure leaves its
+version unrecorded and stops the run, so it is retried next open and nothing
+after it may assume a shape that was never built. Applied-ness is never inferred
+from the schema — that is how a half-migrated database gets marked current. Views
+and syncs stay outside the version gate under a stated rule: a migration changes
+the schema's shape, a view restates it from the current source, so versioning a
+view would make a change to its body a no-op until someone bumped a number.
+
+**The legacy collection columns are retired.** They were a second answer to a
+question `collection_memberships` already answers, and already the wrong one:
+dedup adds a membership without updating the column, removal drops memberships
+without touching it, and pruning leaves surviving shared records pointing at a
+deleted collection. `CatalogEntry.CollectionID`/`ItemIndex` now mean "the
+collection this was read through" on a scoped read, "the sole collection" on an
+unscoped one, and nil when an item belongs to several — the case where the old
+column named whichever inserted it first. `catalog_entry_edb` derives the same
+way. The seven remaining hand-copied read sites moved onto the shared row
+mapping, which the first slice had started.
+
+One behaviour change fell out: `backfillDefaults` was doing double duty as a
+migration *and* an ongoing repair, only working because every migration re-ran
+every open. Those defaults moved to `addEntryIn`, where the row is created.
+
+See `docs/design/2026-07-27-migration-versions-and-membership.md` and
+`implog/2026_07_27_migration_versions_and_membership.md`. This is a one-way
+migration: an older binary would select a column that no longer exists.
 
 ## Recommendation 5: make workspace policy one explicit dependency
 

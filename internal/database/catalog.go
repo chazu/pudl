@@ -118,128 +118,24 @@ func (c *CatalogDB) initialize() error {
 	return nil
 }
 
-// createTables creates the catalog table and indexes
+// createTables brings the catalog schema up to date and (re)builds the views.
+//
+// Schema changes run as ordered, recorded migrations — see migrations.go. Views
+// and syncs deliberately run every open: a view is a restatement of the Go source
+// that declares it, so versioning it would make a change to its body a no-op
+// until someone bumped a number.
 func (c *CatalogDB) createTables() error {
-	// Create catalog entries table
-	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS catalog_entries (
-		id TEXT PRIMARY KEY,
-		stored_path TEXT NOT NULL,
-		metadata_path TEXT NOT NULL,
-		import_timestamp DATETIME NOT NULL,
-		format TEXT NOT NULL,
-		origin TEXT NOT NULL,
-		schema TEXT NOT NULL,
-		confidence REAL NOT NULL,
-		record_count INTEGER NOT NULL,
-		size_bytes INTEGER NOT NULL,
-		-- Collection support fields
-		collection_id TEXT,           -- Parent collection ID (NULL for non-collection items)
-		item_index INTEGER,           -- Position in collection (NULL for collections and standalone items)
-		collection_type TEXT,         -- 'collection', 'item', or NULL for standalone
-		item_id TEXT,                 -- Unique identifier for collection items
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	);`
-
-	if _, err := c.db.Exec(createTableSQL); err != nil {
-		return fmt.Errorf("failed to create catalog_entries table: %w", err)
+	if err := c.runMigrations(); err != nil {
+		return err
 	}
 
-	// Create indexes for collection queries
-	indexSQL := []string{
-		`CREATE INDEX IF NOT EXISTS idx_collection_id ON catalog_entries(collection_id);`,
-		`CREATE INDEX IF NOT EXISTS idx_collection_type ON catalog_entries(collection_type);`,
-		`CREATE INDEX IF NOT EXISTS idx_item_index ON catalog_entries(collection_id, item_index);`,
-		`CREATE INDEX IF NOT EXISTS idx_item_id ON catalog_entries(item_id);`,
-	}
-
-	for _, sql := range indexSQL {
-		if _, err := c.db.Exec(sql); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// Create indexes for common query patterns
-	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_catalog_schema ON catalog_entries(schema);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_origin ON catalog_entries(origin);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_format ON catalog_entries(format);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_import_timestamp ON catalog_entries(import_timestamp);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_size_bytes ON catalog_entries(size_bytes);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_record_count ON catalog_entries(record_count);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_confidence ON catalog_entries(confidence);",
-		"CREATE INDEX IF NOT EXISTS idx_catalog_created_at ON catalog_entries(created_at);",
-	}
-
-	for _, indexSQL := range indexes {
-		if _, err := c.db.Exec(indexSQL); err != nil {
-			return fmt.Errorf("failed to create index: %w", err)
-		}
-	}
-
-	// Run identity column migration (idempotent)
-	if err := c.ensureIdentityColumns(); err != nil {
-		return fmt.Errorf("failed to ensure identity columns: %w", err)
-	}
-
-	// Run artifact column migration (idempotent)
-	if err := c.ensureArtifactColumns(); err != nil {
-		return fmt.Errorf("failed to ensure artifact columns: %w", err)
-	}
-
-	// Run status column migration (idempotent)
-	if err := c.ensureStatusColumn(); err != nil {
-		return fmt.Errorf("failed to ensure status column: %w", err)
-	}
-
-	// Collection membership is many-to-many: content-addressed items can be
-	// members of more than one imported collection.
-	if err := c.ensureCollectionMembershipsTable(); err != nil {
-		return fmt.Errorf("failed to ensure collection memberships: %w", err)
-	}
-
-	// Run audit rows, so an incomplete run is visible rather than leaving the
-	// previous run's verdict standing on the model row.
-	if err := c.ensureRunsTable(); err != nil {
-		return fmt.Errorf("failed to ensure runs table: %w", err)
-	}
-
-	// The observation contract: what each snapshot observed, for which model and
-	// run, from where. Without it a snapshot is a convention rather than an
-	// object, and nothing can be looked up as current, retained or pruned.
-	if err := c.ensureObserveSnapshotsTable(); err != nil {
-		return fmt.Errorf("failed to ensure observe snapshots table: %w", err)
-	}
-
-	// Create facts table (idempotent)
-	if err := c.ensureFactsTable(); err != nil {
-		return fmt.Errorf("failed to ensure facts table: %w", err)
-	}
-
-	// Create current_facts materialized view (idempotent)
-	if err := c.ensureCurrentFactsTable(); err != nil {
-		return fmt.Errorf("failed to ensure current_facts table: %w", err)
-	}
+	// Sync, not schema: guarded by its own emptiness check.
 	if err := c.backfillCurrentFacts(); err != nil {
 		return fmt.Errorf("failed to backfill current_facts: %w", err)
 	}
 
-	// Create + backfill the FTS5 keyword index over current facts.
-	if err := c.ensureFactsFTSTable(); err != nil {
-		return fmt.Errorf("failed to ensure facts FTS index: %w", err)
-	}
-
-	// Create item_schemas junction table (idempotent).
-	// Tracks declared/inferred/unresolved schema references per item;
-	// supports an item satisfying multiple schemas. See
-	// docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W4).
-	if err := c.ensureItemSchemasTable(); err != nil {
-		return fmt.Errorf("failed to ensure item_schemas table: %w", err)
-	}
-
 	// Create the catalog_entry_edb view exposing catalog_entries to Datalog.
-	// Must run last: it references migration-added columns.
+	// Must run after the migrations: it references migration-added columns.
 	if err := c.ensureCatalogEntryView(); err != nil {
 		return fmt.Errorf("failed to ensure catalog_entry view: %w", err)
 	}
@@ -293,14 +189,19 @@ func addEntryIn(q dbtx, entry CatalogEntry) error {
 	// Normalize schema name to canonical format before storing
 	entry.Schema = schemaname.Normalize(entry.Schema)
 
+	// collection_id and item_index are absent: an entry's collection membership is
+	// recorded in collection_memberships below, which is the only relationship
+	// source. Entry.CollectionID is still read on the way in — it means "record a
+	// membership in this collection" — it just no longer becomes a column that can
+	// disagree with the table.
 	insertSQL := `
 	INSERT INTO catalog_entries (
 		id, stored_path, metadata_path, import_timestamp, format, origin,
-		schema, confidence, record_count, size_bytes, collection_id, item_index,
+		schema, confidence, record_count, size_bytes,
 		collection_type, item_id, resource_id, content_hash, identity_json, version,
 		entry_type, target, run_id, tags, status,
 		created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	now := time.Now()
 	entry.CreatedAt = now
@@ -312,10 +213,28 @@ func addEntryIn(q dbtx, entry CatalogEntry) error {
 		entry.Status = &defaultStatus
 	}
 
+	// Defaults applied at insert, not repaired later.
+	//
+	// These used to be filled in by backfillDefaults, which ran on every open —
+	// so a row written without them stayed incomplete until the *next* process
+	// opened the catalog. That worked only because every migration re-ran every
+	// time; under recorded migrations a backfill runs once, and a row written
+	// after it would never be repaired. Setting the value where the row is
+	// created is the right place for it either way: the end state is identical,
+	// it just arrives immediately instead of after a restart.
+	if entry.ContentHash == nil {
+		contentHash := entry.ID
+		entry.ContentHash = &contentHash
+	}
+	if entry.Version == nil {
+		version := 1
+		entry.Version = &version
+	}
+
 	_, err := q.Exec(insertSQL,
 		entry.ID, entry.StoredPath, entry.MetadataPath, formatCatalogTime(entry.ImportTimestamp),
 		entry.Format, entry.Origin, entry.Schema, entry.Confidence,
-		entry.RecordCount, entry.SizeBytes, entry.CollectionID, entry.ItemIndex,
+		entry.RecordCount, entry.SizeBytes,
 		entry.CollectionType, entry.ItemID, entry.ResourceID, entry.ContentHash,
 		entry.IdentityJSON, entry.Version, entry.EntryType, entry.Target,
 		entry.RunID, entry.Tags, entry.Status, formatCatalogTime(entry.CreatedAt), formatCatalogTime(entry.UpdatedAt))
@@ -354,7 +273,7 @@ func (c *CatalogDB) GetEntry(id string) (*CatalogEntry, error) {
 // getEntryIn is the executor-parameterized form of GetEntry.
 func getEntryIn(q dbtx, id string) (*CatalogEntry, error) {
 	entry, err := scanEntry(q.QueryRow(
-		`SELECT `+entryColumns+` FROM catalog_entries WHERE id = ?`, id))
+		`SELECT `+entrySelect("catalog_entries")+` FROM catalog_entries WHERE id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
 	}
@@ -378,11 +297,7 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 
 	// Query for entries where ID starts with this prefix
 	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
+	SELECT ` + entrySelect("catalog_entries") + `
 	FROM catalog_entries
 	WHERE id LIKE ?
 	LIMIT 2` // Limit 2 to detect ambiguous matches
@@ -395,18 +310,11 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 
 	var entries []CatalogEntry
 	for rows.Next() {
-		var entry CatalogEntry
-		err := rows.Scan(
-			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+		entry, err := scanEntry(rows)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
 		}
-		entries = append(entries, entry)
+		entries = append(entries, *entry)
 	}
 
 	if len(entries) == 0 {
@@ -508,11 +416,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 
 	// Build main query with LIMIT and OFFSET
 	selectSQL := fmt.Sprintf(`
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
+	SELECT `+entrySelect("catalog_entries")+`
 	FROM catalog_entries
 	%s
 	ORDER BY %s`, whereClause, orderBy)
@@ -534,18 +438,11 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	// Scan results
 	var entries []CatalogEntry
 	for rows.Next() {
-		var entry CatalogEntry
-		err := rows.Scan(
-			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+		entry, err := scanEntry(rows)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan catalog entry", err)
 		}
-		entries = append(entries, entry)
+		entries = append(entries, *entry)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -624,12 +521,11 @@ func (c *CatalogDB) GetDistinctOrigins() ([]string, error) {
 
 // GetCollectionItems retrieves all items belonging to a collection
 func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, error) {
+	// Read through a specific membership: these entries carry *that* collection
+	// and their index within it, which is the only well-defined answer for an
+	// item shared between collections.
 	selectSQL := `
-	SELECT ce.id, ce.stored_path, ce.metadata_path, ce.import_timestamp, ce.format, ce.origin,
-		   ce.schema, ce.confidence, ce.record_count, ce.size_bytes, cm.collection_id, cm.item_index,
-		   'item', ce.item_id, ce.resource_id, ce.content_hash, ce.identity_json, ce.version,
-		   ce.entry_type, ce.target, ce.run_id, ce.tags, ce.status,
-		   ce.created_at, ce.updated_at
+	SELECT ` + entrySelectVia("ce", "cm") + `
 	FROM collection_memberships cm
 	JOIN catalog_entries ce ON ce.id = cm.item_id
 	WHERE cm.collection_id = ?
@@ -643,18 +539,11 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 
 	var items []CatalogEntry
 	for rows.Next() {
-		var entry CatalogEntry
-		err := rows.Scan(
-			&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-			&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+		entry, err := scanEntry(rows)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan collection item", err)
 		}
-		items = append(items, entry)
+		items = append(items, *entry)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -667,23 +556,11 @@ func (c *CatalogDB) GetCollectionItems(collectionID string) ([]CatalogEntry, err
 // GetCollectionByID retrieves a collection entry by ID
 func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error) {
 	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
+	SELECT ` + entrySelect("catalog_entries") + `
 	FROM catalog_entries
 	WHERE id = ? AND collection_type = 'collection'`
 
-	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, collectionID).Scan(
-		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
-
+	entry, err := scanEntry(c.db.QueryRow(selectSQL, collectionID))
 	if err == sql.ErrNoRows {
 		return nil, errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Collection not found: %s", collectionID), nil)
 	}
@@ -691,7 +568,7 @@ func (c *CatalogDB) GetCollectionByID(collectionID string) (*CatalogEntry, error
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to retrieve collection", err)
 	}
 
-	return &entry, nil
+	return entry, nil
 }
 
 // UpdateEntry updates an existing catalog entry
