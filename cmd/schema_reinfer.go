@@ -102,7 +102,7 @@ func runSchemaReinferCommand() error {
 	defer catalogDB.Close()
 
 	// Create schema inferrer
-	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize schema inferrer", err)
 	}

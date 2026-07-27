@@ -100,7 +100,7 @@ func schemaIdentityResolver() (identityResolver, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
-	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return nil, fmt.Errorf("init schema inferrer: %w", err)
 	}

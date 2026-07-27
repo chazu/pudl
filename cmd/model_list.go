@@ -70,7 +70,9 @@ func listModels() ([]ModelInfo, []string, error) {
 // The abstract base #SystemModel (no concrete name) and incomplete defs decode-fail
 // and are skipped — they are not runnable models.
 func listModelsIn(dir string) ([]ModelInfo, error) {
-	loader := validator.NewCUEModuleLoader(dir)
+	// Shared: resolveModel calls this once per model search dir, and several
+	// commands call it in turn. The compile happens once per directory.
+	loader := validator.SharedLoader(dir)
 	modules, err := loader.LoadAllModules()
 	if err != nil {
 		return nil, fmt.Errorf("load schemas in %s: %w", dir, err)
