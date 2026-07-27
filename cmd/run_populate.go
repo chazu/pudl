@@ -339,7 +339,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	if err != nil {
 		return 0, "", fmt.Errorf("load config: %w", err)
 	}
-	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}

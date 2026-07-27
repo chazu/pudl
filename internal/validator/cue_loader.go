@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/build"
@@ -18,6 +19,11 @@ type CUEModuleLoader struct {
 	ctx        *cue.Context
 	schemaPath string
 	verbose    bool
+
+	// cacheMu guards cache. Nothing in pudl loads schemas concurrently today, but
+	// a memo that is not race-safe is a trap for the first caller who does.
+	cacheMu sync.Mutex
+	cache   *cachedModules
 }
 
 // NewCUEModuleLoader creates a new CUE module loader
@@ -53,6 +59,12 @@ type LoadedModule struct {
 // If any instances have missing dependencies, it runs "cue mod tidy" to fetch
 // them and retries the load once.
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
+	return loader.loadAllModulesCached()
+}
+
+// loadAllModulesUncached is the real load, behind the memo in module_cache.go.
+func (loader *CUEModuleLoader) loadAllModulesUncached() (map[string]*LoadedModule, error) {
+	moduleLoads.Add(1)
 	modules, needsTidy, err := loader.loadAllModulesOnce()
 	if err != nil && !needsTidy {
 		return nil, err

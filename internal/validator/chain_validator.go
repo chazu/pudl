@@ -50,7 +50,7 @@ func NewChainValidator(schemaPaths ...string) (*ChainValidator, error) {
 	var allLoaders []*CUEModuleLoader
 
 	for _, sp := range schemaPaths {
-		loader := NewCUEModuleLoader(sp)
+		loader := SharedLoader(sp)
 		allLoaders = append(allLoaders, loader)
 
 		modules, err := loader.LoadAllModules()
@@ -391,7 +391,7 @@ func (cv *ChainValidator) ReloadModules() error {
 	var allLoaders []*CUEModuleLoader
 
 	for _, sp := range cv.schemaPaths {
-		loader := NewCUEModuleLoader(sp)
+		loader := SharedLoader(sp)
 		allLoaders = append(allLoaders, loader)
 
 		modules, err := loader.LoadAllModules()

@@ -227,7 +227,7 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 	}
 
 	// Initialize the schema inferrer
-	inferrer, err := inference.NewSchemaInferrer(effectiveSchemaPaths(cfg)...)
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to initialize schema inferrer", err)
 	}

@@ -68,7 +68,9 @@ func loadSchemasFromPaths(schemaPaths []string) (map[string]cue.Value, map[strin
 	var allLoaders []*validator.CUEModuleLoader
 
 	for _, sp := range schemaPaths {
-		loader := validator.NewCUEModuleLoader(sp)
+		// Shared: two callers naming the same schema path share one compile, and
+		// one caller loading twice compiles once. See internal/validator/module_cache.go.
+		loader := validator.SharedLoader(sp)
 		allLoaders = append(allLoaders, loader)
 
 		modules, err := loader.LoadAllModules()

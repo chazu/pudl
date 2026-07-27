@@ -951,6 +951,17 @@ local-only, global-only, shadowed, and nested-workspace cases.
 
 ## Recommendation 6: compile and cache schema state per invocation
 
+**DONE 2026-07-27.** Two memos, both invalidated by a file fingerprint (not just
+a path — `pudl schema new` writes a schema and then infers against it inside one
+invocation, so a path-keyed memo would be a correctness bug, not merely stale).
+`validator.SharedLoader` shares the CUE compile per schema path;
+`inference.Shared` shares the assembled inferrer, which is where the inheritance
+graph and merged identity metadata live. The *loader* is shared rather than just
+its modules, because a loader owns a `cue.Context` and values from different
+contexts cannot safely be unified. A failed load is never cached. See
+`docs/design/2026-07-27-schema-state-cache.md` and
+`implog/2026_07_27_schema_state_cache.md`. The original recommendation follows.
+
 Schema loading, CUE compilation, inheritance graphs, and identity metadata are
 reconstructed repeatedly. Cache them within a command invocation, keyed by schema
 repository revision or file fingerprints.

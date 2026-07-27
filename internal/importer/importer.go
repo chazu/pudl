@@ -95,7 +95,7 @@ func NewWithSchemaPaths(dataPath, pudlHome string, schemaPaths ...string) (*Impo
 	}
 
 	// Initialize schema inferrer with all paths
-	inferrer, err := inference.NewSchemaInferrer(schemaPaths...)
+	inferrer, err := inference.Shared(schemaPaths...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}
