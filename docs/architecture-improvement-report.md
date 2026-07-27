@@ -1,9 +1,14 @@
 # Architecture Improvement Report
 
-**Date:** 2026-07-14 (design questions settled 2026-07-24)  
-**Status:** Proposal with the first coordinator slice implemented; the six open
-design questions are decided (D1-D6, revised after adversarial review) and a
-15-entry defect register is recorded  
+**Date:** 2026-07-14 (design questions settled 2026-07-24; recommendations
+implemented 2026-07-27)  
+**Status:** **Complete.** All six recommendations are implemented, all fifteen
+defects are fixed, and every obligation attached to D1-D6 is discharged. Each
+cluster has a design document under `docs/design/` stabilized by adversarial
+review before execution, and an entry in `implog/`. Two defects were found *by*
+this work and fixed: same-second observations overwriting each other's evidence
+(Recommendation 3), and a `backfillDefaults` that only worked because migrations
+re-ran on every open (Recommendation 4).  
 **Scope:** Highest-leverage improvements to the current PUDL codebase
 
 ## Executive summary
@@ -65,8 +70,10 @@ the project a reliable acceptance harness for future changes.
 - [`internal/importer/enhanced_importer.go`](../internal/importer/enhanced_importer.go)
   computes content identity, parses data, infers schemas, writes raw artifacts,
   and creates catalog entries.
-- [`internal/importer/importer.go`](../internal/importer/importer.go) remains the
-  embedded legacy importer and owns much of the streaming/parser machinery.
+- [`internal/importer/importer.go`](../internal/importer/importer.go) *was* the
+  embedded legacy importer; it and `EnhancedImporter` are one type as of
+  2026-07-27, and the record collections it accumulated now stream
+  (Recommendation 2).
 - [`internal/mubridge/ingest.go`](../internal/mubridge/ingest.go) converts mu
   observations and manifests into catalog entries and snapshot memberships.
 
@@ -764,7 +771,7 @@ exists to preserve.
 | ~~11~~ | ~~Snapshot content-hash dedup is dead code~~ — **fixed**: the dead lookup is removed rather than repaired. Hashing content only would collapse two observations into one row, leaving the second run without a snapshot of its own — the opposite of what invariant 3 and `--catalog-scope` need. Idempotency stays a record-level property. | `internal/mubridge/ingest.go` |
 | ~~12~~ | ~~Manifest re-ingest skips the status loop and discards the new run ID~~ — **fixed**: a duplicate now repairs per-action statuses the first ingest never wrote (rows still at `unknown`) and nothing else, since rewriting wholesale would knock a since-verified `clean` back to `converging`. The manifest keeps its owning run — rewriting it would be defect 7 again — and `Skipped` plus the CLI wording now say the reported run is the earlier one. | `internal/mubridge/manifest.go` |
 | ~~13~~ | ~~A failed `GetCollectionByID` degrades into an origin filter matching nothing~~ — **fixed**: only a not-found falls back; any other lookup failure is fatal. Classification is extracted as `observeScopeFilter` so the DB-error path is directly testable. | `cmd/run_inventory.go` |
-| ~~14~~ | ~~No shared transaction within a run~~ — **fixed 2026-07-25**: `CatalogTx`/`WithCatalogTx` make a step atomic, and both recorded steps now use it (observe ingest, manifest ingest). Row mapping is centralized in `catalog_rows.go`. Still outstanding from the recommendation, tracked separately: one run-owned handle, and a migration version table. | `internal/database/catalog_tx.go` |
+| ~~14~~ | ~~No shared transaction within a run~~ — **fixed 2026-07-25**: `CatalogTx`/`WithCatalogTx` make a step atomic, and both recorded steps now use it (observe ingest, manifest ingest). Row mapping is centralized in `catalog_rows.go`. Both items tracked separately here are now done too: the run-owned handle (2026-07-26) and the migration version table (2026-07-27). | `internal/database/catalog_tx.go` |
 | ~~15~~ | ~~Dead code: `ingestObserveOutput` and `ingestObserveOutputWithSnapshot`~~ — **fixed**: both removed. `UpdateEntryRunID` went with defect 7. | `cmd/run_populate.go` |
 
 #### Invariants that hold
@@ -1054,10 +1061,32 @@ above in any order.
 
 ## Success measures
 
-- A full ACUTE run can be tested without external mu or infrastructure.
-- `--only` has one observable scope from plan through status promotion.
-- Every run and observation can be replayed by durable IDs.
-- A failed persistence step cannot create a false `clean` state.
-- Large imports have a measured memory bound and no full-record accumulation.
-- Workspace resolution is identical across CLI and library APIs.
-- Schema loading occurs once per invocation and is shared by all phases.
+Assessed 2026-07-27. Where a measure is met with a limit, the limit is stated
+rather than rounded away.
+
+| Measure | Status |
+|---|---|
+| A full ACUTE run can be tested without external mu or infrastructure | **Met, with a boundary.** Every phase reaches mu through the `muRunner` seam, and eight acceptance-matrix rows run against a scripted runner. What is *not* driven by a test is the Cobra `RunE` envelope itself — flag parsing, model resolution from disk — which needs a staged schema repository rather than a fake mu. The phases it calls are covered. |
+| `--only` has one observable scope from plan through status promotion | **Met.** Defect 2 (selection), 8 (model row), 10 (checks) fixed; D3 extended it to check result tuples; the durable apply budget respects it too (a scoped clean does not reset the model's budget). |
+| Every run and observation can be replayed by durable IDs | **Met.** `runs` rows (Defect 1), `observe_snapshots` with a pre-allocated ID that is also the collection entry ID (Rec 3/D6), and persisted drift observations (Defect 4). |
+| A failed persistence step cannot create a false `clean` state | **Met.** Defects 1, 3, 4, 5 fixed; D3 closes the last route, where a converge run reporting `clean` had evaluated no checks. |
+| Large imports have a measured memory bound and no full-record accumulation | **Met for NDJSON and JSON arrays** — the formats the recommendation scopes — with peak memory measured, not inferred. YAML and CSV still take the chunking parser; both are single-document in practice. |
+| Workspace resolution is identical across CLI and library APIs | **Met by construction.** One `workspace.Policy`, one `Resolve`, and a test asserting `factstore.DiscoverWorkspace` returns the policy's paths verbatim. |
+| Schema loading occurs once per invocation and is shared by all phases | **Met.** `validator.SharedLoader` shares the CUE compile per path and `inference.Shared` the assembled inferrer, both invalidated by a file fingerprint so a command that writes a schema and then infers against it sees what it wrote. |
+
+### What was deliberately not built
+
+Each of these is a recorded decision, not an omission:
+
+- **General resume/checkpoint** (D1). The cycle begins with an observe, so a
+  checkpoint would only say what the run re-derives. The halting guarantee that
+  *did* need to survive re-running is now durable.
+- **A `resource_depends_on` relation** (D4). The typed field shipped; the
+  relation stays deferred on cardinality, namespacing and rule-contract grounds,
+  to be justified on query value if revived.
+- **Rollback** (D5). Out of scope for V1; never as inverse-action synthesis.
+- **Binding a replay's `--catalog-scope` as a check constraint** (D3). The replay
+  scope is a union type and no rule wants it; the mismatch is reported instead of
+  hidden.
+- **YAML/CSV streaming, and deleting the chunking parser** (Rec 2).
+- **A cross-invocation schema cache** (Rec 6).
