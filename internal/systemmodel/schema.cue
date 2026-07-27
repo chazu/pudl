@@ -53,7 +53,7 @@ package systemmodel
 
 	// DESIRED — declared desired state (IDEA Definition layer). Present → the
 	// model can converge; absent → observe-only.
-	desired?: [...{...}]
+	desired?: [...#DesiredResource]
 
 	// CONVERGE — close drift (ACUTE Transform + Execute). V1: #PluginPlan only.
 	converge?: #PluginPlan
@@ -121,6 +121,49 @@ package systemmodel
 #PluginPlan: {
 	plugin: string
 	input?: {...}
+}
+
+// #DesiredResource — one declared resource. Open: the fields a resource carries
+// belong to its own schema, not to #SystemModel, so anything is allowed through.
+// What is typed here is the one field PUDL itself interprets.
+#DesiredResource: {
+	// DEPENDS_ON — other resources in this same model's `desired` list that must
+	// be reconciled before this one. Consumed by `pudl run --converge --only`:
+	// naming a resource pulls in its declared dependencies transitively, so a
+	// scoped converge cannot apply something whose prerequisites it excluded.
+	//
+	// RESOLUTION RULE. Each entry is a *selector*, resolved against this model's
+	// desired list by the same rules as `--only` itself, and it must resolve to
+	// exactly one resource:
+	//
+	//   - an IDENTITY key — `name`, `id`, `path`, `target`, or `metadata.name` —
+	//     names exactly one resource. This is the form to use.
+	//   - a TYPE key — `_schema`, `schema`, `definition`, or `kind` — names every
+	//     resource of that type, so it is an ERROR as a dependency: an edge points
+	//     at one resource, not a set. (`--only` accepts type keys; a dependency
+	//     does not.)
+	//   - the short name after a schema's `#` is accepted for either.
+	//
+	// A selector matching several resources by identity, or matching one by
+	// identity and others by type, is an error rather than a silent pick — see
+	// Defect 2 in docs/architecture-improvement-report.md, where flattening the
+	// two key classes into one namespace pulled resources into converge scope
+	// that the operator never named.
+	//
+	// Note this is NOT the compound catalog identity `<schema>|<field>/<field>`
+	// that `recordIdentity` builds for inventory matching. That key is
+	// schema-relative and only exists once a record has been observed; a desired
+	// resource's dependency is declared before anything is observed, so it is
+	// stated in the model's own terms.
+	//
+	// Resource dependencies are deliberately NOT emitted as facts. `--only`
+	// resolves them at plan time from the loaded model, and deriving converge
+	// scope from catalog facts would make it depend on mutable state.
+	// Model-level `depends_on:` (which IS emitted, as `model_depends_on`) is a
+	// different relation with a different namespace regime — see D4.
+	depends_on?: [...string]
+
+	...
 }
 
 // #Check — an observe-only flag: evaluate a Datalog relation, assert empty /

@@ -154,25 +154,28 @@ func ScopeModelForRun(model *systemmodel.SystemModel, selectors []string) (*syst
 	return &scoped, nil
 }
 
+// desiredDependencies reads a desired resource's declared dependencies.
+//
+// One spelling, one shape: `depends_on` as a list of selector strings, which is
+// what `#DesiredResource` declares. The previously-accepted `dependsOn` alias
+// and bare-string forms are gone — an untyped field with three spellings is the
+// ambiguity D4 asked to remove, and CUE now rejects the shapes this no longer
+// reads, so a model using them fails loudly at load instead of silently having
+// its dependency ignored.
 func desiredDependencies(desired map[string]any) []string {
 	var dependencies []string
-	for _, key := range []string{"depends_on", "dependsOn"} {
-		switch value := desired[key].(type) {
-		case string:
-			if strings.TrimSpace(value) != "" {
-				dependencies = append(dependencies, strings.TrimSpace(value))
+	switch value := desired["depends_on"].(type) {
+	case []string:
+		for _, dependency := range value {
+			if trimmed := strings.TrimSpace(dependency); trimmed != "" {
+				dependencies = append(dependencies, trimmed)
 			}
-		case []string:
-			for _, dependency := range value {
-				if strings.TrimSpace(dependency) != "" {
-					dependencies = append(dependencies, strings.TrimSpace(dependency))
-				}
-			}
-		case []any:
-			for _, dependency := range value {
-				if s := strings.TrimSpace(fmt.Sprint(dependency)); s != "" && s != "<nil>" {
-					dependencies = append(dependencies, s)
-				}
+		}
+	case []any:
+		// CUE and JSON both decode a list into []any.
+		for _, dependency := range value {
+			if s := strings.TrimSpace(fmt.Sprint(dependency)); s != "" && s != "<nil>" {
+				dependencies = append(dependencies, s)
 			}
 		}
 	}
@@ -236,21 +239,50 @@ func resolveSelector(desired []map[string]any, selector string) ([]int, error) {
 }
 
 // resolveDependency resolves one declared dependency to exactly one desired
-// resource. Unlike a user-supplied selector, a dependency edge points at a
-// single resource, so a set match is an error rather than a set selection.
+// resource, by an IDENTITY key only.
+//
+// A dependency edge points at a single resource, so unlike a user-supplied
+// `--only` selector it may not name a type. A type key that happens to match one
+// resource today is still the wrong thing to write: adding a second resource of
+// that type would silently turn one edge into two, which is the Defect 2 failure
+// mode one level down. Rejecting the *class* rather than the cardinality is what
+// makes the rule stable as the model grows.
 func resolveDependency(desired []map[string]any, dependency string) (int, error) {
-	indexes, err := resolveSelector(desired, dependency)
-	if err != nil {
-		return 0, fmt.Errorf("--only dependency %w", err)
+	var identityMatches, typeMatches []int
+	for index, resource := range desired {
+		kind, ok := desiredSelectorValues(resource)[dependency]
+		if !ok {
+			continue
+		}
+		if kind.identity {
+			identityMatches = append(identityMatches, index)
+		}
+		if kind.typed {
+			typeMatches = append(typeMatches, index)
+		}
 	}
-	switch len(indexes) {
-	case 0:
-		return 0, fmt.Errorf("--only dependency selector %q did not match a desired resource", dependency)
-	case 1:
-		return indexes[0], nil
+
+	switch {
+	case len(identityMatches) == 1 && len(typeMatches) > 0 && !sameIndexes(identityMatches, typeMatches):
+		// Identity would win, but silently preferring it is what Defect 2 rejected:
+		// the author cannot tell which resource they got, and the two readings
+		// select different sets. Erroring keeps the fix rather than softening it
+		// into a rule of thumb.
+		return 0, fmt.Errorf("depends_on %q is ambiguous: it names %s by identity and also matches %s by type",
+			dependency,
+			describeResources(desired, identityMatches, dependency, identitySelectorKeys),
+			describeResources(desired, typeMatches, dependency, typeSelectorKeys))
+	case len(identityMatches) == 1:
+		return identityMatches[0], nil
+	case len(identityMatches) > 1:
+		return 0, fmt.Errorf("depends_on %q matches %d resources by identity (%s); a dependency must name exactly one",
+			dependency, len(identityMatches),
+			describeResources(desired, identityMatches, dependency, identitySelectorKeys))
+	case len(typeMatches) > 0:
+		return 0, fmt.Errorf("depends_on %q names a type, not a resource (it matches %s); a dependency must name one resource by an identity key (name, id, path, target or metadata.name)",
+			dependency, describeResources(desired, typeMatches, dependency, typeSelectorKeys))
 	default:
-		return 0, fmt.Errorf("--only dependency selector %q matches %d resources (%s); a dependency must name exactly one",
-			dependency, len(indexes), describeResources(desired, indexes, dependency, append(append([]string{}, identitySelectorKeys...), typeSelectorKeys...)))
+		return 0, fmt.Errorf("depends_on %q did not match a desired resource", dependency)
 	}
 }
 

@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -150,13 +148,17 @@ type reconcileWorkspace struct {
 	// workspace does not own it and must not close it: the same handle outlives
 	// every iteration of the converge loop that observes through here.
 	Catalog *runCatalog
+	// Mu is the subprocess seam: the workspace asks mu to observe, plan and apply
+	// through it rather than reaching for exec.Command, so the whole converge
+	// path can be driven by a scripted runner in a test.
+	Mu      muRunner
 	Cleanup func()
 }
 
 // setupReconcileWorkspace renders the desired manifests + mu.cue into a
 // non-hidden temp subdir under muRoot (so mu merges it and inherits the project's
 // toolchains/cache).
-func setupReconcileWorkspace(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, dryRun bool) (*reconcileWorkspace, error) {
+func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, runID string, dryRun bool) (*reconcileWorkspace, error) {
 	if len(m.Desired) == 0 {
 		return nil, fmt.Errorf("reconcile needs desired state; model %q declares none", m.Name)
 	}
@@ -193,6 +195,7 @@ func setupReconcileWorkspace(cat *runCatalog, m *systemmodel.SystemModel, muRoot
 		RunID:   runID,
 		DryRun:  dryRun,
 		Catalog: cat,
+		Mu:      mu,
 		Cleanup: cleanup,
 	}, nil
 }
@@ -200,21 +203,18 @@ func setupReconcileWorkspace(cat *runCatalog, m *systemmodel.SystemModel, muRoot
 // observeDrift runs `mu observe` against the workspace target and interprets the
 // differential result.
 func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
-	cmd := exec.Command("mu", "observe", "--config", filepath.Join(w.MuRoot, "mu.cue"), "--json", w.Target)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return ModelDriftResult{}, fmt.Errorf("mu observe %s: %w: %s", w.Target, err, strings.TrimSpace(stderr.String()))
+	stdout, err := w.Mu.Observe(filepath.Join(w.MuRoot, "mu.cue"), w.Target)
+	if err != nil {
+		return ModelDriftResult{}, err
 	}
-	res, err := interpretDifferentialObserve(stdout.Bytes())
+	res, err := interpretDifferentialObserve(stdout)
 	if err != nil {
 		return res, err
 	}
 	// Persist the observation this verdict came from. Without it a `clean` claim
 	// rests on a value that only ever existed in memory, and the promotion it
 	// drives cannot be audited afterwards.
-	res.ObservationID = recordDriftObservation(w.Catalog, w.Target, w.RunID, w.DryRun, res, stdout.Bytes())
+	res.ObservationID = recordDriftObservation(w.Catalog, w.Target, w.RunID, w.DryRun, res, stdout)
 	return res, nil
 }
 
@@ -270,8 +270,8 @@ func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, 
 
 // runDrift is the read-only drift phase (observe-only on a convergent model):
 // set up the workspace, observe once, report.
-func runDrift(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string) (ModelDriftResult, error) {
-	w, err := setupReconcileWorkspace(cat, m, muRoot, modelDir, runID, false)
+func runDrift(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, runID string) (ModelDriftResult, error) {
+	w, err := setupReconcileWorkspace(cat, mu, m, muRoot, modelDir, runID, false)
 	if err != nil {
 		return ModelDriftResult{}, err
 	}

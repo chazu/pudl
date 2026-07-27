@@ -3,9 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/mubridge"
@@ -15,14 +13,11 @@ import (
 // planConverge runs `mu build --plan` against the workspace target: it shows the
 // actions the converge plugin would apply, executing nothing.
 func (w *reconcileWorkspace) planConverge() (string, error) {
-	cmd := exec.Command("mu", "build", "--plan", "--config", filepath.Join(w.MuRoot, "mu.cue"), w.Target)
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("mu build --plan %s: %w: %s", w.Target, err, strings.TrimSpace(errb.String()))
+	out, err := w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--plan")
+	if err != nil {
+		return "", fmt.Errorf("mu build --plan %s: %w", w.Target, err)
 	}
-	return out.String(), nil
+	return string(out), nil
 }
 
 // applyConverge runs `mu build --emit-manifest` against the workspace target: the
@@ -31,14 +26,7 @@ func (w *reconcileWorkspace) planConverge() (string, error) {
 // to stderr). Returns the manifest bytes so the caller can record per-resource
 // status. A non-zero exit is an execute_error (V1.4).
 func (w *reconcileWorkspace) applyConverge() ([]byte, error) {
-	cmd := exec.Command("mu", "build", "--emit-manifest", "--config", filepath.Join(w.MuRoot, "mu.cue"), w.Target)
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(errb.String()))
-	}
-	return out.Bytes(), nil
+	return w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--emit-manifest")
 }
 
 // ingestConvergeManifest records the apply's build manifest in the catalog,
@@ -99,8 +87,8 @@ func (e *muConvergeExecutor) Apply() ([]byte, error) {
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
-func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool, budget *int) (*ConvergeReport, error) {
-	w, err := setupReconcileWorkspace(cat, m, muRoot, modelDir, runID, dryRun)
+func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool, budget *int) (*ConvergeReport, error) {
+	w, err := setupReconcileWorkspace(cat, mu, m, muRoot, modelDir, runID, dryRun)
 	if err != nil {
 		return nil, err
 	}

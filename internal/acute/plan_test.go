@@ -64,7 +64,7 @@ func TestScopeRejectsCrossClassDependencyMatch(t *testing.T) {
 	model := convergentModel(
 		map[string]any{"name": "decoy", "kind": "nginx"},
 		map[string]any{"name": "nginx", "kind": "Deployment"},
-		map[string]any{"name": "app", "kind": "Deployment", "depends_on": "nginx"},
+		map[string]any{"name": "app", "kind": "Deployment", "depends_on": []any{"nginx"}},
 	)
 
 	_, err := ScopeModelForRun(model, []string{"app"})
@@ -118,25 +118,28 @@ func TestScopeAllowsTypeSelectorMatchingManyResources(t *testing.T) {
 	assert.Len(t, scoped.Desired, 2)
 }
 
-// A dependency naming a type matches a set, which cannot be a single edge.
+// A dependency naming a type is rejected as a *class*, not on cardinality: a
+// type key that happens to match one resource today would silently become two
+// edges when a second resource of that type is added.
 func TestScopeRejectsDependencyMatchingASet(t *testing.T) {
 	model := convergentModel(
 		map[string]any{"name": "web", "kind": "Deployment"},
 		map[string]any{"name": "api", "kind": "Deployment"},
-		map[string]any{"name": "app", "kind": "StatefulSet", "depends_on": "Deployment"},
+		map[string]any{"name": "app", "kind": "StatefulSet", "depends_on": []any{"Deployment"}},
 	)
 
 	_, err := ScopeModelForRun(model, []string{"app"})
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "must name exactly one")
+	assert.Contains(t, err.Error(), "names a type, not a resource")
+	assert.Contains(t, err.Error(), "identity key")
 }
 
 // An unambiguous dependency still resolves, and the closure is transitive.
 func TestScopeResolvesUnambiguousTransitiveDependencies(t *testing.T) {
 	model := convergentModel(
 		map[string]any{"name": "db"},
-		map[string]any{"name": "web", "depends_on": "db"},
+		map[string]any{"name": "web", "depends_on": []any{"db"}},
 		map[string]any{"name": "app", "depends_on": []any{"web"}},
 	)
 
@@ -164,8 +167,8 @@ func TestScopeAllowsSelfConsistentDualClassMatch(t *testing.T) {
 // Mutual dependencies must terminate rather than spin the closure loop.
 func TestScopeTerminatesOnCyclicDependencies(t *testing.T) {
 	model := convergentModel(
-		map[string]any{"name": "a", "depends_on": "b"},
-		map[string]any{"name": "b", "depends_on": "a"},
+		map[string]any{"name": "a", "depends_on": []any{"b"}},
+		map[string]any{"name": "b", "depends_on": []any{"a"}},
 	)
 
 	scoped, err := ScopeModelForRun(model, []string{"a"})
@@ -184,4 +187,36 @@ func TestNewRunPlanAllowsObserveOnlyWithDefaultIterationCap(t *testing.T) {
 	session := NewRunSession(plan)
 	assert.NotEmpty(t, session.RunID)
 	assert.Same(t, plan, session.Plan)
+}
+
+// A type key matching exactly ONE resource is still rejected. The old rule
+// checked cardinality, so this resolved — and would have kept resolving right up
+// until someone added a second Deployment, at which point one declared edge
+// silently became two. Rejecting the key class is what makes the rule stable as
+// the model grows.
+func TestScopeRejectsASingleMatchTypeDependency(t *testing.T) {
+	model := convergentModel(
+		map[string]any{"name": "web", "kind": "Deployment"},
+		map[string]any{"name": "app", "kind": "StatefulSet", "depends_on": []any{"Deployment"}},
+	)
+
+	_, err := ScopeModelForRun(model, []string{"app"})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "names a type, not a resource")
+}
+
+// The typed field has one spelling. A camelCase `dependsOn`, which the untyped
+// reader used to accept, is no longer a dependency — and CUE rejects the shapes
+// this no longer reads, so a model using them fails at load rather than having
+// its dependency silently dropped at plan time.
+func TestScopeReadsOnlyTheDeclaredDependsOnField(t *testing.T) {
+	model := convergentModel(
+		map[string]any{"name": "db"},
+		map[string]any{"name": "app", "dependsOn": []any{"db"}},
+	)
+
+	scoped, err := ScopeModelForRun(model, []string{"app"})
+	require.NoError(t, err)
+	assert.Len(t, scoped.Desired, 1, "only the named resource is in scope")
 }
