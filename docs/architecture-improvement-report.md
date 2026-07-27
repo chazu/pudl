@@ -810,17 +810,44 @@ observe ingest stages raw files inside that window. Hoisting file staging out of
 the transaction is the next improvement if a step ever approaches the 5s
 busy_timeout.
 
+### Status: second slice delivered 2026-07-26
+
+**One run-owned handle.** A `pudl run` now opens the catalog at most once and
+closes it once. It previously opened eleven times (`cmd/run.go` ×5,
+`run_checks.go`, `run_depends.go` ×2, `run_populate.go`, `run_converge.go`,
+`run_drift.go`), and every `NewCatalogDB` re-ran `createTables` and all
+migrations. The converge loop was the worst of it: the drift observation and the
+manifest ingest both sit inside the loop, so a five-iteration converge opened and
+closed the catalog on every pass.
+
+Delivered:
+
+- `runCatalog` (`cmd/run_catalog.go`), created in `RunE` and threaded to every
+  phase that touches the catalog. Its `Close` defer is registered before the
+  run-record finalizer, so LIFO keeps the audit row written on every exit path.
+- **Lazy, memoized open.** Nothing opens until a phase borrows. This is what keeps
+  `--dry-run` honest — it reaches no catalog-touching phase, so it does not so
+  much as create `data/sqlite/catalog.db`. Memoizing the failure means a broken
+  catalog is diagnosed once per run, not re-attempted by each best-effort phase.
+- **The failure distinction made explicit**, which is what the note below warned
+  about. Opening in place let each phase inherit its semantics from its call site;
+  a borrow now has to name which it is. `required()` returns an error the caller
+  propagates and that fails the run (inventory, checks, observe ingest);
+  `optional()` returns a nil handle the caller returns on without failing (status
+  write, both halves of the run record, dependency reconcile, promotion, drift
+  observation). `optional` hands the open error back rather than swallowing it, so
+  a dropped write is still reportable — a status write that vanishes leaves the
+  previous run's verdict standing.
+
+Existing warning behaviour is preserved verbatim, including the two callers that
+deliberately stay quiet (`finishRunRecord`, whose `startRunRecord` already warned;
+`checkUpstreamFreshness`, a read-only advisory documented to stay silent). Both
+now say so where they ignore the error. No `internal/` or `pkg/` signature
+changed: `runCatalog` is unexported and confined to `package cmd`. See
+`implog/2026_07_26_run_owned_catalog_handle.md`.
+
 Still outstanding:
 
-- **One run-owned handle.** The run path opens the catalog eleven times
-  (`cmd/run.go` ×5, `run_checks.go`, `run_depends.go` ×2, `run_populate.go`,
-  `run_converge.go`, `run_drift.go`), and every `NewCatalogDB` re-runs
-  `createTables` and all migrations. Consolidating is worthwhile on its own
-  merits, but it is lifecycle work rather than atomicity work and carries broad
-  signature churn, so it is tracked separately. Note those opens are currently
-  what makes the best-effort "a missing catalog never fails the run" semantics
-  work: a shared handle has to carry that behaviour explicitly rather than
-  inherit it by accident.
 - An explicit migration version table.
 - Retiring the legacy collection columns in favour of `collection_memberships`.
 

@@ -9,7 +9,6 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -44,6 +43,12 @@ Examples:
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) (runError error) {
 		name := args[0]
+
+		// The run's single catalog handle, borrowed by every phase that touches
+		// the catalog. Opened lazily on first use, closed once here: this defer is
+		// registered before the run-record finalizer below so it runs after it.
+		cat := newRunCatalog(config.GetPudlDir())
+		defer cat.Close()
 
 		flags := runFlags{
 			converge:     runConverge,
@@ -96,12 +101,12 @@ Examples:
 		// finalizer below.
 		finishState := &runFinishState{}
 		if !flags.dryRun {
-			startRunRecord(session.RunID, model.Name, mode, live)
+			startRunRecord(cat, session.RunID, model.Name, mode, live)
 
 			// The finalizer runs on every exit path, including an early `return err`,
 			// so a run that ends badly is still recorded as *ended*. A row left
 			// unfinished therefore means the process died without a word.
-			defer func() { finishRunRecord(session.RunID, *finishState, runError, live) }()
+			defer func() { finishRunRecord(cat, session.RunID, *finishState, runError, live) }()
 
 			// A converge run can mutate before it is able to write a verdict, so the
 			// model's previous verdict stops being trustworthy the moment it starts.
@@ -109,7 +114,7 @@ Examples:
 			// `unknown` rather than a stale `clean`. Observe-only runs change nothing,
 			// so their model keeps its last real verdict.
 			if mode == "converge" {
-				persistRunStatus(model.Name, "unknown", live)
+				persistRunStatus(cat, model.Name, "unknown", live)
 			}
 		}
 
@@ -123,14 +128,14 @@ Examples:
 			// Record the instance in the catalog (identity = name) so every model
 			// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
 			// a recording failure must not fail the run.
-			if err := recordModelInstance(model, session.RunID); err != nil && live {
+			if err := recordModelInstance(cat, model, session.RunID); err != nil && live {
 				fmt.Printf("warning: could not record model instance: %v\n", err)
 			}
 
 			// Reconcile this model's declared depends_on into model_depends_on facts
 			// (add new edges, invalidate removed ones). Best-effort: a reconcile
 			// failure must not fail the run. Warnings (e.g. unresolved deps) surface.
-			if warns, err := reconcileModelDependencies(model); err != nil {
+			if warns, err := reconcileModelDependencies(cat, model); err != nil {
 				if live {
 					fmt.Printf("warning: could not reconcile dependencies: %v\n", err)
 				}
@@ -145,7 +150,7 @@ Examples:
 
 		// Opt-in stale-input guard: warn if any transitive upstream is drifted/failed.
 		if runCheckUpstream && live {
-			for _, w := range checkUpstreamFreshness(model) {
+			for _, w := range checkUpstreamFreshness(cat, model) {
 				fmt.Printf("warning: %s\n", w)
 			}
 		}
@@ -175,7 +180,7 @@ Examples:
 			if live {
 				fmt.Println("\n— converge —")
 			}
-			cr, err := runConvergeLoop(effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun)
+			cr, err := runConvergeLoop(cat, effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun)
 			report.Converge = cr
 			if err != nil {
 				report.OK = false
@@ -204,7 +209,7 @@ Examples:
 				if flags.fromCatalog {
 					scope = strings.TrimSpace(flags.catalogScope)
 				} else {
-					pr, err := runPopulate(model, muRoot, modelDir, pudlRoot, session.RunID)
+					pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID)
 					if err != nil {
 						return err
 					}
@@ -214,16 +219,14 @@ Examples:
 						return fmt.Errorf("populate produced no snapshot to compare against")
 					}
 				}
-				// The catalog is opened *after* populate, not before. Opening it up
-				// front left this reader handle open across runPopulate, which opens
-				// its own handle and writes the very records this then reads —
-				// a second connection writing under an open reader, for no benefit,
-				// since nothing here reads the catalog until populate has finished.
-				db, err := database.NewCatalogDB(config.GetPudlDir())
+				// This reads the records populate just wrote. Both borrow the run's
+				// handle, so the read runs on the same connection as the write that
+				// produced it — where the two phases used to open one apiece, this
+				// was a second connection reading under the first one's writes.
+				db, err := cat.required()
 				if err != nil {
-					return fmt.Errorf("open catalog: %w", err)
+					return err
 				}
-				defer db.Close()
 				res, err := runInventoryDrift(db, scope, model.Desired, identity)
 				if err != nil {
 					return err
@@ -234,13 +237,13 @@ Examples:
 				report.Drift = &res
 			case len(model.Desired) > 0:
 				// Differential: live observe with desired-as-sources (k8s-style).
-				res, err := runDrift(model, muRoot, modelDir, session.RunID)
+				res, err := runDrift(cat, model, muRoot, modelDir, session.RunID)
 				if err != nil {
 					return err
 				}
 				report.Drift = &res
 			default:
-				pr, err := runPopulate(model, muRoot, modelDir, pudlRoot, session.RunID)
+				pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID)
 				if err != nil {
 					return err
 				}
@@ -251,7 +254,7 @@ Examples:
 			// promotion and scope-sensitive checks. Handing checks the unscoped
 			// model would let a check assert over resources this run excluded.
 			if len(effectiveModel.Checks) > 0 {
-				results, err := runChecks(effectiveModel, modelDir)
+				results, err := runChecks(cat, effectiveModel, modelDir)
 				if err != nil {
 					return err
 				}
@@ -298,7 +301,7 @@ Examples:
 				fmt.Println("      a scoped ∅ does not prove the whole model clean; re-run unscoped to establish it")
 			}
 		}
-		persistRunStatus(model.Name, rowVerdict, live)
+		persistRunStatus(cat, model.Name, rowVerdict, live)
 
 		// A verified ∅ re-check promotes this model's resources from `converging`
 		// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
@@ -311,7 +314,7 @@ Examples:
 			((report.Drift != nil && report.Drift.Clean && report.Drift.Verified) ||
 				(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
 		if verifiedClean {
-			promoteConvergingResources(effectiveModel, restricted)
+			promoteConvergingResources(cat, effectiveModel, restricted)
 		}
 		return runErr
 	},
@@ -384,18 +387,17 @@ func modelRowVerdict(verdict string, restricted bool) string {
 // catalog) never fails the run, but it is reported rather than swallowed — a
 // silently dropped verdict leaves the previous run's status standing, which is
 // how a stale `clean` used to survive.
-func persistRunStatus(name, status string, live bool) {
+func persistRunStatus(cat *runCatalog, name, status string, live bool) {
 	if status == "" {
 		return
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := cat.optional()
 	if err != nil {
 		if live {
 			fmt.Printf("warning: could not open catalog to record status %q: %v\n", status, err)
 		}
 		return
 	}
-	defer db.Close()
 	if err := db.UpdateStatus(modelTargetKey(name), status); err != nil && live {
 		fmt.Printf("warning: could not record status %q: %v\n", status, err)
 	}
@@ -417,15 +419,14 @@ type runFinishState struct {
 // earlier run of this model that never finished. An unfinished row means a prior
 // invocation died without recording a verdict, so the status that model currently
 // carries predates it. Best-effort: auditing must not fail the run.
-func startRunRecord(runID, model, mode string, live bool) {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+func startRunRecord(cat *runCatalog, runID, model, mode string, live bool) {
+	db, err := cat.optional()
 	if err != nil {
 		if live {
 			fmt.Printf("warning: could not open catalog to record the run: %v\n", err)
 		}
 		return
 	}
-	defer db.Close()
 
 	if stale, err := db.UnfinishedRuns(model); err == nil && len(stale) > 0 && live {
 		fmt.Printf("warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
@@ -440,12 +441,13 @@ func startRunRecord(runID, model, mode string, live bool) {
 // finishRunRecord marks the run terminal. It runs from a defer so that an early
 // error return is still a *recorded* termination — distinguishable from a process
 // that died without saying anything, which leaves the row unfinished.
-func finishRunRecord(runID string, state runFinishState, runErr error, live bool) {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr error, live bool) {
+	// An open failure goes unreported here alone: startRunRecord borrowed the same
+	// handle and already said so, and there is no row to finish anyway.
+	db, err := cat.optional()
 	if err != nil {
 		return
 	}
-	defer db.Close()
 
 	// Both notes matter and neither supersedes the other: the scope note explains
 	// the verdict, the error explains why the run ended.
@@ -471,15 +473,14 @@ func finishRunRecord(runID string, state runFinishState, runErr error, live bool
 // neither can separate is two models applying untagged manifests that declare a
 // resource with the same identity name — those rows record no model at all. Tag
 // manifests with `--model` to stay on the exact path.
-func promoteConvergingResources(m *systemmodel.SystemModel, restricted bool) {
+func promoteConvergingResources(cat *runCatalog, m *systemmodel.SystemModel, restricted bool) {
 	if len(m.Desired) == 0 {
 		return
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := cat.optional()
 	if err != nil {
 		return
 	}
-	defer db.Close()
 
 	// Exact path: rows tagged with this model by `ingest-manifest --model <name>`.
 	if !restricted {

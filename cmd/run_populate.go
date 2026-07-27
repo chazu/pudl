@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -111,10 +110,10 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
+func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
 		// Self-staged; no external mu root needed (works for project + global).
-		return runEwePopulate(m, modelDir, pudlRoot, runID)
+		return runEwePopulate(cat, m, modelDir, pudlRoot, runID)
 	}
 
 	rm := *m
@@ -144,7 +143,7 @@ func runPopulate(m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID s
 		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
 	}
 
-	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(stdout.Bytes(), runID)
+	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(cat, stdout.Bytes(), runID)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +246,7 @@ func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
 // #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
 // schema was loaded from (the base for resolving the eweSource + relative plugin
 // scripts).
-func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
+func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
 	srcPath, err := resolveEweSource(m.Populate.EweSource, modelDir, pudlRoot)
 	if err != nil {
 		return nil, err
@@ -310,7 +309,7 @@ func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot, runID string
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(wrapped, runID)
+	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(cat, wrapped, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -320,12 +319,11 @@ func runEwePopulate(m *systemmodel.SystemModel, modelDir, pudlRoot, runID string
 // ingestObserveOutputWithSnapshotRunID feeds `mu observe --json` output into the
 // catalog as observe entries, reusing the shipped IngestObserveResults (the same
 // path `pudl mu ingest-observe` uses), and associates them with this run.
-func ingestObserveOutputWithSnapshotRunID(observeJSON []byte, runID string) (int, string, error) {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+func ingestObserveOutputWithSnapshotRunID(cat *runCatalog, observeJSON []byte, runID string) (int, string, error) {
+	db, err := cat.required()
 	if err != nil {
-		return 0, "", fmt.Errorf("open catalog: %w", err)
+		return 0, "", err
 	}
-	defer db.Close()
 
 	cfg, err := config.Load()
 	if err != nil {

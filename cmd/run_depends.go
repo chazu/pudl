@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -103,13 +102,12 @@ func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[stri
 // reconcileModelDependencies reconciles a model's DECLARED depends_on into
 // model_depends_on facts (source model:<name>) and returns any warnings. Runs on
 // every `pudl run`.
-func reconcileModelDependencies(m *systemmodel.SystemModel) (warnings []string, err error) {
+func reconcileModelDependencies(cat *runCatalog, m *systemmodel.SystemModel) (warnings []string, err error) {
 	declared, warnings := declaredDepsOf(m)
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := cat.optional()
 	if err != nil {
 		return warnings, err
 	}
-	defer db.Close()
 	if rerr := reconcileEdges(db, m.Name, declaredSource(m.Name), declared); rerr != nil {
 		return warnings, rerr
 	}
@@ -146,17 +144,17 @@ func dependencyDiff(declared map[string]struct{}, current map[string]string) (ad
 // upstreams that have been run, so silence is "no recorded stale upstream", not
 // a proof of freshness. Best-effort: any failure returns no warnings, never an
 // error — this never blocks a run.
-func checkUpstreamFreshness(m *systemmodel.SystemModel) []string {
-	configDir := config.GetPudlDir()
-	rules, err := loadQueryRules(configDir)
+func checkUpstreamFreshness(cat *runCatalog, m *systemmodel.SystemModel) []string {
+	rules, err := loadQueryRules(cat.Dir())
 	if err != nil {
 		return nil
 	}
-	db, err := database.NewCatalogDB(configDir)
+	// The open error is dropped without a word here alone: this is a read-only
+	// advisory documented to stay silent on any failure.
+	db, err := cat.optional()
 	if err != nil {
 		return nil
 	}
-	defer db.Close()
 
 	ups, err := datalog.Evaluate(db, rules, "depends_transitive",
 		map[string]interface{}{"from": m.Name}, datalog.TemporalScope{})
