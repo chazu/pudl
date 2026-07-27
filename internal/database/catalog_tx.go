@@ -18,6 +18,7 @@ type CatalogWriter interface {
 	AddEntry(entry CatalogEntry) error
 	AddCollectionMembership(collectionID, itemID string, itemIndex int) error
 	RecordObserveSnapshot(snapshot ObserveSnapshot) error
+	GetLatestVersion(resourceID string) (int, error)
 	UpdateStatus(targetName, status string) error
 	GetEntry(id string) (*CatalogEntry, error)
 	FindByContentHash(contentHash string) (*CatalogEntry, error)
@@ -49,6 +50,10 @@ func (t *CatalogTx) AddEntry(entry CatalogEntry) error {
 
 func (t *CatalogTx) RecordObserveSnapshot(snapshot ObserveSnapshot) error {
 	return recordObserveSnapshotIn(t.q, snapshot)
+}
+
+func (t *CatalogTx) GetLatestVersion(resourceID string) (int, error) {
+	return getLatestVersionIn(t.q, resourceID)
 }
 
 func (t *CatalogTx) AddCollectionMembership(collectionID, itemID string, itemIndex int) error {

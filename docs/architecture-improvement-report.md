@@ -774,6 +774,18 @@ machine stdout separated from diagnostics on stderr) were verified to hold.
 
 ## Recommendation 2: finish the bounded-memory importer rewrite
 
+**DONE 2026-07-27.** The source is staged and hashed in one pass, then decoded one
+record at a time into a sink; a top-level JSON array is detected and streamed
+element by element rather than materialized. Identity is unchanged (SHA256 of the
+raw bytes, pinned by a test). All-or-nothing became a transaction rather than a
+hand-unwound cleanup, which also let the collection entry move to the end where it
+carries the true record count — removing the window in which a collection row
+described items that were never written. `Importer` and `EnhancedImporter` are now
+one type. Peak memory is measured, not inferred. See
+`docs/design/2026-07-27-bounded-importer.md` and
+`implog/2026_07_27_bounded_importer.md`. YAML and CSV stay on the chunking parser,
+which the recommendation's scope allows. The original follows.
+
 The recent content-hash fix removed one unconditional large-file read, but the
 pipeline still collects parsed objects into memory and retains a legacy importer
 layer. Small JSON/YAML inputs also take a direct whole-file path.

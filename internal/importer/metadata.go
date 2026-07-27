@@ -92,7 +92,7 @@ type SchemaRegistryEntry struct {
 }
 
 // saveMetadata saves metadata to a JSON file
-func (i *Importer) saveMetadata(metadata ImportMetadata, path string) error {
+func (e *EnhancedImporter) saveMetadata(metadata ImportMetadata, path string) error {
 	data, err := json.MarshalIndent(metadata, "", "  ")
 	if err != nil {
 		return err

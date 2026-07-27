@@ -58,8 +58,16 @@ func (c *CatalogDB) FindByResourceID(resourceID string) ([]CatalogEntry, error) 
 // GetLatestVersion returns the highest version number for a resource_id.
 // Returns 0 if no entries exist.
 func (c *CatalogDB) GetLatestVersion(resourceID string) (int, error) {
+	return getLatestVersionIn(c.db, resourceID)
+}
+
+// getLatestVersionIn is the executor-parameterized form, so a step that assigns
+// versions to a stream of records reads them inside the same transaction that
+// writes them — otherwise two records of the same resource in one import both
+// read the same "latest" and both claim the next version.
+func getLatestVersionIn(q dbtx, resourceID string) (int, error) {
 	var version sql.NullInt64
-	err := c.db.QueryRow(
+	err := q.QueryRow(
 		"SELECT MAX(version) FROM catalog_entries WHERE resource_id = ?",
 		resourceID,
 	).Scan(&version)

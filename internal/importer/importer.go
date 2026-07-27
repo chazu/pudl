@@ -15,15 +15,6 @@ import (
 	"github.com/chazu/pudl/internal/validator"
 )
 
-// Importer handles data import operations
-type Importer struct {
-	dataPath    string
-	schemaPath  string   // primary schema path (first in schemaPaths)
-	schemaPaths []string // all schema paths in priority order
-	catalogDB   *database.CatalogDB
-	inferrer    *inference.SchemaInferrer
-}
-
 // ImportOptions contains options for importing data
 type ImportOptions struct {
 	SourcePath      string
@@ -56,9 +47,17 @@ type ImportResult struct {
 	IsNewVersion     bool                        `json:"is_new_version,omitempty"`
 }
 
-// NewWithSchemaPaths creates a new Importer with multiple schema search paths.
-// Paths are searched in order; earlier paths take priority (per-repo shadows global).
-func NewWithSchemaPaths(dataPath, pudlHome string, schemaPaths ...string) (*Importer, error) {
+// newImporterState builds the importer's shared state from multiple schema
+// search paths. Paths are searched in order; earlier paths take priority
+// (per-repo shadows global).
+//
+// This used to construct a separate `Importer` type that `EnhancedImporter`
+// embedded. Nothing outside this package ever built one — NewEnhancedImporter*
+// is the only entry point — so the embed was pure layering, and it was the
+// layering that made the memory-unbounded path easy to miss: the accumulating
+// call sat in the embedded type while the pipeline above it read as if it
+// streamed.
+func newImporterState(dataPath, pudlHome string, schemaPaths ...string) (*EnhancedImporter, error) {
 	if len(schemaPaths) == 0 {
 		return nil, fmt.Errorf("at least one schema path is required")
 	}
@@ -82,7 +81,7 @@ func NewWithSchemaPaths(dataPath, pudlHome string, schemaPaths ...string) (*Impo
 	}
 
 	// Create importer first (without inferrer)
-	imp := &Importer{
+	imp := &EnhancedImporter{
 		dataPath:    dataPath,
 		schemaPath:  primarySchemaPath,
 		schemaPaths: schemaPaths,
@@ -105,16 +104,16 @@ func NewWithSchemaPaths(dataPath, pudlHome string, schemaPaths ...string) (*Impo
 }
 
 // Close closes the importer and its database connections
-func (i *Importer) Close() error {
+func (e *EnhancedImporter) Close() error {
 	// Close catalog database
-	if i.catalogDB != nil {
-		return i.catalogDB.Close()
+	if e.catalogDB != nil {
+		return e.catalogDB.Close()
 	}
 	return nil
 }
 
 // copyFile copies a file from src to dst
-func (i *Importer) copyFile(src, dst string) error {
+func (e *EnhancedImporter) copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
@@ -143,7 +142,7 @@ func extractPackage(schema string) string {
 }
 
 // analyzeDataDirect analyzes small structured files directly without streaming
-func (i *Importer) analyzeDataDirect(filePath, format string) (interface{}, int, error) {
+func (e *EnhancedImporter) analyzeDataDirect(filePath, format string) (interface{}, int, error) {
 	// Read the entire file
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -206,7 +205,7 @@ func (i *Importer) analyzeDataDirect(filePath, format string) (interface{}, int,
 }
 
 // analyzeDataStreaming analyzes data using the streaming parser for large files
-func (i *Importer) analyzeDataStreaming(filePath, format string, config *streaming.StreamingConfig) (interface{}, int, error) {
+func (e *EnhancedImporter) analyzeDataStreaming(filePath, format string, config *streaming.StreamingConfig) (interface{}, int, error) {
 	// Use default config if none provided
 	if config == nil {
 		config = streaming.DefaultStreamingConfig()
@@ -223,7 +222,7 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 	// For small structured files (< 10KB), bypass streaming and process directly
 	// This avoids issues with CDC chunking splitting JSON/YAML objects
 	if fileSize < 10*1024 && (format == "json" || format == "yaml") {
-		return i.analyzeDataDirect(filePath, format)
+		return e.analyzeDataDirect(filePath, format)
 	}
 
 	// For larger files, use streaming with appropriate chunk sizes
@@ -380,14 +379,14 @@ func (i *Importer) analyzeDataStreaming(filePath, format string, config *streami
 }
 
 // assignItemSchema assigns a schema to an individual collection item using inference
-func (i *Importer) assignItemSchema(itemData interface{}, opts ImportOptions) (string, float64) {
+func (e *EnhancedImporter) assignItemSchema(itemData interface{}, opts ImportOptions) (string, float64) {
 	// If manual schema is specified, use it
 	if opts.ManualSchema != "" {
 		return opts.ManualSchema, 0.9
 	}
 
 	// Use schema inferrer for automatic schema assignment
-	result, err := i.inferrer.Infer(itemData, inference.InferenceHints{
+	result, err := e.inferrer.Infer(itemData, inference.InferenceHints{
 		Format:         "json",
 		CollectionType: "item",
 	})
