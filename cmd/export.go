@@ -249,4 +249,3 @@ func writeCSV(w io.Writer, data []map[string]interface{}) error {
 
 	return nil
 }
-

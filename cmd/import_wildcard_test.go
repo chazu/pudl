@@ -18,7 +18,7 @@ func TestResolveFilePaths(t *testing.T) {
 	// Create test files
 	testFiles := []string{
 		"data1.json",
-		"data2.json", 
+		"data2.json",
 		"config.yaml",
 		"logs.txt",
 		"subdir/nested.json",
@@ -26,14 +26,14 @@ func TestResolveFilePaths(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tempDir, file)
-		
+
 		// Create subdirectory if needed
 		dir := filepath.Dir(fullPath)
 		if dir != tempDir {
 			err := os.MkdirAll(dir, 0755)
 			require.NoError(t, err)
 		}
-		
+
 		// Create the file
 		f, err := os.Create(fullPath)
 		require.NoError(t, err)
@@ -45,7 +45,7 @@ func TestResolveFilePaths(t *testing.T) {
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer os.Chdir(originalDir)
-	
+
 	err = os.Chdir(tempDir)
 	require.NoError(t, err)
 
@@ -60,7 +60,7 @@ func TestResolveFilePaths(t *testing.T) {
 		paths, err := resolveFilePaths("*.json")
 		require.NoError(t, err)
 		require.Len(t, paths, 2)
-		
+
 		// Should contain both JSON files
 		fileNames := make([]string, len(paths))
 		for i, path := range paths {
@@ -148,7 +148,7 @@ func TestResolveFilePathsFiltersDirectories(t *testing.T) {
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer os.Chdir(originalDir)
-	
+
 	err = os.Chdir(tempDir)
 	require.NoError(t, err)
 
@@ -168,8 +168,8 @@ func TestWildcardImportIntegration(t *testing.T) {
 
 	// Create test JSON files with valid content
 	testFiles := map[string]string{
-		"data1.json": `{"name": "test1", "value": 100}`,
-		"data2.json": `{"name": "test2", "value": 200}`,
+		"data1.json":  `{"name": "test1", "value": 100}`,
+		"data2.json":  `{"name": "test2", "value": 200}`,
 		"config.yaml": `name: config\nvalue: 300`,
 	}
 

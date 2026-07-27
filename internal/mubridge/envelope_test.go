@@ -9,10 +9,10 @@ import (
 
 func TestUnwrap_RawJSON(t *testing.T) {
 	cases := []string{
-		`{"instance_id":"i-abc"}`,        // plain object, no schema/data keys
-		`[1,2,3]`,                        // array
-		`"just a string"`,                // primitive
-		`{"data":"only data, no schema"}`, // half an envelope
+		`{"instance_id":"i-abc"}`,                       // plain object, no schema/data keys
+		`[1,2,3]`,                                       // array
+		`"just a string"`,                               // primitive
+		`{"data":"only data, no schema"}`,               // half an envelope
 		`{"schema":{"module":"mu/aws","version":"v1"}}`, // half an envelope
 	}
 	for _, in := range cases {

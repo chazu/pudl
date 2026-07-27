@@ -20,10 +20,10 @@ const (
 // ItemSchema is one row of the item_schemas junction table: a single
 // (item, schema_ref, status) association.
 type ItemSchema struct {
-	ItemID        string
-	SchemaRef     string // canonical form: "<module>@<version>" or "<module>@<version>#<definition>"
-	Status        string
-	ClassifiedAt  time.Time
+	ItemID       string
+	SchemaRef    string // canonical form: "<module>@<version>" or "<module>@<version>#<definition>"
+	Status       string
+	ClassifiedAt time.Time
 }
 
 // ensureItemSchemasTable creates the item_schemas table and indexes if

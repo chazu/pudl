@@ -17,21 +17,21 @@ import (
 
 // Importer handles data import operations
 type Importer struct {
-	dataPath     string
-	schemaPath   string   // primary schema path (first in schemaPaths)
-	schemaPaths  []string // all schema paths in priority order
-	catalogDB    *database.CatalogDB
-	inferrer     *inference.SchemaInferrer
+	dataPath    string
+	schemaPath  string   // primary schema path (first in schemaPaths)
+	schemaPaths []string // all schema paths in priority order
+	catalogDB   *database.CatalogDB
+	inferrer    *inference.SchemaInferrer
 }
 
 // ImportOptions contains options for importing data
 type ImportOptions struct {
-	SourcePath       string
-	Origin           string                      // Optional origin override
-	ManualSchema     string                      // Manual schema specification
-	ChainValidator *validator.ChainValidator // Validator for manual schema
-	UseStreaming     bool                        // Whether to use streaming parser
-	StreamingConfig  *streaming.StreamingConfig  // Configuration for streaming parser
+	SourcePath      string
+	Origin          string                     // Optional origin override
+	ManualSchema    string                     // Manual schema specification
+	ChainValidator  *validator.ChainValidator  // Validator for manual schema
+	UseStreaming    bool                       // Whether to use streaming parser
+	StreamingConfig *streaming.StreamingConfig // Configuration for streaming parser
 }
 
 // ImportResult contains the results of an import operation

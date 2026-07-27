@@ -180,4 +180,3 @@ func TestDetectFormatFromContentEmpty(t *testing.T) {
 		t.Errorf("Expected 'unknown' for empty file, got %s", result)
 	}
 }
-

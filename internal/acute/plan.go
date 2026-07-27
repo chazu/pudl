@@ -37,15 +37,22 @@ type RunPlan struct {
 // separate state-machine decision.
 type RunSession struct {
 	RunID string
-	Plan  *RunPlan
+	// SnapshotID is allocated with the run, not by the ingest that writes it.
+	// PUDL decides when to observe, so it owns the identifier for the
+	// observation it initiates — which is what lets a run name the snapshot a
+	// failed ingest would have produced, instead of discarding the ID with the
+	// error and leaving the partial state unnamed.
+	SnapshotID string
+	Plan       *RunPlan
 }
 
 // NewRunSession starts an audit-identified run after its side-effect-free plan
 // has been resolved.
 func NewRunSession(plan *RunPlan) *RunSession {
 	return &RunSession{
-		RunID: "run_" + idgen.GenerateRandomProquint(),
-		Plan:  plan,
+		RunID:      "run_" + idgen.GenerateRandomProquint(),
+		SnapshotID: "snap_" + idgen.GenerateRandomProquint(),
+		Plan:       plan,
 	}
 }
 

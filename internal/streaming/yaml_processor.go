@@ -10,21 +10,21 @@ import (
 
 // YAMLChunkProcessor handles YAML data with document boundary detection
 type YAMLChunkProcessor struct {
-	buffer         []byte             // Buffer for incomplete YAML documents
-	boundaryFinder *YAMLBoundaryFinder // Tracks YAML document boundaries across chunks
-	formatDetected bool               // Whether we've detected the format
-	hasMultipleDocs bool              // Whether stream contains multiple documents
-	sequence       int                // Chunk sequence for Finalize
+	buffer          []byte              // Buffer for incomplete YAML documents
+	boundaryFinder  *YAMLBoundaryFinder // Tracks YAML document boundaries across chunks
+	formatDetected  bool                // Whether we've detected the format
+	hasMultipleDocs bool                // Whether stream contains multiple documents
+	sequence        int                 // Chunk sequence for Finalize
 }
 
 // NewYAMLChunkProcessor creates a new YAML chunk processor
 func NewYAMLChunkProcessor() *YAMLChunkProcessor {
 	return &YAMLChunkProcessor{
-		buffer:         make([]byte, 0),
-		boundaryFinder: NewYAMLBoundaryFinder(),
-		formatDetected: false,
+		buffer:          make([]byte, 0),
+		boundaryFinder:  NewYAMLBoundaryFinder(),
+		formatDetected:  false,
 		hasMultipleDocs: false,
-		sequence:       0,
+		sequence:        0,
 	}
 }
 
@@ -138,27 +138,27 @@ func (p *YAMLChunkProcessor) CanProcess(data []byte) bool {
 
 	lines := bytes.Split(trimmed, []byte("\n"))
 	yamlIndicators := 0
-	
+
 	for _, line := range lines {
 		line = bytes.TrimSpace(line)
 		if len(line) == 0 || line[0] == '#' {
 			continue
 		}
-		
+
 		// Look for YAML indicators
-		if bytes.Contains(line, []byte(": ")) || 
-		   bytes.HasPrefix(line, []byte("- ")) ||
-		   bytes.HasPrefix(line, []byte("---")) ||
-		   bytes.HasPrefix(line, []byte("...")) {
+		if bytes.Contains(line, []byte(": ")) ||
+			bytes.HasPrefix(line, []byte("- ")) ||
+			bytes.HasPrefix(line, []byte("---")) ||
+			bytes.HasPrefix(line, []byte("...")) {
 			yamlIndicators++
 		}
-		
+
 		// Check for indented content (common in YAML)
 		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
 			yamlIndicators++
 		}
 	}
-	
+
 	return yamlIndicators > 0
 }
 
@@ -176,13 +176,13 @@ func (p *YAMLChunkProcessor) parseYAMLDocuments(data []byte) ([]interface{}, []i
 	// Split by document separators
 	docSeparator := regexp.MustCompile(`(?m)^---\s*$`)
 	docEnd := regexp.MustCompile(`(?m)^\.\.\.?\s*$`)
-	
+
 	dataStr := string(data)
-	
+
 	// Find document boundaries
 	separatorIndices := docSeparator.FindAllStringIndex(dataStr, -1)
 	endIndices := docEnd.FindAllStringIndex(dataStr, -1)
-	
+
 	if len(separatorIndices) == 0 && len(endIndices) == 0 {
 		// Single document without explicit separators
 		return p.parseSingleYAMLDocument(data)
@@ -192,7 +192,7 @@ func (p *YAMLChunkProcessor) parseYAMLDocuments(data []byte) ([]interface{}, []i
 	for i, sepIndex := range separatorIndices {
 		// Skip the separator itself
 		docStart := sepIndex[1]
-		
+
 		// Find the end of this document
 		var docEnd int
 		if i+1 < len(separatorIndices) {
@@ -213,13 +213,13 @@ func (p *YAMLChunkProcessor) parseYAMLDocuments(data []byte) ([]interface{}, []i
 				docEnd = len(dataStr)
 			}
 		}
-		
+
 		// Extract document content
 		docContent := strings.TrimSpace(dataStr[docStart:docEnd])
 		if docContent == "" {
 			continue
 		}
-		
+
 		// Try to parse the document
 		var doc interface{}
 		if err := yaml.Unmarshal([]byte(docContent), &doc); err != nil {
@@ -231,7 +231,7 @@ func (p *YAMLChunkProcessor) parseYAMLDocuments(data []byte) ([]interface{}, []i
 			// Skip invalid documents
 			continue
 		}
-		
+
 		documents = append(documents, doc)
 		boundaries = append(boundaries, docEnd)
 	}
@@ -272,7 +272,7 @@ func (p *YAMLChunkProcessor) GetBufferSize() int {
 
 // YAMLBoundaryFinder helps find YAML document boundaries in streaming data
 type YAMLBoundaryFinder struct {
-	inDocument bool
+	inDocument  bool
 	indentLevel int
 }
 
@@ -284,15 +284,15 @@ func NewYAMLBoundaryFinder() *YAMLBoundaryFinder {
 // FindBoundary finds the end of a complete YAML document in the data
 func (f *YAMLBoundaryFinder) FindBoundary(data []byte) int {
 	lines := bytes.Split(data, []byte("\n"))
-	
+
 	for i, line := range lines {
 		trimmed := bytes.TrimSpace(line)
-		
+
 		// Skip empty lines and comments
 		if len(trimmed) == 0 || trimmed[0] == '#' {
 			continue
 		}
-		
+
 		// Check for document separator
 		if bytes.HasPrefix(trimmed, []byte("---")) {
 			if f.inDocument {
@@ -304,7 +304,7 @@ func (f *YAMLBoundaryFinder) FindBoundary(data []byte) int {
 				continue
 			}
 		}
-		
+
 		// Check for document end marker
 		if bytes.HasPrefix(trimmed, []byte("...")) {
 			if f.inDocument {
@@ -312,7 +312,7 @@ func (f *YAMLBoundaryFinder) FindBoundary(data []byte) int {
 				return f.calculateLineOffset(lines, i+1)
 			}
 		}
-		
+
 		// If we're in a document, track indentation
 		if f.inDocument {
 			indent := f.getIndentLevel(line)
@@ -322,7 +322,7 @@ func (f *YAMLBoundaryFinder) FindBoundary(data []byte) int {
 			}
 		}
 	}
-	
+
 	return -1 // No complete document found
 }
 
@@ -362,13 +362,13 @@ func isYAMLKey(line []byte) bool {
 	if len(trimmed) == 0 {
 		return false
 	}
-	
+
 	// Look for key: value pattern
 	colonIndex := bytes.Index(trimmed, []byte(":"))
 	if colonIndex == -1 {
 		return false
 	}
-	
+
 	// Make sure it's not inside quotes
 	inQuotes := false
 	for i, b := range trimmed[:colonIndex] {
@@ -378,7 +378,7 @@ func isYAMLKey(line []byte) bool {
 			}
 		}
 	}
-	
+
 	return !inQuotes
 }
 

@@ -17,14 +17,14 @@ import (
 
 // Model represents the bubbletea model for the list UI
 type Model struct {
-	list         list.Model
-	entries      []lister.ListEntry
-	quitting     bool
-	err          error
-	width        int
-	height       int
-	showHelp     bool
-	verbose      bool
+	list          list.Model
+	entries       []lister.ListEntry
+	quitting      bool
+	err           error
+	width         int
+	height        int
+	showHelp      bool
+	verbose       bool
 	showingDetail bool
 	detailContent string
 }
@@ -199,16 +199,16 @@ func (m Model) getStatusLine() string {
 
 	if filtered {
 		visibleCount := len(m.list.VisibleItems())
-		statusParts = append(statusParts, 
+		statusParts = append(statusParts,
 			fmt.Sprintf("Showing %d of %d entries", visibleCount, len(m.entries)))
 	} else {
-		statusParts = append(statusParts, 
+		statusParts = append(statusParts,
 			fmt.Sprintf("%d entries", len(m.entries)))
 	}
 
-	statusParts = append(statusParts, 
+	statusParts = append(statusParts,
 		fmt.Sprintf("Total: %s", formatBytes(totalSize)))
-	statusParts = append(statusParts, 
+	statusParts = append(statusParts,
 		fmt.Sprintf("Records: %s", formatInt(totalRecords)))
 
 	// Add filter hint

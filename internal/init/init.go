@@ -20,7 +20,7 @@ type InitOptions struct {
 // Initialize sets up the PUDL workspace
 func Initialize(opts InitOptions) error {
 	pudlDir := config.GetPudlDir()
-	
+
 	// Check if already initialized (unless force is specified)
 	if !opts.Force && config.Exists() {
 		if opts.Verbose {
@@ -28,29 +28,29 @@ func Initialize(opts InitOptions) error {
 		}
 		return nil
 	}
-	
+
 	if opts.Verbose {
 		fmt.Printf("Initializing PUDL workspace at %s\n", pudlDir)
 	}
-	
+
 	// Create the main PUDL directory
 	if err := os.MkdirAll(pudlDir, 0755); err != nil {
 		return fmt.Errorf("failed to create PUDL directory: %w", err)
 	}
-	
+
 	// Load default configuration
 	cfg := config.DefaultConfig()
-	
+
 	// Create schema directory
 	if err := os.MkdirAll(cfg.SchemaPath, 0755); err != nil {
 		return fmt.Errorf("failed to create schema directory: %w", err)
 	}
-	
+
 	// Create data directory
 	if err := os.MkdirAll(cfg.DataPath, 0755); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
-	
+
 	// Initialize CUE module in schema directory
 	if err := initCUEModule(cfg.SchemaPath, opts.Verbose); err != nil {
 		return fmt.Errorf("failed to initialize CUE module: %w", err)
@@ -76,19 +76,19 @@ func Initialize(opts InitOptions) error {
 	if err := initGitRepo(cfg.SchemaPath, opts.Verbose); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
 	}
-	
+
 	// Save configuration
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
-	
+
 	if opts.Verbose {
 		fmt.Println("✅ PUDL workspace initialized successfully!")
 		fmt.Printf("   Schema repository: %s\n", cfg.SchemaPath)
 		fmt.Printf("   Data directory: %s\n", cfg.DataPath)
 		fmt.Printf("   Configuration: %s\n", config.GetConfigPath())
 	}
-	
+
 	return nil
 }
 
@@ -101,7 +101,7 @@ func initGitRepo(dir string, verbose bool) error {
 		}
 		return nil // Not a fatal error
 	}
-	
+
 	// Check if already a git repository
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
@@ -110,14 +110,14 @@ func initGitRepo(dir string, verbose bool) error {
 		}
 		return nil
 	}
-	
+
 	// Initialize git repository
 	cmd := exec.Command("git", "init")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to run git init: %w", err)
 	}
-	
+
 	// Create initial .gitignore
 	gitignorePath := filepath.Join(dir, ".gitignore")
 	gitignoreContent := `# PUDL Schema Repository
@@ -139,11 +139,11 @@ Thumbs.db
 .vscode/
 .idea/
 `
-	
+
 	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
-	
+
 	// Create initial README
 	readmePath := filepath.Join(dir, "README.md")
 	readmeContent := `# PUDL Schema Repository
@@ -203,28 +203,28 @@ import k8s "cue.dev/x/k8s.io/api/apps/v1"
 
 See the **examples/** directory for more usage patterns.
 `
-	
+
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
 		return fmt.Errorf("failed to create README.md: %w", err)
 	}
-	
+
 	// Add and commit initial files
 	addCmd := exec.Command("git", "add", ".")
 	addCmd.Dir = dir
 	if err := addCmd.Run(); err != nil {
 		return fmt.Errorf("failed to add files to git: %w", err)
 	}
-	
+
 	commitCmd := exec.Command("git", "commit", "-m", "Initial PUDL schema repository")
 	commitCmd.Dir = dir
 	if err := commitCmd.Run(); err != nil {
 		return fmt.Errorf("failed to create initial commit: %w", err)
 	}
-	
+
 	if verbose {
 		fmt.Printf("✅ Git repository initialized in %s\n", dir)
 	}
-	
+
 	return nil
 }
 

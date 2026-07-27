@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	setupShell    string
-	setupDryRun   bool
+	setupShell     string
+	setupDryRun    bool
 	setupUninstall bool
 )
 

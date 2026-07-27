@@ -159,4 +159,3 @@ func confirmDelete(entry *lister.ListEntry, items []lister.ListEntry) bool {
 
 	return response == "y" || response == "yes"
 }
-

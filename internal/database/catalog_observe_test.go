@@ -10,19 +10,19 @@ func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string) {
 	entryType := "observe"
 	schema := "pudl/mu.#ObserveResult"
 	entry := CatalogEntry{
-		ID:             id,
-		StoredPath:     "/tmp/test/" + id + ".json",
-		MetadataPath:   "/tmp/test/" + id + ".json.meta",
+		ID:              id,
+		StoredPath:      "/tmp/test/" + id + ".json",
+		MetadataPath:    "/tmp/test/" + id + ".json.meta",
 		ImportTimestamp: time.Now(),
-		Format:         "json",
-		Origin:         "mu-observe",
-		Schema:         schema,
-		Confidence:     1.0,
-		RecordCount:    1,
-		SizeBytes:      100,
-		EntryType:      &entryType,
-		Target:     &def,
-		ContentHash:    &contentHash,
+		Format:          "json",
+		Origin:          "mu-observe",
+		Schema:          schema,
+		Confidence:      1.0,
+		RecordCount:     1,
+		SizeBytes:       100,
+		EntryType:       &entryType,
+		Target:          &def,
+		ContentHash:     &contentHash,
 	}
 	if err := db.AddEntry(entry); err != nil {
 		t.Fatalf("failed to add test observe entry: %v", err)
@@ -56,7 +56,7 @@ func addTestManifestEntry(t *testing.T, db *CatalogDB, id, def string) {
 		RecordCount:     1,
 		SizeBytes:       100,
 		EntryType:       &entryType,
-		Target:      &def,
+		Target:          &def,
 	}
 	if err := db.AddEntry(entry); err != nil {
 		t.Fatalf("failed to add test manifest entry: %v", err)

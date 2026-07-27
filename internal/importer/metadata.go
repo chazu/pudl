@@ -67,12 +67,12 @@ type CatalogEntry struct {
 
 // SchemaAssignment represents a schema assignment in the catalog
 type SchemaAssignment struct {
-	DataID               string  `json:"data_id"`
-	CuePackage           string  `json:"cue_package"`
-	CueDefinition        string  `json:"cue_definition"`
-	AssignmentMethod     string  `json:"assignment_method"`
-	Confidence           float64 `json:"confidence"`
-	AssignmentTimestamp  string  `json:"assignment_timestamp"`
+	DataID              string  `json:"data_id"`
+	CuePackage          string  `json:"cue_package"`
+	CueDefinition       string  `json:"cue_definition"`
+	AssignmentMethod    string  `json:"assignment_method"`
+	Confidence          float64 `json:"confidence"`
+	AssignmentTimestamp string  `json:"assignment_timestamp"`
 }
 
 // SchemaRegistry represents the schema registry catalog
@@ -99,4 +99,3 @@ func (i *Importer) saveMetadata(metadata ImportMetadata, path string) error {
 	}
 	return os.WriteFile(path, data, 0644)
 }
-

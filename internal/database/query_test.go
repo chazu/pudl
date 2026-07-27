@@ -135,7 +135,7 @@ func TestQueryEntries_Sorting(t *testing.T) {
 		for i := 1; i < len(result.Entries); i++ {
 			assert.True(t,
 				result.Entries[i-1].ImportTimestamp.After(result.Entries[i].ImportTimestamp) ||
-				result.Entries[i-1].ImportTimestamp.Equal(result.Entries[i].ImportTimestamp),
+					result.Entries[i-1].ImportTimestamp.Equal(result.Entries[i].ImportTimestamp),
 				"Results should be sorted by timestamp descending")
 		}
 	})

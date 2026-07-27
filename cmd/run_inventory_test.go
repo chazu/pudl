@@ -22,8 +22,8 @@ func TestInventorySetDiff(t *testing.T) {
 	}
 	desired := []map[string]any{
 		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"}, // satisfied
-		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},    // missing
-		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},   // changed
+		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},   // missing
+		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},  // changed
 	}
 	drift := inventorySetDiff(desired, observed, nil) // nil resolver -> name|path|id fallback
 	require.Len(t, drift, 2)
@@ -94,13 +94,13 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 		{"_schema":"pudl/linux.#Package","name":"restic","state":"present"}
 	]}}]`
 	dataDir := filepath.Join(dir, "data")
-	_, err = mubridge.IngestObserveResults(db, strings.NewReader(canned), "pudl-run", dataDir, nil)
+	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: dataDir, Graph: nil})
 	require.NoError(t, err)
 
 	desired := []map[string]any{
 		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"}, // satisfied
-		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},    // missing
-		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},   // changed
+		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},   // missing
+		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},  // changed
 	}
 	res, err := runInventoryDrift(db, "pudl-run", desired, nil)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestRunInventoryDriftDoesNotMatchAcrossScopes(t *testing.T) {
 	other := `[{"target":"//host:other","current":{"records":[
 		{"_schema":"pudl/linux.#Package","name":"podman","state":"present"}
 	]}}]`
-	_, err = mubridge.IngestObserveResults(db, strings.NewReader(other), "other-model", dataDir, nil)
+	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(other), Origin: "other-model", DataDir: dataDir, Graph: nil})
 	require.NoError(t, err)
 
 	desired := []map[string]any{

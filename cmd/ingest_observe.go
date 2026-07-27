@@ -65,13 +65,22 @@ Examples:
 			return fmt.Errorf("failed to initialize schema inferrer: %w", err)
 		}
 
-		// Ingest observe results
-		count, err := mubridge.IngestObserveResults(db, reader, ingestObserveOrigin, cfg.DataPath, inferrer.GetInheritanceGraph())
+		// Ingest observe results. No model: a standalone ingest is not taken on
+		// behalf of one, and inventing a model here would let a hand-fed snapshot
+		// be picked up as some model's current observation.
+		result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
+			Reader:    reader,
+			DataDir:   cfg.DataPath,
+			Graph:     inferrer.GetInheritanceGraph(),
+			Origin:    ingestObserveOrigin,
+			Source:    database.SnapshotSourceIngestObserve,
+			Workspace: effectiveWorkspaceName(),
+		})
 		if err != nil {
 			return fmt.Errorf("ingest failed: %w", err)
 		}
 
-		fmt.Printf("Ingested %d observe results\n", count)
+		fmt.Printf("Ingested %d observe results (snapshot %s)\n", result.Records, result.SnapshotID)
 		return nil
 	},
 }

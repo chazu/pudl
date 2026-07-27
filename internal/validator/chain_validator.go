@@ -348,12 +348,12 @@ func extractPackageFromPath(schemaPath, filePath string) string {
 	if err != nil {
 		return "unknown"
 	}
-	
+
 	dir := filepath.Dir(relPath)
 	if dir == "." {
 		return "root"
 	}
-	
+
 	return strings.ReplaceAll(dir, string(filepath.Separator), ".")
 }
 

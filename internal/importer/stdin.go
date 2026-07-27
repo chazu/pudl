@@ -98,4 +98,3 @@ func GetStdinFilename(format string) string {
 
 	return "stdin" + ext
 }
-

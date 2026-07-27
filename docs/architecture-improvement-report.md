@@ -472,6 +472,11 @@ the right reframing.
 
 **D6 — Snapshot ownership: the session allocates the run ID; the observer
 adapter returns the snapshot ID — with the snapshot row written on completion.**
+— **IMPLEMENTED 2026-07-27** with Recommendation 3, as the coherent rule below
+rather than the adapter-returns shape: the session pre-allocates the snapshot ID
+alongside the run ID, and the contract row plus the collection entry commit
+together when the ingest completes. The orphan-row failure this decision
+described is now covered by a test.
 
 *Correction to the earlier draft:* it justified adapter-returns by the property
 "no snapshot row for an observation that never completed." The code does not
@@ -770,6 +775,21 @@ Then retire the embedded legacy importer and make memory-budget tests measure
 peak memory rather than only elapsed time.
 
 ## Recommendation 3: make observation snapshots first-class
+
+**DONE 2026-07-27.** An `observe_snapshots` table is the contract; the snapshot
+ID is pre-allocated by the run and is also the collection entry ID (closing D6);
+currentness is derived; retention/pruning exists behind `pudl snapshot`; and the
+scoping tests this recommendation asked for are in place. See
+`docs/design/2026-07-27-first-class-snapshots.md` and
+`implog/2026_07_27_first_class_snapshots.md`.
+
+Writing those scoping tests surfaced a pre-existing defect, now fixed: a record's
+raw filename was a function of (second, target, index), so two observations of
+the same target within one second overwrote each other's evidence while their
+catalog entries stayed distinct — an earlier snapshot could end up pointing at a
+later observation's record, and a set-diff against it report `clean` off data it
+never observed. The filename now carries the content hash. The original
+recommendation follows.
 
 Observe ingestion currently creates timestamped collection entries and membership
 rows. Add an explicit snapshot contract containing workspace, model, target, run

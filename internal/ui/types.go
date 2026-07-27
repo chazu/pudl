@@ -17,10 +17,10 @@ type ListItem struct {
 func (i ListItem) FilterValue() string {
 	// Combine multiple fields for comprehensive filtering
 	return i.Entry.Proquint + " " +
-		   i.Entry.ID + " " +
-		   i.Entry.Schema + " " +
-		   i.Entry.Origin + " " +
-		   i.Entry.Format
+		i.Entry.ID + " " +
+		i.Entry.Schema + " " +
+		i.Entry.Origin + " " +
+		i.Entry.Format
 }
 
 // Title returns the main title for the list item
@@ -42,9 +42,9 @@ func (i ListItem) Title() string {
 func (i ListItem) Description() string {
 	displayOrigin := formatOriginForDisplay(i.Entry.Origin)
 	return "Origin: " + displayOrigin +
-		   " | Format: " + i.Entry.Format +
-		   " | Records: " + formatInt(i.Entry.RecordCount) +
-		   " | Size: " + formatBytes(i.Entry.SizeBytes)
+		" | Format: " + i.Entry.Format +
+		" | Records: " + formatInt(i.Entry.RecordCount) +
+		" | Size: " + formatBytes(i.Entry.SizeBytes)
 }
 
 // formatOriginForDisplay converts hash-based origins to human-readable format
@@ -104,22 +104,22 @@ func formatIntSimple(n int) string {
 	if n == 0 {
 		return "0"
 	}
-	
+
 	negative := n < 0
 	if negative {
 		n = -n
 	}
-	
+
 	result := ""
 	for n > 0 {
 		result = string(rune('0'+(n%10))) + result
 		n /= 10
 	}
-	
+
 	if negative {
 		result = "-" + result
 	}
-	
+
 	return result
 }
 
@@ -129,10 +129,10 @@ func formatIntWithCommas(n int) string {
 	if negative {
 		n = -n
 	}
-	
+
 	result := ""
 	count := 0
-	
+
 	for n > 0 {
 		if count > 0 && count%3 == 0 {
 			result = "," + result
@@ -141,11 +141,11 @@ func formatIntWithCommas(n int) string {
 		n /= 10
 		count++
 	}
-	
+
 	if negative {
 		result = "-" + result
 	}
-	
+
 	return result
 }
 

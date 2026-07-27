@@ -39,7 +39,7 @@ func TestJSONChunkProcessor(t *testing.T) {
 	// Test newline-delimited JSON
 	ndjsonData := []byte(`{"name": "John", "age": 30}
 {"name": "Jane", "age": 25}`)
-	
+
 	chunk.Data = ndjsonData
 	chunk.Size = len(ndjsonData)
 
@@ -60,7 +60,7 @@ func TestCSVChunkProcessor(t *testing.T) {
 	csvData := []byte(`name,age,city
 John,30,NYC
 Jane,25,LA`)
-	
+
 	chunk := &CDCChunk{
 		Data:     csvData,
 		Offset:   0,
@@ -120,7 +120,7 @@ func TestYAMLChunkProcessor(t *testing.T) {
 	yamlData := []byte(`name: John
 age: 30
 city: NYC`)
-	
+
 	chunk := &CDCChunk{
 		Data:     yamlData,
 		Offset:   0,
@@ -154,7 +154,7 @@ age: 30
 ---
 name: Jane
 age: 25`)
-	
+
 	chunk.Data = multiYamlData
 	chunk.Size = len(multiYamlData)
 

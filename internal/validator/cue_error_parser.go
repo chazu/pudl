@@ -7,11 +7,11 @@ import (
 
 // ParsedError represents a parsed CUE validation error
 type ParsedError struct {
-	Path        string // CUE path where error occurred
-	Expected    string // Expected value/type
-	Got         string // Actual value/type
-	Constraint  string // The constraint that was violated
-	Suggestion  string // Suggested fix
+	Path       string // CUE path where error occurred
+	Expected   string // Expected value/type
+	Got        string // Actual value/type
+	Constraint string // The constraint that was violated
+	Suggestion string // Suggested fix
 }
 
 // CUEErrorParser parses CUE validation errors into structured format
@@ -170,4 +170,3 @@ func (p *CUEErrorParser) FormatError(pe ParsedError) string {
 
 	return strings.Join(parts, " | ")
 }
-

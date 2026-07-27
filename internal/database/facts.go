@@ -15,15 +15,15 @@ import (
 // Facts are the EDB for the Datalog evaluator and the storage layer
 // for agent observations.
 type Fact struct {
-	ID         string  `json:"id"`
-	Relation   string  `json:"relation"`
-	Args       string  `json:"args"`        // JSON object with meaningful keys
-	ValidStart int64   `json:"valid_start"` // unix timestamp
-	ValidEnd   *int64  `json:"valid_end,omitempty"`
-	TxStart    int64   `json:"tx_start"`
-	TxEnd      *int64  `json:"tx_end,omitempty"`
-	Source     string  `json:"source,omitempty"`
-	Provenance string  `json:"provenance,omitempty"` // JSON
+	ID         string `json:"id"`
+	Relation   string `json:"relation"`
+	Args       string `json:"args"`        // JSON object with meaningful keys
+	ValidStart int64  `json:"valid_start"` // unix timestamp
+	ValidEnd   *int64 `json:"valid_end,omitempty"`
+	TxStart    int64  `json:"tx_start"`
+	TxEnd      *int64 `json:"tx_end,omitempty"`
+	Source     string `json:"source,omitempty"`
+	Provenance string `json:"provenance,omitempty"` // JSON
 }
 
 // FactFilter specifies criteria for querying facts.

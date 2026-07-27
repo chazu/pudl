@@ -41,7 +41,7 @@ func TestCatalogEntryViewProjectsEntries(t *testing.T) {
 	}
 
 	var id, origin string
-	row := db.DB().QueryRow("SELECT id, origin FROM " + CatalogEntryView + " WHERE id = ?", "a")
+	row := db.DB().QueryRow("SELECT id, origin FROM "+CatalogEntryView+" WHERE id = ?", "a")
 	if err := row.Scan(&id, &origin); err != nil {
 		t.Fatalf("view query failed: %v", err)
 	}

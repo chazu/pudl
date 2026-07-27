@@ -7,10 +7,10 @@ import (
 
 // TargetStatus represents the convergence status of a single target.
 type TargetStatus struct {
-	Target string
-	Status     string
-	UpdatedAt  time.Time
-	DiffCount  int // from latest drift report, 0 if clean
+	Target    string
+	Status    string
+	UpdatedAt time.Time
+	DiffCount int // from latest drift report, 0 if clean
 }
 
 // UpdateStatus sets the convergence status for entries matching a target name.

@@ -48,8 +48,8 @@ const (
 	// verified clean, across however many processes. The per-run cap alone gives
 	// no halting guarantee to a scheduler or a crash-loop supervisor, each of
 	// whose restarts would otherwise get a fresh cap.
-	OutcomeCapExhausted    Outcome = "failed (cap_exhausted)"
-	OutcomeBudgetExhausted Outcome = "failed (apply_budget_exhausted)"
+	OutcomeCapExhausted      Outcome = "failed (cap_exhausted)"
+	OutcomeBudgetExhausted   Outcome = "failed (apply_budget_exhausted)"
 	OutcomeExecuteError      Outcome = "failed (execute_error)"
 	OutcomeObserveError      Outcome = "failed (observe_error)"
 	OutcomeDryRun            Outcome = "dry-run (no changes applied)"
@@ -70,11 +70,11 @@ type ConvergeRequest struct {
 	// reset its budget) and then refuse to apply. A sentinel would make the
 	// struct's zero value mean "refuse every apply" for any caller that forgot
 	// the field.
-	ApplyBudget     *int
-	DryRun          bool
-	RecordManifest  ManifestRecorder
-	OnObserve       ObserveHook
-	OnApply         ApplyHook
+	ApplyBudget    *int
+	DryRun         bool
+	RecordManifest ManifestRecorder
+	OnObserve      ObserveHook
+	OnApply        ApplyHook
 	// OnApplied fires immediately after each successful apply, before the
 	// manifest is recorded. That ordering is load-bearing: the durable apply
 	// count must land before anything else in the iteration can fail, or a

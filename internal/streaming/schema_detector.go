@@ -8,10 +8,10 @@ import (
 
 // SimpleSchemaDetector implements basic pattern-based schema detection
 type SimpleSchemaDetector struct {
-	mu            sync.RWMutex
-	patterns      []SchemaPattern
-	samples       []ChunkSample
-	maxSamples    int
+	mu             sync.RWMutex
+	patterns       []SchemaPattern
+	samples        []ChunkSample
+	maxSamples     int
 	detectedSchema string
 }
 
@@ -26,11 +26,11 @@ type SchemaPattern struct {
 
 // FieldPattern represents a pattern for detecting specific fields
 type FieldPattern struct {
-	Name     string      // Field name or pattern
-	Type     string      // Expected data type
-	Required bool        // Whether field is required
-	Pattern  string      // Regex pattern for field name (optional)
-	Values   []string    // Expected values (for enums)
+	Name     string   // Field name or pattern
+	Type     string   // Expected data type
+	Required bool     // Whether field is required
+	Pattern  string   // Regex pattern for field name (optional)
+	Values   []string // Expected values (for enums)
 }
 
 // ChunkSample represents a sample from a processed chunk for schema detection
@@ -47,10 +47,10 @@ func NewSimpleSchemaDetector(maxSamples int) *SimpleSchemaDetector {
 		samples:    make([]ChunkSample, 0),
 		maxSamples: maxSamples,
 	}
-	
+
 	// Load default patterns
 	detector.loadDefaultPatterns()
-	
+
 	return detector
 }
 
@@ -58,20 +58,20 @@ func NewSimpleSchemaDetector(maxSamples int) *SimpleSchemaDetector {
 func (d *SimpleSchemaDetector) AddSample(chunk *ProcessedChunk) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	sample := ChunkSample{
 		Objects:  chunk.Objects,
 		Format:   chunk.Format,
 		Metadata: chunk.Metadata,
 	}
-	
+
 	d.samples = append(d.samples, sample)
-	
+
 	// Keep only the most recent samples
 	if len(d.samples) > d.maxSamples {
 		d.samples = d.samples[1:]
 	}
-	
+
 	return nil
 }
 
@@ -79,24 +79,24 @@ func (d *SimpleSchemaDetector) AddSample(chunk *ProcessedChunk) error {
 func (d *SimpleSchemaDetector) DetectSchema() (*SchemaDetection, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	if len(d.samples) == 0 {
 		return nil, fmt.Errorf("no samples available for schema detection")
 	}
-	
+
 	// Analyze all objects from all samples
 	allObjects := make([]interface{}, 0)
 	for _, sample := range d.samples {
 		allObjects = append(allObjects, sample.Objects...)
 	}
-	
+
 	if len(allObjects) == 0 {
 		return nil, fmt.Errorf("no objects found in samples")
 	}
-	
+
 	// Find the best matching pattern
 	bestMatch := d.findBestMatch(allObjects)
-	
+
 	if bestMatch == nil {
 		return &SchemaDetection{
 			SchemaName: "unknown",
@@ -108,7 +108,7 @@ func (d *SimpleSchemaDetector) DetectSchema() (*SchemaDetection, error) {
 			},
 		}, nil
 	}
-	
+
 	return bestMatch, nil
 }
 
@@ -116,7 +116,7 @@ func (d *SimpleSchemaDetector) DetectSchema() (*SchemaDetection, error) {
 func (d *SimpleSchemaDetector) Reset() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	d.samples = d.samples[:0]
 	d.detectedSchema = ""
 }
@@ -125,17 +125,17 @@ func (d *SimpleSchemaDetector) Reset() {
 func (d *SimpleSchemaDetector) GetConfidence() float64 {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	if len(d.samples) == 0 {
 		return 0.0
 	}
-	
+
 	// Simple confidence based on number of samples
 	confidence := float64(len(d.samples)) / float64(d.maxSamples)
 	if confidence > 1.0 {
 		confidence = 1.0
 	}
-	
+
 	return confidence
 }
 
@@ -143,7 +143,7 @@ func (d *SimpleSchemaDetector) GetConfidence() float64 {
 func (d *SimpleSchemaDetector) findBestMatch(objects []interface{}) *SchemaDetection {
 	bestScore := 0.0
 	var bestPattern *SchemaPattern
-	
+
 	for _, pattern := range d.patterns {
 		score := d.scorePattern(pattern, objects)
 		if score > bestScore {
@@ -151,19 +151,19 @@ func (d *SimpleSchemaDetector) findBestMatch(objects []interface{}) *SchemaDetec
 			bestPattern = &pattern
 		}
 	}
-	
+
 	if bestPattern == nil || bestScore < 0.3 { // Minimum threshold
 		return nil
 	}
-	
+
 	return &SchemaDetection{
 		SchemaName: bestPattern.Name,
 		Confidence: bestScore,
 		Samples:    len(d.samples),
 		Metadata: map[string]interface{}{
 			"pattern_description": bestPattern.Description,
-			"score":              bestScore,
-			"total_objects":      len(objects),
+			"score":               bestScore,
+			"total_objects":       len(objects),
 		},
 	}
 }
@@ -173,25 +173,25 @@ func (d *SimpleSchemaDetector) scorePattern(pattern SchemaPattern, objects []int
 	if len(objects) == 0 {
 		return 0.0
 	}
-	
+
 	totalScore := 0.0
 	validObjects := 0
-	
+
 	for _, obj := range objects {
 		objMap, ok := obj.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		
+
 		validObjects++
 		score := d.scoreObject(pattern, objMap)
 		totalScore += score
 	}
-	
+
 	if validObjects == 0 {
 		return 0.0
 	}
-	
+
 	return totalScore / float64(validObjects)
 }
 
@@ -199,32 +199,32 @@ func (d *SimpleSchemaDetector) scorePattern(pattern SchemaPattern, objects []int
 func (d *SimpleSchemaDetector) scoreObject(pattern SchemaPattern, obj map[string]interface{}) float64 {
 	requiredMatches := 0
 	optionalMatches := 0
-	
+
 	// Check required fields
 	for _, field := range pattern.Fields {
 		if d.matchesField(field, obj) {
 			requiredMatches++
 		}
 	}
-	
+
 	// Check optional fields
 	for _, field := range pattern.Optional {
 		if d.matchesField(field, obj) {
 			optionalMatches++
 		}
 	}
-	
+
 	// Calculate score
 	requiredScore := 0.0
 	if len(pattern.Fields) > 0 {
 		requiredScore = float64(requiredMatches) / float64(len(pattern.Fields))
 	}
-	
+
 	optionalScore := 0.0
 	if len(pattern.Optional) > 0 {
 		optionalScore = float64(optionalMatches) / float64(len(pattern.Optional))
 	}
-	
+
 	// Weight required fields more heavily
 	return (requiredScore * 0.8) + (optionalScore * 0.2)
 }
@@ -235,7 +235,7 @@ func (d *SimpleSchemaDetector) matchesField(field FieldPattern, obj map[string]i
 	if !exists {
 		return false
 	}
-	
+
 	// Check type if specified
 	if field.Type != "" {
 		actualType := d.getValueType(value)
@@ -243,7 +243,7 @@ func (d *SimpleSchemaDetector) matchesField(field FieldPattern, obj map[string]i
 			return false
 		}
 	}
-	
+
 	// Check enum values if specified
 	if len(field.Values) > 0 {
 		valueStr := fmt.Sprintf("%v", value)
@@ -258,7 +258,7 @@ func (d *SimpleSchemaDetector) matchesField(field FieldPattern, obj map[string]i
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -267,7 +267,7 @@ func (d *SimpleSchemaDetector) getValueType(value interface{}) string {
 	if value == nil {
 		return "null"
 	}
-	
+
 	switch reflect.TypeOf(value).Kind() {
 	case reflect.String:
 		return "string"
@@ -298,7 +298,7 @@ func (d *SimpleSchemaDetector) loadDefaultPatterns() {
 func (d *SimpleSchemaDetector) AddPattern(pattern SchemaPattern) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	d.patterns = append(d.patterns, pattern)
 }
 
@@ -306,7 +306,7 @@ func (d *SimpleSchemaDetector) AddPattern(pattern SchemaPattern) {
 func (d *SimpleSchemaDetector) GetPatterns() []SchemaPattern {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	
+
 	patterns := make([]SchemaPattern, len(d.patterns))
 	copy(patterns, d.patterns)
 	return patterns

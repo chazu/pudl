@@ -10,7 +10,7 @@ import (
 // ValidationService handles CUE validation for data validation workflows
 type ValidationService struct {
 	chainValidator *ChainValidator
-	schemaPaths      []string
+	schemaPaths    []string
 }
 
 // NewValidationService creates a new validation service.
@@ -27,7 +27,7 @@ func NewValidationService(schemaPaths ...string) (*ValidationService, error) {
 
 	return &ValidationService{
 		chainValidator: chainValidator,
-		schemaPaths:      schemaPaths,
+		schemaPaths:    schemaPaths,
 	}, nil
 }
 
@@ -139,13 +139,13 @@ func (vs *ValidationService) GetValidationSummary(result *ServiceValidationResul
 
 // ServiceValidationResult represents the result of validating data against a schema
 type ServiceValidationResult struct {
-	Valid           bool                    `json:"valid"`
-	SchemaName      string                  `json:"schema_name"`
-	AssignedSchema  string                  `json:"assigned_schema"`
-	ErrorMessage    string                  `json:"error_message"`
-	Errors          []string                `json:"errors"`
-	FallbackReason  string                  `json:"fallback_reason"`
-	ChainAttempts []ServiceChainAttempt  `json:"chain_attempts"`
+	Valid          bool                  `json:"valid"`
+	SchemaName     string                `json:"schema_name"`
+	AssignedSchema string                `json:"assigned_schema"`
+	ErrorMessage   string                `json:"error_message"`
+	Errors         []string              `json:"errors"`
+	FallbackReason string                `json:"fallback_reason"`
+	ChainAttempts  []ServiceChainAttempt `json:"chain_attempts"`
 }
 
 // ServiceChainAttempt represents a single validation attempt

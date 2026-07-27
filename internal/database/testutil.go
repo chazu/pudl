@@ -23,18 +23,18 @@ type DatabaseTestSuite struct {
 func NewDatabaseTestSuite(t *testing.T) *DatabaseTestSuite {
 	// Use t.TempDir() for automatic cleanup by Go's test runner
 	tempDir := t.TempDir()
-	
+
 	suite := &DatabaseTestSuite{
 		TempDir:    tempDir,
 		cleanupFns: []func() error{},
 		t:          t,
 	}
-	
+
 	// Register cleanup that ALWAYS runs, even on panic/crash
 	t.Cleanup(func() {
 		suite.Cleanup()
 	})
-	
+
 	return suite
 }
 
@@ -44,9 +44,9 @@ func (s *DatabaseTestSuite) InitializeDatabase() error {
 	if err != nil {
 		return fmt.Errorf("failed to create test database: %w", err)
 	}
-	
+
 	s.DB = db
-	
+
 	// Register database cleanup
 	s.RegisterCleanup(func() error {
 		if s.DB != nil {
@@ -54,7 +54,7 @@ func (s *DatabaseTestSuite) InitializeDatabase() error {
 		}
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -66,14 +66,14 @@ func (s *DatabaseTestSuite) RegisterCleanup(fn func() error) {
 // Cleanup performs all registered cleanup operations
 func (s *DatabaseTestSuite) Cleanup() {
 	var cleanupErrors []error
-	
+
 	// Run all cleanup functions in reverse order (LIFO)
 	for i := len(s.cleanupFns) - 1; i >= 0; i-- {
 		if err := s.cleanupFns[i](); err != nil {
 			cleanupErrors = append(cleanupErrors, err)
 		}
 	}
-	
+
 	// Close database connections
 	if s.DB != nil {
 		if err := s.DB.Close(); err != nil {
@@ -81,7 +81,7 @@ func (s *DatabaseTestSuite) Cleanup() {
 		}
 		s.DB = nil
 	}
-	
+
 	// Log cleanup errors but don't fail the test
 	for _, err := range cleanupErrors {
 		if s.t != nil {
@@ -107,25 +107,25 @@ func NewTestDataGenerator() *TestDataGenerator {
 // GenerateAWSEntries creates realistic AWS catalog entries
 func (g *TestDataGenerator) GenerateAWSEntries(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
-	
+
 	awsSchemas := []string{
 		"aws.#EC2Instance",
 		"aws.#S3Bucket",
 		"aws.#RDSInstance",
 		"aws.#SecurityGroup",
 	}
-	
+
 	awsOrigins := []string{
 		"aws-ec2-describe-instances",
 		"aws-s3-list-buckets",
 		"aws-rds-describe-db-instances",
 		"aws-ec2-describe-security-groups",
 	}
-	
+
 	for i := 0; i < count; i++ {
 		schemaIndex := i % len(awsSchemas)
 		g.counter++
-		
+
 		entries[i] = CatalogEntry{
 			ID:              fmt.Sprintf("aws-test-%06d", g.counter),
 			StoredPath:      fmt.Sprintf("/test/raw/aws-test-%06d.json", g.counter),
@@ -135,40 +135,40 @@ func (g *TestDataGenerator) GenerateAWSEntries(count int) []CatalogEntry {
 			Origin:          awsOrigins[schemaIndex],
 			Schema:          awsSchemas[schemaIndex],
 			Confidence:      0.85 + float64(i%15)/100.0, // 0.85-0.99
-			RecordCount:     1 + i%5,                     // 1-5 records
-			SizeBytes:       int64(500 + i*50),           // Varying sizes
+			RecordCount:     1 + i%5,                    // 1-5 records
+			SizeBytes:       int64(500 + i*50),          // Varying sizes
 			CollectionID:    nil,
 			ItemIndex:       nil,
 			CollectionType:  nil,
 			ItemID:          nil,
 		}
 	}
-	
+
 	return entries
 }
 
 // GenerateK8sEntries creates realistic Kubernetes catalog entries
 func (g *TestDataGenerator) GenerateK8sEntries(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
-	
+
 	k8sSchemas := []string{
 		"k8s.#Pod",
 		"k8s.#Service",
 		"k8s.#Deployment",
 		"k8s.#ConfigMap",
 	}
-	
+
 	k8sOrigins := []string{
 		"k8s-get-pods",
 		"k8s-get-services",
 		"k8s-get-deployments",
 		"k8s-get-configmaps",
 	}
-	
+
 	for i := 0; i < count; i++ {
 		schemaIndex := i % len(k8sSchemas)
 		g.counter++
-		
+
 		entries[i] = CatalogEntry{
 			ID:              fmt.Sprintf("k8s-test-%06d", g.counter),
 			StoredPath:      fmt.Sprintf("/test/raw/k8s-test-%06d.yaml", g.counter),
@@ -178,43 +178,43 @@ func (g *TestDataGenerator) GenerateK8sEntries(count int) []CatalogEntry {
 			Origin:          k8sOrigins[schemaIndex],
 			Schema:          k8sSchemas[schemaIndex],
 			Confidence:      0.90 + float64(i%10)/100.0, // 0.90-0.99
-			RecordCount:     1,                           // K8s resources are typically single objects
-			SizeBytes:       int64(200 + i*25),           // Smaller than AWS resources
+			RecordCount:     1,                          // K8s resources are typically single objects
+			SizeBytes:       int64(200 + i*25),          // Smaller than AWS resources
 			CollectionID:    nil,
 			ItemIndex:       nil,
 			CollectionType:  nil,
 			ItemID:          nil,
 		}
 	}
-	
+
 	return entries
 }
 
 // GenerateGenericEntries creates generic catalog entries for testing
 func (g *TestDataGenerator) GenerateGenericEntries(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
-	
+
 	genericSchemas := []string{
 		"core.#Item",
 		"generic.#JSONData",
 		"generic.#CSVData",
 		"generic.#TextData",
 	}
-	
+
 	genericOrigins := []string{
 		"unknown",
 		"manual-import",
 		"csv-import",
 		"text-import",
 	}
-	
+
 	formats := []string{"json", "yaml", "csv", "txt"}
-	
+
 	for i := 0; i < count; i++ {
 		schemaIndex := i % len(genericSchemas)
 		formatIndex := i % len(formats)
 		g.counter++
-		
+
 		entries[i] = CatalogEntry{
 			ID:              fmt.Sprintf("generic-%06d", g.counter),
 			StoredPath:      fmt.Sprintf("/test/raw/generic-%06d.%s", g.counter, formats[formatIndex]),
@@ -224,49 +224,49 @@ func (g *TestDataGenerator) GenerateGenericEntries(count int) []CatalogEntry {
 			Origin:          genericOrigins[schemaIndex],
 			Schema:          genericSchemas[schemaIndex],
 			Confidence:      0.5 + float64(i%30)/100.0, // 0.5-0.79
-			RecordCount:     1 + i%20,                   // 1-20 records
-			SizeBytes:       int64(50 + i*15),           // Smaller files
+			RecordCount:     1 + i%20,                  // 1-20 records
+			SizeBytes:       int64(50 + i*15),          // Smaller files
 			CollectionID:    nil,
 			ItemIndex:       nil,
 			CollectionType:  nil,
 			ItemID:          nil,
 		}
 	}
-	
+
 	return entries
 }
 
 // GenerateMixedDataset creates a diverse dataset with different types of entries
 func (g *TestDataGenerator) GenerateMixedDataset(totalCount int) []CatalogEntry {
 	// Distribute entries across different types
-	awsCount := totalCount * 40 / 100      // 40% AWS
-	k8sCount := totalCount * 30 / 100      // 30% Kubernetes
+	awsCount := totalCount * 40 / 100                // 40% AWS
+	k8sCount := totalCount * 30 / 100                // 30% Kubernetes
 	genericCount := totalCount - awsCount - k8sCount // Remaining generic
-	
+
 	var allEntries []CatalogEntry
-	
+
 	// Add AWS entries
 	awsEntries := g.GenerateAWSEntries(awsCount)
 	allEntries = append(allEntries, awsEntries...)
-	
+
 	// Add Kubernetes entries
 	k8sEntries := g.GenerateK8sEntries(k8sCount)
 	allEntries = append(allEntries, k8sEntries...)
-	
+
 	// Add generic entries
 	genericEntries := g.GenerateGenericEntries(genericCount)
 	allEntries = append(allEntries, genericEntries...)
-	
+
 	return allEntries
 }
 
 // GenerateCorruptedEntries creates entries with various data issues for error testing
 func (g *TestDataGenerator) GenerateCorruptedEntries(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
-	
+
 	for i := 0; i < count; i++ {
 		g.counter++
-		
+
 		entry := CatalogEntry{
 			ID:              fmt.Sprintf("corrupted-%06d", g.counter),
 			StoredPath:      fmt.Sprintf("/test/raw/corrupted-%06d.json", g.counter),
@@ -283,7 +283,7 @@ func (g *TestDataGenerator) GenerateCorruptedEntries(count int) []CatalogEntry {
 			CollectionType:  nil,
 			ItemID:          nil,
 		}
-		
+
 		// Introduce various corruption patterns
 		switch i % 4 {
 		case 0:
@@ -299,10 +299,10 @@ func (g *TestDataGenerator) GenerateCorruptedEntries(count int) []CatalogEntry {
 			// Zero timestamp
 			entry.ImportTimestamp = time.Time{}
 		}
-		
+
 		entries[i] = entry
 	}
-	
+
 	return entries
 }
 
@@ -310,7 +310,7 @@ func (g *TestDataGenerator) GenerateCorruptedEntries(count int) []CatalogEntry {
 func (g *TestDataGenerator) GenerateLargeDataset(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)
 	now := time.Now()
-	
+
 	for i := 0; i < count; i++ {
 		// Distribute across different schemas and origins
 		var schema, origin, format string
@@ -332,7 +332,7 @@ func (g *TestDataGenerator) GenerateLargeDataset(count int) []CatalogEntry {
 			origin = "k8s-get-services"
 			format = "yaml"
 		}
-		
+
 		g.counter++
 		entries[i] = CatalogEntry{
 			ID:              fmt.Sprintf("large-dataset-%06d", g.counter),
@@ -343,15 +343,15 @@ func (g *TestDataGenerator) GenerateLargeDataset(count int) []CatalogEntry {
 			Origin:          origin,
 			Schema:          schema,
 			Confidence:      0.8 + float64(i%20)/100.0, // Vary confidence
-			RecordCount:     1 + i%10,                   // Vary record count
-			SizeBytes:       int64(100 + i*10),          // Vary size
+			RecordCount:     1 + i%10,                  // Vary record count
+			SizeBytes:       int64(100 + i*10),         // Vary size
 			CollectionID:    nil,
 			ItemIndex:       nil,
 			CollectionType:  nil,
 			ItemID:          nil,
 		}
 	}
-	
+
 	return entries
 }
 

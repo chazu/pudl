@@ -217,7 +217,7 @@ Examples:
 				if flags.fromCatalog {
 					scope = strings.TrimSpace(flags.catalogScope)
 				} else {
-					pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID)
+					pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
 					if err != nil {
 						return err
 					}
@@ -251,7 +251,7 @@ Examples:
 				}
 				report.Drift = &res
 			default:
-				pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID)
+				pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
 				if err != nil {
 					return err
 				}

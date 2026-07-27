@@ -123,7 +123,7 @@ func (r *Repository) Add(files ...string) error {
 	args := append([]string{"add"}, files...)
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.Path
-	
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to add files: %w", err)
 	}
@@ -186,7 +186,7 @@ func (r *Repository) Log(limit int) ([]CommitInfo, error) {
 
 	var commits []CommitInfo
 	scanner := bufio.NewScanner(strings.NewReader(string(output)))
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
@@ -233,11 +233,11 @@ func (r *Repository) GetLastCommit() (*CommitInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if len(commits) == 0 {
 		return nil, fmt.Errorf("no commits found")
 	}
-	
+
 	return &commits[0], nil
 }
 

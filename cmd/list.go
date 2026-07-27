@@ -14,23 +14,23 @@ import (
 )
 
 var (
-	listSchema        string
-	listOrigin        string
-	listFormat        string
-	listVerbose       bool
-	listLimit         int
-	listSortBy        string
-	listReverse       bool
-	listCollectionID  string
-	listCollectionType string
-	listItemID        string
+	listSchema          string
+	listOrigin          string
+	listFormat          string
+	listVerbose         bool
+	listLimit           int
+	listSortBy          string
+	listReverse         bool
+	listCollectionID    string
+	listCollectionType  string
+	listItemID          string
 	listCollectionsOnly bool
-	listItemsOnly     bool
-	listFancy         bool
-	listPage          int
-	listPerPage       int
-	listArtifacts     bool
-	listAllWorkspaces bool
+	listItemsOnly       bool
+	listFancy           bool
+	listPage            int
+	listPerPage         int
+	listArtifacts       bool
+	listAllWorkspaces   bool
 )
 
 // listCmd represents the list command

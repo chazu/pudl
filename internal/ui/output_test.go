@@ -134,4 +134,3 @@ func TestOutputWriter(t *testing.T) {
 		assert.Contains(t, buf.String(), "\n")
 	})
 }
-

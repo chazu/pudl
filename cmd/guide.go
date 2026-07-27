@@ -42,14 +42,14 @@ Run 'pudl guide <topic>' to read a specific guide.`,
 }
 
 var guideTopics = map[string]func(){
-	"overview":    printGuideOverview,
-	"import":      printGuideImport,
-	"schemas":     printGuideSchemas,
-	"facts":       printGuideFacts,
-	"datalog":     printGuideDatalog,
-	"models":      printGuideModels,
-	"mu":          printGuideMu,
-	"agents":      printGuideAgents,
+	"overview": printGuideOverview,
+	"import":   printGuideImport,
+	"schemas":  printGuideSchemas,
+	"facts":    printGuideFacts,
+	"datalog":  printGuideDatalog,
+	"models":   printGuideModels,
+	"mu":       printGuideMu,
+	"agents":   printGuideAgents,
 }
 
 func init() {

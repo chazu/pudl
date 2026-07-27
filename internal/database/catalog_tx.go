@@ -17,6 +17,7 @@ import (
 type CatalogWriter interface {
 	AddEntry(entry CatalogEntry) error
 	AddCollectionMembership(collectionID, itemID string, itemIndex int) error
+	RecordObserveSnapshot(snapshot ObserveSnapshot) error
 	UpdateStatus(targetName, status string) error
 	GetEntry(id string) (*CatalogEntry, error)
 	FindByContentHash(contentHash string) (*CatalogEntry, error)
@@ -44,6 +45,10 @@ type CatalogTx struct {
 
 func (t *CatalogTx) AddEntry(entry CatalogEntry) error {
 	return addEntryIn(t.q, entry)
+}
+
+func (t *CatalogTx) RecordObserveSnapshot(snapshot ObserveSnapshot) error {
+	return recordObserveSnapshotIn(t.q, snapshot)
 }
 
 func (t *CatalogTx) AddCollectionMembership(collectionID, itemID string, itemIndex int) error {

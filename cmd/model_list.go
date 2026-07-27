@@ -20,10 +20,10 @@ var modelListJSON bool
 
 // ModelInfo is a registered #SystemModel definition discovered in the schema repo.
 type ModelInfo struct {
-	Name       string                  // the instance's display identity (`name:` field)
-	DefName    string                  // short definition name, e.g. "GithubChazu"
-	SchemaName string                  // canonical schema name, e.g. "models.#GithubChazu"
-	Dir        string                  // module dir the definition was loaded from
+	Name       string                   // the instance's display identity (`name:` field)
+	DefName    string                   // short definition name, e.g. "GithubChazu"
+	SchemaName string                   // canonical schema name, e.g. "models.#GithubChazu"
+	Dir        string                   // module dir the definition was loaded from
 	Model      *systemmodel.SystemModel // decoded model
 }
 
