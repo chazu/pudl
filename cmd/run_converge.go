@@ -99,7 +99,7 @@ func (e *muConvergeExecutor) Apply() ([]byte, error) {
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
-func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool) (*ConvergeReport, error) {
+func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool, budget *int) (*ConvergeReport, error) {
 	w, err := setupReconcileWorkspace(cat, m, muRoot, modelDir, runID, dryRun)
 	if err != nil {
 		return nil, err
@@ -110,6 +110,7 @@ func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelD
 	result, runErr := acute.Converge(acute.ConvergeRequest{
 		Executor:      &muConvergeExecutor{workspace: w},
 		MaxIterations: maxIters,
+		ApplyBudget:   budget,
 		DryRun:        dryRun,
 		RecordManifest: func(manifest []byte) error {
 			return ingestConvergeManifest(cat, m.Name, runID, manifest)
@@ -132,6 +133,11 @@ func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelD
 				fmt.Printf("iteration %d: applying converge…\n", iteration)
 			}
 		},
+		OnApplied: func(iteration int) {
+			// The durable half of the halting guarantee. Recorded per apply, so a
+			// run killed here still tells the next one what it spent.
+			recordDurableApply(cat, runID, live)
+		},
 		OnRecordFailure: func(err error) {
 			if live {
 				fmt.Printf("warning: per-resource status not recorded: %v\n", err)
@@ -144,10 +150,33 @@ func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelD
 		fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
 	}
 
+	if runErr != nil && result.Outcome == acute.OutcomeBudgetExhausted && live {
+		fmt.Println("\nthis model has spent its apply budget since it was last verified clean.")
+		fmt.Println("      an unscoped run that observes it clean resets the budget;")
+		fmt.Println("      --max-applies 0 disables it for one run.")
+	}
+
 	rep := &ConvergeReport{
 		Outcome:           string(result.Outcome),
 		Iterations:        result.Iterations,
 		NeedsVerification: result.NeedsVerification,
 	}
 	return rep, runErr
+}
+
+// recordDurableApply increments the model's spent apply budget. Best-effort in
+// the sense that it must not fail a converge mid-flight, but never silent: an
+// unrecorded apply is a spent apply the next run will not see, which is how the
+// budget would come to over-grant.
+func recordDurableApply(cat *runCatalog, runID string, live bool) {
+	db, err := cat.optional()
+	if err != nil {
+		if live {
+			fmt.Printf("warning: could not open catalog to record the apply: %v\n", err)
+		}
+		return
+	}
+	if err := db.RecordApply(runID); err != nil && live {
+		fmt.Printf("warning: could not record the apply against this model's budget: %v\n", err)
+	}
 }

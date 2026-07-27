@@ -41,8 +41,15 @@ type PlanHook func(string)
 type Outcome string
 
 const (
-	OutcomeClean             Outcome = "clean"
-	OutcomeCapExhausted      Outcome = "failed (cap_exhausted)"
+	OutcomeClean Outcome = "clean"
+	// OutcomeCapExhausted is the per-run cap: this process applied MaxIterations
+	// times without reaching clean. OutcomeBudgetExhausted is its durable
+	// counterpart: the model has applied its whole budget since it was last
+	// verified clean, across however many processes. The per-run cap alone gives
+	// no halting guarantee to a scheduler or a crash-loop supervisor, each of
+	// whose restarts would otherwise get a fresh cap.
+	OutcomeCapExhausted    Outcome = "failed (cap_exhausted)"
+	OutcomeBudgetExhausted Outcome = "failed (apply_budget_exhausted)"
 	OutcomeExecuteError      Outcome = "failed (execute_error)"
 	OutcomeObserveError      Outcome = "failed (observe_error)"
 	OutcomeDryRun            Outcome = "dry-run (no changes applied)"
@@ -51,12 +58,28 @@ const (
 
 // ConvergeRequest configures one ACUTE convergence loop.
 type ConvergeRequest struct {
-	Executor        Executor
-	MaxIterations   int
+	Executor      Executor
+	MaxIterations int
+	// ApplyBudget caps the applies this run may make against the model's durable
+	// history — the applies it has already spent since it was last verified
+	// clean. nil means no durable budget is known (no catalog to consult), which
+	// leaves behaviour exactly as it was before the budget existed.
+	//
+	// A pointer rather than a sentinel because zero is reachable and means
+	// something specific: observe (so a model that has since become clean can
+	// reset its budget) and then refuse to apply. A sentinel would make the
+	// struct's zero value mean "refuse every apply" for any caller that forgot
+	// the field.
+	ApplyBudget     *int
 	DryRun          bool
 	RecordManifest  ManifestRecorder
 	OnObserve       ObserveHook
 	OnApply         ApplyHook
+	// OnApplied fires immediately after each successful apply, before the
+	// manifest is recorded. That ordering is load-bearing: the durable apply
+	// count must land before anything else in the iteration can fail, or a
+	// crash-looping run spends applies the next run never learns about.
+	OnApplied       ApplyHook
 	OnPlan          PlanHook
 	OnRecordFailure func(error)
 }
@@ -122,6 +145,15 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 			result.Outcome = OutcomeDryRun
 			break
 		}
+		// Both caps are checked after the observation, never before it: a model
+		// that has since become clean must be able to end clean and reset its
+		// budget, so exhaustion withholds the apply, not the look.
+		if request.ApplyBudget != nil && result.Iterations >= *request.ApplyBudget {
+			result.Outcome = OutcomeBudgetExhausted
+			loopErr = fmt.Errorf("convergence %s: this model has spent its apply budget since it was last verified clean",
+				OutcomeBudgetExhausted)
+			break
+		}
 		if i >= request.MaxIterations {
 			result.Outcome = OutcomeCapExhausted
 			loopErr = fmt.Errorf("convergence %s", OutcomeCapExhausted)
@@ -139,6 +171,9 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 			break
 		}
 		result.Iterations++
+		if request.OnApplied != nil {
+			request.OnApplied(iteration)
+		}
 
 		if request.RecordManifest != nil {
 			if err := request.RecordManifest(manifest); err != nil {
