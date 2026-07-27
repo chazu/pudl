@@ -10,7 +10,7 @@ import (
 )
 
 // detectFormat detects the format of a file based on extension and content
-func (i *Importer) detectFormat(filePath string) (string, error) {
+func (e *EnhancedImporter) detectFormat(filePath string) (string, error) {
 	// First detect and handle compression
 	compression := DetectCompression(filePath)
 	var fileToAnalyze string
@@ -36,7 +36,7 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 		return "ndjson", nil
 	case ".json":
 		// Check if it's NDJSON (newline-delimited JSON)
-		if isNDJSON, err := i.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
+		if isNDJSON, err := e.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
 			return "ndjson", nil
 		}
 		return "json", nil
@@ -69,7 +69,7 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 		// Content looks like JSON — but check for NDJSON first.
 		// NDJSON is multiple JSON objects separated by newlines, not a JSON array.
 		if strings.HasPrefix(content, "{") {
-			if isNDJSON, err := i.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
+			if isNDJSON, err := e.isNewlineDelimitedJSON(fileToAnalyze); err == nil && isNDJSON {
 				return "ndjson", nil
 			}
 		}
@@ -91,7 +91,7 @@ func (i *Importer) detectFormat(filePath string) (string, error) {
 }
 
 // isNewlineDelimitedJSON checks if a file contains newline-delimited JSON
-func (i *Importer) isNewlineDelimitedJSON(filePath string) (bool, error) {
+func (e *EnhancedImporter) isNewlineDelimitedJSON(filePath string) (bool, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return false, err
@@ -138,7 +138,7 @@ func (i *Importer) isNewlineDelimitedJSON(filePath string) (bool, error) {
 // detectOrigin returns the origin/source identifier for the data.
 // It uses the filename (without extension) as the origin identifier.
 // Schema detection should be handled by CUE-based inference, not hardcoded patterns.
-func (i *Importer) detectOrigin(filePath, format string) string {
+func (e *EnhancedImporter) detectOrigin(filePath, format string) string {
 	filename := strings.ToLower(filepath.Base(filePath))
 
 	// Remove extension to get the base name

@@ -1,7 +1,6 @@
 package importer
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,9 +13,19 @@ import (
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
-// EnhancedImporter extends the base importer with content-based ID generation
+// EnhancedImporter imports files into the catalog with content-based identity.
+//
+// It used to embed a separate `Importer` type. Nothing outside this package ever
+// constructed one, so the split was pure layering — and it was the layering that
+// hid the memory problem: the call that accumulated every decoded record into one
+// slice lived in the embedded type, while the pipeline above it read as though it
+// streamed.
 type EnhancedImporter struct {
-	*Importer // Embed the original importer
+	dataPath    string
+	schemaPath  string   // primary schema path (first in schemaPaths)
+	schemaPaths []string // all schema paths in priority order
+	catalogDB   *database.CatalogDB
+	inferrer    *inference.SchemaInferrer
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -29,14 +38,7 @@ func NewEnhancedImporter(dataPath, schemaPath, configDir string) (*EnhancedImpor
 // NewEnhancedImporterWithSchemaPaths creates a new enhanced importer with multiple schema paths.
 // Paths are searched in order; earlier paths take priority (per-repo shadows global).
 func NewEnhancedImporterWithSchemaPaths(dataPath, configDir string, schemaPaths ...string) (*EnhancedImporter, error) {
-	baseImporter, err := NewWithSchemaPaths(dataPath, configDir, schemaPaths...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create base importer: %w", err)
-	}
-
-	return &EnhancedImporter{
-		Importer: baseImporter,
-	}, nil
+	return newImporterState(dataPath, configDir, schemaPaths...)
 }
 
 // ImportFileWithFriendlyIDs imports a file using content-based ID generation
@@ -71,21 +73,29 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to detect format: %w", err)
 	}
 
-	// Compute the content-based ID through a streaming reader. This keeps the
-	// identity contract (SHA256 of the raw bytes) without loading large files
-	// into memory before the format-specific importer runs.
-	file, err := os.Open(opts.SourcePath)
+	// Create date-based directory structure up front: staging writes into it.
+	dateDir := timestamp.Format("2006/01/02")
+	rawDir := filepath.Join(e.dataPath, "raw", dateDir)
+	metadataDir := filepath.Join(e.dataPath, "metadata")
+	if err := os.MkdirAll(metadataDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	// Stage and hash in one pass. The import used to hash the file, then decode
+	// it, then copy it — three reads of the same bytes, two of them for purposes
+	// an io.MultiWriter serves at once. Identity is unchanged: still SHA256 of the
+	// raw source bytes, taken as read rather than from anything decoded.
+	//
+	// Writing to a temp file and renaming is also what makes staging atomic: a
+	// killed import leaves a temp file, not a half-written record in the raw tree
+	// that a later read would treat as evidence.
+	staged, err := stageSource(opts.SourcePath, rawDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open file for hashing: %w", err)
+		return nil, err
 	}
-	contentHash, err := idgen.ComputeContentIDReader(file)
-	closeErr := file.Close()
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash file: %w", err)
-	}
-	if closeErr != nil {
-		return nil, fmt.Errorf("failed to close file after hashing: %w", closeErr)
-	}
+	defer staged.Discard() // no-op once committed
+
+	contentHash := staged.ContentHash
 	mainID := contentHash
 
 	// Content hash dedup: check if this exact content exists anywhere in the catalog
@@ -94,6 +104,8 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to check for existing content: %w", err)
 	}
 	if existingEntry != nil {
+		// The staged bytes are already in the catalog; the deferred Discard
+		// removes the copy just written.
 		return &ImportResult{
 			ID:             mainID,
 			SourcePath:     opts.SourcePath,
@@ -113,23 +125,25 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	// Create filename using content hash (truncated for filesystem compatibility)
 	ext := filepath.Ext(opts.SourcePath)
 	filename := fmt.Sprintf("%s%s", mainID[:16], ext)
-
-	// Create date-based directory structure
-	dateDir := timestamp.Format("2006/01/02")
-	rawDir := filepath.Join(e.dataPath, "raw", dateDir)
-	metadataDir := filepath.Join(e.dataPath, "metadata")
-
-	// Ensure directories exist
-	if err := os.MkdirAll(rawDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create raw directory: %w", err)
-	}
-	if err := os.MkdirAll(metadataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
+	storedPath, err := staged.Commit(filepath.Join(rawDir, filename))
+	if err != nil {
+		return nil, err
 	}
 
-	// Handle NDJSON collections differently
-	if format == "ndjson" {
-		return e.importNDJSONCollectionWithContentHash(opts, mainID, timestamp, origin, filename, rawDir, metadataDir, fileInfo)
+	// Record collections stream: NDJSON, and a top-level JSON array. Both used to
+	// be decoded whole into a slice before a single row was written, so peak
+	// memory was the record set rather than one record.
+	if collectionFormat, ok := streamableCollectionFormat(opts.SourcePath, format); ok {
+		// Decoded from the staged copy, not the source: the bytes are identical
+		// (that is what the hash asserts) and it is the copy that is warm in the
+		// page cache, having just been written.
+		result, err := e.importCollectionStreamed(opts, mainID, timestamp, origin, storedPath,
+			staged.Size, rawDir, metadataDir, collectionFormat)
+		if err != nil {
+			_ = os.Remove(storedPath)
+			return nil, err
+		}
+		return result, nil
 	}
 
 	// Analyze data for schema assignment
@@ -139,12 +153,6 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
-	}
-
-	// Copy file to storage
-	storedPath := filepath.Join(rawDir, filename)
-	if err := e.copyFile(opts.SourcePath, storedPath); err != nil {
-		return nil, fmt.Errorf("failed to copy file: %w", err)
 	}
 
 	// Assign schema using inference
@@ -270,35 +278,17 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	}, nil
 }
 
-// importNDJSONCollectionWithContentHash handles NDJSON collections with content-based IDs
-func (e *EnhancedImporter) importNDJSONCollectionWithContentHash(opts ImportOptions, collectionID string, timestamp time.Time, origin, filename string, rawDir, metadataDir string, fileInfo os.FileInfo) (*ImportResult, error) {
-	// Parse NDJSON file
-	data, recordCount, err := e.analyzeDataStreaming(opts.SourcePath, "json", opts.StreamingConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to analyze NDJSON data: %w", err)
+// importCollectionStreamed imports a record collection one record at a time.
+func (e *EnhancedImporter) importCollectionStreamed(opts ImportOptions, collectionID string, timestamp time.Time, origin, storedPath string, sizeBytes int64, rawDir, metadataDir, format string) (*ImportResult, error) {
+	stream := &collectionStream{
+		importer:     e,
+		opts:         opts,
+		collectionID: collectionID,
+		timestamp:    timestamp,
+		rawDir:       rawDir,
+		metadataDir:  metadataDir,
 	}
-
-	// Copy original file to raw storage
-	storedPath := filepath.Join(rawDir, filename)
-	if err := e.copyFile(opts.SourcePath, storedPath); err != nil {
-		return nil, fmt.Errorf("failed to copy file: %w", err)
-	}
-
-	// Create collection entry with content hash ID
-	collectionResult, err := e.createCollectionEntryWithContentHash(opts, timestamp, origin, collectionID, storedPath, metadataDir, fileInfo, recordCount, data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create collection entry: %w", err)
-	}
-
-	// Create individual item entries
-	if err := e.createCollectionItemsWithContentHash(collectionID, data, timestamp, rawDir, metadataDir, opts); err != nil {
-		if cleanupErr := e.cleanupFailedCollectionImport(collectionResult); cleanupErr != nil {
-			return nil, fmt.Errorf("%w (cleanup also failed: %v)", err, cleanupErr)
-		}
-		return nil, fmt.Errorf("failed to create collection items: %w", err)
-	}
-
-	return collectionResult, nil
+	return stream.run(storedPath, format, origin, storedPath, sizeBytes)
 }
 
 // GetIDDisplayFormat returns a proquint display format for a content hash ID
@@ -330,7 +320,7 @@ func (e *EnhancedImporter) identityNamespace(schema string) string {
 }
 
 // createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
-func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, fileInfo os.FileInfo, recordCount int, data interface{}) (*ImportResult, error) {
+func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, sizeBytes int64, recordCount int) (*ImportResult, error) {
 	schema := "pudl.schemas/pudl/core:#Collection"
 	confidence := 0.8
 	contentHash := collectionID // For collections, content hash is the collection ID (file hash)
@@ -349,7 +339,7 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 		ImportMetadata: ImportMeta{
 			Format:      "ndjson",
 			RecordCount: recordCount,
-			SizeBytes:   fileInfo.Size(),
+			SizeBytes:   sizeBytes,
 			Timestamp:   timestamp.Format(time.RFC3339),
 		},
 		SchemaInfo: SchemaInfo{
@@ -384,14 +374,14 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 		Schema:          schema,
 		Confidence:      confidence,
 		RecordCount:     recordCount,
-		SizeBytes:       fileInfo.Size(),
+		SizeBytes:       sizeBytes,
 		CollectionType:  &collectionType,
 		ResourceID:      &resourceID,
 		ContentHash:     &contentHash,
 		Version:         &version,
 	}
 
-	if err := e.catalogDB.AddEntry(entry); err != nil {
+	if err := w.AddEntry(entry); err != nil {
 		return nil, fmt.Errorf("failed to add collection to catalog: %w", err)
 	}
 
@@ -405,195 +395,10 @@ func (e *EnhancedImporter) createCollectionEntryWithContentHash(opts ImportOptio
 		AssignedSchema:   schema,
 		SchemaConfidence: confidence,
 		RecordCount:      recordCount,
-		SizeBytes:        fileInfo.Size(),
+		SizeBytes:        sizeBytes,
 		ImportTimestamp:  timestamp.Format(time.RFC3339),
 		ResourceID:       resourceID,
 		ContentHash:      contentHash,
 		Version:          version,
 	}, nil
-}
-
-// createCollectionItemsWithContentHash creates individual catalog entries for each item in the collection with content hash IDs
-func (e *EnhancedImporter) createCollectionItemsWithContentHash(collectionID string, data interface{}, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
-	items, ok := data.([]interface{})
-	if !ok {
-		return fmt.Errorf("expected array of items for collection, got %T", data)
-	}
-
-	for index, item := range items {
-		if err := e.createCollectionItemWithContentHash(collectionID, item, index, timestamp, rawDir, metadataDir, opts); err != nil {
-			// The failing item may have written its files before its catalog
-			// insert failed; remove those paths as part of the rollback.
-			_ = os.Remove(filepath.Join(rawDir, fmt.Sprintf("%s_item_%d.json", collectionID, index)))
-			_ = os.Remove(filepath.Join(metadataDir, fmt.Sprintf("%s_item_%d.meta", collectionID, index)))
-			return fmt.Errorf("failed to create collection item %d: %w", index, err)
-		}
-	}
-
-	return nil
-}
-
-// createCollectionItemWithContentHash creates a single collection item entry with content hash IDs
-func (e *EnhancedImporter) createCollectionItemWithContentHash(collectionID string, itemData interface{}, index int, timestamp time.Time, rawDir, metadataDir string, opts ImportOptions) error {
-	// Generate item ID based on content hash of the item data
-	itemJSON, err := json.Marshal(itemData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal item data: %w", err)
-	}
-	itemContentHash := idgen.ComputeContentID(itemJSON)
-	itemID := itemContentHash
-
-	// Content hash dedup per-item
-	existingItem, err := e.catalogDB.FindByContentHash(itemContentHash)
-	if err != nil {
-		return fmt.Errorf("failed to check for existing item: %w", err)
-	}
-	if existingItem != nil {
-		if err := e.catalogDB.AddCollectionMembership(collectionID, existingItem.ID, index); err != nil {
-			return fmt.Errorf("failed to add membership for existing item: %w", err)
-		}
-		return nil
-	}
-
-	// Create filename for individual item
-	itemFilename := fmt.Sprintf("%s_item_%d", collectionID, index)
-	itemPath := filepath.Join(rawDir, itemFilename+".json")
-
-	// Save individual item as JSON (use indented format for storage)
-	itemJSON, err = json.MarshalIndent(itemData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal item data: %w", err)
-	}
-
-	if err := os.WriteFile(itemPath, itemJSON, 0644); err != nil {
-		return fmt.Errorf("failed to write item file: %w", err)
-	}
-
-	// Assign schema to item
-	schema, confidence := e.assignItemSchema(itemData, opts)
-
-	// Compute identity for item
-	schemaIdentityFields := e.getSchemaIdentityFields(schema)
-	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
-	if extractErr != nil {
-		identityValues = nil
-	}
-
-	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, itemContentHash)
-
-	identityJSON := ""
-	if identityValues != nil && len(identityValues) > 0 {
-		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
-			identityJSON = canonical
-		}
-	}
-
-	latestVersion, err := e.catalogDB.GetLatestVersion(resourceID)
-	if err != nil {
-		return fmt.Errorf("failed to get latest item version: %w", err)
-	}
-	version := latestVersion + 1
-
-	// Create item metadata
-	itemMetadata := &ImportMetadata{
-		ID: itemID,
-		SourceInfo: SourceInfo{
-			OriginalPath: opts.SourcePath,
-			Origin:       fmt.Sprintf("%s_item_%d", collectionID, index),
-			Confidence:   "high",
-		},
-		ImportMetadata: ImportMeta{
-			Format:      "json",
-			RecordCount: 1,
-			SizeBytes:   int64(len(itemJSON)),
-			Timestamp:   timestamp.Format(time.RFC3339),
-		},
-		SchemaInfo: SchemaInfo{
-			CuePackage:       extractPackage(schema),
-			CueDefinition:    schema,
-			ValidationStatus: "auto-assigned",
-
-			SchemaVersion: "v1.0",
-		},
-		ResourceTracking: ResourceTracking{
-			IdentityFields: schemaIdentityFields,
-			TrackedFields:  []string{},
-			ResourceID:     resourceID,
-			ContentHash:    itemContentHash,
-			IdentityValues: identityValues,
-			Version:        version,
-		},
-	}
-
-	// Save item metadata
-	itemMetadataPath := filepath.Join(metadataDir, itemFilename+".meta")
-	if err := e.saveMetadata(*itemMetadata, itemMetadataPath); err != nil {
-		return fmt.Errorf("failed to save item metadata: %w", err)
-	}
-
-	// Create catalog entry for item with identity tracking
-	collectionType := "item"
-	var identityJSONPtr *string
-	if identityJSON != "" {
-		identityJSONPtr = &identityJSON
-	}
-
-	entry := database.CatalogEntry{
-		ID:              itemID,
-		StoredPath:      itemPath,
-		MetadataPath:    itemMetadataPath,
-		ImportTimestamp: timestamp,
-		Format:          "json",
-		Origin:          fmt.Sprintf("%s_item_%d", collectionID, index),
-		Schema:          schema,
-		Confidence:      confidence,
-		RecordCount:     1,
-		SizeBytes:       int64(len(itemJSON)),
-		CollectionID:    &collectionID,
-		ItemIndex:       &index,
-		CollectionType:  &collectionType,
-		ItemID:          &itemID,
-		ResourceID:      &resourceID,
-		ContentHash:     &itemContentHash,
-		IdentityJSON:    identityJSONPtr,
-		Version:         &version,
-	}
-
-	if err := e.catalogDB.AddEntry(entry); err != nil {
-		return err
-	}
-	if err := e.catalogDB.AddCollectionMembership(collectionID, itemID, index); err != nil {
-		return fmt.Errorf("failed to add collection membership: %w", err)
-	}
-	return nil
-}
-
-// cleanupFailedCollectionImport rolls back catalog relationships and newly
-// orphaned item artifacts when an item in an NDJSON collection cannot be
-// imported. A collection import is all-or-nothing from the catalog's point of
-// view, while shared content remains available to other collections.
-func (e *EnhancedImporter) cleanupFailedCollectionImport(collection *ImportResult) error {
-	items, err := e.catalogDB.GetCollectionItems(collection.ID)
-	if err != nil {
-		return err
-	}
-	for _, item := range items {
-		if err := e.catalogDB.RemoveCollectionMembership(collection.ID, item.ID); err != nil {
-			return err
-		}
-		count, err := e.catalogDB.ItemMembershipCount(item.ID)
-		if err != nil {
-			return err
-		}
-		if count == 0 {
-			_ = os.Remove(item.StoredPath)
-			_ = os.Remove(item.MetadataPath)
-			if err := e.catalogDB.DeleteEntry(item.ID); err != nil {
-				return err
-			}
-		}
-	}
-	_ = os.Remove(collection.StoredPath)
-	_ = os.Remove(collection.MetadataPath)
-	return e.catalogDB.DeleteEntry(collection.ID)
 }

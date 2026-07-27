@@ -93,17 +93,17 @@ func BootstrapPackages() map[string]bool {
 // schemas are missing, it copies them automatically. This handles the case
 // where new bootstrap schemas are added after the user has already run
 // 'pudl init'.
-func (i *Importer) ensureBasicSchemas() error {
+func (e *EnhancedImporter) ensureBasicSchemas() error {
 	// Check cue.mod/module.cue exists (required for CUE module loading)
-	modulePath := filepath.Join(i.schemaPath, "cue.mod", "module.cue")
+	modulePath := filepath.Join(e.schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
 	}
 
 	// Check if core schema exists; if not, copy bootstrap schemas to fill gaps
-	corePath := filepath.Join(i.schemaPath, "pudl", "core", "core.cue")
+	corePath := filepath.Join(e.schemaPath, "pudl", "core", "core.cue")
 	if _, err := os.Stat(corePath); os.IsNotExist(err) {
-		if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+		if copyErr := copyBootstrapSchemasTo(e.schemaPath); copyErr != nil {
 			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
 		}
 		// Verify the copy succeeded
@@ -115,24 +115,24 @@ func (i *Importer) ensureBasicSchemas() error {
 	// Check if other bootstrap schemas exist; if not, copy them all
 	// This handles the case where new schema packages are added after init
 	bootstrapChecks := []string{
-		filepath.Join(i.schemaPath, "pudl", "catalog", "catalog.cue"),
-		filepath.Join(i.schemaPath, "pudl", "fs", "fs.cue"),
-		filepath.Join(i.schemaPath, "pudl", "version", "version.cue"),
-		filepath.Join(i.schemaPath, "pudl", "infra", "infra.cue"),
-		filepath.Join(i.schemaPath, "pudl", "component", "component.cue"),
-		filepath.Join(i.schemaPath, "pudl", "artifact", "artifact.cue"),
-		filepath.Join(i.schemaPath, "pudl", "registry", "registry.cue"),
-		filepath.Join(i.schemaPath, "pudl", "aws", "aws.cue"),
-		filepath.Join(i.schemaPath, "pudl", "mu", "mu.cue"),
-		filepath.Join(i.schemaPath, "pudl", "brick", "brick.cue"),
-		filepath.Join(i.schemaPath, "pudl", "linux", "linux.cue"),
-		filepath.Join(i.schemaPath, "pudl", "dlktk", "dlktk.cue"),
-		filepath.Join(i.schemaPath, "pudl", "systemmodel", "systemmodel.cue"),
-		filepath.Join(i.schemaPath, "pudl", "rules", "convergence.cue"),
+		filepath.Join(e.schemaPath, "pudl", "catalog", "catalog.cue"),
+		filepath.Join(e.schemaPath, "pudl", "fs", "fs.cue"),
+		filepath.Join(e.schemaPath, "pudl", "version", "version.cue"),
+		filepath.Join(e.schemaPath, "pudl", "infra", "infra.cue"),
+		filepath.Join(e.schemaPath, "pudl", "component", "component.cue"),
+		filepath.Join(e.schemaPath, "pudl", "artifact", "artifact.cue"),
+		filepath.Join(e.schemaPath, "pudl", "registry", "registry.cue"),
+		filepath.Join(e.schemaPath, "pudl", "aws", "aws.cue"),
+		filepath.Join(e.schemaPath, "pudl", "mu", "mu.cue"),
+		filepath.Join(e.schemaPath, "pudl", "brick", "brick.cue"),
+		filepath.Join(e.schemaPath, "pudl", "linux", "linux.cue"),
+		filepath.Join(e.schemaPath, "pudl", "dlktk", "dlktk.cue"),
+		filepath.Join(e.schemaPath, "pudl", "systemmodel", "systemmodel.cue"),
+		filepath.Join(e.schemaPath, "pudl", "rules", "convergence.cue"),
 	}
 	for _, checkPath := range bootstrapChecks {
 		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
-			if copyErr := copyBootstrapSchemasTo(i.schemaPath); copyErr != nil {
+			if copyErr := copyBootstrapSchemasTo(e.schemaPath); copyErr != nil {
 				return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
 			}
 			break // One copy covers all missing files
