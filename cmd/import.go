@@ -198,8 +198,8 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 
 	// Auto-set origin from workspace when inside one and not explicitly overridden
 	effectiveImportOrigin := importOrigin
-	if effectiveImportOrigin == "" && wsCtx != nil && wsCtx.Workspace != nil {
-		effectiveImportOrigin = wsCtx.EffectiveOrigin
+	if effectiveImportOrigin == "" && wsPolicy.InWorkspace() {
+		effectiveImportOrigin = wsPolicy.EffectiveOrigin
 	}
 
 	// Set up import options
@@ -582,8 +582,8 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 	// Auto-set origin from workspace when inside one and not explicitly overridden
 	batchEffectiveOrigin := importOrigin
-	if batchEffectiveOrigin == "" && wsCtx != nil && wsCtx.Workspace != nil {
-		batchEffectiveOrigin = wsCtx.EffectiveOrigin
+	if batchEffectiveOrigin == "" && wsPolicy.InWorkspace() {
+		batchEffectiveOrigin = wsPolicy.EffectiveOrigin
 	}
 
 	// Import each file

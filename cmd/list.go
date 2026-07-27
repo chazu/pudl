@@ -109,8 +109,8 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	// Default origin to workspace name when inside a workspace,
 	// unless --all-workspaces is set or --origin is explicitly provided.
 	effectiveOrigin := listOrigin
-	if effectiveOrigin == "" && !listAllWorkspaces && wsCtx != nil && wsCtx.Workspace != nil {
-		effectiveOrigin = wsCtx.EffectiveOrigin
+	if effectiveOrigin == "" && !listAllWorkspaces && wsPolicy.InWorkspace() {
+		effectiveOrigin = wsPolicy.EffectiveOrigin
 	}
 
 	// Set up filter options

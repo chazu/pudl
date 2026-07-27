@@ -918,6 +918,21 @@ migration: an older binary would select a column that no longer exists.
 
 ## Recommendation 5: make workspace policy one explicit dependency
 
+**DONE 2026-07-27.** `workspace.Policy` replaces `Context` as one value resolved
+once per invocation, carrying schema, definition, rule and model search paths,
+the effective origin and the mode. `pkg/factstore.DiscoverWorkspace` delegates to
+the same `Resolve`, so CLI/library parity is by construction rather than
+coincidence, and a test asserts it. `modelSearchDirs` stops calling
+`workspace.Discover` a second time. Two shapes did not fit a flat list and became
+methods with their reasons stated: `CatalogScope()` (an alias for the effective
+origin — a run's `--catalog-scope` is per-invocation, and Defect 3 made it
+required rather than inferred) and `PopulatorPathsFor` (owner-relative, so a
+globally-registered model cannot pick up a repo's populator). One ordering that
+looks wrong — a repo's rules shadowing a model's own — is preserved verbatim and
+flagged, since changing it would change what a check evaluates. See
+`docs/design/2026-07-27-workspace-policy.md` and
+`implog/2026_07_27_workspace_policy.md`. The original recommendation follows.
+
 Workspace schema precedence is implemented, but schema paths, rule paths, origin
 filtering, model resolution, and catalog scope are still resolved through several
 different helpers and globals.

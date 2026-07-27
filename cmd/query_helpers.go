@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -14,12 +13,12 @@ import (
 // loadQueryRules loads the workspace Datalog rules (global ~/.pudl rules, then
 // repo-scoped rules which shadow them) plus any ad-hoc -f file. Shared by the
 // query, --list, and --topo paths.
+//
+// The paths come from the run's one workspace policy, not from a local
+// assembly — this used to be one of four places that spelled out "global then
+// repo" independently.
 func loadQueryRules(configDir string) ([]datalog.Rule, error) {
-	rulePaths := []string{filepath.Join(configDir, "schema", "pudl", "rules")}
-	if wsCtx != nil && wsCtx.Workspace != nil {
-		rulePaths = append(rulePaths, filepath.Join(wsCtx.Workspace.PudlDir, "schema", "pudl", "rules"))
-	}
-	rules, err := datalog.LoadRulesFromPaths(rulePaths...)
+	rules, err := datalog.LoadRulesFromPaths(queryRulePaths(configDir)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load rules: %w", err)
 	}

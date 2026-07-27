@@ -74,10 +74,11 @@ Examples:
 		if ruleGlobal {
 			targetDir = filepath.Join(config.GetPudlDir(), "schema", "pudl", "rules")
 		} else {
-			if wsCtx == nil || wsCtx.Workspace == nil {
+			dir, err := wsPolicy.RuleWritePath()
+			if err != nil {
 				return fmt.Errorf("not in a workspace — use --global or run from a repo with .pudl/")
 			}
-			targetDir = filepath.Join(wsCtx.Workspace.PudlDir, "schema", "pudl", "rules")
+			targetDir = dir
 		}
 
 		// Ensure directory exists

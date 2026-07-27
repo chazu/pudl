@@ -20,8 +20,11 @@ var (
 	// Global output flags
 	jsonOutput bool
 
-	// Workspace context (nil when not in a workspace)
-	wsCtx *workspace.Context
+	// wsPolicy is every path decision this invocation makes — schema, definition,
+	// rule, model and populator search paths, the effective origin, and whether
+	// we are in a repo workspace. Resolved once here so no call site re-derives
+	// it and no two derivations can disagree.
+	wsPolicy *workspace.Policy
 )
 
 // GetOutputWriter returns an OutputWriter based on global flags
@@ -51,9 +54,9 @@ Key features:
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
 - Schema generation from imported data`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Discover workspace (may be nil for global mode)
+		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error
-		wsCtx, err = workspace.NewContext()
+		wsPolicy, err = workspace.ResolveForCWD()
 		if err != nil {
 			return fmt.Errorf("workspace discovery: %w", err)
 		}

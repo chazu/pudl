@@ -13,7 +13,6 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
-	"github.com/chazu/pudl/internal/workspace"
 )
 
 var modelListJSON bool
@@ -29,12 +28,14 @@ type ModelInfo struct {
 
 // modelSearchDirs returns the schema dirs to search, project first (shadows global).
 func modelSearchDirs() []string {
-	var dirs []string
-	if ws, _ := workspace.Discover("."); ws != nil && ws.SchemaPath != "" {
-		dirs = append(dirs, ws.SchemaPath)
+	// From the run's one workspace policy. This used to call workspace.Discover(".")
+	// itself — a second answer to a question already resolved at startup, which
+	// agreed only while nothing changed the working directory in between.
+	if wsPolicy != nil {
+		return wsPolicy.ModelSearchPaths
 	}
-	dirs = append(dirs, filepath.Join(config.GetPudlDir(), "schema"))
-	return dirs
+	// Fallback for callers invoked without the Cobra lifecycle (tests).
+	return []string{filepath.Join(config.GetPudlDir(), "schema")}
 }
 
 // listModels discovers all registered #SystemModel definitions across the schema
