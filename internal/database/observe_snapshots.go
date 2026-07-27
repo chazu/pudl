@@ -249,7 +249,7 @@ func scanObserveSnapshot(row rowScanner) (ObserveSnapshot, error) {
 // membership is the normalized relationship, and this is the first consumer
 // written against it alone.
 func (c *CatalogDB) SnapshotRecordEntries(snapshotID string) ([]CatalogEntry, error) {
-	query := `SELECT ` + prefixedEntryColumns("e") + `
+	query := `SELECT ` + entrySelectVia("e", "m") + `
 		FROM collection_memberships m
 		JOIN catalog_entries e ON e.id = m.item_id
 		WHERE m.collection_id = ?

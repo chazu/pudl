@@ -10,24 +10,13 @@ import (
 // GetLatestObserve returns the most recent observe entry for a target.
 func (c *CatalogDB) GetLatestObserve(targetName string) (*CatalogEntry, error) {
 	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
+	SELECT ` + entrySelect("catalog_entries") + `
 	FROM catalog_entries
 	WHERE entry_type = 'observe' AND target = ?
 	ORDER BY import_timestamp DESC
 	LIMIT 1`
 
-	var entry CatalogEntry
-	err := c.db.QueryRow(selectSQL, targetName).Scan(
-		&entry.ID, &entry.StoredPath, &entry.MetadataPath, &entry.ImportTimestamp,
-		&entry.Format, &entry.Origin, &entry.Schema, &entry.Confidence,
-		&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
-		&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
-		&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+	entry, err := scanEntry(c.db.QueryRow(selectSQL, targetName))
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -37,18 +26,14 @@ func (c *CatalogDB) GetLatestObserve(targetName string) (*CatalogEntry, error) {
 			fmt.Sprintf("Failed to get latest observe for %s", targetName), err)
 	}
 
-	return &entry, nil
+	return entry, nil
 }
 
 // GetLatestObserveByOrigin returns the most recent observe entry for a target
 // filtered by origin.
 func (c *CatalogDB) GetLatestObserveByOrigin(targetName, origin string) (*CatalogEntry, error) {
 	selectSQL := `
-	SELECT id, stored_path, metadata_path, import_timestamp, format, origin,
-		   schema, confidence, record_count, size_bytes, collection_id, item_index,
-		   collection_type, item_id, resource_id, content_hash, identity_json, version,
-		   entry_type, target, run_id, tags, status,
-		   created_at, updated_at
+	SELECT ` + entrySelect("catalog_entries") + `
 	FROM catalog_entries
 	WHERE entry_type = 'observe' AND target = ? AND origin = ?
 	ORDER BY import_timestamp DESC
@@ -85,7 +70,7 @@ func (c *CatalogDB) GetLatestObserveByContentHash(targetName, contentHash string
 // batch containing the same record twice deduplicates against itself.
 func getLatestObserveByContentHashIn(q dbtx, targetName, contentHash string) (*CatalogEntry, error) {
 	entry, err := scanOptionalEntry(q.QueryRow(
-		`SELECT `+entryColumns+` FROM catalog_entries
+		`SELECT `+entrySelect("catalog_entries")+` FROM catalog_entries
 		 WHERE entry_type = 'observe' AND target = ? AND content_hash = ?
 		 LIMIT 1`,
 		targetName, contentHash))

@@ -15,15 +15,29 @@ func (c *CatalogDB) ensureCollectionMembershipsTable() error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_collection_memberships_item ON collection_memberships(item_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_collection_memberships_collection ON collection_memberships(collection_id, item_index)`,
-		`INSERT OR IGNORE INTO collection_memberships (collection_id, item_id, item_index)
-		 SELECT collection_id, id, COALESCE(item_index, 0)
-		 FROM catalog_entries
-		 WHERE collection_type = 'item' AND collection_id IS NOT NULL`,
 	}
 	for _, statement := range statements {
 		if _, err := c.db.Exec(statement); err != nil {
 			return fmt.Errorf("collection membership migration: %w", err)
 		}
+	}
+
+	// Backfill from the legacy columns, on a database old enough to still have
+	// them. Conditional because the next migration drops them: this has to be
+	// correct whether it runs before or after, on any database.
+	legacy, err := c.columnExists("catalog_entries", "collection_id")
+	if err != nil {
+		return fmt.Errorf("collection membership migration: %w", err)
+	}
+	if !legacy {
+		return nil
+	}
+	if _, err := c.db.Exec(
+		`INSERT OR IGNORE INTO collection_memberships (collection_id, item_id, item_index)
+		 SELECT collection_id, id, COALESCE(item_index, 0)
+		 FROM catalog_entries
+		 WHERE collection_type = 'item' AND collection_id IS NOT NULL`); err != nil {
+		return fmt.Errorf("collection membership backfill: %w", err)
 	}
 	return nil
 }
