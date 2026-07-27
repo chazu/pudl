@@ -83,10 +83,17 @@ func (r *RunReport) markdown() string {
 	if len(r.Checks) > 0 {
 		fmt.Fprintf(&b, "\n## checks\n")
 		for _, c := range r.Checks {
+			// Advisory matches are rendered even on a pass: a check that only
+			// matched outside the run's --only scope did not gate, and saying so is
+			// what keeps a silent exit-code drop from looking like a clean check.
+			outside := ""
+			if c.AdvisoryCount > 0 {
+				outside = fmt.Sprintf(" (%d match(es) outside --only scope)", c.AdvisoryCount)
+			}
 			if c.Passed {
-				fmt.Fprintf(&b, "  - ✓ %s (%s)\n", c.Name, c.Severity)
+				fmt.Fprintf(&b, "  - ✓ %s (%s)%s\n", c.Name, c.Severity, outside)
 			} else {
-				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es): %s\n", c.Name, c.Severity, c.Count, c.Message)
+				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es)%s: %s\n", c.Name, c.Severity, c.Count, outside, c.Message)
 			}
 		}
 	}

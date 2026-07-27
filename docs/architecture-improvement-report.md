@@ -288,7 +288,15 @@ checkpoint/restore state machine is not worth building, and PUDL cannot resume
 
 Two obligations come with this decision, neither optional:
 
-- **The iteration cap must become durable.** `MaxIterations` is per-process
+- **The iteration cap must become durable.** — **DONE 2026-07-27.** A durable
+  apply budget bounds the applies a model may make since it was last verified
+  clean, counted per apply (so a crash-looping run's spend is not lost) and
+  reset only by an *unscoped* clean observation (so alternating `--only` scopes
+  cannot refill it). Exhaustion still observes — that is how it resets — and
+  withholds only the apply. `--max-applies` (default 20, `0` disables). See
+  `docs/design/2026-07-27-durable-apply-budget.md` and
+  `implog/2026_07_27_durable_apply_budget.md`. The original obligation follows.
+  `MaxIterations` is per-process
   (`internal/acute/coordinator.go:103`), while `#SystemModel` carries
   `freshness.every` — runs are designed to be scheduled. A resource that
   oscillates (apply succeeds, drifts back) gets a cap of N *per run* and an
@@ -332,6 +340,18 @@ observation. Providers whose effects observation cannot see are outside PUDL's
 convergence model regardless.
 
 **D3 — Checks: evaluate them in converge runs, and scope them by constraint.**
+— **IMPLEMENTED 2026-07-27.** All five points shipped; see
+`docs/design/2026-07-27-checks-scope-and-verdict.md` and
+`implog/2026_07_27_checks_scope_and_verdict.md`. Two things landed differently
+from the text below. (a) The demotion is applied to the *verdict*, not to the
+converge branch, because `case r.Drift != nil` had the identical hole — a plain
+`pudl run m` could persist `clean` with a failed `fail` check. (b) Tuple
+partitioning applies to `expect: empty` checks only: those count violations, so
+excusing out-of-scope ones is the point, whereas a `nonempty` check counts
+evidence and dropping it could only manufacture a failure nothing in scope can
+fix. Run-ID binding is opt-in by the rule author (the head must expose `run_id`
+as a variable) and is never bound on a `--from-catalog` replay, where it would
+make every `expect: empty` check pass trivially. The original decision follows.
 
 *The earlier draft's framing was wrong and is withdrawn.* It claimed the
 scoping question was malformed because checks are catalog-wide Datalog with

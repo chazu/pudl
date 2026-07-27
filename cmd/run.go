@@ -9,6 +9,7 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -18,6 +19,7 @@ var (
 	runOnly          []string
 	runDryRun        bool
 	runMaxIters      int
+	runMaxApplies    int
 	runFromCatalog   bool
 	runCatalogScope  string
 	runCheckUpstream bool
@@ -55,12 +57,14 @@ Examples:
 			only:         runOnly,
 			dryRun:       runDryRun,
 			maxIters:     runMaxIters,
+			maxApplies:   runMaxApplies,
 			fromCatalog:  runFromCatalog,
 			catalogScope: runCatalogScope,
 			// whether a convergence flag was explicitly set (for the gate rules)
-			onlySet:     cmd.Flags().Changed("only"),
-			dryRunSet:   cmd.Flags().Changed("dry-run"),
-			maxItersSet: cmd.Flags().Changed("max-iters"),
+			onlySet:       cmd.Flags().Changed("only"),
+			dryRunSet:     cmd.Flags().Changed("dry-run"),
+			maxItersSet:   cmd.Flags().Changed("max-iters"),
+			maxAppliesSet: cmd.Flags().Changed("max-applies"),
 		}
 		if err := validateRunFlags(flags); err != nil {
 			return err
@@ -98,8 +102,11 @@ Examples:
 			mode = "converge"
 		}
 		// finishState is populated once the run concludes and read by the deferred
-		// finalizer below.
-		finishState := &runFinishState{}
+		// finalizer below. `scoped` is set here rather than at the end because it
+		// is known from the flags and must survive an early `return err` — a run
+		// that died after applying under `--only` still must not look like an
+		// unscoped one to the next run's budget calculation.
+		finishState := &runFinishState{scoped: len(flags.only) > 0}
 		if !flags.dryRun {
 			startRunRecord(cat, session.RunID, model.Name, mode, live)
 
@@ -180,7 +187,8 @@ Examples:
 			if live {
 				fmt.Println("\n— converge —")
 			}
-			cr, err := runConvergeLoop(cat, effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun)
+			budget := resolveApplyBudget(cat, model.Name, flags, live)
+			cr, err := runConvergeLoop(cat, effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun, budget)
 			report.Converge = cr
 			if err != nil {
 				report.OK = false
@@ -249,18 +257,36 @@ Examples:
 				}
 				report.Populate = pr
 			}
-			// Checks read the effective scoped model, not the original: invariant 2
-			// requires one model shape across planning, execution, report scope,
-			// promotion and scope-sensitive checks. Handing checks the unscoped
-			// model would let a check assert over resources this run excluded.
-			if len(effectiveModel.Checks) > 0 {
-				results, err := runChecks(cat, effectiveModel, modelDir)
-				if err != nil {
-					return err
-				}
-				report.Checks = results
-				if anyFailSeverityFailed(results) {
-					report.OK = false
+		}
+
+		// Checks run on every arm, converge included. They used to sit inside the
+		// observe-only branch, so a converge run reporting `clean` had evaluated
+		// none of them and claimed more verification than it performed.
+		//
+		// A dry run is exempt: checks are read-only, but `runChecks` borrows the
+		// run's catalog handle, and the handle is lazy precisely so a dry run never
+		// creates data/sqlite/catalog.db. A dry run also writes no verdict, so
+		// there would be nothing for a failed check to demote.
+		//
+		// Checks read the effective scoped model, not the original: invariant 2
+		// requires one model shape across planning, execution, report scope,
+		// promotion and scope-sensitive checks. Handing checks the unscoped
+		// model would let a check assert over resources this run excluded.
+		if len(effectiveModel.Checks) > 0 && !flags.dryRun {
+			results, err := runChecks(cat, effectiveModel, modelDir, checkContext{
+				runID:       session.RunID,
+				fromCatalog: flags.fromCatalog,
+				scope:       acute.NewTupleScope(model, effectiveModel),
+			})
+			if err != nil {
+				return err
+			}
+			report.Checks = results
+			if anyFailSeverityFailed(results) {
+				report.OK = false
+				// First error wins: a converge failure is what the operator needs to
+				// see, and a check failure must not displace it.
+				if runErr == nil {
 					runErr = fmt.Errorf("one or more fail-severity checks did not pass")
 				}
 			}
@@ -291,13 +317,26 @@ Examples:
 		// describes the *whole* model, so a scoped run's verdict may not be
 		// generalizable onto it. The note records the divergence so a reader can
 		// tell this `unknown` from one caused by a lost receipt.
+		// A verdict demoted by a check reads as ordinary resource drift on the model
+		// row, so say which checks did it — otherwise an operator hunts for drift
+		// that is not there.
+		if names := failedFailSeverityNames(report.Checks); len(names) > 0 && verdict == "drifted" {
+			finishState.addNote(fmt.Sprintf("verdict demoted to %q by fail-severity check(s): %s",
+				verdict, strings.Join(names, ", ")))
+			if live {
+				fmt.Printf("\nnote: fail-severity check(s) did not pass: %s\n", strings.Join(names, ", "))
+				fmt.Println("      the model's resources may match desired state; the failure is the check's assertion")
+			}
+		}
+
 		restricted := len(flags.only) > 0
 		rowVerdict := modelRowVerdict(verdict, restricted)
 		if rowVerdict != verdict {
-			finishState.note = fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
+			note := fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
 				verdict, strings.Join(flags.only, ","), rowVerdict)
+			finishState.addNote(note)
 			if live {
-				fmt.Printf("\nnote: %s\n", finishState.note)
+				fmt.Printf("\nnote: %s\n", note)
 				fmt.Println("      a scoped ∅ does not prove the whole model clean; re-run unscoped to establish it")
 			}
 		}
@@ -327,6 +366,27 @@ Examples:
 // is observe-only or was just converged, since the convergence loop ends in the
 // same re-observed ∅ state. It is only ever written off an actual ∅ observation.
 func runVerdict(r *RunReport, f runFlags) string {
+	verdict := phaseVerdict(r, f)
+	// A fail-severity check that did not pass says the model is not in the state
+	// it declares, so a `clean` written over it would claim verification the run
+	// contradicts. Only `clean` is demoted: `drifted` and `failed` are already at
+	// least as severe, `unknown` means the run could not prove the state at all
+	// (and a check over a catalog possibly missing this run's receipt cannot turn
+	// that ignorance into knowledge), and "" writes nothing by design.
+	//
+	// `drifted` rather than `failed`: the run's machinery worked — the apply
+	// succeeded, the re-observation completed. What failed is an assertion about
+	// the resulting state, which is what `drifted` names. `failed` would invite a
+	// manual re-apply, the same mistake D2 rejected for lost receipts.
+	if verdict == "clean" && anyFailSeverityFailed(r.Checks) {
+		return "drifted"
+	}
+	return verdict
+}
+
+// phaseVerdict is the verdict the run's phases alone support, before checks are
+// allowed to demote it.
+func phaseVerdict(r *RunReport, f runFlags) string {
 	if f.dryRun {
 		return ""
 	}
@@ -403,6 +463,50 @@ func persistRunStatus(cat *runCatalog, name, status string, live bool) {
 	}
 }
 
+// resolveApplyBudget works out how many applies this run may make, from how many
+// the model has already spent since it was last verified clean.
+//
+// The per-run `--max-iters` cap gives a halting guarantee inside one process and
+// none at all across processes: a scheduler on `freshness.every`, or a
+// crash-loop supervisor, grants a fresh cap on every restart, so a model that
+// oscillates applies without bound. This is the durable half.
+//
+// Returns nil — no constraint, previous behaviour exactly — when the budget is
+// disabled (`--max-applies 0`), when the run does not converge, or when the
+// history cannot be read. A catalog that cannot answer must not silently refuse
+// to apply; that failure mode is worse than the one being prevented.
+func resolveApplyBudget(cat *runCatalog, model string, flags runFlags, live bool) *int {
+	if !flags.converge || flags.dryRun || flags.maxApplies <= 0 {
+		return nil
+	}
+	db, err := cat.optional()
+	if err != nil {
+		if live {
+			fmt.Printf("warning: could not open catalog to read this model's apply history: %v\n", err)
+			fmt.Println("         the durable apply budget is not enforced for this run")
+		}
+		return nil
+	}
+	spent, err := db.AppliesSinceLastClean(model)
+	if err != nil {
+		if live {
+			fmt.Printf("warning: could not read this model's apply history: %v\n", err)
+			fmt.Println("         the durable apply budget is not enforced for this run")
+		}
+		return nil
+	}
+
+	remaining := flags.maxApplies - spent
+	if remaining < 0 {
+		remaining = 0
+	}
+	if live && spent > 0 {
+		fmt.Printf("apply budget: %d of %d remaining (spent since this model was last verified clean)\n",
+			remaining, flags.maxApplies)
+	}
+	return &remaining
+}
+
 // runFinishState is what a completed run concluded, handed to the deferred
 // finalizer so every exit path — including an early `return err` — records a
 // terminal run row.
@@ -410,9 +514,26 @@ type runFinishState struct {
 	verdict           string
 	outcome           string
 	needsVerification bool
-	// note explains a verdict whose meaning is not evident from the value alone
-	// — currently a scoped run whose model row diverges from its run row.
+	// note explains a verdict whose meaning is not evident from the value alone —
+	// a scoped run whose model row diverges from its run row, or a verdict a
+	// failed check demoted. More than one can apply, so they accumulate.
 	note string
+	// scoped records that `--only` restricted this run. A scoped `clean` covers a
+	// subset, so it must not reset the model's durable apply budget.
+	scoped bool
+}
+
+// addNote appends an explanation, keeping any already recorded. Two notes can
+// both be true of one run (a scoped run whose check also failed), and dropping
+// either would leave a verdict half-explained.
+func (s *runFinishState) addNote(note string) {
+	if note == "" {
+		return
+	}
+	if s.note != "" {
+		s.note += "; "
+	}
+	s.note += note
 }
 
 // startRunRecord opens the run's audit row before any phase runs, and reports any
@@ -458,7 +579,13 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 		}
 		note += runErr.Error()
 	}
-	if err := db.FinishRun(runID, state.verdict, state.outcome, state.needsVerification, note); err != nil && live {
+	if err := db.FinishRun(runID, database.RunConclusion{
+		Verdict:           state.verdict,
+		Outcome:           state.outcome,
+		NeedsVerification: state.needsVerification,
+		Note:              note,
+		Scoped:            state.scoped,
+	}); err != nil && live {
 		fmt.Printf("warning: could not record run completion: %v\n", err)
 	}
 }
@@ -512,12 +639,21 @@ func useInventoryDrift(m *systemmodel.SystemModel, fromCatalog bool) bool {
 
 // anyFailSeverityFailed reports whether any severity:"fail" check did not pass.
 func anyFailSeverityFailed(results []CheckResult) bool {
+	return len(failedFailSeverityNames(results)) > 0
+}
+
+// failedFailSeverityNames lists the fail-severity checks that did not pass.
+// Passed is already the gating verdict — under `--only` a check whose only
+// matches were out of scope passes — so the exit code, the rendered verdict and
+// the recorded reason all follow from the same field.
+func failedFailSeverityNames(results []CheckResult) []string {
+	var names []string
 	for _, c := range results {
 		if !c.Passed && c.Severity == "fail" {
-			return true
+			names = append(names, c.Name)
 		}
 	}
-	return false
+	return names
 }
 
 // printModelDrift renders a model-level drift verdict.
@@ -538,16 +674,20 @@ func printModelDrift(r ModelDriftResult) {
 
 // runFlags is the validated CLI surface for `pudl run`.
 type runFlags struct {
-	converge     bool
-	only         []string
-	dryRun       bool
-	maxIters     int
+	converge bool
+	only     []string
+	dryRun   bool
+	maxIters int
+	// maxApplies is the durable cap: the applies this model may make in total
+	// since it was last verified clean, across runs. 0 disables it.
+	maxApplies   int
 	fromCatalog  bool
 	catalogScope string
 
-	onlySet     bool
-	dryRunSet   bool
-	maxItersSet bool
+	onlySet       bool
+	dryRunSet     bool
+	maxItersSet   bool
+	maxAppliesSet bool
 }
 
 // validateRunFlags enforces the gate rules: convergence flags require --converge,
@@ -570,6 +710,9 @@ func validateRunFlags(f runFlags) error {
 		if f.maxIters < 1 {
 			return fmt.Errorf("--max-iters must be >= 1")
 		}
+		if f.maxApplies < 0 {
+			return fmt.Errorf("--max-applies must be >= 0 (0 disables the durable apply budget)")
+		}
 		return nil
 	}
 	switch {
@@ -579,6 +722,8 @@ func validateRunFlags(f runFlags) error {
 		return fmt.Errorf("--dry-run requires --converge")
 	case f.maxItersSet:
 		return fmt.Errorf("--max-iters requires --converge")
+	case f.maxAppliesSet:
+		return fmt.Errorf("--max-applies requires --converge")
 	}
 	return nil
 }
@@ -655,6 +800,7 @@ func init() {
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these resource selectors (requires --converge)")
 	runCmd.Flags().BoolVar(&runDryRun, "dry-run", false, "print the plan, execute nothing (requires --converge)")
 	runCmd.Flags().IntVar(&runMaxIters, "max-iters", 5, "loop iteration cap (requires --converge)")
+	runCmd.Flags().IntVar(&runMaxApplies, "max-applies", 20, "durable cap on applies since this model was last verified clean; 0 disables (requires --converge)")
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
 	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")

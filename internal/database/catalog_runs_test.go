@@ -32,7 +32,7 @@ func TestStartRunThenFinishRunIsTerminal(t *testing.T) {
 	assert.Equal(t, "model-a", started.Model)
 	assert.Equal(t, "converge", started.Mode)
 
-	require.NoError(t, db.FinishRun("run_a", "unknown", "failed (cap_exhausted)", true, "receipt lost"))
+	require.NoError(t, db.FinishRun("run_a", RunConclusion{Verdict: "unknown", Outcome: "failed (cap_exhausted)", NeedsVerification: true, Note: "receipt lost"}))
 
 	finished, err := db.GetRun("run_a")
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestUnfinishedRunsFindsOnlyRunsThatNeverFinished(t *testing.T) {
 	db := runsTestDB(t)
 
 	require.NoError(t, db.StartRun("run_done", "model-a", "converge"))
-	require.NoError(t, db.FinishRun("run_done", "clean", "clean", false, ""))
+	require.NoError(t, db.FinishRun("run_done", RunConclusion{Verdict: "clean", Outcome: "clean"}))
 	require.NoError(t, db.StartRun("run_crashed", "model-a", "converge"))
 	require.NoError(t, db.StartRun("run_other", "model-b", "observe-only"))
 
@@ -70,7 +70,7 @@ func TestFinishRunWithEmptyVerdictIsStillFinished(t *testing.T) {
 	db := runsTestDB(t)
 
 	require.NoError(t, db.StartRun("run_a", "model-a", "observe-only"))
-	require.NoError(t, db.FinishRun("run_a", "", "", false, "populate failed"))
+	require.NoError(t, db.FinishRun("run_a", RunConclusion{Note: "populate failed"}))
 
 	record, err := db.GetRun("run_a")
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestStartRunIsIdempotent(t *testing.T) {
 func TestFinishRunOnUnknownRunErrors(t *testing.T) {
 	db := runsTestDB(t)
 
-	err := db.FinishRun("nope", "clean", "clean", false, "")
+	err := db.FinishRun("nope", RunConclusion{Verdict: "clean", Outcome: "clean"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no such run")

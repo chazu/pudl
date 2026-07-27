@@ -397,10 +397,23 @@ reported.
 | `--converge` | Close drift instead of only observing |
 | `--only` | During `--converge`, restrict desired-state reconciliation to named resource selectors; unknown selectors fail before side effects |
 | `--dry-run` | Show planned actions without applying them |
-| `--max-iters` | Maximum convergence iterations |
+| `--max-iters` | Maximum convergence iterations within this run (default 5) |
+| `--max-applies` | Durable cap on applies since this model was last verified clean, across runs (default 20; `0` disables) |
 | `--from-catalog` | Force inventory drift from already-ingested records, with no live observe. Requires `--catalog-scope`. Inventory observers — `#EweTarget` or `#PluginObserve` with `differential: false` — auto-route to inventory drift without this flag, and populate their own snapshot to compare against |
 | `--catalog-scope` | Which already-ingested records `--from-catalog` replays: an observe snapshot ID, or the origin they were ingested under |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
+
+`--max-iters` bounds the applies inside one process; `--max-applies` bounds them
+across processes. Without the second, a model that cannot converge applies
+`--max-iters` times on every scheduled run — and a crash-loop supervisor grants
+a fresh cap on every restart — so the apply rate is unbounded. The durable
+budget counts every successful apply the moment it happens, and resets to full
+the first time an **unscoped** run observes the model clean. A model that drifts
+and is fixed on each run therefore ends every run clean and never approaches it;
+only a model that applies and *still* is not clean accumulates. An exhausted
+budget still observes (that is how it resets) and refuses only the apply,
+reporting `failed (apply_budget_exhausted)`. A scoped (`--only`) clean does not
+reset it, for the same reason a scoped ∅ does not write `clean` to the model row.
 
 `--only` accepts one or more comma-separated exact selectors. A selector may be
 an **identity** key — the desired resource `name`, `id`, `path`, or `target`, or
