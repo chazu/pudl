@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -111,10 +110,10 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
+func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
 		// Self-staged; no external mu root needed (works for project + global).
-		return runEwePopulate(cat, m, modelDir, pudlRoot, runID, snapshotID0)
+		return runEwePopulate(cat, mu, m, modelDir, pudlRoot, runID, snapshotID0)
 	}
 
 	rm := *m
@@ -136,15 +135,12 @@ func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, 
 	}
 
 	target := populateTargetName(m.Name)
-	cmd := exec.Command("mu", "observe", "--config", filepath.Join(muRoot, "mu.cue"), "--json", target)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
+	stdout, err := mu.Observe(filepath.Join(muRoot, "mu.cue"), target)
+	if err != nil {
+		return nil, err
 	}
 
-	count, snapshotID, err := ingestPopulateOutput(cat, stdout.Bytes(), populateIngest{
+	count, snapshotID, err := ingestPopulateOutput(cat, stdout, populateIngest{
 		snapshotID: snapshotID0,
 		runID:      runID,
 		model:      m.Name,
@@ -246,7 +242,7 @@ func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
 // #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
 // schema was loaded from (the base for resolving the eweSource + relative plugin
 // scripts).
-func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
+func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
 	srcPath, err := resolveEweSource(m.Populate.EweSource, modelDir, pudlRoot)
 	if err != nil {
 		return nil, err
@@ -277,12 +273,8 @@ func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlR
 	}
 
 	target := populateTargetName(m.Name)
-	cmd := exec.Command("mu", "build", "--config", filepath.Join(dir, "mu.cue"), target)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("mu build %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
+	if _, err := mu.Build(filepath.Join(dir, "mu.cue"), target); err != nil {
+		return nil, fmt.Errorf("mu build %s: %w", target, err)
 	}
 
 	// Wrap each declared output (a JSON records array) as an ObserveResult and

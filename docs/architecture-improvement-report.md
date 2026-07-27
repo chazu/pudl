@@ -266,6 +266,15 @@ records. The remaining work is a durable run record (Defect 1) and broader
 adapter coverage for every populate and observation path — *not* resumable
 recovery, which D1 rejects.
 
+**Both are now done.** The run record landed with Defect 1 on 2026-07-24. Adapter
+coverage landed 2026-07-27: a `muRunner` seam covers all five direct mu
+invocations — the plugin-observe populate, the ewe populate build, the
+differential drift observe, and the converge loop's plan and apply — so the
+acceptance matrix below runs without mu, a cluster or a network. It is passed
+explicitly rather than held in a package variable, because a swappable global is
+a shared mutable seam parallel tests race on. Eight matrix rows are covered in
+`cmd/run_acceptance_test.go`.
+
 ### Settled decisions (2026-07-24)
 
 The six design questions above are closed. Each decision is recorded with its
@@ -403,7 +412,16 @@ The decision that replaces it:
    people to ignore checks" outcome the policy exists to avoid.
 
 **D4 — Resource dependencies: ship the typed field; justify the relation
-separately.**
+separately.** — **TYPED FIELD SHIPPED 2026-07-27.** `#DesiredResource` declares
+`depends_on?: [...string]` with the resolution rule stated in the schema: each
+entry resolves to exactly one resource by an *identity* key, a type key is an
+error as a class (not on cardinality — a type matching one resource today
+silently becomes two edges tomorrow), and a cross-class match stays an error
+rather than silently preferring identity. The compound-identity note is answered
+by saying what a dependency is not: `recordIdentity`'s key is schema-relative and
+post-observation, whereas a dependency is declared before anything is observed.
+The relation stays deferred on the reasoning below. See
+`implog/2026_07_27_mu_seam_and_typed_depends_on.md`.
 The correctness half is unconditional and independent: declare `depends_on` in
 the desired schema as a typed selector list with a defined resolution rule. It
 needs no fact emission and no relation, and it removes the ambiguity class

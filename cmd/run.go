@@ -175,6 +175,11 @@ Examples:
 			return fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
 		}
 
+		// The subprocess seam. Passed explicitly rather than reached for, so the
+		// whole run path can be driven by a scripted runner in a test — the
+		// acceptance matrix the architecture report asks for needs no real mu.
+		var mu muRunner = execMu{}
+
 		report := &RunReport{RunID: session.RunID, Model: model.Name, OK: true}
 		var runErr error
 
@@ -188,7 +193,7 @@ Examples:
 				fmt.Println("\n— converge —")
 			}
 			budget := resolveApplyBudget(cat, model.Name, flags, live)
-			cr, err := runConvergeLoop(cat, effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun, budget)
+			cr, err := runConvergeLoop(cat, mu, effectiveModel, muRoot, modelDir, session.RunID, flags.maxIters, flags.dryRun, budget)
 			report.Converge = cr
 			if err != nil {
 				report.OK = false
@@ -217,7 +222,7 @@ Examples:
 				if flags.fromCatalog {
 					scope = strings.TrimSpace(flags.catalogScope)
 				} else {
-					pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
+					pr, err := runPopulate(cat, mu, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
 					if err != nil {
 						return err
 					}
@@ -245,13 +250,13 @@ Examples:
 				report.Drift = &res
 			case len(model.Desired) > 0:
 				// Differential: live observe with desired-as-sources (k8s-style).
-				res, err := runDrift(cat, model, muRoot, modelDir, session.RunID)
+				res, err := runDrift(cat, mu, model, muRoot, modelDir, session.RunID)
 				if err != nil {
 					return err
 				}
 				report.Drift = &res
 			default:
-				pr, err := runPopulate(cat, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
+				pr, err := runPopulate(cat, mu, model, muRoot, modelDir, pudlRoot, session.RunID, session.SnapshotID)
 				if err != nil {
 					return err
 				}
