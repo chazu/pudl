@@ -1,10 +1,12 @@
 package datalog
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -43,8 +45,13 @@ func LoadRulesFromPaths(paths ...string) ([]Rule, error) {
 func loadRulesFromDir(ctx *cue.Context, dir string) ([]Rule, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil // missing directory is fine
+		// A search path that is not a readable directory contributes no rules; it
+		// is not an error. A workspace legitimately may not have a rules dir, and
+		// a path that exists but is a file (ENOTDIR) is the same nothing from the
+		// caller's point of view. Tolerating it here rather than at each caller is
+		// what lets every caller share one unfiltered search order.
+		if os.IsNotExist(err) || errors.Is(err, syscall.ENOTDIR) {
+			return nil, nil
 		}
 		return nil, err
 	}

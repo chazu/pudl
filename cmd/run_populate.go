@@ -225,14 +225,8 @@ func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
 		return eweSource, nil
 	}
 	var candidates []string
-	if pudlRoot != "" {
-		candidates = append(candidates,
-			filepath.Join(pudlRoot, "populators", eweSource),
-			filepath.Join(pudlRoot, eweSource),
-		)
-	}
-	if modelDir != "" {
-		candidates = append(candidates, filepath.Join(modelDir, eweSource))
+	for _, base := range wsPolicy.PopulatorPathsFor(pudlRoot, modelDir) {
+		candidates = append(candidates, filepath.Join(base, eweSource))
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {

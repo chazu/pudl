@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/workspace"
 	"github.com/chazu/pudl/pkg/factstore"
 )
 
@@ -67,5 +69,40 @@ func TestDiscoverWorkspaceRepo(t *testing.T) {
 	// Repo rules must be last so they shadow global rules.
 	if !strings.HasPrefix(ws.RulePaths[1], pudlDir) {
 		t.Errorf("repo rule path should come last, got %v", ws.RulePaths)
+	}
+}
+
+// The library and the CLI must resolve rules identically — a success measure of
+// the architecture report, and until the workspace policy existed it held only
+// because two independent assemblies happened to agree.
+func TestDiscoverWorkspaceMatchesTheWorkspacePolicy(t *testing.T) {
+	root := t.TempDir()
+	pudlDir := filepath.Join(root, ".pudl")
+	if err := os.MkdirAll(filepath.Join(pudlDir, "schema", "pudl", "rules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pudlDir, "workspace.cue"), []byte(`name: "parity"`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ws, err := factstore.DiscoverWorkspace(root)
+	if err != nil {
+		t.Fatalf("DiscoverWorkspace: %v", err)
+	}
+	policy, err := workspace.Resolve(root, config.GetPudlDir())
+	if err != nil {
+		t.Fatalf("workspace.Resolve: %v", err)
+	}
+
+	if len(ws.RulePaths) != len(policy.RuleSearchPaths) {
+		t.Fatalf("rule paths differ: library %v, policy %v", ws.RulePaths, policy.RuleSearchPaths)
+	}
+	for i := range ws.RulePaths {
+		if ws.RulePaths[i] != policy.RuleSearchPaths[i] {
+			t.Errorf("rule path %d: library %q, policy %q", i, ws.RulePaths[i], policy.RuleSearchPaths[i])
+		}
+	}
+	if ws.RepoDir != policy.Workspace.PudlDir {
+		t.Errorf("repo dir: library %q, policy %q", ws.RepoDir, policy.Workspace.PudlDir)
 	}
 }

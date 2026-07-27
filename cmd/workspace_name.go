@@ -8,8 +8,8 @@ package cmd
 // context would answer where the *reader* is standing, and would silently
 // relabel every past snapshot when a repo moves or is renamed.
 func effectiveWorkspaceName() string {
-	if wsCtx == nil {
+	if wsPolicy == nil {
 		return "global"
 	}
-	return wsCtx.EffectiveOrigin
+	return wsPolicy.EffectiveOrigin
 }

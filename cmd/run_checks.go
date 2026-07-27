@@ -2,11 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -61,27 +58,6 @@ func checkPasses(expect string, count int) bool {
 	}
 }
 
-// ruleSearchPaths returns the existing directories to load Datalog rules from:
-// the global pudl rules, the repo-scoped rules (when in a workspace), and the
-// model's own rules/ subdir. Missing dirs are skipped (the loader errors on them).
-func ruleSearchPaths(modelDir string) []string {
-	candidates := []string{
-		filepath.Join(config.GetPudlDir(), "schema", "pudl", "rules"),
-		filepath.Join(modelDir, "rules"),
-	}
-	if wsCtx != nil && wsCtx.Workspace != nil {
-		candidates = append(candidates,
-			filepath.Join(wsCtx.Workspace.PudlDir, "schema", "pudl", "rules"))
-	}
-	var paths []string
-	for _, p := range candidates {
-		if st, err := os.Stat(p); err == nil && st.IsDir() {
-			paths = append(paths, p)
-		}
-	}
-	return paths
-}
-
 // headExposesRunID reports whether any rule producing this relation declares
 // `run_id` as a variable head argument.
 //
@@ -115,7 +91,7 @@ func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx
 		return nil, err
 	}
 
-	rules, err := datalog.LoadRulesFromPaths(ruleSearchPaths(modelDir)...)
+	rules, err := datalog.LoadRulesFromPaths(rulePathsForModel(modelDir)...)
 	if err != nil {
 		return nil, fmt.Errorf("load rules: %w", err)
 	}
