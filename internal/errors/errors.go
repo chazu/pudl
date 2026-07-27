@@ -11,15 +11,15 @@ type ErrorCode string
 
 const (
 	// User Input Errors
-	ErrCodeInvalidInput     ErrorCode = "INVALID_INPUT"
-	ErrCodeMissingRequired  ErrorCode = "MISSING_REQUIRED"
-	ErrCodeFileNotFound     ErrorCode = "FILE_NOT_FOUND"
-	ErrCodeInvalidFormat    ErrorCode = "INVALID_FORMAT"
+	ErrCodeInvalidInput    ErrorCode = "INVALID_INPUT"
+	ErrCodeMissingRequired ErrorCode = "MISSING_REQUIRED"
+	ErrCodeFileNotFound    ErrorCode = "FILE_NOT_FOUND"
+	ErrCodeInvalidFormat   ErrorCode = "INVALID_FORMAT"
 
 	// System Errors
-	ErrCodeFileSystem  ErrorCode = "FILE_SYSTEM"
-	ErrCodePermission  ErrorCode = "PERMISSION"
-	ErrCodeNetwork     ErrorCode = "NETWORK"
+	ErrCodeFileSystem ErrorCode = "FILE_SYSTEM"
+	ErrCodePermission ErrorCode = "PERMISSION"
+	ErrCodeNetwork    ErrorCode = "NETWORK"
 
 	// Configuration Errors
 	ErrCodeConfigInvalid    ErrorCode = "CONFIG_INVALID"

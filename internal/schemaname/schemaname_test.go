@@ -49,10 +49,10 @@ func TestNormalize(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wantPkg    string
-		wantDef    string
+		name    string
+		input   string
+		wantPkg string
+		wantDef string
 	}{
 		{"full format", "aws/ec2.#Instance", "aws/ec2", "#Instance"},
 		{"CUE format", "pudl.schemas/aws/ec2@v0:#Instance", "aws/ec2", "#Instance"},
@@ -151,4 +151,3 @@ func TestIsFallbackSchema(t *testing.T) {
 		})
 	}
 }
-

@@ -37,11 +37,11 @@ Examples:
 }
 
 var (
-	factsRelation   string
-	factsSource     string
-	factsAsOfValid  string
-	factsAsOfTx     string
-	factsVerbose    bool
+	factsRelation  string
+	factsSource    string
+	factsAsOfValid string
+	factsAsOfTx    string
+	factsVerbose   bool
 )
 
 var factsListCmd = &cobra.Command{

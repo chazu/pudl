@@ -36,27 +36,27 @@ type GenerateOptions struct {
 
 // CollectionGenerateOptions configures smart collection schema generation.
 type CollectionGenerateOptions struct {
-	PackagePath          string            // e.g., "aws/ec2"
-	CollectionName       string            // e.g., "Ec2InstanceCollection" (without #)
-	InferHints           map[string]string // field hints like {"State": "enum"}
+	PackagePath    string            // e.g., "aws/ec2"
+	CollectionName string            // e.g., "Ec2InstanceCollection" (without #)
+	InferHints     map[string]string // field hints like {"State": "enum"}
 }
 
 // CollectionGenerateResult contains the result of smart collection schema generation.
 type CollectionGenerateResult struct {
-	CollectionSchema   *GenerateResult            // The collection schema (list type)
-	NewItemSchemas     []*GenerateResult          // Any new item schemas that were generated
-	ExistingSchemaRefs []string                   // References to existing schemas used
-	ItemSchemaMapping  map[int]string             // Maps item index to schema name
+	CollectionSchema   *GenerateResult   // The collection schema (list type)
+	NewItemSchemas     []*GenerateResult // Any new item schemas that were generated
+	ExistingSchemaRefs []string          // References to existing schemas used
+	ItemSchemaMapping  map[int]string    // Maps item index to schema name
 }
 
 // GenerateResult contains the result of schema generation.
 type GenerateResult struct {
-	FilePath              string   // where the schema was created
-	PackageName           string   // the CUE package name
-	DefinitionName        string   // the definition created
-	FieldCount            int      // number of fields inferred
+	FilePath               string   // where the schema was created
+	PackageName            string   // the CUE package name
+	DefinitionName         string   // the definition created
+	FieldCount             int      // number of fields inferred
 	InferredIdentityFields []string // fields that look like identity fields
-	Content               string   // generated CUE content
+	Content                string   // generated CUE content
 }
 
 // FieldInfo holds analyzed field information.
@@ -87,12 +87,12 @@ func (g *Generator) Generate(data interface{}, opts GenerateOptions) (*GenerateR
 	filePath := filepath.Join(g.SchemaPath, opts.PackagePath, fileName)
 
 	return &GenerateResult{
-		FilePath:              filePath,
-		PackageName:           packageName,
-		DefinitionName:        opts.DefinitionName,
-		FieldCount:            len(analysis.Fields),
+		FilePath:               filePath,
+		PackageName:            packageName,
+		DefinitionName:         opts.DefinitionName,
+		FieldCount:             len(analysis.Fields),
 		InferredIdentityFields: analysis.IdentityFields,
-		Content:               content,
+		Content:                content,
 	}, nil
 }
 
@@ -253,7 +253,6 @@ func containsString(slice []string, s string) bool {
 	}
 	return false
 }
-
 
 // generateCUEContent produces valid CUE schema content.
 func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOptions) string {
@@ -600,10 +599,10 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 
 	// Parse schema references and collect imports needed
 	type schemaRef struct {
-		pkgPath    string // e.g., "aws/ec2"
-		pkgAlias   string // e.g., "ec2" (last component)
-		defName    string // e.g., "#Instance"
-		isLocal    bool   // true if in same package
+		pkgPath  string // e.g., "aws/ec2"
+		pkgAlias string // e.g., "ec2" (last component)
+		defName  string // e.g., "#Instance"
+		isLocal  bool   // true if in same package
 	}
 
 	var refs []schemaRef

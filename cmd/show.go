@@ -184,7 +184,4 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 		}
 	}
 
-
 }
-
-

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -110,10 +111,10 @@ func findMuRoot(startDir string) (string, error) {
 //
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
-func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
+func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
 	if m.Populate.Kind() == systemmodel.KindEweTarget {
 		// Self-staged; no external mu root needed (works for project + global).
-		return runEwePopulate(cat, m, modelDir, pudlRoot, runID)
+		return runEwePopulate(cat, m, modelDir, pudlRoot, runID, snapshotID0)
 	}
 
 	rm := *m
@@ -143,7 +144,12 @@ func runPopulate(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, 
 		return nil, fmt.Errorf("mu observe %s: %w: %s", target, err, strings.TrimSpace(stderr.String()))
 	}
 
-	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(cat, stdout.Bytes(), runID)
+	count, snapshotID, err := ingestPopulateOutput(cat, stdout.Bytes(), populateIngest{
+		snapshotID: snapshotID0,
+		runID:      runID,
+		model:      m.Name,
+		source:     database.SnapshotSourceMuObserve,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +252,7 @@ func resolveEweSource(eweSource, modelDir, pudlRoot string) (string, error) {
 // #PluginObserve one (ewe-populate-spec §3). modelDir is the directory the model
 // schema was loaded from (the base for resolving the eweSource + relative plugin
 // scripts).
-func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlRoot, runID string) (*PopulateReport, error) {
+func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
 	srcPath, err := resolveEweSource(m.Populate.EweSource, modelDir, pudlRoot)
 	if err != nil {
 		return nil, err
@@ -309,17 +315,27 @@ func runEwePopulate(cat *runCatalog, m *systemmodel.SystemModel, modelDir, pudlR
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestObserveOutputWithSnapshotRunID(cat, wrapped, runID)
+	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{
+		snapshotID: snapshotID0,
+		runID:      runID,
+		model:      m.Name,
+		source:     database.SnapshotSourceEwe,
+	})
 	if err != nil {
 		return nil, err
 	}
 	return &PopulateReport{Target: target, Records: count, SnapshotID: snapshotID}, nil
 }
 
-// ingestObserveOutputWithSnapshotRunID feeds `mu observe --json` output into the
-// catalog as observe entries, reusing the shipped IngestObserveResults (the same
-// path `pudl mu ingest-observe` uses), and associates them with this run.
-func ingestObserveOutputWithSnapshotRunID(cat *runCatalog, observeJSON []byte, runID string) (int, string, error) {
+// ingestPopulateOutput feeds `mu observe --json` output into the catalog as
+// observe entries, reusing the shipped ingester (the same path
+// `pudl mu ingest-observe` uses), and records the snapshot's provenance: which
+// run took it, for which model, in which workspace, and how it was produced.
+//
+// The snapshot ID is passed in rather than generated here, so the run owns the
+// identifier for an observation it initiated and can name the snapshot a failed
+// ingest would have produced.
+func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest) (int, string, error) {
 	db, err := cat.required()
 	if err != nil {
 		return 0, "", err
@@ -333,5 +349,24 @@ func ingestObserveOutputWithSnapshotRunID(cat *runCatalog, observeJSON []byte, r
 	if err != nil {
 		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}
-	return mubridge.IngestObserveResultsWithSnapshotRunID(db, bytes.NewReader(observeJSON), "pudl-run", cfg.DataPath, inferrer.GetInheritanceGraph(), runID)
+	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
+		Reader:     bytes.NewReader(observeJSON),
+		DataDir:    cfg.DataPath,
+		Graph:      inferrer.GetInheritanceGraph(),
+		SnapshotID: in.snapshotID,
+		RunID:      in.runID,
+		Model:      in.model,
+		Workspace:  effectiveWorkspaceName(),
+		Origin:     "pudl-run",
+		Source:     in.source,
+	})
+	return result.Records, result.SnapshotID, err
+}
+
+// populateIngest is the provenance a populate phase attaches to its snapshot.
+type populateIngest struct {
+	snapshotID string
+	runID      string
+	model      string
+	source     string
 }

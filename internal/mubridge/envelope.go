@@ -29,9 +29,9 @@ import (
 // schema cache so subsequent imports of the same (module, version)
 // classify as 'declared' instead of 'auto_registered'.
 type Envelope struct {
-	Schema      EnvelopeSchema      `json:"schema"`
-	Definitions []EnvelopeDefFile   `json:"definitions,omitempty"`
-	Data        json.RawMessage     `json:"data"`
+	Schema      EnvelopeSchema    `json:"schema"`
+	Definitions []EnvelopeDefFile `json:"definitions,omitempty"`
+	Data        json.RawMessage   `json:"data"`
 }
 
 // EnvelopeSchema is the schema reference portion of an envelope. Field

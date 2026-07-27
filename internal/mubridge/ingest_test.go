@@ -42,7 +42,8 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 		}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
 	}
@@ -114,7 +115,8 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 		}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
 	}
@@ -151,9 +153,14 @@ func TestIngestObserveResultsWithSnapshotRunID_AttachesAuditIdentity(t *testing.
 	defer db.Close()
 
 	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"box"}]}}]`
-	count, snapshotID, err := IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_test")
+	result, err := IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir,
+		RunID: "run_test", SnapshotID: "snap_test",
+	})
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 1, result.Records)
+	snapshotID := result.SnapshotID
+	assert.Equal(t, "snap_test", snapshotID, "the pre-allocated id is what lands")
 
 	entry, err := db.GetLatestObserve("app")
 	require.NoError(t, err)
@@ -172,8 +179,12 @@ func TestIngestObserveResultsWithSnapshotRunID_AttachesAuditIdentity(t *testing.
 	// last-writer-wins, so a query for run_test under-reported what run_test saw
 	// and the entry's run disagreed with its snapshot membership about the same
 	// fact (invariant 3).
-	_, nextSnapshotID, err := IngestObserveResultsWithSnapshotRunID(db, strings.NewReader(input), "mu-observe", dataDir, nil, "run_next")
+	next, err := IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir,
+		RunID: "run_next",
+	})
 	require.NoError(t, err)
+	nextSnapshotID := next.SnapshotID
 	entry, err = db.GetLatestObserve("app")
 	require.NoError(t, err)
 	require.NotNil(t, entry.RunID)
@@ -198,7 +209,8 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 
 	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"box","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
 
-	count1, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	count1Result, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count1 := count1Result.Records
 	if err != nil {
 		t.Fatalf("first ingest failed: %v", err)
 	}
@@ -207,7 +219,8 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 	}
 
 	// Same data again — should deduplicate
-	count2, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	count2Result, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count2 := count2Result.Records
 	if err != nil {
 		t.Fatalf("second ingest failed: %v", err)
 	}
@@ -220,7 +233,8 @@ func TestIngestObserveResults_EmptyInput(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
 
-	count, err := IngestObserveResults(db, strings.NewReader(""), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(""), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +253,8 @@ func TestIngestObserveResults_TargetError(t *testing.T) {
 		{"target":"//ok","current":{"records":[{"_schema":"linux.host","hostname":"good","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -255,7 +270,8 @@ func TestIngestObserveResults_NoRecordsKey(t *testing.T) {
 	// current without records key — treat whole current as single record
 	input := `[{"target":"//simple","current":{"status":"healthy","uptime":42}}]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -285,7 +301,8 @@ func TestIngestObserveResults_MultipleTargets(t *testing.T) {
 		{"target":"//host/b","current":{"records":[{"_schema":"linux.host","hostname":"b","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":2}]}}
 	]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "mu-observe", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -310,7 +327,8 @@ func TestIngestObserveResults_CustomOrigin(t *testing.T) {
 
 	input := `[{"target":"//app","current":{"records":[{"_schema":"linux.host","hostname":"x","kernel":"6.0","arch":"x86_64","os":{"id":"ubuntu","version":"22.04","name":"Ubuntu"},"uptime_seconds":1}]}}]`
 
-	count, err := IngestObserveResults(db, strings.NewReader(input), "custom-origin", dataDir, nil)
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "custom-origin", DataDir: dataDir, Graph: nil})
+	count := countResult.Records
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

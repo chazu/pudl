@@ -205,6 +205,13 @@ func (c *CatalogDB) createTables() error {
 		return fmt.Errorf("failed to ensure runs table: %w", err)
 	}
 
+	// The observation contract: what each snapshot observed, for which model and
+	// run, from where. Without it a snapshot is a convention rather than an
+	// object, and nothing can be looked up as current, retained or pruned.
+	if err := c.ensureObserveSnapshotsTable(); err != nil {
+		return fmt.Errorf("failed to ensure observe snapshots table: %w", err)
+	}
+
 	// Create facts table (idempotent)
 	if err := c.ensureFactsTable(); err != nil {
 		return fmt.Errorf("failed to ensure facts table: %w", err)

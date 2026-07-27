@@ -25,12 +25,12 @@ func NewValidator() *Validator {
 
 // ValidationResult represents the result of schema validation
 type ValidationResult struct {
-	Valid        bool     `json:"valid"`
-	Errors       []string `json:"errors,omitempty"`
-	Warnings     []string `json:"warnings,omitempty"`
-	PackageName  string   `json:"package_name,omitempty"`
-	Definitions  []string `json:"definitions,omitempty"`
-	HasMetadata  bool     `json:"has_metadata"`
+	Valid        bool         `json:"valid"`
+	Errors       []string     `json:"errors,omitempty"`
+	Warnings     []string     `json:"warnings,omitempty"`
+	PackageName  string       `json:"package_name,omitempty"`
+	Definitions  []string     `json:"definitions,omitempty"`
+	HasMetadata  bool         `json:"has_metadata"`
 	MetadataInfo MetadataInfo `json:"metadata_info,omitempty"`
 }
 
@@ -178,29 +178,29 @@ func (v *Validator) extractPackageName(content string) string {
 // extractDefinitions extracts schema definition names from CUE content
 func (v *Validator) extractDefinitions(content string) []string {
 	var definitions []string
-	
+
 	// Regular expression to match #DefinitionName: patterns
 	re := regexp.MustCompile(`#([A-Za-z][A-Za-z0-9_]*)\s*:`)
 	matches := re.FindAllStringSubmatch(content, -1)
-	
+
 	for _, match := range matches {
 		if len(match) > 1 {
 			definitions = append(definitions, "#"+match[1])
 		}
 	}
-	
+
 	return definitions
 }
 
 // validateMetadata checks for required metadata fields in schema definitions
 func (v *Validator) validateMetadata(content string, definitions []string) MetadataInfo {
 	info := MetadataInfo{}
-	
+
 	// Check for metadata fields
 	info.HasIdentity = strings.Contains(content, "_identity:")
 	info.HasTracked = strings.Contains(content, "_tracked:")
 	info.HasVersion = strings.Contains(content, "_version:")
-	
+
 	return info
 }
 

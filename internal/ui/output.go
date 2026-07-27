@@ -81,21 +81,21 @@ type ListSummary struct {
 
 // EntryOutput represents a single entry in JSON output
 type EntryOutput struct {
-	ID              string   `json:"id"`
-	Proquint        string   `json:"proquint"`
-	Schema          string   `json:"schema"`
-	Origin          string   `json:"origin"`
-	Format          string   `json:"format"`
-	SizeBytes       int64    `json:"size_bytes"`
-	RecordCount     int      `json:"record_count"`
-	ImportTimestamp string   `json:"import_timestamp"`
-	StoredPath      string   `json:"stored_path"`
-	MetadataPath    string   `json:"metadata_path"`
-	Confidence      float64  `json:"confidence"`
-	CollectionType  *string  `json:"collection_type,omitempty"`
-	CollectionID    *string  `json:"collection_id,omitempty"`
-	ItemID          *string  `json:"item_id,omitempty"`
-	ItemIndex       *int     `json:"item_index,omitempty"`
+	ID              string  `json:"id"`
+	Proquint        string  `json:"proquint"`
+	Schema          string  `json:"schema"`
+	Origin          string  `json:"origin"`
+	Format          string  `json:"format"`
+	SizeBytes       int64   `json:"size_bytes"`
+	RecordCount     int     `json:"record_count"`
+	ImportTimestamp string  `json:"import_timestamp"`
+	StoredPath      string  `json:"stored_path"`
+	MetadataPath    string  `json:"metadata_path"`
+	Confidence      float64 `json:"confidence"`
+	CollectionType  *string `json:"collection_type,omitempty"`
+	CollectionID    *string `json:"collection_id,omitempty"`
+	ItemID          *string `json:"item_id,omitempty"`
+	ItemIndex       *int    `json:"item_index,omitempty"`
 }
 
 // ImportOutput represents structured output for import command
@@ -143,15 +143,15 @@ type DoctorCheckOutput struct {
 
 // SchemaNewOutput represents structured output for schema new command
 type SchemaNewOutput struct {
-	Success                bool                      `json:"success"`
-	FilePath               string                    `json:"file_path"`
-	PackageName            string                    `json:"package_name"`
-	DefinitionName         string                    `json:"definition_name"`
-	FieldCount             int                       `json:"field_count"`
-	InferredIdentityFields []string                  `json:"inferred_identity_fields,omitempty"`
-	IsCollection           bool                      `json:"is_collection"`
-	NewItemSchemas         []SchemaNewItemOutput     `json:"new_item_schemas,omitempty"`
-	ExistingSchemaRefs     []string                  `json:"existing_schema_refs,omitempty"`
+	Success                bool                  `json:"success"`
+	FilePath               string                `json:"file_path"`
+	PackageName            string                `json:"package_name"`
+	DefinitionName         string                `json:"definition_name"`
+	FieldCount             int                   `json:"field_count"`
+	InferredIdentityFields []string              `json:"inferred_identity_fields,omitempty"`
+	IsCollection           bool                  `json:"is_collection"`
+	NewItemSchemas         []SchemaNewItemOutput `json:"new_item_schemas,omitempty"`
+	ExistingSchemaRefs     []string              `json:"existing_schema_refs,omitempty"`
 }
 
 // SchemaNewItemOutput represents a generated item schema in collection generation

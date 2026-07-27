@@ -116,4 +116,3 @@ func TestCUEErrorParserGenericError(t *testing.T) {
 	assert.Equal(t, "some.field", results[0].Path)
 	assert.NotEmpty(t, results[0].Suggestion)
 }
-

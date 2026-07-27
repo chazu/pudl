@@ -9,11 +9,11 @@ import (
 type ValidationResult struct {
 	IntendedSchema   string            `json:"intended_schema"`
 	AssignedSchema   string            `json:"assigned_schema"`
-	Valid            bool              `json:"valid"`             // Whether data matched the intended schema
+	Valid            bool              `json:"valid"` // Whether data matched the intended schema
 	ValidationErrors []ValidationError `json:"validation_errors,omitempty"`
 	FallbackReason   string            `json:"fallback_reason,omitempty"`
-	Success          bool              `json:"success"`           // Always true (never reject data)
-	ChainAttempts  []ChainAttempt  `json:"chain_attempts"`  // All validation attempts
+	Success          bool              `json:"success"`        // Always true (never reject data)
+	ChainAttempts    []ChainAttempt    `json:"chain_attempts"` // All validation attempts
 }
 
 // ValidationError represents a specific validation failure
@@ -35,12 +35,12 @@ type ChainAttempt struct {
 
 // SchemaMetadata represents PUDL metadata embedded in CUE schemas
 type SchemaMetadata struct {
-	SchemaType     string   `json:"schema_type"`      // "base", "policy", "custom", "catchall"
-	ResourceType   string   `json:"resource_type"`    // "aws.ec2.instance", "k8s.pod"
-	BaseSchema     string   `json:"base_schema"`      // Parent schema reference
-	IdentityFields []string `json:"identity_fields"`  // Fields that identify the resource
-	TrackedFields  []string `json:"tracked_fields"`   // Fields to monitor for changes
-	IsListType     bool     `json:"is_list_type"`     // True if schema is structurally a list/array type
+	SchemaType     string   `json:"schema_type"`     // "base", "policy", "custom", "catchall"
+	ResourceType   string   `json:"resource_type"`   // "aws.ec2.instance", "k8s.pod"
+	BaseSchema     string   `json:"base_schema"`     // Parent schema reference
+	IdentityFields []string `json:"identity_fields"` // Fields that identify the resource
+	TrackedFields  []string `json:"tracked_fields"`  // Fields to monitor for changes
+	IsListType     bool     `json:"is_list_type"`    // True if schema is structurally a list/array type
 }
 
 // GetSummary returns a human-readable summary of the validation result
@@ -121,7 +121,7 @@ func NewValidationResult(intendedSchema string) *ValidationResult {
 	return &ValidationResult{
 		IntendedSchema:   intendedSchema,
 		Success:          true, // Never reject data
-		ChainAttempts:  []ChainAttempt{},
+		ChainAttempts:    []ChainAttempt{},
 		ValidationErrors: []ValidationError{},
 	}
 }

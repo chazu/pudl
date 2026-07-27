@@ -12,40 +12,40 @@ import (
 
 func TestDetectCompression(t *testing.T) {
 	tests := []struct {
-		name       string
-		filename   string
-		content    []byte
-		expected   string
+		name     string
+		filename string
+		content  []byte
+		expected string
 	}{
 		{
-			name:       "gzip by extension",
-			filename:   "test.json.gz",
-			content:    []byte{0x1f, 0x8b, 0x08, 0x00}, // gzip magic bytes
-			expected:   "gzip",
+			name:     "gzip by extension",
+			filename: "test.json.gz",
+			content:  []byte{0x1f, 0x8b, 0x08, 0x00}, // gzip magic bytes
+			expected: "gzip",
 		},
 		{
-			name:       "zstd by extension",
-			filename:   "test.json.zst",
-			content:    []byte{0x28, 0xb5, 0x2f, 0xfd}, // zstd magic bytes
-			expected:   "zstd",
+			name:     "zstd by extension",
+			filename: "test.json.zst",
+			content:  []byte{0x28, 0xb5, 0x2f, 0xfd}, // zstd magic bytes
+			expected: "zstd",
 		},
 		{
-			name:       "gzip by magic bytes",
-			filename:   "test.data",
-			content:    []byte{0x1f, 0x8b, 0x08, 0x00},
-			expected:   "gzip",
+			name:     "gzip by magic bytes",
+			filename: "test.data",
+			content:  []byte{0x1f, 0x8b, 0x08, 0x00},
+			expected: "gzip",
 		},
 		{
-			name:       "zstd by magic bytes",
-			filename:   "test.data",
-			content:    []byte{0x28, 0xb5, 0x2f, 0xfd},
-			expected:   "zstd",
+			name:     "zstd by magic bytes",
+			filename: "test.data",
+			content:  []byte{0x28, 0xb5, 0x2f, 0xfd},
+			expected: "zstd",
 		},
 		{
-			name:       "no compression",
-			filename:   "test.json",
-			content:    []byte(`{"key": "value"}`),
-			expected:   "none",
+			name:     "no compression",
+			filename: "test.json",
+			content:  []byte(`{"key": "value"}`),
+			expected: "none",
 		},
 	}
 
@@ -185,4 +185,3 @@ func TestDecompressFileUncompressed(t *testing.T) {
 		t.Errorf("Expected original path, got different path")
 	}
 }
-

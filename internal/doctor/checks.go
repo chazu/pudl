@@ -8,11 +8,11 @@ import (
 	"sort"
 	"strings"
 
-	_ "modernc.org/sqlite"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
+	_ "modernc.org/sqlite"
 )
 
 // CheckResult represents the result of a health check
@@ -629,4 +629,3 @@ func CheckOrphanedFiles() *CheckResult {
 		Details: "All data files are properly cataloged",
 	}
 }
-

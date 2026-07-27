@@ -327,4 +327,3 @@ func TestSchemaValidationError(t *testing.T) {
 		assert.Len(t, validationErr.Errors, 1)
 	})
 }
-

@@ -8,15 +8,15 @@ import (
 
 // CLIProgressReporter implements ProgressReporter for command-line interface
 type CLIProgressReporter struct {
-	mu           sync.RWMutex
-	total        int64
-	processed    int64
-	operation    string
-	startTime    time.Time
-	lastUpdate   time.Time
+	mu             sync.RWMutex
+	total          int64
+	processed      int64
+	operation      string
+	startTime      time.Time
+	lastUpdate     time.Time
 	updateInterval time.Duration
-	verbose      bool
-	finished     bool
+	verbose        bool
+	finished       bool
 }
 
 // NewCLIProgressReporter creates a new CLI progress reporter
@@ -31,14 +31,14 @@ func NewCLIProgressReporter(verbose bool) *CLIProgressReporter {
 func (p *CLIProgressReporter) Start(total int64, operation string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.total = total
 	p.processed = 0
 	p.operation = operation
 	p.startTime = time.Now()
 	p.lastUpdate = time.Now()
 	p.finished = false
-	
+
 	if p.verbose {
 		fmt.Printf("🚀 Starting %s", operation)
 		if total > 0 {
@@ -52,43 +52,43 @@ func (p *CLIProgressReporter) Start(total int64, operation string) {
 func (p *CLIProgressReporter) Update(processed int64, message string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if p.finished {
 		return
 	}
-	
+
 	p.processed = processed
 	now := time.Now()
-	
+
 	// Only update if enough time has passed
 	if now.Sub(p.lastUpdate) < p.updateInterval {
 		return
 	}
 	p.lastUpdate = now
-	
+
 	// Calculate progress
 	var percentage float64
 	if p.total > 0 {
 		percentage = float64(processed) / float64(p.total) * 100
 	}
-	
+
 	// Calculate rate
 	duration := now.Sub(p.startTime)
 	var rate float64
 	if duration.Seconds() > 0 {
 		rate = float64(processed) / duration.Seconds() / 1024 / 1024 // MB/s
 	}
-	
+
 	// Format output
 	if p.verbose {
 		if p.total > 0 {
-			fmt.Printf("\r📊 %s: %.1f%% (%s/%s) at %.1f MB/s", 
+			fmt.Printf("\r📊 %s: %.1f%% (%s/%s) at %.1f MB/s",
 				p.operation, percentage, formatBytes(processed), formatBytes(p.total), rate)
 		} else {
-			fmt.Printf("\r📊 %s: %s at %.1f MB/s", 
+			fmt.Printf("\r📊 %s: %s at %.1f MB/s",
 				p.operation, formatBytes(processed), rate)
 		}
-		
+
 		if message != "" {
 			fmt.Printf(" - %s", message)
 		}
@@ -106,15 +106,15 @@ func (p *CLIProgressReporter) Update(processed int64, message string) {
 func (p *CLIProgressReporter) Finish(result ProcessingResult) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if p.finished {
 		return
 	}
 	p.finished = true
-	
+
 	// Clear the progress line
 	fmt.Print("\r" + clearLine())
-	
+
 	if result.Success {
 		fmt.Printf("✅ %s completed successfully\n", p.operation)
 		if p.verbose {
@@ -126,7 +126,7 @@ func (p *CLIProgressReporter) Finish(result ProcessingResult) {
 			if result.SchemaDetected != "" {
 				fmt.Printf("   🔍 Schema: %s detected\n", result.SchemaDetected)
 			}
-			
+
 			// Calculate final throughput
 			if result.Duration.Seconds() > 0 {
 				throughput := float64(result.BytesProcessed) / result.Duration.Seconds() / 1024 / 1024
@@ -149,7 +149,7 @@ func (p *CLIProgressReporter) Error(err error) {
 	p.mu.RLock()
 	verbose := p.verbose
 	p.mu.RUnlock()
-	
+
 	if verbose {
 		fmt.Printf("\n⚠️  Error: %v\n", err)
 	}
@@ -170,10 +170,10 @@ func NewSilentProgressReporter() *SilentProgressReporter {
 	return &SilentProgressReporter{}
 }
 
-func (p *SilentProgressReporter) Start(total int64, operation string)        {}
-func (p *SilentProgressReporter) Update(processed int64, message string)    {}
-func (p *SilentProgressReporter) Finish(result ProcessingResult)            {}
-func (p *SilentProgressReporter) Error(err error)                           {}
+func (p *SilentProgressReporter) Start(total int64, operation string)    {}
+func (p *SilentProgressReporter) Update(processed int64, message string) {}
+func (p *SilentProgressReporter) Finish(result ProcessingResult)         {}
+func (p *SilentProgressReporter) Error(err error)                        {}
 
 // Helper functions
 
@@ -224,18 +224,18 @@ type ProgressStats struct {
 func (p *CLIProgressReporter) GetStats() ProgressStats {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	var percentage float64
 	if p.total > 0 {
 		percentage = float64(p.processed) / float64(p.total) * 100
 	}
-	
+
 	duration := time.Since(p.startTime)
 	var throughput float64
 	if duration.Seconds() > 0 {
 		throughput = float64(p.processed) / duration.Seconds() / 1024 / 1024
 	}
-	
+
 	return ProgressStats{
 		Operation:      p.operation,
 		BytesProcessed: p.processed,

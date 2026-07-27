@@ -358,8 +358,6 @@ func TestStreamingParserBasicParsing(t *testing.T) {
 	}
 }
 
-
-
 // TestLargeJSONArrayCrossChunkReassembly tests that large JSON arrays spanning multiple CDC chunks
 // are correctly reassembled by the streaming parser
 func TestLargeJSONArrayCrossChunkReassembly(t *testing.T) {
@@ -394,7 +392,7 @@ func TestLargeJSONArrayCrossChunkReassembly(t *testing.T) {
 	t.Logf("Generated JSON array: %d bytes, %d objects", len(jsonData), len(objects))
 
 	config := DefaultStreamingConfig()
-	config.MinChunkSize = 1024  // 1KB min chunks to force multiple chunks
+	config.MinChunkSize = 1024 // 1KB min chunks to force multiple chunks
 	config.MaxChunkSize = 4096 // 4KB max chunks
 	config.AvgChunkSize = 2048 // 2KB average
 

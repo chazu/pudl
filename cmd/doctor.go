@@ -155,4 +155,3 @@ func displayCheckResult(name string, result *doctor.CheckResult) {
 
 	fmt.Println()
 }
-

@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"strings"
 )
 
 // This file is the single place that knows the shape of a catalog_entries row.
@@ -19,6 +20,18 @@ const entryColumns = `id, stored_path, metadata_path, import_timestamp, format, 
 	collection_type, item_id, resource_id, content_hash, identity_json, version,
 	entry_type, target, run_id, tags, status,
 	created_at, updated_at`
+
+// prefixedEntryColumns is entryColumns qualified with a table alias, for reads
+// that join catalog_entries against another table and would otherwise have
+// ambiguous column names. Derived from the same constant, so a new column still
+// only has to be added once.
+func prefixedEntryColumns(alias string) string {
+	columns := strings.Split(entryColumns, ",")
+	for i, column := range columns {
+		columns[i] = alias + "." + strings.TrimSpace(column)
+	}
+	return strings.Join(columns, ", ")
+}
 
 // rowScanner is the part of *sql.Row and *sql.Rows that scanEntry needs, so one
 // mapping serves both single-row and multi-row reads.

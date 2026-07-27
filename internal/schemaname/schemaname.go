@@ -134,4 +134,3 @@ func IsFallbackSchema(name string) bool {
 		normalized == "pudl/core.#Collection" ||
 		normalized == "pudl/core.#CatchAll"
 }
-

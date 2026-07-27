@@ -70,7 +70,7 @@ func TestRecordDriftObservationDoesNotPolluteObserveQueries(t *testing.T) {
 	canned := `[{"target":"//host:odroid","current":{"records":[
 		{"_schema":"pudl/linux.#Package","name":"podman","state":"present"}
 	]}}]`
-	_, err := IngestObserveResults(db, strings.NewReader(canned), "pudl-run", dataDir, nil)
+	_, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: dataDir, Graph: nil})
 	require.NoError(t, err)
 
 	_, err = RecordDriftObservation(db, DriftObservation{

@@ -14,9 +14,9 @@ import (
 
 // StatusOutput represents JSON output for the status command.
 type StatusOutput struct {
-	Target string `json:"target"`
-	Status     string `json:"status"`
-	UpdatedAt  string `json:"updated_at"`
+	Target    string `json:"target"`
+	Status    string `json:"status"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 var statusCmd = &cobra.Command{
@@ -96,9 +96,9 @@ func runStatusAll() error {
 		jsonOut := make([]StatusOutput, len(statuses))
 		for i, s := range statuses {
 			jsonOut[i] = StatusOutput{
-				Target: s.Target,
-				Status:     s.Status,
-				UpdatedAt:  formatStatusTime(s.UpdatedAt),
+				Target:    s.Target,
+				Status:    s.Status,
+				UpdatedAt: formatStatusTime(s.UpdatedAt),
 			}
 		}
 		return GetOutputWriter().WriteJSON(jsonOut)
@@ -133,9 +133,9 @@ func runStatusDetail(name string) error {
 
 	if jsonOutput {
 		return GetOutputWriter().WriteJSON(StatusOutput{
-			Target: found.Target,
-			Status:     found.Status,
-			UpdatedAt:  formatStatusTime(found.UpdatedAt),
+			Target:    found.Target,
+			Status:    found.Status,
+			UpdatedAt: formatStatusTime(found.UpdatedAt),
 		})
 	}
 

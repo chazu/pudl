@@ -32,9 +32,9 @@ type DefaultStreamingParser struct {
 	closed  bool
 
 	// Processor state management - maintain same processor across chunks
-	currentProcessor   ChunkProcessor // The processor selected for this stream
-	streamFormat       string         // Format detected at stream start
-	formatDetected     bool           // Whether format has been detected
+	currentProcessor ChunkProcessor // The processor selected for this stream
+	streamFormat     string         // Format detected at stream start
+	formatDetected   bool           // Whether format has been detected
 }
 
 // NewStreamingParser creates a new streaming parser with the given configuration

@@ -112,9 +112,9 @@ func TestCollectionOperations(t *testing.T) {
 
 		// Should be sorted by timestamp
 		for i := 1; i < len(result.Entries); i++ {
-			assert.True(t, 
+			assert.True(t,
 				result.Entries[i-1].ImportTimestamp.Before(result.Entries[i].ImportTimestamp) ||
-				result.Entries[i-1].ImportTimestamp.Equal(result.Entries[i].ImportTimestamp),
+					result.Entries[i-1].ImportTimestamp.Equal(result.Entries[i].ImportTimestamp),
 				"Items should be sorted by timestamp")
 		}
 	})

@@ -107,4 +107,3 @@ func BenchmarkLargeJSONProcessing(b *testing.B) {
 		json.Unmarshal(jsonData, &result)
 	}
 }
-

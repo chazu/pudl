@@ -222,26 +222,26 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 // GetAllSchemas returns a flattened map of all schemas from all loaded modules
 func (loader *CUEModuleLoader) GetAllSchemas(modules map[string]*LoadedModule) map[string]cue.Value {
 	allSchemas := make(map[string]cue.Value)
-	
+
 	for _, module := range modules {
 		for schemaName, schemaValue := range module.Schemas {
 			allSchemas[schemaName] = schemaValue
 		}
 	}
-	
+
 	return allSchemas
 }
 
 // GetAllMetadata returns a flattened map of all metadata from all loaded modules
 func (loader *CUEModuleLoader) GetAllMetadata(modules map[string]*LoadedModule) map[string]SchemaMetadata {
 	allMetadata := make(map[string]SchemaMetadata)
-	
+
 	for _, module := range modules {
 		for schemaName, metadata := range module.Metadata {
 			allMetadata[schemaName] = metadata
 		}
 	}
-	
+
 	return allMetadata
 }
 

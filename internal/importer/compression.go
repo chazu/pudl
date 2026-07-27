@@ -106,4 +106,3 @@ func DecompressFile(sourcePath string) (string, error) {
 
 	return tmpFile.Name(), nil
 }
-

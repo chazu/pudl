@@ -11,11 +11,11 @@ import (
 
 // CSVChunkProcessor handles CSV data with row completion logic
 type CSVChunkProcessor struct {
-	buffer         []byte              // Buffer for incomplete CSV rows
-	headers        []string            // CSV headers if detected
-	boundaryFinder *CSVBoundaryFinder  // Tracks CSV row boundaries across chunks
-	formatDetected bool                // Whether we've detected the format
-	sequence       int                 // Chunk sequence for Finalize
+	buffer         []byte             // Buffer for incomplete CSV rows
+	headers        []string           // CSV headers if detected
+	boundaryFinder *CSVBoundaryFinder // Tracks CSV row boundaries across chunks
+	formatDetected bool               // Whether we've detected the format
+	sequence       int                // Chunk sequence for Finalize
 }
 
 // NewCSVChunkProcessor creates a new CSV chunk processor
@@ -215,7 +215,7 @@ func (p *CSVChunkProcessor) parseCSVRows(data []byte) ([][]string, []int, []byte
 		}
 
 		rows = append(rows, record)
-		
+
 		// Calculate boundary position
 		// This is approximate since csv.Reader doesn't provide exact positions
 		rowText := strings.Join(record, ",") + "\n"
@@ -240,13 +240,13 @@ func (p *CSVChunkProcessor) detectHeaders(firstRow []string) {
 		if field == "" {
 			continue
 		}
-		
+
 		// If field is purely numeric, probably not a header
 		if _, err := strconv.ParseFloat(field, 64); err == nil {
 			hasHeaders = false
 			break
 		}
-		
+
 		// If field doesn't contain letters, probably not a header
 		hasLetters := false
 		for _, r := range field {
@@ -278,7 +278,7 @@ func (p *CSVChunkProcessor) rowsToObjects(rows [][]string) []interface{} {
 		}
 
 		obj := make(map[string]interface{})
-		
+
 		if p.headers != nil {
 			// Use headers as keys
 			for j, value := range row {
@@ -309,7 +309,7 @@ func (p *CSVChunkProcessor) rowsToObjects(rows [][]string) []interface{} {
 // parseValue attempts to parse a CSV value to the appropriate type
 func (p *CSVChunkProcessor) parseValue(value string) interface{} {
 	value = strings.TrimSpace(value)
-	
+
 	if value == "" {
 		return nil
 	}
@@ -338,14 +338,14 @@ func (p *CSVChunkProcessor) getColumnCount(rows [][]string) int {
 	if len(rows) == 0 {
 		return 0
 	}
-	
+
 	maxCols := 0
 	for _, row := range rows {
 		if len(row) > maxCols {
 			maxCols = len(row)
 		}
 	}
-	
+
 	return maxCols
 }
 
@@ -368,7 +368,7 @@ func (p *CSVChunkProcessor) GetHeaders() []string {
 	if p.headers == nil {
 		return nil
 	}
-	
+
 	headers := make([]string, len(p.headers))
 	copy(headers, p.headers)
 	return headers
@@ -410,7 +410,7 @@ func (f *CSVBoundaryFinder) FindBoundary(data []byte) int {
 			return i + 1 // Just \r
 		}
 	}
-	
+
 	return -1 // No complete row found
 }
 

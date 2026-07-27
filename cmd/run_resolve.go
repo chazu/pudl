@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -35,7 +36,14 @@ func recordModelInstance(cat *runCatalog, m *systemmodel.SystemModel, runID stri
 	if err != nil {
 		return err
 	}
-	_, _, err = ingestObserveOutputWithSnapshotRunID(cat, wrapped, runID)
+	// Recorded under its own source: this is a registration, not an observation
+	// of the live system, and it must not be picked up as the model's current
+	// snapshot in place of what populate actually observed.
+	_, _, err = ingestPopulateOutput(cat, wrapped, populateIngest{
+		runID:  runID,
+		model:  m.Name,
+		source: database.SnapshotSourceModelInstance,
+	})
 	return err
 }
 

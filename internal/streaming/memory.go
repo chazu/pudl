@@ -14,7 +14,7 @@ type DefaultMemoryMonitor struct {
 	peakMB   int64
 	enabled  bool
 	interval time.Duration
-	
+
 	// Callbacks for memory events
 	callbacks []func(usage float64)
 }
@@ -32,17 +32,17 @@ func NewMemoryMonitor(limitMB int) *DefaultMemoryMonitor {
 func (m *DefaultMemoryMonitor) CheckMemory() (current int64, limit int64, exceeded bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	if !m.enabled {
 		return 0, m.limitMB, false
 	}
-	
+
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
-	
+
 	// Convert bytes to MB
 	currentMB := int64(memStats.Alloc / 1024 / 1024)
-	
+
 	// Update peak usage
 	m.mu.RUnlock()
 	m.mu.Lock()
@@ -52,9 +52,9 @@ func (m *DefaultMemoryMonitor) CheckMemory() (current int64, limit int64, exceed
 	limit = m.limitMB
 	m.mu.Unlock()
 	m.mu.RLock()
-	
+
 	exceeded = currentMB > m.limitMB
-	
+
 	// Trigger callbacks if usage is high
 	if len(m.callbacks) > 0 {
 		usage := float64(currentMB) / float64(m.limitMB)
@@ -62,7 +62,7 @@ func (m *DefaultMemoryMonitor) CheckMemory() (current int64, limit int64, exceed
 			go callback(usage)
 		}
 	}
-	
+
 	return currentMB, limit, exceeded
 }
 
@@ -71,10 +71,10 @@ func (m *DefaultMemoryMonitor) SetLimit(limitMB int) error {
 	if limitMB <= 0 {
 		return fmt.Errorf("memory limit must be positive, got %d", limitMB)
 	}
-	
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.limitMB = int64(limitMB)
 	return nil
 }
@@ -82,16 +82,16 @@ func (m *DefaultMemoryMonitor) SetLimit(limitMB int) error {
 // GetStats returns memory usage statistics
 func (m *DefaultMemoryMonitor) GetStats() MemoryStats {
 	current, limit, _ := m.CheckMemory()
-	
+
 	m.mu.RLock()
 	peak := m.peakMB
 	m.mu.RUnlock()
-	
+
 	usage := float64(current) / float64(limit)
 	if limit == 0 {
 		usage = 0
 	}
-	
+
 	return MemoryStats{
 		CurrentMB: current,
 		LimitMB:   limit,
@@ -143,7 +143,7 @@ func NewBackpressureController(monitor MemoryMonitor) *BackpressureController {
 func (b *BackpressureController) ShouldPause() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	if b.paused {
 		// Check if we can resume
 		stats := b.monitor.GetStats()
@@ -157,7 +157,7 @@ func (b *BackpressureController) ShouldPause() bool {
 		}
 		return true
 	}
-	
+
 	// Check if we should pause
 	stats := b.monitor.GetStats()
 	if stats.Usage >= b.pauseThreshold {
@@ -168,7 +168,7 @@ func (b *BackpressureController) ShouldPause() bool {
 		b.mu.RLock()
 		return true
 	}
-	
+
 	return false
 }
 
@@ -188,10 +188,10 @@ func (b *BackpressureController) SetThresholds(pause, resume float64) error {
 	if pause < 0 || pause > 1 || resume < 0 || resume > 1 {
 		return fmt.Errorf("thresholds must be between 0 and 1")
 	}
-	
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	
+
 	b.pauseThreshold = pause
 	b.resumeThreshold = resume
 	return nil
@@ -201,7 +201,7 @@ func (b *BackpressureController) SetThresholds(pause, resume float64) error {
 func (b *BackpressureController) GetStatus() (paused bool, usage float64) {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	stats := b.monitor.GetStats()
 	return b.paused, stats.Usage
 }

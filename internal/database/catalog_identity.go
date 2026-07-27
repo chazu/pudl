@@ -52,7 +52,7 @@ func (c *CatalogDB) FindByResourceID(resourceID string) ([]CatalogEntry, error) 
 			&entry.RecordCount, &entry.SizeBytes, &entry.CollectionID, &entry.ItemIndex,
 			&entry.CollectionType, &entry.ItemID, &entry.ResourceID, &entry.ContentHash,
 			&entry.IdentityJSON, &entry.Version, &entry.EntryType, &entry.Target,
-		&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
+			&entry.RunID, &entry.Tags, &entry.Status, &entry.CreatedAt, &entry.UpdatedAt)
 		if err != nil {
 			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan entry", err)
 		}

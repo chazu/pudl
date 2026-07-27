@@ -24,7 +24,7 @@ func TestEnsureStatusColumn(t *testing.T) {
 		ID:              "status-test-001",
 		StoredPath:      filepath.Join(tmpDir, "test.json"),
 		MetadataPath:    filepath.Join(tmpDir, "test.meta"),
-		ImportTimestamp:  time.Now(),
+		ImportTimestamp: time.Now(),
 		Format:          "json",
 		Origin:          "test",
 		Schema:          "pudl/core.#Item",
@@ -65,14 +65,14 @@ func TestUpdateStatus_Valid(t *testing.T) {
 		ID:              "status-valid-001",
 		StoredPath:      "/test/data.json",
 		MetadataPath:    "/test/data.meta",
-		ImportTimestamp:  time.Now(),
+		ImportTimestamp: time.Now(),
 		Format:          "json",
 		Origin:          "test",
 		Schema:          "test.#App",
 		Confidence:      1.0,
 		RecordCount:     1,
 		SizeBytes:       50,
-		Target:      defNamePtr,
+		Target:          defNamePtr,
 		EntryType:       &entryType,
 	}
 	require.NoError(t, db.AddEntry(entry))
@@ -105,8 +105,8 @@ func TestPromoteConvergingToClean(t *testing.T) {
 		}))
 		require.NoError(t, db.UpdateStatus(def, status))
 	}
-	mk("a", "web", "converging") // this model, pending
-	mk("b", "api", "drifted")    // this model, not converging -> untouched
+	mk("a", "web", "converging")   // this model, pending
+	mk("b", "api", "drifted")      // this model, not converging -> untouched
 	mk("c", "other", "converging") // another model -> must NOT be promoted
 
 	n, err := db.PromoteConvergingToClean([]string{"web", "api", "absent"}, "mymodel")
@@ -199,8 +199,8 @@ func TestPromoteConvergingToCleanByModel(t *testing.T) {
 		}))
 		require.NoError(t, db.UpdateStatus(def, status))
 	}
-	mk("a", "Deployment/web", "mymodel", "converging") // this model, pending
-	mk("b", "Service/api", "mymodel", "drifted")       // this model, not converging -> untouched
+	mk("a", "Deployment/web", "mymodel", "converging")  // this model, pending
+	mk("b", "Service/api", "mymodel", "drifted")        // this model, not converging -> untouched
 	mk("c", "Deployment/x", "othermodel", "converging") // another model -> must NOT promote
 	mk("d", "untagged", "", "converging")               // untagged -> must NOT promote by model
 
@@ -256,14 +256,14 @@ func TestGetTargetStatuses(t *testing.T) {
 			ID:              fmt.Sprintf("def-status-%03d", i),
 			StoredPath:      fmt.Sprintf("/test/%s.json", d.name),
 			MetadataPath:    fmt.Sprintf("/test/%s.meta", d.name),
-			ImportTimestamp:  time.Now().Add(time.Duration(i) * time.Second),
+			ImportTimestamp: time.Now().Add(time.Duration(i) * time.Second),
 			Format:          "json",
 			Origin:          "test",
 			Schema:          "test.#App",
 			Confidence:      1.0,
 			RecordCount:     1,
 			SizeBytes:       50,
-			Target:      &defName,
+			Target:          &defName,
 			EntryType:       &entryType,
 		}
 		require.NoError(t, db.AddEntry(entry))

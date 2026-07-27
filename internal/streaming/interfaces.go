@@ -10,13 +10,13 @@ import (
 type StreamingParser interface {
 	// Parse processes an input stream and returns a channel of parsed chunks
 	Parse(ctx context.Context, reader io.Reader) (<-chan ParsedChunk, <-chan error)
-	
+
 	// Configure updates the parser configuration
 	Configure(config *StreamingConfig) error
-	
+
 	// Stats returns current parsing statistics
 	Stats() ParsingStats
-	
+
 	// Close releases any resources held by the parser
 	Close() error
 }
@@ -47,13 +47,13 @@ type ChunkProcessor interface {
 type SchemaDetector interface {
 	// AddSample adds a chunk sample for schema detection
 	AddSample(chunk *ProcessedChunk) error
-	
+
 	// DetectSchema returns the detected schema with confidence score
 	DetectSchema() (*SchemaDetection, error)
-	
+
 	// Reset clears all samples and starts fresh
 	Reset()
-	
+
 	// GetConfidence returns the current confidence level
 	GetConfidence() float64
 }
@@ -62,10 +62,10 @@ type SchemaDetector interface {
 type MemoryMonitor interface {
 	// CheckMemory returns current memory usage and whether limit is exceeded
 	CheckMemory() (current int64, limit int64, exceeded bool)
-	
+
 	// SetLimit updates the memory limit
 	SetLimit(limitMB int) error
-	
+
 	// GetStats returns memory usage statistics
 	GetStats() MemoryStats
 }
@@ -74,13 +74,13 @@ type MemoryMonitor interface {
 type ProgressReporter interface {
 	// Start begins progress reporting for an operation
 	Start(total int64, operation string)
-	
+
 	// Update reports progress with current position and optional message
 	Update(processed int64, message string)
-	
+
 	// Finish completes progress reporting with final result
 	Finish(result ProcessingResult)
-	
+
 	// Error reports an error during processing
 	Error(err error)
 }
@@ -97,13 +97,13 @@ type CDCChunk struct {
 
 // ProcessedChunk represents a chunk after format-specific processing
 type ProcessedChunk struct {
-	Original    *CDCChunk              // Original CDC chunk
-	Format      string                 // Detected format (json, csv, yaml, etc.)
-	Objects     []interface{}          // Parsed objects from the chunk
-	Metadata    map[string]interface{} // Extracted metadata
-	Errors      []error                // Any parsing errors encountered
-	Partial     bool                   // True if chunk contains partial objects
-	Boundaries  []int                  // Object boundaries within the chunk
+	Original   *CDCChunk              // Original CDC chunk
+	Format     string                 // Detected format (json, csv, yaml, etc.)
+	Objects    []interface{}          // Parsed objects from the chunk
+	Metadata   map[string]interface{} // Extracted metadata
+	Errors     []error                // Any parsing errors encountered
+	Partial    bool                   // True if chunk contains partial objects
+	Boundaries []int                  // Object boundaries within the chunk
 }
 
 // SchemaDetection represents the result of schema detection
@@ -159,20 +159,20 @@ type ParsedChunk struct {
 	// Core data
 	Objects  []interface{}          // Parsed objects
 	Metadata map[string]interface{} // Chunk metadata
-	
+
 	// Processing info
-	Format     string    // Data format
-	Schema     string    // Detected schema
-	Confidence float64   // Schema confidence
-	
+	Format     string  // Data format
+	Schema     string  // Detected schema
+	Confidence float64 // Schema confidence
+
 	// Source info
 	Offset   int64     // Original offset
 	Size     int       // Chunk size
 	Hash     string    // Content hash
 	Sequence int       // Sequence number
 	Time     time.Time // Processing time
-	
+
 	// Error info
-	Errors   []error // Any errors encountered
+	Errors   []error  // Any errors encountered
 	Warnings []string // Any warnings
 }
