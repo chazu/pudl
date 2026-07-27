@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -50,14 +48,12 @@ func (w *reconcileWorkspace) applyConverge() ([]byte, error) {
 // promoteConvergingResources -> CatalogDB.PromoteConvergingToCleanByModel. This
 // is what wires `pudl run --converge`'s apply into the per-resource lifecycle —
 // without it, only the model-level verdict is recorded.
-func ingestConvergeManifest(modelName, runID string, manifestJSON []byte) error {
-	pudlDir := config.GetPudlDir()
-	db, err := database.NewCatalogDB(pudlDir)
+func ingestConvergeManifest(cat *runCatalog, modelName, runID string, manifestJSON []byte) error {
+	db, err := cat.optional()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
-	_, err = mubridge.IngestManifestWithRunID(db, bytes.NewReader(manifestJSON), "mu-build", pudlDir, modelName, runID)
+	_, err = mubridge.IngestManifestWithRunID(db, bytes.NewReader(manifestJSON), "mu-build", cat.Dir(), modelName, runID)
 	return err
 }
 
@@ -103,8 +99,8 @@ func (e *muConvergeExecutor) Apply() ([]byte, error) {
 //
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
-func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool) (*ConvergeReport, error) {
-	w, err := setupReconcileWorkspace(m, muRoot, modelDir, runID, dryRun)
+func runConvergeLoop(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool) (*ConvergeReport, error) {
+	w, err := setupReconcileWorkspace(cat, m, muRoot, modelDir, runID, dryRun)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +112,7 @@ func runConvergeLoop(m *systemmodel.SystemModel, muRoot, modelDir, runID string,
 		MaxIterations: maxIters,
 		DryRun:        dryRun,
 		RecordManifest: func(manifest []byte) error {
-			return ingestConvergeManifest(m.Name, runID, manifest)
+			return ingestConvergeManifest(cat, m.Name, runID, manifest)
 		},
 		OnObserve: func(observation acute.Observation) {
 			if !live {

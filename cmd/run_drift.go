@@ -11,7 +11,6 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -146,14 +145,18 @@ type reconcileWorkspace struct {
 	RunID string
 	// DryRun suppresses the observation write, since --dry-run promises no
 	// catalog mutation.
-	DryRun  bool
+	DryRun bool
+	// Catalog is the run's handle, borrowed to record each observation. The
+	// workspace does not own it and must not close it: the same handle outlives
+	// every iteration of the converge loop that observes through here.
+	Catalog *runCatalog
 	Cleanup func()
 }
 
 // setupReconcileWorkspace renders the desired manifests + mu.cue into a
 // non-hidden temp subdir under muRoot (so mu merges it and inherits the project's
 // toolchains/cache).
-func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir, runID string, dryRun bool) (*reconcileWorkspace, error) {
+func setupReconcileWorkspace(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string, dryRun bool) (*reconcileWorkspace, error) {
 	if len(m.Desired) == 0 {
 		return nil, fmt.Errorf("reconcile needs desired state; model %q declares none", m.Name)
 	}
@@ -189,6 +192,7 @@ func setupReconcileWorkspace(m *systemmodel.SystemModel, muRoot, modelDir, runID
 		Target:  driftTargetName(m.Name),
 		RunID:   runID,
 		DryRun:  dryRun,
+		Catalog: cat,
 		Cleanup: cleanup,
 	}, nil
 }
@@ -210,7 +214,7 @@ func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
 	// Persist the observation this verdict came from. Without it a `clean` claim
 	// rests on a value that only ever existed in memory, and the promotion it
 	// drives cannot be audited afterwards.
-	res.ObservationID = recordDriftObservation(w.Target, w.RunID, w.DryRun, res, stdout.Bytes())
+	res.ObservationID = recordDriftObservation(w.Catalog, w.Target, w.RunID, w.DryRun, res, stdout.Bytes())
 	return res, nil
 }
 
@@ -220,7 +224,7 @@ func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
 // and it leaves ObservationID empty rather than implying evidence exists.
 //
 // A dry run stores nothing, because --dry-run promises no catalog writes.
-func recordDriftObservation(target, runID string, dryRun bool, res ModelDriftResult, raw []byte) string {
+func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, res ModelDriftResult, raw []byte) string {
 	if dryRun {
 		return ""
 	}
@@ -231,14 +235,13 @@ func recordDriftObservation(target, runID string, dryRun bool, res ModelDriftRes
 		}
 		return ""
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := cat.optional()
 	if err != nil {
 		if !jsonOutput {
 			fmt.Printf("warning: could not open catalog to record the observation: %v\n", err)
 		}
 		return ""
 	}
-	defer db.Close()
 
 	drifted := make([]map[string]any, 0, len(res.Drifted))
 	for _, d := range res.Drifted {
@@ -267,8 +270,8 @@ func recordDriftObservation(target, runID string, dryRun bool, res ModelDriftRes
 
 // runDrift is the read-only drift phase (observe-only on a convergent model):
 // set up the workspace, observe once, report.
-func runDrift(m *systemmodel.SystemModel, muRoot, modelDir, runID string) (ModelDriftResult, error) {
-	w, err := setupReconcileWorkspace(m, muRoot, modelDir, runID, false)
+func runDrift(cat *runCatalog, m *systemmodel.SystemModel, muRoot, modelDir, runID string) (ModelDriftResult, error) {
+	w, err := setupReconcileWorkspace(cat, m, muRoot, modelDir, runID, false)
 	if err != nil {
 		return ModelDriftResult{}, err
 	}

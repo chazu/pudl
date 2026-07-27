@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -59,15 +58,14 @@ func ruleSearchPaths(modelDir string) []string {
 // runChecks evaluates each of the model's checks (a Datalog relation over the
 // catalog) and returns the per-check verdicts. Rules are loaded from the standard
 // pudl paths plus the model's rules/ subdir.
-func runChecks(m *systemmodel.SystemModel, modelDir string) ([]CheckResult, error) {
+func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string) ([]CheckResult, error) {
 	if len(m.Checks) == 0 {
 		return nil, nil
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := cat.required()
 	if err != nil {
-		return nil, fmt.Errorf("open catalog: %w", err)
+		return nil, err
 	}
-	defer db.Close()
 
 	rules, err := datalog.LoadRulesFromPaths(ruleSearchPaths(modelDir)...)
 	if err != nil {

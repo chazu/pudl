@@ -215,7 +215,12 @@ func TestScopedCleanRun_ModelRowUnknown_RunRowKeepsVerdict(t *testing.T) {
 	flags := runFlags{converge: true, only: []string{"web"}, maxIters: 5, onlySet: true}
 	report := &RunReport{Converge: &ConvergeReport{Outcome: "clean"}}
 
-	startRunRecord(runID, "mymodel", "converge", false)
+	// One handle for the whole run, as `pudl run` itself does — the status write
+	// and both halves of the run record go through it.
+	cat := newRunCatalog(config.GetPudlDir())
+	defer cat.Close()
+
+	startRunRecord(cat, runID, "mymodel", "converge", false)
 	verdict := runVerdict(report, flags)
 	require.Equal(t, "clean", verdict, "the run itself did reach ∅ over its scope")
 
@@ -226,8 +231,8 @@ func TestScopedCleanRun_ModelRowUnknown_RunRowKeepsVerdict(t *testing.T) {
 		state.note = fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
 			verdict, strings.Join(flags.only, ","), rowVerdict)
 	}
-	persistRunStatus("mymodel", rowVerdict, false)
-	finishRunRecord(runID, state, nil, false)
+	persistRunStatus(cat, "mymodel", rowVerdict, false)
+	finishRunRecord(cat, runID, state, nil, false)
 
 	db2, err := database.NewCatalogDB(config.GetPudlDir())
 	require.NoError(t, err)
@@ -268,7 +273,9 @@ func TestUnscopedCleanRun_ModelRowClean(t *testing.T) {
 
 	flags := runFlags{converge: true, maxIters: 5}
 	verdict := runVerdict(&RunReport{Converge: &ConvergeReport{Outcome: "clean"}}, flags)
-	persistRunStatus("mymodel", modelRowVerdict(verdict, len(flags.only) > 0), false)
+	cat := newRunCatalog(config.GetPudlDir())
+	defer cat.Close()
+	persistRunStatus(cat, "mymodel", modelRowVerdict(verdict, len(flags.only) > 0), false)
 
 	db2, err := database.NewCatalogDB(config.GetPudlDir())
 	require.NoError(t, err)
