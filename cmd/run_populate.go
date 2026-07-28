@@ -115,6 +115,10 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 		// Self-staged; no external mu root needed (works for project + global).
 		return runEwePopulate(cat, mu, m, modelDir, pudlRoot, runID, snapshotID0)
 	}
+	pluginSource := resolveObservePluginSource(m, modelDir, muRoot)
+	if err := ensureObservePluginAvailable(pluginSource); err != nil {
+		return nil, err
+	}
 
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
@@ -145,6 +149,7 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 		runID:      runID,
 		model:      m.Name,
 		source:     database.SnapshotSourceMuObserve,
+		plugin:     pluginSource,
 	})
 	if err != nil {
 		return nil, err
@@ -335,16 +340,22 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	if err != nil {
 		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}
+	mappings, err := loadObservePluginMetadataFor(in.plugin, inferrer.GetInheritanceGraph())
+	if err != nil {
+		return 0, "", err
+	}
 	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
-		Reader:     bytes.NewReader(observeJSON),
-		DataDir:    cfg.DataPath,
-		Graph:      inferrer.GetInheritanceGraph(),
-		SnapshotID: in.snapshotID,
-		RunID:      in.runID,
-		Model:      in.model,
-		Workspace:  effectiveWorkspaceName(),
-		Origin:     "pudl-run",
-		Source:     in.source,
+		Reader:         bytes.NewReader(observeJSON),
+		DataDir:        cfg.DataPath,
+		Graph:          inferrer.GetInheritanceGraph(),
+		Inferrer:       inferrer,
+		SchemaMappings: mappings,
+		SnapshotID:     in.snapshotID,
+		RunID:          in.runID,
+		Model:          in.model,
+		Workspace:      effectiveWorkspaceName(),
+		Origin:         "pudl-run",
+		Source:         in.source,
 	})
 	return result.Records, result.SnapshotID, err
 }
@@ -355,4 +366,20 @@ type populateIngest struct {
 	runID      string
 	model      string
 	source     string
+	plugin     observePluginRef
+}
+
+func localPluginDir(m *systemmodel.SystemModel, modelDir string) string {
+	if m == nil {
+		return ""
+	}
+	def, ok := m.PluginByName(m.Populate.Plugin)
+	if !ok || def.Script == "" {
+		return ""
+	}
+	script := def.Script
+	if !filepath.IsAbs(script) {
+		script = filepath.Join(modelDir, script)
+	}
+	return filepath.Dir(script)
 }

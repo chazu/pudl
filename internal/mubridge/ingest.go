@@ -44,6 +44,14 @@ type ObserveIngest struct {
 	Reader  io.Reader
 	DataDir string
 	Graph   *inference.InheritanceGraph
+	// SchemaMappings maps plugin-declared _schema resource types to validated
+	// PUDL semantic schemas. It takes precedence over the legacy naming
+	// convention when present.
+	SchemaMappings map[string]string
+	// Inferrer is used when a plugin-declared resource type cannot be mapped to
+	// a loaded schema name. The declared resource type remains a strong hint,
+	// but inference is the safe fallback instead of persisting a dangling ref.
+	Inferrer *inference.SchemaInferrer
 
 	// SnapshotID is allocated by the run before it observes, so a failed ingest
 	// can still be named. Generated here when empty (the standalone
@@ -162,8 +170,8 @@ func IngestObserve(db *database.CatalogDB, in ObserveIngest) (ObserveIngestResul
 
 		for _, rec := range records {
 			allRecords = append(allRecords, targetRecord{record: rec, target: target})
-			if s, ok := rec["_schema"].(string); ok {
-				schemaCounts[resourceTypeToSchema(s)]++
+			if _, ok := rec["_schema"].(string); ok {
+				schemaCounts[resolveObserveSchemaWithMappings(rec, in.Graph, in.Inferrer, in.SchemaMappings)]++
 			} else {
 				schemaCounts["pudl/mu.#ObserveResult"]++
 			}
@@ -208,7 +216,7 @@ func IngestObserve(db *database.CatalogDB, in ObserveIngest) (ObserveIngestResul
 
 		ingested = 0
 		for i, tr := range allRecords {
-			n, err := ingestObserveRecord(tx, tr.record, tr.target, origin, rawDir, now, i, in.SnapshotID, in.Graph, runID)
+			n, err := ingestObserveRecord(tx, tr.record, tr.target, origin, rawDir, now, i, in.SnapshotID, in.Graph, in.Inferrer, in.SchemaMappings, runID)
 			if err != nil {
 				return err
 			}
@@ -342,13 +350,12 @@ func ingestObserveRecord(
 	index int,
 	collectionID string,
 	graph *inference.InheritanceGraph,
+	inferrer *inference.SchemaInferrer,
+	schemaMappings map[string]string,
 	runID string,
 ) (int, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
-	schema := "pudl/mu.#ObserveResult"
-	if declaredSchema, ok := record["_schema"].(string); ok && declaredSchema != "" {
-		schema = resourceTypeToSchema(declaredSchema)
-	}
+	schema := resolveObserveSchemaWithMappings(record, graph, inferrer, schemaMappings)
 
 	// Compute content hash from the canonical JSON of the record.
 	recordJSON, err := json.Marshal(record)
@@ -448,25 +455,94 @@ func ingestObserveRecord(
 	return 1, nil
 }
 
-// resourceTypeToSchema converts a _schema resource type like "linux.host" to a
-// pudl schema path like "pudl/linux.#Host".
+const genericObserveSchema = "pudl/mu.#ObserveResult"
+
+// resolveObserveSchema turns a plugin-declared resource type into a schema
+// reference only when that reference exists in the current schema namespace.
+// If the naming convention does not identify a loaded schema, the inferrer gets
+// one chance to resolve the declared resource type by _pudl.resource_type;
+// otherwise the record is safely classified as the generic observe result.
+func resolveObserveSchema(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer) string {
+	return resolveObserveSchemaWithMappings(record, graph, inferrer, nil)
+}
+
+// resolveObserveSchemaWithMappings prefers an explicit plugin mapping over
+// the historical resource-type-to-CUE-name convention. Invalid mappings are
+// not persisted: callers validate package metadata before ingest, while this
+// function still falls back safely for library callers that bypass validation.
+func resolveObserveSchemaWithMappings(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer, schemaMappings map[string]string) string {
+	declared, ok := record["_schema"].(string)
+	if !ok || declared == "" {
+		return genericObserveSchema
+	}
+	if mapped, exists := schemaMappings[declared]; exists && graph != nil && graph.HasSchema(mapped) {
+		return mapped
+	}
+
+	candidate := resourceTypeToSchema(declared)
+	// A nil graph means there is no loaded schema namespace to validate against.
+	// Accepting the naming-convention candidate in that case would recreate the
+	// original dangling-reference bug for library callers that omit schema
+	// context. The CLI always supplies the graph built from its active schema
+	// repository.
+	if graph != nil && graph.HasSchema(candidate) {
+		return candidate
+	}
+
+	if inferrer != nil {
+		result, err := inferrer.Infer(record, inference.InferenceHints{
+			DeclaredSchema: declared,
+			CollectionType: "item",
+		})
+		if err == nil && result != nil && result.Schema != "" {
+			return result.Schema
+		}
+	}
+	return genericObserveSchema
+}
+
+// resourceTypeToSchema converts a _schema resource type like "linux.host" to
+// a pudl schema path like "pudl/linux.#Host". The final resource component is
+// used because provider namespaces may contain dots (for example
+// "aws.ec2.vpc"). Known initialisms preserve the spelling used by CUE
+// definitions such as #VPC, #EC2Instance, and #NATGateway.
 func resourceTypeToSchema(resourceType string) string {
-	parts := strings.SplitN(resourceType, ".", 2)
-	if len(parts) != 2 {
-		return "pudl/mu.#ObserveResult"
+	parts := strings.Split(resourceType, ".")
+	if len(parts) < 2 {
+		return genericObserveSchema
 	}
 	pkg := parts[0]
-	name := parts[1]
-	if len(name) > 0 {
-		name = strings.ToUpper(name[:1]) + name[1:]
-	}
-	// Handle underscored names: "network_interface" -> "NetworkInterface"
-	for {
-		idx := strings.Index(name, "_")
-		if idx < 0 || idx >= len(name)-1 {
-			break
-		}
-		name = name[:idx] + strings.ToUpper(name[idx+1:idx+2]) + name[idx+2:]
+	name := pascalResourceName(parts[len(parts)-1])
+	if name == "" {
+		return genericObserveSchema
 	}
 	return fmt.Sprintf("pudl/%s.#%s", pkg, name)
+}
+
+var resourceInitialisms = map[string]string{
+	"acl": "ACL", "api": "API", "arn": "ARN", "aws": "AWS",
+	"cidr": "CIDR", "dns": "DNS", "ec2": "EC2", "gcp": "GCP",
+	"http": "HTTP", "https": "HTTPS", "iam": "IAM", "id": "ID",
+	"ip": "IP", "json": "JSON", "k8s": "K8s", "nat": "NAT",
+	"rds": "RDS", "ssh": "SSH", "tcp": "TCP", "tls": "TLS",
+	"udp": "UDP", "uid": "UID", "uri": "URI", "url": "URL",
+	"vpc": "VPC", "yaml": "YAML",
+}
+
+func pascalResourceName(raw string) string {
+	parts := strings.FieldsFunc(raw, func(r rune) bool { return r == '_' || r == '-' })
+	var b strings.Builder
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if initialism, ok := resourceInitialisms[strings.ToLower(part)]; ok {
+			b.WriteString(initialism)
+			continue
+		}
+		runes := []rune(part)
+		b.WriteString(strings.ToUpper(string(runes[0])))
+		b.WriteString(string(runes[1:]))
+	}
+	return b.String()
 }
