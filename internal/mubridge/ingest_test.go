@@ -1,6 +1,7 @@
 package mubridge
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 func setupIngestTestDB(t *testing.T) (*database.CatalogDB, string) {
@@ -102,6 +105,10 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 	db, dataDir := setupIngestTestDB(t)
 	defer db.Close()
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/linux.#Host":    {ResourceType: "linux.host"},
+		"pudl/linux.#Service": {ResourceType: "linux.service"},
+	})
 
 	input := `[
 		{
@@ -115,7 +122,7 @@ func TestIngestObserveResults_SchemaRouting(t *testing.T) {
 		}
 	]`
 
-	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
+	countResult, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: graph})
 	count := countResult.Records
 	if err != nil {
 		t.Fatalf("IngestObserveResults failed: %v", err)
@@ -356,7 +363,10 @@ func TestResourceTypeToSchema(t *testing.T) {
 		{"linux.service", "pudl/linux.#Service"},
 		{"linux.filesystem", "pudl/linux.#Filesystem"},
 		{"linux.user", "pudl/linux.#User"},
-		{"aws.ec2_instance", "pudl/aws.#Ec2Instance"},
+		{"aws.ec2.instance", "pudl/aws.#Instance"},
+		{"aws.ec2.vpc", "pudl/aws.#VPC"},
+		{"aws.ec2.nat_gateway", "pudl/aws.#NATGateway"},
+		{"aws.ec2.network_acl", "pudl/aws.#NetworkACL"},
 		{"unknown", "pudl/mu.#ObserveResult"}, // no dot separator
 	}
 
@@ -366,4 +376,133 @@ func TestResourceTypeToSchema(t *testing.T) {
 			t.Errorf("resourceTypeToSchema(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
+}
+
+func TestResolveObserveSchemaRequiresLoadedSchema(t *testing.T) {
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/linux.#Host": {ResourceType: "linux.host"},
+	})
+
+	assert.Equal(t, "pudl/linux.#Host", resolveObserveSchema(
+		map[string]any{"_schema": "linux.host"}, graph, nil,
+	))
+	assert.Equal(t, genericObserveSchema, resolveObserveSchema(
+		map[string]any{"_schema": "aws.ec2.vpc"}, graph, nil,
+	))
+	assert.Equal(t, genericObserveSchema, resolveObserveSchema(
+		map[string]any{"_schema": "not-a-resource"}, graph, nil,
+	))
+	assert.Equal(t, genericObserveSchema, resolveObserveSchema(
+		map[string]any{"_schema": "linux.host"}, nil, nil,
+	), "a missing schema graph must not create a dangling ref")
+}
+
+func TestIngestObserveResults_KubernetesInventorySchema(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/k8s.#Resource": {ResourceType: "k8s.resource"},
+	})
+	input := `[{"target":"//cluster","current":{"records":[{
+		"_schema":"k8s.resource",
+		"apiVersion":"v1",
+		"kind":"Pod",
+		"metadata":{"name":"web","namespace":"default"},
+		"spec":{"containers":[{"name":"web","image":"example/web:1"}]}
+	}]}}]`
+
+	result, err := IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), Origin: "mu-k8s-inventory", DataDir: dataDir, Graph: graph,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Records)
+
+	entries, err := db.QueryEntries(
+		database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"},
+		database.QueryOptions{Limit: 10},
+	)
+	require.NoError(t, err)
+	require.Len(t, entries.Entries, 1)
+	assert.Equal(t, "pudl/k8s.#Resource", entries.Entries[0].Schema)
+}
+
+func TestIngestObserveResults_AWSInstanceSchema(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/aws.#Instance": {ResourceType: "aws.ec2.instance"},
+	})
+	input := `[{"target":"//aws","current":{"records":[{
+		"_schema":"aws.ec2.instance",
+		"instance_id":"i-123",
+		"instance_type":"t3.micro",
+		"state":"running",
+		"tags":[],
+		"security_groups":[]
+	}]}}]`
+
+	result, err := IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), Origin: "mu-aws", DataDir: dataDir, Graph: graph,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Records)
+
+	entries, err := db.QueryEntries(
+		database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"},
+		database.QueryOptions{Limit: 10},
+	)
+	require.NoError(t, err)
+	require.Len(t, entries.Entries, 1)
+	assert.Equal(t, "pudl/aws.#Instance", entries.Entries[0].Schema)
+}
+
+func TestIngestObserveResults_ExplicitPluginMappingOverridesNamingConvention(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/aws.#VPC":           {ResourceType: "aws.ec2.vpc"},
+		"pudl/custom.#AwsNetwork": {ResourceType: "aws.ec2.vpc"},
+	})
+	input := `[{"target":"//aws","current":{"records":[{"_schema":"aws.ec2.vpc","vpc_id":"vpc-123","cidr_block":"10.0.0.0/16","state":"available","is_default":false,"tags":[],"instance_tenancy":"default"}]}}]`
+	result, err := IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), Origin: "mu-aws", DataDir: dataDir, Graph: graph,
+		SchemaMappings: map[string]string{"aws.ec2.vpc": "pudl/custom.#AwsNetwork"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Records)
+
+	entries, err := db.QueryEntries(database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}, database.QueryOptions{Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, entries.Entries, 1)
+	assert.Equal(t, "pudl/custom.#AwsNetwork", entries.Entries[0].Schema)
+}
+
+func TestResolveObserveSchemaUsesInferenceForUnknownResourceType(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cue.mod"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cue.mod", "module.cue"), []byte("module: \"test.schemas\"\nlanguage: version: \"v0.14.0\"\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "schemas"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "schemas", "custom.cue"), []byte(`package schemas
+
+#Thing: {
+	_pudl: {
+		schema_type: "base"
+		resource_type: "provider.custom"
+		identity_fields: ["name"]
+	}
+	name: string
+	...
+}
+`), 0o644))
+
+	inferrer, err := inference.NewSchemaInferrer(dir)
+	require.NoError(t, err)
+	got := resolveObserveSchema(map[string]any{
+		"_schema": "provider.custom",
+		"name":    "thing-1",
+	}, inferrer.GetInheritanceGraph(), inferrer)
+	assert.Equal(t, "schemas.#Thing", got)
 }

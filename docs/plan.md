@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Swamp parity utility/UX slices (2026-07-27)
+
+Done — see [`docs/design/2026-07-27-swamp-parity-roadmap.md`](design/2026-07-27-swamp-parity-roadmap.md)
+and [`implog/2026_07_27_swamp_parity_slices.md`](../implog/2026_07_27_swamp_parity_slices.md).
+PUDL now has scaffold-first model/rule/populator commands, ad-hoc observe-only
+plugin runs, machine-readable help/model descriptions, durable run reports,
+request-level converge approvals with resume/reject, troubleshooting/memory
+guides, and an advisory raw-infrastructure hook. Mu's Kubernetes plugin has an
+explicit typed inventory observe mode. Observe ingestion now refuses dangling
+schema refs and falls back safely to inference or the generic observe schema.
+Cross-model value wiring remains the next design boundary.
+
 ### Adversarial review closure (2026-07-14)
 
 - `pudl run --converge --only` now validates exact resource selectors before
@@ -70,6 +82,9 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - `pudl mu ingest-observe` records timestamped observe snapshots
 - `pudl mu ingest-manifest` records per-action convergence results
 - `pudl run --converge` renders desired state and delegates execution to mu
+- Catalog-installed digest plugins synchronize package-owned `mu/...` schemas
+  and validate PUDL mappings automatically; missing bundles report the exact
+  `mu plugin install NAME[@VERSION]` repair command.
 
 ### ACUTE Feedback Loop
 - `pudl ingest-observe` — ingest mu observe results as live state for drift detection

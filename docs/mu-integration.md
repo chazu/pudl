@@ -10,9 +10,9 @@ The two tools collaborate in two directions:
   data flows into pudl's catalog, optionally tagged with a CUE schema
   reference declared by the plugin.
 
-There is no code-level dependency between the two binaries — they
-communicate through files (rendered sources, plugin output, schema sidecars)
-that either side can author independently.
+There is no Go-package dependency between the two binaries — they communicate
+through files (rendered sources, plugin output, plugin package metadata, and
+schema sidecars) that either side can author independently.
 
 ## Direction 1: drift convergence (pudl → mu)
 
@@ -197,3 +197,40 @@ in the mu repo for the full design.
 
 If you're writing a mu plugin and want pudl to type-classify your
 output, see `mu/docs/plugin-output-schemas.md`.
+
+### Plugin package schemas and mappings
+
+An installed/local plugin can carry two kinds of metadata:
+
+```text
+mu.cue       plugin manifest, including schemas: [{module, version, path}]
+pudl.cue     resource_type → PUDL semantic schema mappings
+schemas/...  plugin-owned wire/output CUE definitions
+```
+
+The plugin owns the `mu/...` wire namespace. PUDL owns the `pudl/...` semantic
+namespace, so installing a plugin never replaces PUDL's catalog schemas. The
+mapping is classification metadata: it connects a record's `_schema` value to
+the semantic schema even when the wire fields and catalog fields differ.
+
+For a local plugin package, standalone ingest can synchronize and validate this
+metadata explicitly:
+
+```bash
+pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json
+```
+
+`pudl run` performs the same synchronization automatically for both local
+`script` plugins and catalog-installed digest plugins. Catalog installation
+records the package metadata in `mu.lock` and writes `mu-plugin.json` into the
+extracted bundle under `~/.mu/plugins/<name>/bundle-<digest>/`; PUDL reads that
+metadata without importing mu or re-fetching the source package.
+
+The package-owned schemas are copied into PUDL's append-only `muschemas` cache,
+while the mappings are checked against the loaded `pudl/...` inheritance graph
+before records are ingested. If a model refers to a missing digest bundle,
+PUDL stops before invoking mu and reports the exact repair command, for example:
+
+```text
+mu plugin "aws@0.1.0" is not available: ...; run `mu plugin install aws@0.1.0`
+```
