@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // identityNamespace returns the schema used to namespace resource identity:
@@ -475,8 +476,11 @@ func resolveObserveSchemaWithMappings(record map[string]any, graph *inference.In
 	if !ok || declared == "" {
 		return genericObserveSchema
 	}
-	if mapped, exists := schemaMappings[declared]; exists && graph != nil && graph.HasSchema(mapped) {
-		return mapped
+	if mapped, exists := schemaMappings[declared]; exists && graph != nil {
+		mapped = schemaname.Normalize(mapped)
+		if graph.HasSchema(mapped) {
+			return mapped
+		}
 	}
 
 	candidate := resourceTypeToSchema(declared)

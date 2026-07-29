@@ -36,7 +36,15 @@ package mu
 
 // ManifestAction records the outcome of a single action in a build.
 #ManifestAction: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "mu.manifest_action"
+		identity_fields: ["id"]
+		tracked_fields:  ["target", "cached", "exit_code", "outputs"]
+	}
+
 	id:        string
+	target?:   string
 	cached:    bool
 	exit_code: int
 	outputs: {[string]: string} | *{}
@@ -76,6 +84,7 @@ package mu
 	snapshot_id:  string             // timestamp-based ID
 	timestamp:    string             // ISO 8601
 	origin:       string             // e.g. "mu-observe"
+	run_id?:      string             // enclosing pudl run, when available
 	targets:      [...string]        // targets that were observed
 	record_count: int & >=0          // total records across all targets
 	schema_summary: [...{            // distribution of _schema types
@@ -86,6 +95,28 @@ package mu
 		target: string
 		error:  string
 	}]
+}
+
+// DriftObservation is the durable evidence behind a differential observe
+// verdict. The drift payloads are intentionally open: provider plugins own
+// their resource details, while this envelope is the stable PUDL contract.
+#DriftObservation: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "mu.drift_observation"
+		identity_fields: ["observation_id"]
+		tracked_fields:  ["target", "clean", "drifted_count", "drifted"]
+	}
+
+	observation_id: string
+	timestamp:      string
+	origin:         string
+	target:         string
+	run_id?:        string
+	clean:          bool
+	drifted_count:  int & >=0
+	drifted?:       [...{...}]
+	raw?:           [...]
 }
 
 // PlanOutput represents the output of `mu build --plan --json`.
@@ -180,4 +211,3 @@ package mu
 	// Open: tolerate forward-compatible fields mu may add to a target.
 	...
 }
-

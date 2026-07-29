@@ -19,6 +19,30 @@ package aws
 	...
 }
 
+// Instance represents an EC2 virtual machine.
+// Data source: aws ec2 describe-instances
+#Instance: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "aws.ec2.instance"
+		identity_fields: ["instance_id"]
+		tracked_fields:  ["instance_type", "state", "vpc_id", "subnet_id", "private_ip", "public_ip", "image_id", "tags", "security_groups", "iam_profile"]
+	}
+
+	instance_id:     string
+	instance_type:   string
+	state:           string
+	vpc_id?:         string | null
+	subnet_id?:      string | null
+	private_ip?:     string | null
+	public_ip?:      string | null
+	image_id?:       string | null
+	tags:            [...#Tag]
+	security_groups: [...string]
+	iam_profile?:    string | null
+	...
+}
+
 // VPC represents an AWS Virtual Private Cloud.
 // Data source: aws ec2 describe-vpcs
 #VPC: {

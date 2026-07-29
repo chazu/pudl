@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // ValidationService handles CUE validation for data validation workflows
@@ -33,26 +34,39 @@ func NewValidationService(schemaPaths ...string) (*ValidationService, error) {
 
 // ValidateDataAgainstSchema validates data against a specific schema using CUE
 func (vs *ValidationService) ValidateDataAgainstSchema(data interface{}, schemaName string) *ServiceValidationResult {
-	result, err := vs.chainValidator.ValidateChain(data, schemaName)
-	if err != nil {
+	canonicalSchema := schemaname.Normalize(schemaName)
+	if !vs.chainValidator.HasSchema(canonicalSchema) {
 		return &ServiceValidationResult{
-			Valid:        false,
-			SchemaName:   schemaName,
-			ErrorMessage: fmt.Sprintf("Validation system error: %v", err),
-			Errors:       []string{err.Error()},
+			Valid:           false,
+			SchemaName:      canonicalSchema,
+			ErrorMessage:    fmt.Sprintf("schema %s is not loaded", canonicalSchema),
+			Errors:          []string{fmt.Sprintf("schema %s is not loaded", canonicalSchema)},
+			SchemaAvailable: false,
 		}
 	}
 
-	return vs.convertResult(result, schemaName)
+	result, err := vs.chainValidator.ValidateChain(data, schemaName)
+	if err != nil {
+		return &ServiceValidationResult{
+			Valid:           false,
+			SchemaName:      canonicalSchema,
+			ErrorMessage:    fmt.Sprintf("Validation system error: %v", err),
+			Errors:          []string{err.Error()},
+			SchemaAvailable: true,
+		}
+	}
+
+	return vs.convertResult(result, canonicalSchema)
 }
 
 // convertResult converts a validation result to a service validation result
 func (vs *ValidationService) convertResult(vr *ValidationResult, intendedSchema string) *ServiceValidationResult {
 	result := &ServiceValidationResult{
-		SchemaName:     intendedSchema,
-		AssignedSchema: vr.AssignedSchema,
-		Valid:          vr.Valid,
-		FallbackReason: vr.FallbackReason,
+		SchemaName:      intendedSchema,
+		AssignedSchema:  vr.AssignedSchema,
+		Valid:           vr.Valid,
+		FallbackReason:  vr.FallbackReason,
+		SchemaAvailable: true,
 	}
 
 	if !vr.Valid {
@@ -139,13 +153,14 @@ func (vs *ValidationService) GetValidationSummary(result *ServiceValidationResul
 
 // ServiceValidationResult represents the result of validating data against a schema
 type ServiceValidationResult struct {
-	Valid          bool                  `json:"valid"`
-	SchemaName     string                `json:"schema_name"`
-	AssignedSchema string                `json:"assigned_schema"`
-	ErrorMessage   string                `json:"error_message"`
-	Errors         []string              `json:"errors"`
-	FallbackReason string                `json:"fallback_reason"`
-	ChainAttempts  []ServiceChainAttempt `json:"chain_attempts"`
+	Valid           bool                  `json:"valid"`
+	SchemaName      string                `json:"schema_name"`
+	AssignedSchema  string                `json:"assigned_schema"`
+	SchemaAvailable bool                  `json:"schema_available"`
+	ErrorMessage    string                `json:"error_message"`
+	Errors          []string              `json:"errors"`
+	FallbackReason  string                `json:"fallback_reason"`
+	ChainAttempts   []ServiceChainAttempt `json:"chain_attempts"`
 }
 
 // ServiceChainAttempt represents a single validation attempt

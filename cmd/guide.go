@@ -42,14 +42,16 @@ Run 'pudl guide <topic>' to read a specific guide.`,
 }
 
 var guideTopics = map[string]func(){
-	"overview": printGuideOverview,
-	"import":   printGuideImport,
-	"schemas":  printGuideSchemas,
-	"facts":    printGuideFacts,
-	"datalog":  printGuideDatalog,
-	"models":   printGuideModels,
-	"mu":       printGuideMu,
-	"agents":   printGuideAgents,
+	"overview":        printGuideOverview,
+	"import":          printGuideImport,
+	"schemas":         printGuideSchemas,
+	"facts":           printGuideFacts,
+	"datalog":         printGuideDatalog,
+	"models":          printGuideModels,
+	"mu":              printGuideMu,
+	"agents":          printGuideAgents,
+	"troubleshooting": printGuideTroubleshooting,
+	"memory":          printGuideMemory,
 }
 
 func init() {
@@ -81,6 +83,8 @@ Convergence:
 For agents:
 
   pudl guide agents         Conventions, best practices, and tips for AI agents
+  pudl guide troubleshooting Common failure modes and recovery commands
+  pudl guide memory          The facts/memory loop and hook integration
 `)
 }
 
@@ -504,6 +508,17 @@ WHAT A MODEL DECLARES
   Register with 'pudl schema add'; resolve and run it by name (its 'name'
   field or short definition name).
 
+SCAFFOLD FIRST
+
+  pudl model new pods --populate plugin:k8s --input namespace=default
+  pudl model describe pods --json
+  pudl run --populate plugin:k8s --input inventory='{"kinds":["pods"]}'
+
+  The ad-hoc form writes no model definition and is observe-only. For a durable
+  model, edit the path printed by 'model new' rather than authoring registration
+  boilerplate by hand. Use 'pudl run report [run-id]' after a run; use
+  '--require-approval' plus 'run resume'/'run reject' before convergence.
+
 SEE ALSO
 
   pudl guide schemas       The schema system models build on
@@ -544,6 +559,21 @@ INGESTING MU RESULTS
 
   These understand mu's output formats natively. 'pudl run' calls them
   for you, but they're also usable standalone.
+
+DISTRIBUTION
+
+  mu plugins are published and discovered through mu's OCI path:
+    mu plugin push <name>
+    mu plugin list --remote
+    mu plugin info <name> --json
+
+  PUDL schemas and model contracts remain CUE modules:
+    pudl module add <module@version>
+    pudl module tidy
+
+  Compose the two by declaring the resolved mu plugin in a model's plugins:
+  block and keeping the PUDL schema/model in the CUE module. Do not create a
+  second registry format for a plugin bundle.
 
 SEE ALSO
 
@@ -588,6 +618,8 @@ MACHINE-READABLE OUTPUT
 
   Pass --json on any command for structured output:
 
+    pudl help --json
+    pudl help run --json
     pudl list --json
     pudl facts list --json
     pudl query stale-items --json
@@ -638,5 +670,71 @@ INTEGRATING WITH AGENT CONFIG
   Or for the full reference:
 
     Run 'pudl guide overview' for a quick introduction to pudl.
+`)
+}
+
+func printGuideTroubleshooting() {
+	fmt.Print(`pudl guide troubleshooting — diagnose the shipped path
+
+DISCOVER THE ACTUAL SURFACE
+
+  pudl help --json                 command tree and flags
+  pudl model describe <name> --json
+  mu plugin info <name> --json     plugin capabilities/config schema
+
+RUN DIAGNOSTICS
+
+  pudl run report [<run-id>] --json   retrieve the most recent/stored report
+  pudl status                         model verdicts
+  pudl list --artifacts               run and manifest artifacts
+
+COMMON CASES
+
+  No model found:
+    pudl model list
+    pudl model new <name> --populate plugin:<name>
+
+  Plugin cannot be resolved:
+    mu plugin list --cached
+    mu plugin info <name> --json
+    pudl run <model> --mu-root <directory-containing-mu.cue>
+
+  Observe records have an unexpected schema:
+    inspect the plugin's _schema field, then use ` + "`pudl mu ingest-observe`" + `
+    with the current schema repository. PUDL only persists references present
+    in the loaded schema namespace; unresolved declarations fall back safely.
+
+  Convergence stopped after mutation:
+    inspect ` + "`pudl run report <run-id> --json`" + `. A needs_verification/unknown
+    result means receipt or re-observation proof was incomplete; do not blindly
+    re-apply.
+
+  Approval pending:
+    pudl run report <run-id> --json
+    pudl run resume <run-id>       # approve and execute
+    pudl run reject <run-id>       # terminal no-op
+`)
+}
+
+func printGuideMemory() {
+	fmt.Print(`pudl guide memory — durable agent knowledge
+
+LOOP
+
+  pudl facts observe "<finding>" --kind <kind> --scope repo:path --source <agent>
+  pudl facts curate                 deterministic maturity advancement
+  pudl memory context --task "..."  ranked promoted context
+  pudl memory cycle                 reflect → curate (schedule it; do not run it
+                                     from every Stop hook)
+
+HOOKS
+
+  pudl hooks print
+  pudl hooks install --scope project
+
+  The installed hooks are idempotent: SessionStart recalls context, Stop runs
+  the deterministic curator, and PreToolUse may add advisory PUDL/mu context for
+  raw kubectl/aws/terraform JSON reads. The PreToolUse hook never blocks the
+  underlying command and stays quiet when no matching plugin/model is available.
 `)
 }

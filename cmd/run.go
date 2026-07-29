@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -14,19 +15,24 @@ import (
 )
 
 var (
-	runMuRoot        string
-	runConverge      bool
-	runOnly          []string
-	runDryRun        bool
-	runMaxIters      int
-	runMaxApplies    int
-	runFromCatalog   bool
-	runCatalogScope  string
-	runCheckUpstream bool
+	runMuRoot          string
+	runConverge        bool
+	runOnly            []string
+	runDryRun          bool
+	runMaxIters        int
+	runMaxApplies      int
+	runFromCatalog     bool
+	runCatalogScope    string
+	runCheckUpstream   bool
+	runPopulateSpec    string
+	runPopulateInput   []string
+	runRequireApproval bool
+	runResumeID        string
+	runApprovalStatus  string
 )
 
 var runCmd = &cobra.Command{
-	Use:   "run <model>",
+	Use:   "run [<model>]",
 	Short: "Run a #SystemModel instance (observe-only, or --converge)",
 	Long: `Run a #SystemModel instance through the ACUTE cycle.
 
@@ -41,10 +47,25 @@ Examples:
     pudl run k8sPolicy --converge
     pudl run k8sConverge --converge --only web,api
     pudl run k8sConverge --converge --dry-run`,
-	Args:         cobra.ExactArgs(1),
+	Args: func(cmd *cobra.Command, args []string) error {
+		if runPopulateSpec != "" {
+			if len(args) != 0 {
+				return fmt.Errorf("--populate is an ad-hoc run and does not take a model name")
+			}
+			return nil
+		}
+		return cobra.ExactArgs(1)(cmd, args)
+	},
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) (runError error) {
-		name := args[0]
+		if runResumeID == "" {
+			// Cobra commands can be exercised repeatedly in one process by callers
+			// and tests; approval state belongs only to a resumed invocation.
+			runApprovalStatus = ""
+		}
+		if runPopulateSpec != "" && runConverge {
+			return fmt.Errorf("--populate currently supports observe-only runs; scaffold a model before using --converge")
+		}
 
 		// The run's single catalog handle, borrowed by every phase that touches
 		// the catalog. Opened lazily on first use, closed once here: this defer is
@@ -73,9 +94,25 @@ Examples:
 		// Resolve the model from the registered schemas (project .pudl/schema
 		// wins over global ~/.pudl/schema). modelDir is where it was loaded from
 		// — the base for eweSource + relative plugin paths.
-		model, modelDir, pudlRoot, err := resolveModel(name)
+		var name string
+		var model *systemmodel.SystemModel
+		var modelDir, pudlRoot string
+		var err error
+		if runPopulateSpec != "" {
+			model, modelDir, pudlRoot, err = adHocModel(runPopulateSpec, runPopulateInput)
+		} else {
+			name = args[0]
+			model, modelDir, pudlRoot, err = resolveModel(name)
+		}
 		if err != nil {
 			return err
+		}
+		name = model.Name
+		if runRequireApproval && (!runConverge || runDryRun) {
+			return fmt.Errorf("--require-approval requires --converge without --dry-run")
+		}
+		if runRequireApproval && !model.Convergent() {
+			return fmt.Errorf("--require-approval requires a model with a converge arm")
 		}
 		plan, err := acute.NewRunPlan(model, acute.RunRequest{
 			Converge:    flags.converge,
@@ -88,6 +125,9 @@ Examples:
 			return err
 		}
 		session := acute.NewRunSession(plan)
+		if runResumeID != "" {
+			session.RunID = runResumeID
+		}
 		effectiveModel := session.Plan.Effective
 
 		live := !jsonOutput
@@ -107,13 +147,18 @@ Examples:
 		// that died after applying under `--only` still must not look like an
 		// unscoped one to the next run's budget calculation.
 		finishState := &runFinishState{scoped: len(flags.only) > 0}
+		approvalPending := false
 		if !flags.dryRun {
 			startRunRecord(cat, session.RunID, model.Name, mode, live)
 
 			// The finalizer runs on every exit path, including an early `return err`,
 			// so a run that ends badly is still recorded as *ended*. A row left
 			// unfinished therefore means the process died without a word.
-			defer func() { finishRunRecord(cat, session.RunID, *finishState, runError, live) }()
+			defer func() {
+				if !approvalPending {
+					finishRunRecord(cat, session.RunID, *finishState, runError, live)
+				}
+			}()
 
 			// A converge run can mutate before it is able to write a verdict, so the
 			// model's previous verdict stops being trustworthy the moment it starts.
@@ -167,8 +212,16 @@ Examples:
 		// path self-stages its own mu project, and --from-catalog runs no mu.
 		// Best-effort: phases that genuinely need it validate when they run.
 		muRoot := runMuRoot
+		var removeAdHocMuRoot func()
 		if muRoot == "" && !flags.fromCatalog {
 			muRoot, _ = findMuRoot(modelDir)
+			if muRoot == "" && runPopulateSpec != "" {
+				muRoot, removeAdHocMuRoot, err = createAdHocMuRoot()
+				if err != nil {
+					return err
+				}
+				defer removeAdHocMuRoot()
+			}
 		}
 
 		if flags.fromCatalog && len(model.Desired) == 0 {
@@ -180,7 +233,48 @@ Examples:
 		// acceptance matrix the architecture report asks for needs no real mu.
 		var mu muRunner = execMu{}
 
-		report := &RunReport{RunID: session.RunID, Model: model.Name, OK: true}
+		report := &RunReport{RunID: session.RunID, Model: model.Name, OK: true, ApprovalStatus: runApprovalStatus}
+		reportPersisted := false
+		defer func() {
+			if flags.dryRun || reportPersisted {
+				return
+			}
+			applyRunError(report, runError)
+			persistRunReport(cat, report, live)
+		}()
+
+		if runRequireApproval {
+			request, err := json.Marshal(approvalRequest{
+				Model: model.Name, Only: flags.only, MaxIters: flags.maxIters,
+				MaxApplies: flags.maxApplies,
+			})
+			if err != nil {
+				return err
+			}
+			db, err := cat.required()
+			if err != nil {
+				return err
+			}
+			if err := db.SaveRunApproval(session.RunID, model.Name, request); err != nil {
+				return err
+			}
+			report.Mode = "awaiting-approval"
+			report.PendingApproval = true
+			report.ApprovalStatus = "pending"
+			approvalPending = true
+			reportPersisted = persistRunReport(cat, report, live)
+			out, err := report.render(jsonOutput)
+			if err != nil {
+				return err
+			}
+			if live {
+				fmt.Print(out)
+				fmt.Printf("approval pending: pudl run resume %s | pudl run reject %s\n", session.RunID, session.RunID)
+			} else {
+				fmt.Print(out)
+			}
+			return nil
+		}
 		var runErr error
 
 		switch {
@@ -297,6 +391,8 @@ Examples:
 			}
 		}
 
+		applyRunError(report, runErr)
+		reportPersisted = persistRunReport(cat, report, live)
 		out, err := report.render(jsonOutput)
 		if err != nil {
 			return err
@@ -800,6 +896,8 @@ func populateRef(p systemmodel.Populate) string {
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().StringVar(&runPopulateSpec, "populate", "", "Run an unregistered observer as plugin:<name>")
+	runCmd.Flags().StringArrayVar(&runPopulateInput, "input", nil, "Ad-hoc populate input key=value (repeatable)")
 	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
 	runCmd.Flags().BoolVar(&runConverge, "converge", false, "opt into the convergence loop (mutates the target)")
 	runCmd.Flags().StringSliceVar(&runOnly, "only", nil, "converge only these resource selectors (requires --converge)")
@@ -809,4 +907,5 @@ func init() {
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
 	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
+	runCmd.Flags().BoolVar(&runRequireApproval, "require-approval", false, "persist the converge request and wait for `pudl run resume <run-id>`")
 }

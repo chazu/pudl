@@ -123,6 +123,7 @@ func (e *EnhancedImporter) ensureBasicSchemas() error {
 		filepath.Join(e.schemaPath, "pudl", "artifact", "artifact.cue"),
 		filepath.Join(e.schemaPath, "pudl", "registry", "registry.cue"),
 		filepath.Join(e.schemaPath, "pudl", "aws", "aws.cue"),
+		filepath.Join(e.schemaPath, "pudl", "k8s", "k8s.cue"),
 		filepath.Join(e.schemaPath, "pudl", "mu", "mu.cue"),
 		filepath.Join(e.schemaPath, "pudl", "brick", "brick.cue"),
 		filepath.Join(e.schemaPath, "pudl", "linux", "linux.cue"),

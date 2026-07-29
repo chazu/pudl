@@ -242,6 +242,14 @@ func (cv *ChainValidator) GetAvailableSchemas() []string {
 	return schemas
 }
 
+// HasSchema reports whether a canonical or legacy schema reference is loaded.
+// Callers that persist typed assignments should use this before accepting a
+// reference so a missing schema cannot silently become a generic fallback.
+func (cv *ChainValidator) HasSchema(schemaName string) bool {
+	_, exists := cv.schemas[schemaname.Normalize(schemaName)]
+	return exists
+}
+
 // GetSchemaMetadata returns metadata for a specific schema
 func (cv *ChainValidator) GetSchemaMetadata(schemaName string) (SchemaMetadata, bool) {
 	meta, exists := cv.metadata[schemaName]

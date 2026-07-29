@@ -480,6 +480,20 @@ func TestIngestObserveResults_ExplicitPluginMappingOverridesNamingConvention(t *
 	assert.Equal(t, "pudl/custom.#AwsNetwork", entries.Entries[0].Schema)
 }
 
+func TestResolveObserveSchemaNormalizesExplicitPluginMapping(t *testing.T) {
+	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
+		"pudl/custom.#AwsNetwork": {ResourceType: "aws.ec2.vpc"},
+	})
+
+	got := resolveObserveSchemaWithMappings(
+		map[string]any{"_schema": "aws.ec2.vpc"},
+		graph,
+		nil,
+		map[string]string{"aws.ec2.vpc": "pudl.schemas/pudl/custom@v0:#AwsNetwork"},
+	)
+	assert.Equal(t, "pudl/custom.#AwsNetwork", got)
+}
+
 func TestResolveObserveSchemaUsesInferenceForUnknownResourceType(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cue.mod"), 0o755))

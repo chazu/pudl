@@ -14,7 +14,16 @@ request-level converge approvals with resume/reject, troubleshooting/memory
 guides, and an advisory raw-infrastructure hook. Mu's Kubernetes plugin has an
 explicit typed inventory observe mode. Observe ingestion now refuses dangling
 schema refs and falls back safely to inference or the generic observe schema.
-Cross-model value wiring remains the next design boundary.
+The convergence stocktake also closed the catalog-plugin reconcile path: desired
+manifest sources are absolute within the mu project root, mu accepts those
+contained absolute action inputs, and terminal convergence errors survive in
+durable run reports. Typed projection/validation alignment is now closed for
+the shipped path: schema loading preserves schema-root-relative package paths,
+explicit plugin/bridge assignments validate against their assigned CUE schema,
+and fixed-point inference is reserved for genuinely inferred imports. The
+mixed 41-entry acceptance fixture now passes both `pudl validate --all` and
+`pudl verify` with zero invalid entries or mismatches. Cross-model value wiring
+remains the next design boundary.
 
 ### Adversarial review closure (2026-07-14)
 

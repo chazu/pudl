@@ -10,14 +10,28 @@ import (
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
-	RunID    string            `json:"run_id"`
-	Model    string            `json:"model"`
-	Mode     string            `json:"mode"` // observe-only | converge | dry-run
-	Populate *PopulateReport   `json:"populate,omitempty"`
-	Drift    *ModelDriftResult `json:"drift,omitempty"`
-	Checks   []CheckResult     `json:"checks,omitempty"`
-	Converge *ConvergeReport   `json:"converge,omitempty"`
-	OK       bool              `json:"ok"` // overall: no fail-severity check failed, converge not failed
+	RunID           string            `json:"run_id"`
+	Model           string            `json:"model"`
+	Mode            string            `json:"mode"` // observe-only | converge | dry-run
+	Populate        *PopulateReport   `json:"populate,omitempty"`
+	Drift           *ModelDriftResult `json:"drift,omitempty"`
+	Checks          []CheckResult     `json:"checks,omitempty"`
+	Converge        *ConvergeReport   `json:"converge,omitempty"`
+	OK              bool              `json:"ok"` // overall: no fail-severity check failed, converge not failed
+	Error           string            `json:"error,omitempty"`
+	PendingApproval bool              `json:"pending_approval,omitempty"`
+	ApprovalStatus  string            `json:"approval_status,omitempty"`
+}
+
+// applyRunError copies a phase error into the report before it is rendered or
+// persisted. Convergence reports are persisted before RunE returns, so relying
+// only on the deferred named-return finalizer would lose the error details.
+func applyRunError(report *RunReport, err error) {
+	if report == nil || err == nil {
+		return
+	}
+	report.OK = false
+	report.Error = err.Error()
 }
 
 // PopulateReport summarizes an inventory populate.
@@ -61,6 +75,12 @@ func (r *RunReport) markdown() string {
 		status = "FAILED"
 	}
 	fmt.Fprintf(&b, "- status: %s\n", status)
+	if r.ApprovalStatus != "" {
+		fmt.Fprintf(&b, "- approval: %s\n", r.ApprovalStatus)
+	}
+	if r.Error != "" {
+		fmt.Fprintf(&b, "- error: %s\n", r.Error)
+	}
 
 	if r.Populate != nil {
 		fmt.Fprintf(&b, "\n## populate\n- target: %s\n- records: %d\n", r.Populate.Target, r.Populate.Records)
