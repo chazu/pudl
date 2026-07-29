@@ -128,6 +128,7 @@ func ruleBodySummary(r datalog.Rule) string {
 func init() {
 	rootCmd.AddCommand(ruleCmd)
 	ruleCmd.AddCommand(ruleAddCmd)
+	ruleCmd.AddCommand(ruleNewCmd)
 
 	ruleAddCmd.Flags().BoolVar(&ruleGlobal, "global", false, "Install as a global rule (~/.pudl/schema/pudl/rules/)")
 }

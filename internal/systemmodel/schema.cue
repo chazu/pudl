@@ -20,6 +20,9 @@ package systemmodel
 	}
 
 	name: string
+	// Quoted because this is the JSON-visible routing tag emitted when the
+	// model itself is persisted as a typed catalog resource.
+	"_schema"?: string
 
 	// DEPENDS_ON — NAMES of other #SystemModel instances whose output this
 	// model's desired/observed state depends on. Model names (each dependency's

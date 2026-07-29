@@ -140,6 +140,12 @@ entries: {
 		resource_type: "aws.account"
 		description:   "AWS account with 12-digit ID"
 	}
+	"pudl/aws.#Instance": {
+		schema:        "pudl/aws.#Instance"
+		schema_type:   "base"
+		resource_type: "aws.ec2.instance"
+		description:   "AWS EC2 virtual machine"
+	}
 	"pudl/aws.#VPC": {
 		schema:        "pudl/aws.#VPC"
 		schema_type:   "base"
@@ -199,6 +205,16 @@ entries: {
 		schema_type:   "base"
 		resource_type: "aws.ec2.elastic_ip"
 		description:   "Static public IPv4 address"
+	}
+}
+
+// Kubernetes types
+entries: {
+	"pudl/k8s.#Resource": {
+		schema:        "pudl/k8s.#Resource"
+		schema_type:   "base"
+		resource_type: "k8s.resource"
+		description:   "Open Kubernetes API object envelope for inventory observation"
 	}
 }
 

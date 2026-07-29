@@ -3,8 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -20,6 +22,7 @@ type hookEntry struct {
 	event   string // "SessionStart", "Stop", ...
 	command string
 	why     string
+	matcher string
 }
 
 // managedHooks are the hooks pudl installs for the memory loop. The Stop hook runs
@@ -29,6 +32,7 @@ type hookEntry struct {
 var managedHooks = []hookEntry{
 	{event: "SessionStart", command: "pudl memory context", why: "inject ranked prior knowledge"},
 	{event: "Stop", command: "pudl facts curate", why: "advance maturity from feedback (deterministic, no LLM)"},
+	{event: "PreToolUse", command: "pudl hooks suggest", matcher: "Bash", why: "suggest the PUDL/mu path without blocking the shell command"},
 }
 
 var hooksCmd = &cobra.Command{
@@ -38,6 +42,7 @@ var hooksCmd = &cobra.Command{
 
   SessionStart -> pudl memory context   (inject ranked prior knowledge)
   Stop         -> pudl facts curate     (advance maturity from feedback)
+  PreToolUse   -> pudl hooks suggest    (advisory PUDL/mu path suggestions)
 
 The Stop hook deliberately runs only the deterministic curator, not the reflect
 cycle ('pudl memory cycle'), because reflect invokes your coding agent — running
@@ -60,6 +65,37 @@ var hooksPrintCmd = &cobra.Command{
 		out, _ := json.MarshalIndent(snippet, "", "  ")
 		fmt.Println(string(out))
 		fmt.Fprintln(os.Stderr, "\nMerge this into your Claude Code settings.json, or run: pudl hooks install")
+		return nil
+	},
+}
+
+var hooksSuggestCmd = &cobra.Command{
+	Use:   "suggest",
+	Short: "Suggest a PUDL/mu path for a raw infrastructure command",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil // hooks must never fail the underlying tool call
+		}
+		var request struct {
+			ToolName  string `json:"tool_name"`
+			ToolInput struct {
+				Command string `json:"command"`
+			} `json:"tool_input"`
+		}
+		if json.Unmarshal(data, &request) != nil {
+			return nil
+		}
+		plugin, suggestion := rawInfrastructureSuggestion(request.ToolInput.Command)
+		if plugin == "" || !hookPluginAvailable(plugin) {
+			return nil
+		}
+		response := map[string]any{"hookSpecificOutput": map[string]any{
+			"hookEventName":     "PreToolUse",
+			"additionalContext": suggestion,
+		}}
+		b, _ := json.Marshal(response)
+		fmt.Println(string(b))
 		return nil
 	},
 }
@@ -121,13 +157,13 @@ changing an existing file.
 func buildHooksMap() map[string]interface{} {
 	m := map[string]interface{}{}
 	for _, h := range managedHooks {
-		m[h.event] = []interface{}{
-			map[string]interface{}{
-				"hooks": []interface{}{
-					map[string]interface{}{"type": "command", "command": h.command},
-				},
-			},
+		group := map[string]interface{}{"hooks": []interface{}{
+			map[string]interface{}{"type": "command", "command": h.command},
+		}}
+		if h.matcher != "" {
+			group["matcher"] = h.matcher
 		}
+		m[h.event] = []interface{}{group}
 	}
 	return m
 }
@@ -147,11 +183,13 @@ func mergeHooks(settings map[string]interface{}) []string {
 		if hookCommandPresent(groups, h.command) {
 			continue
 		}
-		groups = append(groups, map[string]interface{}{
-			"hooks": []interface{}{
-				map[string]interface{}{"type": "command", "command": h.command},
-			},
-		})
+		group := map[string]interface{}{"hooks": []interface{}{
+			map[string]interface{}{"type": "command", "command": h.command},
+		}}
+		if h.matcher != "" {
+			group["matcher"] = h.matcher
+		}
+		groups = append(groups, group)
 		hooks[h.event] = groups
 		added = append(added, h.command)
 	}
@@ -189,10 +227,41 @@ func claudeSettingsPath(scope string) (string, error) {
 	}
 }
 
+func rawInfrastructureSuggestion(command string) (string, string) {
+	trimmed := strings.TrimSpace(command)
+	switch {
+	case strings.HasPrefix(trimmed, "kubectl "):
+		return "k8s", "Advisory: this looks like a Kubernetes read. If it is repeatable system state, use `pudl run --populate plugin:k8s --input inventory.kinds=[...]` so mu observes it and PUDL snapshots/classifies the result. This suggestion does not block the command."
+	case strings.HasPrefix(trimmed, "aws ") && strings.Contains(trimmed, "--output json"):
+		return "aws", "Advisory: this looks like an AWS JSON inventory read. Consider the mu aws observer plus PUDL ingest so the result is typed, snapshotted, and queryable. This suggestion does not block the command."
+	case strings.HasPrefix(trimmed, "terraform ") && strings.Contains(trimmed, "show") && strings.Contains(trimmed, "-json"):
+		return "terraform", "Advisory: this looks like a Terraform JSON state read. Consider the mu terraform observer and a PUDL model for durable provenance. This suggestion does not block the command."
+	default:
+		return "", ""
+	}
+}
+
+func hookPluginAvailable(name string) bool {
+	if _, err := cachedPluginDefinition(name); err == nil {
+		return true
+	}
+	models, _, err := listModels()
+	if err != nil {
+		return false
+	}
+	for _, model := range models {
+		if model.Model.Populate.Plugin == name || (model.Model.Converge != nil && model.Model.Converge.Plugin == name) {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	rootCmd.AddCommand(hooksCmd)
 	hooksCmd.AddCommand(hooksPrintCmd)
 	hooksCmd.AddCommand(hooksInstallCmd)
+	hooksCmd.AddCommand(hooksSuggestCmd)
 
 	hooksCmd.PersistentFlags().StringVar(&hooksHarness, "harness", "claude-code", "Target harness (claude-code)")
 	hooksInstallCmd.Flags().StringVar(&hooksScope, "scope", "user", "Where to install: user or project")

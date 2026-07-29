@@ -17,6 +17,14 @@ type InheritanceGraph struct {
 	leaves   []string            // schemas with no children (most specific)
 }
 
+// HasSchema reports whether schema is present in the loaded schema set.
+// Callers that accept externally-declared schema references should check this
+// before persisting the reference; an inheritance graph is also the resolved
+// schema namespace for the current workspace.
+func (g *InheritanceGraph) HasSchema(schema string) bool {
+	return g != nil && g.all[schema]
+}
+
 // BuildInheritanceGraph constructs an inheritance graph from schema metadata.
 // It uses the base_schema field in _pudl metadata to determine parent-child relationships.
 func BuildInheritanceGraph(metadata map[string]validator.SchemaMetadata) *InheritanceGraph {

@@ -3,6 +3,7 @@ package validator
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -161,11 +162,14 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 	schemas := make(map[string]cue.Value)
 	metadata := make(map[string]SchemaMetadata)
 
-	// Convert import path to module name (e.g., "pudl.schemas/aws/ec2@v0" -> "aws/ec2")
-	moduleName := strings.TrimPrefix(inst.ImportPath, "pudl.schemas/")
-	if moduleName == inst.ImportPath {
-		// Fallback to package name if not using module structure
-		moduleName = inst.PkgName
+	// The schema directory is the authoritative namespace. CUE's package name
+	// collapses nested paths (pudl/k8s becomes just k8s), and module import paths
+	// vary between pudl.schemas/pudl/k8s and pudl.schemas@v0/pudl/k8s. Deriving
+	// the name from the schema-root-relative directory keeps validation aligned
+	// with inference and catalog schema references.
+	moduleName := inst.PkgName
+	if rel, err := filepath.Rel(loader.schemaPath, inst.Dir); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		moduleName = filepath.ToSlash(rel)
 	}
 
 	// Iterate through all definitions in the package
@@ -259,10 +263,12 @@ func (loader *CUEModuleLoader) GetAllMetadata(modules map[string]*LoadedModule) 
 
 // ValidateModuleIntegrity performs integrity checks on loaded modules
 func (loader *CUEModuleLoader) ValidateModuleIntegrity(modules map[string]*LoadedModule) error {
-	for packageName, module := range modules {
-		// Check that the module has at least one schema
+	for _, module := range modules {
+		// A package may contain only reusable components or rule definitions.
+		// Those are valid parts of the schema tree even though they are not
+		// independently registered validation targets.
 		if len(module.Schemas) == 0 {
-			return fmt.Errorf("package %s contains no schema definitions", packageName)
+			continue
 		}
 
 		// Validate that all schemas in the module are valid CUE values

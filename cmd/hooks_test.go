@@ -22,12 +22,23 @@ func stopCommands(settings map[string]interface{}) []string {
 func TestMergeHooksIntoEmpty(t *testing.T) {
 	settings := map[string]interface{}{}
 	added := mergeHooks(settings)
-	if len(added) != 2 {
-		t.Fatalf("added = %v, want 2 hooks", added)
+	if len(added) != 3 {
+		t.Fatalf("added = %v, want 3 hooks", added)
 	}
 	// idempotent second merge
 	if again := mergeHooks(settings); len(again) != 0 {
 		t.Errorf("second merge added %v, want none", again)
+	}
+}
+
+func TestRawInfrastructureSuggestionIsAdvisory(t *testing.T) {
+	plugin, text := rawInfrastructureSuggestion("kubectl get pods -o json")
+	if plugin != "k8s" || text == "" {
+		t.Fatalf("suggestion = (%q, %q), want k8s advisory", plugin, text)
+	}
+	plugin, text = rawInfrastructureSuggestion("echo kubectl get pods")
+	if plugin != "" || text != "" {
+		t.Fatalf("non-command suggestion = (%q, %q), want empty", plugin, text)
 	}
 }
 

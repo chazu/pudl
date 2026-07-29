@@ -12,6 +12,26 @@ converge real infrastructure through the **mu** execution layer.
 There is no execution layer inside pudl — models, methods and workflows were
 extracted to mu. pudl declares desired/observed state; mu mutates the world.
 
+## Agent routing
+
+Use the binary as the source of truth for the current command surface:
+
+- `pudl help --json` — complete command tree, flags, and descriptions.
+- `pudl guide <topic>` — operational guidance (`overview`, `models`, `mu`,
+  `troubleshooting`, `memory`, and the other listed topics).
+- `pudl model describe <name> --json` — a model's actual runtime contract.
+
+Scaffold first, then edit the returned path:
+
+- `pudl model new <name> --populate plugin:<name>`
+- `pudl rule new <name>`
+- `pudl model populator new <model>`
+
+For a one-off observer, use `pudl run --populate plugin:<name> --input key=value`;
+it writes no model definition and is observe-only. Retrieve completed or pending
+diagnostics with `pudl run report [<run-id>] --json`. Convergence that crosses a
+trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
+
 ## Repository Layout
 
 ```

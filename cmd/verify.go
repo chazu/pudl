@@ -5,20 +5,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // verifyCmd represents the verify command
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
-	Short: "Verify schema inference is a fixed point for all catalog entries",
-	Long: `Re-run schema inference on all catalog entries and confirm every entry
-still resolves to the same schema it was originally assigned.
+	Short: "Verify catalog schemas and inferred assignments",
+	Long: `Validate every catalog entry against its assigned schema.
+
+For ordinary imported records, also re-run schema inference and confirm it is a
+fixed point. Explicitly typed records (including plugin and bridge artifacts)
+are checked against their assigned schema; their payload is not reclassified by
+heuristic inference.
 
 This is a correctness invariant: if inference is deterministic, re-running it
 on stored data should always produce the same schema assignment. Any mismatch
@@ -58,6 +65,10 @@ func runVerifyCommand() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}
+	validationService, err := validator.NewValidationService(effectiveSchemaPaths(cfg)...)
+	if err != nil {
+		return fmt.Errorf("failed to initialize validation service: %w", err)
+	}
 
 	// Query all catalog entries
 	queryResult, err := catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{
@@ -89,6 +100,22 @@ func runVerifyCommand() error {
 			continue
 		}
 
+		validation := validationService.ValidateDataAgainstSchema(data, entry.Schema)
+		if !validation.Valid {
+			fmt.Printf("  %s: INVALID (%s): %s\n", displayName, entry.Schema, validation.ErrorMessage)
+			for _, validationErr := range validation.Errors {
+				fmt.Printf("      - %s\n", validationErr)
+			}
+			errCount++
+			continue
+		}
+
+		if !shouldVerifyInference(data, entry) {
+			fmt.Printf("  %s: OK (%s; explicit)\n", displayName, entry.Schema)
+			okCount++
+			continue
+		}
+
 		// Determine collection type for inference hints
 		collectionType := ""
 		if entry.CollectionType != nil {
@@ -107,7 +134,7 @@ func runVerifyCommand() error {
 			continue
 		}
 
-		if result.Schema == entry.Schema {
+		if schemaname.IsEquivalent(result.Schema, entry.Schema) {
 			fmt.Printf("  %s: OK (%s)\n", displayName, entry.Schema)
 			okCount++
 		} else {
@@ -124,11 +151,29 @@ func runVerifyCommand() error {
 	}
 	fmt.Println()
 
-	if mismatchCount > 0 {
-		return fmt.Errorf("fixed-point verification failed: %d mismatches found", mismatchCount)
+	if mismatchCount > 0 || errCount > 0 {
+		return fmt.Errorf("catalog verification failed: %d mismatches, %d errors", mismatchCount, errCount)
 	}
 
 	return nil
+}
+
+// shouldVerifyInference reports whether the stored assignment should be
+// re-derived. Explicitly typed and bridge-owned records already have an
+// authoritative producer assignment; ordinary imported records are the ones
+// for which fixed-point inference is meaningful.
+func shouldVerifyInference(data interface{}, entry database.CatalogEntry) bool {
+	if entry.EntryType != nil || entry.CollectionType != nil {
+		return false
+	}
+
+	if record, ok := data.(map[string]interface{}); ok {
+		if declared, ok := record["_schema"].(string); ok && strings.TrimSpace(declared) != "" {
+			return false
+		}
+	}
+
+	return true
 }
 
 // loadVerifyData loads data from a stored file path for verification.

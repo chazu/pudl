@@ -88,7 +88,9 @@ func targetPudlRoot(global bool) (string, error) {
 
 func init() {
 	rootCmd.AddCommand(modelCmd)
+	modelCmd.AddCommand(modelNewCmd)
 	modelCmd.AddCommand(modelPopulatorCmd)
 	modelPopulatorCmd.AddCommand(modelPopulatorAddCmd)
+	modelPopulatorCmd.AddCommand(modelPopulatorNewCmd)
 	modelPopulatorAddCmd.Flags().BoolVar(&modelPopulatorGlobal, "global", false, "install into the global ~/.pudl repo (default: project repo if found)")
 }

@@ -74,9 +74,9 @@ func interpretDifferentialObserve(observeJSON []byte) (ModelDriftResult, error) 
 // renderReconcileMuCue emits a mu.cue with one converge-plugin target whose
 // sources are the model's desired (rendered as manifests). The SAME target
 // serves both `mu observe` (drift) and `mu build` (converge) — the §5.5 apply
-// path. manifestNames are bare filenames (the manifests sit beside this mu.cue;
-// mu resolves sources relative to the package dir, for both observe and build).
-func renderReconcileMuCue(m *systemmodel.SystemModel, manifestNames []string) (string, error) {
+// path. manifestSources are absolute paths because catalog-installed plugins
+// run from their extracted bundle directory, not the project directory.
+func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) (string, error) {
 	if !m.Convergent() {
 		return "", fmt.Errorf("renderReconcileMuCue: model has no converge arm")
 	}
@@ -88,7 +88,7 @@ func renderReconcileMuCue(m *systemmodel.SystemModel, manifestNames []string) (s
 	if err != nil {
 		return "", fmt.Errorf("marshal plugins: %w", err)
 	}
-	srcJSON, err := json.Marshal(manifestNames)
+	srcJSON, err := json.Marshal(manifestSources)
 	if err != nil {
 		return "", fmt.Errorf("marshal sources: %w", err)
 	}
@@ -180,7 +180,11 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 		cleanup()
 		return nil, err
 	}
-	src, err := renderReconcileMuCue(&rm, names)
+	manifestSources := make([]string, len(names))
+	for i, name := range names {
+		manifestSources[i] = filepath.Join(dir, name)
+	}
+	src, err := renderReconcileMuCue(&rm, manifestSources)
 	if err != nil {
 		cleanup()
 		return nil, err
