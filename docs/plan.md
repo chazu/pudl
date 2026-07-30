@@ -23,7 +23,14 @@ explicit plugin/bridge assignments validate against their assigned CUE schema,
 and fixed-point inference is reserved for genuinely inferred imports. The
 mixed 41-entry acceptance fixture now passes both `pudl validate --all` and
 `pudl verify` with zero invalid entries or mismatches. Cross-model value wiring
-remains the next design boundary.
+now has a reviewed design, including its deferred secret boundary against mu's
+existing sealed-I/O primitives and convention-over-configuration observation
+reuse; implementation is the next slice. Bindings do not carry freshness
+fields: orchestrated runs prefer current-run observations, standalone runs use
+the latest successful scoped observation, and stricter age bounds belong to run
+policy. See
+[`docs/design/2026-07-28-cross-resource-value-wiring.md`](design/2026-07-28-cross-resource-value-wiring.md)
+and [`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_07_29_cross_resource_wiring_mu_alignment.md).
 
 ### Adversarial review closure (2026-07-14)
 
@@ -240,6 +247,222 @@ affinity for numeric view columns.
 ## What's Next
 
 Potential future work, roughly ordered by value.
+
+### Cross-Resource Value Wiring — Design Hold Point
+
+Status: design reviewed; implementation is paused until the execution and
+observation contracts below are resolved. The working design is
+[`docs/design/2026-07-28-cross-resource-value-wiring.md`](design/2026-07-28-cross-resource-value-wiring.md),
+with mu secret-input/output compatibility recorded in
+[`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_07_29_cross_resource_wiring_mu_alignment.md).
+
+The first implementation slice is intentionally limited to scalar leaves. A
+consumer model binds an input slot to a typed scalar leaf from a producer's
+observation, using an exact `(model, schema, identity, path)` selector. The
+binding itself does not carry freshness or TTL configuration. By convention,
+an orchestrated run prefers the producer's current successful observation;
+standalone resolution uses the latest successful observation in the current
+scope. Missing or invalid values fail closed, and stricter age bounds belong
+to run/operator policy rather than the CUE binding API. Secret-valued wiring
+remains deferred, but the eventual design must align with mu's existing
+sealed-input, sealed-output, and secret-provider primitives.
+
+The following questions surfaced in the final adversarial review and should be
+answered in the design discussion before implementation resumes.
+
+#### Execution boundary
+
+1. **What is the multi-model run surface?** `pudl run` currently resolves and
+   executes one model. The wiring design assumes a producer and consumer can
+   participate in one orchestrated run, with producer-first ordering. Define
+   the run-set request (CLI and/or library), model selection, ordering,
+   cycle handling, per-model run identity, snapshot ownership, and failure
+   propagation. Also reconcile this with the existing dependency contract,
+   where `depends_on` records ordering/impact facts and mu owns orchestration.
+
+   **Resolved:** PUDL owns model-level coordination through a separate
+   `pudl run-set <model> <model>...` surface backed by an exact `RunSetRequest`;
+   mu continues to execute one elaborated model's internal graph at a time.
+   Bindings require their producers in the explicit set, while `depends_on`
+   targets outside it remain advisory. Binding and in-set `depends_on` edges
+   determine producer-first order with lexical tie-breaking. Duplicate models,
+   self-dependencies, and cycles fail preflight. The operation has one run-set
+   ID plus per-model run and snapshot IDs; failures block transitive consumers,
+   independent branches continue, and any failed or blocked member makes the
+   command fail.
+
+2. **Which execution phases participate?** Decide whether value production is
+   limited to observation/populate, or whether checks, desired-state
+   evaluation, and convergence are part of the same dependency run. This
+   determines when a producer is considered available and whether a later
+   convergence failure invalidates an otherwise usable observation.
+
+   **Resolved:** the first `run-set` contract is observe-only. A producer
+   becomes available only after its complete observe-only lifecycle succeeds:
+   observation or populate, drift evaluation where applicable, checks, and
+   reporting. Ordinary drift does not invalidate its observed values, while an
+   execution error or failed fail-severity check blocks consumers. Convergence
+   flags are rejected and multi-model convergence remains a separate design
+   problem; single-model convergence is unchanged.
+
+#### Observation selection and reuse
+
+3. **What does “successful observation” mean?** Observe snapshots currently
+   record provenance and timestamps but do not record an explicit status. Define
+   whether success means successful ingestion, successful populate, or a
+   successful complete model run, then encode or query that definition
+   consistently.
+
+   **Resolved:** success means the owning model completed the full
+   observe-only lifecycle defined above. `runs` gains a structured
+   `running`/`succeeded`/`failed`/`blocked` completion status, separate from its
+   drift verdict. A snapshot is eligible only by joining matching model/run
+   provenance to a `succeeded` run and confirming it is a real typed
+   observation. Registration and differential-drift artifacts, failed or
+   unfinished runs, and legacy rows without provable structured success are
+   ineligible. Failure to persist success blocks consumers.
+
+4. **What is the scope of “latest”?** Snapshot selection must be scoped to the
+   current workspace/origin as well as the producer model, schema, identity,
+   and path. The selected immutable snapshot ID should be pinned before value
+   lookup so a concurrent observation cannot change the consumer's inputs.
+
+   **Resolved:** a run set uses the exact successful snapshot owned by its
+   producer member. A standalone run selects the newest eligible snapshot for
+   the exact producer model and current `EffectiveOrigin` workspace, with no
+   cross-workspace or `global` fallback. Origin/source remain system provenance,
+   not binding fields. PUDL pins the snapshot before resolving schema, identity,
+   or path and uses one consistent catalog read view. Absence from that newest
+   snapshot fails; resolution never searches older snapshots for a resource
+   that may have been deleted.
+
+5. **Who owns an optional age bound?** The existing `#SystemModel.freshness`
+   field describes loop cadence, not observation age. If an age bound is
+   retained, define it as a separate run/operator policy, its CLI/config API,
+   report representation, and precedence. It may tighten the conventional
+   selector, never loosen it. Otherwise defer age bounds until the selector
+   contract is established.
+
+   **Resolved:** retain an explicit `--max-observation-age <duration>` policy
+   on `pudl run` and `pudl run-set`, backed by an optional library request
+   field. The first release has no config-file default, binding field, or reuse
+   of model `freshness`. Age is evaluated once at consumer elaboration against
+   the pinned snapshot and applies to current-run and reused snapshots alike.
+   Rejection never changes the selected snapshot or starts a producer. Reports
+   include snapshot/evaluation times, age, bound, and status; future policy
+   layers combine by taking the smallest bound.
+
+6. **What happens when the current-run producer fails?** Specify that a failed
+   producer cannot silently fall back to an older observation when the
+   consumer is part of the same orchestrated run. Define the corresponding
+   standalone behavior when there is no current-run producer.
+
+   **Resolved:** a current-run producer that fails, is blocked, fails a
+   fail-severity check, or produces no eligible snapshot blocks all dependent
+   consumers with no historical fallback. A standalone consumer may reuse the
+   newest eligible successful snapshot even if a newer producer attempt failed,
+   subject to workspace and age policy, but its report must disclose both the
+   reuse and the failed attempt. No eligible or sufficiently recent snapshot
+   means failure before mu planning; PUDL never starts the producer implicitly.
+
+#### Binding and CUE contract
+
+7. **What is the scalar path grammar?** Define whether `path` is a CUE path,
+   dot path, JSON pointer, or another grammar. Resolve nested fields, root
+   scalars, hidden fields, aliases, list indexing, and the rule that the first
+   slice rejects non-scalar and list-valued leaves.
+
+   **Resolved:** `path` is an absolute RFC 6901 JSON Pointer into the concrete
+   exported catalog resource. It traverses exact, case-sensitive object fields
+   with standard escaping. The first slice rejects the empty root, arrays and
+   list indexes, objects or arrays as final values, wildcards, filters, relative
+   paths, and CUE-only aliases/definitions/optional/hidden structure. Concrete
+   string, number, boolean, and explicit `null` leaves are allowed; missing and
+   `null` remain distinct and CUE validates whether the input accepts `null`.
+
+8. **What is the input completeness rule?** Decide whether every declared
+   input must be bound, or only inputs referenced by `desired`, `checks`, or
+   another phase. Define nested input-slot naming, duplicate bindings,
+   unbound inputs, and the validation/error timing for incomplete models.
+
+   **Resolved:** inputs are flat, visible top-level scalar slots, and every
+   declared input has exactly one same-named binding; extra bindings, optional
+   slots, and nested slots are rejected. Names are exact labels, not paths, and
+   defaults do not make bindings optional. Keyed CUE declarations unify
+   normally, with conflicts reported by CUE rather than AST duplicate checks.
+   Static shape/completeness failures occur before any run-set member executes;
+   resolved values undergo final concrete CUE validation before the consumer
+   run or mu plan begins.
+
+9. **How are raw CUE templates retained?** Model discovery currently validates
+   and decodes a model, then discards the original `cue.Value`. Define a
+   `ModelTemplate` or registry seam that retains the raw value, decoded
+   metadata, module root, and compatible CUE context for later unification.
+
+   **Resolved:** discovery returns an in-memory
+   `systemmodel.ModelTemplate` containing the loaded template `cue.Value`,
+   concrete/canonical identity, load directory, owning PUDL root, definition
+   origin, and decoded bindings. It validates incomplete CUE and decodes only
+   preflight metadata. `Elaborate` builds inputs in the same CUE context,
+   immutably unifies and concretely validates a fresh value, then produces the
+   existing runtime `SystemModel`. Neither template values nor resolved values
+   are persisted or cached across runs.
+
+10. **Where does binding metadata live?** Model instances are serialized into
+    the catalog from the decoded system model. Decide whether `inputs` and
+    `bindings` remain template-only, or whether catalog serialization uses an
+    explicit redacted projection so authoring metadata does not leak into
+    model-instance resources or mu inputs.
+
+    **Resolved:** `inputs` and `bindings` are template-only and are absent from
+    runtime `SystemModel`. Catalog model-instance serialization and mu rendering
+    consume only that explicit runtime projection. Referenced non-secret values
+    may appear naturally in executable desired/config/check fields, while
+    binding provenance belongs in reports and dependency edges in their
+    relation. Sentinel contract tests must prove authoring namespaces reach
+    neither catalog model JSON nor mu input.
+
+11. **How is the secret boundary enforced?** Secret-valued bindings are out of
+    scope for the first slice, but that requires an enforceable non-sensitive
+    scalar contract now. Define the schema marker or validation rule that
+    rejects sensitive leaves, and reserve the later secret path for mu's
+    existing sealed I/O rather than inventing a second mechanism.
+
+#### Dependency graph and provenance
+
+12. **What is the canonical edge direction?** The design diagram uses
+    producer-to-consumer edges, while existing `model_depends_on` facts use
+    consumer-to-producer semantics. Choose the persisted representation and
+    document the conversion used for topological execution order.
+
+13. **Are binding edges persisted?** A binding implies a data dependency, but
+    it is not yet clear whether that edge is emitted as a dependency fact,
+    shown by `pudl model deps`, or kept as an execution-only edge. If persisted,
+    define its provenance, reconciliation with explicit `depends_on`, and
+    behavior when the binding changes or disappears.
+
+14. **What provenance is reported?** Every resolved value should identify the
+    pinned snapshot ID, workspace, producer run, observation age, and reuse
+    decision (current-run versus prior observation). Define the durable report
+    shape and error detail before implementing the selector.
+
+#### Acceptance and compatibility
+
+15. **What failure and race cases are contractual?** Acceptance coverage must
+    include workspace isolation, no snapshot, current-run producer failure
+    without fallback, pinned snapshot selection, invalid paths, list/non-leaf
+    rejection, duplicate and unbound inputs, and producer/consumer cycles.
+
+16. **Which existing documents are superseded?**
+    [`docs/cross-model-dependencies.md`](cross-model-dependencies.md) currently
+    says value passing is deferred and that PUDL does not re-run downstream
+    models. The wiring design should explicitly mark which statements remain
+    true and which are replaced by the new bounded value-flow contract.
+
+These questions are a design checkpoint, not additional binding configuration.
+The intended user-facing API remains convention-driven; the extra detail is
+needed to make selection, failure, provenance, and orchestration deterministic
+under the hood.
 
 ### Richer Catalog
 - Schema coverage reports (what percentage of data matches specific schemas)
