@@ -78,6 +78,10 @@ func Init(opts InitOptions) error {
 	if err := os.MkdirAll(defsDir, 0755); err != nil {
 		return fmt.Errorf("creating definitions/: %w", err)
 	}
+	populatorsDir := filepath.Join(pudlDir, "populators")
+	if err := os.MkdirAll(populatorsDir, 0o755); err != nil {
+		return fmt.Errorf("creating populators/: %w", err)
+	}
 
 	// All durable operational state for a repository workspace is local to its
 	// .pudl/data tree. The catalog creates sqlite/catalog.db lazily; the other
@@ -103,7 +107,7 @@ func Init(opts InitOptions) error {
 	}
 
 	// Create .gitkeep in empty directories so git tracks them
-	for _, d := range []string{modelsDir, defsDir} {
+	for _, d := range []string{modelsDir, defsDir, populatorsDir} {
 		gitkeep := filepath.Join(d, ".gitkeep")
 		if _, err := os.Stat(gitkeep); os.IsNotExist(err) {
 			os.WriteFile(gitkeep, []byte(""), 0644)
@@ -115,6 +119,7 @@ func Init(opts InitOptions) error {
 		fmt.Printf("  schema/        (project-specific CUE schemas)\n")
 		fmt.Printf("  schema/models/ (registered #SystemModel definitions)\n")
 		fmt.Printf("  definitions/   (desired state definitions)\n")
+		fmt.Printf("  populators/    (#EweTarget programs and local model plugins)\n")
 		fmt.Printf("  data/          (repo-local raw data, metadata, and catalog)\n")
 	}
 

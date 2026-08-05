@@ -116,10 +116,10 @@ whose producer is not named fails preflight before any member runs. Without
 pinned for downstream plain bindings.
 
 With --converge, pudl completes read-only planning for the whole set before the
-first mutation. If any selected model declares a sealed output, exact-plan
-approval is mandatory: the command persists a pending plan and prints the
-matching resume/reject commands. --require-approval may be used to request the
-same pause for any mutating run-set.
+first mutation. --require-approval persists and pauses a non-sealed exact plan.
+The sealed exact-plan contract currently fails closed during planning because
+mu v0.3.3 JSON plans omit the per-action sealed claims PUDL must validate; see
+issue pudl-olm.
 
 Examples:
   pudl run-set network app

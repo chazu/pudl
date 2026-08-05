@@ -13,4 +13,4 @@ name: "pudl"
 
 // Optional: restrict provider references that sealed outputs may write.
 // Omit for mu compatibility mode; set [] for explicit deny-all.
-// secrets: writable_refs: ["pass:myproject/*"]
+secrets: writable_refs: ["kicksecret:token"]

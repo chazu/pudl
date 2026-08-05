@@ -75,3 +75,30 @@ func TestResolveModelTemplateInRetainsIncompleteBindingModel(t *testing.T) {
 		Message:       `resolve binding "value": source-absent: no matching resource`,
 	}, diagnostic.BindingIssues[0])
 }
+
+func TestResolveModelTemplateInReportsRequestedInvalidTemplate(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cue.mod"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cue.mod", "module.cue"), []byte("module: \"test.models\"\nlanguage: version: \"v0.14.0\"\n"), 0o644))
+	modelsDir := filepath.Join(dir, "models")
+	require.NoError(t, os.MkdirAll(modelsDir, 0o755))
+	schema := strings.Replace(systemmodel.SchemaCUE(), "package systemmodel", "package models", 1)
+	source := schema + `
+
+#InvalidPointer: #SystemModel & {
+	name: "invalid-pointer"
+	inputs: value: string @pudl(binding=plain)
+	bindings: value: {
+		source: {model: "producer", schema: "resources.#Thing", identity: {name: "one"}}
+		path: "value"
+	}
+	populate: #PluginObserve & {plugin: "host", differential: false}
+}
+`
+	require.NoError(t, os.WriteFile(filepath.Join(modelsDir, "models.cue"), []byte(source), 0o644))
+	validator.ResetSharedLoaders()
+	t.Cleanup(validator.ResetSharedLoaders)
+
+	_, err := resolveModelTemplateIn(dir, "invalid-pointer")
+	require.ErrorContains(t, err, "RFC 6901 JSON Pointer")
+}

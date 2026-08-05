@@ -321,10 +321,7 @@ Examples:
 		}()
 
 		if runRequireApproval {
-			request, err := json.Marshal(approvalRequest{
-				Model: model.Name, Only: flags.only, MaxIters: flags.maxIters,
-				MaxApplies: flags.maxApplies,
-			})
+			request, err := json.Marshal(newApprovalRequest(model.Name, flags, muRoot))
 			if err != nil {
 				return err
 			}

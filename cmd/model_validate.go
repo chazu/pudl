@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -11,28 +12,87 @@ import (
 var modelValidateCmd = &cobra.Command{
 	Use:   "validate <name>",
 	Short: "Validate a registered #SystemModel without running it",
-	Long: `Resolve and validate a #SystemModel by name. It loads and decodes the
-model (CUE unification) and runs structural checks on its arms — without touching
-any external system. Reports problems and exits non-zero if any are found.`,
+	Long: `Resolve and validate a #SystemModel by name. It validates the authored
+CUE template and runs structural checks on its arms without touching any external
+system. Bound models remain valid templates before their catalog values exist;
+their final concrete values are validated again when pudl runs them.`,
 	Args:              cobra.ExactArgs(1),
 	SilenceUsage:      true,
 	ValidArgsFunction: completeModelNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m, _, _, err := resolveModel(args[0])
+		template, _, _, err := resolveModelTemplate(args[0])
 		if err != nil {
 			return err
 		}
-		problems := validateModel(m)
+		problems, err := validateModelTemplate(template)
+		if err != nil {
+			return err
+		}
 		if len(problems) == 0 {
-			fmt.Printf("✓ %s is valid\n", m.Name)
+			fmt.Printf("✓ %s is valid\n", template.Name)
 			return nil
 		}
-		fmt.Printf("✗ %s has %d problem(s):\n", m.Name, len(problems))
+		fmt.Printf("✗ %s has %d problem(s):\n", template.Name, len(problems))
 		for _, p := range problems {
 			fmt.Printf("  - %s\n", p)
 		}
-		return fmt.Errorf("model %q failed validation", m.Name)
+		return fmt.Errorf("model %q failed validation", template.Name)
 	},
+}
+
+func validateModelTemplate(template *systemmodel.ModelTemplate) ([]string, error) {
+	if len(template.Inputs) == 0 {
+		model, err := template.Elaborate(map[string]any{})
+		if err != nil {
+			return nil, err
+		}
+		return validateModel(model), nil
+	}
+
+	summary, err := template.Summary()
+	if err != nil {
+		return nil, err
+	}
+	var problems []string
+	switch summary.PopulateKind {
+	case systemmodel.KindPluginObserve:
+		if summary.PopulatePlugin == "" {
+			problems = append(problems, "populate: observe arm has no concrete plugin name")
+		}
+	case systemmodel.KindEweTarget:
+		populate := template.Value().LookupPath(cue.ParsePath("populate"))
+		if source, _ := populate.LookupPath(cue.ParsePath("eweSource")).String(); source == "" {
+			problems = append(problems, "populate: ewe arm has no eweSource")
+		}
+		if outputs, listErr := populate.LookupPath(cue.ParsePath("outputs")).List(); listErr != nil || !outputs.Next() {
+			problems = append(problems, "populate: ewe arm declares no outputs")
+		}
+	}
+	if summary.ConvergePlugin != "" && summary.DesiredCount == 0 {
+		problems = append(problems, "converge: declared but desired is empty (nothing to reconcile)")
+	}
+
+	if !templateUsesDifferentialDrift(template, summary.PopulateKind) {
+		desired := template.Value().LookupPath(cue.ParsePath("desired"))
+		if list, listErr := desired.List(); listErr == nil {
+			for index := 0; list.Next(); index++ {
+				field := list.Value().LookupPath(cue.MakePath(cue.Str("_schema")))
+				if schema, schemaErr := field.String(); schemaErr != nil || schema == "" {
+					problems = append(problems, fmt.Sprintf("desired[%d]: missing quoted \"_schema\" routing tag", index))
+				}
+			}
+		}
+	}
+	return problems, nil
+}
+
+func templateUsesDifferentialDrift(template *systemmodel.ModelTemplate, kind systemmodel.PopulateKind) bool {
+	if kind == systemmodel.KindEweTarget {
+		return false
+	}
+	value := template.Value().LookupPath(cue.ParsePath("populate.differential"))
+	differential, err := value.Bool()
+	return err == nil && differential
 }
 
 // validateModel runs structural checks beyond CUE decode (resolveModel already

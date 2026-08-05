@@ -137,7 +137,9 @@ test/
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
 - Run verdict mapping, `--only` scope selection, and the `pudl run` phase plan (`cmd` run tests)
 - Plain/sealed binding classification, exact run-set ordering, producer snapshot
-  pinning, approval/resume/reject, and durable linked reports
+  pinning, non-sealed approval/resume/reject, and durable linked reports. Sealed
+  coordination tests use synthetic action claims; the real mu plan bridge is
+  tracked by `pudl-olm`.
 - Bootstrap installation and repair derived from the complete embedded schema
   tree, including built-in `@pudl(binding=plain)` projections
 

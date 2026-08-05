@@ -275,9 +275,10 @@ exact named run-set
 ```
 
 PUDL owns selection, catalog provenance, plan approval, and reports. Mu owns
-action planning/execution and secret-provider I/O. Generated targets select
-mu's strict sealed-routing mode so target declarations are availability bounds,
-not implicit action grants.
+action planning/execution and secret-provider I/O. The accepted sealed run-set
+contract treats target declarations as availability bounds, not implicit action
+grants. Current mu JSON plans omit the action claims needed to enforce that
+contract, so PUDL fails sealed run-sets closed (`pudl-olm`).
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership

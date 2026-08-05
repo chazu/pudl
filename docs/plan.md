@@ -4,6 +4,31 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Repository-local run-set kick-the-tires (2026-08-05)
+
+The in-repository `.pudl` fixture now exercises real mu observe, planning,
+approval, provider, recovery, and concurrency boundaries while keeping every
+fixture and runtime artifact local. Live execution confirmed plain
+producer-to-consumer ordering, exact current-run snapshot binding, standalone
+reuse, structured fail-fast reports, durable non-sealed approval/resume/reject,
+stale-plan rejection, single-model sealed provider I/O, write-policy denial,
+crash `needs-verification`, and concurrent catalog safety.
+
+The sweep fixed four PUDL gaps: `model validate` now accepts structurally valid
+bound templates, requested malformed models retain their actual validation
+error instead of becoming “not found,” repo init/doctor own the supported
+`populators/` directory, and single-run approval requests preserve `--mu-root`
+across process resume. See
+[`implog/2026_08_05_repository_kick_tires.md`](../implog/2026_08_05_repository_kick_tires.md).
+
+One release blocker remains open as `pudl-olm`: mu v0.3.3 receives and executes
+sealed target declarations but omits action-level sealed claims from
+`build --plan --json`. PUDL therefore cannot validate the strict exact plan and
+fails sealed mutating run-sets closed before approval. Existing fake-runner
+coverage proves the intended contract, not the live bridge. Plain run-sets,
+non-sealed exact-plan approvals, and single-model sealed convergence remain
+executable.
+
 ### Swamp parity utility/UX slices (2026-07-27)
 
 Done — see [`docs/design/2026-07-27-swamp-parity-roadmap.md`](design/2026-07-27-swamp-parity-roadmap.md)
@@ -26,17 +51,19 @@ mixed 41-entry acceptance fixture now passes both `pudl validate --all` and
 now has an accepted design, including full v1 integration with mu's sealed-I/O
 primitives and convention-over-configuration observation reuse. The retained
 template seam, standalone plain-scalar resolver, exact `run-set` execution,
-canonical mutation approval, fail-fast receipts, and strict sealed routing are
-implemented. Producer-first scheduling, current-run snapshot pinning,
-stale-plan rejection, mandatory approval for sealed writes, redacted sealed
-provenance, and linked durable reports cover the executable orchestration
-slice. Living docs and CLI help now describe the exact run-set and strict
-sealed-routing contract; init/repair derives its owned file set from every
+canonical non-sealed mutation approval, and fail-fast receipts are implemented.
+Producer-first scheduling, current-run snapshot pinning, stale-plan rejection,
+redacted sealed provenance, and linked durable reports cover the executable
+orchestration slice. The strict sealed run-set logic is implemented at PUDL's
+coordination boundary but remains fail-closed against real mu plan output as
+described above. Living docs and CLI help describe that boundary; init/repair
+derives its owned file set from every
 embedded schema plus `#SystemModel`, and selected non-secret built-in resource
 handles expose explicit plain-binding annotations. One contract inconsistency remains: an action-backed populate cannot
 both finish the required pre-approval observation and defer its sealed write
 until after approval. PUDL fails that combination closed pending a design
-decision; converge-phase sealed production and consumption are fully wired.
+decision. Single-model converge-phase sealed production and consumption work;
+their strict cross-model run-set plan is blocked by `pudl-olm`.
 Bindings do not carry
 freshness fields: orchestrated runs prefer current-run observations, standalone
 runs use the latest successful scoped observation, and stricter age bounds
@@ -294,22 +321,23 @@ provenance source, and dry-run binding reads use a non-migrating read-only
 catalog connection.
 
 Mutating run-sets now plan every member before applying, persist one immutable
-redacted plan identity, gate sealed outputs automatically, reject stale
-resumes, stop globally after the first mutation failure, and record completed
-receipts or `needs-verification`. A durable write-ahead mutation intent now
+redacted plan identity for executable non-sealed plans, reject stale resumes,
+stop globally after the first mutation failure, and record completed receipts
+or `needs-verification`. A durable write-ahead mutation intent now
 marks every external apply uncertain until its manifest receipt commits, so a
 process loss cannot silently invite an automatic retry. Generated mu targets
-use strict action-level sealed claims, workspace-owned write policy, delayed
-provider resolution, and metadata-only PUDL evidence. Cross-model sealed
-producer/consumer runs are covered at the PUDL coordination boundary, while mu
-has a real fake-provider execution fixture.
+request strict action-level sealed claims, workspace-owned write policy, delayed
+provider resolution, and metadata-only PUDL evidence. PUDL's coordination tests
+cover synthetic sealed action claims, and mu has a real fake-provider execution
+fixture; the real JSON-plan bridge between them remains blocked by `pudl-olm`.
 
 The populate/approval boundary is now resolved: sealed outputs are
 converge-only in v1. Populate may consume sealed inputs for authenticated
 observation, but the CUE schema, Go projection, and generated mu populate
 project expose no write path. Observe-only runs may inspect a model with a
-dormant converge output without mutation; a mutating run that can execute the
-output is automatically exact-plan gated. The working design is
+dormant converge output without mutation. The accepted contract automatically
+gates a mutating run that can execute the output, but real sealed run-sets fail
+closed before that gate until `pudl-olm` is resolved. The working design is
 [`docs/design/2026-07-28-cross-resource-value-wiring.md`](design/2026-07-28-cross-resource-value-wiring.md),
 with mu secret-input/output compatibility recorded in
 [`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_07_29_cross_resource_wiring_mu_alignment.md).
@@ -322,9 +350,10 @@ an orchestrated run prefers the producer's current successful observation;
 standalone resolution uses the latest successful observation in the current
 scope. Missing or invalid values fail closed, and stricter age bounds belong
 to run/operator policy rather than the CUE binding API. Secret-valued wiring
-ships in v1 through a separate sealed-reference channel that fully reuses mu's
-existing sealed-input, sealed-output, secret-provider, taint, and write-policy
-primitives. Secret values never become CUE inputs or catalog values.
+uses a separate sealed-reference channel. Its single-model path reuses mu's
+sealed-input, sealed-output, secret-provider, taint, and write-policy
+primitives; cross-model exact planning remains blocked by `pudl-olm`. Secret
+values never become CUE inputs or catalog values.
 
 The following questions surfaced in the final adversarial review and are
 resolved inline as the implementation contract.
@@ -496,16 +525,18 @@ resolved inline as the implementation contract.
 
 11. **How is the secret boundary enforced?**
 
-    **Resolved:** plain and sealed bindings both ship in v1 as distinct,
+    **Resolved contract:** plain and sealed bindings are distinct,
     non-coercible channels. `@pudl(binding=plain)` permits a schema field and
     consumer slot to participate in catalog-scalar CUE elaboration.
     `@pudl(binding=sealed)` identifies a phase-owned sealed input or a
     converge-owned output declaration. Unannotated fields fail closed; inherited annotations are
     honored; conflicting classifications are errors. Sealed bindings transport
-    only a provider reference and execution metadata, never a value. They lower fully
+    only a provider reference and execution metadata, never a value. The
+    single-model path lowers fully
     to mu `sealed_inputs`, `sealed_input_modes`, `sealed_outputs`,
     `sealed_output_modes`, `resolve_secret`, `store_secret`, pith `secret/get`
-    taint, and `secrets.writable_refs`. PUDL never resolves or stores secret
+    taint, and `secrets.writable_refs`; cross-model exact-plan validation awaits
+    mu action claims in `pudl-olm`. PUDL never resolves or stores secret
     values. Provider references pass through generated mu configuration and
     mu's action key/provider calls as required; PUDL persists only their scheme
     and a fingerprint, and no resolved value enters CUE, catalog rows, reports,

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"cuelang.org/go/cue"
+
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -135,7 +137,14 @@ func resolveModelTemplateIn(dir, name string) (*systemmodel.ModelTemplate, error
 				Definition: schemaName, SchemaName: schemaName, LoadDir: mod.LoadPath,
 				PUDLRoot: filepath.Dir(dir),
 			})
-			if templateErr != nil || (template.Name != name && shortDefName(schemaName) != name) {
+			if templateErr != nil {
+				authoredName, _ := value.LookupPath(cue.ParsePath("name")).String()
+				if authoredName == name || shortDefName(schemaName) == name {
+					return nil, fmt.Errorf("system model %q is invalid: %w", name, templateErr)
+				}
+				continue
+			}
+			if template.Name != name && shortDefName(schemaName) != name {
 				continue
 			}
 			if match != nil && match.Origin.SchemaName != template.Origin.SchemaName {

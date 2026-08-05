@@ -20,13 +20,24 @@ local name and delivery mode. Generated mu targets opt into strict action
 routing and forward the workspace's writable-ref policy. Provider values are
 resolved only by mu at execution time.
 
+### Live compatibility correction
+
+A subsequent repository-local CLI sweep found that mu v0.3.3's
+`build --plan --json` projection omits the per-action sealed input/output claims
+that PUDL must validate. The synthetic PUDL runner tests and mu provider tests
+prove their respective sides, but not the real bridge between them. PUDL
+therefore fails sealed run-sets closed before approval; this gap is tracked by
+`pudl-olm`. Non-sealed run-set approval and single-model sealed convergence are
+executable.
+
 ## Public API
 
 - `pudl run-set <models...> --converge` plans all mutating members before the
   first apply and executes without approval only when policy permits.
 - `--require-approval` persists the exact plan and returns at the boundary.
-  Any converge-owned sealed output forces the same boundary during a mutating
-  run even when the flag is absent.
+  The accepted contract makes a converge-owned sealed output force the same
+  boundary even when the flag is absent; real sealed sets currently fail closed
+  before the boundary because of `pudl-olm`.
 - `pudl run-set resume <run-set-id>` reconstructs and digest-checks the complete
   plan before atomically approving it and beginning execution.
 - `pudl run-set reject <run-set-id>` terminates a pending plan without mutation.
@@ -61,7 +72,8 @@ resolved only by mu at execution time.
 ## Mu boundary
 
 Mu commit `a334872` adds `sealed_routing: "strict"`, target/action output modes,
-complete structured JSON plans, and delayed sealed-input resolution. Strict
+and delayed sealed-input resolution. Its internal plans carry the claims, but
+mu v0.3.3's public JSON plan projection omits them. Strict
 planning rejects implicit fan-out, undeclared or unused claims, ref/mode
 changes, and outputs without exactly one producer. A real fake-provider test
 proves planning does not resolve a value, execution performs resolve/store with
@@ -77,7 +89,7 @@ The design's 21 numbered criteria map to deterministic tests as follows:
 | --- | --- |
 | 1–5 | `internal/wiring/resolver_test.go`, `internal/systemmodel/template_test.go`, and the current-run run-set fixture cover exact scalar selection, missing/ambiguous sources, pinned/latest snapshots, age, and final CUE typing. |
 | 6–8 | Run-set integration persists typed unresolved selectors; generated mu config proves concrete input with no authoring metadata; the mu boundary has no catalog dependency or lazy PUDL lookup. |
-| 9–12 | Cross-model sealed integration plus mu's fake provider, strict-routing, non-leakage, and plan/write-time policy tests cover metadata-only reference transport and both enforcement points. |
+| 9–12 | PUDL's synthetic cross-model runner tests plus mu's separate fake-provider tests cover metadata-only reference transport and both enforcement points; `pudl-olm` tracks the missing real JSON-plan bridge test. |
 | 13–15 | Approval/resume/reject, changed-plan, completed-partial-state, global fail-fast, blocked, and cancelled integration tests cover the mutation boundary. |
 | 16–18 | Producer-owned sealed resolution, model-schema policy rejection, declaration/classification tests, and exact action-claim tests cover ownership and least privilege. |
 | 19–20 | Binding fact reconciliation and persisted versioned member/run-set reports cover durable provenance, redaction, and receipts. |
@@ -98,7 +110,9 @@ approval while also forbidding the action's sealed write before approval. V1
 therefore makes sealed outputs converge-only. Populate may consume sealed
 inputs, but its CUE arms, decoded Go type, and generated mu project expose no
 sealed-output path. Observe-only runs may inspect dormant converge declarations
-without mutation; mutating runs that can execute them require exact approval.
+without mutation. The accepted contract requires exact approval for mutating
+runs that can execute them; real sealed run-sets currently fail closed before
+that approval because of `pudl-olm`.
 
 ## Verification
 

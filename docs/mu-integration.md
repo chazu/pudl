@@ -57,17 +57,17 @@ Plain values are scalar catalog projections. The consumer declares a required
 field must opt into `@pudl(binding=plain)`. PUDL persists the value's producer,
 run, snapshot, identity, path, age, and digest as binding evidence.
 
-Sealed values never take the catalog path. PUDL renders provider references into
-mu targets with `sealed_routing: "strict"`; the plugin must explicitly claim
-each action's exact ref and mode. Mu validates those claims at planning, resolves
-secret values immediately before action execution, and re-checks
-`secrets.writable_refs` at write time. PUDL stores only redacted fingerprints.
-Sealed outputs are converge-only, and any mutating run-set that contains one
-requires approval of the exact persisted plan:
+Sealed values never take the catalog path. Single-model convergence renders
+provider references into mu targets; mu resolves values immediately before
+execution and re-checks `secrets.writable_refs` at write time. PUDL stores only
+redacted evidence. The stricter run-set contract additionally requires visible
+per-action ref/mode claims before exact-plan approval. Mu v0.3.3 omits those
+claims from `build --plan --json`, so PUDL currently fails sealed run-sets closed
+during planning (`pudl-olm`) rather than persisting an approval:
 
 ```bash
 pudl run-set network app --converge
-pudl run-set resume <run-set-id>   # or: pudl run-set reject <run-set-id>
+# currently fails closed until mu exposes sealed action claims in JSON plans
 ```
 
 ## Example: Converging Kubernetes State
