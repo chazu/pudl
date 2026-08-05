@@ -10,6 +10,13 @@ value wiring) remains explicitly deferred until the stocktake gate in §13.
 swamp + mu deployment), and the swamp agent skill tree at
 `~/.claude/skills/swamp/` (SKILL.md + 12 per-primitive guides + ~50 references)
 
+**Successor:** This roadmap intentionally stopped before R6. The accepted
+follow-on contract is
+[`2026-07-28-cross-resource-value-wiring.md`](2026-07-28-cross-resource-value-wiring.md),
+which includes plain CUE elaboration and full v1 mu sealed I/O integration.
+References to R6 as deferred below describe this completed roadmap's historical
+delivery boundary, not the current project plan.
+
 ## 1. What swamp is
 
 A repo-scoped automation runtime with a package registry behind it. State lives

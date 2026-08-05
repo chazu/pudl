@@ -17,6 +17,11 @@ type Workspace struct {
 	SchemaPath        string              // .pudl/schema/ (may not exist)
 	DefinitionsPath   string              // .pudl/definitions/ (may not exist)
 	ToolchainMappings []ToolchainOverride // per-repo toolchain overrides
+	// SecretsWritableRefs is the workspace-owned mu sealed-output allow-list.
+	// The configured bit preserves the security-significant distinction between
+	// an omitted policy (mu compatibility mode) and an explicit empty deny-all.
+	SecretsWritableRefs       []string
+	SecretsWritableConfigured bool
 }
 
 // ToolchainOverride maps a schema prefix to a toolchain for this workspace.
@@ -89,6 +94,15 @@ func load(root string) (*Workspace, error) {
 					Prefix:    prefix,
 					Toolchain: toolchain,
 				})
+			}
+		}
+	}
+
+	if secrets := val.LookupPath(cue.ParsePath("secrets")); secrets.Exists() {
+		if writable := secrets.LookupPath(cue.ParsePath("writable_refs")); writable.Exists() {
+			ws.SecretsWritableConfigured = true
+			if err := writable.Decode(&ws.SecretsWritableRefs); err != nil {
+				return nil, fmt.Errorf("parsing workspace.cue secrets.writable_refs: %w", err)
 			}
 		}
 	}

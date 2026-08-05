@@ -102,7 +102,7 @@ func TestConvergeDoesNotReportCleanAfterManifestPersistenceFailure(t *testing.T)
 	require.Error(t, err)
 	assert.Equal(t, OutcomeNeedsVerification, result.Outcome)
 	assert.EqualError(t, callbackErr, "catalog unavailable")
-	assert.Equal(t, 2, fake.observed)
+	assert.Equal(t, 1, fake.observed, "receipt loss stops before another observation/apply cycle")
 }
 
 func TestConvergeApplyFailureIsNotClean(t *testing.T) {
@@ -116,6 +116,7 @@ func TestConvergeApplyFailureIsNotClean(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, OutcomeExecuteError, result.Outcome)
 	assert.Zero(t, result.Iterations)
+	assert.True(t, result.NeedsVerification, "an impure executor can fail after partial external mutation")
 }
 
 // A lost receipt used to be dropped on every exit route except the clean one, so
@@ -134,16 +135,14 @@ func TestConvergeSurfacesLostReceiptWhenCapExhausted(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	assert.Equal(t, OutcomeCapExhausted, result.Outcome, "the cap is still why the loop stopped")
-	assert.True(t, result.NeedsVerification, "but the lost receipt must survive it")
+	assert.Equal(t, OutcomeNeedsVerification, result.Outcome)
+	assert.True(t, result.NeedsVerification)
 	assert.Contains(t, err.Error(), "needs verification")
 	assert.Equal(t, 1, result.Iterations)
 }
 
-// Same masking on the apply-error route: iteration 1 applies and loses its
-// receipt, iteration 2's apply then fails. The run must still report that it
-// cannot prove what iteration 1 did.
-func TestConvergeSurfacesLostReceiptWhenApplyLaterFails(t *testing.T) {
+// A lost receipt is a global stop boundary: a later apply must never start.
+func TestConvergeStopsImmediatelyAfterLostReceipt(t *testing.T) {
 	fake := &fakeExecutor{
 		observations: []Observation{{Clean: false}, {Clean: false}},
 		manifest:     []byte(`manifest`),
@@ -161,13 +160,25 @@ func TestConvergeSurfacesLostReceiptWhenApplyLaterFails(t *testing.T) {
 	})
 
 	require.Error(t, err)
-	require.Equal(t, 2, fake.applied, "second apply must have been attempted")
+	require.Equal(t, 1, fake.applied, "receipt loss prevents the second apply")
 	assert.Equal(t, 1, recorded, "only the successful apply produced a receipt")
-	assert.Equal(t, OutcomeExecuteError, result.Outcome, "the failed apply is still why the loop stopped")
-	assert.True(t, result.NeedsVerification, "and the earlier lost receipt survives it")
+	assert.Equal(t, OutcomeNeedsVerification, result.Outcome)
+	assert.True(t, result.NeedsVerification)
 	assert.Contains(t, err.Error(), "needs verification")
-	assert.Contains(t, err.Error(), "apply")
 	assert.Equal(t, 1, result.Iterations)
+}
+
+func TestConvergeDoesNotApplyWhenMutationIntentCannotBeRecorded(t *testing.T) {
+	fake := &fakeExecutor{observations: []Observation{{Clean: false}}}
+	result, err := Converge(ConvergeRequest{
+		Executor: fake, MaxIterations: 2,
+		BeforeApply: func(int) error { return errors.New("catalog locked") },
+	})
+	require.Error(t, err)
+	assert.Equal(t, OutcomeExecuteError, result.Outcome)
+	assert.False(t, result.NeedsVerification, "no external attempt began")
+	assert.Zero(t, fake.applied)
+	assert.Contains(t, err.Error(), "record mutation intent")
 }
 
 // Applying and then failing to re-observe is the same operational state as a lost

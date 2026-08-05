@@ -8,12 +8,20 @@ PUDL is a **personal data lake that knows things**. It ingests structured data (
 
 PUDL is the knowledge layer. It tells you what exists, what shape it has, what changed, and what's wrong. It does not execute remediation -- that is the job of **mu** (a separate tool at `~/dev/go/mu/`).
 
+PUDL may coordinate an explicit set of models when catalog selection and CUE
+elaboration must occur between them. Coordination chooses and orders run units;
+execution and all external side effects remain inside mu. PUDL never turns
+dependency discovery into implicit downstream execution.
+
 ### The Split: pudl knows, mu acts
 
 - **pudl** detects drift, validates schemas, catalogs data, and renders desired state.
 - **mu** receives desired-state sources and executes them (plugin protocol, effect dispatch).
 - `pudl run --converge` bridges the two: it renders the selected model and ingests
   mu's observe and manifest results.
+- `pudl run-set <model>...` is the bounded multi-model coordinator: the operator
+  names the exact set, PUDL resolves cross-model values and approvals, and mu
+  executes each member graph.
 
 This separation keeps pudl focused on data and knowledge while mu handles side effects and execution.
 

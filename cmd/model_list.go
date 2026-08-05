@@ -24,6 +24,8 @@ type ModelInfo struct {
 	SchemaName string                   // canonical schema name, e.g. "models.#GithubChazu"
 	Dir        string                   // module dir the definition was loaded from
 	Model      *systemmodel.SystemModel // decoded model
+	Template   *systemmodel.ModelTemplate
+	Summary    systemmodel.TemplateSummary
 }
 
 // modelSearchDirs returns the schema dirs to search, project first (shadows global).
@@ -87,16 +89,32 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 			if !ok {
 				continue
 			}
-			m, derr := systemmodel.DecodeValue(val)
-			if derr != nil {
+			template, templateErr := systemmodel.NewTemplate(val, systemmodel.TemplateOrigin{
+				Definition: schemaName, SchemaName: schemaName, LoadDir: mod.LoadPath,
+				PUDLRoot: filepath.Dir(dir),
+			})
+			if templateErr != nil {
 				continue
 			}
+			summary, summaryErr := template.Summary()
+			if summaryErr != nil {
+				continue
+			}
+			// Preserve the existing concrete projection for commands that inspect
+			// models without bindings. Bound models remain discoverable through their
+			// retained template and summary until run-time elaboration.
+			var m *systemmodel.SystemModel
+			if len(template.Bindings) == 0 {
+				m, _ = systemmodel.DecodeValue(val)
+			}
 			out = append(out, ModelInfo{
-				Name:       m.Name,
+				Name:       template.Name,
 				DefName:    shortDefName(schemaName),
 				SchemaName: schemaName,
 				Dir:        mod.LoadPath,
 				Model:      m,
+				Template:   template,
+				Summary:    summary,
 			})
 		}
 	}
@@ -105,8 +123,8 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 
 // convergeName returns the converge plugin name, or "-" for observe-only models.
 func (mi ModelInfo) convergeName() string {
-	if mi.Model.Convergent() {
-		return mi.Model.Converge.Plugin
+	if mi.Summary.ConvergePlugin != "" {
+		return mi.Summary.ConvergePlugin
 	}
 	return "-"
 }
@@ -167,10 +185,10 @@ resolve — independent of whether a model has been run yet.`,
 			}
 			fmt.Printf("  %-24s %-9s %-12s %-8d %-7d %-10s %s\n",
 				mi.Name,
-				string(mi.Model.Populate.Kind()),
+				string(mi.Summary.PopulateKind),
 				mi.convergeName(),
-				len(mi.Model.Desired),
-				len(mi.Model.Checks),
+				mi.Summary.DesiredCount,
+				mi.Summary.CheckCount,
 				status,
 				mi.SchemaName,
 			)
@@ -194,12 +212,12 @@ func (mi ModelInfo) summary() modelSummary {
 	s := modelSummary{
 		Name:       mi.Name,
 		Definition: mi.SchemaName,
-		Populate:   string(mi.Model.Populate.Kind()),
-		Desired:    len(mi.Model.Desired),
-		Checks:     len(mi.Model.Checks),
+		Populate:   string(mi.Summary.PopulateKind),
+		Desired:    mi.Summary.DesiredCount,
+		Checks:     mi.Summary.CheckCount,
 	}
-	if mi.Model.Convergent() {
-		s.Converge = mi.Model.Converge.Plugin
+	if mi.Summary.ConvergePlugin != "" {
+		s.Converge = mi.Summary.ConvergePlugin
 	}
 	return s
 }

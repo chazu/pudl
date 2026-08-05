@@ -33,6 +33,7 @@ type ObserveHook func(Observation)
 
 // ApplyHook receives the one-based apply iteration number.
 type ApplyHook func(iteration int)
+type BeforeApplyHook func(iteration int) error
 
 // PlanHook receives the rendered mu plan for a dry run.
 type PlanHook func(string)
@@ -74,7 +75,10 @@ type ConvergeRequest struct {
 	DryRun         bool
 	RecordManifest ManifestRecorder
 	OnObserve      ObserveHook
-	OnApply        ApplyHook
+	// BeforeApply is the durable write-ahead boundary. When configured, it must
+	// succeed before the executor may begin an external mutation.
+	BeforeApply BeforeApplyHook
+	OnApply     ApplyHook
 	// OnApplied fires immediately after each successful apply, before the
 	// manifest is recorded. That ordering is load-bearing: the durable apply
 	// count must land before anything else in the iteration can fail, or a
@@ -112,6 +116,7 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 
 	result := ConvergeResult{}
 	manifestFailure := false
+	attemptUnverified := false
 
 	// Every exit is a `break` rather than a `return` so that the
 	// needs-verification verdict below is evaluated on all of them. Returning
@@ -161,6 +166,14 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 		}
 
 		iteration := i + 1
+		if request.BeforeApply != nil {
+			if err := request.BeforeApply(iteration); err != nil {
+				result.Outcome = OutcomeExecuteError
+				loopErr = fmt.Errorf("record mutation intent: %w", err)
+				break
+			}
+		}
+		attemptUnverified = true
 		if request.OnApply != nil {
 			request.OnApply(iteration)
 		}
@@ -181,22 +194,26 @@ func Converge(request ConvergeRequest) (ConvergeResult, error) {
 				if request.OnRecordFailure != nil {
 					request.OnRecordFailure(err)
 				}
+				break
 			}
 		}
+		attemptUnverified = false
 	}
 
 	// Two distinct ways to end a run having mutated the system without being able
 	// to prove the result: the receipt was lost, or the verifying observation
 	// never came back. Both are the same operational state.
-	result.NeedsVerification = manifestFailure ||
+	result.NeedsVerification = manifestFailure || attemptUnverified ||
 		(result.Outcome == OutcomeObserveError && result.Iterations > 0)
 
 	if result.NeedsVerification {
-		if result.Outcome == OutcomeClean {
+		if result.Outcome == OutcomeClean || result.Outcome == "" {
 			result.Outcome = OutcomeNeedsVerification
 		}
 		reason := "an apply manifest was not recorded"
-		if !manifestFailure {
+		if attemptUnverified && result.Outcome == OutcomeExecuteError {
+			reason = "an apply attempt may have partially mutated the system"
+		} else if !manifestFailure {
 			reason = "the re-observation after an apply failed"
 		}
 		if loopErr == nil {

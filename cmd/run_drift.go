@@ -103,12 +103,35 @@ func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) 
 
 	var b strings.Builder
 	b.WriteString("package mu\n\n")
+	if err := renderWritableRefsPolicy(&b, len(m.Converge.SealedOutputs) > 0); err != nil {
+		return "", err
+	}
 	fmt.Fprintf(&b, "plugins: %s\n\n", pluginsJSON)
 	b.WriteString("targets: [{\n")
 	fmt.Fprintf(&b, "\ttarget:    %q\n", driftTargetName(m.Name))
 	fmt.Fprintf(&b, "\ttoolchain: %q\n", plugin)
 	fmt.Fprintf(&b, "\tsources:   %s\n", srcJSON)
 	fmt.Fprintf(&b, "\tconfig:    %s\n", cfgJSON)
+	if len(m.Converge.SealedInputs) > 0 || len(m.Converge.SealedOutputs) > 0 {
+		b.WriteString("\tsealed_routing: \"strict\"\n")
+	}
+	if len(m.Converge.SealedInputs) > 0 {
+		refs, modes, err := sealedInputProjection(m.Converge.SealedInputs)
+		if err != nil {
+			return "", fmt.Errorf("converge: %w", err)
+		}
+		sealedJSON, _ := json.Marshal(refs)
+		fmt.Fprintf(&b, "\tsealed_inputs: %s\n", sealedJSON)
+		modesJSON, _ := json.Marshal(modes)
+		fmt.Fprintf(&b, "\tsealed_input_modes: %s\n", modesJSON)
+	}
+	if len(m.Converge.SealedOutputs) > 0 {
+		refs, modes := sealedOutputProjection(m.Converge.SealedOutputs)
+		sealedJSON, _ := json.Marshal(refs)
+		fmt.Fprintf(&b, "\tsealed_outputs: %s\n", sealedJSON)
+		modesJSON, _ := json.Marshal(modes)
+		fmt.Fprintf(&b, "\tsealed_output_modes: %s\n", modesJSON)
+	}
 	b.WriteString("}]\n")
 	return b.String(), nil
 }
@@ -137,6 +160,10 @@ func writeDesiredManifests(desired []map[string]any, dir string) ([]string, erro
 // (converge) run against Target. Call Cleanup when done.
 type reconcileWorkspace struct {
 	MuRoot string
+	// Dir is the ephemeral generated-project directory. Exact-plan hashing
+	// canonicalizes this path because a resume reconstructs equivalent files in
+	// a fresh directory.
+	Dir    string
 	Target string
 	// RunID tags the observations this workspace records, so a verdict can be
 	// traced back to the run that produced it.
@@ -195,6 +222,7 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	}
 	return &reconcileWorkspace{
 		MuRoot:  muRoot,
+		Dir:     dir,
 		Target:  driftTargetName(m.Name),
 		RunID:   runID,
 		DryRun:  dryRun,

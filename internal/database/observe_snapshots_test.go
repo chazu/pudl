@@ -143,6 +143,45 @@ func TestCurrentObserveSnapshot_NoneIsNil(t *testing.T) {
 	assert.Nil(t, current)
 }
 
+func finishSnapshotRun(t *testing.T, db *CatalogDB, snapshot ObserveSnapshot, status string) {
+	t.Helper()
+	require.NoError(t, db.StartRun(snapshot.RunID, snapshot.Model, "observe-only"))
+	require.NoError(t, db.FinishRun(snapshot.RunID, RunConclusion{CompletionStatus: status}))
+}
+
+func TestLatestSuccessfulObserveSnapshot_IsScopedAndProvenSuccessful(t *testing.T) {
+	db := snapshotTestDB(t)
+	base := time.Now().Add(-time.Hour)
+	success := snapshotFor("snap_success", "producer", SnapshotSourceMuObserve, base)
+	failed := snapshotFor("snap_failed", "producer", SnapshotSourceMuObserve, base.Add(10*time.Minute))
+	otherWorkspace := snapshotFor("snap_other_workspace", "producer", SnapshotSourceMuObserve, base.Add(20*time.Minute))
+	otherWorkspace.Workspace = "other"
+	legacy := snapshotFor("snap_legacy", "producer", SnapshotSourceMuObserve, base.Add(30*time.Minute))
+	registration := snapshotFor("snap_registration", "producer", SnapshotSourceModelInstance, base.Add(40*time.Minute))
+
+	for _, snapshot := range []ObserveSnapshot{success, failed, otherWorkspace, legacy, registration} {
+		require.NoError(t, db.RecordObserveSnapshot(snapshot))
+	}
+	finishSnapshotRun(t, db, success, RunStatusSucceeded)
+	finishSnapshotRun(t, db, failed, RunStatusFailed)
+	finishSnapshotRun(t, db, otherWorkspace, RunStatusSucceeded)
+	finishSnapshotRun(t, db, registration, RunStatusSucceeded)
+
+	got, err := db.LatestSuccessfulObserveSnapshot("producer", "repo")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, success.SnapshotID, got.SnapshotID)
+
+	current, err := db.SuccessfulObserveSnapshotForRun("producer", "repo", success.RunID)
+	require.NoError(t, err)
+	require.NotNil(t, current)
+	assert.Equal(t, success.SnapshotID, current.SnapshotID)
+
+	missing, err := db.SuccessfulObserveSnapshotForRun("producer", "repo", failed.RunID)
+	require.NoError(t, err)
+	assert.Nil(t, missing)
+}
+
 func TestSnapshotRecordEntries_ReturnsOnlyThatSnapshotsMembers(t *testing.T) {
 	db := snapshotTestDB(t)
 	raw := filepath.Join(t.TempDir(), "raw")

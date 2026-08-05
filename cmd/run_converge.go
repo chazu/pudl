@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 
@@ -13,7 +15,7 @@ import (
 // planConverge runs `mu build --plan` against the workspace target: it shows the
 // actions the converge plugin would apply, executing nothing.
 func (w *reconcileWorkspace) planConverge() (string, error) {
-	out, err := w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--plan")
+	out, err := w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--plan", "--json")
 	if err != nil {
 		return "", fmt.Errorf("mu build --plan %s: %w", w.Target, err)
 	}
@@ -95,13 +97,28 @@ func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, m
 	defer w.Cleanup()
 
 	live := !jsonOutput // suppress progress chatter when emitting machine JSON
+	lastIteration := 0
+	var receipts []MutationReceipt
 	result, runErr := acute.Converge(acute.ConvergeRequest{
 		Executor:      &muConvergeExecutor{workspace: w},
 		MaxIterations: maxIters,
 		ApplyBudget:   budget,
 		DryRun:        dryRun,
+		BeforeApply: func(int) error {
+			return beginDurableMutationAttempt(cat, runID)
+		},
 		RecordManifest: func(manifest []byte) error {
-			return ingestConvergeManifest(cat, m.Name, runID, manifest)
+			if err := ingestConvergeManifest(cat, m.Name, runID, manifest); err != nil {
+				return err
+			}
+			if err := completeDurableMutationReceipt(cat, runID); err != nil {
+				return err
+			}
+			digest := sha256.Sum256(manifest)
+			receipts = append(receipts, MutationReceipt{
+				Iteration: lastIteration, ManifestSHA256: hex.EncodeToString(digest[:]), Status: "completed",
+			})
+			return nil
 		},
 		OnObserve: func(observation acute.Observation) {
 			if !live {
@@ -122,6 +139,7 @@ func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, m
 			}
 		},
 		OnApplied: func(iteration int) {
+			lastIteration = iteration
 			// The durable half of the halting guarantee. Recorded per apply, so a
 			// run killed here still tells the next one what it spent.
 			recordDurableApply(cat, runID, live)
@@ -132,6 +150,7 @@ func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, m
 			}
 		},
 	})
+	runErr = redactSealedError(runErr, m)
 
 	if runErr != nil && result.Outcome == outcomeExecErr && live {
 		fmt.Printf("converge apply failed: %v\n", runErr)
@@ -148,6 +167,7 @@ func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, m
 		Outcome:           string(result.Outcome),
 		Iterations:        result.Iterations,
 		NeedsVerification: result.NeedsVerification,
+		MutationReceipts:  receipts,
 	}
 	return rep, runErr
 }
@@ -167,4 +187,20 @@ func recordDurableApply(cat *runCatalog, runID string, live bool) {
 	if err := db.RecordApply(runID); err != nil && live {
 		fmt.Printf("warning: could not record the apply against this model's budget: %v\n", err)
 	}
+}
+
+func beginDurableMutationAttempt(cat *runCatalog, runID string) error {
+	db, err := cat.required()
+	if err != nil {
+		return err
+	}
+	return db.BeginRunMutationAttempt(runID)
+}
+
+func completeDurableMutationReceipt(cat *runCatalog, runID string) error {
+	db, err := cat.required()
+	if err != nil {
+		return err
+	}
+	return db.CompleteRunMutationReceipt(runID)
 }

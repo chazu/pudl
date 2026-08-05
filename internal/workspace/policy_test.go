@@ -97,6 +97,28 @@ func TestPolicy_LocalWorkspacePrecedesGlobal(t *testing.T) {
 	assert.Equal(t, filepath.Join(pudlDir, "schema", "pudl", "rules"), write)
 }
 
+func TestPolicy_SecretsWritablePolicyPreservesAbsentVersusDenyAll(t *testing.T) {
+	global := globalDir(t)
+	root := repoWorkspace(t, t.TempDir(), "locked")
+	workspaceCue := filepath.Join(root, ".pudl", "workspace.cue")
+	require.NoError(t, os.WriteFile(workspaceCue, []byte("name: \"locked\"\nsecrets: writable_refs: []\n"), 0o644))
+
+	policy, err := Resolve(root, global)
+	require.NoError(t, err)
+	refs, configured := policy.SecretsWritablePolicy()
+	assert.True(t, configured)
+	assert.Empty(t, refs)
+
+	globalPolicy, err := Resolve(t.TempDir(), global)
+	require.NoError(t, err)
+	if globalPolicy.InWorkspace() {
+		t.Skip("the temp dir sits inside a real pudl workspace")
+	}
+	refs, configured = globalPolicy.SecretsWritablePolicy()
+	assert.False(t, configured)
+	assert.Nil(t, refs)
+}
+
 func TestPolicy_RepoRulesShadowGlobalRules(t *testing.T) {
 	// The shadowing contract, asserted through the loader rather than by reading
 	// the order off the slice: a rule name defined in both resolves to the repo's.

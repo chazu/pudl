@@ -15,10 +15,18 @@ fake remote host (inventory class). See
 `docs/design/system-models/V1-BUILD-SPEC.md` §12, and the pudl-side convergence
 work (`docs/system-models-build-status.md`).
 
+> **Supersession note (2026-08-05):** The dependency fact substrate in this
+> document remains authoritative. The claims below that cross-model value flow
+> and all downstream coordination are out of scope are superseded by
+> `docs/design/2026-07-28-cross-resource-value-wiring.md`. Standalone
+> `pudl run` still never starts producers implicitly; the new bounded contract
+> adds an explicit, exact-set `pudl run-set` coordinator while mu continues to
+> execute each model's internal graph.
+
 ## The problem
 
-`pudl run <model>` is **single-instance**. A model declares `desired` state and
-observes the world, but there is no way to express — or reason over — the fact
+`pudl run <model>` remains **single-instance**. When this design was written,
+there was no way to express — or reason over — the fact
 that **one model's state depends on another model's output**:
 
 - a `network` model produces subnets/VPCs that a `compute` model's `desired`
@@ -47,15 +55,14 @@ deliberately relocated every socket concern, and §12 records it:
   resource ordering is the plugin's job.
 - **Relating** → pudl Datalog (P2), not in-body plugin calls or a declaration
   graph.
-- **Value passing** (B's field = A's *generated* output, e.g. `subnet.vpcId ←
-  vpc.id`) → the mu DAG / ewe `.result` threading — the deferred **ewe-converge**
-  item (§7), whose revisit-trigger is a second/third pure-HTTP-CRUD converger.
+- **Value passing** was deferred from this slice. Its successor is now the
+  bounded CUE-elaboration and sealed-reference contract in
+  `docs/design/2026-07-28-cross-resource-value-wiring.md`; interpolation and
+  lazy runtime catalog reads remain rejected.
 
-So this design covers **reasoning over dependencies** (ordering, impact),
-explicitly **not** author-visible declarative value interpolation at the
-`desired` layer. That one genuinely-lost capability (Terraform-style
-`${vpc.id}`) stays parked behind the ewe-converge trigger; it is a separate,
-larger feature and YAGNI until a real consumer appears.
+This document continues to cover **reasoning over dependencies** (ordering and
+impact). The successor adds typed plain-value elaboration and sealed-reference
+flow without reviving Terraform-style string interpolation.
 
 **Why this is not a socket resurrection** — and the spec authorizes it. The
 retired socket concern was runtime **output→input value dataflow** between named
@@ -325,13 +332,12 @@ Phase-1 actions are **read-only advisories**:
 - The topological **order helper** (Phase 1 step 4) prints an order; it does not
   run anything.
 
-**Re-running downstream models is out of scope for pudl.** Automatically
-re-triggering `impacted_by` models after an upstream reaches `clean` is
-**orchestration** — the mu DAG's job (ordering → mu DAG, E5), or an external
-scheduler reading the relation. pudl emits `impacted_by` and the topo order; a
-consumer outside pudl decides whether and how to act. There is no
-`pudl run --with-downstream`; proposing one would stake a claim on orchestration
-inside pudl's CLI that the charter forbids.
+**Implicit downstream triggering remains out of scope.** Standalone resolution
+does not start a missing producer, and there is no graph-discovering
+`pudl run --with-downstream`. The successor design adds explicit
+`pudl run-set <model>...`: PUDL coordinates exactly the operator-named model
+set because catalog selection and CUE elaboration occur between members; mu
+still plans and executes each member's internal target/action graph.
 
 ## Phasing / revisit-triggers
 

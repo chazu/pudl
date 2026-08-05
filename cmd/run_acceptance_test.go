@@ -91,6 +91,13 @@ func acceptanceFixture(t *testing.T) (*runCatalog, string) {
 	return cat, muRoot
 }
 
+func startAcceptanceMutationRun(t *testing.T, cat *runCatalog) {
+	t.Helper()
+	db, err := cat.required()
+	require.NoError(t, err)
+	require.NoError(t, db.StartRun("run_a", "m", "converge"))
+}
+
 func TestAcceptance_ObserveOnlyDifferentialRun(t *testing.T) {
 	cat, muRoot := acceptanceFixture(t)
 	mu := &scriptedMu{observes: [][]byte{[]byte(cleanObserve)}}
@@ -121,6 +128,7 @@ func TestAcceptance_ConvergeToClean(t *testing.T) {
 	// Drifted, apply, re-observe clean — the loop's whole point, and previously
 	// untestable without a real cluster.
 	cat, muRoot := acceptanceFixture(t)
+	startAcceptanceMutationRun(t, cat)
 	mu := &scriptedMu{
 		observes:  [][]byte{[]byte(driftedObserve), []byte(cleanObserve)},
 		manifests: [][]byte{[]byte(`{"actions":[]}`)},
@@ -128,6 +136,9 @@ func TestAcceptance_ConvergeToClean(t *testing.T) {
 
 	report, err := runConvergeLoop(cat, mu, convergentModel(), muRoot, t.TempDir(), "run_a", 5, false, nil)
 	require.NoError(t, err)
+	require.Len(t, report.MutationReceipts, 1)
+	assert.Equal(t, 1, report.MutationReceipts[0].Iteration)
+	assert.Equal(t, "completed", report.MutationReceipts[0].Status)
 	require.NotNil(t, report)
 
 	assert.Equal(t, string(acute.OutcomeClean), report.Outcome)
@@ -139,6 +150,7 @@ func TestAcceptance_ConvergeToClean(t *testing.T) {
 
 func TestAcceptance_ApplyFailureIsNonCleanAndVisible(t *testing.T) {
 	cat, muRoot := acceptanceFixture(t)
+	startAcceptanceMutationRun(t, cat)
 	mu := &scriptedMu{
 		observes: [][]byte{[]byte(driftedObserve)},
 		applyErr: fmt.Errorf("provider rejected the manifest"),
@@ -150,13 +162,15 @@ func TestAcceptance_ApplyFailureIsNonCleanAndVisible(t *testing.T) {
 
 	assert.Equal(t, string(acute.OutcomeExecuteError), report.Outcome)
 	assert.Equal(t, 0, report.Iterations)
-	assert.Equal(t, "failed", runVerdict(&RunReport{Converge: report}, runFlags{converge: true}))
+	assert.True(t, report.NeedsVerification)
+	assert.Equal(t, "unknown", runVerdict(&RunReport{Converge: report}, runFlags{converge: true}))
 }
 
 func TestAcceptance_ManifestPersistenceFailureIsNotReportedAsClean(t *testing.T) {
 	// The lost-receipt case: the apply succeeded and the re-observation is clean,
 	// but the receipt could not be recorded. It must not become `clean`.
 	cat, muRoot := acceptanceFixture(t)
+	startAcceptanceMutationRun(t, cat)
 	mu := &scriptedMu{
 		observes:  [][]byte{[]byte(driftedObserve), []byte(cleanObserve)},
 		manifests: [][]byte{[]byte(`not valid json — the ingest will reject it`)},
@@ -184,7 +198,7 @@ func TestAcceptance_DryRunPlansAndAppliesNothing(t *testing.T) {
 
 	assert.Equal(t, string(acute.OutcomeDryRun), report.Outcome)
 	assert.Equal(t, 0, mu.applied, "a dry run applies nothing")
-	assert.Equal(t, []string{"[--plan]"}, mu.buildLog, "and only ever asks mu to plan")
+	assert.Equal(t, []string{"[--plan --json]"}, mu.buildLog, "and only ever asks mu for a structured plan")
 	assert.False(t, cat.opened, "nor does it open the catalog")
 }
 
@@ -206,6 +220,7 @@ func TestAcceptance_ObserveFailureAfterApplyNeedsVerification(t *testing.T) {
 	// Applying and then failing to re-observe is the same operational state as a
 	// lost receipt: the system changed and the result cannot be proven.
 	cat, muRoot := acceptanceFixture(t)
+	startAcceptanceMutationRun(t, cat)
 	mu := &failAfterApplyMu{manifest: []byte(`{"actions":[]}`)}
 
 	report, err := runConvergeLoop(cat, mu, convergentModel(), muRoot, t.TempDir(), "run_a", 5, false, nil)

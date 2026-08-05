@@ -69,12 +69,11 @@ type Populate struct {
 	Input        map[string]any `json:"input,omitempty"`
 	Differential bool           `json:"differential,omitempty"` // observer reports per-resource exists/matches (k8s); false → inventory set-diff
 	// #EweTarget
-	EweSource        string            `json:"eweSource,omitempty"`
-	Outputs          []string          `json:"outputs,omitempty"`
-	Network          bool              `json:"network,omitempty"`
-	Impure           bool              `json:"impure,omitempty"`
-	SealedInputs     map[string]string `json:"sealed_inputs,omitempty"`
-	SealedInputModes map[string]string `json:"sealed_input_modes,omitempty"`
+	EweSource    string                 `json:"eweSource,omitempty"`
+	Outputs      []string               `json:"outputs,omitempty"`
+	Network      bool                   `json:"network,omitempty"`
+	Impure       bool                   `json:"impure,omitempty"`
+	SealedInputs map[string]SealedInput `json:"-"`
 }
 
 // PopulateKind enumerates the populate union arms.
@@ -108,8 +107,10 @@ func (m *SystemModel) DifferentialDrift() bool {
 
 // PluginPlan is the converge arm: a declarative-apply plugin + its input.
 type PluginPlan struct {
-	Plugin string         `json:"plugin"`
-	Input  map[string]any `json:"input,omitempty"`
+	Plugin        string                  `json:"plugin"`
+	Input         map[string]any          `json:"input,omitempty"`
+	SealedInputs  map[string]SealedInput  `json:"-"`
+	SealedOutputs map[string]SealedOutput `json:"-"`
 }
 
 // Check is an observe-only flag over a Datalog relation.
@@ -155,6 +156,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 	}
 	if desired != nil {
 		m.Desired = desired
+	}
+	if err := decodeSealedDeclarations(inst, &m); err != nil {
+		return nil, err
 	}
 	return &m, nil
 }

@@ -51,7 +51,7 @@ func TestResolveApplyBudget_SubtractsSpentApplies(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		require.NoError(t, db.RecordApply("run_1"))
 	}
-	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{Verdict: "failed"}))
+	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{CompletionStatus: database.RunStatusFailed, Verdict: "failed"}))
 
 	budget := resolveApplyBudget(cat, "m", runFlags{converge: true, maxApplies: 20}, false)
 	require.NotNil(t, budget)
@@ -67,7 +67,7 @@ func TestResolveApplyBudget_ExhaustedFloorsAtZeroRatherThanGoingNegative(t *test
 	for i := 0; i < 9; i++ {
 		require.NoError(t, db.RecordApply("run_1"))
 	}
-	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{Verdict: "failed"}))
+	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{CompletionStatus: database.RunStatusFailed, Verdict: "failed"}))
 
 	budget := resolveApplyBudget(cat, "m", runFlags{converge: true, maxApplies: 4}, false)
 	require.NotNil(t, budget)
@@ -83,12 +83,12 @@ func TestResolveApplyBudget_CleanRunRefillsIt(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		require.NoError(t, db.RecordApply("run_1"))
 	}
-	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{Verdict: "failed"}))
+	require.NoError(t, db.FinishRun("run_1", database.RunConclusion{CompletionStatus: database.RunStatusFailed, Verdict: "failed"}))
 
 	// The remediation loop: this run applied once and ended clean.
 	require.NoError(t, db.StartRun("run_2", "m", "converge"))
 	require.NoError(t, db.RecordApply("run_2"))
-	require.NoError(t, db.FinishRun("run_2", database.RunConclusion{Verdict: "clean"}))
+	require.NoError(t, db.FinishRun("run_2", database.RunConclusion{CompletionStatus: database.RunStatusSucceeded, Verdict: "clean"}))
 
 	budget := resolveApplyBudget(cat, "m", runFlags{converge: true, maxApplies: 20}, false)
 	require.NotNil(t, budget)

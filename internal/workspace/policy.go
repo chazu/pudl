@@ -60,6 +60,16 @@ type Policy struct {
 	ModelSearchPaths []string
 }
 
+// SecretsWritablePolicy returns the workspace-owned sealed-output policy. The
+// boolean is false when no policy was authored; an authored empty slice is an
+// explicit deny-all and therefore returns true.
+func (p *Policy) SecretsWritablePolicy() (refs []string, configured bool) {
+	if p == nil || p.Workspace == nil {
+		return nil, false
+	}
+	return append([]string(nil), p.Workspace.SecretsWritableRefs...), p.Workspace.SecretsWritableConfigured
+}
+
 // Resolve discovers the workspace for a working directory and assembles every
 // search path from it.
 func Resolve(cwd, globalDir string) (*Policy, error) {

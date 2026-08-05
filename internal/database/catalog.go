@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,6 +92,30 @@ func NewCatalogDB(configDir string) (*CatalogDB, error) {
 	}
 
 	return db, nil
+}
+
+// OpenCatalogDBReadOnly opens an existing catalog without creating directories,
+// running migrations, rebuilding views, or performing backfills. It is intended
+// for plan-only operations whose contract permits catalog reads but no writes.
+func OpenCatalogDBReadOnly(configDir string) (*CatalogDB, error) {
+	dbPath := filepath.Join(configDir, "data", "sqlite", "catalog.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, fmt.Errorf("open read-only catalog: %w", err)
+	}
+	dsn := (&url.URL{
+		Scheme:   "file",
+		Path:     dbPath,
+		RawQuery: "mode=ro&_pragma=busy_timeout(5000)",
+	}).String()
+	sqlDB, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open read-only catalog: %w", err)
+	}
+	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
+		return nil, fmt.Errorf("open read-only catalog: %w", err)
+	}
+	return &CatalogDB{db: sqlDB, configDir: configDir}, nil
 }
 
 // initialize sets up the database connection and creates tables if needed
@@ -607,6 +632,29 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", entry.ID), nil)
 	}
 
+	return nil
+}
+
+// UpdateEntryIdentity enriches a content-addressed entry whose bytes were
+// deduplicated before schema-relative identity metadata was available.
+func (c *CatalogDB) UpdateEntryIdentity(id, resourceID, identityJSON string) error {
+	return updateEntryIdentityIn(c.db, id, resourceID, identityJSON)
+}
+
+func updateEntryIdentityIn(q dbtx, id, resourceID, identityJSON string) error {
+	result, err := q.Exec(`UPDATE catalog_entries
+		SET resource_id = ?, identity_json = ?, updated_at = ? WHERE id = ?`,
+		resourceID, identityJSON, formatCatalogTime(time.Now()), id)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update catalog entry identity", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get updated identity row count", err)
+	}
+	if affected == 0 {
+		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
+	}
 	return nil
 }
 

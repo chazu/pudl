@@ -21,6 +21,7 @@ const modelDependsRelation = "model_depends_on"
 // other: each only manages edges carrying its own source.
 func declaredSource(model string) string { return "model:" + model }
 func derivedSource(model string) string  { return "derived:" + model }
+func bindingSource(model string) string  { return "binding:" + model }
 
 // declaredDepsOf canonicalizes a model's declared depends_on into a set of
 // resolved instance names (so the `to` recorded matches the `from` that dep
@@ -28,18 +29,26 @@ func derivedSource(model string) string  { return "derived:" + model }
 // don't resolve to a known model (the edge is still recorded — forward
 // references register — but impact answers stay partial until it exists).
 func declaredDepsOf(m *systemmodel.SystemModel) (map[string]struct{}, []string) {
-	declared := make(map[string]struct{}, len(m.DependsOn))
+	return declaredDeps(m.Name, m.DependsOn)
+}
+
+func declaredDepsOfTemplate(template *systemmodel.ModelTemplate) (map[string]struct{}, []string) {
+	return declaredDeps(template.Name, template.DependsOn)
+}
+
+func declaredDeps(model string, dependencies []string) (map[string]struct{}, []string) {
+	declared := make(map[string]struct{}, len(dependencies))
 	var warnings []string
-	for _, dep := range m.DependsOn {
+	for _, dep := range dependencies {
 		if dep == "" {
 			continue
 		}
-		if dep == m.Name {
-			warnings = append(warnings, fmt.Sprintf("model %q declares a dependency on itself; ignored", m.Name))
+		if dep == model {
+			warnings = append(warnings, fmt.Sprintf("model %q declares a dependency on itself; ignored", model))
 			continue
 		}
 		canonical := dep
-		if found, _, _, rerr := resolveModel(dep); rerr == nil && found != nil {
+		if found, _, _, rerr := resolveModelTemplate(dep); rerr == nil && found != nil {
 			canonical = found.Name
 		} else {
 			warnings = append(warnings, fmt.Sprintf("depends_on %q does not resolve to a known model (edge recorded; impact answers stay partial until it is registered/run)", dep))
@@ -62,7 +71,19 @@ func declaredDepsOf(m *systemmodel.SystemModel) (map[string]struct{}, []string) 
 // keyed on the instance NAME, so model-level names join cleanly across the
 // closure.
 func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[string]struct{}) error {
-	facts, err := db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
+	return db.WithCatalogTx(func(tx *database.CatalogTx) error {
+		return reconcileEdgesIn(tx, from, source, wanted)
+	})
+}
+
+type dependencyFactStore interface {
+	QueryFacts(filter database.FactFilter) ([]database.Fact, error)
+	AddFact(fact database.Fact) (database.Fact, error)
+	InvalidateFact(id string) error
+}
+
+func reconcileEdgesIn(store dependencyFactStore, from, source string, wanted map[string]struct{}) error {
+	facts, err := store.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
 	if err != nil {
 		return err
 	}
@@ -79,7 +100,7 @@ func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[stri
 
 	add, invalidate := dependencyDiff(wanted, current)
 	for _, id := range invalidate {
-		if ierr := db.InvalidateFact(id); ierr != nil {
+		if ierr := store.InvalidateFact(id); ierr != nil {
 			return fmt.Errorf("invalidate stale dependency for %s: %w", from, ierr)
 		}
 	}
@@ -88,7 +109,7 @@ func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[stri
 		if merr != nil {
 			return merr
 		}
-		if _, aerr := db.AddFact(database.Fact{
+		if _, aerr := store.AddFact(database.Fact{
 			Relation: modelDependsRelation,
 			Args:     string(args),
 			Source:   source,
@@ -97,6 +118,22 @@ func reconcileEdges(db *database.CatalogDB, from, source string, wanted map[stri
 		}
 	}
 	return nil
+}
+
+func bindingDepsOf(template *systemmodel.ModelTemplate) map[string]struct{} {
+	dependencies := make(map[string]struct{}, len(template.BindingProducers))
+	for _, producer := range template.BindingProducers {
+		canonical := producer
+		if found, _, _, err := resolveModelTemplate(producer); err == nil && found != nil {
+			canonical = found.Name
+		}
+		dependencies[canonical] = struct{}{}
+	}
+	return dependencies
+}
+
+func reconcileBindingDependencies(db *database.CatalogDB, template *systemmodel.ModelTemplate) error {
+	return reconcileEdges(db, template.Name, bindingSource(template.Name), bindingDepsOf(template))
 }
 
 // reconcileModelDependencies reconciles a model's DECLARED depends_on into

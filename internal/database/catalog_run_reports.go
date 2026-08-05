@@ -36,13 +36,17 @@ func (c *CatalogDB) ensureRunReportsTable() error {
 // SaveRunReport replaces the report for a run. A report is written after the
 // phase data is known and before the run's terminal status is finalized.
 func (c *CatalogDB) SaveRunReport(runID, model string, report []byte) error {
+	return saveRunReportIn(c.db, runID, model, report)
+}
+
+func saveRunReportIn(q dbtx, runID, model string, report []byte) error {
 	if runID == "" {
 		return fmt.Errorf("save run report: empty run id")
 	}
 	if len(report) == 0 {
 		return fmt.Errorf("save run report %q: empty report", runID)
 	}
-	_, err := c.db.Exec(`INSERT INTO run_reports (run_id, model, report_json, created_at)
+	_, err := q.Exec(`INSERT INTO run_reports (run_id, model, report_json, created_at)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET model = excluded.model, report_json = excluded.report_json, created_at = excluded.created_at`,
 		runID, model, report, time.Now().UTC())

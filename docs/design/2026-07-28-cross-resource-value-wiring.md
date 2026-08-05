@@ -2,38 +2,38 @@
 
 **Date:** 2026-07-28  
 **Scope:** PUDL, mu, and the typed catalog  
-**Status:** Proposed — adversarial review complete; secret path deferred  
+**Status:** Accepted design — implementation in progress (Phases 0–1 and observe-only Phase 2 slice landed 2026-08-05)
 **Predecessor:** `docs/design/2026-07-27-swamp-parity-roadmap.md` §13
 
 ## Summary
 
-Add bounded value flow between `#SystemModel` instances by treating a model as
-a CUE template with declared input slots. PUDL resolves each slot from one
-typed catalog resource, injects the concrete value into the authored CUE value,
-and only then decodes and runs the model.
+Add bounded value flow between `#SystemModel` instances with two deliberately
+separate channels. Plain bindings resolve an eligible field from one typed
+catalog resource, inject the concrete value into the authored CUE template,
+and only then decode and run the model. Sealed bindings carry only a secret
+provider reference and lower to mu's existing sealed-input/output machinery;
+the secret value never becomes a CUE value or catalog field.
 
 The shape is:
 
 ```text
 producer model
-    │ observe typed resource
-    ▼
-catalog snapshot + provenance
-    │ resolve binding
-    ▼
-concrete CUE inputs
-    │ unify with model template
-    ▼
-validated concrete #SystemModel
-    │ render desired state
-    ▼
-mu
+    ├─ observe eligible plain field ─> pinned catalog snapshot
+    │                                  │ resolve + unify
+    │                                  ▼
+    │                            concrete CUE input
+    │
+    └─ declare sealed output ────────> provider reference only
+                                       │ lower without resolving
+                                       ▼
+consumer model ───────────────────> mu sealed_inputs / sealed_outputs
 ```
 
-CUE remains the lingua franca for types, model structure, and value
-propagation. PUDL remains responsible for catalog selection, observation reuse,
-cardinality, provenance, and run orchestration. mu receives concrete model
-inputs and does not query the catalog.
+CUE remains the lingua franca for types, model structure, annotations, and
+plain-value propagation. PUDL remains responsible for catalog selection,
+observation reuse, cardinality, provenance, sealed-reference wiring, and run
+orchestration. mu receives concrete plain model inputs plus sealed references;
+it does not query the catalog. Only mu resolves or stores secret values.
 
 ## The motivating case
 
@@ -46,7 +46,7 @@ App: sm.#SystemModel & {
 	name: "app"
 
 	inputs: {
-		subnet_id: string
+		subnet_id: string @pudl(binding=plain)
 	}
 
 	bindings: {
@@ -56,7 +56,7 @@ App: sm.#SystemModel & {
 				schema: "pudl/aws.#Subnet"
 				identity: {SubnetId: "subnet-private"}
 			}
-			path: "SubnetId"
+			path: "/SubnetId"
 		}
 	}
 
@@ -93,9 +93,19 @@ validated, and passed to mu.
 - **Observation snapshot:** the durable record of what a model observed during a
   run. Existing `observe_snapshots.model`, `snapshot_id`, `run_id`, and
   collection memberships provide the provenance boundary.
-- **Input slot:** a named CUE constraint such as `inputs.subnet_id: string`.
-- **Binding:** the declaration that tells PUDL which typed resource and field
-  supply an input slot.
+- **Plain input slot:** a named CUE constraint such as
+  `inputs.subnet_id: string`, explicitly annotated as eligible for plain
+  binding.
+- **Plain binding:** a declaration that tells PUDL which typed resource and
+  eligible field supply a concrete CUE input.
+- **Sealed output declaration:** a converge-owned name plus the provider
+  destination and store mode. It carries metadata, never the secret value.
+- **Sealed input declaration:** a phase-local mu input name, delivery mode, and
+  exactly one source: either a direct provider reference or a producer model's
+  named sealed output.
+- **Sealed binding:** the `source` arm of a sealed input declaration. It copies
+  the producer output's provider reference into mu `sealed_inputs`; it does not
+  bind a secret-valued CUE field.
 - **Elaboration:** resolving bindings and unifying concrete inputs into the
   authored CUE value before `DecodeValue` produces the Go run unit.
 
@@ -103,6 +113,14 @@ The words “dependency” and “reference” must stay qualified. A model depe
 is an execution/data edge; a resource reference is a selector for one catalog
 item. Existing `depends_on` remains ordering and impact metadata, not a value
 expression.
+
+The canonical dependency direction is consumer to producer, matching the
+existing `model_depends_on(from, to)` contract: `from` is the model that needs
+state and `to` is its prerequisite. Plain bindings and cross-model sealed
+sources use the same meaning. A direct sealed `ref` creates no model edge.
+Execution planning reverses canonical edges to obtain producer-before-consumer
+order; diagrams may show that scheduling direction but do not redefine the
+stored relation.
 
 ## Proposed CUE contract
 
@@ -126,10 +144,41 @@ The base model schema would gain open, optional authoring fields similar to:
 	identity: {[string]: _}
 }
 
+#SealedInputs: {
+	sealed_inputs?: {[string]: #SealedInput}
+}
+
+#SealedExecution: {
+	#SealedInputs
+	sealed_outputs?: {[string]: #SealedOutput}
+}
+
+#SealedInput: {
+	delivery_mode: "env" | "file"
+	({
+		ref:     string & != ""
+		source?: _|_
+	} | {
+		ref?: _|_
+		source: {
+			model:  string & != ""
+			output: string & != ""
+		}
+	})
+}
+
+#SealedOutput: {
+	ref:        string & != ""
+	store_mode: "create" | "overwrite" | "create_if_absent"
+}
+
+// populate arms embed #SealedInputs. Only converge embeds #SealedExecution;
+// desired values and Datalog checks embed neither.
 ```
 
 The value type is deliberately expressed by the input slot, not duplicated in
-the binding. `inputs.subnet_id: string` is what CUE checks after elaboration.
+the binding. `inputs.subnet_id: string @pudl(binding=plain)` is what authorizes
+and what CUE checks after elaboration.
 The binding supplies a value; it does not become a second type system.
 
 ### Scalar path grammar
@@ -148,8 +197,13 @@ input's CUE constraint permits it.
 
 CUE aliases, definitions, optional constraints, and hidden fields are not
 addressable because resolution operates on the concrete exported resource
-rather than the schema's authoring structure. Schema-level sensitivity policy
-is a separate eligibility check and does not change path syntax.
+rather than the schema's authoring structure. Schema-level binding
+classification is a separate eligibility check and does not change path
+syntax. A plain resource projection is allowed only when the selected schema
+field carries `@pudl(binding=plain)`. Unannotated fields fail closed. A
+A phase-owned input or converge-owned output declaration marked
+`@pudl(binding=sealed)` may participate only in the sealed-reference channel
+and is never a secret-valued CUE field or catalog value.
 
 The first implementation should require these invariants:
 
@@ -159,6 +213,10 @@ The first implementation should require these invariants:
 4. `source.identity` selects exactly one resource in the permitted snapshot.
 5. `path` resolves to one concrete leaf value.
 6. The injected value unifies with the input slot and the final model.
+7. The source schema field and consumer slot both permit plain binding.
+8. A sealed input declares exactly one of `ref` or `source`, never both.
+9. A sealed `source` selects one model-wide unique producer output name and
+   transports only its provider reference; it cannot become a plain input.
 
 `inputs` is a flat struct of visible top-level scalar constraints in the first
 slice. Optional and nested slots are rejected, binding names are exact field
@@ -178,6 +236,28 @@ before the consumer run or mu plan begins.
 
 Bindings are carried by a separate template object outside the decoded Go
 `SystemModel`. They are authoring metadata, not desired state.
+
+Sealed input declarations live on the `populate` or `converge` execution arm
+that consumes them. Sealed outputs are converge-only in v1. Populate must
+finish before PUDL can construct the complete exact mutation plan, so allowing
+the same populate action to write would place an external mutation before its
+approval. The map key is already the mu-visible input/output name; there is no
+separate generic port, `as` alias, or attachment layer.
+
+Ownership remains asymmetric. A producer output owns its provider reference and
+`store_mode` because it performs and accounts for the external write. A
+consumer input owns its local name and `delivery_mode`. A source-bound input
+names only the producer model and output and cannot repeat, replace, or override
+the provider reference. A direct-ref input owns its reference because no model
+produces it. The current workspace/run-set policy owns
+`secrets.writable_refs`, which PUDL forwards unchanged into every generated mu
+project that may write.
+
+Preflight validates the exactly-one-of input union, resolves every sealed source
+to one annotated producer output, validates provider-ref syntax and scheme
+capability, rejects duplicate output names, validates delivery/store modes, and
+applies writable-ref policy. A consumer cannot downgrade a sealed declaration
+into a plain binding or bind a plain field as sealed.
 
 ## Elaboration boundary
 
@@ -269,21 +349,73 @@ model-name ordering for otherwise independent members. Duplicate model names,
 self-dependencies, and cycles are rejected before any member model executes.
 
 One run-set ID groups the operation, while every model retains its own run ID,
-snapshot ID, and snapshot ownership. A failed model blocks its transitive
-consumers, but independent branches continue. The command exits nonzero when
-any member failed or was blocked.
+snapshot ID, and snapshot ownership. In an observe-only run-set, a failed model
+blocks its transitive consumers while independent branches continue. In a
+mutating run-set, the first failure globally stops new mutations: transitive
+consumers are `blocked`, independent members that have not started mutation are
+`cancelled`, and no `--continue-on-error` escape hatch exists in v1. The command
+exits nonzero when any member failed, was blocked, or was cancelled.
 
-The first run-set contract is observe-only and rejects convergence-specific
-flags. Each member completes its existing observe-only lifecycle—observation
-or populate, drift evaluation when applicable, checks, and reporting—before
-its consumers may elaborate. Ordinary drift does not invalidate observed
-values, but an execution error or failed fail-severity check blocks consumers.
-An ingested snapshot is therefore not exposed early and cannot be consumed
-before the producer's terminal result is known.
+`pudl run-set` without `--converge` is observe-only. Each member completes its
+existing observe-only lifecycle—observation or populate, drift evaluation when
+applicable, checks, and reporting—before its consumers may elaborate. Ordinary
+drift does not invalidate observed values, but an execution error or failed
+fail-severity check blocks consumers. An ingested snapshot is therefore not
+exposed early and cannot be consumed before the producer's terminal result is
+known.
 
-Multi-model convergence is deferred to a separate design decision covering
-group approvals, apply budgets, partial mutation, and final re-observation.
-Single-model `pudl run <model> --converge` remains unchanged.
+`pudl run-set ... --converge` enables a mutating run-set. PUDL completes all
+read-only preflight, observation, elaboration, policy validation, and mu
+planning before the first mutation. A converging run-set whose model declares
+any sealed output is always approval-gated even when the operator omits
+`--require-approval`.
+Ordinary run-sets without sealed outputs retain the explicit flag's existing
+policy.
+
+The approval is bound to an exact canonical plan digest, not merely the model
+names and command options. The digest commits to the selected models, graph
+edges, pinned snapshots, resolved plain bindings, desired/config projections,
+plugin and action identities, sealed provider references, input/output modes,
+store modes, writable-ref policy, and convergence options. It never contains a
+resolved secret value. The approval display shows complete write destinations
+and modes so the operator can review the side effects; the durable approval
+record retains the digest plus redacted reference fingerprints.
+
+On approval or resume, PUDL rebuilds and revalidates the complete plan before
+execution. Any difference invalidates the approval and performs no mutation;
+the replacement plan requires a new approval. A denied request performs no
+mutation. A forbidden sealed-output destination fails policy validation before
+an approval request is created.
+
+Approval does not claim transactional rollback across external systems. Once
+mu successfully calls `store_secret`, a later failure leaves that write in
+place and the run report must identify the completed mutation and blocked or
+failed remainder. After any mutating member fails, PUDL launches no further
+mutations, including on independent branches. It may perform read-only
+re-observation, verification, and reporting for actions already attempted.
+Existing per-model convergence behavior remains unchanged outside `run-set`.
+
+### Transaction and concurrency boundary
+
+A run-set never holds one SQLite transaction across mu planning, execution, or
+another external call. It reserves the run-set ID, member run IDs, and expected
+snapshot IDs atomically, then uses a short catalog read transaction to select
+and pin every reused snapshot and copy all required binding evidence into an
+immutable plan object. The read closes before any subprocess runs.
+
+A current-run producer commits its snapshot, items, memberships, and successful
+completion as one short step transaction; consumers address that exact snapshot
+ID. The canonical plan digest and pending approval commit together. Approval or
+resume reloads model, plugin, and policy fingerprints, reconstructs the plan
+from pinned evidence, and compares the digest before mutation. Each completed
+execution step and mutation receipt commits in its own short transaction.
+
+Concurrent catalog writes cannot redirect a pinned binding to a newer snapshot.
+Pending approvals protect all referenced snapshots from retention pruning. If
+required evidence is missing or any plan input changes, approval becomes stale
+instead of selecting replacement data. A crash after a possible external
+mutation but before its receipt commits yields `needs-verification`/`unknown`;
+the mutating run-set does not retry or resume automatically.
 
 ## Source selection and authority
 
@@ -294,7 +426,8 @@ desired declaration, or a last-written filesystem artifact.
 An observation is successful only when its owning model run reaches the
 successful terminal state defined by the full observe-only lifecycle above.
 The `runs` audit record therefore gains a structured completion status:
-`running`, `succeeded`, `failed`, or `blocked`. This status is distinct from
+`running`, `succeeded`, `failed`, `blocked`, or `cancelled`. This status is
+distinct from
 the model verdict: a successfully completed observation may report ordinary
 drift and still supply valid observed values.
 
@@ -420,20 +553,52 @@ the same diagnostic without causing external side effects.
 
 ## Run reports and facts
 
-The run report should gain a binding section containing, for each input:
+Binding-derived model edges are persisted in the existing
+`model_depends_on(from, to)` relation under fact source
+`binding:<consumer>`. Reconciliation aggregates all valid plain bindings and
+cross-model sealed sources into one wanted producer set, then atomically diffs
+that entire set after successful template validation. Removing the last
+binding to a producer bitemporally invalidates the binding-sourced fact. An
+invalid template never partially rewrites the graph.
 
-- consumer model and input name;
-- producer model, snapshot ID, run ID, schema, and resource identity;
-- selected path;
-- reuse decision, snapshot and evaluation times, observed age, and any
-  run-level age bound;
-- resolution status;
-- a redacted value summary or value hash, not secret material.
+The existing `model:<consumer>` declared source, `derived:<consumer>` heuristic
+source, and new `binding:<consumer>` authoritative source reconcile
+independently. Coincident edges remain independently valid but queries and
+`pudl model deps` coalesce the `(from, to)` pair and report combined provenance,
+such as `[declared, binding]`. Direct sealed provider refs create no model
+edge. Per-input resolution, snapshot, and run evidence belongs in the run
+report rather than per-run dependency facts.
 
-The report is the operator-facing explanation for why a consumer did or did not
-run. The binding edge may also be emitted as a model dependency fact, but it
-must remain bounded by the current model graph and run retention policy. Do not
-add a monotonically growing per-phase relation merely to expose wiring.
+Reports are a versioned, two-level public contract. A `RunSetReport`, keyed by
+`run_set_id`, records `report_version`, mode, terminal status, canonical plan
+digest, approval identity/status, dependency edges, ordered members, and each
+member's model/run ID plus `succeeded`/`failed`/`blocked`/`cancelled` result.
+Each existing per-model `RunReport`, keyed by `run_id`, gains `report_version`,
+`run_set_id`, completion status, binding evidence, and mutation receipts. The
+catalog stores both as explicit typed JSON documents rather than unversioned
+maps; a dedicated run-set record owns orchestration-level retrieval.
+
+Each plain binding report records the consumer model/run/input, producer
+model/run, pinned snapshot, workspace, schema, identity, JSON Pointer,
+current-run/reused selection, observation/evaluation times, age and bound,
+resolution status, exact JSON scalar/type, and scalar digest. The plain
+annotation explicitly authorizes that catalog value to flow and the exact value
+keeps the durable report reproducible after snapshot retention.
+
+Each sealed binding report records the consumer model/run/phase/input,
+delivery mode and claiming action IDs, direct-ref versus producer-output
+source, producer model/run/phase/output/store mode and producing action when
+applicable, provider scheme, reference fingerprint, matched writable-policy
+rule, and lifecycle status (`planned`, `stored`, `resolved`, `delivered`, or
+`failed`). It stores neither the secret value nor a secret-value hash; hashing a
+low-entropy secret can itself disclose it. Provider paths remain limited to the
+live approval display and mu's operational configuration/provider calls.
+
+Every completed external mutation has a typed receipt in the responsible
+member report, so successful writes remain auditable if a later member fails.
+Errors are structured and redacted. The report is the operator-facing
+explanation for why each consumer did or did not run; dependency facts stay
+bounded to the current graph rather than growing once per run or phase.
 
 ## Interaction with mu
 
@@ -446,10 +611,10 @@ desired resource data, PUDL should place the concrete non-secret value in the
 existing model/plugin input or config map only after CUE elaboration and
 validation. A secret must not take that path as plaintext.
 
-### Deferred secret compatibility with mu
+### V1 sealed compatibility with mu
 
-The future secret path must lower into mu's existing sealed-I/O primitives,
-not invent a second PUDL secret channel:
+The v1 secret path lowers into mu's existing sealed-I/O primitives. PUDL does
+not invent a second secret channel:
 
 - `sealed_inputs: {[name]: ref}` carries references such as
   `"pass:deploy/token"` on a mu target or action. mu resolves the reference at
@@ -472,17 +637,48 @@ not invent a second PUDL secret channel:
   `secrets.writable_refs` gates writes at plan time and write time.
 - The Go plugin SDK exposes these provider capabilities directly through
   `ResolveSecret`/`StoreSecret`, or through the `SecretBackend` plus
-  `SecretPlugin` adapter. This is the provider contract Phase 2 must reuse.
+  `SecretPlugin` adapter. This is the provider contract v1 reuses.
 
-The exact model-level spelling and lowering of a secret binding remain
-deferred. The required invariant is already fixed: a secret binding lowers to
-mu sealed-input references and execution metadata, never to a concrete CUE
-scalar. A secret produced by an action likewise remains on the sealed-output
-side channel; it does not become an ordinary observation record. If a later
-feature needs a catalog-visible fact, it must expose only non-secret metadata
-or an opaque handle and receive its own design review.
+PUDL-generated mu targets require strict explicit sealed routing. A phase-level
+declaration makes a sealed name available to its plugin plan, but does not grant
+it to every emitted action. Each action must explicitly claim every sealed
+input it consumes; an input may reach several actions only through several
+explicit claims. Every sealed output must be claimed by exactly one producing
+action. Planning rejects implicit inheritance, unused declarations, undeclared
+claims, and ambiguous outputs before execution. Mu needs a strict-routing mode
+for these targets rather than its current convenience behavior of copying
+target-level sealed inputs to emitted actions that omit their own map. This is
+a least-privilege policy over mu's existing sealed execution and provider
+machinery, not a second secret channel.
 
-Canonical mu references for this future work are `docs/guide/protocol.md`,
+Field annotations classify the two channels: `@pudl(binding=plain)` permits a
+catalog scalar projection, while `@pudl(binding=sealed)` identifies a sealed
+input/output declaration. Classification is inherited through CUE unification,
+unannotated declarations are denied, and conflicting classifications are
+validation errors. PUDL validates references and compatibility but never calls
+`resolve_secret` or `store_secret` itself.
+
+For source-bound sealed inputs, the producer's converge-owned output declaration
+is the sole authority for `ref` and `store_mode`; the consumer phase owns its
+mu-visible input name and `delivery_mode`. Direct-ref inputs own their ref
+because no producer model exists. The workspace is the sole authority for
+`secrets.writable_refs`. Generated mu targets/actions receive those projections
+without merging competing copies.
+
+A sealed binding lowers to mu sealed-input/output references and execution
+metadata, never to a concrete CUE scalar. A secret produced by an action stays
+on the sealed-output side channel; it does not become an observation record.
+Catalogs and reports may contain the declaration name, provider scheme, producer and
+consumer identities, run IDs, status, and a redacted reference fingerprint,
+but not the reference path or secret value.
+
+The provider reference is not itself treated as secret plaintext: mu must carry
+the full reference in its generated target/action configuration, action key,
+and provider request so resolution and invalidation work correctly. PUDL's
+durable surfaces expose only the scheme and fingerprint. The resolved value is
+the datum excluded everywhere.
+
+Canonical mu references are `docs/guide/protocol.md`,
 `docs/guide/pith-plugins.md`, `docs/guide/sdk.md`,
 `docs/sealed-input-delivery-modes.md`, `docs/secrets-write-policy.md`, and
 `docs/design/pith-sealed-io.md` in the mu repository.
@@ -520,6 +716,8 @@ schema-relative path; add query bindings only as a separately designed feature.
 
 - Preserve the authored `cue.Value` through model resolution.
 - Add `#ValueBinding`/`#ResourceRef` validation.
+- Add inherited `@pudl(binding=plain|sealed)` classification and conflict
+  validation.
 - Add an elaboration result type with concrete inputs and diagnostics.
 - Prove CUE type propagation with scalar, nested, missing, and conflicting
   values without invoking mu.
@@ -539,15 +737,44 @@ schema-relative path; add query bindings only as a separately designed feature.
 - Ensure producer failure prevents consumer planning.
 - Preserve explicit `depends_on` as ordering-only metadata.
 - Add dry-run and JSON diagnostics for unresolved bindings.
+- Add observe-only and explicit `--converge` run-set modes.
+- Replace request-level approval with canonical exact-plan identity and reject
+  stale approval before mutation.
+- Add versioned run-set reports plus linked, versioned member reports with
+  typed binding evidence and mutation receipts.
+- Add short ID-reservation, snapshot-selection, approval, and receipt
+  transactions around an immutable plan object; never hold a catalog lock
+  across mu.
+
+### Phase 3 — sealed-reference wiring and execution
+
+- Add phase-owned sealed input declarations and converge-owned sealed output
+  declarations with CUE annotation validation. Reject populate sealed outputs
+  structurally in v1.
+- Support the exactly-one-of direct `ref` or cross-model `source` input union.
+- Enforce producer-output ownership of provider reference/store mode,
+  consumer-phase ownership of local name/delivery mode, and workspace ownership
+  of write policy; reject every attempted override.
+- Add strict explicit action-level routing in mu for PUDL-generated targets;
+  reject implicit input fan-out, unused/undeclared claims, and any output not
+  claimed by exactly one action.
+- Lower consumer references and delivery modes to mu `sealed_inputs` and
+  `sealed_input_modes` without resolving them in PUDL.
+- Lower producer destinations and store modes to mu `sealed_outputs` and
+  `sealed_output_modes`; pass an explicit `secrets.writable_refs` policy into
+  every generated mu project that may write.
+- Force mandatory exact-plan approval for every converging run-set whose model
+  declares a sealed output, independent of `--require-approval`.
+- Preserve mu's provider capability checks, pith taint boundary, file-delivery
+  restriction, forced impurity, write-policy checks, and cleanup behavior.
+- Add end-to-end tests proving values are absent from CUE, catalog rows, action
+  keys, CAS, manifests, reports, stdout, stderr, and failure diagnostics.
 
 ### Deferred follow-ons
 
 - whole-record and list-valued projections;
 - arbitrary Datalog query bindings;
 - automatic producer execution when a standalone consumer is missing data;
-- secret-valued bindings lowered through mu `sealed_inputs` and
-  `sealed_input_modes`, with any producer-side capture using
-  `sealed_outputs`/`store_secret`;
 - explicit historical-version pinning or custom observation selection beyond
   the latest-successful convention;
 
@@ -567,6 +794,72 @@ The design is ready to implement when these cases are specified and tested:
 6. Producer failure appears in the consumer run report as an unresolved source.
 7. The generated mu input contains the concrete value and no binding metadata.
 8. No catalog lookup, interpolation, or lazy reference occurs inside mu.
+9. A sealed producer writes through mu `sealed_outputs`/`store_secret`, and a
+   consumer receives the same reference through `sealed_inputs` without PUDL
+   observing the value.
+10. Plain/sealed annotation mismatches fail before execution, and inherited or
+    conflicting annotations behave deterministically.
+11. Secret values are absent from every PUDL and mu persistence, diagnostic,
+    cache, manifest, and process-output surface. Provider-reference paths occur
+    only where mu needs them operationally; PUDL persists a fingerprint.
+12. A forbidden sealed-output destination fails both plan-time and write-time
+    policy checks through mu's `secrets.writable_refs` enforcement.
+13. No mutation occurs before exact-plan approval, and changing any committed
+    plan input invalidates approval and requires a new review.
+14. A successful sealed write followed by failure is reported as completed
+    partial state and is never represented as rolled back.
+15. The first mutating failure prevents every unstarted mutation, including
+    independent branches; dependents become `blocked`, unrelated unstarted
+    members become `cancelled`, and only read-only diagnostics may continue.
+16. A source-bound consumer cannot override its producer output's provider
+    reference or store mode, and a model cannot override workspace writable-ref
+    policy.
+17. Phase-owned inputs accept exactly one direct `ref` or cross-model `source`;
+    producer outputs are converge-owned, and desired/check fields cannot consume
+    sealed declarations.
+18. A multi-action plan exposes each sealed input only to actions that
+    explicitly claim it, and routes each sealed output through exactly one
+    explicitly claiming producer action.
+19. Binding-derived `model_depends_on` facts reconcile atomically under
+    `binding:<consumer>`, coexist with declared/heuristic provenance, and do not
+    create per-run fact churn.
+20. Versioned run-set/member reports round-trip complete plain provenance,
+    metadata-only sealed provenance, redacted errors, and completed mutation
+    receipts without any secret value or secret-value hash.
+21. Concurrent catalog writes cannot redirect pinned inputs; pending approvals
+    retain required snapshots, stale evidence invalidates approval, and a crash
+    across an external-write/receipt boundary becomes `needs-verification`
+    without automatic retry.
+
+### Release-blocking verification matrix
+
+V1 is not complete until a deterministic matrix passes in both PUDL and mu:
+
+- CUE classification: inherited/conflicting/missing annotations and attempted
+  plain/sealed coercion;
+- plain selection: workspace isolation, pinned snapshots, age bounds,
+  ambiguity, missing/non-leaf paths, type mismatch, and no forbidden fallback;
+- sealed declarations: direct refs, producer outputs, exactly-one-of input
+  validation, unique outputs, modes, phase restrictions, and provider
+  capabilities;
+- mu execution: strict action routing, env/file delivery, store modes,
+  writable-ref policy at both enforcement points, cleanup, and secret
+  non-leakage;
+- graph behavior: missing producers, duplicate/self/cyclic edges, ordering,
+  binding-fact reconciliation, and direct-ref non-edges;
+- approval and failure: exact identity, stale rejection, no pre-approval
+  mutation, global fail-fast, blocked/cancelled members, partial receipts,
+  crash injection, and `needs-verification`;
+- concurrency and retention: simultaneous observation/catalog writes,
+  approval/resume races, immutable plan evidence, and pruning protection;
+- reporting and compatibility: versioned JSON round trips, exact plain and
+  metadata-only sealed provenance, redacted errors, unchanged unbound models,
+  and unchanged single-model behavior.
+
+The end-to-end fixture uses real mu planning and execution with a deterministic
+fake provider implementing both `resolve_secret` and `store_secret`. Live
+`pass`, Vault, or cloud-provider smokes are optional because credentials are not
+a CI precondition; the fake-provider path is not optional.
 
 ## Adversarial review questions
 
@@ -617,20 +910,45 @@ configuration to every binding.
 
 5. **Resolved:** use current-run/latest-successful observation conventions;
    keep stricter age bounds at run policy level, not in CUE bindings.
-### Review decision 6 — no secret-valued bindings in the first slice
+### Review decision 6 — plain and sealed channels both ship in v1
 
-Accepted during adversarial review: the first wiring slice does not support
-secret-valued bindings. Future secret support must lower to mu's existing
-`sealed_inputs`/`sealed_input_modes` contract, and any producer-side secret
-capture must use `sealed_outputs`/`store_secret`. Plaintext must stay out of
-CUE, catalog records, and run reports. Reports may retain provenance,
-freshness, status, and a redacted or hashed summary.
+Revised during follow-up design review: v1 is not plain-only. Plain values use
+CUE elaboration; sensitive values use a distinct sealed-reference channel that
+fully reuses mu `sealed_inputs`, `sealed_input_modes`, `sealed_outputs`,
+`sealed_output_modes`, `resolve_secret`, `store_secret`, pith taint, and
+`secrets.writable_refs`. CUE field annotations classify eligibility, with
+deny-by-default and conflict rejection. Plaintext stays out of PUDL and mu's
+persistent or diagnostic surfaces.
 
-6. **Resolved:** exclude secret-valued bindings initially; reserve them for a
-   separate sealed-input design with redacted reporting.
+6. **Resolved:** ship both channels in v1; never represent a secret as a
+   concrete CUE input or catalog value.
 
 ## Adversarial review status
 
-Complete for this design pass. The six review decisions above are the current
-implementation boundaries; changes to them should be treated as design
-revisions rather than incidental implementation details.
+Complete for the full sealed-I/O v1 boundary. The review decisions above are
+implementation boundaries. Mutating run-sets and mandatory exact-plan approval
+for sealed outputs are accepted; scheduling after an irreversible member
+failure is globally fail-fast. Sealed authoring uses phase-owned inputs and
+converge-owned outputs with no generic port or attachment layer, and
+least-privilege action routing is explicit and mandatory. Canonical dependency
+direction is consumer to producer. Binding-derived edges use the existing relation and a separate
+authoritative fact source. Durable provenance uses versioned run-set and member
+reports. Transactions are short and step-scoped around immutable plan evidence;
+no lock spans external work. The deterministic PUDL+mu matrix is
+release-blocking. Compatibility boundaries are reconciled with the dependency
+substrate, historical roadmap, and project vision. Phase 0, Phase 1, mutating
+Phase 2, and converge-backed Phase 3 are implemented. PUDL persists canonical
+redacted exact plans, atomically creates and resolves approvals, revalidates
+before mutation, fails globally after a mutating error, records receipts and
+`needs-verification`, durably records mutation intent before every external
+apply, and lowers explicit strict action claims to mu. The matching mu change
+is committed as `a334872`, with boundary-test hardening in `6e757b8`, on
+`codex/pudl-strict-sealed-routing`.
+
+The populate/approval contradiction is resolved for v1 by making sealed outputs
+converge-only. Populate remains observation-only and may consume sealed inputs,
+but its CUE arms and Go runtime projection expose no sealed-output write path.
+This preserves the complete-plan approval boundary without staging secret
+values or introducing partial approvals. An observe-only run may inspect a
+model that declares a dormant converge output and still performs no mutation;
+any mutating run that can execute that output remains exact-plan gated.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,7 +18,7 @@ var modelDepsDerive bool
 var modelDepsCmd = &cobra.Command{
 	Use:   "deps",
 	Short: "Refresh and show the cross-model dependency graph",
-	Long: `Reconcile every registered model's declared depends_on into model_depends_on
+	Long: `Reconcile every registered model's declared and binding-derived dependencies into model_depends_on
 facts WITHOUT running the models, then print the dependency graph.
 
 This closes the run-time-only coverage gap: querying impact (impacted_by) is
@@ -42,7 +43,9 @@ Examples:
 		}
 		ms := make([]*systemmodel.SystemModel, 0, len(models))
 		for _, mi := range models {
-			ms = append(ms, mi.Model)
+			if mi.Model != nil {
+				ms = append(ms, mi.Model)
+			}
 		}
 
 		db, err := database.NewCatalogDB(config.GetPudlDir())
@@ -53,12 +56,16 @@ Examples:
 
 		var warnings []string
 
-		// 1. Declared edges for every model (no run needed).
-		for _, m := range ms {
-			declared, warns := declaredDepsOf(m)
+		// 1. Declared and authoritative binding edges for every retained model
+		// template (no successful value resolution or run needed).
+		for _, model := range models {
+			declared, warns := declaredDepsOfTemplate(model.Template)
 			warnings = append(warnings, warns...)
-			if rerr := reconcileEdges(db, m.Name, declaredSource(m.Name), declared); rerr != nil {
-				return fmt.Errorf("reconcile declared deps for %s: %w", m.Name, rerr)
+			if rerr := reconcileEdges(db, model.Name, declaredSource(model.Name), declared); rerr != nil {
+				return fmt.Errorf("reconcile declared deps for %s: %w", model.Name, rerr)
+			}
+			if rerr := reconcileBindingDependencies(db, model.Template); rerr != nil {
+				return fmt.Errorf("reconcile binding deps for %s: %w", model.Name, rerr)
 			}
 		}
 
@@ -82,9 +89,9 @@ Examples:
 
 // depEdge is one model_depends_on edge with its provenance for display.
 type depEdge struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Source string `json:"source"` // "declared" | "derived" | raw source
+	From    string   `json:"from"`
+	To      string   `json:"to"`
+	Sources []string `json:"sources"`
 }
 
 // printDepGraph reads the current model_depends_on facts and prints them grouped
@@ -94,13 +101,27 @@ func printDepGraph(db *database.CatalogDB, warnings []string) error {
 	if err != nil {
 		return err
 	}
-	var edges []depEdge
+	edgesByPair := map[string]*depEdge{}
 	for _, f := range facts {
 		from, to := edgeArgs(f.Args)
 		if from == "" || to == "" {
 			continue
 		}
-		edges = append(edges, depEdge{From: from, To: to, Source: sourceLabel(f.Source)})
+		key := from + "\x00" + to
+		edge := edgesByPair[key]
+		if edge == nil {
+			edge = &depEdge{From: from, To: to}
+			edgesByPair[key] = edge
+		}
+		label := sourceLabel(f.Source)
+		if !containsString(edge.Sources, label) {
+			edge.Sources = append(edge.Sources, label)
+		}
+	}
+	edges := make([]depEdge, 0, len(edgesByPair))
+	for _, edge := range edgesByPair {
+		sort.Strings(edge.Sources)
+		edges = append(edges, *edge)
 	}
 	sort.Slice(edges, func(i, j int) bool {
 		if edges[i].From != edges[j].From {
@@ -133,7 +154,7 @@ func printDepGraph(db *database.CatalogDB, warnings []string) error {
 			fmt.Printf("  %s depends on:\n", e.From)
 			lastFrom = e.From
 		}
-		fmt.Printf("    → %s  [%s]\n", e.To, e.Source)
+		fmt.Printf("    → %s  [%s]\n", e.To, strings.Join(e.Sources, ", "))
 	}
 	fmt.Println("\nQuery: pudl query depends_transitive from=<model> | impacted_by changed=<model> | --topo model_depends_on")
 	return nil
@@ -146,9 +167,20 @@ func sourceLabel(source string) string {
 		return "declared"
 	case len(source) >= 8 && source[:8] == "derived:":
 		return "derived"
+	case len(source) >= 8 && source[:8] == "binding:":
+		return "binding"
 	default:
 		return source
 	}
+}
+
+func containsString(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
 }
 
 func init() {

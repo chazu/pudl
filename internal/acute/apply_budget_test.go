@@ -131,6 +131,6 @@ func TestConverge_LostReceiptStillDominatesAnExhaustedBudget(t *testing.T) {
 		RecordManifest: func([]byte) error { return errors.New("catalog unavailable") },
 	})
 	require.Error(t, err)
-	assert.Equal(t, OutcomeBudgetExhausted, result.Outcome)
+	assert.Equal(t, OutcomeNeedsVerification, result.Outcome)
 	assert.True(t, result.NeedsVerification)
 }

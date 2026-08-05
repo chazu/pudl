@@ -23,12 +23,21 @@ explicit plugin/bridge assignments validate against their assigned CUE schema,
 and fixed-point inference is reserved for genuinely inferred imports. The
 mixed 41-entry acceptance fixture now passes both `pudl validate --all` and
 `pudl verify` with zero invalid entries or mismatches. Cross-model value wiring
-now has a reviewed design, including its deferred secret boundary against mu's
-existing sealed-I/O primitives and convention-over-configuration observation
-reuse; implementation is the next slice. Bindings do not carry freshness
-fields: orchestrated runs prefer current-run observations, standalone runs use
-the latest successful scoped observation, and stricter age bounds belong to run
-policy. See
+now has an accepted design, including full v1 integration with mu's sealed-I/O
+primitives and convention-over-configuration observation reuse. The retained
+template seam, standalone plain-scalar resolver, exact `run-set` execution,
+canonical mutation approval, fail-fast receipts, and strict sealed routing are
+implemented. Producer-first scheduling, current-run snapshot pinning,
+stale-plan rejection, mandatory approval for sealed writes, redacted sealed
+provenance, and linked durable reports cover the executable orchestration
+slice. One contract inconsistency remains: an action-backed populate cannot
+both finish the required pre-approval observation and defer its sealed write
+until after approval. PUDL fails that combination closed pending a design
+decision; converge-phase sealed production and consumption are fully wired.
+Bindings do not carry
+freshness fields: orchestrated runs prefer current-run observations, standalone
+runs use the latest successful scoped observation, and stricter age bounds
+belong to run policy. See
 [`docs/design/2026-07-28-cross-resource-value-wiring.md`](design/2026-07-28-cross-resource-value-wiring.md)
 and [`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_07_29_cross_resource_wiring_mu_alignment.md).
 
@@ -248,10 +257,45 @@ affinity for numeric view columns.
 
 Potential future work, roughly ordered by value.
 
-### Cross-Resource Value Wiring — Design Hold Point
+### Cross-Resource Value Wiring — Implementation at the Populate/Approval Boundary
 
-Status: design reviewed; implementation is paused until the execution and
-observation contracts below are resolved. The working design is
+Status: Phase 0, Phase 1, mutating Phase 2, and converge-backed Phase 3 are
+implemented and verified. Discovery retains incomplete
+`ModelTemplate` values;
+plain inputs resolve through exact successful, workspace-scoped snapshots;
+schema-relative identity and RFC 6901 scalar projection are fail-closed; CUE
+performs final type validation; `pudl run` accepts `--max-observation-age`; and
+versioned member reports carry exact binding evidence. Structured run completion
+now prevents failed, unfinished, registration-only, and legacy snapshots from
+being reused. Observation ingest persists declared schema identity so selectors
+do not rely on heuristics.
+
+The new `pudl run-set <model>...` surface rejects incomplete exact sets,
+duplicates, self-dependencies, and cycles before execution; orders producers
+first with lexical tie-breaking; blocks transitive consumers after failure;
+continues independent observe-only branches; and persists a versioned run-set
+report linked to versioned member reports. `pudl run-set report [id]` retrieves
+that orchestration record. Binding facts reconcile atomically under their own
+provenance source, and dry-run binding reads use a non-migrating read-only
+catalog connection.
+
+Mutating run-sets now plan every member before applying, persist one immutable
+redacted plan identity, gate sealed outputs automatically, reject stale
+resumes, stop globally after the first mutation failure, and record completed
+receipts or `needs-verification`. A durable write-ahead mutation intent now
+marks every external apply uncertain until its manifest receipt commits, so a
+process loss cannot silently invite an automatic retry. Generated mu targets
+use strict action-level sealed claims, workspace-owned write policy, delayed
+provider resolution, and metadata-only PUDL evidence. Cross-model sealed
+producer/consumer runs are covered at the PUDL coordination boundary, while mu
+has a real fake-provider execution fixture.
+
+The populate/approval boundary is now resolved: sealed outputs are
+converge-only in v1. Populate may consume sealed inputs for authenticated
+observation, but the CUE schema, Go projection, and generated mu populate
+project expose no write path. Observe-only runs may inspect a model with a
+dormant converge output without mutation; a mutating run that can execute the
+output is automatically exact-plan gated. The working design is
 [`docs/design/2026-07-28-cross-resource-value-wiring.md`](design/2026-07-28-cross-resource-value-wiring.md),
 with mu secret-input/output compatibility recorded in
 [`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_07_29_cross_resource_wiring_mu_alignment.md).
@@ -264,11 +308,12 @@ an orchestrated run prefers the producer's current successful observation;
 standalone resolution uses the latest successful observation in the current
 scope. Missing or invalid values fail closed, and stricter age bounds belong
 to run/operator policy rather than the CUE binding API. Secret-valued wiring
-remains deferred, but the eventual design must align with mu's existing
-sealed-input, sealed-output, and secret-provider primitives.
+ships in v1 through a separate sealed-reference channel that fully reuses mu's
+existing sealed-input, sealed-output, secret-provider, taint, and write-policy
+primitives. Secret values never become CUE inputs or catalog values.
 
-The following questions surfaced in the final adversarial review and should be
-answered in the design discussion before implementation resumes.
+The following questions surfaced in the final adversarial review and are
+resolved inline as the implementation contract.
 
 #### Execution boundary
 
@@ -287,9 +332,11 @@ answered in the design discussion before implementation resumes.
    targets outside it remain advisory. Binding and in-set `depends_on` edges
    determine producer-first order with lexical tie-breaking. Duplicate models,
    self-dependencies, and cycles fail preflight. The operation has one run-set
-   ID plus per-model run and snapshot IDs; failures block transitive consumers,
-   independent branches continue, and any failed or blocked member makes the
-   command fail.
+   ID plus per-model run and snapshot IDs. Observe-only failures block
+   transitive consumers while independent branches continue. Mutating failures
+   globally stop new mutations: dependents become `blocked`, unrelated
+   unstarted members become `cancelled`, and any non-successful member makes
+   the command fail.
 
 2. **Which execution phases participate?** Decide whether value production is
    limited to observation/populate, or whether checks, desired-state
@@ -297,13 +344,24 @@ answered in the design discussion before implementation resumes.
    determines when a producer is considered available and whether a later
    convergence failure invalidates an otherwise usable observation.
 
-   **Resolved:** the first `run-set` contract is observe-only. A producer
-   becomes available only after its complete observe-only lifecycle succeeds:
-   observation or populate, drift evaluation where applicable, checks, and
-   reporting. Ordinary drift does not invalidate its observed values, while an
-   execution error or failed fail-severity check blocks consumers. Convergence
-   flags are rejected and multi-model convergence remains a separate design
-   problem; single-model convergence is unchanged.
+   **Resolved:** `pudl run-set` remains observe-only unless `--converge` is
+   present. A producer becomes available only after its complete lifecycle for
+   that mode succeeds. Mutating run-sets finish read-only observation,
+   elaboration, policy validation, and planning before executing anything. Any
+   converge-owned sealed output makes exact-plan approval mandatory during a
+   mutating run regardless of `--require-approval`; ordinary convergence
+   retains the explicit flag's existing policy. The approval digest commits to
+   the complete model graph,
+   pinned snapshots, resolved plain inputs, desired/config projections, plugin
+   and action identities, sealed references and modes, writable-ref policy,
+   and converge options, but never a resolved secret value. Approval/resume
+   regenerates the plan; any difference invalidates approval with no mutation.
+   Forbidden writes fail before an approval request. Successful external
+   writes are not rolled back if a later member fails and must be reported as
+   completed partial state. The first mutating failure stops every unstarted
+   mutation, including independent branches; only read-only re-observation,
+   verification, and reporting may continue. V1 has no
+   `--continue-on-error` override.
 
 #### Observation selection and reuse
 
@@ -422,11 +480,41 @@ answered in the design discussion before implementation resumes.
     relation. Sentinel contract tests must prove authoring namespaces reach
     neither catalog model JSON nor mu input.
 
-11. **How is the secret boundary enforced?** Secret-valued bindings are out of
-    scope for the first slice, but that requires an enforceable non-sensitive
-    scalar contract now. Define the schema marker or validation rule that
-    rejects sensitive leaves, and reserve the later secret path for mu's
-    existing sealed I/O rather than inventing a second mechanism.
+11. **How is the secret boundary enforced?**
+
+    **Resolved:** plain and sealed bindings both ship in v1 as distinct,
+    non-coercible channels. `@pudl(binding=plain)` permits a schema field and
+    consumer slot to participate in catalog-scalar CUE elaboration.
+    `@pudl(binding=sealed)` identifies a phase-owned sealed input or a
+    converge-owned output declaration. Unannotated fields fail closed; inherited annotations are
+    honored; conflicting classifications are errors. Sealed bindings transport
+    only a provider reference and execution metadata, never a value. They lower fully
+    to mu `sealed_inputs`, `sealed_input_modes`, `sealed_outputs`,
+    `sealed_output_modes`, `resolve_secret`, `store_secret`, pith `secret/get`
+    taint, and `secrets.writable_refs`. PUDL never resolves or stores secret
+    values. Provider references pass through generated mu configuration and
+    mu's action key/provider calls as required; PUDL persists only their scheme
+    and a fingerprint, and no resolved value enters CUE, catalog rows, reports,
+    manifests, caches, or logs.
+
+    Sealed inputs live directly on the `populate` or `converge` arm that
+    consumes them; sealed outputs are converge-only in v1. Their map key is the
+    mu-visible name, with no generic port/attachment layer. An input declares
+    exactly one direct `ref` or a cross-model `source: {model, output}`. A
+    producer output exclusively owns its provider reference and store mode; a
+    source-bound consumer owns only its local name and `env`/`file` delivery
+    mode and cannot override the reference. A direct-ref consumer owns its
+    reference. Workspace/run-set policy exclusively owns
+    `secrets.writable_refs`.
+
+    PUDL-generated mu targets use strict explicit sealed routing. Phase-level
+    declarations make names available to plugin planning but never implicitly
+    grant them to every action. Each consuming action explicitly claims its
+    sealed inputs, and every sealed output has exactly one explicitly claiming
+    producer action. Planning rejects implicit fan-out, unused declarations,
+    undeclared claims, and ambiguous outputs. Mu's existing sealed execution
+    and provider machinery remain authoritative; v1 adds the strict routing
+    policy needed for least privilege.
 
 #### Dependency graph and provenance
 
@@ -435,16 +523,44 @@ answered in the design discussion before implementation resumes.
     consumer-to-producer semantics. Choose the persisted representation and
     document the conversion used for topological execution order.
 
+    **Resolved:** consumer to producer remains canonical everywhere authored,
+    reported, queried, or persisted: `model_depends_on(from: consumer, to:
+    producer)`. Plain bindings and cross-model sealed sources share this
+    meaning; direct provider refs create no model edge. The scheduler reverses
+    canonical edges only to compute producer-first execution order. Diagrams
+    may show execution flow but do not change relation semantics.
+
 13. **Are binding edges persisted?** A binding implies a data dependency, but
     it is not yet clear whether that edge is emitted as a dependency fact,
     shown by `pudl model deps`, or kept as an execution-only edge. If persisted,
     define its provenance, reconciliation with explicit `depends_on`, and
     behavior when the binding changes or disappears.
 
+    **Resolved:** persist authoritative binding-derived edges in the existing
+    `model_depends_on(from, to)` relation under `binding:<consumer>`. Aggregate
+    plain bindings and cross-model sealed sources by producer and atomically
+    reconcile the consumer's complete wanted set after successful template
+    validation. Direct provider refs create no edge. Declared, heuristic, and
+    binding sources reconcile independently; coincident edges are coalesced for
+    queries/display with combined provenance. Removing the last binding
+    bitemporally invalidates only the binding-sourced fact. Per-input and
+    per-run evidence stays in reports rather than generating fact churn.
+
 14. **What provenance is reported?** Every resolved value should identify the
     pinned snapshot ID, workspace, producer run, observation age, and reuse
     decision (current-run versus prior observation). Define the durable report
     shape and error detail before implementing the selector.
+
+    **Resolved:** add a versioned `RunSetReport` keyed by run-set ID for the
+    plan digest, approval, graph, member ordering, and terminal member states;
+    link versioned per-model `RunReport`s by run-set ID. Plain evidence records
+    the exact authorized scalar/type/digest plus complete producer snapshot,
+    workspace, selector, age, and reuse provenance. Sealed evidence records
+    phases, names, modes, action routing, provider scheme/reference fingerprint,
+    policy match, producer provenance, and lifecycle status, but never a secret
+    value or secret-value hash. Typed mutation receipts preserve completed
+    partial state, and structured errors are redacted. Reports use explicit
+    structs and a schema version rather than untyped maps.
 
 #### Acceptance and compatibility
 
@@ -453,11 +569,41 @@ answered in the design discussion before implementation resumes.
     without fallback, pinned snapshot selection, invalid paths, list/non-leaf
     rejection, duplicate and unbound inputs, and producer/consumer cycles.
 
+    **Transaction boundary accepted:** reserve run-set/member/snapshot IDs
+    atomically; select reused snapshots and copy binding evidence in one short
+    read transaction; commit each current-run observation as one atomic step;
+    close every transaction before invoking mu. Persist plan/approval and each
+    execution receipt in short write transactions. Approval reconstruction uses
+    pinned evidence plus current model/plugin/policy fingerprints and rejects
+    any digest change. Pending approvals retain their snapshots. Missing
+    evidence becomes stale, and a crash after possible mutation but before its
+    receipt becomes `needs-verification` with no automatic retry or resume.
+
+    **Resolved release gate:** v1 requires deterministic coverage across CUE
+    classification, plain selection, sealed declaration/provider/mode policy,
+    strict mu action routing, graph ordering/reconciliation, exact approval,
+    fail-fast and crash recovery, concurrency/retention, versioned reporting,
+    and compatibility. The end-to-end path runs real mu planning/execution
+    against a fake provider implementing `resolve_secret` and `store_secret`.
+    Live credentialed providers are optional smokes; the fake-provider matrix
+    and complete PUDL/mu gates are release-blocking.
+
 16. **Which existing documents are superseded?**
     [`docs/cross-model-dependencies.md`](cross-model-dependencies.md) currently
     says value passing is deferred and that PUDL does not re-run downstream
     models. The wiring design should explicitly mark which statements remain
     true and which are replaced by the new bounded value-flow contract.
+
+    **Resolved:** the dependency relation, rules, reconciliation, and explicit
+    `depends_on` semantics remain authoritative. The older claims that all value
+    passing and downstream orchestration are out of scope are superseded.
+    Standalone runs still never start producers implicitly; explicit `run-set`
+    coordinates exactly the named models while mu executes each member graph.
+    The historical Swamp roadmap retains its original deferred boundary with a
+    successor note. `VISION.md` now distinguishes PUDL coordination from mu
+    execution. User guides, CLI reference, embedded skills, and generated help
+    update with implementation rather than documenting unavailable commands as
+    shipped.
 
 These questions are a design checkpoint, not additional binding configuration.
 The intended user-facing API remains convention-driven; the extra detail is
