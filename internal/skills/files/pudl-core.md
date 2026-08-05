@@ -51,12 +51,12 @@ trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
 ### Data pipeline
 - `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` takes globs and `-` for stdin)
 - `pudl list` — list catalog entries (default shows all; `--artifacts` = run outputs)
-- `pudl show <id>` / `pudl export <id>` / `pudl delete <id>`
-- `pudl validate` — validate catalog data against assigned schemas
+- `pudl show <id>` / `pudl export --id <id>` / `pudl delete <id>`
+- `pudl validate --all` — validate catalog data against assigned schemas
 
 ### Schema
 - `pudl schema list|show <name>` — browse schemas
-- `pudl schema new <name>` — generate a schema from data
+- `pudl schema new --from <id> --path <package>/#<Definition>` — generate a schema from data
 - `pudl schema add` — register a definition (e.g. a `#SystemModel`)
 - `pudl module add <module@version>` — add CUE module deps
 
@@ -66,7 +66,7 @@ trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl pull <scope|entity>` — retrieve all related facts
+- `pudl pull [scope]` — retrieve facts by scope prefix (plus kind/source/relation filters)
 
 ### #SystemModel loop
 - `pudl model list` — list registered `#SystemModel` definitions + last-run status
@@ -76,13 +76,16 @@ trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
 - `pudl run <model> --converge` — close drift (mutates the target via mu)
 - `pudl run <model> --from-catalog` — explicitly replay ingested records for inventory drift; a normal inventory run populates and compares its own current snapshot
 - `pudl run <model> --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
+- `pudl run-set <models...>` — run exactly the named models in producer-first order; no implicit producer expansion
+- `pudl run-set <models...> --converge` — whole-set read-only preflight before mutation; sealed outputs force exact-plan approval
+- `pudl run-set report|resume|reject` — inspect or decide durable run-set plans
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
 - `pudl model deps --derive` — also derive edges from desired↔produced identity matching
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
 - `pudl status [target]` — recorded convergence status by catalog target (a run records its verdict)
 
 ### Utilities
-- `pudl init` / `pudl doctor` / `pudl config show` / `pudl version`
+- `pudl init` / `pudl doctor` / `pudl config` / `pudl version`
 - `pudl guide` / `pudl prime` — agent-facing usage reference
 
 ## How pudl drives mu (the #SystemModel loop)
@@ -164,3 +167,18 @@ A produces (e.g. B's Deployment names a Namespace A declares), B→A is derived
 without a manual `depends_on` (heuristic, opt-in, separately sourced). pudl only
 makes deps queryable — it does not re-run downstream models (that is mu's / a
 scheduler's job). See `docs/cross-model-dependencies.md`.
+
+### Value bindings
+
+For actual value flow, a model template declares required scalar `inputs` and
+matching `bindings`. Both the consumer slot and source schema field must carry
+`@pudl(binding=plain)`. A standalone run may reuse the latest successful scoped
+producer snapshot but never starts it. `pudl run-set` names the exact closed set,
+rejects missing producers/cycles before execution, and pins current-run producer
+observations for downstream resolution.
+
+Sealed bindings never pass through the catalog. PUDL-generated mu targets use
+`sealed_routing: "strict"`; mu resolves provider values immediately before the
+claiming action executes. PUDL records only redacted fingerprints. Sealed outputs
+are converge-only, and any mutating set containing one requires approval of the
+exact persisted plan.

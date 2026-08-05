@@ -6,23 +6,23 @@ package k8s
 // validation without making the built-in observer unusable on a new kind.
 #Resource: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "k8s.resource"
+		schema_type:   "base"
+		resource_type: "k8s.resource"
 		identity_fields: ["kind", "metadata.namespace", "metadata.name"]
-		tracked_fields:  ["apiVersion", "kind", "metadata", "spec", "status"]
+		tracked_fields: ["apiVersion", "kind", "metadata", "spec", "status"]
 	}
 
-	apiVersion: string
-	kind:       string
+	apiVersion: string @pudl(binding=plain)
+	kind:       string @pudl(binding=plain)
 	metadata: {
-		name:      string
-		namespace?: string
-		uid?:       string
-		labels?:    [string]: string
+		name:       string @pudl(binding=plain)
+		namespace?: string @pudl(binding=plain)
+		uid?:       string @pudl(binding=plain)
+		labels?: [string]:      string
 		annotations?: [string]: string
 		...
 	}
-	spec?:   {...}
+	spec?: {...}
 	status?: {...}
 	...
 }

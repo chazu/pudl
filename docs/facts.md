@@ -171,19 +171,19 @@ As specific relations stabilize, their args structure can be formalized with CUE
 
 ## CLI Commands
 
-### `pudl observe`
+### `pudl facts observe`
 
 Record a structured observation:
 
 ```bash
-pudl observe "auth package has circular dependency with user package" \
+pudl facts observe "auth package has circular dependency with user package" \
     --kind obstacle \
     --scope pudl:pkg/auth
 
-pudl observe "all database calls go through a single connection pool" \
+pudl facts observe "all database calls go through a single connection pool" \
     --kind pattern
 
-pudl observe "the Config struct has 47 fields, should be split" \
+pudl facts observe "the Config struct has 47 fields, should be split" \
     --kind suggestion \
     --scope pudl:internal/config \
     --source claude-code

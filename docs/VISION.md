@@ -102,7 +102,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl mu ingest-manifest` -- Ingest mu build manifests
 - `pudl module` -- Manage CUE module dependencies
 - `pudl migrate` -- Run database migrations
-- `pudl observe` -- Record structured observations about the codebase
+- `pudl facts observe` -- Record structured observations about the codebase
 - `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
 - `pudl query` -- Evaluate Datalog rules and query derived facts
 - `pudl rule add` -- Validate and install Datalog rule files
@@ -110,7 +110,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl completion` -- Generate shell completion scripts
 
 ### Agent Observations
-- **`pudl observe`**: Agents and humans record structured observations, stored as facts in the bitemporal store
+- **`pudl facts observe`**: Agents and humans record structured observations, stored as facts in the bitemporal store
 - **Observation schema**: `pudl/nous.#Observation` with kind taxonomy (fact, obstacle, pattern, antipattern, suggestion, bug, opportunity)
 - **Corroboration**: Multiple agents independently flagging the same thing produces distinct facts; the count is signal
 

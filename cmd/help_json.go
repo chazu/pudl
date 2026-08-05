@@ -113,5 +113,5 @@ var helpJSONCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(helpJSONCmd)
+	rootCmd.SetHelpCommand(helpJSONCmd)
 }

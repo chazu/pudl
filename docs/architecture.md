@@ -17,9 +17,11 @@ This document describes PUDL's internal architecture: storage layout, streaming 
     +-- .git/                      # Full git repository
     +-- cue.mod/module.cue         # CUE module definition
     +-- pudl/
-    |   +-- core/core.cue          # Bootstrap schemas (catchall, collection)
+    |   +-- core/core.cue          # Catchall and collection schemas
+    |   +-- systemmodel/           # Built-in #SystemModel contract
     |   +-- rules/                 # Datalog rules (*.cue)
-    |   +-- <user packages>/       # Custom schema packages + #SystemModel instances
+    |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, mu, etc.
+    +-- models/                    # Global #SystemModel instances
 ```
 
 ### Raw Data
@@ -32,7 +34,12 @@ Each import produces a JSON metadata file alongside the raw data. This includes 
 
 ### Schema Repository
 
-The schema directory is a standalone git repository. Bootstrap schemas (`pudl/core.#Item` and `pudl/core.#Collection`) are embedded in the PUDL binary and copied to the user's schema repo on `pudl init`. User schemas are added alongside them.
+The schema directory is a standalone git repository. Every built-in resource
+schema and rule package is embedded in the PUDL binary; the programmatic
+`pudl/systemmodel.#SystemModel` schema is installed beside them. `pudl init`
+copies the complete owned set, and normal importer startup repairs any missing
+built-in file in an existing workspace. User schemas and model instances are
+added alongside the built-ins.
 
 ## Catalog Database
 
@@ -250,6 +257,23 @@ PUDL is a data import, cataloging, and validation system. The core flow is:
     |  + metadata)     |          |  assignment, ID) |
     +------------------+          +------------------+
 ```
+
+System-model orchestration is a second, bounded flow over the same catalog:
+
+```text
+exact named run-set
+  -> preflight dependencies and binding shapes
+  -> observe producers and pin successful snapshots
+  -> project authorized plain scalars into consumer templates
+  -> complete whole-set read-only planning
+  -> optionally execute through mu
+  -> persist linked run-set/member reports and redacted evidence
+```
+
+PUDL owns selection, catalog provenance, plan approval, and reports. Mu owns
+action planning/execution and secret-provider I/O. Generated targets select
+mu's strict sealed-routing mode so target declarations are availability bounds,
+not implicit action grants.
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership

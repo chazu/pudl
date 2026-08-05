@@ -17,7 +17,8 @@ go build -o pudl .
 
 This creates the workspace at `~/.pudl/` with:
 - A configuration file (`config.yaml`)
-- A git-tracked schema repository with bootstrap schemas
+- A git-tracked schema repository with all built-in resource schemas, rules,
+  and `pudl/systemmodel.#SystemModel`
 - Data storage directories
 
 If you forget to run `init`, PUDL auto-initializes on first use.
@@ -206,6 +207,21 @@ pudl run prod_stack --converge
 ```
 
 By default `pudl run` changes nothing in the world; it computes drift and reports. `--converge` closes that drift -- pudl declares state, mu executes.
+
+When one model consumes an observed scalar from another, declare a required
+`inputs` slot and a matching `bindings` entry. Both the consumer slot and the
+source schema field must opt into `@pudl(binding=plain)`. Run the closed set
+explicitly so the producer's observation is pinned for the consumer:
+
+```bash
+pudl run-set network prod_stack
+```
+
+PUDL does not add omitted producers. A missing producer, cycle, invalid
+projection, or incomplete binding fails preflight. Add `--converge` only when
+the whole set should be allowed to mutate. If any member declares a sealed
+output, PUDL persists the exact plan and requires `pudl run-set resume <id>` or
+`pudl run-set reject <id>` before execution.
 
 Check the latest convergence verdict recorded in the catalog:
 

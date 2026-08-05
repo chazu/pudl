@@ -35,18 +35,18 @@ var importCmd = &cobra.Command{
 	Long: `Import data from files into the PUDL data lake with automatic format detection
 and schema assignment.
 
-This command imports data from various formats (JSON, YAML, CSV) and stores it
-in the PUDL data lake with full metadata tracking. The data is stored in raw
-format with timestamp-based naming and metadata.
+This command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it
+in the PUDL data lake with full metadata tracking. Raw and metadata files use
+content-addressed names.
 
 The --path flag supports both single files and wildcard patterns for batch imports:
 - Single file: --path data.json
 - Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
 
 Data Storage:
-- Raw data: ~/.pudl/data/raw/YYYY/MM/DD/YYYYMMDD_HHMMSS_origin.ext
-- Metadata: ~/.pudl/data/metadata/YYYYMMDD_HHMMSS_origin.ext.meta
-- Catalog: ~/.pudl/data/catalog/ (inventory, schema assignments, etc.)
+- Raw data: ~/.pudl/data/raw/YYYY/MM/DD/<content-hash-prefix>.ext
+- Metadata: ~/.pudl/data/metadata/<content-hash>.meta
+- Catalog: ~/.pudl/data/sqlite/catalog.db
 
 Schema Assignment:
 - Manual schema specification with --schema flag (chained validation)

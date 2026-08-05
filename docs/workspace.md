@@ -18,3 +18,8 @@ Workspace-local schemas and model files are project-owned and should be
 committed with the repository. The catalog and imported data remain under the
 global PUDL data directory unless a future workspace data policy says
 otherwise.
+
+`pudl repo init` creates `.pudl/schema/models/`, the path used by
+`pudl model new`. Built-in schemas and `pudl/systemmodel.#SystemModel` remain in
+the global fallback installed by `pudl init`; repository workspaces do not need
+to duplicate them.

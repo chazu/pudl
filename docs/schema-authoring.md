@@ -81,6 +81,32 @@ A list of fields to **monitor for changes** between versions of the same resourc
 tracked_fields: ["State", "InstanceType", "Tags"]
 ```
 
+### Plain binding fields
+
+Cross-model scalar projection is opt-in per field. Add
+`@pudl(binding=plain)` only to values that may safely leave their observed
+resource and become another model's concrete input:
+
+```cue
+#Subnet: {
+    _pudl: {
+        schema_type:     "base"
+        resource_type:   "aws.ec2.subnet"
+        identity_fields: ["SubnetId"]
+        tracked_fields:  ["VpcId"]
+    }
+
+    SubnetId: string @pudl(binding=plain)
+    VpcId:    string @pudl(binding=plain)
+    Notes?:   string // not projectable
+}
+```
+
+The consumer must independently declare its required scalar `inputs` slot with
+the same annotation. Unannotated source fields fail closed. Do not mark tokens,
+passwords, private keys, or other secrets as plain; model those through
+`sealed_inputs`/`sealed_outputs`, which stay inside mu's provider channel.
+
 ### `base_schema` (optional)
 
 Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).

@@ -65,6 +65,10 @@ func Init(opts InitOptions) error {
 	if err := os.MkdirAll(schemaDir, 0755); err != nil {
 		return fmt.Errorf("creating schema/: %w", err)
 	}
+	modelsDir := filepath.Join(schemaDir, "models")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		return fmt.Errorf("creating schema/models/: %w", err)
+	}
 
 	// Create definitions directory
 	defsDir := filepath.Join(pudlDir, "definitions")
@@ -73,7 +77,7 @@ func Init(opts InitOptions) error {
 	}
 
 	// Create .gitkeep in empty directories so git tracks them
-	for _, d := range []string{schemaDir, defsDir} {
+	for _, d := range []string{schemaDir, modelsDir, defsDir} {
 		gitkeep := filepath.Join(d, ".gitkeep")
 		if _, err := os.Stat(gitkeep); os.IsNotExist(err) {
 			os.WriteFile(gitkeep, []byte(""), 0644)
@@ -83,6 +87,7 @@ func Init(opts InitOptions) error {
 	if opts.Verbose {
 		fmt.Printf("  workspace.cue  (workspace: %q)\n", dirName)
 		fmt.Printf("  schema/        (project-specific CUE schemas)\n")
+		fmt.Printf("  schema/models/ (registered #SystemModel definitions)\n")
 		fmt.Printf("  definitions/   (desired state definitions)\n")
 	}
 

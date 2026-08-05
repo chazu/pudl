@@ -30,7 +30,10 @@ canonical mutation approval, fail-fast receipts, and strict sealed routing are
 implemented. Producer-first scheduling, current-run snapshot pinning,
 stale-plan rejection, mandatory approval for sealed writes, redacted sealed
 provenance, and linked durable reports cover the executable orchestration
-slice. One contract inconsistency remains: an action-backed populate cannot
+slice. Living docs and CLI help now describe the exact run-set and strict
+sealed-routing contract; init/repair derives its owned file set from every
+embedded schema plus `#SystemModel`, and selected non-secret built-in resource
+handles expose explicit plain-binding annotations. One contract inconsistency remains: an action-backed populate cannot
 both finish the required pre-approval observation and defer its sealed write
 until after approval. PUDL fails that combination closed pending a design
 decision; converge-phase sealed production and consumption are fully wired.
@@ -70,7 +73,9 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - CUE-based schema inference using heuristics and CUE unification
 - Schema generation from imported data (`pudl schema new`)
 - Schema name normalization to canonical `<package>.#<Definition>` format
-- Bootstrap schemas (`pudl/core.#Item`, `pudl/core.#Collection`)
+- Built-in schemas and rules, including core, AWS, Git, Kubernetes, Linux, mu,
+  nous, convergence rules, and `pudl/systemmodel.#SystemModel`; init repair is
+  derived from the embedded file set so newly shipped built-ins are included
 - Git-backed schema repository with status/commit/log
 - Pluggable type patterns (AWS, Kubernetes, GitLab)
 - Component/schema boundary: `#`-definitions with no `_pudl` block are treated as
@@ -112,8 +117,8 @@ The core pipeline is stable and tested. Execution-related features (models, meth
   `mu plugin install NAME[@VERSION]` repair command.
 
 ### ACUTE Feedback Loop
-- `pudl ingest-observe` — ingest mu observe results as live state for drift detection
-- `pudl ingest-manifest` — ingest mu build manifests, track per-action results
+- `pudl mu ingest-observe` — ingest mu observe results as live state for drift detection
+- `pudl mu ingest-manifest` — ingest mu build manifests, track per-action results
 - `pudl status` — per-model/resource convergence status (unknown/drifted/converging/clean/failed); unknown also means an apply receipt needs verification
 - Status column on catalog entries, updated through the full ACUTE cycle
 - Architecture: [`docs/acute-loop-architecture.md`](acute-loop-architecture.md)
@@ -127,7 +132,9 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 
 ### Agent Integration
 - `pudl prime` outputs a structured prompt teaching agents how to use pudl
-- `pudl guide` provides topic-based reference guides for agents and humans (overview, import, schemas, facts, datalog, definitions, drift, pith, mu, agents)
+- `pudl guide` provides topic-based reference guides for agents and humans
+  (overview, import, schemas, facts, datalog, models, mu, agents,
+  troubleshooting, memory)
 - `pudl repo init` creates `.pudl/` with workspace.cue and installs Claude skills
 
 ### Documentation

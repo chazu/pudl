@@ -171,6 +171,27 @@ func TestResolverElaboratesExactAuthorizedScalar(t *testing.T) {
 	assert.Equal(t, "current-run", pinned.Evidence[0].Selection)
 }
 
+func TestResolverElaboratesAuthorizedOptionalSchemaField(t *testing.T) {
+	fixture := newResolverFixture(t)
+	fixture.addSnapshot(t, "snap_optional", "run_network", database.RunStatusSucceeded,
+		map[string]any{"name": "private", "details": map[string]any{"id": "subnet-optional"}})
+	ctx := cuecontext.New()
+	schema := ctx.CompileString(`
+#Subnet: {
+	name: string
+	details?: id?: string @pudl(binding=plain)
+}`, cue.Filename("resources.cue")).LookupPath(cue.ParsePath("#Subnet"))
+	require.NoError(t, schema.Err())
+
+	result, err := (Resolver{Catalog: fixture.db, Schemas: testSchemas{
+		"resources.#Subnet": schema,
+	}}).Elaborate(compileConsumer(t, `string @pudl(binding=plain)`), ResolveRequest{
+		Workspace: "repo", EvaluationTime: fixture.created,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "subnet-optional", result.Model.Desired[0]["subnet_id"])
+}
+
 func TestResolverNeverFallsBackBehindNewestSuccessfulSnapshot(t *testing.T) {
 	fixture := newResolverFixture(t)
 	fixture.addSnapshot(t, "snap_old", "run_old", database.RunStatusSucceeded,

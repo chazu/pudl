@@ -1,4 +1,12 @@
-# `pudl run` / #SystemModel — build status & handoff
+# `pudl run` / #SystemModel — historical build status & current handoff
+
+> This records the V1 implementation journey. The current command contract is
+> `pudl run <model>` for one model and `pudl run-set <models...>` for an exact
+> producer/consumer set. There is no `--file` model selector. Observe-only is the
+> default; `--converge --dry-run` plans a single-model mutation. Mutating
+> run-sets perform whole-set preflight, and sealed outputs require exact-plan
+> approval. See `docs/cli-reference.md` and
+> `docs/design/2026-07-28-cross-resource-value-wiring.md`.
 
 Implementation status of the V1 convergence build (the design lives in the **mu**
 repo: `mu/docs/design/system-models/` — `V1-BUILD-SPEC.md` is canonical, `issue-ledger.md`
@@ -161,8 +169,9 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go`,
 # inventory drift, isolated catalog, canned records (no host needed):
 H=/tmp/pt; rm -rf $H; mkdir -p $H
 HOME=$H pudl mu ingest-observe --path canned_host.json     # records with _schema + name
-HOME=$H pudl run <inst> --file model.cue --from-catalog [--json]
+HOME=$H pudl run <registered-model> --from-catalog --catalog-scope <snapshot-or-origin> [--json]
 
 # k8s differential drift (needs a reachable cluster):
-pudl run <inst> --file k8s.cue --mu-root /path/to/mu        # bare = drift; --converge --dry-run = plan
+pudl run <registered-model> --mu-root /path/to/mu           # bare = observe
+pudl run <registered-model> --mu-root /path/to/mu --converge --dry-run
 ```

@@ -884,7 +884,7 @@ type runFlags struct {
 // resource can't be named (or a plan dry-run requested) without explicitly opting
 // into mutation. The second exists because there is no way to infer which
 // already-ingested records belong to a model: records ingested by
-// `pudl ingest-observe` carry whatever target their observer reported, so an
+// `pudl mu ingest-observe` carry whatever target their observer reported, so an
 // unscoped replay would set-diff `desired` against every observation in the
 // catalog — every model, every host, all time — and could report clean off
 // another model's records.

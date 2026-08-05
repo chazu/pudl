@@ -113,10 +113,10 @@ THE MENTAL MODEL
 
 THE DAY-TO-DAY VERBS
 
-  pudl import <file>          Import data (auto-detects format + schema).
+  pudl import --path <file>   Import data (auto-detects format + schema).
   pudl list                   Browse catalog entries.
   pudl show <id>              Inspect an entry's content and metadata.
-  pudl facts list             Query the fact store.
+  pudl facts list --relation observation  Query observations in the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
   pudl facts observe "<text>"       Record a structured observation.
   pudl run <model>            Run a #SystemModel (observe-only, or --converge).
@@ -163,14 +163,13 @@ BASIC EXAMPLES
   pudl import --path inventory.json
   pudl import --path config.yaml --schema myapp.#Config
   pudl import --path "data/*.json"               # wildcard batch
-  pudl import --path data.json --tag env:prod     # add tags
 
 STDIN SUPPORT
 
   Pipe data directly into pudl:
 
-    curl -s https://api.example.com/data | pudl import --stdin
-    cat <<'EOF' | pudl import --stdin --format json
+    curl -s https://api.example.com/data | pudl import --path - --format json
+    cat <<'EOF' | pudl import --path - --format json
     {"name": "test", "value": 42}
     EOF
 
@@ -181,10 +180,9 @@ SCHEMA INFERENCE
   1. Detects the data format
   2. Infers a CUE schema from the data structure
   3. Matches against existing schemas (exact or structural)
-  4. Assigns the best-matching schema or creates a new one
+  4. Assigns the best-matching schema or the catchall
 
   Use --schema to force a specific schema assignment.
-  Use --skip-inference to import without schema assignment.
 
 CONTENT-ADDRESSED IDS
 
@@ -212,12 +210,9 @@ WILDCARDS
 
 FLAGS
 
-  --path <path>       File path or glob pattern (required unless --stdin)
-  --stdin             Read data from stdin
+  --path <path>       File path or glob pattern; '-' reads stdin
   --format <fmt>      Force format (json, yaml, csv, ndjson)
   --schema <name>     Force schema assignment
-  --tag <key:value>   Add metadata tags (repeatable)
-  --skip-inference    Skip schema inference
   --json              Output results as JSON
 `)
 }
@@ -250,7 +245,7 @@ COMMANDS
 
   pudl schema list                   List all schemas by package
   pudl schema show <name>            Display schema CUE source
-  pudl schema new <name>             Generate schema from imported data
+  pudl schema new --from <id> --path <package>/#<Definition>
   pudl schema add <name> <file>      Add a schema file
   pudl schema edit <name>            Edit schema in $EDITOR
   pudl schema reinfer                Re-run inference on all entries
@@ -329,9 +324,9 @@ WRITING FACTS — ONE DOOR
 
 QUERYING FACTS
 
-  pudl facts list                           List all current facts
+  pudl facts list --relation <name>         List current facts in a relation
   pudl facts list --relation observation    Filter by relation
-  pudl facts list --source claude-code      Filter by source
+  pudl facts list --relation observation --source claude-code
   pudl facts search "<text>"                Full-text search (FTS5, ranked)
   pudl facts show <id>                      Full fact details
   pudl facts stats                          Aggregate statistics
@@ -355,16 +350,15 @@ FACT LIFECYCLE
 
 TIME-TRAVEL QUERIES
 
-  pudl facts list --as-of-valid "2025-01-15T00:00:00Z"
-  pudl facts list --as-of-tx "2025-01-15T00:00:00Z"
+  pudl facts list --relation observation --as-of-valid "2025-01-15T00:00:00Z"
+  pudl facts list --relation observation --as-of-tx "2025-01-15T00:00:00Z"
 
   --as-of-valid: "What was true at this time?"
   --as-of-tx:    "What did we believe at this time?"
 
 PULLING RELATED FACTS
 
-  pudl pull --scope <scope>          All facts for a scope
-  pudl pull --entity <entity>        All facts for an entity
+  pudl pull <scope>                  All facts for a scope prefix
   pudl pull --relation <relation>    All facts of a relation type
 
 TABLES
@@ -392,11 +386,11 @@ OVERVIEW
 QUERYING
 
   pudl query <relation>                   Query derived facts
-  pudl query <relation> --field=value     Filter results
+  pudl query <relation> field=value       Filter results
   pudl query <relation> --json            JSON output
 
   Example:
-    pudl query stale-observations --age=7d
+    pudl query stale-observations age=7d
 
 RULES
 
@@ -492,6 +486,10 @@ COMMANDS
   pudl model validate <name>           Structurally validate without running
   pudl run <name>                      Observe-only run (populate → drift → checks)
   pudl run <name> --converge           Close drift (mutates the target via mu)
+  pudl run-set <models...>             Observe an exact dependency set
+  pudl run-set <models...> --converge  Plan the whole set, then mutate
+  pudl run-set report [id]             Read a durable run-set report
+  pudl run-set resume|reject <id>      Decide a pending exact plan
   pudl status                          Show recorded convergence status
 
 WHAT A MODEL DECLARES
@@ -518,6 +516,18 @@ SCAFFOLD FIRST
   model, edit the path printed by 'model new' rather than authoring registration
   boilerplate by hand. Use 'pudl run report [run-id]' after a run; use
   '--require-approval' plus 'run resume'/'run reject' before convergence.
+
+CROSS-MODEL VALUES
+
+  Required scalar inputs can bind to a producer observation. Both the consumer
+  input and source schema field must declare @pudl(binding=plain). 'run-set'
+  runs exactly the named models, rejects omitted producers/cycles in preflight,
+  orders producers first, and pins their successful snapshots. It never expands
+  the set implicitly.
+
+  Sealed values stay inside mu's provider channel. Sealed outputs are
+  converge-only, and a mutating set containing one always pauses for exact-plan
+  approval even when --require-approval was not supplied.
 
 SEE ALSO
 
@@ -551,6 +561,17 @@ THE ACUTE LOOP (driven by 'pudl run')
 
   pudl run github-chazu                 # observe-only
   pudl run k8sPolicy --converge         # close drift via mu
+  pudl run-set network k8sPolicy        # exact producer/consumer set
+
+VALUE ROUTING
+
+  Plain scalar bindings come from PUDL catalog snapshots and carry durable
+  producer/run/snapshot/path evidence. Sealed bindings are rendered as provider
+  refs on mu targets with sealed_routing: "strict". Mu validates each action's
+  exact ref/mode claims during planning and resolves values only immediately
+  before execution. PUDL records redacted fingerprints, never secret values or
+  provider refs. A mutating run-set with sealed outputs requires exact-plan
+  approval before mu executes.
 
 INGESTING MU RESULTS
 
@@ -621,7 +642,7 @@ MACHINE-READABLE OUTPUT
     pudl help --json
     pudl help run --json
     pudl list --json
-    pudl facts list --json
+    pudl facts list --relation observation --json
     pudl query stale-items --json
     pudl status --json
 
@@ -634,8 +655,8 @@ TEMPORAL QUERIES
 
   Query historical state with time-travel flags:
 
-    pudl facts list --as-of-valid "2025-01-15T00:00:00Z"
-    pudl facts list --as-of-tx "2025-01-15T00:00:00Z"
+    pudl facts list --relation observation --as-of-valid "2025-01-15T00:00:00Z"
+    pudl facts list --relation observation --as-of-tx "2025-01-15T00:00:00Z"
 
   --as-of-valid: "What was true at this time?"
   --as-of-tx:    "What did we believe at this time?"
@@ -650,14 +671,14 @@ RECOMMENDED WORKFLOWS
   Explore a codebase and record findings:
     1. Analyze code
     2. pudl facts observe "<finding>" --kind <kind> --scope <repo:path>
-    3. pudl facts list --source claude-code  (review what you've recorded)
+    3. pudl facts list --relation observation --source claude-code
 
   Query existing knowledge:
-    1. pudl pull --scope <repo:path>  (all facts for a scope)
+    1. pudl pull <repo:path>          (all facts for a scope prefix)
     2. pudl query <relation>         (derived facts from rules)
 
   Import external data:
-    1. curl ... | pudl import --stdin --format json
+    1. curl ... | pudl import --path - --format json
     2. pudl list --schema <name>     (verify import)
     3. pudl show <id>                (inspect details)
 

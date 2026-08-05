@@ -52,7 +52,9 @@ Key features:
 - Automatic CUE-based schema inference with cascade validation
 - Version-controlled schema repository with git integration
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
-- Schema generation from imported data`,
+- Schema generation from imported data
+- Observe-only and converging #SystemModel runs through mu
+- Exact producer/consumer run-sets with plain and sealed value wiring`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error

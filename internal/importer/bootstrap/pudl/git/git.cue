@@ -33,20 +33,20 @@ package git
 // two -- so it is tracked, not identity. See the design doc (D2).
 #GitRepository: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   string | *"git.repository"
+		schema_type:   "base"
+		resource_type: string | *"git.repository"
 		identity_fields: ["name"]
-		tracked_fields:  ["default_branch", "root_commit"]
+		tracked_fields: ["default_branch", "root_commit"]
 		// Declared (optional) so platform specializations built with
 		// `#Child: #GitRepository & {...}` may set it; `_pudl` is closed
 		// inside a definition, so an undeclared field would be rejected.
 		base_schema?: string
 	}
 
-	name:           string // fully-qualified path, globally unique
-	default_branch: string
+	name:           string @pudl(binding=plain) // fully-qualified path, globally unique
+	default_branch: string @pudl(binding=plain)
 	bare?:          bool
-	root_commit?:   string // first (parentless) commit; optional => tracked, not identity
+	root_commit?:   string @pudl(binding=plain) // first (parentless) commit; optional => tracked, not identity
 	remotes: [...#GitRemote]
 	branches: [...#GitBranch]
 	...
@@ -64,7 +64,7 @@ package git
 	}
 
 	name:        =~"^github\\.com/" // "github.com/owner/repo"
-	owner?:      string
+	owner?:      string             @pudl(binding=plain)
 	visibility?: "public" | "private" | "internal"
 }
 
@@ -78,6 +78,6 @@ package git
 	}
 
 	name:        =~"^gitlab\\.com/" // "gitlab.com/group/project"
-	namespace?:  string
+	namespace?:  string             @pudl(binding=plain)
 	visibility?: "public" | "private" | "internal"
 }
