@@ -43,6 +43,33 @@ pudl declares desired/observed state; mu executes. There is no separate
 export step — `pudl run --converge` renders sources and drives `mu build`
 in one command.
 
+## Exact multi-model runs and value channels
+
+`pudl run-set <models...>` is the bounded coordinator for cross-model values.
+It runs exactly the named models, orders declared/binding producers first, and
+pins successful producer observations for their consumers. It never discovers
+and starts an omitted producer. Without `--converge` every member is
+observe-only; with it, PUDL finishes whole-set read-only planning before the
+first mutation.
+
+Plain values are scalar catalog projections. The consumer declares a required
+`inputs` slot and `bindings` source, and both that slot and the source schema
+field must opt into `@pudl(binding=plain)`. PUDL persists the value's producer,
+run, snapshot, identity, path, age, and digest as binding evidence.
+
+Sealed values never take the catalog path. PUDL renders provider references into
+mu targets with `sealed_routing: "strict"`; the plugin must explicitly claim
+each action's exact ref and mode. Mu validates those claims at planning, resolves
+secret values immediately before action execution, and re-checks
+`secrets.writable_refs` at write time. PUDL stores only redacted fingerprints.
+Sealed outputs are converge-only, and any mutating run-set that contains one
+requires approval of the exact persisted plan:
+
+```bash
+pudl run-set network app --converge
+pudl run-set resume <run-set-id>   # or: pudl run-set reject <run-set-id>
+```
+
 ## Example: Converging Kubernetes State
 
 ### 1. Declare desired state

@@ -118,6 +118,10 @@ test/
 ### System Model Tests
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
 - Run verdict mapping, `--only` scope selection, and the `pudl run` phase plan (`cmd` run tests)
+- Plain/sealed binding classification, exact run-set ordering, producer snapshot
+  pinning, approval/resume/reject, and durable linked reports
+- Bootstrap installation and repair derived from the complete embedded schema
+  tree, including built-in `@pudl(binding=plain)` projections
 
 ### Environment-sensitive tests
 

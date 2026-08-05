@@ -23,6 +23,9 @@ pudl verify
 # Run a system model: populate, detect drift, run checks, report
 pudl model list
 pudl run my-server
+
+# Run exactly the named producer/consumer models in dependency order
+pudl run-set network my-server
 ```
 
 ## What Happens When You Import
@@ -50,6 +53,11 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **Collections**: NDJSON files are split into individual items; normalized memberships allow one item to appear in multiple collections
 - **Envelopes**: Typed `{schema, definitions?, data}` JSON records preserve schema metadata while importing the inner payload
 - **System models**: A `#SystemModel` instance declares the desired state of a system as a set of desired resources; `pudl run` drives it
+- **Value wiring**: required scalar `inputs` bind to explicitly authorized
+  `@pudl(binding=plain)` fields from successful producer snapshots; sealed values
+  stay inside mu's provider path
+- **Exact run-sets**: `pudl run-set <models...>` orders only the named models,
+  pins producer observations, and never expands the set implicitly
 - **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
 - **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
 - **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
@@ -65,7 +73,7 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl init` | Initialize workspace (`~/.pudl/`) |
 | `pudl import --path <file>` | Import data with automatic detection |
 | `pudl list` | Query catalog (filter by `--schema`, `--origin`, `--format`, etc.) |
-| `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`, `--validation`) |
+| `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`) |
 | `pudl delete <id>` | Remove entry from catalog |
 | `pudl export` | Export data by ID, schema, or origin to JSON/YAML/CSV/NDJSON |
 | `pudl catalog` | List all registered schema types with metadata |
@@ -91,14 +99,18 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl model validate <name>` | Validate a model against its schema |
 | `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
 | `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
+| `pudl run-set <models...>` | Observe an exact producer/consumer set in dependency order |
+| `pudl run-set <models...> --converge` | Plan the whole exact set, then mutate; sealed outputs require approval |
+| `pudl run-set report [id]` | Read the latest or named durable run-set report |
+| `pudl run-set resume/reject <id>` | Approve or reject a pending exact mutation plan |
 | `pudl status` | Read catalog convergence status recorded by the last model run |
 
 ### Observations and Facts
 
 | Command | Description |
 |---------|-------------|
-| `pudl observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
-| `pudl facts list` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
+| `pudl facts observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
+| `pudl facts list --relation <name>` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
 | `pudl facts show <id>` | Inspect a single fact (supports ID prefix matching) |
 | `pudl facts retract <id>` | Mark a fact as retracted (assertion was wrong) |
 | `pudl facts invalidate <id>` | Mark a fact as no longer valid (reality changed) |
@@ -122,7 +134,7 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 | `pudl doctor` | Workspace health checks |
 | `pudl repo init` | Initialize `.pudl/` in a repository, install Claude skills |
 | `pudl config` | Show current configuration |
-| `pudl validate` | Validate data against schemas |
+| `pudl validate --all` | Validate catalog data against assigned schemas |
 
 See [docs/cli-reference.md](docs/cli-reference.md) for the full command reference.
 
@@ -159,7 +171,16 @@ pudl run my-server
 
 # Close drift: pudl renders desired -> sources, mu reconciles
 pudl run my-server --converge
+
+# Coordinate cross-model values without implicit producer discovery
+pudl run-set network my-server
 ```
+
+PUDL-generated mu targets use `sealed_routing: "strict"`. Plain values are
+persisted with source/snapshot provenance; sealed values are resolved by mu at
+execution time and PUDL stores only redacted fingerprints. Sealed outputs are
+converge-only in the current contract, and a mutating run-set containing one
+always pauses for exact-plan approval.
 
 ## Documentation
 

@@ -360,7 +360,7 @@ With `--converge` it closes drift: pudl renders the desired state to sources and
 pudl run my_model                 # observe-only: populate -> drift -> checks -> report
 pudl run my_model --converge      # close drift (render desired -> sources, mu reconciles)
 pudl run my_model --converge --only foo  # converge only the selected resource
-pudl run my_model --dry-run       # show planned actions without applying
+pudl run my_model --converge --dry-run  # show planned actions without applying
 pudl run my_model --from-catalog --catalog-scope pudl-run   # replay: no live observe
 ```
 
@@ -370,7 +370,7 @@ against records already in the catalog, so its verdict describes what was
 therefore never promotes resources to `clean` and never writes a model status;
 the model keeps the verdict of its last real observation. The scope is mandatory
 because there is no way to infer which ingested records belong to a model:
-records ingested by `pudl ingest-observe` carry whatever target their observer
+records ingested by `pudl mu ingest-observe` carry whatever target their observer
 reported.
 
 > **Host credentials for converge plugins.** mu runs converge actions with a
@@ -402,6 +402,11 @@ reported.
 | `--from-catalog` | Force inventory drift from already-ingested records, with no live observe. Requires `--catalog-scope`. Inventory observers — `#EweTarget` or `#PluginObserve` with `differential: false` — auto-route to inventory drift without this flag, and populate their own snapshot to compare against |
 | `--catalog-scope` | Which already-ingested records `--from-catalog` replays: an observe snapshot ID, or the origin they were ingested under |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
+
+A standalone `pudl run` never starts another model automatically. If the model
+has a plain binding, PUDL reuses the latest eligible successful producer
+snapshot in the same workspace; use `pudl run-set` to observe and pin producers
+in the current operation.
 
 `--max-iters` bounds the applies inside one process; `--max-applies` bounds them
 across processes. Without the second, a model that cannot converge applies
@@ -443,6 +448,37 @@ model row is left `unknown` instead, and the run row records the real verdict
 plus a note naming the scope. `drifted` and `failed` *are* written: a defect
 found in a subset is a defect in the model. Re-run without `--only` to establish
 a whole-model `clean`.
+
+### `pudl run-set <model> [<model>...]`
+
+Run exactly the named producer/consumer models in dependency order. The set is
+closed: missing producers are errors, not requests for implicit expansion.
+
+```bash
+pudl run-set network app                         # observe-only
+pudl run-set network app --max-observation-age 15m
+pudl run-set network app --converge              # whole-set plan, then apply
+pudl run-set network app --converge --require-approval
+pudl run-set report [run-set-id]
+pudl run-set resume <run-set-id>
+pudl run-set reject <run-set-id>
+```
+
+Observe-only sets continue independent branches after a member failure while
+blocking its dependents. Mutating sets complete read-only preflight for every
+member before the first mutation and stop new mutations after the first apply
+failure. A converging set with any sealed output always pauses for exact-plan
+approval, even without `--require-approval`. Resume revalidates the immutable
+request and plan digest before execution.
+
+| Flag | Description |
+|------|-------------|
+| `--converge` | Enable mutation after whole-set read-only preflight |
+| `--require-approval` | Persist and pause any mutating exact plan for approval |
+| `--max-observation-age` | Reject a reused or pinned producer snapshot older than this duration |
+| `--max-iters` | Maximum apply iterations per mutating member (default 5) |
+| `--max-applies` | Durable per-member apply budget (default 20; `0` disables) |
+| `--mu-root` | Mu project root for member runs; otherwise discover per model |
 
 ### `pudl status [target]`
 
@@ -509,14 +545,14 @@ pudl migrate identity
 
 ## Observations and Facts
 
-### `pudl observe`
+### `pudl facts observe`
 
 Record a structured observation about the codebase. Observations are stored as facts in the bitemporal fact store.
 
 ```bash
-pudl observe "auth has circular dependency with user" --kind obstacle --scope pudl:pkg/auth
-pudl observe "all db calls use single connection pool" --kind pattern
-pudl observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config --source claude-code
+pudl facts observe "auth has circular dependency with user" --kind obstacle --scope pudl:pkg/auth
+pudl facts observe "all db calls use single connection pool" --kind pattern
+pudl facts observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config --source claude-code
 ```
 
 | Flag | Default | Description |

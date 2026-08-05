@@ -5,15 +5,15 @@ package aws
 // Data source: aws organizations list-accounts, aws sts get-caller-identity
 #Account: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.account"
+		schema_type:   "base"
+		resource_type: "aws.account"
 		identity_fields: ["Id"]
-		tracked_fields:  ["Arn", "Name", "Status", "Email"]
+		tracked_fields: ["Arn", "Name", "Status", "Email"]
 	}
 
-	Id:      string // 12-digit AWS account ID
-	Arn:     string
-	Name:    string
+	Id:      string @pudl(binding=plain) // 12-digit AWS account ID
+	Arn:     string @pudl(binding=plain)
+	Name:    string @pudl(binding=plain)
 	Status?: "ACTIVE" | "SUSPENDED" | "PENDING_CLOSURE"
 	Email?:  string
 	...
@@ -23,23 +23,23 @@ package aws
 // Data source: aws ec2 describe-instances
 #Instance: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.instance"
+		schema_type:   "base"
+		resource_type: "aws.ec2.instance"
 		identity_fields: ["instance_id"]
-		tracked_fields:  ["instance_type", "state", "vpc_id", "subnet_id", "private_ip", "public_ip", "image_id", "tags", "security_groups", "iam_profile"]
+		tracked_fields: ["instance_type", "state", "vpc_id", "subnet_id", "private_ip", "public_ip", "image_id", "tags", "security_groups", "iam_profile"]
 	}
 
-	instance_id:     string
-	instance_type:   string
-	state:           string
-	vpc_id?:         string | null
-	subnet_id?:      string | null
-	private_ip?:     string | null
-	public_ip?:      string | null
-	image_id?:       string | null
-	tags:            [...#Tag]
+	instance_id:   string @pudl(binding=plain)
+	instance_type: string
+	state:         string
+	vpc_id?:       string | null @pudl(binding=plain)
+	subnet_id?:    string | null @pudl(binding=plain)
+	private_ip?:   string | null
+	public_ip?:    string | null
+	image_id?:     string | null @pudl(binding=plain)
+	tags: [...#Tag]
 	security_groups: [...string]
-	iam_profile?:    string | null
+	iam_profile?: string | null
 	...
 }
 
@@ -47,17 +47,17 @@ package aws
 // Data source: aws ec2 describe-vpcs
 #VPC: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.vpc"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc"
 		identity_fields: ["VpcId"]
-		tracked_fields:  ["CidrBlock", "State", "IsDefault", "EnableDnsSupport", "EnableDnsHostnames"]
+		tracked_fields: ["CidrBlock", "State", "IsDefault", "EnableDnsSupport", "EnableDnsHostnames"]
 	}
 
-	VpcId:               string
-	CidrBlock:           string
+	VpcId:               string @pudl(binding=plain)
+	CidrBlock:           string @pudl(binding=plain)
 	State:               "available" | "pending"
 	IsDefault:           bool
-	OwnerId?:            string
+	OwnerId?:            string @pudl(binding=plain)
 	InstanceTenancy?:    "default" | "dedicated" | "host"
 	EnableDnsSupport?:   bool
 	EnableDnsHostnames?: bool
@@ -69,21 +69,21 @@ package aws
 // Data source: aws ec2 describe-subnets
 #Subnet: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.subnet"
+		schema_type:   "base"
+		resource_type: "aws.ec2.subnet"
 		identity_fields: ["SubnetId"]
-		tracked_fields:  ["VpcId", "CidrBlock", "AvailabilityZone", "MapPublicIpOnLaunch", "State"]
+		tracked_fields: ["VpcId", "CidrBlock", "AvailabilityZone", "MapPublicIpOnLaunch", "State"]
 	}
 
-	SubnetId:                string
-	VpcId:                   string
-	CidrBlock:               string
-	AvailabilityZone:        string
-	AvailabilityZoneId?:     string
-	State:                   "available" | "pending"
-	MapPublicIpOnLaunch:     bool
+	SubnetId:                 string @pudl(binding=plain)
+	VpcId:                    string @pudl(binding=plain)
+	CidrBlock:                string @pudl(binding=plain)
+	AvailabilityZone:         string @pudl(binding=plain)
+	AvailabilityZoneId?:      string @pudl(binding=plain)
+	State:                    "available" | "pending"
+	MapPublicIpOnLaunch:      bool
 	AvailableIpAddressCount?: int
-	DefaultForAz?:           bool
+	DefaultForAz?:            bool
 	Tags?: [...#Tag]
 	...
 }
@@ -92,14 +92,14 @@ package aws
 // Data source: aws ec2 describe-route-tables
 #RouteTable: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.route_table"
+		schema_type:   "base"
+		resource_type: "aws.ec2.route_table"
 		identity_fields: ["RouteTableId"]
-		tracked_fields:  ["VpcId", "Routes", "Associations"]
+		tracked_fields: ["VpcId", "Routes", "Associations"]
 	}
 
-	RouteTableId: string
-	VpcId:        string
+	RouteTableId: string @pudl(binding=plain)
+	VpcId:        string @pudl(binding=plain)
 	Routes: [...#Route]
 	Associations: [...#RouteTableAssociation]
 	Tags?: [...#Tag]
@@ -138,25 +138,25 @@ package aws
 // Data source: aws ec2 describe-security-groups
 #SecurityGroup: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.security_group"
+		schema_type:   "base"
+		resource_type: "aws.ec2.security_group"
 		identity_fields: ["GroupId"]
-		tracked_fields:  ["VpcId", "IpPermissions", "IpPermissionsEgress"]
+		tracked_fields: ["VpcId", "IpPermissions", "IpPermissionsEgress"]
 	}
 
-	GroupId:              string
-	GroupName:            string
-	VpcId:               string
-	Description?:        string
-	OwnerId?:            string
-	IpPermissions:       [...#IpPermission]
+	GroupId:      string @pudl(binding=plain)
+	GroupName:    string @pudl(binding=plain)
+	VpcId:        string @pudl(binding=plain)
+	Description?: string
+	OwnerId?:     string
+	IpPermissions: [...#IpPermission]
 	IpPermissionsEgress: [...#IpPermission]
 	Tags?: [...#Tag]
 	...
 }
 
 #IpPermission: {
-	IpProtocol: string          // "tcp", "udp", "icmp", "-1" (all)
+	IpProtocol: string // "tcp", "udp", "icmp", "-1" (all)
 	FromPort?:  int
 	ToPort?:    int
 	IpRanges?: [...{
@@ -170,8 +170,8 @@ package aws
 		...
 	}]
 	UserIdGroupPairs?: [...{
-		GroupId:     string
-		UserId?:    string
+		GroupId:      string
+		UserId?:      string
 		Description?: string
 		...
 	}]
@@ -187,13 +187,13 @@ package aws
 // Data source: aws ec2 describe-internet-gateways
 #InternetGateway: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.internet_gateway"
+		schema_type:   "base"
+		resource_type: "aws.ec2.internet_gateway"
 		identity_fields: ["InternetGatewayId"]
-		tracked_fields:  ["Attachments"]
+		tracked_fields: ["Attachments"]
 	}
 
-	InternetGatewayId: string
+	InternetGatewayId: string @pudl(binding=plain)
 	OwnerId?:          string
 	Attachments: [...{
 		VpcId: string
@@ -208,15 +208,15 @@ package aws
 // Data source: aws ec2 describe-nat-gateways
 #NATGateway: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.nat_gateway"
+		schema_type:   "base"
+		resource_type: "aws.ec2.nat_gateway"
 		identity_fields: ["NatGatewayId"]
-		tracked_fields:  ["SubnetId", "VpcId", "State", "ConnectivityType"]
+		tracked_fields: ["SubnetId", "VpcId", "State", "ConnectivityType"]
 	}
 
-	NatGatewayId:     string
-	SubnetId:         string
-	VpcId:            string
+	NatGatewayId:     string @pudl(binding=plain)
+	SubnetId:         string @pudl(binding=plain)
+	VpcId:            string @pudl(binding=plain)
 	State:            "pending" | "failed" | "available" | "deleting" | "deleted"
 	ConnectivityType: "public" | "private"
 	NatGatewayAddresses?: [...{
@@ -234,14 +234,14 @@ package aws
 // Data source: aws ec2 describe-network-acls
 #NetworkACL: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.network_acl"
+		schema_type:   "base"
+		resource_type: "aws.ec2.network_acl"
 		identity_fields: ["NetworkAclId"]
-		tracked_fields:  ["VpcId", "Entries", "IsDefault"]
+		tracked_fields: ["VpcId", "Entries", "IsDefault"]
 	}
 
-	NetworkAclId: string
-	VpcId:        string
+	NetworkAclId: string @pudl(binding=plain)
+	VpcId:        string @pudl(binding=plain)
 	IsDefault:    bool
 	Entries: [...#NetworkACLEntry]
 	Associations: [...{
@@ -255,11 +255,11 @@ package aws
 }
 
 #NetworkACLEntry: {
-	RuleNumber: int
-	Protocol:   string // "-1" (all), "6" (tcp), "17" (udp)
-	RuleAction: "allow" | "deny"
-	Egress:     bool
-	CidrBlock?: string
+	RuleNumber:     int
+	Protocol:       string // "-1" (all), "6" (tcp), "17" (udp)
+	RuleAction:     "allow" | "deny"
+	Egress:         bool
+	CidrBlock?:     string
 	Ipv6CidrBlock?: string
 	PortRange?: {
 		From: int
@@ -272,23 +272,23 @@ package aws
 // Data source: aws ec2 describe-vpc-peering-connections
 #VPCPeering: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.vpc_peering"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc_peering"
 		identity_fields: ["VpcPeeringConnectionId"]
-		tracked_fields:  ["RequesterVpcInfo", "AccepterVpcInfo", "Status"]
+		tracked_fields: ["RequesterVpcInfo", "AccepterVpcInfo", "Status"]
 	}
 
 	VpcPeeringConnectionId: string
 	RequesterVpcInfo: {
-		OwnerId: string
-		VpcId:   string
+		OwnerId:    string
+		VpcId:      string
 		CidrBlock?: string
 		Region?:    string
 		...
 	}
 	AccepterVpcInfo: {
-		OwnerId: string
-		VpcId:   string
+		OwnerId:    string
+		VpcId:      string
 		CidrBlock?: string
 		Region?:    string
 		...
@@ -306,10 +306,10 @@ package aws
 // Data source: aws ec2 describe-vpc-endpoints
 #VPCEndpoint: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.vpc_endpoint"
+		schema_type:   "base"
+		resource_type: "aws.ec2.vpc_endpoint"
 		identity_fields: ["VpcEndpointId"]
-		tracked_fields:  ["ServiceName", "VpcId", "VpcEndpointType", "State"]
+		tracked_fields: ["ServiceName", "VpcId", "VpcEndpointType", "State"]
 	}
 
 	VpcEndpointId:   string
@@ -326,7 +326,7 @@ package aws
 		...
 	}]
 	NetworkInterfaceIds?: [...string]
-	PrivateDnsEnabled?:   bool
+	PrivateDnsEnabled?: bool
 	Tags?: [...#Tag]
 	...
 }
@@ -335,10 +335,10 @@ package aws
 // Data source: aws ec2 describe-addresses
 #ElasticIP: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "aws.ec2.elastic_ip"
+		schema_type:   "base"
+		resource_type: "aws.ec2.elastic_ip"
 		identity_fields: ["AllocationId"]
-		tracked_fields:  ["PublicIp", "AssociationId", "Domain", "InstanceId", "NetworkInterfaceId"]
+		tracked_fields: ["PublicIp", "AssociationId", "Domain", "InstanceId", "NetworkInterfaceId"]
 	}
 
 	AllocationId:        string

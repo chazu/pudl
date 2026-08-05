@@ -1,0 +1,41 @@
+# Wiring documentation and init inventory
+
+**Date:** 2026-08-05
+
+## Outcome
+
+PUDL and mu's living documentation and embedded usage text now describe the
+shipped `#SystemModel`, exact `run-set`, plain-binding, and strict sealed-routing
+contracts. Removed `pudl drift` / `pudl export-actions` / `pudl process` usage
+was replaced with the current commands; historical records remain snapshots.
+
+PUDL initialization no longer maintains a handwritten subset of built-in files.
+Fresh installation and existing-workspace repair share an inventory derived from
+the complete embedded schema tree plus the programmatic
+`pudl/systemmodel.#SystemModel`. This includes previously omitted repair checks
+such as Git, nous, `rules.cue`, and every future embedded built-in. Repository
+initialization also creates the `schema/models` path used by `pudl model new`.
+
+Selected non-secret resource handles in the built-in AWS, Git, Kubernetes,
+filesystem, and artifact schemas now opt into `@pudl(binding=plain)`. Fields not
+explicitly annotated remain unavailable to cross-model projection. Schema-path
+lookup now follows optional CUE fields as well as required ones, so an explicitly
+authorized optional handle can be projected when the observed record contains it.
+
+## Compatibility and safety
+
+- Standalone runs still never start a producer implicitly.
+- `pudl run-set` remains a closed operator-named set and observe-only by default.
+- Sealed outputs remain converge-only and force exact-plan approval in a
+  mutating run-set.
+- PUDL-generated mu targets retain `sealed_routing: "strict"`; mu plans with
+  refs/modes only and resolves values immediately before execution.
+- Init repair retains the existing install semantics while removing the drift-
+  prone file checklist.
+
+## Verification
+
+- Focused importer, repo-init, command, and CUE validation tests.
+- Generated skill synchronization check.
+- Full Go test, CGO-disabled test, vet, build, and repository lint gates.
+- Mu CUE validation, guide rendering, full test task, and repository verifier.

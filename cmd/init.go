@@ -23,14 +23,16 @@ and configuration files with proper CUE module support.
 
 This command creates:
 - ~/.pudl/ directory structure
-- ~/.pudl/schema/ directory with CUE module and git repository
+- ~/.pudl/schema/ directory with a CUE module, git repository, all built-in
+  resource schemas, convergence rules, and pudl/systemmodel.#SystemModel
 - ~/.pudl/data/ directory for data storage
 - ~/.pudl/config.yaml configuration file
 
-The schema directory is initialized as:
+The schema directory is initialized with:
 - A proper CUE module with cue.mod/module.cue
 - A git repository for version control
-- Local schema directories under pudl/
+- Built-in schema packages under pudl/ (including aws, git, k8s, linux, mu,
+  nous, rules, and systemmodel)
 - Example files showing third-party module usage
 
 This enables you to use third-party CUE modules like Kubernetes schemas
@@ -76,11 +78,12 @@ func runInitCommand(cmd *cobra.Command, args []string) error {
 	// Show next steps
 	fmt.Println()
 	fmt.Println("🚀 Next steps:")
-	fmt.Println("   1. Import some data: pudl import --path <file>")
-	fmt.Println("   2. List your data: pudl list")
-	fmt.Println("   3. Check the examples: cat ~/.pudl/schema/examples/kubernetes.cue")
-	fmt.Println("   4. Add third-party modules: pudl module add <module@version>")
-	fmt.Println("   5. Process CUE files: pudl process <file.cue>")
+	fmt.Println("   1. Import data: pudl import --path <file>")
+	fmt.Println("   2. Inspect built-ins: pudl schema list")
+	fmt.Println("   3. Initialize a repository workspace: pudl repo init")
+	fmt.Println("   4. List and validate models: pudl model list")
+	fmt.Println("   5. Run one model: pudl run <model>")
+	fmt.Println("   6. Run an exact dependency set: pudl run-set <producer> <consumer>")
 	fmt.Println()
 	fmt.Println("📚 Module management:")
 	fmt.Println("   - List dependencies: pudl module list")

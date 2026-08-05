@@ -56,12 +56,12 @@ func Initialize(opts InitOptions) error {
 		return fmt.Errorf("failed to initialize CUE module: %w", err)
 	}
 
-	// Copy bootstrap schemas (catchall, collections)
+	// Copy every built-in resource schema, rule package, and #SystemModel.
 	if err := importer.CopyBootstrapSchemas(cfg.SchemaPath); err != nil {
 		return fmt.Errorf("failed to copy bootstrap schemas: %w", err)
 	}
 	if opts.Verbose {
-		fmt.Println("✅ Bootstrap schemas copied (catchall, collections)")
+		fmt.Println("✅ Built-in schemas, rules, and #SystemModel copied")
 	}
 
 	// Write skill files if .claude/ exists in project root
@@ -153,7 +153,7 @@ This directory contains CUE schema definitions for your PUDL data lake, organize
 ## Structure
 
 - **cue.mod/module.cue** - Module definition with third-party dependencies
-- **pudl/** - Your local schema definitions
+- **pudl/** - Built-in and local schema definitions, rules, and #SystemModel
 - **examples/** - Usage examples showing how to combine local and third-party schemas
 - All changes are version controlled with git
 
@@ -202,6 +202,13 @@ import k8s "cue.dev/x/k8s.io/api/apps/v1"
 ` + "```" + `
 
 See the **examples/** directory for more usage patterns.
+
+## System Models
+
+` + "`pudl/systemmodel.#SystemModel`" + ` is installed with the other built-ins.
+Repository models normally live under ` + "`.pudl/models/`" + ` and can be inspected
+with ` + "`pudl model list`" + `. Run one model with ` + "`pudl run <model>`" + ` or an
+explicit producer/consumer set with ` + "`pudl run-set <models...>`" + `.
 `
 
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {

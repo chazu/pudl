@@ -116,7 +116,7 @@ func TestInit_CreatesSubdirectories(t *testing.T) {
 		t.Fatalf("Init() error: %v", err)
 	}
 
-	for _, sub := range []string{"schema", "definitions"} {
+	for _, sub := range []string{"schema", "schema/models", "definitions"} {
 		subDir := filepath.Join(tmpDir, ".pudl", sub)
 		info, err := os.Stat(subDir)
 		if err != nil {

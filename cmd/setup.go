@@ -69,14 +69,13 @@ alias pcd='cd "$PUDL_SCHEMA_PATH"'
 
 # Enhanced PUDL directory navigation with git status
 pudl-cd() {
-    local pudl_path
-    pudl_path=$(pudl git cd --shell 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$pudl_path" ]; then
-        eval "$pudl_path"
+    if [ -d "$PUDL_SCHEMA_PATH" ]; then
+        cd "$PUDL_SCHEMA_PATH" || return 1
         echo "📁 PUDL Schema Repository"
         if command -v git >/dev/null 2>&1 && [ -d .git ]; then
             echo "🌿 $(git branch --show-current 2>/dev/null || echo 'detached')"
-            local status=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+            local status
+            status=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
             if [ "$status" -gt 0 ]; then
                 echo "📝 $status uncommitted changes"
             else
@@ -108,14 +107,13 @@ alias pcd='cd "$PUDL_SCHEMA_PATH"'
 
 # Enhanced PUDL directory navigation with git status
 pudl-cd() {
-    local pudl_path
-    pudl_path=$(pudl git cd --shell 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$pudl_path" ]; then
-        eval "$pudl_path"
+    if [ -d "$PUDL_SCHEMA_PATH" ]; then
+        cd "$PUDL_SCHEMA_PATH" || return 1
         echo "📁 PUDL Schema Repository"
         if command -v git >/dev/null 2>&1 && [ -d .git ]; then
             echo "🌿 $(git branch --show-current 2>/dev/null || echo 'detached')"
-            local status=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+            local status
+            status=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
             if [ "$status" -gt 0 ]; then
                 echo "📝 $status uncommitted changes"
             else
@@ -147,9 +145,8 @@ alias pcd='cd "$PUDL_SCHEMA_PATH"'
 
 # Enhanced PUDL directory navigation with git status
 function pudl-cd
-    set pudl_path (pudl git cd --shell 2>/dev/null)
-    if test $status -eq 0 -a -n "$pudl_path"
-        eval $pudl_path
+    if test -d "$PUDL_SCHEMA_PATH"
+        cd "$PUDL_SCHEMA_PATH"; or return 1
         echo "📁 PUDL Schema Repository"
         if command -v git >/dev/null 2>&1; and test -d .git
             echo "🌿 "(git branch --show-current 2>/dev/null; or echo 'detached')

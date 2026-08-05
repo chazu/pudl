@@ -68,11 +68,7 @@ func (r Resolver) resolve(input string, binding systemmodel.ValueBinding, reques
 		return nil, BindingEvidence{}, bindingError(input, "schema-unavailable", fmt.Errorf("schema %q is not loaded", schemaName))
 	}
 	segments := pointerSegments(binding.Path)
-	selectors := make([]cue.Selector, len(segments))
-	for i, segment := range segments {
-		selectors[i] = cue.Str(segment)
-	}
-	field := schema.LookupPath(cue.MakePath(selectors...))
+	field := lookupSchemaField(schema, segments)
 	if !field.Exists() {
 		return nil, BindingEvidence{}, bindingError(input, "projection-invalid", fmt.Errorf("schema field %q does not exist", binding.Path))
 	}
@@ -150,6 +146,26 @@ func (r Resolver) resolve(input string, binding systemmodel.ValueBinding, reques
 		ScalarSHA256: hex.EncodeToString(digest[:]), ResolutionCode: "resolved",
 	}
 	return value, proof, nil
+}
+
+// lookupSchemaField follows either required or optional struct fields. CUE's
+// ordinary string selector does not match an optional constraint, but observed
+// catalog data may legitimately contain a value for one. The annotation on
+// that optional schema field still owns whether projection is authorized.
+func lookupSchemaField(schema cue.Value, segments []string) cue.Value {
+	current := schema
+	for _, segment := range segments {
+		selector := cue.Str(segment)
+		next := current.LookupPath(cue.MakePath(selector))
+		if !next.Exists() {
+			next = current.LookupPath(cue.MakePath(selector.Optional()))
+		}
+		if !next.Exists() {
+			return next
+		}
+		current = next
+	}
+	return current
 }
 
 func pointerSegments(pointer string) []string {

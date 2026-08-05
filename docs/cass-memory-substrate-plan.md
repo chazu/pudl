@@ -173,7 +173,7 @@ Decisions:
   schema-validated against the relation's registered CUE `#Schema`. This is the
   single door for feedback, playbook bullets, diary entries, and any future
   relation. The substrate does **not** sprout one verb per relation.
-- **`pudl observe` → `pudl facts observe`** — kept as ergonomic sugar for
+- **`pudl observe` → `pudl facts observe`** — migration complete; use the nested command (the old top-level alias is removed)
   `facts add --relation observation`, explicitly documented as such.
 - **Feedback gets no top-level verb** → `pudl facts add --relation feedback`.
 - **`pudl facts promote`** — a *transition* verb, legitimately distinct from add.

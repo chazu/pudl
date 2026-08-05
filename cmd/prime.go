@@ -62,7 +62,7 @@ pudl import --path "*.json"                  # wildcard batch import
 pudl list                                    # list all entries
 pudl list --schema <name>                    # filter by schema
 pudl show <id>                               # show entry details + content
-pudl export <id>                             # export raw data
+pudl export --id <id>                        # export raw data
 pudl delete <id>                             # remove an entry
 ` + "```" + `
 
@@ -70,7 +70,7 @@ pudl delete <id>                             # remove an entry
 ` + "```" + `
 pudl schema list                             # list schemas by package
 pudl schema show <name>                      # display schema CUE
-pudl schema new <name>                       # generate from imported data
+pudl schema new --from <id> --path <package>/#<Definition>
 pudl schema add <name> <file>                # add schema file
 pudl schema reinfer                          # re-run inference on entries
 ` + "```" + `
@@ -82,6 +82,10 @@ pudl model show <name>                       # show populate/converge/desired/ch
 pudl model validate <name>                   # structural validation without running
 pudl run <name>                              # observe-only run (populate → drift → checks)
 pudl run <name> --converge                   # close drift via mu
+pudl run-set <models...>                     # observe exact producer/consumer set
+pudl run-set <models...> --converge          # whole-set preflight, then mutate
+pudl run-set report [run-set-id]             # durable orchestration report
+pudl run-set resume|reject <run-set-id>      # decide a pending exact plan
 pudl run <name> --check-upstream             # warn if a depends_on upstream is drifted/failed
 pudl model deps                              # show the cross-model dependency graph (no run)
 pudl model deps --derive                     # also derive edges from desired↔produced identities
@@ -101,6 +105,19 @@ pudl query --topo model_depends_on           # topological run order (deps first
 ` + "`pudl model deps`" + ` records edges for every registered model without running them;
 ` + "`--derive`" + ` adds heuristic edges from desired↔produced identity matching. pudl
 makes deps queryable but does not re-run downstream models (that is mu's job).
+
+### Cross-model value wiring
+
+Model templates can declare required scalar ` + "`inputs`" + ` and ` + "`bindings`" + `. Both
+the consumer slot and source schema field must opt into
+` + "`@pudl(binding=plain)`" + `. A standalone run reuses an eligible successful
+producer snapshot but never starts the producer. Use ` + "`pudl run-set <models...>`" + `
+to name the closed set, order producers first, and pin current-run observations.
+
+Sealed values stay in mu's provider channel. PUDL-generated targets use
+` + "`sealed_routing: \"strict\"`" + `; PUDL persists only redacted fingerprints.
+Sealed outputs are converge-only, and a mutating run-set containing one always
+requires approval of the exact persisted plan.
 
 ### Writing data — three doors (do not confuse them)
 

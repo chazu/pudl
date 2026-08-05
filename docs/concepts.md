@@ -186,6 +186,23 @@ By default `pudl run` observes only: it computes drift but changes nothing in th
 
 `pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅ and the apply receipt was persisted; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it. `unknown` also covers an apply whose receipt could not be persisted and therefore needs verification.
 
+### Cross-model value wiring
+
+A model template can declare required scalar `inputs` and `bindings` that name
+a producer model, resource schema and identity, and RFC 6901 field path. Plain
+projection is fail-closed: the consumer slot and source schema field must both
+carry `@pudl(binding=plain)`. PUDL selects a successful observation snapshot,
+projects one scalar, type-checks the elaborated model, and records snapshot/run
+provenance plus a value digest in the run report.
+
+`pudl run-set <models...>` coordinates exactly the named set. It validates
+completeness and cycles before execution, orders producers first, and pins each
+successful producer observation for its consumers. It never starts an omitted
+producer implicitly. Without `--converge` the set is observe-only. Mutating
+run-sets complete read-only planning before any apply; sealed values stay in
+mu's provider channel, sealed outputs are converge-only, and any set containing
+a sealed output requires exact-plan approval.
+
 ## Fixed-Point Verification
 
 The `pudl verify` command re-runs schema inference on all catalog entries and confirms every entry still resolves to the same schema it was originally assigned. This is an idempotency check: if inference is deterministic, re-running it on stored data should always produce the same schema assignment. Any mismatch indicates drift between the stored schema and the current inference rules.

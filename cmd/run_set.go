@@ -109,8 +109,29 @@ var (
 var runSetCmd = &cobra.Command{
 	Use:   "run-set <model> [<model>...]",
 	Short: "Run an explicit producer/consumer model set in dependency order",
-	Args:  cobra.MinimumNArgs(1),
-	RunE:  runObserveSet,
+	Long: `Run exactly the named models in dependency order.
+
+The set is closed and explicit: pudl does not add missing producers. A binding
+whose producer is not named fails preflight before any member runs. Without
+--converge, every member is observe-only and successful producer snapshots are
+pinned for downstream plain bindings.
+
+With --converge, pudl completes read-only planning for the whole set before the
+first mutation. If any selected model declares a sealed output, exact-plan
+approval is mandatory: the command persists a pending plan and prints the
+matching resume/reject commands. --require-approval may be used to request the
+same pause for any mutating run-set.
+
+Examples:
+  pudl run-set network app
+  pudl run-set network app --max-observation-age 15m
+  pudl run-set network app --converge
+  pudl run-set network app --converge --require-approval
+  pudl run-set report
+  pudl run-set resume <run-set-id>
+  pudl run-set reject <run-set-id>`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: runObserveSet,
 }
 
 func runObserveSet(cmd *cobra.Command, args []string) error {

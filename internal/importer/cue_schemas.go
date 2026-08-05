@@ -70,6 +70,29 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 	return os.WriteFile(filepath.Join(smDir, "systemmodel.cue"), []byte(systemmodel.SchemaCUE()), 0644)
 }
 
+// bootstrapSchemaFiles returns every file that pudl init owns in the schema
+// repository. Keep this derived from the embedded tree so adding a built-in
+// schema automatically updates both fresh initialization and repair of an
+// existing workspace.
+func bootstrapSchemaFiles() ([]string, error) {
+	var files []string
+	err := fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		files = append(files, path[len("bootstrap/"):])
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, filepath.Join("pudl", "systemmodel", "systemmodel.cue"))
+	return files, nil
+}
+
 // BootstrapPackages returns the set of package paths (e.g. "pudl/core") that
 // are shipped as built-in bootstrap schemas.
 func BootstrapPackages() map[string]bool {
@@ -100,43 +123,23 @@ func (e *EnhancedImporter) ensureBasicSchemas() error {
 		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
 	}
 
-	// Check if core schema exists; if not, copy bootstrap schemas to fill gaps
-	corePath := filepath.Join(e.schemaPath, "pudl", "core", "core.cue")
-	if _, err := os.Stat(corePath); os.IsNotExist(err) {
-		if copyErr := copyBootstrapSchemasTo(e.schemaPath); copyErr != nil {
-			return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
-		}
-		// Verify the copy succeeded
-		if _, err := os.Stat(corePath); os.IsNotExist(err) {
-			return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", corePath)
-		}
+	required, err := bootstrapSchemaFiles()
+	if err != nil {
+		return fmt.Errorf("list bootstrap schemas: %w", err)
 	}
-
-	// Check if other bootstrap schemas exist; if not, copy them all
-	// This handles the case where new schema packages are added after init
-	bootstrapChecks := []string{
-		filepath.Join(e.schemaPath, "pudl", "catalog", "catalog.cue"),
-		filepath.Join(e.schemaPath, "pudl", "fs", "fs.cue"),
-		filepath.Join(e.schemaPath, "pudl", "version", "version.cue"),
-		filepath.Join(e.schemaPath, "pudl", "infra", "infra.cue"),
-		filepath.Join(e.schemaPath, "pudl", "component", "component.cue"),
-		filepath.Join(e.schemaPath, "pudl", "artifact", "artifact.cue"),
-		filepath.Join(e.schemaPath, "pudl", "registry", "registry.cue"),
-		filepath.Join(e.schemaPath, "pudl", "aws", "aws.cue"),
-		filepath.Join(e.schemaPath, "pudl", "k8s", "k8s.cue"),
-		filepath.Join(e.schemaPath, "pudl", "mu", "mu.cue"),
-		filepath.Join(e.schemaPath, "pudl", "brick", "brick.cue"),
-		filepath.Join(e.schemaPath, "pudl", "linux", "linux.cue"),
-		filepath.Join(e.schemaPath, "pudl", "dlktk", "dlktk.cue"),
-		filepath.Join(e.schemaPath, "pudl", "systemmodel", "systemmodel.cue"),
-		filepath.Join(e.schemaPath, "pudl", "rules", "convergence.cue"),
-	}
-	for _, checkPath := range bootstrapChecks {
-		if _, err := os.Stat(checkPath); os.IsNotExist(err) {
+	for _, relPath := range required {
+		checkPath := filepath.Join(e.schemaPath, relPath)
+		if _, err := os.Stat(checkPath); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("check bootstrap schema %s: %w", checkPath, err)
+			}
 			if copyErr := copyBootstrapSchemasTo(e.schemaPath); copyErr != nil {
 				return fmt.Errorf("failed to copy bootstrap schemas: %w", copyErr)
 			}
-			break // One copy covers all missing files
+			if _, err := os.Stat(checkPath); err != nil {
+				return fmt.Errorf("schema repository not initialized: missing %s after repair: %w", checkPath, err)
+			}
+			break // One copy installs every built-in file.
 		}
 	}
 
