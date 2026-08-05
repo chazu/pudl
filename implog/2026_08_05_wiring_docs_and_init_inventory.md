@@ -4,10 +4,13 @@
 
 ## Outcome
 
-PUDL and mu's living documentation and embedded usage text now describe the
-shipped `#SystemModel`, exact `run-set`, plain-binding, and strict sealed-routing
-contracts. Removed `pudl drift` / `pudl export-actions` / `pudl process` usage
-was replaced with the current commands; historical records remain snapshots.
+PUDL and mu's living documentation and embedded usage text were updated for the
+`#SystemModel`, exact `run-set`, plain-binding, and accepted strict
+sealed-routing contracts. Removed `pudl drift` / `pudl export-actions` /
+`pudl process` usage was replaced with the current commands; historical records
+remain snapshots. A later live CLI sweep found that the strict sealed run-set
+contract is not executable against mu v0.3.3 because its JSON plan projection
+omits action-level sealed claims; PUDL fails that path closed as `pudl-olm`.
 
 PUDL initialization no longer maintains a handwritten subset of built-in files.
 Fresh installation and existing-workspace repair share an inventory derived from
@@ -26,10 +29,11 @@ authorized optional handle can be projected when the observed record contains it
 
 - Standalone runs still never start a producer implicitly.
 - `pudl run-set` remains a closed operator-named set and observe-only by default.
-- Sealed outputs remain converge-only and force exact-plan approval in a
-  mutating run-set.
-- PUDL-generated mu targets retain `sealed_routing: "strict"`; mu plans with
-  refs/modes only and resolves values immediately before execution.
+- Sealed outputs remain converge-only. Single-model sealed convergence works;
+  sealed run-sets fail closed before approval until `pudl-olm` is resolved.
+- PUDL-generated mu targets retain `sealed_routing: "strict"`, but mu v0.3.3's
+  JSON plan does not expose the action claims required by PUDL's exact-plan
+  validator.
 - Init repair retains the existing install semantics while removing the drift-
   prone file checklist.
 

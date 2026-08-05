@@ -115,10 +115,10 @@ the consumer slot and source schema field must opt into
 producer snapshot but never starts the producer. Use ` + "`pudl run-set <models...>`" + `
 to name the closed set, order producers first, and pin current-run observations.
 
-Sealed values stay in mu's provider channel. PUDL-generated targets use
-` + "`sealed_routing: \"strict\"`" + `; PUDL persists only redacted fingerprints.
-Sealed outputs are converge-only, and a mutating run-set containing one always
-requires approval of the exact persisted plan.
+Single-model sealed values stay in mu's provider channel and PUDL persists only
+redacted evidence. Sealed run-sets currently fail closed during planning because
+mu v0.3.3 JSON plans omit per-action sealed claims required for exact-plan
+validation (issue pudl-olm).
 
 ### Writing data — three doors (do not confuse them)
 

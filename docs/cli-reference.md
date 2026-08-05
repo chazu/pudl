@@ -346,7 +346,9 @@ pudl model show my_model --json
 
 ### `pudl model validate <name>`
 
-Validate a model against its schema.
+Validate the authored model template against its schema without running it.
+Models with plain bindings are valid before their catalog values exist; the
+resolved scalars and final concrete model are validated again at run time.
 
 ```bash
 pudl model validate my_model
@@ -472,9 +474,15 @@ pudl run-set reject <run-set-id>
 Observe-only sets continue independent branches after a member failure while
 blocking its dependents. Mutating sets complete read-only preflight for every
 member before the first mutation and stop new mutations after the first apply
-failure. A converging set with any sealed output always pauses for exact-plan
-approval, even without `--require-approval`. Resume revalidates the immutable
-request and plan digest before execution.
+failure. Non-sealed sets can pause with `--require-approval`; resume revalidates
+the immutable request and plan digest before execution.
+
+Current compatibility limit: mu v0.3.3's `build --plan --json` output omits
+per-action sealed input/output claims. PUDL therefore fails a sealed mutating
+run-set closed during planning instead of creating the pending approval. Plain
+run-sets and non-sealed `--require-approval` plans are executable. Single-model
+sealed convergence remains available through `pudl run --converge` (use
+`--require-approval` when an operator gate is required). Tracked as `pudl-olm`.
 
 | Flag | Description |
 |------|-------------|
@@ -516,9 +524,11 @@ pudl repo init --force    # Replace authored workspace configuration
 ```
 
 The command is idempotent and repairs missing PUDL-owned files. It installs a
-local CUE module and all built-in schemas, and creates `.pudl/data/` for the
-repository's independent catalog, imports, facts, snapshots, reports, and
-approvals. Runtime data is ignored by the enclosing Git repository.
+local CUE module and all built-in schemas, creates `schema/models/`,
+`definitions/`, and `populators/` authoring directories, and creates
+`.pudl/data/` for the repository's independent catalog, imports, facts,
+snapshots, reports, and approvals. Runtime data is ignored by the enclosing Git
+repository.
 
 ## Interoperability
 

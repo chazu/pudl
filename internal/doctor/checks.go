@@ -322,6 +322,7 @@ func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 		".gitignore":    true,
 		"data":          true,
 		"definitions":   true,
+		"populators":    true,
 		"schema":        true,
 		"config.yaml":   true,
 		"workspace.cue": true,

@@ -14,6 +14,21 @@ type approvalRequest struct {
 	Only       []string `json:"only,omitempty"`
 	MaxIters   int      `json:"max_iters"`
 	MaxApplies int      `json:"max_applies"`
+	MuRoot     string   `json:"mu_root,omitempty"`
+}
+
+func newApprovalRequest(model string, flags runFlags, muRoot string) approvalRequest {
+	return approvalRequest{
+		Model: model, Only: flags.only, MaxIters: flags.maxIters,
+		MaxApplies: flags.maxApplies, MuRoot: muRoot,
+	}
+}
+
+func restoreApprovalRequest(request approvalRequest) {
+	runOnly = request.Only
+	runMaxIters = request.MaxIters
+	runMaxApplies = request.MaxApplies
+	runMuRoot = request.MuRoot
 }
 
 var runResumeCmd = &cobra.Command{
@@ -52,9 +67,7 @@ var runResumeCmd = &cobra.Command{
 		runRequireApproval = false
 		runResumeID = args[0]
 		runApprovalStatus = "approved"
-		runOnly = request.Only
-		runMaxIters = request.MaxIters
-		runMaxApplies = request.MaxApplies
+		restoreApprovalRequest(request)
 		return runCmd.RunE(runCmd, []string{request.Model})
 	},
 }

@@ -100,11 +100,11 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 |---------|-------------|
 | `pudl model list` | List registered `#SystemModel` instances with last-run status |
 | `pudl model show <name>` | Show a model's desired entries and details |
-| `pudl model validate <name>` | Validate a model against its schema |
+| `pudl model validate <name>` | Validate an authored model template; bound values are concretely revalidated at run time |
 | `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
 | `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
 | `pudl run-set <models...>` | Observe an exact producer/consumer set in dependency order |
-| `pudl run-set <models...> --converge` | Plan the whole exact set, then mutate; sealed outputs require approval |
+| `pudl run-set <models...> --converge` | Plan the whole exact set, then mutate; non-sealed exact-plan approval is live, while sealed sets currently fail closed (see below) |
 | `pudl run-set report [id]` | Read the latest or named durable run-set report |
 | `pudl run-set resume/reject <id>` | Approve or reject a pending exact mutation plan |
 | `pudl status` | Read catalog convergence status recorded by the last model run |
@@ -180,11 +180,12 @@ pudl run my-server --converge
 pudl run-set network my-server
 ```
 
-PUDL-generated mu targets use `sealed_routing: "strict"`. Plain values are
-persisted with source/snapshot provenance; sealed values are resolved by mu at
-execution time and PUDL stores only redacted fingerprints. Sealed outputs are
-converge-only in the current contract, and a mutating run-set containing one
-always pauses for exact-plan approval.
+Plain values are persisted with source/snapshot provenance. Single-model sealed
+inputs/outputs use mu's provider path and PUDL stores only redacted evidence.
+The stricter sealed run-set contract currently fails closed: mu v0.3.3's JSON
+plan omits the per-action sealed claims PUDL must validate before persisting an
+exact approval. Ordinary run-set approval/resume works; sealed run-set
+resume is tracked by `pudl-olm` and is not yet an executable path.
 
 ## Documentation
 

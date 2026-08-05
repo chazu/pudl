@@ -43,3 +43,22 @@ func TestScopedChecksUseRepositoryPudlRoot(t *testing.T) {
 		}
 	}
 }
+
+func TestDirectoryStructureAcceptsPopulatorAuthoringDirectory(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Init(repo.InitOptions{Dir: root}); err != nil {
+		t.Fatal(err)
+	}
+	pudlDir := filepath.Join(root, ".pudl")
+	if err := os.MkdirAll(filepath.Join(pudlDir, "populators", "fixture"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result := doctor.CheckDirectoryStructureAt(pudlDir)
+	if result.Status != "ok" {
+		t.Fatalf("populators directory rejected: %s (%s)", result.Message, result.Details)
+	}
+}

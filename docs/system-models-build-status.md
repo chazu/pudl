@@ -4,8 +4,9 @@
 > `pudl run <model>` for one model and `pudl run-set <models...>` for an exact
 > producer/consumer set. There is no `--file` model selector. Observe-only is the
 > default; `--converge --dry-run` plans a single-model mutation. Mutating
-> run-sets perform whole-set preflight, and sealed outputs require exact-plan
-> approval. See `docs/cli-reference.md` and
+> run-sets perform whole-set preflight. Non-sealed exact-plan approval is live;
+> sealed run-sets currently fail closed because mu's JSON plan omits sealed
+> action claims (`pudl-olm`). See `docs/cli-reference.md` and
 > `docs/design/2026-07-28-cross-resource-value-wiring.md`.
 
 Implementation status of the V1 convergence build (the design lives in the **mu**

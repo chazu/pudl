@@ -84,7 +84,7 @@ global catalogs are independent; mutable state never falls back across them.
 - `pudl run <model> --from-catalog` — explicitly replay ingested records for inventory drift; a normal inventory run populates and compares its own current snapshot
 - `pudl run <model> --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
 - `pudl run-set <models...>` — run exactly the named models in producer-first order; no implicit producer expansion
-- `pudl run-set <models...> --converge` — whole-set read-only preflight before mutation; sealed outputs force exact-plan approval
+- `pudl run-set <models...> --converge` — whole-set read-only preflight before mutation; non-sealed sets may use `--require-approval`, while sealed sets currently fail closed during real mu planning (`pudl-olm`)
 - `pudl run-set report|resume|reject` — inspect or decide durable run-set plans
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
 - `pudl model deps --derive` — also derive edges from desired↔produced identity matching
@@ -186,8 +186,9 @@ producer snapshot but never starts it. `pudl run-set` names the exact closed set
 rejects missing producers/cycles before execution, and pins current-run producer
 observations for downstream resolution.
 
-Sealed bindings never pass through the catalog. PUDL-generated mu targets use
-`sealed_routing: "strict"`; mu resolves provider values immediately before the
-claiming action executes. PUDL records only redacted fingerprints. Sealed outputs
-are converge-only, and any mutating set containing one requires approval of the
-exact persisted plan.
+Sealed bindings never pass through the catalog. Single-model convergence uses
+mu's provider channel and PUDL records only redacted evidence. The stricter
+sealed run-set contract currently fails closed: mu v0.3.3 JSON plans omit the
+per-action sealed claims PUDL must validate before exact-plan approval. Plain
+run-sets, non-sealed approval/resume, and single-model sealed convergence are
+executable; sealed run-set approval is tracked by `pudl-olm`.
