@@ -119,7 +119,7 @@ type Catalog struct {
 func New(dataPath string) (*Lister, error) {
 	// Initialize catalog database with config directory
 	// We need to derive the config directory from the data path
-	// dataPath is typically ~/.pudl/data, so config dir is ~/.pudl
+	// dataPath is <active-pudl-root>/data, so its parent owns the catalog.
 	configDir := filepath.Dir(dataPath)
 	catalogDB, err := database.NewCatalogDB(configDir)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
@@ -397,7 +396,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 		return 0, "", err
 	}
 
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return 0, "", fmt.Errorf("load config: %w", err)
 	}

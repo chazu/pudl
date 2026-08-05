@@ -6,7 +6,8 @@ All commands support `--json` for machine-readable output and `--help` for inlin
 
 ### `pudl init`
 
-Initialize the PUDL workspace at `~/.pudl/`.
+Initialize global-mode PUDL state at `~/.pudl/`. For repository-local state,
+use `pudl repo init`.
 
 Creates the configuration file, data directories, and a git-tracked schema repository with bootstrap schemas. Safe to run multiple times -- skips if already initialized.
 
@@ -17,7 +18,11 @@ pudl init --force  # Reinitialize (preserves existing data)
 
 ### `pudl config`
 
-View or modify configuration.
+View or modify configuration under the active PUDL root. Inside an initialized
+repository this is `.pudl/config.yaml`; otherwise it is
+`~/.pudl/config.yaml`.
+Repository `schema_path` and `data_path` are fixed beneath `.pudl/`; path
+customization remains a global-mode facility.
 
 ```bash
 pudl config                          # Show current configuration
@@ -507,8 +512,13 @@ Initialize a `.pudl/` directory in the current repository and install Claude ski
 
 ```bash
 pudl repo init
-pudl repo init --force    # Force reinitialize
+pudl repo init --force    # Replace authored workspace configuration
 ```
+
+The command is idempotent and repairs missing PUDL-owned files. It installs a
+local CUE module and all built-in schemas, and creates `.pudl/data/` for the
+repository's independent catalog, imports, facts, snapshots, reports, and
+approvals. Runtime data is ignored by the enclosing Git repository.
 
 ## Interoperability
 

@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -88,7 +87,7 @@ Examples:
 		}
 
 		// Open database
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)

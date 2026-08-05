@@ -5,9 +5,9 @@ PUDL is a CLI tool for building a local, schema-validated data lake. Import JSON
 ## Quick Start
 
 ```bash
-# Build and initialize
+# Build and initialize this repository
 go build -o pudl .
-./pudl init
+./pudl repo init
 
 # Import some data
 pudl import --path aws-ec2-instances.json
@@ -38,7 +38,8 @@ pudl import --path data.json
     +-- Detect NDJSON collections and unwrap typed envelopes when present
     +-- Infer schema via heuristics + CUE unification
     +-- Extract resource identity (stable ID across re-imports)
-    +-- Store raw file in ~/.pudl/data/raw/YYYY/MM/DD/
+    +-- Store raw file in .pudl/data/raw/YYYY/MM/DD/ (repo workspace)
+    |                   or ~/.pudl/data/raw/YYYY/MM/DD/ (global mode)
     +-- Catalog in SQLite with full provenance metadata
 ```
 
@@ -58,6 +59,9 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
   stay inside mu's provider path
 - **Exact run-sets**: `pudl run-set <models...>` orders only the named models,
   pins producer observations, and never expands the set implicitly
+- **Repository isolation**: `pudl repo init` creates a self-contained `.pudl/`;
+  its schemas, imports, catalog, facts, reports, snapshots, and approvals do not
+  mutate the global `~/.pudl/` state
 - **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
 - **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
 - **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
@@ -70,7 +74,7 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 
 | Command | Description |
 |---------|-------------|
-| `pudl init` | Initialize workspace (`~/.pudl/`) |
+| `pudl init` | Initialize global mode (`~/.pudl/`) |
 | `pudl import --path <file>` | Import data with automatic detection |
 | `pudl list` | Query catalog (filter by `--schema`, `--origin`, `--format`, etc.) |
 | `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`) |
@@ -132,7 +136,7 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 |---------|-------------|
 | `pudl verify` | Fixed-point check: re-run inference on all entries, confirm stability |
 | `pudl doctor` | Workspace health checks |
-| `pudl repo init` | Initialize `.pudl/` in a repository, install Claude skills |
+| `pudl repo init` | Initialize or repair a self-contained repository `.pudl/` and install Claude skills |
 | `pudl config` | Show current configuration |
 | `pudl validate --all` | Validate catalog data against assigned schemas |
 

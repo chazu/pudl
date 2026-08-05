@@ -4,24 +4,27 @@ This document describes PUDL's internal architecture: storage layout, streaming 
 
 ## Storage Layout
 
+The active root is `<repo>/.pudl/` inside an initialized repository and
+`~/.pudl/` in global mode. Mutable state never falls back between those roots.
+
 ```
-~/.pudl/
+<active-pudl-root>/
 +-- config.yaml                    # YAML configuration
++-- workspace.cue                 # repository identity/policy (repo mode)
 +-- data/
 |   +-- raw/YYYY/MM/DD/            # Date-partitioned imported data files
 |   |   +-- YYYYMMDD_HHMMSS_origin.ext
 |   +-- metadata/                  # Per-import JSON metadata sidecar files
 |   |   +-- YYYYMMDD_HHMMSS_origin.ext.meta
 |   +-- sqlite/catalog.db          # SQLite catalog database
-+-- schema/                        # Git-tracked CUE schema repository
-    +-- .git/                      # Full git repository
++-- schema/                        # CUE schema module
     +-- cue.mod/module.cue         # CUE module definition
     +-- pudl/
     |   +-- core/core.cue          # Catchall and collection schemas
     |   +-- systemmodel/           # Built-in #SystemModel contract
     |   +-- rules/                 # Datalog rules (*.cue)
     |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, mu, etc.
-    +-- models/                    # Global #SystemModel instances
+    +-- models/                    # #SystemModel instances
 ```
 
 ### Raw Data
@@ -34,12 +37,13 @@ Each import produces a JSON metadata file alongside the raw data. This includes 
 
 ### Schema Repository
 
-The schema directory is a standalone git repository. Every built-in resource
-schema and rule package is embedded in the PUDL binary; the programmatic
+In global mode the schema directory is a standalone Git repository. In a
+repository workspace it is versioned by the enclosing repository. Every
+built-in resource schema and rule package is embedded in the PUDL binary; the programmatic
 `pudl/systemmodel.#SystemModel` schema is installed beside them. `pudl init`
-copies the complete owned set, and normal importer startup repairs any missing
-built-in file in an existing workspace. User schemas and model instances are
-added alongside the built-ins.
+and `pudl repo init` copy the complete owned set; repository initialization is
+idempotent and repairs missing built-ins. User schemas and model instances are
+added alongside them.
 
 ## Catalog Database
 
@@ -170,7 +174,7 @@ ImportFileWithFriendlyIDs(opts)
     +-- identity.ExtractFieldValues(data, identityFields)
     +-- identity.ComputeResourceID(schema, fieldValues)
     |
-    +-- Copy raw file to ~/.pudl/data/raw/YYYY/MM/DD/
+    +-- Copy raw file to <active-pudl-root>/data/raw/YYYY/MM/DD/
     +-- Write metadata sidecar JSON
     +-- CatalogDB.AddEntry()
 ```

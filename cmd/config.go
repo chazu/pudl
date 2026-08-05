@@ -45,28 +45,28 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 	showPath, _ := cmd.Flags().GetBool("path")
 
 	if showPath {
-		fmt.Println(config.GetConfigPath())
+		fmt.Println(config.ConfigPath(effectivePudlDir()))
 		return nil
 	}
 
 	// Load and display configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}
 
 	fmt.Println("PUDL Configuration:")
-	fmt.Printf("  Workspace: %s\n", config.GetPudlDir())
+	fmt.Printf("  Workspace: %s\n", effectivePudlDir())
 	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
 	if paths := effectiveSchemaPaths(cfg); len(paths) > 0 {
 		fmt.Printf("  Schema Search Paths: %s\n", strings.Join(paths, ", "))
 	}
 	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-	fmt.Printf("  Config File: %s\n", config.GetConfigPath())
+	fmt.Printf("  Config File: %s\n", config.ConfigPath(effectivePudlDir()))
 	fmt.Printf("  Version: %s\n", cfg.Version)
 
 	// Check if workspace exists
-	if !config.Exists() {
+	if !config.ExistsAt(effectivePudlDir()) {
 		fmt.Println()
 		fmt.Println("⚠️  Workspace not initialized. Run 'pudl init' to set up.")
 	}
@@ -84,6 +84,9 @@ Valid configuration keys:
 - schema_path: Path to the schema repository directory
 - data_path: Path to the data storage directory
 - version: Configuration version
+
+Inside a repository workspace, schema_path and data_path are fixed beneath
+.pudl/ and cannot be redirected outside the repository-local state boundary.
 
 Example usage:
     pudl config set schema_path ~/my-schemas
@@ -105,15 +108,22 @@ Example usage:
 func runConfigSetCommand(cmd *cobra.Command, args []string) error {
 	key := args[0]
 	value := args[1]
+	if wsPolicy != nil && wsPolicy.InWorkspace() && (key == "schema_path" || key == "data_path") {
+		return errors.NewInputError(
+			fmt.Sprintf("%s is fixed inside a repository workspace", key),
+			fmt.Sprintf("Repository state must remain beneath %s", effectivePudlDir()),
+			"Use `pudl config reset` to restore the local paths, or run the command outside a repository for global configuration",
+		)
+	}
 
-	if err := config.SetConfigValue(key, value); err != nil {
+	if err := config.SetConfigValueAt(effectivePudlDir(), key, value); err != nil {
 		return err // Already a PUDLError from config.SetConfigValue()
 	}
 
 	fmt.Printf("✅ Configuration updated: %s = %s\n", key, value)
 
 	// Show the updated configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}
@@ -133,8 +143,8 @@ var configResetCmd = &cobra.Command{
 	Long: `Reset the PUDL configuration to default values.
 
 This will restore:
-- Schema path to ~/.pudl/schema
-- Data path to ~/.pudl/data
+- Schema path beneath the active .pudl workspace
+- Data path beneath the active .pudl workspace
 - Version to 1.0
 
 Example usage:
@@ -152,7 +162,7 @@ Example usage:
 
 // runConfigResetCommand contains the actual config reset logic with structured error handling
 func runConfigResetCommand(cmd *cobra.Command, args []string) error {
-	if err := config.ResetToDefaults(); err != nil {
+	if err := config.ResetToDefaultsAt(effectivePudlDir()); err != nil {
 		return err // Already a PUDLError from config.ResetToDefaults()
 	}
 
@@ -160,7 +170,7 @@ func runConfigResetCommand(cmd *cobra.Command, args []string) error {
 
 	// Show the reset configuration
 	fmt.Println()
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}

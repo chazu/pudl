@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -45,7 +44,7 @@ Examples:
 
 // snapshotCatalog opens the catalog for a snapshot subcommand.
 func snapshotCatalog() (*database.CatalogDB, error) {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return nil, fmt.Errorf("open catalog: %w", err)
 	}
@@ -219,7 +218,7 @@ before the snapshot contract existed, are never removed.`,
 		}
 		defer db.Close()
 
-		cfg, err := config.Load()
+		cfg, err := loadEffectiveConfig()
 		if err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}

@@ -33,10 +33,13 @@ var repoInitCmd = &cobra.Command{
 Claude skills into .claude/skills/.
 
 This sets up the current repo for project-local PUDL usage, including:
-- .pudl/ directory (project-local marker)
+- .pudl/workspace.cue and repo-local configuration
+- .pudl/schema/ with a CUE module and every built-in schema
+- .pudl/data/ for the local catalog, raw data, metadata, and run state
 - .claude/skills/ with PUDL skill files for AI agent integration
 
-Use --force to reinitialize an existing repo.
+The command is safe to repeat: it repairs PUDL-owned files while preserving
+authored workspace configuration. Use --force to replace that configuration.
 
 Examples:
     pudl repo init
@@ -50,7 +53,8 @@ Examples:
 			return errors.WrapError(errors.ErrCodeFileSystem, "repo init failed", err)
 		}
 		fmt.Println()
-		fmt.Println("Repo initialized. PUDL skills are available in .claude/skills/.")
+		fmt.Println("Repo initialized. Durable PUDL state will stay under .pudl/.")
+		fmt.Println("PUDL skills are available in .claude/skills/.")
 		return nil
 	},
 }

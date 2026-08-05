@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/identity"
@@ -52,7 +51,7 @@ func init() {
 }
 
 func runIdentityMigrate() error {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to load configuration", err)
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -65,7 +64,7 @@ func colorForStatus(status string) lipgloss.Style {
 }
 
 func openCatalogForStatus() (*database.CatalogDB, error) {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return nil, fmt.Errorf("failed to open catalog: %w", err)
 	}

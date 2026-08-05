@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/schema"
 )
@@ -58,7 +57,7 @@ func runSchemaShowCommand(schemaArg string) error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}

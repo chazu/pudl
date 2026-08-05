@@ -42,39 +42,40 @@ func init() {
 }
 
 func runDoctorCommand(cmd *cobra.Command, args []string) error {
+	pudlDir := effectivePudlDir()
 	// Define all health checks
 	checks := []doctor.HealthCheck{
 		{
 			Name:      "Workspace Structure",
-			CheckFunc: doctor.CheckWorkspaceStructure,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckWorkspaceStructureAt(pudlDir) },
 		},
 		{
 			Name:      "Database Integrity",
-			CheckFunc: doctor.CheckDatabaseIntegrity,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckDatabaseIntegrityAt(pudlDir) },
 		},
 		{
 			Name:      "Schema Repository",
-			CheckFunc: doctor.CheckSchemaRepository,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(pudlDir) },
 		},
 		{
 			Name:      "Git Repository",
-			CheckFunc: doctor.CheckGitRepository,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckGitRepositoryAt(pudlDir) },
 		},
 		{
 			Name:      "Directory Structure",
-			CheckFunc: doctor.CheckDirectoryStructure,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckDirectoryStructureAt(pudlDir) },
 		},
 		{
 			Name:      "Schema Namespace",
-			CheckFunc: doctor.CheckPudlNamespaceSchemas,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckPudlNamespaceSchemasAt(pudlDir) },
 		},
 		{
 			Name:      "Identity Fields",
-			CheckFunc: doctor.CheckIdentityFieldConsistency,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckIdentityFieldConsistencyAt(pudlDir) },
 		},
 		{
 			Name:      "Orphaned Files",
-			CheckFunc: doctor.CheckOrphanedFiles,
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckOrphanedFilesAt(pudlDir) },
 		},
 	}
 

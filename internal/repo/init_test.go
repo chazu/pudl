@@ -53,7 +53,7 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func TestInit_AlreadyExists(t *testing.T) {
+func TestInit_AlreadyExistsRepairsWithoutFailing(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create .pudl/ first
@@ -64,9 +64,11 @@ func TestInit_AlreadyExists(t *testing.T) {
 		Verbose: false,
 	}
 
-	err := Init(opts)
-	if err == nil {
-		t.Fatal("expected error when .pudl/ already exists")
+	if err := Init(opts); err != nil {
+		t.Fatalf("Init() should repair an existing .pudl: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, ".pudl", "workspace.cue")); err != nil {
+		t.Fatalf("workspace marker was not repaired: %v", err)
 	}
 }
 
@@ -116,7 +118,7 @@ func TestInit_CreatesSubdirectories(t *testing.T) {
 		t.Fatalf("Init() error: %v", err)
 	}
 
-	for _, sub := range []string{"schema", "schema/models", "definitions"} {
+	for _, sub := range []string{"schema/models", "definitions"} {
 		subDir := filepath.Join(tmpDir, ".pudl", sub)
 		info, err := os.Stat(subDir)
 		if err != nil {
@@ -131,6 +133,29 @@ func TestInit_CreatesSubdirectories(t *testing.T) {
 		gitkeep := filepath.Join(subDir, ".gitkeep")
 		if _, err := os.Stat(gitkeep); err != nil {
 			t.Errorf("expected .gitkeep in %s/: %v", sub, err)
+		}
+	}
+
+	for _, sub := range []string{"data/raw", "data/metadata", "data/sqlite"} {
+		info, err := os.Stat(filepath.Join(tmpDir, ".pudl", sub))
+		if err != nil {
+			t.Errorf("expected %s/ to exist: %v", sub, err)
+			continue
+		}
+		if !info.IsDir() {
+			t.Errorf("expected %s to be a directory", sub)
+		}
+	}
+
+	for _, path := range []string{
+		".pudl/.gitignore",
+		".pudl/config.yaml",
+		".pudl/schema/cue.mod/module.cue",
+		".pudl/schema/pudl/systemmodel/systemmodel.cue",
+		".pudl/schema/pudl/rules/rules.cue",
+	} {
+		if _, err := os.Stat(filepath.Join(tmpDir, path)); err != nil {
+			t.Errorf("expected initialized file %s: %v", path, err)
 		}
 	}
 }
@@ -180,9 +205,10 @@ func TestInit_NoForce_PreservesWorkspaceCue(t *testing.T) {
 	customContent := `name: "custom-name"`
 	os.WriteFile(cuePath, []byte(customContent), 0644)
 
-	// Second init without force — should fail because .pudl/ exists
-	// But workspace.cue should be preserved
-	_ = Init(InitOptions{Dir: tmpDir})
+	// Second init without force repairs owned files but preserves workspace.cue.
+	if err := Init(InitOptions{Dir: tmpDir}); err != nil {
+		t.Fatalf("second Init() error: %v", err)
+	}
 
 	data, err := os.ReadFile(cuePath)
 	if err != nil {
@@ -191,6 +217,28 @@ func TestInit_NoForce_PreservesWorkspaceCue(t *testing.T) {
 
 	if string(data) != customContent {
 		t.Errorf("expected workspace.cue to be preserved, got:\n%s", string(data))
+	}
+}
+
+func TestInit_NoForce_PreservesLocalConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := Init(InitOptions{Dir: tmpDir}); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(tmpDir, ".pudl", "config.yaml")
+	const custom = "schema_path: /custom/schema\ndata_path: /custom/data\nversion: custom\n"
+	if err := os.WriteFile(configPath, []byte(custom), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Init(InitOptions{Dir: tmpDir}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != custom {
+		t.Fatalf("repo init replaced authored config:\n%s", got)
 	}
 }
 

@@ -66,7 +66,7 @@ config.local.*
 *.local.yml
 *.local.json
 
-# SQLite database files (should be in ~/.pudl, not in repo)
+# SQLite/runtime database files (repo-local copies stay under ignored .pudl/data/)
 **/data/sqlite/
 *.db
 *.db-shm

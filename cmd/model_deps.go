@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -48,7 +47,7 @@ Examples:
 			}
 		}
 
-		db, err := database.NewCatalogDB(config.GetPudlDir())
+		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return fmt.Errorf("open catalog: %w", err)
 		}

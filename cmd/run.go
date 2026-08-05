@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -75,7 +74,7 @@ Examples:
 		// The run's single catalog handle, borrowed by every phase that touches
 		// the catalog. Opened lazily on first use, closed once here: this defer is
 		// registered before the run-record finalizer below so it runs after it.
-		cat := newRunCatalog(config.GetPudlDir())
+		cat := newRunCatalog(effectivePudlDir())
 		defer cat.Close()
 
 		flags := runFlags{

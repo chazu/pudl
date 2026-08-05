@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -88,7 +87,7 @@ Examples:
 		}
 
 		// Open database
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -234,7 +233,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -276,7 +275,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -313,7 +312,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id := args[0]
 
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -370,7 +369,7 @@ Examples:
     pudl facts stats --group-by kind,scope
     pudl facts stats --relation observation --group-by source`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)

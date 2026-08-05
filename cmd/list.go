@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/lister"
@@ -40,9 +39,10 @@ var listCmd = &cobra.Command{
 	Short:   "List imported data in the PUDL data lake",
 	Long: `List and query imported data in the PUDL data lake with filtering and sorting options.
 
-This command displays information about all imported data, including metadata such as
-schema assignments, import timestamps, file sizes, and record counts. You can filter
-the results by various criteria and sort them in different ways.
+This command displays imported data from the active catalog, including metadata
+such as schema assignments, timestamps, sizes, and record counts. In a repository
+workspace the default origin filter is that workspace; use --all-workspaces to
+remove the origin filter within the same repository-local catalog.
 
 Filtering Options:
 - --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)
@@ -61,7 +61,8 @@ Display Options:
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
 Examples:
-    pudl list                                    # List all imported data
+    pudl list                                    # List this workspace origin
+    pudl list --all-workspaces                   # Remove the origin filter
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
     pudl list --origin k8s-pods                  # List Kubernetes pod data
     pudl list --format ndjson --verbose         # List NDJSON collections with details
@@ -85,9 +86,9 @@ Examples:
 // runListCommand contains the actual list logic with structured error handling
 func runListCommand(cmd *cobra.Command, args []string) error {
 	// Load configuration to get data directory
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
-		return err // Already a PUDLError from config.Load()
+		return err // Already a PUDLError from loadEffectiveConfig()
 	}
 
 	// Create lister

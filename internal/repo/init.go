@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/skills"
 )
 
@@ -31,20 +33,15 @@ func Init(opts InitOptions) error {
 
 	pudlDir := filepath.Join(dir, pudlDirName)
 
-	// Check for existing .pudl/
-	if !opts.Force {
-		if _, err := os.Stat(pudlDir); err == nil {
-			return fmt.Errorf("repo already initialized at %s (use --force to reinitialize)", pudlDir)
-		}
-	}
-
-	// Create .pudl/ directory
+	// Initialization is deliberately idempotent. Running `pudl repo init`
+	// again repairs the owned layout and built-ins while preserving authored
+	// workspace configuration unless --force was requested.
 	if err := os.MkdirAll(pudlDir, 0755); err != nil {
 		return fmt.Errorf("creating %s: %w", pudlDir, err)
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Created %s\n", pudlDir)
+		fmt.Printf("Ensured %s\n", pudlDir)
 	}
 
 	// Create workspace.cue
@@ -69,6 +66,12 @@ func Init(opts InitOptions) error {
 	if err := os.MkdirAll(modelsDir, 0755); err != nil {
 		return fmt.Errorf("creating schema/models/: %w", err)
 	}
+	if err := initLocalCUEModule(schemaDir); err != nil {
+		return err
+	}
+	if err := importer.CopyBootstrapSchemas(schemaDir); err != nil {
+		return fmt.Errorf("installing built-in schemas: %w", err)
+	}
 
 	// Create definitions directory
 	defsDir := filepath.Join(pudlDir, "definitions")
@@ -76,8 +79,31 @@ func Init(opts InitOptions) error {
 		return fmt.Errorf("creating definitions/: %w", err)
 	}
 
+	// All durable operational state for a repository workspace is local to its
+	// .pudl/data tree. The catalog creates sqlite/catalog.db lazily; the other
+	// directories are initialized now so commands share one obvious boundary.
+	dataDirs := []string{
+		filepath.Join(pudlDir, "data"),
+		filepath.Join(pudlDir, "data", "raw"),
+		filepath.Join(pudlDir, "data", "metadata"),
+		filepath.Join(pudlDir, "data", "sqlite"),
+	}
+	for _, dataDir := range dataDirs {
+		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+			return fmt.Errorf("creating local data directory %s: %w", dataDir, err)
+		}
+	}
+	if err := writeLocalGitignore(pudlDir); err != nil {
+		return err
+	}
+	if opts.Force || !config.ExistsAt(pudlDir) {
+		if err := config.DefaultConfigFor(pudlDir).SaveTo(pudlDir); err != nil {
+			return fmt.Errorf("writing repo-local config: %w", err)
+		}
+	}
+
 	// Create .gitkeep in empty directories so git tracks them
-	for _, d := range []string{schemaDir, modelsDir, defsDir} {
+	for _, d := range []string{modelsDir, defsDir} {
 		gitkeep := filepath.Join(d, ".gitkeep")
 		if _, err := os.Stat(gitkeep); os.IsNotExist(err) {
 			os.WriteFile(gitkeep, []byte(""), 0644)
@@ -89,6 +115,7 @@ func Init(opts InitOptions) error {
 		fmt.Printf("  schema/        (project-specific CUE schemas)\n")
 		fmt.Printf("  schema/models/ (registered #SystemModel definitions)\n")
 		fmt.Printf("  definitions/   (desired state definitions)\n")
+		fmt.Printf("  data/          (repo-local raw data, metadata, and catalog)\n")
 	}
 
 	// Install skills into .claude/skills/
@@ -114,8 +141,8 @@ func generateWorkspaceCue(name string) string {
 	return fmt.Sprintf(`// PUDL workspace configuration.
 // This file marks the root of a per-repo PUDL workspace.
 
-// Workspace name — used as the origin for catalog entries.
-// Must be unique across all workspaces sharing the same ~/.pudl/ catalog.
+// Workspace name — used as the origin for catalog entries in this repo's
+// .pudl/data/sqlite/catalog.db.
 name: %q
 
 // Optional: override toolchain mappings for this workspace.
@@ -128,4 +155,44 @@ name: %q
 // Omit for mu compatibility mode; set [] for explicit deny-all.
 // secrets: writable_refs: ["pass:myproject/*"]
 `, name)
+}
+
+func initLocalCUEModule(schemaDir string) error {
+	moduleDir := filepath.Join(schemaDir, "cue.mod")
+	if err := os.MkdirAll(moduleDir, 0o755); err != nil {
+		return fmt.Errorf("creating local CUE module: %w", err)
+	}
+	modulePath := filepath.Join(moduleDir, "module.cue")
+	if _, err := os.Stat(modulePath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking local CUE module: %w", err)
+	}
+	const module = `language: version: "v0.16.0"
+
+module: "pudl.schemas@v0"
+
+source: kind: "self"
+`
+	if err := os.WriteFile(modulePath, []byte(module), 0o644); err != nil {
+		return fmt.Errorf("writing local CUE module: %w", err)
+	}
+	return nil
+}
+
+func writeLocalGitignore(pudlDir string) error {
+	path := filepath.Join(pudlDir, ".gitignore")
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("checking local .gitignore: %w", err)
+	}
+	const contents = `# Runtime state belongs to this workspace but not to Git.
+data/
+config.yaml
+`
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		return fmt.Errorf("writing local .gitignore: %w", err)
+	}
+	return nil
 }

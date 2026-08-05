@@ -708,9 +708,8 @@ func TestMutatingRunSetRejectionPerformsNoMutation(t *testing.T) {
 
 func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing.T) {
 	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true,
-	}
+	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
+		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
 	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
@@ -751,9 +750,8 @@ func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing
 
 func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T) {
 	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true,
-	}
+	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
+		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
 	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
@@ -776,9 +774,8 @@ func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T
 
 func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *testing.T) {
 	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true,
-	}
+	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
+		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
 	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-secret-consumer", "mutator-secret-producer"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
@@ -817,9 +814,8 @@ func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *test
 
 func TestCompletedSealedWriteRemainsRecordedWhenLaterConsumerFails(t *testing.T) {
 	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true,
-	}
+	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
+		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
 	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-secret-consumer", "mutator-secret-producer"}))
 	pending := latestRunSetReportForTest(t, pudlDir)

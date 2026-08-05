@@ -28,8 +28,10 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 ## What Exists Today
 
 ### Data Lake Structure
-- **Schema Repository**: `~/.pudl/schema/` -- Git repository containing CUE schema definitions
-- **Data Storage**: `~/.pudl/data/` -- Imported data files with full provenance metadata
+- **Repository Workspace**: `pudl repo init` creates a self-contained `.pudl/`
+  with schemas, local configuration, imported data, provenance, and catalog
+- **Global Mode**: outside an initialized repository, the same state layout is
+  rooted at `~/.pudl/`
 - **Catalog Database**: SQLite-based catalog with query, filter, and pagination support
 - **Bitemporal Fact Store**: General-purpose table for typed assertions with valid-time and transaction-time tracking, content-addressed dedup, and four temporal query modes (see [docs/facts.md](facts.md))
 - **Self-contained**: No external dependencies required for the PUDL binary
@@ -81,7 +83,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Workspace Resolution**: Schema and model commands search project-local CUE before global CUE
 
 ### CLI Commands
-- `pudl init` -- Initialize the data lake
+- `pudl init` -- Initialize the global data lake
 - `pudl setup` -- Set up shell integration
 - `pudl config` -- View and manage configuration
 - `pudl import` -- Import data files
@@ -96,7 +98,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl model list/show/validate` -- Inspect registered system models
 - `pudl run` -- Populate, detect drift, check, report, and optionally converge
 - `pudl status` -- Read recorded model/resource convergence status
-- `pudl repo init` -- Initialize a repo with pudl config and Claude skills
+- `pudl repo init` -- Initialize or repair a self-contained repo data lake and Claude skills
 - `pudl model validate` -- Validate a system model against its schema
 - `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
 - `pudl mu ingest-manifest` -- Ingest mu build manifests

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -16,7 +15,7 @@ var runSetReportCmd = &cobra.Command{
 	Short: "Read a persisted run-set report",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := database.NewCatalogDB(config.GetPudlDir())
+		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return err
 		}

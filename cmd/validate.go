@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
@@ -58,12 +57,12 @@ func init() {
 
 func runValidateCommand(cmd *cobra.Command, args []string) error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err
 	}
 
-	// Derive config dir from data path (data path is typically ~/.pudl/data, so config dir is ~/.pudl)
+	// The parent of <active-pudl-root>/data owns the matching catalog.
 	configDir := filepath.Dir(cfg.DataPath)
 
 	// Initialize catalog database

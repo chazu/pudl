@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
@@ -73,7 +72,7 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Open catalog database
-	configDir := config.GetPudlDir()
+	configDir := effectivePudlDir()
 	catalogDB, err := database.NewCatalogDB(configDir)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to open catalog database", err)

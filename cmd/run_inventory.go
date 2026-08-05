@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/inference"
@@ -96,7 +95,7 @@ func modelResourceDefs(desired []map[string]any, identity identityResolver) []st
 // each schema's declared identity_fields from the inference graph. Records whose
 // schema is unknown or declares none fall back to the name|path|id heuristic.
 func schemaIdentityResolver() (identityResolver, error) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, fmt.Errorf("load config: %w", err)
 	}

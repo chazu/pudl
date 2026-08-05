@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/git"
 )
@@ -114,7 +113,7 @@ func init() {
 // runSchemaStatusCommand contains the actual schema status logic with structured error handling
 func runSchemaStatusCommand() error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
@@ -193,7 +192,7 @@ func runSchemaCommitCommand() error {
 	}
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
@@ -272,7 +271,7 @@ func runSchemaCommitCommand() error {
 // runSchemaLogCommand contains the actual schema log logic with structured error handling
 func runSchemaLogCommand() error {
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}

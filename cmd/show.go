@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/lister"
 )
@@ -55,9 +54,9 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 	entryID := args[0]
 
 	// Load configuration to get data directory
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
-		return err // Already a PUDLError from config.Load()
+		return err // Already a PUDLError from loadEffectiveConfig()
 	}
 
 	// Create lister to find the entry

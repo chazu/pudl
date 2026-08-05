@@ -1,10 +1,41 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/chazu/pudl/internal/config"
 )
+
+// effectivePudlDir is the one persistence root for the current invocation.
+// Inside a repository workspace, catalog rows, raw data, reports, approvals,
+// snapshots, and other durable state all belong under that repository's
+// .pudl directory. Outside one, the global ~/.pudl root remains the fallback.
+func effectivePudlDir() string {
+	if wsPolicy != nil && wsPolicy.InWorkspace() && wsPolicy.Workspace.PudlDir != "" {
+		return wsPolicy.Workspace.PudlDir
+	}
+	return config.GetPudlDir()
+}
+
+// loadEffectiveConfig loads configuration from the active persistence root.
+// Repository schema/data paths are fixed beneath .pudl: accepting an edited
+// path that escapes the root would silently defeat workspace isolation.
+func loadEffectiveConfig() (*config.Config, error) {
+	root := effectivePudlDir()
+	cfg, err := config.LoadFrom(root)
+	if err != nil {
+		return nil, err
+	}
+	if wsPolicy != nil && wsPolicy.InWorkspace() {
+		wantSchema := filepath.Join(root, "schema")
+		wantData := filepath.Join(root, "data")
+		if filepath.Clean(cfg.SchemaPath) != wantSchema || filepath.Clean(cfg.DataPath) != wantData {
+			return nil, fmt.Errorf("repository workspace paths must stay under %s (schema_path=%s, data_path=%s)", root, wantSchema, wantData)
+		}
+	}
+	return cfg, nil
+}
 
 // effectiveSchemaPaths returns the workspace-first schema search order. The
 // workspace context is authoritative when available; the config path remains

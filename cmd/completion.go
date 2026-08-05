@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/schema"
@@ -14,11 +13,11 @@ import (
 
 // completeProquintIDs returns a completion function for proquint entry IDs
 func completeProquintIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	// dataPath is ~/.pudl/data, config dir (for database) is ~/.pudl
+	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
 	configDir := filepath.Dir(cfg.DataPath)
 
 	catalogDB, err := database.NewCatalogDB(configDir)
@@ -52,7 +51,7 @@ func completeProquintIDs(cmd *cobra.Command, args []string, toComplete string) (
 
 // completeSchemaNames returns a completion function for schema names
 func completeSchemaNames(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -90,7 +89,7 @@ func completeFormats(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeSchemaPackages returns a completion function for schema package names
 func completeSchemaPackages(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -132,11 +131,11 @@ func completeSortByOptions(cmd *cobra.Command, args []string, toComplete string)
 
 // completeOrigins returns a completion function for data origins
 func completeOrigins(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	// dataPath is ~/.pudl/data, config dir (for database) is ~/.pudl
+	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
 	configDir := filepath.Dir(cfg.DataPath)
 
 	catalogDB, err := database.NewCatalogDB(configDir)
@@ -164,11 +163,11 @@ func completeOrigins(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeEntryIDs returns a completion function for recent entry IDs
 func completeEntryIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
-	// dataPath is ~/.pudl/data, config dir (for database) is ~/.pudl
+	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
 	configDir := filepath.Dir(cfg.DataPath)
 
 	catalogDB, err := database.NewCatalogDB(configDir)
@@ -203,7 +202,7 @@ func completeEntryIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 
 // completeRelations returns a completion function for fact relation names
 func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -238,7 +237,7 @@ func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]
 	for _, r := range relations {
 		addCandidate(r)
 	}
-	if rules, rerr := loadQueryRules(config.GetPudlDir()); rerr == nil {
+	if rules, rerr := loadQueryRules(effectivePudlDir()); rerr == nil {
 		for _, ru := range rules {
 			addCandidate(ru.Head.Rel)
 		}
@@ -252,7 +251,7 @@ func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]
 
 // completeSources returns a completion function for fact source names
 func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -281,7 +280,7 @@ func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeFactIDs returns a completion function for fact IDs (hex prefix)
 func completeFactIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
