@@ -24,6 +24,12 @@ package systemmodel
 	// model itself is persisted as a typed catalog resource.
 	"_schema"?: string
 
+	// INPUTS + BINDINGS are authoring-only. PUDL resolves every binding to one
+	// concrete scalar and unifies it into inputs before decoding SystemModel.
+	// Runtime models and catalog model-instance records omit both fields.
+	inputs?: {...}
+	bindings?: {[string]: #ValueBinding}
+
 	// DEPENDS_ON — NAMES of other #SystemModel instances whose output this
 	// model's desired/observed state depends on. Model names (each dependency's
 	// `name:` field), not value references: this expresses ordering/impact, not
@@ -83,6 +89,7 @@ package systemmodel
 // observe op runs and its output is ingested as the live side. `plugin` names a
 // #PluginDef declared in the model's `plugins:` block.
 #PluginObserve: {
+	#SealedInputs
 	plugin: string
 	input: {...}
 	// differential: this observer reads `desired` as sources and reports
@@ -104,12 +111,11 @@ package systemmodel
 // _schema is a hidden CUE field and json.Marshal drops it, so the routing tag
 // would never reach the records file.
 #EweTarget: {
+	#SealedInputs
 	eweSource: string
 	outputs: [...string]
 	network?:            bool | *false
 	impure?:             bool | *false
-	sealed_inputs?:      {[string]: string}
-	sealed_input_modes?: {[string]: string}
 }
 
 // #PluginPlan — converge via a declarative-apply plugin. pudl routes `desired`
@@ -122,8 +128,52 @@ package systemmodel
 // `input.kubeconfig: "/abs/path/to/kubeconfig"`; without it `kubectl` cannot
 // find `~/.kube/config` and apply fails with `context "…" does not exist`.
 #PluginPlan: {
+	#SealedExecution
 	plugin: string
 	input?: {...}
+}
+
+// #ValueBinding selects one scalar field from one exact typed resource.
+#ValueBinding: {
+	source: #ResourceRef
+	path:   string & != ""
+}
+
+#ResourceRef: {
+	model:    string & != ""
+	schema:   string & != ""
+	identity: {[string]: _}
+}
+
+// Sealed inputs belong directly to the populate or converge arm that consumes
+// them. V1 sealed outputs belong only to converge: populate must finish before
+// the complete exact-plan approval boundary and therefore cannot write.
+#SealedInputs: {
+	sealed_inputs?: {[string]: #SealedInput}
+}
+
+#SealedExecution: {
+	#SealedInputs
+	sealed_outputs?: {[string]: #SealedOutput}
+}
+
+#SealedInput: {
+	delivery_mode: "env" | "file"
+	({
+		ref:     string & != ""
+		source?: _|_
+	} | {
+		ref?: _|_
+		source: {
+			model:  string & != ""
+			output: string & != ""
+		}
+	})
+}
+
+#SealedOutput: {
+	ref:        string & != ""
+	store_mode: "create" | "overwrite" | "create_if_absent"
 }
 
 // #DesiredResource — one declared resource. Open: the fields a resource carries

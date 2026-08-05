@@ -10,6 +10,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // recordModelInstance upserts the run's #SystemModel instance into the catalog
@@ -90,6 +91,62 @@ func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot s
 	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
 }
 
+// resolveModelTemplate is the binding-aware discovery path. Unlike
+// resolveModel it retains the authored cue.Value and therefore admits models
+// whose desired/config projection cannot become concrete until catalog values
+// are injected.
+func resolveModelTemplate(name string) (template *systemmodel.ModelTemplate, modelDir, pudlRoot string, err error) {
+	var searched []string
+	for _, dir := range modelSearchDirs() {
+		if st, statErr := os.Stat(dir); statErr != nil || !st.IsDir() {
+			continue
+		}
+		searched = append(searched, dir)
+		found, rerr := resolveModelTemplateIn(dir, name)
+		if rerr != nil {
+			return nil, "", "", rerr
+		}
+		if found != nil {
+			return found, found.Origin.LoadDir, found.Origin.PUDLRoot, nil
+		}
+	}
+	if len(searched) == 0 {
+		return nil, "", "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
+	}
+	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
+}
+
+func resolveModelTemplateIn(dir, name string) (*systemmodel.ModelTemplate, error) {
+	modules, err := validator.SharedLoader(dir).LoadAllModules()
+	if err != nil {
+		return nil, fmt.Errorf("load schemas in %s: %w", dir, err)
+	}
+	var match *systemmodel.ModelTemplate
+	for _, mod := range modules {
+		for schemaName, meta := range mod.Metadata {
+			if meta.ResourceType != "system_model" {
+				continue
+			}
+			value, ok := mod.Schemas[schemaName]
+			if !ok {
+				continue
+			}
+			template, templateErr := systemmodel.NewTemplate(value, systemmodel.TemplateOrigin{
+				Definition: schemaName, SchemaName: schemaName, LoadDir: mod.LoadPath,
+				PUDLRoot: filepath.Dir(dir),
+			})
+			if templateErr != nil || (template.Name != name && shortDefName(schemaName) != name) {
+				continue
+			}
+			if match != nil && match.Origin.SchemaName != template.Origin.SchemaName {
+				return nil, fmt.Errorf("system model %q is ambiguous in %s (matches %s and %s)", name, dir, match.Origin.SchemaName, template.Origin.SchemaName)
+			}
+			match = template
+		}
+	}
+	return match, nil
+}
+
 // resolveModelIn searches one schema directory for a system-model definition
 // matching name (by instance `name:` or short definition name). Returns
 // (nil, "", nil) if none matched here. Shares the per-dir iterator with
@@ -112,6 +169,9 @@ func resolveModelIn(dir, name string) (*systemmodel.SystemModel, string, error) 
 	}
 	if match == nil {
 		return nil, "", nil
+	}
+	if match.Model == nil {
+		return nil, "", fmt.Errorf("system model %q requires binding elaboration; use `pudl run`", name)
 	}
 	return match.Model, match.Dir, nil
 }

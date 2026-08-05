@@ -3,6 +3,12 @@ package cmd
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 func set(keys ...string) map[string]struct{} {
@@ -11,6 +17,35 @@ func set(keys ...string) map[string]struct{} {
 		m[k] = struct{}{}
 	}
 	return m
+}
+
+func TestBindingDependencyReconcileCoexistsWithDeclaredProvenance(t *testing.T) {
+	db, err := database.NewCatalogDB(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	require.NoError(t, reconcileEdges(db, "consumer", declaredSource("consumer"), set("producer")))
+	template := &systemmodel.ModelTemplate{Name: "consumer", BindingProducers: []string{"producer", "secrets"}}
+	require.NoError(t, reconcileBindingDependencies(db, template))
+
+	facts, err := db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
+	require.NoError(t, err)
+	require.Len(t, facts, 3)
+	sources := map[string]int{}
+	for _, fact := range facts {
+		sources[fact.Source]++
+	}
+	assert.Equal(t, 1, sources[declaredSource("consumer")])
+	assert.Equal(t, 2, sources[bindingSource("consumer")])
+
+	// Removing every binding invalidates only authoritative binding facts; the
+	// coincident declared edge remains current under its independent source.
+	template.BindingProducers = nil
+	require.NoError(t, reconcileBindingDependencies(db, template))
+	facts, err = db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
+	require.NoError(t, err)
+	require.Len(t, facts, 1)
+	assert.Equal(t, declaredSource("consumer"), facts[0].Source)
 }
 
 func TestDependencyDiff_Idempotent(t *testing.T) {

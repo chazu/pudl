@@ -56,6 +56,9 @@ func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 	if report == nil || report.RunID == "" {
 		return false
 	}
+	if report.ReportVersion == 0 {
+		report.ReportVersion = 1
+	}
 	db, err := cat.optional()
 	if err != nil {
 		if live {

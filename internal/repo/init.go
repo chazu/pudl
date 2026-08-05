@@ -118,5 +118,9 @@ name: %q
 // toolchain_mappings: [
 //     {prefix: "myapp", toolchain: "shell"},
 // ]
+
+// Optional: restrict provider references that sealed outputs may write.
+// Omit for mu compatibility mode; set [] for explicit deny-all.
+// secrets: writable_refs: ["pass:myproject/*"]
 `, name)
 }

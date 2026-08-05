@@ -250,7 +250,7 @@ func hookPluginAvailable(name string) bool {
 		return false
 	}
 	for _, model := range models {
-		if model.Model.Populate.Plugin == name || (model.Model.Converge != nil && model.Model.Converge.Plugin == name) {
+		if model.Summary.PopulatePlugin == name || model.Summary.ConvergePlugin == name {
 			return true
 		}
 	}

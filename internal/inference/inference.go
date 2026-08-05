@@ -261,6 +261,16 @@ func (si *SchemaInferrer) GetSchemaMetadata(schemaName string) (validator.Schema
 	return meta, exists
 }
 
+// GetSchemaValue returns the loaded CUE value for a canonical schema name.
+// Binding resolution uses it to authorize the exact projected source field.
+func (si *SchemaInferrer) GetSchemaValue(schemaName string) (cue.Value, bool) {
+	si.mu.RLock()
+	defer si.mu.RUnlock()
+
+	value, exists := si.schemas[schemaname.Normalize(schemaName)]
+	return value, exists
+}
+
 // GetInheritanceGraph returns the schema inheritance graph.
 func (si *SchemaInferrer) GetInheritanceGraph() *InheritanceGraph {
 	si.mu.RLock()

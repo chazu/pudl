@@ -80,11 +80,11 @@ var runRejectCmd = &cobra.Command{
 		if err := db.ResolveRunApproval(args[0], "rejected"); err != nil {
 			return err
 		}
-		if err := db.FinishRun(args[0], database.RunConclusion{Verdict: "failed", Outcome: "rejected", Note: "convergence approval rejected"}); err != nil {
+		if err := db.FinishRun(args[0], database.RunConclusion{CompletionStatus: database.RunStatusFailed, Verdict: "failed", Outcome: "rejected", Note: "convergence approval rejected"}); err != nil {
 			return err
 		}
 		report, _ := json.Marshal(&RunReport{
-			RunID: args[0], Model: approval.Model, Mode: "converge", OK: false,
+			ReportVersion: 1, RunID: args[0], Model: approval.Model, Mode: "converge", OK: false,
 			Error: "convergence approval rejected", ApprovalStatus: "rejected",
 		})
 		if err := db.SaveRunReport(args[0], approval.Model, report); err != nil {

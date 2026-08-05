@@ -366,12 +366,39 @@ func ingestObserveRecord(
 	hash := sha256.Sum256(recordJSON)
 	contentHash := fmt.Sprintf("%x", hash)
 
+	// Binding selectors use the assigned schema's declared identity fields, not
+	// target/name heuristics. Persist the canonical schema-relative identity on
+	// every typed observation so a later resolver can match it exactly without
+	// reopening or re-inferring the raw record.
+	var identityValues map[string]any
+	if inferrer != nil {
+		if meta, ok := inferrer.GetSchemaMetadata(schema); ok {
+			identityValues, err = identity.ExtractFieldValues(record, meta.IdentityFields)
+			if err != nil {
+				identityValues = nil
+			}
+		}
+	}
+	resourceID := identity.ComputeResourceID(identityNamespace(graph, schema), identityValues, contentHash)
+	identityJSON := ""
+	if len(identityValues) > 0 {
+		identityJSON, err = identity.CanonicalIdentityJSON(identityValues)
+		if err != nil {
+			return 0, fmt.Errorf("canonicalize observe identity: %w", err)
+		}
+	}
+
 	// Dedup: skip if exact same content already exists for this target.
 	existing, err := db.GetLatestObserveByContentHash(target, contentHash)
 	if err != nil {
 		return 0, fmt.Errorf("dedup check failed for %s: %w", target, err)
 	}
 	if existing != nil {
+		if identityJSON != "" && (existing.IdentityJSON == nil || *existing.IdentityJSON == "") {
+			if err := db.UpdateEntryIdentity(existing.ID, resourceID, identityJSON); err != nil {
+				return 0, fmt.Errorf("enrich deduplicated observe identity: %w", err)
+			}
+		}
 		// The entry keeps the run that *first* observed it. Rewriting run_id to the
 		// current run made the association last-writer-wins: an entry first seen by
 		// run A silently moved to run B on the next identical observation, so a
@@ -409,24 +436,16 @@ func ingestObserveRecord(
 		return 0, fmt.Errorf("failed to write observe record: %w", err)
 	}
 
-	// Compute resource ID from the record's identity fields.
-	identityValues := map[string]any{"target": target}
-	if s, ok := record["_schema"].(string); ok {
-		identityValues["_schema"] = s
-	}
-	for _, key := range []string{"hostname", "host", "name", "unit", "mountpoint", "ifname"} {
-		if v, ok := record[key]; ok {
-			identityValues[key] = v
-		}
-	}
-	resourceID := identity.ComputeResourceID(identityNamespace(graph, schema), identityValues, contentHash)
-
 	entryType := "observe"
 	collectionType := "item"
 	itemID := fmt.Sprintf("%s_item_%d", safeTarget, index)
 	var runIDPtr *string
 	if runID != "" {
 		runIDPtr = &runID
+	}
+	var identityJSONPtr *string
+	if identityJSON != "" {
+		identityJSONPtr = &identityJSON
 	}
 	entry := database.CatalogEntry{
 		ID:              contentHash,
@@ -441,6 +460,7 @@ func ingestObserveRecord(
 		EntryType:       &entryType,
 		Target:          &target,
 		ResourceID:      &resourceID,
+		IdentityJSON:    identityJSONPtr,
 		ContentHash:     &contentHash,
 		CollectionID:    &collectionID,
 		CollectionType:  &collectionType,

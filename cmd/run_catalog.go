@@ -68,6 +68,20 @@ func (c *runCatalog) required() (*database.CatalogDB, error) {
 	return db, nil
 }
 
+// readOnlyRequired borrows an existing catalog without migrations or any other
+// initialization writes. A dry-run binding resolver uses this path so looking
+// up pinned evidence cannot create or modify catalog state.
+func (c *runCatalog) readOnlyRequired() (*database.CatalogDB, error) {
+	if !c.opened {
+		c.opened = true
+		c.db, c.err = database.OpenCatalogDBReadOnly(c.dir)
+	}
+	if c.err != nil {
+		return nil, fmt.Errorf("open catalog read-only: %w", c.err)
+	}
+	return c.db, nil
+}
+
 // optional borrows the handle for a best-effort phase — the status write, the
 // run's audit row, the dependency reconcile, promotion, the drift observation.
 // It returns a nil handle when the catalog could not be opened, and the caller

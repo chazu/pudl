@@ -11,25 +11,30 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
+	"github.com/chazu/pudl/internal/wiring"
 )
 
 var (
-	runMuRoot          string
-	runConverge        bool
-	runOnly            []string
-	runDryRun          bool
-	runMaxIters        int
-	runMaxApplies      int
-	runFromCatalog     bool
-	runCatalogScope    string
-	runCheckUpstream   bool
-	runPopulateSpec    string
-	runPopulateInput   []string
-	runRequireApproval bool
-	runResumeID        string
-	runApprovalStatus  string
+	runMuRoot            string
+	runConverge          bool
+	runOnly              []string
+	runDryRun            bool
+	runMaxIters          int
+	runMaxApplies        int
+	runFromCatalog       bool
+	runCatalogScope      string
+	runCheckUpstream     bool
+	runPopulateSpec      string
+	runPopulateInput     []string
+	runRequireApproval   bool
+	runResumeID          string
+	runApprovalStatus    string
+	runMaxObservationAge time.Duration
 )
+
+var runMuRunnerFactory = func() muRunner { return execMu{} }
 
 var runCmd = &cobra.Command{
 	Use:   "run [<model>]",
@@ -97,15 +102,74 @@ Examples:
 		var name string
 		var model *systemmodel.SystemModel
 		var modelDir, pudlRoot string
+		var bindingEvidence []wiring.BindingEvidence
+		var sealedEvidence []wiring.SealedBindingEvidence
 		var err error
 		if runPopulateSpec != "" {
 			model, modelDir, pudlRoot, err = adHocModel(runPopulateSpec, runPopulateInput)
 		} else {
 			name = args[0]
-			model, modelDir, pudlRoot, err = resolveModel(name)
+			template, templateDir, templateRoot, templateErr := resolveModelTemplate(name)
+			if templateErr != nil {
+				return templateErr
+			}
+			modelDir, pudlRoot = templateDir, templateRoot
+			if !flags.dryRun {
+				db, catalogErr := cat.required()
+				if catalogErr != nil {
+					return catalogErr
+				}
+				if reconcileErr := reconcileBindingDependencies(db, template); reconcileErr != nil {
+					return fmt.Errorf("reconcile binding dependencies for %q: %w", template.Name, reconcileErr)
+				}
+			}
+			if len(template.Bindings) == 0 {
+				model, err = template.Elaborate(map[string]any{})
+			} else {
+				if cmd.Flags().Changed("max-observation-age") && runMaxObservationAge <= 0 {
+					return fmt.Errorf("--max-observation-age must be greater than zero")
+				}
+				var db *database.CatalogDB
+				var catalogErr error
+				if flags.dryRun {
+					db, catalogErr = cat.readOnlyRequired()
+				} else {
+					db, catalogErr = cat.required()
+				}
+				if catalogErr != nil {
+					return catalogErr
+				}
+				schemas, schemaErr := inference.Shared(wsPolicy.SchemaSearchPaths...)
+				if schemaErr != nil {
+					return fmt.Errorf("load binding schemas: %w", schemaErr)
+				}
+				var maxAge *time.Duration
+				if cmd.Flags().Changed("max-observation-age") {
+					maxAge = &runMaxObservationAge
+				}
+				elaboration, resolveErr := (wiring.Resolver{Catalog: db, Schemas: schemas}).Elaborate(template, wiring.ResolveRequest{
+					Workspace: effectiveWorkspaceName(), MaxObservationAge: maxAge,
+					CurrentProducerRuns: currentRunSetProducerRuns(),
+				})
+				if resolveErr != nil {
+					if jsonOutput && activeRunSet == nil {
+						diagnostic := resolutionDiagnosticReport(template, flags, resolveErr)
+						if rendered, renderErr := diagnostic.render(true); renderErr == nil {
+							fmt.Print(rendered)
+						}
+					}
+					return resolveErr
+				}
+				model = elaboration.Model
+				bindingEvidence = elaboration.Evidence
+			}
 		}
 		if err != nil {
 			return err
+		}
+		model, sealedEvidence, err = resolveCurrentRunSetSealedModel(model)
+		if err != nil {
+			return fmt.Errorf("resolve sealed bindings for %q: %w", name, err)
 		}
 		name = model.Name
 		if runRequireApproval && (!runConverge || runDryRun) {
@@ -125,8 +189,18 @@ Examples:
 			return err
 		}
 		session := acute.NewRunSession(plan)
+		if reserved := currentRunSetMemberRunID(); reserved != "" {
+			session.RunID = reserved
+		}
 		if runResumeID != "" {
 			session.RunID = runResumeID
+		}
+		registerRunSetMemberRunID(session.RunID)
+		if activeRunSet != nil {
+			activeRunSet.lastModel = model
+			activeRunSet.lastSealed = sealedEvidence
+			activeRunSet.lastSnapshotID = session.SnapshotID
+			activeRunSet.lastModelDir = modelDir
 		}
 		effectiveModel := session.Plan.Effective
 
@@ -231,9 +305,13 @@ Examples:
 		// The subprocess seam. Passed explicitly rather than reached for, so the
 		// whole run path can be driven by a scripted runner in a test — the
 		// acceptance matrix the architecture report asks for needs no real mu.
-		var mu muRunner = execMu{}
+		var mu muRunner = runMuRunnerFactory()
 
-		report := &RunReport{RunID: session.RunID, Model: model.Name, OK: true, ApprovalStatus: runApprovalStatus}
+		report := &RunReport{
+			ReportVersion: 1, RunSetID: currentRunSetID(), RunID: session.RunID,
+			Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
+			ApprovalStatus: runApprovalStatus, Bindings: bindingEvidence, SealedBindings: sealedEvidence,
+		}
 		reportPersisted := false
 		defer func() {
 			if flags.dryRun || reportPersisted {
@@ -267,10 +345,10 @@ Examples:
 			if err != nil {
 				return err
 			}
-			if live {
+			if live && emitRunSetMemberOutput() {
 				fmt.Print(out)
 				fmt.Printf("approval pending: pudl run resume %s | pudl run reject %s\n", session.RunID, session.RunID)
-			} else {
+			} else if emitRunSetMemberOutput() {
 				fmt.Print(out)
 			}
 			return nil
@@ -392,15 +470,20 @@ Examples:
 		}
 
 		applyRunError(report, runErr)
+		if runErr == nil {
+			report.CompletionStatus = database.RunStatusSucceeded
+		}
 		reportPersisted = persistRunReport(cat, report, live)
 		out, err := report.render(jsonOutput)
 		if err != nil {
 			return err
 		}
-		if live {
+		if live && emitRunSetMemberOutput() {
 			fmt.Print("\n")
 		}
-		fmt.Print(out)
+		if emitRunSetMemberOutput() {
+			fmt.Print(out)
+		}
 
 		// Persist the run's terminal verdict on the model instance row so
 		// `pudl model list` / `pudl status` surface last-run state, and record the
@@ -680,7 +763,12 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 		}
 		note += runErr.Error()
 	}
+	completionStatus := database.RunStatusSucceeded
+	if runErr != nil {
+		completionStatus = database.RunStatusFailed
+	}
 	if err := db.FinishRun(runID, database.RunConclusion{
+		CompletionStatus:  completionStatus,
 		Verdict:           state.verdict,
 		Outcome:           state.outcome,
 		NeedsVerification: state.needsVerification,
@@ -907,5 +995,6 @@ func init() {
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
 	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
+	runCmd.Flags().DurationVar(&runMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runCmd.Flags().BoolVar(&runRequireApproval, "require-approval", false, "persist the converge request and wait for `pudl run resume <run-id>`")
 }

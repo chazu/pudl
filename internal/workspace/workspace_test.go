@@ -86,6 +86,7 @@ toolchain_mappings: [
     {prefix: "aws", toolchain: "terraform"},
     {prefix: "k8s", toolchain: "kubectl"},
 ]
+secrets: writable_refs: ["pass:full-project/*"]
 `
 	require.NoError(t, os.WriteFile(filepath.Join(pudlDir, "workspace.cue"), []byte(cueContent), 0644))
 
@@ -98,6 +99,24 @@ toolchain_mappings: [
 	assert.Equal(t, "terraform", ws.ToolchainMappings[0].Toolchain)
 	assert.Equal(t, "k8s", ws.ToolchainMappings[1].Prefix)
 	assert.Equal(t, "kubectl", ws.ToolchainMappings[1].Toolchain)
+	assert.True(t, ws.SecretsWritableConfigured)
+	assert.Equal(t, []string{"pass:full-project/*"}, ws.SecretsWritableRefs)
+}
+
+func TestLoad_ExplicitEmptyWritableRefsIsDenyAll(t *testing.T) {
+	tmp := t.TempDir()
+	pudlDir := filepath.Join(tmp, ".pudl")
+	require.NoError(t, os.MkdirAll(pudlDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(pudlDir, "workspace.cue"), []byte(`
+name: "locked"
+secrets: writable_refs: []
+`), 0o644))
+
+	ws, err := Discover(tmp)
+	require.NoError(t, err)
+	require.NotNil(t, ws)
+	assert.True(t, ws.SecretsWritableConfigured)
+	assert.Empty(t, ws.SecretsWritableRefs)
 }
 
 func TestLoad_InvalidCUE(t *testing.T) {

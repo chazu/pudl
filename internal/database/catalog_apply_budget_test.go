@@ -14,7 +14,7 @@ func applyRun(t *testing.T, db *CatalogDB, runID, model, verdict string, applies
 	for i := 0; i < applies; i++ {
 		require.NoError(t, db.RecordApply(runID))
 	}
-	require.NoError(t, db.FinishRun(runID, RunConclusion{Verdict: verdict, Scoped: scoped}))
+	require.NoError(t, db.FinishRun(runID, RunConclusion{CompletionStatus: RunStatusSucceeded, Verdict: verdict, Scoped: scoped}))
 }
 
 func TestAppliesSinceLastClean_NoHistory(t *testing.T) {
@@ -94,7 +94,7 @@ func TestRecordApply_UnknownRunIsAnError(t *testing.T) {
 func TestFinishRun_RecordsScope(t *testing.T) {
 	db := runsTestDB(t)
 	require.NoError(t, db.StartRun("run_a", "m", "converge"))
-	require.NoError(t, db.FinishRun("run_a", RunConclusion{Verdict: "clean", Scoped: true}))
+	require.NoError(t, db.FinishRun("run_a", RunConclusion{CompletionStatus: RunStatusSucceeded, Verdict: "clean", Scoped: true}))
 
 	record, err := db.GetRun("run_a")
 	require.NoError(t, err)

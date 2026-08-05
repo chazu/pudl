@@ -32,7 +32,7 @@ func TestStartRunThenFinishRunIsTerminal(t *testing.T) {
 	assert.Equal(t, "model-a", started.Model)
 	assert.Equal(t, "converge", started.Mode)
 
-	require.NoError(t, db.FinishRun("run_a", RunConclusion{Verdict: "unknown", Outcome: "failed (cap_exhausted)", NeedsVerification: true, Note: "receipt lost"}))
+	require.NoError(t, db.FinishRun("run_a", RunConclusion{CompletionStatus: RunStatusFailed, Verdict: "unknown", Outcome: "failed (cap_exhausted)", NeedsVerification: true, Note: "receipt lost"}))
 
 	finished, err := db.GetRun("run_a")
 	require.NoError(t, err)
@@ -42,6 +42,51 @@ func TestStartRunThenFinishRunIsTerminal(t *testing.T) {
 	assert.Equal(t, "failed (cap_exhausted)", finished.Outcome)
 	assert.True(t, finished.NeedsVerification)
 	assert.Equal(t, "receipt lost", finished.Note)
+	assert.Equal(t, RunStatusFailed, finished.CompletionStatus)
+}
+
+func TestPrepareRunMutationReopensOnlySuccessfulPreflight(t *testing.T) {
+	db := runsTestDB(t)
+	require.NoError(t, db.StartRun("run_ok", "model-a", "observe-only"))
+	require.NoError(t, db.FinishRun("run_ok", RunConclusion{CompletionStatus: RunStatusSucceeded}))
+	require.NoError(t, db.PrepareRunMutation("run_ok"))
+
+	record, err := db.GetRun("run_ok")
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	assert.Equal(t, "converge", record.Mode)
+	assert.Equal(t, RunStatusRunning, record.CompletionStatus)
+	assert.False(t, record.Finished())
+
+	require.NoError(t, db.StartRun("run_failed", "model-a", "observe-only"))
+	require.NoError(t, db.FinishRun("run_failed", RunConclusion{CompletionStatus: RunStatusFailed}))
+	assert.Error(t, db.PrepareRunMutation("run_failed"))
+}
+
+func TestMutationIntentIsDurableUntilReceiptCommits(t *testing.T) {
+	db := runsTestDB(t)
+	require.NoError(t, db.StartRun("run_attempt", "model-a", "converge"))
+	require.NoError(t, db.BeginRunMutationAttempt("run_attempt"))
+
+	crashed, err := db.GetRun("run_attempt")
+	require.NoError(t, err)
+	require.NotNil(t, crashed)
+	assert.False(t, crashed.Finished())
+	assert.Equal(t, "unknown", crashed.Verdict)
+	assert.Equal(t, "needs-verification", crashed.Outcome)
+	assert.True(t, crashed.NeedsVerification)
+	assert.Contains(t, crashed.Note, "receipt not recorded")
+
+	require.NoError(t, db.RecordApply("run_attempt"))
+	require.NoError(t, db.CompleteRunMutationReceipt("run_attempt"))
+	receipted, err := db.GetRun("run_attempt")
+	require.NoError(t, err)
+	require.NotNil(t, receipted)
+	assert.False(t, receipted.NeedsVerification)
+	assert.Empty(t, receipted.Outcome)
+	assert.Empty(t, receipted.Note)
+	assert.Equal(t, 1, receipted.Applies)
+	assert.Error(t, db.CompleteRunMutationReceipt("run_attempt"), "one receipt cannot clear twice")
 }
 
 // The point of the table: a run that never finished stays discoverable, so the
@@ -50,7 +95,7 @@ func TestUnfinishedRunsFindsOnlyRunsThatNeverFinished(t *testing.T) {
 	db := runsTestDB(t)
 
 	require.NoError(t, db.StartRun("run_done", "model-a", "converge"))
-	require.NoError(t, db.FinishRun("run_done", RunConclusion{Verdict: "clean", Outcome: "clean"}))
+	require.NoError(t, db.FinishRun("run_done", RunConclusion{CompletionStatus: RunStatusSucceeded, Verdict: "clean", Outcome: "clean"}))
 	require.NoError(t, db.StartRun("run_crashed", "model-a", "converge"))
 	require.NoError(t, db.StartRun("run_other", "model-b", "observe-only"))
 
@@ -70,7 +115,7 @@ func TestFinishRunWithEmptyVerdictIsStillFinished(t *testing.T) {
 	db := runsTestDB(t)
 
 	require.NoError(t, db.StartRun("run_a", "model-a", "observe-only"))
-	require.NoError(t, db.FinishRun("run_a", RunConclusion{Note: "populate failed"}))
+	require.NoError(t, db.FinishRun("run_a", RunConclusion{CompletionStatus: RunStatusFailed, Note: "populate failed"}))
 
 	record, err := db.GetRun("run_a")
 	require.NoError(t, err)
@@ -99,7 +144,7 @@ func TestStartRunIsIdempotent(t *testing.T) {
 func TestFinishRunOnUnknownRunErrors(t *testing.T) {
 	db := runsTestDB(t)
 
-	err := db.FinishRun("nope", RunConclusion{Verdict: "clean", Outcome: "clean"})
+	err := db.FinishRun("nope", RunConclusion{CompletionStatus: RunStatusSucceeded, Verdict: "clean", Outcome: "clean"})
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no such run")

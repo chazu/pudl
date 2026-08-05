@@ -23,6 +23,7 @@ type CatalogWriter interface {
 	GetEntry(id string) (*CatalogEntry, error)
 	FindByContentHash(contentHash string) (*CatalogEntry, error)
 	GetLatestObserveByContentHash(targetName, contentHash string) (*CatalogEntry, error)
+	UpdateEntryIdentity(id, resourceID, identityJSON string) error
 	GetTargetStatuses() ([]TargetStatus, error)
 }
 
@@ -76,8 +77,24 @@ func (t *CatalogTx) GetLatestObserveByContentHash(targetName, contentHash string
 	return getLatestObserveByContentHashIn(t.q, targetName, contentHash)
 }
 
+func (t *CatalogTx) UpdateEntryIdentity(id, resourceID, identityJSON string) error {
+	return updateEntryIdentityIn(t.q, id, resourceID, identityJSON)
+}
+
 func (t *CatalogTx) GetTargetStatuses() ([]TargetStatus, error) {
 	return getTargetStatusesIn(t.q)
+}
+
+func (t *CatalogTx) QueryFacts(filter FactFilter) ([]Fact, error) {
+	return queryFactsIn(t.q, filter)
+}
+
+func (t *CatalogTx) AddFact(fact Fact) (Fact, error) {
+	return addFactIn(t.q, fact)
+}
+
+func (t *CatalogTx) InvalidateFact(id string) error {
+	return invalidateFactIn(t.q, id)
 }
 
 // WithCatalogTx runs fn inside a single immediate-mode SQLite transaction. If fn

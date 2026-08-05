@@ -56,6 +56,10 @@ func NewRunSession(plan *RunPlan) *RunSession {
 	}
 }
 
+func NewRunSetID() string { return "runset_" + idgen.GenerateRandomProquint() }
+
+func NewMemberRunID() string { return "run_" + idgen.GenerateRandomProquint() }
+
 // NewRunPlan validates run policy and resolves --only before any external
 // process or catalog write can occur.
 func NewRunPlan(model *systemmodel.SystemModel, request RunRequest) (*RunPlan, error) {

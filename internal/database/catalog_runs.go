@@ -40,7 +40,19 @@ type RunRecord struct {
 	// apply budget either: alternating a converging scope with an oscillating one
 	// would otherwise sustain exactly the unbounded apply rate the budget bounds.
 	Scoped bool
+	// CompletionStatus is the orchestration result, separate from the resource
+	// verdict. Pure populate runs have no drift verdict but can still succeed and
+	// own an eligible observation snapshot.
+	CompletionStatus string
 }
+
+const (
+	RunStatusRunning   = "running"
+	RunStatusSucceeded = "succeeded"
+	RunStatusFailed    = "failed"
+	RunStatusBlocked   = "blocked"
+	RunStatusCancelled = "cancelled"
+)
 
 // Finished reports whether the run reached a terminal state. An unfinished row
 // belonging to no live process is a run that died without recording a verdict.
@@ -60,7 +72,8 @@ func (c *CatalogDB) ensureRunsTable() error {
 			needs_verification INTEGER NOT NULL DEFAULT 0,
 			note TEXT NOT NULL DEFAULT '',
 			applies INTEGER NOT NULL DEFAULT 0,
-			scoped INTEGER NOT NULL DEFAULT 0
+			scoped INTEGER NOT NULL DEFAULT 0,
+			completion_status TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_model ON runs(model, started_at)`,
 		`CREATE INDEX IF NOT EXISTS idx_runs_unfinished ON runs(finished_at)`,
@@ -76,6 +89,10 @@ func (c *CatalogDB) ensureRunsTable() error {
 	for _, column := range []struct{ name, ddl string }{
 		{"applies", "ALTER TABLE runs ADD COLUMN applies INTEGER NOT NULL DEFAULT 0"},
 		{"scoped", "ALTER TABLE runs ADD COLUMN scoped INTEGER NOT NULL DEFAULT 0"},
+		// Existing rows intentionally remain blank: without a status written by
+		// the owning run they cannot prove successful completion and are therefore
+		// ineligible for cross-resource observation reuse.
+		{"completion_status", "ALTER TABLE runs ADD COLUMN completion_status TEXT NOT NULL DEFAULT ''"},
 	} {
 		exists, err := c.columnExists("runs", column.name)
 		if err != nil {
@@ -98,9 +115,10 @@ func (c *CatalogDB) StartRun(runID, model, mode string) error {
 		return fmt.Errorf("start run: empty run id")
 	}
 	_, err := c.db.Exec(
-		`INSERT INTO runs (run_id, model, mode, started_at) VALUES (?, ?, ?, ?)
-		 ON CONFLICT(run_id) DO UPDATE SET model = excluded.model, mode = excluded.mode`,
-		runID, model, mode, time.Now().UTC(),
+		`INSERT INTO runs (run_id, model, mode, started_at, completion_status) VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(run_id) DO UPDATE SET model = excluded.model, mode = excluded.mode,
+		 completion_status = excluded.completion_status`,
+		runID, model, mode, time.Now().UTC(), RunStatusRunning,
 	)
 	if err != nil {
 		return fmt.Errorf("start run %q: %w", runID, err)
@@ -112,6 +130,7 @@ func (c *CatalogDB) StartRun(runID, model, mode string) error {
 // The apply count is deliberately absent: it is written per apply by RecordApply
 // so it survives a run that never reaches here.
 type RunConclusion struct {
+	CompletionStatus  string
 	Verdict           string
 	Outcome           string
 	NeedsVerification bool
@@ -128,10 +147,13 @@ func (c *CatalogDB) FinishRun(runID string, conclusion RunConclusion) error {
 	if runID == "" {
 		return fmt.Errorf("finish run: empty run id")
 	}
+	if !terminalRunStatus(conclusion.CompletionStatus) {
+		return fmt.Errorf("finish run %q: invalid terminal completion status %q", runID, conclusion.CompletionStatus)
+	}
 	result, err := c.db.Exec(
-		`UPDATE runs SET finished_at = ?, verdict = ?, outcome = ?, needs_verification = ?, note = ?, scoped = ?
+		`UPDATE runs SET finished_at = ?, completion_status = ?, verdict = ?, outcome = ?, needs_verification = ?, note = ?, scoped = ?
 		 WHERE run_id = ?`,
-		time.Now().UTC(), conclusion.Verdict, conclusion.Outcome,
+		time.Now().UTC(), conclusion.CompletionStatus, conclusion.Verdict, conclusion.Outcome,
 		boolToInt(conclusion.NeedsVerification), conclusion.Note, boolToInt(conclusion.Scoped), runID,
 	)
 	if err != nil {
@@ -147,10 +169,49 @@ func (c *CatalogDB) FinishRun(runID string, conclusion RunConclusion) error {
 	return nil
 }
 
+// PrepareRunMutation reopens a successfully completed read-only member under
+// the same reserved run identity for its approved mutation phase. Only a
+// succeeded member may cross this boundary; failed/blocked/cancelled evidence
+// can never be promoted into a mutation run.
+func (c *CatalogDB) PrepareRunMutation(runID string) error {
+	return prepareRunMutationIn(c.db, runID)
+}
+
+func prepareRunMutationIn(q dbtx, runID string) error {
+	if runID == "" {
+		return fmt.Errorf("prepare run mutation: empty run id")
+	}
+	result, err := q.Exec(`UPDATE runs SET mode = 'converge', finished_at = NULL,
+		completion_status = ?, verdict = '', outcome = '', needs_verification = 0,
+		note = '', applies = 0, scoped = 0
+		WHERE run_id = ? AND completion_status = ?`,
+		RunStatusRunning, runID, RunStatusSucceeded)
+	if err != nil {
+		return fmt.Errorf("prepare run mutation %q: %w", runID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("prepare run mutation %q: %w", runID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("prepare run mutation %q: run is not successfully preflighted", runID)
+	}
+	return nil
+}
+
+func terminalRunStatus(status string) bool {
+	switch status {
+	case RunStatusSucceeded, RunStatusFailed, RunStatusBlocked, RunStatusCancelled:
+		return true
+	default:
+		return false
+	}
+}
+
 // GetRun reads one run record, or nil when it does not exist.
 func (c *CatalogDB) GetRun(runID string) (*RunRecord, error) {
 	row := c.db.QueryRow(
-		`SELECT run_id, model, mode, started_at, finished_at, verdict, outcome, needs_verification, note, applies, scoped
+		`SELECT run_id, model, mode, started_at, finished_at, verdict, outcome, needs_verification, note, applies, scoped, completion_status
 		 FROM runs WHERE run_id = ?`, runID)
 	record, err := scanRunRecord(row)
 	if err == sql.ErrNoRows {
@@ -169,7 +230,7 @@ func (c *CatalogDB) GetRun(runID string) (*RunRecord, error) {
 // whatever status its model currently carries predates that run and cannot be
 // trusted.
 func (c *CatalogDB) UnfinishedRuns(model string) ([]RunRecord, error) {
-	query := `SELECT run_id, model, mode, started_at, finished_at, verdict, outcome, needs_verification, note, applies, scoped
+	query := `SELECT run_id, model, mode, started_at, finished_at, verdict, outcome, needs_verification, note, applies, scoped, completion_status
 	          FROM runs WHERE finished_at IS NULL`
 	args := []any{}
 	if model != "" {
@@ -206,6 +267,7 @@ func scanRunRecord(row rowScanner) (RunRecord, error) {
 	err := row.Scan(
 		&record.RunID, &record.Model, &record.Mode, &record.StartedAt, &finishedAt,
 		&record.Verdict, &record.Outcome, &needsVer, &record.Note, &record.Applies, &scoped,
+		&record.CompletionStatus,
 	)
 	if err != nil {
 		return RunRecord{}, err
@@ -240,6 +302,53 @@ func (c *CatalogDB) RecordApply(runID string) error {
 	}
 	if affected == 0 {
 		return fmt.Errorf("record apply for run %q: no such run", runID)
+	}
+	return nil
+}
+
+// BeginRunMutationAttempt writes the crash marker before an external apply may
+// start. A process death after this commit is therefore read as
+// needs-verification even if it dies before mu returns or RecordApply runs.
+func (c *CatalogDB) BeginRunMutationAttempt(runID string) error {
+	if runID == "" {
+		return fmt.Errorf("begin mutation attempt: empty run id")
+	}
+	result, err := c.db.Exec(`UPDATE runs SET verdict = 'unknown',
+		outcome = 'needs-verification', needs_verification = 1,
+		note = 'external mutation attempt started; receipt not recorded'
+		WHERE run_id = ? AND finished_at IS NULL AND completion_status = ?`, runID, RunStatusRunning)
+	if err != nil {
+		return fmt.Errorf("begin mutation attempt for run %q: %w", runID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("begin mutation attempt for run %q: %w", runID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("begin mutation attempt for run %q: run is not active", runID)
+	}
+	return nil
+}
+
+// CompleteRunMutationReceipt clears the crash marker only after the apply's
+// manifest receipt has committed. The run remains active and unknown until a
+// later observation proves its terminal verdict.
+func (c *CatalogDB) CompleteRunMutationReceipt(runID string) error {
+	if runID == "" {
+		return fmt.Errorf("complete mutation receipt: empty run id")
+	}
+	result, err := c.db.Exec(`UPDATE runs SET outcome = '', needs_verification = 0, note = ''
+		WHERE run_id = ? AND finished_at IS NULL AND completion_status = ?
+		AND needs_verification = 1`, runID, RunStatusRunning)
+	if err != nil {
+		return fmt.Errorf("complete mutation receipt for run %q: %w", runID, err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("complete mutation receipt for run %q: %w", runID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("complete mutation receipt for run %q: no unreceipted active attempt", runID)
 	}
 	return nil
 }

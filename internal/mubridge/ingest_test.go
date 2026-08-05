@@ -520,3 +520,57 @@ func TestResolveObserveSchemaUsesInferenceForUnknownResourceType(t *testing.T) {
 	}, inferrer.GetInheritanceGraph(), inferrer)
 	assert.Equal(t, "schemas.#Thing", got)
 }
+
+func TestIngestObservePersistsAndEnrichesSchemaRelativeIdentity(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+
+	dir := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cue.mod"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "cue.mod", "module.cue"), []byte("module: \"test.schemas\"\nlanguage: version: \"v0.14.0\"\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "schemas"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "schemas", "custom.cue"), []byte(`package schemas
+
+#Thing: {
+	_pudl: {
+		schema_type: "base"
+		resource_type: "provider.custom"
+		identity_fields: ["name"]
+	}
+	name: string
+	value: string
+	...
+}
+`), 0o644))
+	inferrer, err := inference.NewSchemaInferrer(dir)
+	require.NoError(t, err)
+	input := `[{
+		"target":"//producer",
+		"current":{"records":[{"_schema":"provider.custom","name":"thing-1","value":"ready"}]}
+	}]`
+	mapping := map[string]string{"provider.custom": "schemas.#Thing"}
+
+	// First ingest simulates an older caller that supplied the loaded namespace
+	// but not its metadata. The content row has no semantic identity yet.
+	_, err = IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), DataDir: dataDir, SnapshotID: "snap_old",
+		Graph: inferrer.GetInheritanceGraph(), SchemaMappings: mapping,
+	})
+	require.NoError(t, err)
+	entry, err := db.GetLatestObserve("producer")
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+	assert.Nil(t, entry.IdentityJSON)
+
+	// Re-observing identical content deduplicates the row but enriches it using
+	// the schema's declared identity instead of leaving it permanently unbindable.
+	_, err = IngestObserve(db, ObserveIngest{
+		Reader: strings.NewReader(input), DataDir: dataDir, SnapshotID: "snap_new",
+		Graph: inferrer.GetInheritanceGraph(), Inferrer: inferrer, SchemaMappings: mapping,
+	})
+	require.NoError(t, err)
+	entry, err = db.GetLatestObserve("producer")
+	require.NoError(t, err)
+	require.NotNil(t, entry.IdentityJSON)
+	assert.Equal(t, `{"name":"thing-1"}`, *entry.IdentityJSON)
+}
