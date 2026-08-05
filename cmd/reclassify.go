@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/muschemas"
 )
@@ -44,7 +43,7 @@ func init() {
 }
 
 func runReclassify(ref string) error {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
 	}
@@ -114,5 +113,5 @@ func tryResolveSchemaRef(cache *muschemas.Cache, ref string) (bool, error) {
 // (pudl import) can register schemas into the same cache that
 // reclassify reads from.
 func SchemaCacheRoot() string {
-	return filepath.Join(config.GetPudlDir(), "schemas")
+	return filepath.Join(effectivePudlDir(), "schemas")
 }

@@ -32,9 +32,11 @@ type Config struct {
 }
 
 func DefaultConfig() *Config {
-	homeDir, _ := os.UserHomeDir()
-	pudlDir := filepath.Join(homeDir, ".pudl")
+	return DefaultConfigFor(GetPudlDir())
+}
 
+// DefaultConfigFor returns defaults rooted entirely beneath pudlDir.
+func DefaultConfigFor(pudlDir string) *Config {
 	return &Config{
 		SchemaPath: filepath.Join(pudlDir, "schema"),
 		DataPath:   filepath.Join(pudlDir, "data"),
@@ -52,15 +54,21 @@ func GetPudlDir() string {
 }
 
 func GetConfigPath() string {
-	return filepath.Join(GetPudlDir(), "config.yaml")
+	return ConfigPath(GetPudlDir())
 }
 
-func Load() (*Config, error) {
-	configPath := GetConfigPath()
+// ConfigPath returns the configuration file beneath one PUDL state root.
+func ConfigPath(pudlDir string) string { return filepath.Join(pudlDir, "config.yaml") }
+
+func Load() (*Config, error) { return LoadFrom(GetPudlDir()) }
+
+// LoadFrom loads configuration scoped to one PUDL state root.
+func LoadFrom(pudlDir string) (*Config, error) {
+	configPath := ConfigPath(pudlDir)
 
 	// If config doesn't exist, return default config
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return DefaultConfig(), nil
+		return DefaultConfigFor(pudlDir), nil
 	}
 
 	data, err := os.ReadFile(configPath)
@@ -77,7 +85,12 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) Save() error {
-	configPath := GetConfigPath()
+	return c.SaveTo(GetPudlDir())
+}
+
+// SaveTo saves configuration beneath one PUDL state root.
+func (c *Config) SaveTo(pudlDir string) error {
+	configPath := ConfigPath(pudlDir)
 
 	// Ensure the directory exists
 	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
@@ -98,8 +111,12 @@ func (c *Config) Save() error {
 
 // Exists checks if the PUDL workspace exists
 func Exists() bool {
-	pudlDir := GetPudlDir()
-	configPath := GetConfigPath()
+	return ExistsAt(GetPudlDir())
+}
+
+// ExistsAt reports whether a PUDL state root has an explicit configuration.
+func ExistsAt(pudlDir string) bool {
+	configPath := ConfigPath(pudlDir)
 
 	// Check if both the directory and config file exist
 	if _, err := os.Stat(pudlDir); os.IsNotExist(err) {
@@ -169,6 +186,11 @@ func ValidatePath(path string) error {
 }
 
 func SetConfigValue(key, value string) error {
+	return SetConfigValueAt(GetPudlDir(), key, value)
+}
+
+// SetConfigValueAt updates one configuration rooted beneath pudlDir.
+func SetConfigValueAt(pudlDir, key, value string) error {
 	if !IsValidConfigKey(key) {
 		return errors.NewInputError(
 			fmt.Sprintf("Invalid configuration key: %s", key),
@@ -177,7 +199,7 @@ func SetConfigValue(key, value string) error {
 	}
 
 	// Load current configuration
-	cfg, err := Load()
+	cfg, err := LoadFrom(pudlDir)
 	if err != nil {
 		return err // Already a PUDLError from Load()
 	}
@@ -223,7 +245,7 @@ func SetConfigValue(key, value string) error {
 	}
 
 	// Save the updated configuration
-	if err := cfg.Save(); err != nil {
+	if err := cfg.SaveTo(pudlDir); err != nil {
 		return err // Already a PUDLError from Save()
 	}
 
@@ -231,8 +253,13 @@ func SetConfigValue(key, value string) error {
 }
 
 func ResetToDefaults() error {
-	defaultCfg := DefaultConfig()
-	if err := defaultCfg.Save(); err != nil {
+	return ResetToDefaultsAt(GetPudlDir())
+}
+
+// ResetToDefaultsAt restores path defaults under pudlDir.
+func ResetToDefaultsAt(pudlDir string) error {
+	defaultCfg := DefaultConfigFor(pudlDir)
+	if err := defaultCfg.SaveTo(pudlDir); err != nil {
 		return err // Already a PUDLError from Save()
 	}
 	return nil

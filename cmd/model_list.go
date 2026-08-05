@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
@@ -37,7 +36,7 @@ func modelSearchDirs() []string {
 		return wsPolicy.ModelSearchPaths
 	}
 	// Fallback for callers invoked without the Cobra lifecycle (tests).
-	return []string{filepath.Join(config.GetPudlDir(), "schema")}
+	return []string{filepath.Join(effectivePudlDir(), "schema")}
 }
 
 // listModels discovers all registered #SystemModel definitions across the schema
@@ -133,7 +132,7 @@ func (mi ModelInfo) convergeName() string {
 // (modelTargetKey(name)) — the catalog target key, best-effort — an empty map if the catalog is unavailable.
 func modelRunStatuses() map[string]string {
 	out := map[string]string{}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return out
 	}

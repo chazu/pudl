@@ -19,8 +19,9 @@ var schemaCmd = &cobra.Command{
 	Long: `Manage CUE schemas used for data validation and organization in PUDL.
 
 Schemas are organized by packages (aws, k8s, unknown, etc.) and stored in the
-schema repository at ~/.pudl/schema/. Each schema is a CUE file that defines
-the structure and validation rules for imported data.
+active schema repository: .pudl/schema/ inside an initialized repository, or
+~/.pudl/schema/ in global mode. Each CUE file defines structure and validation
+rules for imported data.
 
 Available subcommands:
 - list:    Show available schemas organized by package

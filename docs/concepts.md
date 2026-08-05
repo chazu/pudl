@@ -84,7 +84,9 @@ When the same logical resource is imported multiple times with different data (e
 
 ## Schema System
 
-PUDL uses [CUE](https://cuelang.org/) for schema definition and validation. Schemas live in `~/.pudl/schema/` as `.cue` files, organized into packages (directories).
+PUDL uses [CUE](https://cuelang.org/) for schema definition and validation.
+Schemas live in `.pudl/schema/` inside an initialized repository, or
+`~/.pudl/schema/` in global mode, organized into packages (directories).
 
 What makes PUDL schemas special is the `_pudl` metadata block embedded in each definition. This metadata drives the inference engine:
 

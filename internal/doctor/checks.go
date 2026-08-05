@@ -29,9 +29,13 @@ type HealthCheck struct {
 	CheckFunc func() *CheckResult
 }
 
-// CheckWorkspaceStructure verifies that ~/.pudl directories exist
+// CheckWorkspaceStructure verifies the global PUDL directories.
 func CheckWorkspaceStructure() *CheckResult {
-	pudlDir := config.GetPudlDir()
+	return CheckWorkspaceStructureAt(config.GetPudlDir())
+}
+
+// CheckWorkspaceStructureAt verifies one global or repository PUDL root.
+func CheckWorkspaceStructureAt(pudlDir string) *CheckResult {
 
 	// Check if pudl directory exists
 	if _, err := os.Stat(pudlDir); os.IsNotExist(err) {
@@ -58,7 +62,7 @@ func CheckWorkspaceStructure() *CheckResult {
 	}
 
 	// Check config file
-	configPath := config.GetConfigPath()
+	configPath := config.ConfigPath(pudlDir)
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return &CheckResult{
 			Status:  "warning",
@@ -77,7 +81,11 @@ func CheckWorkspaceStructure() *CheckResult {
 
 // CheckDatabaseIntegrity runs PRAGMA integrity_check on the catalog database
 func CheckDatabaseIntegrity() *CheckResult {
-	pudlDir := config.GetPudlDir()
+	return CheckDatabaseIntegrityAt(config.GetPudlDir())
+}
+
+// CheckDatabaseIntegrityAt runs integrity_check against one PUDL root.
+func CheckDatabaseIntegrityAt(pudlDir string) *CheckResult {
 	dbPath := filepath.Join(pudlDir, "data", "sqlite", "catalog.db")
 
 	// Check if database file exists
@@ -131,13 +139,18 @@ func CheckDatabaseIntegrity() *CheckResult {
 
 // CheckSchemaRepository verifies CUE module exists
 func CheckSchemaRepository() *CheckResult {
-	cfg, err := config.Load()
+	return CheckSchemaRepositoryAt(config.GetPudlDir())
+}
+
+// CheckSchemaRepositoryAt verifies the schema module beneath one PUDL root.
+func CheckSchemaRepositoryAt(pudlDir string) *CheckResult {
+	cfg, err := config.LoadFrom(pudlDir)
 	if err != nil {
 		return &CheckResult{
 			Status:  "error",
 			Message: "Failed to load configuration",
 			Details: err.Error(),
-			Fix:     "Check config file at " + config.GetConfigPath(),
+			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
 		}
 	}
 
@@ -171,7 +184,13 @@ func CheckSchemaRepository() *CheckResult {
 
 // CheckGitRepository verifies git is initialized
 func CheckGitRepository() *CheckResult {
-	cfg, err := config.Load()
+	return CheckGitRepositoryAt(config.GetPudlDir())
+}
+
+// CheckGitRepositoryAt accepts either a standalone schema Git repository or
+// the enclosing repository that owns a local .pudl workspace.
+func CheckGitRepositoryAt(pudlDir string) *CheckResult {
+	cfg, err := config.LoadFrom(pudlDir)
 	if err != nil {
 		return &CheckResult{
 			Status:  "warning",
@@ -181,7 +200,16 @@ func CheckGitRepository() *CheckResult {
 	}
 
 	gitDir := filepath.Join(cfg.SchemaPath, ".git")
+	repoGitDir := filepath.Join(filepath.Dir(pudlDir), ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		_, workspaceErr := os.Stat(filepath.Join(pudlDir, "workspace.cue"))
+		if _, repoErr := os.Stat(repoGitDir); workspaceErr == nil && repoErr == nil {
+			return &CheckResult{
+				Status:  "ok",
+				Message: "Repository workspace is version controlled",
+				Details: fmt.Sprintf("Git repository found at %s", repoGitDir),
+			}
+		}
 		return &CheckResult{
 			Status:  "warning",
 			Message: "Git repository not initialized",
@@ -201,7 +229,11 @@ func CheckGitRepository() *CheckResult {
 // ensuring expected subdirectories exist and no unexpected top-level entries are present.
 // Inspired by defn's manifest/manifest.cue close({}) pattern for exhaustive validation.
 func CheckDirectoryStructure() *CheckResult {
-	pudlDir := config.GetPudlDir()
+	return CheckDirectoryStructureAt(config.GetPudlDir())
+}
+
+// CheckDirectoryStructureAt validates one global or repository PUDL root.
+func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 
 	// Check if pudl directory exists
 	if _, err := os.Stat(pudlDir); os.IsNotExist(err) {
@@ -224,7 +256,7 @@ func CheckDirectoryStructure() *CheckResult {
 		}
 	}
 
-	for _, sub := range []string{"raw", "sqlite"} {
+	for _, sub := range []string{"raw", "metadata", "sqlite"} {
 		subPath := filepath.Join(dataDir, sub)
 		if _, err := os.Stat(subPath); os.IsNotExist(err) {
 			return &CheckResult{
@@ -287,10 +319,13 @@ func CheckDirectoryStructure() *CheckResult {
 
 	// Check for unexpected top-level directories (exhaustive validation)
 	allowedTopLevel := map[string]bool{
-		"data":        true,
-		"schema":      true,
-		"config.yaml": true,
-		"mu.cue":      true, // memory cycle config written by 'pudl memory init'
+		".gitignore":    true,
+		"data":          true,
+		"definitions":   true,
+		"schema":        true,
+		"config.yaml":   true,
+		"workspace.cue": true,
+		"mu.cue":        true, // memory cycle config written by 'pudl memory init'
 	}
 	unexpectedEntries := []string{}
 	if entries, err := os.ReadDir(pudlDir); err == nil {
@@ -405,13 +440,18 @@ func isNumericDir(name string, expectedLen int) bool {
 // built-ins. Users should namespace their own schemas elsewhere -- `user/` by
 // convention. See docs/schema-authoring.md.
 func CheckPudlNamespaceSchemas() *CheckResult {
-	cfg, err := config.Load()
+	return CheckPudlNamespaceSchemasAt(config.GetPudlDir())
+}
+
+// CheckPudlNamespaceSchemasAt checks one PUDL root's schema namespace.
+func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
+	cfg, err := config.LoadFrom(pudlDir)
 	if err != nil {
 		return &CheckResult{
 			Status:  "warning",
 			Message: "Failed to load configuration",
 			Details: err.Error(),
-			Fix:     "Check config file at " + config.GetConfigPath(),
+			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
 		}
 	}
 
@@ -477,13 +517,18 @@ func CheckPudlNamespaceSchemas() *CheckResult {
 // families are built with `#Child: #Base & {...}`; this check backstops
 // base_schema references that bypass CUE inheritance). See docs/schema-authoring.md.
 func CheckIdentityFieldConsistency() *CheckResult {
-	cfg, err := config.Load()
+	return CheckIdentityFieldConsistencyAt(config.GetPudlDir())
+}
+
+// CheckIdentityFieldConsistencyAt checks one PUDL root's schema families.
+func CheckIdentityFieldConsistencyAt(pudlDir string) *CheckResult {
+	cfg, err := config.LoadFrom(pudlDir)
 	if err != nil {
 		return &CheckResult{
 			Status:  "warning",
 			Message: "Failed to load configuration",
 			Details: err.Error(),
-			Fix:     "Check config file at " + config.GetConfigPath(),
+			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
 		}
 	}
 
@@ -562,7 +607,11 @@ func sameStringSet(a, b []string) bool {
 
 // CheckOrphanedFiles finds files not in catalog
 func CheckOrphanedFiles() *CheckResult {
-	pudlDir := config.GetPudlDir()
+	return CheckOrphanedFilesAt(config.GetPudlDir())
+}
+
+// CheckOrphanedFilesAt checks one PUDL root's raw-data/catalog pairing.
+func CheckOrphanedFilesAt(pudlDir string) *CheckResult {
 	dataDir := filepath.Join(pudlDir, "data", "raw")
 
 	// Check if data directory exists

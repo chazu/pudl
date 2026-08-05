@@ -28,6 +28,24 @@ dependency uses unsafe pointer arithmetic.
 go test ./...
 ```
 
+### Repository-local isolation smoke test
+
+Run these from a disposable or intentionally dogfooded repository checkout:
+
+```bash
+mise exec -- go run . repo init
+mise exec -- go run . config
+mise exec -- go run . doctor
+```
+
+`config` must report `<repo>/.pudl` as the workspace, schema, data, and config
+root. After an import, raw content, metadata, and `data/sqlite/catalog.db` must
+appear only beneath that directory. Hash or timestamp the global
+`~/.pudl/data/sqlite/catalog.db` before and after when explicitly testing the
+no-leak boundary. `repo init` is safe to repeat and should repair missing
+PUDL-owned files without replacing an authored `workspace.cue` unless
+`--force` is passed.
+
 ### By category
 ```bash
 # Database

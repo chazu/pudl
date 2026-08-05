@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 )
 
@@ -42,15 +41,15 @@ func runSchemaEditCommand(pathArg string) error {
 	packagePath, definitionName := parseSchemaEditPath(pathArg)
 
 	// Load configuration to get schema path
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
 	// Resolve the file path
 	// Schema files can be at:
-	// 1. ~/.pudl/schema/<package_path>/<definition>.cue (created by pudl schema new)
-	// 2. ~/.pudl/schema/<package_path>.cue (simple single-file schema)
+	// 1. <active-schema>/<package_path>/<definition>.cue (created by pudl schema new)
+	// 2. <active-schema>/<package_path>.cue (simple single-file schema)
 	var filePath string
 	var found bool
 	schemaPath := effectiveSchemaPath(cfg)

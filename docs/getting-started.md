@@ -11,17 +11,20 @@
 # Build PUDL
 go build -o pudl .
 
-# Initialize your workspace (creates ~/.pudl/)
-./pudl init
+# Initialize this repository's self-contained workspace
+./pudl repo init
 ```
 
-This creates the workspace at `~/.pudl/` with:
+This creates `.pudl/` in the repository with:
 - A configuration file (`config.yaml`)
-- A git-tracked schema repository with all built-in resource schemas, rules,
+- A CUE module with all built-in resource schemas, rules,
   and `pudl/systemmodel.#SystemModel`
-- Data storage directories
+- Repository-local raw data, metadata, SQLite catalog, facts, reports,
+  snapshots, and approvals
 
-If you forget to run `init`, PUDL auto-initializes on first use.
+`pudl repo init` is safe to repeat and repairs missing owned files. Outside a
+repository workspace, `pudl init` creates the equivalent global `~/.pudl/`
+layout and ordinary commands auto-initialize that global mode on first use.
 
 ## 2. Import Some Data
 

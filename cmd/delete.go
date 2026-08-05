@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/lister"
 	"github.com/chazu/pudl/internal/ui"
@@ -57,7 +56,7 @@ func init() {
 func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	entryID := args[0]
 
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err
 	}

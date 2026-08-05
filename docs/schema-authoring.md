@@ -238,10 +238,13 @@ pudl schema new --from govim-nupab --collection --path user/#MyItem
 
 ## Schema File Location
 
-Schemas live in `~/.pudl/schema/` organized by package (directory). The schema name format is `<package-path>.#<Definition>`:
+Schemas live in the active workspace's `schema/` directory: `.pudl/schema/`
+inside an initialized repository, or `~/.pudl/schema/` in global mode. They are
+organized by package, and the schema name format is
+`<package-path>.#<Definition>`:
 
 ```
-~/.pudl/schema/
+<active-pudl-root>/schema/
 +-- cue.mod/module.cue
 +-- pudl/                          # reserved for built-in schemas (see below)
 |   +-- core/core.cue             # pudl/core.#Item, pudl/core.#Collection
@@ -259,7 +262,7 @@ Schemas live in `~/.pudl/schema/` organized by package (directory). The schema n
 
 PUDL does not enforce any particular package path for your own schemas -- the package path is simply the directory you place a `.cue` file under. To keep things organized and avoid collisions, follow this convention:
 
-- **Use `user` as your top-level package by default.** Put bespoke schemas under `~/.pudl/schema/user/`, producing names like `user/git.#Repository` or `user/k8s.#CustomResource`. This namespaces all of your schemas together and keeps them clearly separated from PUDL's built-ins.
+- **Use `user` as your top-level package by default.** Put bespoke schemas under `<active-pudl-root>/schema/user/`, producing names like `user/git.#Repository` or `user/k8s.#CustomResource`. This namespaces all of your schemas together and keeps them clearly separated from PUDL's built-ins.
 - **Any name of your choice is valid.** If `user` does not fit, pick something meaningful -- an org or team name (`acme/`, `platform/`), a domain (`finance/`), or a product (`myapi/`). PUDL applies no restrictions to the package path beyond it being a valid CUE package.
 - **Use multiple top-level names freely.** You are not limited to one. Mix `user/`, `acme/`, and `experimental/` side by side; each is an independent package path.
 - **Avoid the `pudl/` namespace.** It is reserved for built-in schemas, and the legacy short form `core.#Item` auto-normalizes to `pudl/core.#Item`. Placing your schemas under `pudl/` risks shadowing built-ins (first-found-wins), so keep your packages outside it.
@@ -276,7 +279,8 @@ The CUE `package` declaration in the file must match the target package director
 
 ## Version Control
 
-The schema directory is a git repository. Use PUDL's built-in commands:
+The global schema directory is its own Git repository. Repository-local schemas
+are versioned by the enclosing project repository. Use PUDL's built-in commands:
 
 ```bash
 pudl schema status                     # Show uncommitted changes

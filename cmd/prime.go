@@ -34,10 +34,11 @@ provides a bitemporal fact store with Datalog query support.
 
 ## Core concepts
 
-- **Catalog**: SQLite database at ~/.pudl/data/sqlite/catalog.db storing all
-  imported entries with metadata, schema assignments, and content-addressed IDs.
-- **Schemas**: CUE files in ~/.pudl/schema/ that define structure and validation
-  rules. Organized by package (aws, k8s, etc.). Schema inference is automatic.
+- **Catalog**: SQLite at .pudl/data/sqlite/catalog.db inside a repository
+  workspace, or ~/.pudl/data/sqlite/catalog.db in global mode. Repositories do
+  not share mutable catalog state.
+- **Schemas**: CUE files in the active .pudl/schema/ define structure and
+  validation rules. Repository schemas are searched before global fallbacks.
 - **Models**: ` + "`#SystemModel`" + ` definitions packaging a system's shape, how to
   populate (observe) it, optional desired state, and how to converge. Run with
   ` + "`pudl run`" + `.
@@ -45,8 +46,8 @@ provides a bitemporal fact store with Datalog query support.
   dependencies, derived facts) with valid-time and transaction-time tracking.
 - **Datalog rules**: CUE-defined rules evaluated over the fact store and catalog
   for derived queries.
-- **Workspace**: A repo can have a .pudl/ directory for project-local config
-  and rules. Global config lives at ~/.pudl/.
+- **Workspace**: pudl repo init creates a self-contained .pudl/ with config,
+  built-ins, models, raw data, metadata, and catalog. Global mode uses ~/.pudl/.
 
 ## Commands you should know
 

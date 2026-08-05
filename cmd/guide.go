@@ -109,7 +109,7 @@ THE MENTAL MODEL
   - models           #SystemModels: declared shape + populate/converge
   - fact store       bitemporal assertions (valid-time + transaction-time)
   - datalog rules    CUE-defined rules for derived queries
-  - workspace        .pudl/ (repo-local) + ~/.pudl/ (global)
+  - workspace        one durable state root: repo .pudl/ or global ~/.pudl/
 
 THE DAY-TO-DAY VERBS
 
@@ -125,10 +125,14 @@ THE DAY-TO-DAY VERBS
 
 WHERE DATA LIVES
 
-  ~/.pudl/data/sqlite/catalog.db    The catalog database.
-  ~/.pudl/schema/                   Global schema repository (git-tracked).
-  .pudl/schema/                     Repo-local schemas and rules.
-  .pudl/config.cue                  Repo-local configuration.
+  Inside a repo initialized with pudl repo init, all durable state is local:
+  .pudl/data/sqlite/catalog.db    Catalog, reports, approvals, and facts.
+  .pudl/data/{raw,metadata}/      Imported content and provenance.
+  .pudl/schema/                   Local CUE module, built-ins, models, rules.
+  .pudl/config.yaml               Local path configuration.
+  .pudl/workspace.cue             Workspace identity and policy.
+
+  Outside a repo workspace the same layout lives under ~/.pudl/.
 
 WHAT TO READ NEXT
 

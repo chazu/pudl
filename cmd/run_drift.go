@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -260,7 +259,7 @@ func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, 
 	if dryRun {
 		return ""
 	}
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		if !jsonOutput {
 			fmt.Printf("warning: could not load config to record the observation: %v\n", err)

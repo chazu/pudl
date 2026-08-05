@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/importer"
@@ -44,9 +43,9 @@ The --path flag supports both single files and wildcard patterns for batch impor
 - Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
 
 Data Storage:
-- Raw data: ~/.pudl/data/raw/YYYY/MM/DD/<content-hash-prefix>.ext
-- Metadata: ~/.pudl/data/metadata/<content-hash>.meta
-- Catalog: ~/.pudl/data/sqlite/catalog.db
+- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/
+- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/
+- The repository and global catalogs are separate; imports never cross them
 
 Schema Assignment:
 - Manual schema specification with --schema flag (chained validation)
@@ -133,13 +132,13 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	absPath := filePaths[0]
 
 	// Load configuration to get data directory
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
 	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
@@ -240,7 +239,7 @@ func recordItemSchemas(result *importer.ImportResult, env *unwrappedEnvelope) er
 	if result == nil || result.ID == "" {
 		return nil
 	}
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return fmt.Errorf("open catalog: %w", err)
 	}
@@ -532,13 +531,13 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	fmt.Printf("🔄 Importing %d files...\n\n", len(filePaths))
 
 	// Load configuration to get data directory
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
 	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
@@ -684,13 +683,13 @@ func importFromStdin(cmd *cobra.Command) error {
 	defer os.Remove(finalPath)
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
 	// Create importer
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, config.GetPudlDir(), effectiveSchemaPaths(cfg)...)
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		return errors.NewSystemError("Failed to initialize importer", err)
 	}

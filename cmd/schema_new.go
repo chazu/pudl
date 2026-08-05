@@ -81,13 +81,13 @@ func runSchemaNewCommand() error {
 	inferHints := parseInferHints(schemaNewInfer)
 
 	// Load configuration
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
 	// Initialize database connection
-	catalogDB, err := database.NewCatalogDB(config.GetPudlDir())
+	catalogDB, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to initialize catalog database", err)
 	}

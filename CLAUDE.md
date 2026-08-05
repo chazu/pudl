@@ -12,7 +12,8 @@ When completing a task, add a file to the `implog` directory summarizing the wor
 
 - **Go module:** `github.com/chazu/pudl` (per go.mod; imports use the full path)
 - **SQLite:** `modernc.org/sqlite` (pure Go, no CGo) via `database/sql`
-- **Catalog DB:** `~/.pudl/data/sqlite/catalog.db`
+- **Catalog DB:** `.pudl/data/sqlite/catalog.db` in a repository workspace;
+  `~/.pudl/data/sqlite/catalog.db` only in global mode
 - **Schema system:** CUE-based inference with heuristics + native CUE unification
 - **IDs:** Content-addressed SHA256 → proquint display format
 - **Schema names:** Normalized to canonical `<package>.#<Definition>` via `schemaname.Normalize()`

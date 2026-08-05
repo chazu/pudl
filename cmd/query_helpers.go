@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 )
@@ -37,7 +36,7 @@ func loadQueryRules(configDir string) ([]datalog.Rule, error) {
 // discoverability gap where rule-head relations never appear in shell completion
 // (which lists only fact-table relations).
 func runQueryList() error {
-	configDir := config.GetPudlDir()
+	configDir := effectivePudlDir()
 
 	rules, err := loadQueryRules(configDir)
 	if err != nil {

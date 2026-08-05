@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/errors"
 )
 
@@ -107,7 +106,7 @@ Examples:
 
 func runModuleTidyCommand() error {
 	// Load configuration to get schema path
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
@@ -142,7 +141,7 @@ func runModuleTidyCommand() error {
 
 func runModuleListCommand() error {
 	// Load configuration to get schema path
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
@@ -169,7 +168,7 @@ func runModuleListCommand() error {
 
 func runModuleInfoCommand() error {
 	// Load configuration to get schema path
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
@@ -208,7 +207,7 @@ func runModuleInfoCommand() error {
 
 func runModuleAddCommand(moduleSpec string) error {
 	// Load configuration to get schema path
-	cfg, err := config.Load()
+	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}

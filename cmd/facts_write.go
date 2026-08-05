@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/validator"
@@ -97,7 +96,7 @@ Examples:
 		// --no-validate is given.
 		switch {
 		case factsAddSchema != "":
-			cfg, err := config.Load()
+			cfg, err := loadEffectiveConfig()
 			if err != nil {
 				return fmt.Errorf("failed to load config for validation: %w", err)
 			}
@@ -115,7 +114,7 @@ Examples:
 			}
 		}
 
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -185,7 +184,7 @@ Examples:
 			return fmt.Errorf("--rule is only valid with --to promoted")
 		}
 
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
@@ -296,7 +295,7 @@ Examples:
     pudl facts search "auth*" --limit 10`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		configDir := config.GetPudlDir()
+		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)

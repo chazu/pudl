@@ -53,8 +53,10 @@ and [`implog/2026_07_29_cross_resource_wiring_mu_alignment.md`](../implog/2026_0
 - Content hashing, collection import, observe snapshots, and typed envelopes use
   bounded or shared paths; collection membership is normalized and deletion is
   safe for shared items.
-- Workspace schema resolution is local-first with global fallback, and the CI
-  workflow runs build, test, vet, generated-skill, race, and optional smoke gates.
+- Workspace schema resolution is local-first with global fallback. Repository
+  catalogs and every mutable artifact are now rooted under `.pudl/`, while
+  global mode remains isolated under `~/.pudl/`. The CI workflow runs build,
+  test, vet, generated-skill, race, and optional smoke gates.
 - Review tickets are tracked in Beads Rust under `.beads/`; all tickets from this
   review are closed.
 
@@ -124,9 +126,14 @@ The core pipeline is stable and tested. Execution-related features (models, meth
 - Architecture: [`docs/acute-loop-architecture.md`](acute-loop-architecture.md)
 
 ### Per-Repo Workspaces
-- `pudl repo init` creates `.pudl/workspace.cue` with schema/ and definitions/ directories
+- `pudl repo init` idempotently creates or repairs `.pudl/workspace.cue`, local
+  config/data directories, a CUE module, every built-in schema, models, and
+  definitions
 - Workspace discovery walks up from cwd looking for `.pudl/workspace.cue`
-- Catalog queries scoped by workspace origin (--all-workspaces to bypass)
+- Repository commands use `.pudl/data/sqlite/catalog.db`; no mutable catalog,
+  report, approval, snapshot, fact, raw-data, or metadata state leaks globally
+- Catalog queries remain scoped by workspace origin (`--all-workspaces` bypasses
+  the origin filter within the repository's catalog)
 - Multi-path schema resolution with per-repo shadowing of global schemas
 - Imports within a workspace auto-tagged with workspace name as origin
 

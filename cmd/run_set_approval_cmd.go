@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -31,7 +30,7 @@ var runSetRejectCmd = &cobra.Command{
 }
 
 func resumeRunSet(runSetID string) error {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return err
 	}
@@ -70,7 +69,7 @@ func resumeRunSet(runSetID string) error {
 }
 
 func rejectRunSet(runSetID string) error {
-	db, err := database.NewCatalogDB(config.GetPudlDir())
+	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return err
 	}

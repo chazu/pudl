@@ -69,11 +69,14 @@ Key features:
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	// Perform auto-initialization before executing any command
-	// Skip auto-init for help, version, and init commands
+	// Perform global auto-initialization only outside a repository workspace.
+	// A local workspace is self-contained; touching ~/.pudl before Cobra resolves
+	// it would violate the repo-local persistence boundary.
 	if len(os.Args) > 1 {
 		cmd := os.Args[1]
-		if cmd != "help" && cmd != "version" && cmd != "init" && cmd != "--help" && cmd != "-h" && cmd != "--version" && cmd != "-v" {
+		cwd, _ := os.Getwd()
+		localWorkspace, discoverErr := workspace.Discover(cwd)
+		if discoverErr == nil && localWorkspace == nil && shouldAutoInitializeGlobal(cmd) {
 			if err := pudlInit.AutoInitialize(); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to auto-initialize PUDL workspace: %v\n", err)
 				fmt.Fprintf(os.Stderr, "You may need to run 'pudl init' manually.\n")
@@ -84,6 +87,15 @@ func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
+	}
+}
+
+func shouldAutoInitializeGlobal(command string) bool {
+	switch command {
+	case "help", "version", "init", "repo", "--help", "-h", "--version", "-v":
+		return false
+	default:
+		return true
 	}
 }
 

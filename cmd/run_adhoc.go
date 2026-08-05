@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -41,7 +40,7 @@ func adHocModel(spec string, inputArgs []string) (*systemmodel.SystemModel, stri
 			Input:        input,
 			Differential: false,
 		},
-	}, mustCurrentDir(), config.GetPudlDir(), nil
+	}, mustCurrentDir(), effectivePudlDir(), nil
 }
 
 func hasCapability(value any, want string) bool {

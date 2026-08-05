@@ -11,7 +11,7 @@ Start with the [root README](../README.md) for a project overview.
 | [cli-reference.md](cli-reference.md) | All commands, flags, and examples |
 | [schema-authoring.md](schema-authoring.md) | Writing custom CUE schemas with `_pudl` metadata |
 | [collections.md](collections.md) | NDJSON collections, typed envelopes, membership, and queries |
-| [workspace.md](workspace.md) | Project-local schema resolution and global fallback |
+| [workspace.md](workspace.md) | Self-contained repository state, local schema resolution, and global fallback |
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
 | [architecture-improvement-report.md](architecture-improvement-report.md) | Highest-leverage architecture improvements and design questions |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |

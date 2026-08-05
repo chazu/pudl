@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -290,7 +289,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 					return nil, nil, fmt.Errorf("revalidate mutation for %q: %w", name, err)
 				}
 				reconcile, err = setupReconcileWorkspace(
-					&runCatalog{dir: config.GetPudlDir(), opened: true, db: db},
+					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
 					runMuRunnerFactory(), model, memberRoot, context.modelDirs[name], run.RunID, true,
 				)
 				if err != nil {
@@ -324,7 +323,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 			}
 			if reconcile == nil {
 				reconcile, err = setupReconcileWorkspace(
-					&runCatalog{dir: config.GetPudlDir(), opened: true, db: db},
+					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
 					runMuRunnerFactory(), model, member.muRoot, member.modelDir, member.runID, true,
 				)
 				if err != nil {
@@ -508,7 +507,7 @@ func prepareMutationMemberRuns(db *database.CatalogDB, report *acute.RunSetRepor
 }
 
 func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
-	cat := &runCatalog{dir: config.GetPudlDir(), opened: true, db: db}
+	cat := &runCatalog{dir: effectivePudlDir(), opened: true, db: db}
 	results := make(map[string]string, len(report.Members))
 	for _, member := range report.Members {
 		results[member.Model] = member.Result

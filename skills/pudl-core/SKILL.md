@@ -32,25 +32,32 @@ it writes no model definition and is observe-only. Retrieve completed or pending
 diagnostics with `pudl run report [<run-id>] --json`. Convergence that crosses a
 trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
 
-## Repository Layout
+## State Layout
 
 ```
-~/.pudl/                 # global (project .pudl/ shadows it)
-  config.yaml            # workspace configuration
-  schema/                # CUE schema repository (git-tracked)
+.pudl/                   # active inside a repo; ~/.pudl/ outside one
+  workspace.cue          # repo identity and policy (repository mode)
+  config.yaml            # local path configuration
+  schema/                # CUE module; repo copy is tracked by enclosing Git
     cue.mod/             # CUE module metadata
     pudl/                # built-in + local schema defs (incl. #SystemModel)
     pudl/rules/          # Datalog rules
     populators/          # populator programs for #EweTarget models
   data/
-    sqlite/catalog.db    # SQLite catalog (modernc, pure Go)
+    raw/                 # content-addressed imports
+    metadata/            # provenance sidecars
+    sqlite/catalog.db    # catalog, facts, reports, snapshots, approvals
 ```
+
+`pudl repo init` is idempotent and repairs this local layout. Repository and
+global catalogs are independent; mutable state never falls back across them.
 
 ## Common Commands
 
 ### Data pipeline
 - `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` takes globs and `-` for stdin)
-- `pudl list` — list catalog entries (default shows all; `--artifacts` = run outputs)
+- `pudl list` — list entries for the current workspace origin
+  (`--all-workspaces` removes that origin filter; `--artifacts` = run outputs)
 - `pudl show <id>` / `pudl export --id <id>` / `pudl delete <id>`
 - `pudl validate --all` — validate catalog data against assigned schemas
 
@@ -85,7 +92,7 @@ trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
 - `pudl status [target]` — recorded convergence status by catalog target (a run records its verdict)
 
 ### Utilities
-- `pudl init` / `pudl doctor` / `pudl config` / `pudl version`
+- `pudl repo init` / `pudl init` / `pudl doctor` / `pudl config` / `pudl version`
 - `pudl guide` / `pudl prime` — agent-facing usage reference
 
 ## How pudl drives mu (the #SystemModel loop)
@@ -139,8 +146,10 @@ outputs), vs ingested/observed data.
 
 Inside a repository workspace, PUDL searches `<repo>/.pudl/schema/` before the
 global `~/.pudl/schema/`. The first matching definition wins, while unrelated
-global schemas remain available. `pudl config` reports the configured global
-path and effective search order. See `docs/workspace.md`.
+global schemas remain available. All mutable state stays in the repository's
+`.pudl/data/`; global fallback applies only to schema reads. `pudl config`
+reports the active local paths and effective search order. See
+`docs/workspace.md`.
 
 ## Cross-model dependencies
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -23,7 +22,7 @@ var runResumeCmd = &cobra.Command{
 	Aliases: []string{"approve"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := database.NewCatalogDB(config.GetPudlDir())
+		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return err
 		}
@@ -65,7 +64,7 @@ var runRejectCmd = &cobra.Command{
 	Short: "Reject a pending converge run",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := database.NewCatalogDB(config.GetPudlDir())
+		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return err
 		}

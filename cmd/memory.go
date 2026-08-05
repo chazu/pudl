@@ -9,7 +9,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -58,7 +57,7 @@ Examples:
     pudl memory context --task "rate limiting auth" --limit 10
     pudl memory context --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		db, err := database.NewCatalogDB(config.GetPudlDir())
+		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return fmt.Errorf("failed to open catalog: %w", err)
 		}
@@ -122,7 +121,7 @@ Examples:
     pudl memory init
     pudl memory init --reflect-cmd "aider --message"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.GetPudlDir()
+		dir := effectivePudlDir()
 		path := filepath.Join(dir, "mu.cue")
 		if _, err := os.Stat(path); err == nil && !memoryInitForce {
 			return fmt.Errorf("%s already exists (use --force to overwrite)", path)
@@ -134,7 +133,7 @@ Examples:
 		// Reflect command precedence: --reflect-cmd flag > config > default.
 		reflectCmd := memoryInitReflect
 		if reflectCmd == "" {
-			if cfg, err := config.Load(); err == nil && cfg.ReflectCommand != "" {
+			if cfg, err := loadEffectiveConfig(); err == nil && cfg.ReflectCommand != "" {
 				reflectCmd = cfg.ReflectCommand
 			}
 		}
@@ -166,7 +165,7 @@ runs uncached.
 Scheduling is out of scope: trigger this from a hook ('pudl hooks'), cron, or a
 scheduled agent.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		dir := config.GetPudlDir()
+		dir := effectivePudlDir()
 		muCue := filepath.Join(dir, "mu.cue")
 		if _, err := os.Stat(muCue); err != nil {
 			return fmt.Errorf("no cycle workspace at %s — run 'pudl memory init' first", muCue)
