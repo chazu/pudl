@@ -13,8 +13,8 @@ package systemmodel
 	// inventoried). Hidden + concrete, so loading/validating an instance never
 	// has to supply it.
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "system_model"
+		schema_type:   "base"
+		resource_type: "system_model"
 		identity_fields: ["name"]
 		tracked_fields: ["populate", "desired", "converge", "checks", "plugins", "depends_on"]
 	}
@@ -77,12 +77,12 @@ package systemmodel
 // cache), or url+sha256 (remote) says where it comes from. pudl emits these
 // verbatim into the generated mu.cue.
 #PluginDef: {
-	name:     string & !=""
-	command?: [...string] // run this argv directly (e.g. ["bb", "p.bb"] or ["/abs/binary"])
-	script?:  string      // local .bb / binary path (relative to the model dir, or abs)
-	digest?:  string      // content digest, resolved from the mu plugin cache
-	url?:     string      // remote bundle
-	sha256?:  string      // required with url
+	name: string & !=""
+	command?: [...string] // mutable escape hatch; guarded exact mutation rejects zero-digest command plugins
+	script?:              string // local .bb / binary path (relative to the model dir, or abs)
+	digest?:              string // content digest, resolved from the mu plugin cache
+	url?:                 string // remote bundle
+	sha256?:              string // required with url
 }
 
 // #PluginObserve — reuse a shipped observer plugin (the `host`/`k8s` case). Its
@@ -114,8 +114,8 @@ package systemmodel
 	#SealedInputs
 	eweSource: string
 	outputs: [...string]
-	network?:            bool | *false
-	impure?:             bool | *false
+	network?: bool | *false
+	impure?:  bool | *false
 }
 
 // #PluginPlan — converge via a declarative-apply plugin. pudl routes `desired`
@@ -136,12 +136,12 @@ package systemmodel
 // #ValueBinding selects one scalar field from one exact typed resource.
 #ValueBinding: {
 	source: #ResourceRef
-	path:   string & != ""
+	path:   string & !=""
 }
 
 #ResourceRef: {
-	model:    string & != ""
-	schema:   string & != ""
+	model:  string & !=""
+	schema: string & !=""
 	identity: {[string]: _}
 }
 
@@ -160,19 +160,19 @@ package systemmodel
 #SealedInput: {
 	delivery_mode: "env" | "file"
 	({
-		ref:     string & != ""
+		ref:     string & !=""
 		source?: _|_
 	} | {
 		ref?: _|_
 		source: {
-			model:  string & != ""
-			output: string & != ""
+			model:  string & !=""
+			output: string & !=""
 		}
 	})
 }
 
 #SealedOutput: {
-	ref:        string & != ""
+	ref:        string & !=""
 	store_mode: "create" | "overwrite" | "create_if_absent"
 }
 

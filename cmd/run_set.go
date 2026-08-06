@@ -115,11 +115,13 @@ whose producer is not named fails preflight before any member runs. Without
 --converge, every member is observe-only and successful producer snapshots are
 pinned for downstream plain bindings.
 
-With --converge, pudl completes read-only planning for the whole set before the
-first mutation. --require-approval persists and pauses a non-sealed exact plan.
-The sealed exact-plan contract currently fails closed during planning because
-mu v0.3.3 JSON plans omit the per-action sealed claims PUDL must validate; see
-issue pudl-olm.
+With --converge, pudl completes read-only preflight and exact mu planning for
+the whole set before the first mutation. --require-approval persists and pauses
+any exact plan. A set that can write a sealed output is always approval-gated,
+even without the flag. Generated targets use strict sealed routing, so unused
+declarations, undeclared action claims, and ambiguous output writers fail during
+planning before mutation or provider traffic. Resume rebuilds and revalidates
+the exact plan before producer-first execution.
 
 Examples:
   pudl run-set network app

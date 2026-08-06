@@ -2,19 +2,23 @@
 
 **Date:** 2026-08-05
 
+> **Current closure:** CI now pins mu v0.3.5. The matrix covers a successful
+> sealed producer/consumer approval-resume plus strict-routing rejection and
+> redaction; the v0.3.3 fail-closed description below is the pre-fix snapshot.
+
 ## Outcome
 
 The formerly manual repository-local run-set matrix is now a checked-in smoke
 contract. `make test-kick-tires` builds the current PUDL binary beneath
 `.pudl/data/smoke/bin/`, creates isolated nested repositories beneath
 `.pudl/data/kick-tires/test-runs/`, installs the tracked CUE/plugin fixtures, and
-drives the public CLI through real mu. An independent CI job installs mu v0.3.3
+drives the public CLI through real mu. The original CI job installed mu v0.3.3
 and runs the target on every push and pull request.
 
 The matrix covers plain producer/consumer ordering and reuse, fail-fast graph
 and template validation, projection authorization, failed-producer propagation,
 durable approval/resume/reject, stale plans, single-model sealed provider I/O,
-the known fail-closed sealed run-set boundary, write-policy denial, and two
+the then-known fail-closed sealed run-set boundary, write-policy denial, and two
 simultaneous run-sets. Existing Go tests continue to cover crash recovery and
 approval races in the normal `go test ./...` suite.
 

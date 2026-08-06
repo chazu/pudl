@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-28  
 **Scope:** PUDL, mu, and the typed catalog  
-**Status:** Accepted design — implementation in progress (Phases 0–1 and observe-only Phase 2 slice landed 2026-08-05)
+**Status:** Accepted and implemented — Phases 0–3 plus the real sealed run-set
+release matrix are complete across PUDL and mu
 **Predecessor:** `docs/design/2026-07-27-swamp-parity-roadmap.md` §13
 
 ## Summary
@@ -589,7 +590,7 @@ Each sealed binding report records the consumer model/run/phase/input,
 delivery mode and claiming action IDs, direct-ref versus producer-output
 source, producer model/run/phase/output/store mode and producing action when
 applicable, provider scheme, reference fingerprint, matched writable-policy
-rule, and lifecycle status (`planned`, `stored`, `resolved`, `delivered`, or
+rule fingerprint, and lifecycle status (`planned`, `stored`, `resolved`, `delivered`, or
 `failed`). It stores neither the secret value nor a secret-value hash; hashing a
 low-entropy secret can itself disclose it. Provider paths remain limited to the
 live approval display and mu's operational configuration/provider calls.
@@ -780,7 +781,8 @@ schema-relative path; add query bindings only as a separately designed feature.
 
 ## Acceptance criteria
 
-The design is ready to implement when these cases are specified and tested:
+The implementation is release-complete when these cases are specified and
+tested:
 
 1. A producer observes one typed subnet and a consumer receives its ID through
    CUE unification.
@@ -939,11 +941,16 @@ release-blocking. Compatibility boundaries are reconciled with the dependency
 substrate, historical roadmap, and project vision. Phase 0, Phase 1, mutating
 Phase 2, and converge-backed Phase 3 are implemented. PUDL persists canonical
 redacted exact plans, atomically creates and resolves approvals, revalidates
-before mutation, fails globally after a mutating error, records receipts and
+the normalized plan before each mutation, and invokes mu's guarded build so the
+raw plan digest is compared before provider access and the same in-memory graph
+is executed. Plan v2 also commits resolved plugin identities. PUDL fails globally
+after a mutating error, records receipts and
 `needs-verification`, durably records mutation intent before every external
 apply, and lowers explicit strict action claims to mu. The matching mu change
-is committed as `a334872`, with boundary-test hardening in `6e757b8`, on
-`codex/pudl-strict-sealed-routing`.
+landed in mu as `a334872` with boundary hardening in `6e757b8`; version-2 JSON
+plan projection landed as `50921c5`, and the line was integrated by `3d44291`.
+PUDL's repository smoke verifies the combined path through approval resume and
+a fake provider.
 
 The populate/approval contradiction is resolved for v1 by making sealed outputs
 converge-only. Populate remains observation-only and may consume sealed inputs,

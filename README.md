@@ -104,7 +104,7 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
 | `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
 | `pudl run-set <models...>` | Observe an exact producer/consumer set in dependency order |
-| `pudl run-set <models...> --converge` | Plan the whole exact set, then mutate; non-sealed exact-plan approval is live, while sealed sets currently fail closed (see below) |
+| `pudl run-set <models...> --converge` | Preflight and plan the whole exact set, then mutate; sealed-output sets pause for mandatory exact-plan approval |
 | `pudl run-set report [id]` | Read the latest or named durable run-set report |
 | `pudl run-set resume/reject <id>` | Approve or reject a pending exact mutation plan |
 | `pudl status` | Read catalog convergence status recorded by the last model run |
@@ -180,12 +180,14 @@ pudl run my-server --converge
 pudl run-set network my-server
 ```
 
-Plain values are persisted with source/snapshot provenance. Single-model sealed
-inputs/outputs use mu's provider path and PUDL stores only redacted evidence.
-The stricter sealed run-set contract currently fails closed: mu v0.3.3's JSON
-plan omits the per-action sealed claims PUDL must validate before persisting an
-exact approval. Ordinary run-set approval/resume works; sealed run-set
-resume is tracked by `pudl-olm` and is not yet an executable path.
+Plain values are persisted with source/snapshot provenance. Sealed inputs and
+outputs stay in mu's provider path, while PUDL stores only schemes and
+fingerprints. Generated targets use strict action routing: unused declarations,
+undeclared claims, and ambiguous output writers fail during whole-set planning,
+before mutation or provider traffic. A set that can write a sealed output always
+pauses for exact-plan approval; resume rebuilds and revalidates that plan, then
+mu compares the same-workspace raw digest and executes that exact in-memory
+graph before producer-first execution.
 
 ## Documentation
 

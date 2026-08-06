@@ -477,12 +477,15 @@ member before the first mutation and stop new mutations after the first apply
 failure. Non-sealed sets can pause with `--require-approval`; resume revalidates
 the immutable request and plan digest before execution.
 
-Current compatibility limit: mu v0.3.3's `build --plan --json` output omits
-per-action sealed input/output claims. PUDL therefore fails a sealed mutating
-run-set closed during planning instead of creating the pending approval. Plain
-run-sets and non-sealed `--require-approval` plans are executable. Single-model
-sealed convergence remains available through `pudl run --converge` (use
-`--require-approval` when an operator gate is required). Tracked as `pudl-olm`.
+Mu's version-2 `build --plan --json` output includes each action's complete
+execution identity, resolved plugin identities, and sealed input/output claims. PUDL validates those claims
+under strict routing before persisting an exact approval. Unused declarations,
+undeclared claims, mismatched refs/modes, and ambiguous output writers fail
+before mutation or provider traffic. Any run-set that can write a sealed output
+is approval-gated automatically; `--require-approval` adds the same gate to
+other mutating sets. Resume rebuilds and compares the normalized exact plan;
+immediately before every apply, mu compares the raw same-workspace digest before
+provider access and executes that same in-memory graph.
 
 | Flag | Description |
 |------|-------------|

@@ -277,10 +277,15 @@ exact named run-set
 ```
 
 PUDL owns selection, catalog provenance, plan approval, and reports. Mu owns
-action planning/execution and secret-provider I/O. The accepted sealed run-set
-contract treats target declarations as availability bounds, not implicit action
-grants. Current mu JSON plans omit the action claims needed to enforce that
-contract, so PUDL fails sealed run-sets closed (`pudl-olm`).
+action planning/execution and secret-provider I/O. The sealed run-set contract
+treats target declarations as availability bounds, not implicit action grants.
+Mu's version-2 JSON plan projects the full executable action identity, resolved
+plugin identities, and sealed claims, so PUDL validates strict routing before
+persisting an exact approval. Each apply rechecks the normalized approved plan,
+then mu compares its raw digest before provider access and executes that same
+in-memory graph.
+Read-only observation activates a sealed-free converge target; planning and
+apply activate its full converge-owned sealed projection.
 PUDL also serializes its generated subprojects per mu root: mu recursively
 merges non-hidden project directories, so overlapping PUDL workspaces would
 otherwise expose duplicate targets or remove files from a live invocation.

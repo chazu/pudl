@@ -6,6 +6,10 @@
 **Mu dependency:** `a334872` plus test hardening `6e757b8` on
 `codex/pudl-strict-sealed-routing`
 
+> **Compatibility closure:** the strict branch and plan-schema-v2 projection
+> were integrated into mu by `3d44291`; PUDL's real sealed run-set smoke passes.
+> The compatibility correction below records the pre-fix v0.3.3 boundary.
+
 ## Outcome
 
 PUDL now coordinates exact mutating run sets. It finishes read-only member

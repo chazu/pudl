@@ -65,14 +65,22 @@ run, snapshot, identity, path, age, and digest as binding evidence.
 Sealed values never take the catalog path. Single-model convergence renders
 provider references into mu targets; mu resolves values immediately before
 execution and re-checks `secrets.writable_refs` at write time. PUDL stores only
-redacted evidence. The stricter run-set contract additionally requires visible
-per-action ref/mode claims before exact-plan approval. Mu v0.3.3 omits those
-claims from `build --plan --json`, so PUDL currently fails sealed run-sets closed
-during planning (`pudl-olm`) rather than persisting an approval:
+redacted evidence. The run-set contract additionally requires visible
+per-action ref/mode claims before exact-plan approval. Mu's version-2
+`build --plan --json` projects those claims, resolved plugin identities, and the
+complete execution identity. PUDL validates strict routing before persisting
+approval, rechecks the normalized plan immediately before each apply, and uses
+`--expect-plan-sha256` so mu compares before provider access and executes the
+same in-memory graph:
+
+Use content-addressed `script`, `url`+`sha256`, or `digest` plugin declarations
+for exact mutations. Direct `command` plugins remain an ordinary mu escape hatch
+but are rejected by guarded exact execution because their bytes are not pinned.
 
 ```bash
 pudl run-set network app --converge
-# currently fails closed until mu exposes sealed action claims in JSON plans
+# sealed-output sets return pending-approval; resume after review
+pudl run-set resume <run-set-id>
 ```
 
 ## Example: Converging Kubernetes State

@@ -247,16 +247,124 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 		}
 	})
 
-	t.Run("sealed run set fails closed without action claims", func(t *testing.T) {
+	t.Run("sealed producer consumer run set survives approval resume", func(t *testing.T) {
 		w := newKickTiresWorkspace(t)
-		stdout, stderr, err := w.pudl("run-set", "kick-sealed-producer", "--converge", "--mu-root", w.muRoot)
-		if err == nil || !strings.Contains(stderr, `sealed output "TOKEN" has no producing action`) {
-			t.Fatalf("sealed run-set did not expose the known fail-closed boundary: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+		producerState := filepath.Join(w.muRoot, "state", "sealed-producer")
+		consumerState := filepath.Join(w.muRoot, "state", "sealed-consumer")
+		stdout, stderr, err := w.pudl(
+			"run-set", "kick-sealed-consumer", "kick-sealed-producer",
+			"--converge", "--mu-root", w.muRoot,
+		)
+		if err != nil {
+			t.Fatalf("create sealed run-set approval: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
-		if _, statErr := os.Stat(w.secretStore); !os.IsNotExist(statErr) {
-			t.Fatalf("fail-closed sealed run-set wrote provider state; stat error = %v", statErr)
+		pending := decodeKickRunSetReport(t, stdout)
+		if pending.Status != "pending-approval" || pending.ApprovalStatus != "pending" {
+			t.Fatalf("unexpected pending sealed run-set: %+v", pending)
+		}
+		for _, path := range []string{producerState, consumerState, w.secretStore} {
+			if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+				t.Fatalf("pending sealed run-set mutated %s; stat error = %v", path, statErr)
+			}
+		}
+
+		stdout, stderr, err = w.pudl("run-set", "resume", pending.RunSetID)
+		if err != nil {
+			t.Fatalf("resume sealed run-set: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+		}
+		resumed := decodeKickRunSetReport(t, stdout)
+		if resumed.Status != "succeeded" || resumed.ApprovalStatus != "approved" {
+			t.Fatalf("unexpected resumed sealed run-set: %+v", resumed)
+		}
+		for _, path := range []string{producerState, consumerState} {
+			if _, statErr := os.Stat(path); statErr != nil {
+				t.Fatalf("approved sealed run-set did not mutate %s: %v", path, statErr)
+			}
+		}
+		secrets, readErr := os.ReadFile(w.secretStore)
+		if readErr != nil {
+			t.Fatalf("read fake provider store: %v", readErr)
+		}
+		if !bytes.Contains(secrets, []byte(`"token"`)) {
+			t.Fatalf("provider store lacks expected key: %s", secrets)
+		}
+		if strings.Contains(stdout+stderr, "kick-token-value") {
+			t.Fatalf("secret value leaked to process output:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+		}
+		catalog, readErr := os.ReadFile(filepath.Join(w.root, ".pudl", "data", "sqlite", "catalog.db"))
+		if readErr != nil {
+			t.Fatalf("read repository catalog: %v", readErr)
+		}
+		for _, forbidden := range [][]byte{[]byte("kick-token-value"), []byte("kicksecret:token")} {
+			if bytes.Contains(catalog, forbidden) {
+				t.Fatalf("sealed material %q leaked into repository catalog", forbidden)
+			}
 		}
 	})
+
+	for _, test := range []struct {
+		name    string
+		models  []string
+		env     map[string]string
+		wantErr string
+	}{
+		{
+			name:    "unused input declaration",
+			models:  []string{"kick-sealed-consumer", "kick-sealed-producer"},
+			env:     map[string]string{"PUDL_KICK_DROP_CLAIMS": "input"},
+			wantErr: `declared input "TOKEN" is not claimed`,
+		},
+		{
+			name:    "unused output declaration",
+			models:  []string{"kick-sealed-producer"},
+			env:     map[string]string{"PUDL_KICK_DROP_CLAIMS": "output"},
+			wantErr: `declared output "TOKEN" is not claimed`,
+		},
+		{
+			name:    "undeclared input claim",
+			models:  []string{"kick-sealed-producer"},
+			env:     map[string]string{"PUDL_KICK_EXTRA_CLAIM": "input"},
+			wantErr: `claims undeclared input "UNDECLARED"`,
+		},
+		{
+			name:    "undeclared output claim",
+			models:  []string{"kick-sealed-producer"},
+			env:     map[string]string{"PUDL_KICK_EXTRA_CLAIM": "output"},
+			wantErr: `claims undeclared output "UNDECLARED"`,
+		},
+		{
+			name:    "ambiguous output claim",
+			models:  []string{"kick-sealed-producer"},
+			env:     map[string]string{"PUDL_KICK_DUPLICATE_OUTPUT_CLAIM": "1"},
+			wantErr: `output "TOKEN" is claimed by 2 actions`,
+		},
+	} {
+		t.Run(test.name+" fails before mutation or provider traffic", func(t *testing.T) {
+			w := newKickTiresWorkspace(t)
+			args := append([]string{"run-set"}, test.models...)
+			args = append(args, "--converge", "--mu-root", w.muRoot)
+			stdout, stderr, err := w.pudlWithEnv(test.env, args...)
+			if err == nil || !strings.Contains(stdout+stderr, test.wantErr) {
+				t.Fatalf("strict routing did not reject %s: err=%v\nstdout:\n%s\nstderr:\n%s", test.name, err, stdout, stderr)
+			}
+			for _, path := range []string{
+				filepath.Join(w.muRoot, "state", "sealed-producer"),
+				filepath.Join(w.muRoot, "state", "sealed-consumer"),
+				w.secretStore,
+			} {
+				if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+					t.Fatalf("strict-routing rejection mutated %s; stat error = %v", path, statErr)
+				}
+			}
+			traffic, readErr := os.ReadFile(w.sentinel)
+			if readErr != nil && !os.IsNotExist(readErr) {
+				t.Fatal(readErr)
+			}
+			if bytes.Contains(traffic, []byte("resolve_secret")) || bytes.Contains(traffic, []byte("store_secret")) {
+				t.Fatalf("strict-routing rejection reached provider traffic:\n%s", traffic)
+			}
+		})
+	}
 
 	t.Run("workspace policy denies output before plugin traffic", func(t *testing.T) {
 		w := newKickTiresWorkspace(t)

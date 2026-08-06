@@ -1,5 +1,9 @@
 # Repository-local run-set kick-the-tires
 
+> **Resolved later on 2026-08-05:** the mu plan projection and PUDL observation
+> phase boundary were fixed; the sealed producer/consumer run-set now passes
+> through exact approval/resume. Earlier blocker text below is historical.
+
 ## Scope
 
 Created and executed a hermetic operator checklist against the PUDL repository's

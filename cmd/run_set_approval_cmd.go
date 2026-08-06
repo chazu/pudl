@@ -126,11 +126,13 @@ func loadPendingRunSetApproval(db *database.CatalogDB, runSetID string) (*databa
 	return approval, &report, &plan, request, nil
 }
 
-func markRunSetApprovalStale(db *database.CatalogDB, approval *database.RunSetApprovalRecord, report *acute.RunSetReport, cause error) error {
+func markRunSetApprovalStale(db *database.CatalogDB, approval *database.RunSetApprovalRecord, report *acute.RunSetReport, _ error) error {
 	if err := db.ResolveRunSetApproval(approval.RunSetID, approval.PlanDigest, "stale"); err != nil {
-		return fmt.Errorf("approval revalidation failed (%v), and stale transition failed: %w", cause, err)
+		return fmt.Errorf("approval revalidation failed, and stale transition failed: %w", err)
 	}
-	note := "exact-plan approval became stale: " + cause.Error()
+	// Revalidation failures can originate in an untrusted planner and may echo
+	// sealed provider refs. Persist and display only the state transition.
+	note := "exact-plan approval became stale during revalidation"
 	report.ApprovalStatus = "stale"
 	if err := cancelPendingRunSetMembers(db, report, note); err != nil {
 		return err
@@ -142,7 +144,7 @@ func markRunSetApprovalStale(db *database.CatalogDB, approval *database.RunSetAp
 	if err := saveRunSetReport(db, report); err != nil {
 		return err
 	}
-	return fmt.Errorf("run set %s approval is stale: %w", approval.RunSetID, cause)
+	return fmt.Errorf("run set %s approval is stale: exact-plan revalidation failed", approval.RunSetID)
 }
 
 func cancelPendingRunSetMembers(db *database.CatalogDB, report *acute.RunSetReport, note string) error {

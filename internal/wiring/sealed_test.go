@@ -47,6 +47,11 @@ func TestResolveSealedSourcesUsesProducerOwnedReferenceAndRedactsEvidence(t *tes
 	assert.NotContains(t, string(encoded), "apps/token")
 	assert.NotContains(t, string(encoded), "pass:apps/token")
 	assert.Contains(t, string(encoded), "reference_sha256")
+
+	producerEvidence, err := MarshalSealedEvidence(resolved[1].Evidence)
+	require.NoError(t, err)
+	assert.NotContains(t, string(producerEvidence), "pass:apps/*", "writable policy paths are durable only as fingerprints")
+	assert.Contains(t, string(producerEvidence), "matched_writable_pattern_sha256")
 }
 
 func TestResolveSealedSourcesEnforcesWritablePolicyAndExactSet(t *testing.T) {

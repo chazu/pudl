@@ -71,12 +71,20 @@ func interpretDifferentialObserve(observeJSON []byte) (ModelDriftResult, error) 
 	return ModelDriftResult{Clean: len(drifted) == 0, Drifted: drifted, Verified: true}, nil
 }
 
-// renderReconcileMuCue emits a mu.cue with one converge-plugin target whose
-// sources are the model's desired (rendered as manifests). The SAME target
-// serves both `mu observe` (drift) and `mu build` (converge) — the §5.5 apply
-// path. manifestSources are absolute paths because catalog-installed plugins
-// run from their extracted bundle directory, not the project directory.
+// renderReconcileMuCue emits the converge form of a mu.cue with one
+// converge-plugin target whose sources are the model's desired (rendered as
+// manifests). manifestSources are absolute paths because catalog-installed
+// plugins run from their extracted bundle directory, not the project directory.
 func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) (string, error) {
+	return renderReconcileMuCueForPhase(m, manifestSources, true)
+}
+
+// renderReconcileMuCueForPhase renders one phase's effective target. Observe
+// deliberately omits converge-owned sealed declarations: whole-run read-only
+// preflight must be able to establish drift before any converge output exists.
+// Plan and apply use the full converge projection so mu can resolve and route
+// sealed values at the mutation boundary.
+func renderReconcileMuCueForPhase(m *systemmodel.SystemModel, manifestSources []string, includeConvergeSealed bool) (string, error) {
 	if !m.Convergent() {
 		return "", fmt.Errorf("renderReconcileMuCue: model has no converge arm")
 	}
@@ -103,7 +111,7 @@ func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) 
 
 	var b strings.Builder
 	b.WriteString("package mu\n\n")
-	if err := renderWritableRefsPolicy(&b, len(m.Converge.SealedOutputs) > 0); err != nil {
+	if err := renderWritableRefsPolicy(&b, includeConvergeSealed && len(m.Converge.SealedOutputs) > 0); err != nil {
 		return "", err
 	}
 	fmt.Fprintf(&b, "plugins: %s\n\n", pluginsJSON)
@@ -112,10 +120,10 @@ func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) 
 	fmt.Fprintf(&b, "\ttoolchain: %q\n", plugin)
 	fmt.Fprintf(&b, "\tsources:   %s\n", srcJSON)
 	fmt.Fprintf(&b, "\tconfig:    %s\n", cfgJSON)
-	if len(m.Converge.SealedInputs) > 0 || len(m.Converge.SealedOutputs) > 0 {
+	if includeConvergeSealed && (len(m.Converge.SealedInputs) > 0 || len(m.Converge.SealedOutputs) > 0) {
 		b.WriteString("\tsealed_routing: \"strict\"\n")
 	}
-	if len(m.Converge.SealedInputs) > 0 {
+	if includeConvergeSealed && len(m.Converge.SealedInputs) > 0 {
 		refs, modes, err := sealedInputProjection(m.Converge.SealedInputs)
 		if err != nil {
 			return "", fmt.Errorf("converge: %w", err)
@@ -125,7 +133,7 @@ func renderReconcileMuCue(m *systemmodel.SystemModel, manifestSources []string) 
 		modesJSON, _ := json.Marshal(modes)
 		fmt.Fprintf(&b, "\tsealed_input_modes: %s\n", modesJSON)
 	}
-	if len(m.Converge.SealedOutputs) > 0 {
+	if includeConvergeSealed && len(m.Converge.SealedOutputs) > 0 {
 		refs, modes := sealedOutputProjection(m.Converge.SealedOutputs)
 		sealedJSON, _ := json.Marshal(refs)
 		fmt.Fprintf(&b, "\tsealed_outputs: %s\n", sealedJSON)
@@ -156,8 +164,10 @@ func writeDesiredManifests(desired []map[string]any, dir string) ([]string, erro
 }
 
 // reconcileWorkspace is a prepared temp mu project (under muRoot) with the
-// desired manifests + a converge-plugin target. Both observe (drift) and build
-// (converge) run against Target. Call Cleanup when done.
+// desired manifests + a converge-plugin target. Observe and build share Target
+// but activate phase-specific config: read-only observation excludes
+// converge-owned sealed declarations, while plan/apply includes them. Call
+// Cleanup when done.
 type reconcileWorkspace struct {
 	MuRoot string
 	// Dir is the ephemeral generated-project directory. Exact-plan hashing
@@ -178,8 +188,24 @@ type reconcileWorkspace struct {
 	// Mu is the subprocess seam: the workspace asks mu to observe, plan and apply
 	// through it rather than reaching for exec.Command, so the whole converge
 	// path can be driven by a scripted runner in a test.
-	Mu      muRunner
-	Cleanup func()
+	Mu muRunner
+	// ObserveConfig and ConvergeConfig are rendered once from the same model and
+	// desired sources, then swapped into ConfigPath immediately before each mu
+	// operation while the workspace holds the project lock.
+	ObserveConfig  string
+	ConvergeConfig string
+	ConfigPath     string
+	// ExpectedMuPlanSHA256 is the workspace-normalized plan identity approved
+	// for an exact run-set mutation. Empty preserves ordinary converge behavior.
+	ExpectedMuPlanSHA256 string
+	Cleanup              func()
+}
+
+func (w *reconcileWorkspace) activateConfig(src string) error {
+	if err := os.WriteFile(w.ConfigPath, []byte(src), 0o644); err != nil {
+		return fmt.Errorf("write reconcile mu.cue: %w", err)
+	}
+	return nil
 }
 
 // setupReconcileWorkspace renders the desired manifests + mu.cue into a
@@ -229,31 +255,43 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	for i, name := range names {
 		manifestSources[i] = filepath.Join(dir, name)
 	}
-	src, err := renderReconcileMuCue(&rm, manifestSources)
+	observeSrc, err := renderReconcileMuCueForPhase(&rm, manifestSources, false)
 	if err != nil {
 		cleanup()
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
+	convergeSrc, err := renderReconcileMuCueForPhase(&rm, manifestSources, true)
+	if err != nil {
+		cleanup()
+		return nil, err
+	}
+	configPath := filepath.Join(dir, "mu.cue")
+	if err := os.WriteFile(configPath, []byte(observeSrc), 0o644); err != nil {
 		cleanup()
 		return nil, fmt.Errorf("write reconcile mu.cue: %w", err)
 	}
 	locked = false
 	return &reconcileWorkspace{
-		MuRoot:  muRoot,
-		Dir:     dir,
-		Target:  driftTargetName(m.Name),
-		RunID:   runID,
-		DryRun:  dryRun,
-		Catalog: cat,
-		Mu:      mu,
-		Cleanup: cleanup,
+		MuRoot:         muRoot,
+		Dir:            dir,
+		Target:         driftTargetName(m.Name),
+		RunID:          runID,
+		DryRun:         dryRun,
+		Catalog:        cat,
+		Mu:             mu,
+		ObserveConfig:  observeSrc,
+		ConvergeConfig: convergeSrc,
+		ConfigPath:     configPath,
+		Cleanup:        cleanup,
 	}, nil
 }
 
 // observeDrift runs `mu observe` against the workspace target and interprets the
 // differential result.
 func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
+	if err := w.activateConfig(w.ObserveConfig); err != nil {
+		return ModelDriftResult{}, err
+	}
 	stdout, err := w.Mu.Observe(filepath.Join(w.MuRoot, "mu.cue"), w.Target)
 	if err != nil {
 		return ModelDriftResult{}, err

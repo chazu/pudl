@@ -2,6 +2,10 @@
 
 **Date:** 2026-08-05
 
+> **Resolved later that day:** mu plan schema v2 now projects strict sealed
+> action claims, and PUDL's real producer/consumer approval-resume smoke passes.
+> The v0.3.3/`pudl-olm` language below records the earlier discovery point.
+
 ## Outcome
 
 PUDL and mu's living documentation and embedded usage text were updated for the

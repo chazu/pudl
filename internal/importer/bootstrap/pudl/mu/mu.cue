@@ -5,10 +5,10 @@ package mu
 // which were cached, and what artifacts were produced.
 #Manifest: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.manifest"
+		schema_type:   "base"
+		resource_type: "mu.manifest"
 		identity_fields: ["timestamp"]
-		tracked_fields:  ["summary", "actions", "targets"]
+		tracked_fields: ["summary", "actions", "targets"]
 	}
 
 	version:    int & >=1
@@ -30,17 +30,17 @@ package mu
 #ManifestTarget: {
 	name:        string
 	toolchain:   string
-	kind?:       string // BRICK kind (set by pudl export-actions)
-	implements?: string // BRICK interface (set by pudl export-actions)
+	kind?:       string // optional BRICK classification
+	implements?: string // optional BRICK interface
 }
 
 // ManifestAction records the outcome of a single action in a build.
 #ManifestAction: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.manifest_action"
+		schema_type:   "base"
+		resource_type: "mu.manifest_action"
 		identity_fields: ["id"]
-		tracked_fields:  ["target", "cached", "exit_code", "outputs"]
+		tracked_fields: ["target", "cached", "exit_code", "outputs"]
 	}
 
 	id:        string
@@ -55,18 +55,18 @@ package mu
 // (e.g. pudl/linux.#Host); this is the fallback for untyped observe data.
 #ObserveResult: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.observe"
+		schema_type:   "base"
+		resource_type: "mu.observe"
 		// Identity includes `current` (the observed-state payload) so a full
 		// target *definition* — which has no `current` — does not tie with this
 		// fallback observe-record schema during inference. See pudl/mu.#Target.
 		identity_fields: ["target", "current"]
-		tracked_fields:  []
+		tracked_fields: []
 	}
 
-	target?:  string
+	target?: string
 	current?: {...}
-	error?:   string
+	error?: string
 	...
 }
 
@@ -75,23 +75,23 @@ package mu
 // Created by `pudl ingest-observe` to group records from one invocation.
 #ObserveSnapshot: {
 	_pudl: {
-		schema_type:     "collection"
-		resource_type:   "mu.observe_snapshot"
+		schema_type:   "collection"
+		resource_type: "mu.observe_snapshot"
 		identity_fields: ["snapshot_id"]
-		tracked_fields:  ["targets", "record_count", "schema_summary"]
+		tracked_fields: ["targets", "record_count", "schema_summary"]
 	}
 
-	snapshot_id:  string             // timestamp-based ID
-	timestamp:    string             // ISO 8601
-	origin:       string             // e.g. "mu-observe"
-	run_id?:      string             // enclosing pudl run, when available
-	targets:      [...string]        // targets that were observed
-	record_count: int & >=0          // total records across all targets
-	schema_summary: [...{            // distribution of _schema types
+	snapshot_id: string // timestamp-based ID
+	timestamp:   string // ISO 8601
+	origin:      string // e.g. "mu-observe"
+	run_id?:     string // enclosing pudl run, when available
+	targets: [...string] // targets that were observed
+	record_count:        int & >=0 // total records across all targets
+	schema_summary: [...{// distribution of _schema types
 		schema: string
 		count:  int & >=0
 	}]
-	errors?: [...{                   // targets that reported errors
+	errors?: [...{// targets that reported errors
 		target: string
 		error:  string
 	}]
@@ -102,10 +102,10 @@ package mu
 // their resource details, while this envelope is the stable PUDL contract.
 #DriftObservation: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.drift_observation"
+		schema_type:   "base"
+		resource_type: "mu.drift_observation"
 		identity_fields: ["observation_id"]
-		tracked_fields:  ["target", "clean", "drifted_count", "drifted"]
+		tracked_fields: ["target", "clean", "drifted_count", "drifted"]
 	}
 
 	observation_id: string
@@ -115,37 +115,62 @@ package mu
 	run_id?:        string
 	clean:          bool
 	drifted_count:  int & >=0
-	drifted?:       [...{...}]
-	raw?:           [...]
+	drifted?: [...{...}]
+	raw?: [...]
 }
 
 // PlanOutput represents the output of `mu build --plan --json`.
 #PlanOutput: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.plan"
+		schema_type:   "base"
+		resource_type: "mu.plan"
 		identity_fields: ["targets"]
-		tracked_fields:  ["actions"]
+		tracked_fields: ["plugins", "actions"]
 	}
 
-	version: int & >=1
+	version:     2
+	plan_sha256: string
 	targets: [...string]
+	plugins: [...#PlanPlugin]
 	actions: [...#PlanAction]
 	summary: {
 		total: int & >=0
 	}
 }
 
+// PlanPlugin commits the resolved plugin artifact and protocol surface that
+// participated in planning or will service sealed execution.
+#PlanPlugin: {
+	name:             string & !=""
+	digest:           string & !=""
+	version:          string & !=""
+	protocol_version: int & >=1
+	capabilities: [...string]
+}
+
 // PlanAction describes a planned action before execution.
 #PlanAction: {
-	id:        string
-	command:   [...string]
-	inputs:    {[string]: string} | *{}
-	outputs:   [...string] | *[]
+	id:         string & !=""
+	action_key: string & !=""
+	command: [...string] | null
+	body?: [...]
+	ewe_digest?: string
+	inputs: {[string]: string} | *{}
+	outputs: [...string] | *[]
 	depends_on: [...string] | *[]
-	env?:      {[string]: string}
-	network?:  bool
-	work_dir?: string
+	env?: {[string]: string}
+	sealed_inputs?: {[string]: string}
+	sealed_input_modes?: {[string]: "env" | "file"}
+	sealed_outputs?: {[string]: string}
+	sealed_output_modes?: {[string]: "create" | "overwrite" | "create_if_absent"}
+	network?:          bool
+	work_dir?:         string
+	impure?:           bool
+	timeout_s?:        int & >=0
+	retries?:          int & >=0
+	retry_backoff_ms?: int & >=0
+	toolchain?: {[string]: string}
+	sources?: [...string]
 }
 
 // Target is a fully-specified mu build target, as authored in mu.cue and
@@ -166,10 +191,10 @@ package mu
 // fragmentation when a target's build outcome changes.
 #Target: {
 	_pudl: {
-		schema_type:     "base"
-		resource_type:   "mu.target"
+		schema_type:   "base"
+		resource_type: "mu.target"
 		identity_fields: ["target"]
-		tracked_fields:  ["toolchain", "sources", "deps", "config", "sealed_inputs", "sealed_outputs"]
+		tracked_fields: ["toolchain", "sources", "deps", "config", "sealed_inputs", "sealed_input_modes", "sealed_outputs", "sealed_output_modes", "sealed_routing"]
 	}
 
 	// Fully-qualified target label, e.g. "//cmd/mu". Globally unique handle.
@@ -199,12 +224,16 @@ package mu
 	// Sealed-output declarations: NAME -> "scheme:path" destination ref.
 	sealed_outputs?: {[string]: string}
 
+	// Per-name store behavior and strict action-level claim enforcement.
+	sealed_output_modes?: {[string]: "create" | "overwrite" | "create_if_absent"}
+	sealed_routing?: "strict"
+
 	// Inline pith programs (alternatives to / complements of plugin planning).
 	// Opaque arrays here; the program grammar is validated by mu, not pudl.
-	plan?:      [...]
+	plan?: [...]
 	transform?: [...]
 
-	// BRICK classification metadata, when present (set by pudl export-actions).
+	// Optional BRICK classification metadata.
 	kind?:       "relationship" | "interface" | "component" | "kit" | ""
 	implements?: string
 

@@ -11,7 +11,7 @@ permissions:
 
 env:
   GO_VERSION: '1.25.8'
-  MU_VERSION: 'v0.3.3'
+  MU_VERSION: 'v0.3.5'
 
 jobs:
   test:
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          # mu v0.3.3 declares this toolchain; it also builds PUDL's 1.25 module.
+          # mu v0.3.5 declares this toolchain; it also builds PUDL's 1.25 module.
           go-version: '1.26.2'
           cache: true
       - run: go install github.com/chazu/mu/cmd/mu@${MU_VERSION}
