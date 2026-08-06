@@ -11,6 +11,7 @@ permissions:
 
 env:
   GO_VERSION: '1.25.8'
+  MU_VERSION: 'v0.3.3'
 
 jobs:
   test:
@@ -39,6 +40,19 @@ jobs:
       # go-cdc-chunkers uses unsafe pointer arithmetic that trips Go's
       # checkptr instrumentation; the race detector itself remains enabled.
       - run: go test -race -gcflags=all=-d=checkptr=0 ./...
+
+  kick-tires:
+    name: repository kick-the-tires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # mu v0.3.3 declares this toolchain; it also builds PUDL's 1.25 module.
+          go-version: '1.26.2'
+          cache: true
+      - run: go install github.com/chazu/mu/cmd/mu@${MU_VERSION}
+      - run: make test-kick-tires
 
   smoke:
     name: smoke (external tools/infrastructure)

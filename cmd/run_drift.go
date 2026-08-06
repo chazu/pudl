@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/mubridge"
@@ -190,6 +191,16 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	}
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
+	projectLock, err := acquireMuProjectLock(muRoot)
+	if err != nil {
+		return nil, err
+	}
+	locked := true
+	defer func() {
+		if locked {
+			_ = projectLock.Release()
+		}
+	}()
 
 	// Collect any workspace an earlier run died holding, before adding ours.
 	reportSweptWorkspaces(sweepStaleWorkspaces(muRoot, staleWorkspaceAge), !jsonOutput)
@@ -200,7 +211,15 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	}
 	// From here on the directory exists in the user's project, so every failure
 	// path — and an interrupt — has to take it back out again.
-	cleanup := removeOnSignal(dir)
+	removeWorkspace := removeOnSignal(dir)
+	var cleanupOnce sync.Once
+	cleanup := func() {
+		cleanupOnce.Do(func() {
+			removeWorkspace()
+			_ = projectLock.Release()
+			locked = false
+		})
+	}
 	names, err := writeDesiredManifests(m.Desired, dir)
 	if err != nil {
 		cleanup()
@@ -219,6 +238,7 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 		cleanup()
 		return nil, fmt.Errorf("write reconcile mu.cue: %w", err)
 	}
+	locked = false
 	return &reconcileWorkspace{
 		MuRoot:  muRoot,
 		Dir:     dir,

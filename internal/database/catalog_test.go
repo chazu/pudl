@@ -69,6 +69,35 @@ func TestNewCatalogDB(t *testing.T) {
 	}
 }
 
+func TestNewCatalogDBConcurrentFirstOpen(t *testing.T) {
+	const attempts = 10
+	const openers = 8
+	for attempt := range attempts {
+		dir := t.TempDir()
+		start := make(chan struct{})
+		type result struct {
+			db  *CatalogDB
+			err error
+		}
+		results := make(chan result, openers)
+		for range openers {
+			go func() {
+				<-start
+				db, err := NewCatalogDB(dir)
+				results <- result{db: db, err: err}
+			}()
+		}
+		close(start)
+		for range openers {
+			result := <-results
+			require.NoErrorf(t, result.err, "attempt %d", attempt)
+			if result.db != nil {
+				require.NoError(t, result.db.Close())
+			}
+		}
+	}
+}
+
 func TestAddEntry(t *testing.T) {
 	suite := NewDatabaseTestSuite(t)
 	require.NoError(t, suite.InitializeDatabase())

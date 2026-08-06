@@ -7,8 +7,8 @@
 // up after itself (clusters, containers, temp dirs) via t.Cleanup.
 //
 // Run all:           go test -tags=smoke ./test/smoke/ -v -timeout 20m
-// Run one:           go test -tags=smoke ./test/smoke/ -v -run TestSmoke_CrossModelDeps
-// Or via make:       make smoke
+// Run kick-the-tires: make test-kick-tires
+// Run infrastructure: make smoke
 //
 // The infra tests need a mu project to borrow toolchains from. By default they
 // look for ~/dev/go/mu; override with PUDL_SMOKE_MU_ROOT=/path/to/mu-project.
@@ -34,7 +34,12 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "smoke: locate repo root:", err)
 		os.Exit(1)
 	}
-	bin := filepath.Join(os.TempDir(), fmt.Sprintf("pudl-smoke-%d", os.Getpid()))
+	binDir := filepath.Join(root, ".pudl", "data", "smoke", "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, "smoke: create repository-local bin dir:", err)
+		os.Exit(1)
+	}
+	bin := filepath.Join(binDir, fmt.Sprintf("pudl-%d", os.Getpid()))
 	build := exec.Command("go", "build", "-o", bin, ".")
 	build.Dir = root
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")

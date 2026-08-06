@@ -136,6 +136,11 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 	if err != nil {
 		return nil, err
 	}
+	projectLock, err := acquireMuProjectLock(muRoot)
+	if err != nil {
+		return nil, err
+	}
+	defer projectLock.Release()
 
 	// Non-hidden temp subdir under the project root so mergeSubdirConfigs picks
 	// it up (it skips hidden dirs, mu/internal/config/loader.go:105).
