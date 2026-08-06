@@ -29,6 +29,13 @@ coverage proves the intended contract, not the live bridge. Plain run-sets,
 non-sealed exact-plan approvals, and single-model sealed convergence remain
 executable.
 
+The operator matrix is now a checked-in smoke contract invoked by
+`make test-kick-tires` and an every-push CI job. It builds and runs entirely
+beneath `.pudl/data/`. Automating the formerly manual concurrency row exposed
+and fixed two first-run races: catalog schema initialization is serialized
+across processes, and PUDL serializes generated subprojects sharing one mu root
+so mu cannot merge duplicate live targets or observe a removed workspace.
+
 ### Swamp parity utility/UX slices (2026-07-27)
 
 Done — see [`docs/design/2026-07-27-swamp-parity-roadmap.md`](design/2026-07-27-swamp-parity-roadmap.md)

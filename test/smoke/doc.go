@@ -1,10 +1,12 @@
-// Package smoke contains end-to-end smoke tests for the convergence and
-// cross-model dependency surface. The tests are gated behind the `smoke` build
-// tag, so `go test ./...` compiles this package (via this untagged file) but
-// runs no tests. Run the smoke tests explicitly:
+// Package smoke contains end-to-end smoke tests for repository-local run-sets,
+// convergence, and cross-model dependencies. The tests are gated behind the
+// `smoke` build tag, so `go test ./...` compiles this package (via this untagged
+// file) but runs no tests. Run the smoke tests explicitly:
 //
-//	go test -tags=smoke ./test/smoke/ -v -timeout 20m   # or: make smoke
+//	make test-kick-tires # real mu, repository-local fixtures
+//	make smoke          # complete external-tools/infrastructure suite
 //
-// Each test skips cleanly when its tooling (docker/k3d/kubectl/mu/bb/jq) is
-// absent and cleans up its clusters, containers, and temp dirs via t.Cleanup.
+// Each test cleans up its clusters, containers, and workspaces via t.Cleanup.
+// The generic smoke target skips cases whose tools are absent; the named
+// kick-the-tires target requires git, mu, and python3.
 package smoke

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/filelock"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/schemaname"
 	_ "modernc.org/sqlite"
@@ -119,12 +120,24 @@ func OpenCatalogDBReadOnly(configDir string) (*CatalogDB, error) {
 }
 
 // initialize sets up the database connection and creates tables if needed
-func (c *CatalogDB) initialize() error {
+func (c *CatalogDB) initialize() (err error) {
 	// Ensure sqlite directory exists under config/data/sqlite/
 	sqliteDir := filepath.Join(c.configDir, "data", "sqlite")
 	if err := os.MkdirAll(sqliteDir, 0755); err != nil {
 		return fmt.Errorf("failed to create sqlite directory: %w", err)
 	}
+	initLock, err := filelock.Acquire(filepath.Join(sqliteDir, "catalog.init.lock"))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if releaseErr := initLock.Release(); err == nil && releaseErr != nil {
+			if c.db != nil {
+				_ = c.db.Close()
+			}
+			err = releaseErr
+		}
+	}()
 
 	// Open database connection
 	dbPath := filepath.Join(sqliteDir, "catalog.db")
@@ -137,6 +150,7 @@ func (c *CatalogDB) initialize() error {
 
 	// Create tables and indexes
 	if err := c.createTables(); err != nil {
+		_ = db.Close()
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
 

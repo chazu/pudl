@@ -52,6 +52,11 @@ and starts an omitted producer. Without `--converge` every member is
 observe-only; with it, PUDL finishes whole-set read-only planning before the
 first mutation.
 
+Concurrent PUDL processes may share a catalog, but generated mu subprojects are
+serialized per `--mu-root`. Mu recursively merges non-hidden project
+directories, so this narrow lock keeps one run's temporary targets invisible to
+another while leaving catalog work concurrent.
+
 Plain values are scalar catalog projections. The consumer declares a required
 `inputs` slot and `bindings` source, and both that slot and the source schema
 field must opt into `@pudl(binding=plain)`. PUDL persists the value's producer,

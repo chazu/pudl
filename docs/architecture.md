@@ -47,7 +47,9 @@ added alongside them.
 
 ## Catalog Database
 
-The catalog uses SQLite with WAL mode for concurrent read safety.
+The catalog uses SQLite with WAL mode for concurrent read/write safety. A short
+cross-process initialization lock serializes migrations and view repair when
+multiple processes first open or upgrade the same catalog.
 
 ### Schema
 
@@ -279,6 +281,9 @@ action planning/execution and secret-provider I/O. The accepted sealed run-set
 contract treats target declarations as availability bounds, not implicit action
 grants. Current mu JSON plans omit the action claims needed to enforce that
 contract, so PUDL fails sealed run-sets closed (`pudl-olm`).
+PUDL also serializes its generated subprojects per mu root: mu recursively
+merges non-hidden project directories, so overlapping PUDL workspaces would
+otherwise expose duplicate targets or remove files from a live invocation.
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
