@@ -220,18 +220,13 @@ cyclic: {
 }
 ```
 
-These ship in `internal/importer/bootstrap/pudl/rules/` (a **new** non-definition
-`.cue` file — `ParseRules` skips `#`-prefixed definitions, so the rules must be
-plain top-level fields, not defs). `pudl init` copies the embedded bootstrap
-into `~/.pudl/schema/pudl/rules/` (`CopyBootstrapSchemas`, `cmd/init.go`), so
-every **freshly initialized** workspace gets
-`depends_transitive`/`impacted_by`/`cyclic` for free. These shipped rules are
-**canonical** (overwritten by `pudl init --force`, per the `62998c2` clobber
-fix) — they are not meant to be edited in place. **Caveat for already-initialized
-workspaces:** the gap-fill check (`ensureBasicSchemas` / `bootstrapChecks` in
-`internal/importer/cue_schemas.go`) only re-copies *listed* files, so add the new
-rules filename to `bootstrapChecks` (a one-line change) — otherwise pre-existing
-workspaces get the rules only via `pudl init --force`.
+These ship in `internal/importer/bootstrap/pudl/rules/` as a non-definition CUE
+file (`ParseRules` reads plain top-level rule fields, not `#` definitions).
+`pudl init` installs the embedded tree into the repository-owned `.pudl/schema`,
+and ordinary workspace repair derives its complete owned-file inventory from
+that same embedded tree plus the separately single-sourced `#SystemModel`.
+Existing workspaces therefore receive newly embedded owned files through repair;
+there is no handwritten `bootstrapChecks` list and no `--force` requirement.
 
 Then the **actual** commands (positional `key=value` constraints — there is no
 `--where` flag; `cmd/query.go` parses `key=value` positionally, and the keys are

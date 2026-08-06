@@ -222,10 +222,12 @@ pudl run-set network prod_stack
 
 PUDL does not add omitted producers. A missing producer, cycle, invalid
 projection, or incomplete binding fails preflight. Add `--converge` only when
-the whole set should be allowed to mutate. Non-sealed sets can pause with
-`--require-approval`. Sealed sets currently fail closed during planning because
-mu v0.3.3 does not include action-level sealed claims in its JSON plan; the
-pending sealed run-set approval path is tracked by `pudl-olm`.
+the whole set should be allowed to mutate. Use `--require-approval` to pause any
+mutating set. Sets that can write sealed outputs pause automatically. PUDL
+validates mu's action-level sealed claims and resolved plugin identities during
+exact planning, persists only redacted provider metadata, and rebuilds the plan
+before approval resume. Each apply is then guarded by mu's raw plan SHA-256
+comparison before provider access.
 
 Check the latest convergence verdict recorded in the catalog:
 

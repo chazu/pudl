@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,6 +25,7 @@ import (
 
 type runSetMu struct {
 	configs         map[string]string
+	planConfigs     map[string]string
 	failProducer    bool
 	producerEmpty   bool
 	applied         map[string]int
@@ -30,15 +33,67 @@ type runSetMu struct {
 	failApply       string
 	invalidManifest string
 	planSuffix      string
+	expectDigests   []string
+}
+
+func signedMuPlan(raw string) []byte {
+	var document map[string]any
+	if err := json.Unmarshal([]byte(raw), &document); err != nil {
+		panic(err)
+	}
+	if _, ok := document["targets"]; !ok {
+		document["targets"] = []any{}
+	}
+	if _, ok := document["plugins"]; !ok {
+		document["plugins"] = []any{}
+	}
+	actions, _ := document["actions"].([]any)
+	for index, item := range actions {
+		action := item.(map[string]any)
+		if _, ok := action["action_key"]; !ok {
+			action["action_key"] = fmt.Sprintf("sha256:test-%d", index)
+		}
+		if _, ok := action["command"]; !ok {
+			action["command"] = []any{}
+		}
+		if _, ok := action["inputs"]; !ok {
+			action["inputs"] = map[string]any{}
+		}
+		if _, ok := action["outputs"]; !ok {
+			action["outputs"] = []any{}
+		}
+		if _, ok := action["depends_on"]; !ok {
+			action["depends_on"] = []any{}
+		}
+	}
+	if _, ok := document["summary"]; !ok {
+		document["summary"] = map[string]any{"total": len(actions)}
+	}
+	payload, err := json.Marshal(document)
+	if err != nil {
+		panic(err)
+	}
+	digest := sha256.Sum256(payload)
+	document["plan_sha256"] = hex.EncodeToString(digest[:])
+	payload, err = json.Marshal(document)
+	if err != nil {
+		panic(err)
+	}
+	return payload
+}
+
+func generatedRunSetConfig(configPath string) string {
+	root := filepath.Dir(configPath)
+	generated, _ := filepath.Glob(filepath.Join(root, "pudl_run_*", "mu.cue"))
+	if len(generated) == 0 {
+		return ""
+	}
+	data, _ := os.ReadFile(generated[len(generated)-1])
+	return string(data)
 }
 
 func (m *runSetMu) Observe(configPath, target string) ([]byte, error) {
-	root := filepath.Dir(configPath)
-	generated, _ := filepath.Glob(filepath.Join(root, "pudl_run_*", "mu.cue"))
-	if len(generated) > 0 {
-		data, _ := os.ReadFile(generated[len(generated)-1])
-		m.configs[target] = string(data)
-	}
+	m.configs[target] = generatedRunSetConfig(configPath)
 	if m.failProducer && strings.Contains(target, "producer") {
 		return nil, fmt.Errorf("producer observation failed")
 	}
@@ -72,16 +127,25 @@ func (m *runSetMu) Observe(configPath, target string) ([]byte, error) {
 }
 
 func (m *runSetMu) Build(configPath, target string, flags ...string) ([]byte, error) {
+	for index, flag := range flags {
+		if flag == "--expect-plan-sha256" && index+1 < len(flags) {
+			m.expectDigests = append(m.expectDigests, flags[index+1])
+		}
+	}
 	for _, flag := range flags {
 		if flag == "--plan" {
+			if m.planConfigs == nil {
+				m.planConfigs = map[string]string{}
+			}
+			m.planConfigs[target] = generatedRunSetConfig(configPath)
 			m.operations = append(m.operations, "plan "+target)
 			if strings.Contains(target, "mutator-secret-producer") || strings.Contains(target, "sealed-mutator") {
-				return []byte(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_outputs":{"TOKEN":"pass:apps/token"},"sealed_output_modes":{"TOKEN":"create_if_absent"}}]}`, target, target+":write-token", "sha256:sealed"+m.planSuffix)), nil
+				return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_outputs":{"TOKEN":"pass:apps/token"},"sealed_output_modes":{"TOKEN":"create_if_absent"}}]}`, target, target+":write-token", "sha256:sealed"+m.planSuffix)), nil
 			}
 			if strings.Contains(target, "mutator-secret-consumer") {
-				return []byte(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_inputs":{"TOKEN":"pass:apps/token"},"sealed_input_modes":{"TOKEN":"env"}}]}`, target, target+":read-token", "sha256:sealed-input"+m.planSuffix)), nil
+				return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_inputs":{"TOKEN":"pass:apps/token"},"sealed_input_modes":{"TOKEN":"env"}}]}`, target, target+":read-token", "sha256:sealed-input"+m.planSuffix)), nil
 			}
-			return []byte(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"command":["apply"],"env":{"PLAN_SUFFIX":%q}}]}`, target, target+":apply", m.planSuffix)), nil
+			return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"command":["apply"],"env":{"PLAN_SUFFIX":%q}}]}`, target, target+":apply", m.planSuffix)), nil
 		}
 		if flag == "--emit-manifest" {
 			m.operations = append(m.operations, "apply "+target)
@@ -460,6 +524,7 @@ func TestMutatingRunSetPlansAllMembersBeforeApplyingAndPersistsReceipts(t *testi
 		"observe //models/mutator-a:drift",
 		"plan //models/mutator-a:drift",
 		"observe //models/mutator-a:drift",
+		"plan //models/mutator-a:drift",
 		"apply //models/mutator-a:drift",
 		"observe //models/mutator-a:drift",
 	}, runner.operations)
@@ -665,6 +730,8 @@ func TestMutatingRunSetExactApprovalRevalidatesBeforeApplying(t *testing.T) {
 
 	require.NoError(t, resumeRunSet(pending.RunSetID))
 	assert.NotEqual(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
+	require.Len(t, runner.expectDigests, 1, "apply must be guarded by the raw same-workspace mu plan identity")
+	assert.Len(t, runner.expectDigests[0], 64)
 	completed := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
 	assert.Equal(t, "approved", completed.ApprovalStatus)
@@ -717,10 +784,12 @@ func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing
 	assert.Equal(t, "pending", pending.ApprovalStatus)
 	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/sealed-mutator:drift"))
 
-	generated := runner.configs["//models/sealed-mutator:drift"]
+	generated := runner.planConfigs["//models/sealed-mutator:drift"]
 	assert.Contains(t, generated, `sealed_routing: "strict"`)
 	assert.Contains(t, generated, `"TOKEN":"pass:apps/token"`)
 	assert.Contains(t, generated, `writable_refs: ["pass:apps/*"]`)
+	assert.NotContains(t, runner.configs["//models/sealed-mutator:drift"], "sealed_outputs",
+		"read-only preflight must not activate converge-owned sealed outputs")
 
 	db, err := database.NewCatalogDB(pudlDir)
 	require.NoError(t, err)
@@ -781,8 +850,10 @@ func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *test
 	pending := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, []string{"mutator-secret-producer", "mutator-secret-consumer"}, pending.Ordered)
 	assert.Equal(t, "pending-approval", pending.Status)
-	assert.Contains(t, runner.configs["//models/mutator-secret-consumer:drift"], `"TOKEN":"pass:apps/token"`)
-	assert.Contains(t, runner.configs["//models/mutator-secret-consumer:drift"], `sealed_routing: "strict"`)
+	assert.Contains(t, runner.planConfigs["//models/mutator-secret-consumer:drift"], `"TOKEN":"pass:apps/token"`)
+	assert.Contains(t, runner.planConfigs["//models/mutator-secret-consumer:drift"], `sealed_routing: "strict"`)
+	assert.NotContains(t, runner.configs["//models/mutator-secret-consumer:drift"], "sealed_inputs",
+		"read-only preflight must not resolve converge-owned sealed inputs")
 
 	require.NoError(t, resumeRunSet(pending.RunSetID))
 	producerApply := indexOfString(runner.operations, "apply //models/mutator-secret-producer:drift")
@@ -854,7 +925,7 @@ func TestAnnotateSealedActionClaimsRecordsExactRouting(t *testing.T) {
 			{"id":"//models/app:converge:read","sealed_inputs":{"TOKEN":"env:TOKEN"}}
 		]
 	}`)
-	require.NoError(t, annotateSealedActionClaims(&report, plan))
+	require.NoError(t, annotateSealedActionClaims(&report, plan, &systemmodel.SystemModel{}))
 	assert.Equal(t, []string{"//models/app:converge:read", "//models/app:converge:write"}, report.SealedBindings[0].ClaimingActionIDs)
 	assert.Equal(t, "//models/app:converge:write", report.SealedBindings[1].ProducingActionID)
 	assert.Empty(t, report.SealedBindings[2].ClaimingActionIDs, "populate input is not claimed by the converge plan")
@@ -864,7 +935,7 @@ func TestAnnotateSealedActionClaimsRejectsMissingAndAmbiguousRouting(t *testing.
 	input := RunReport{SealedBindings: []wiring.SealedBindingEvidence{{
 		Direction: "input", ConsumerPhase: "converge", Input: "TOKEN",
 	}}}
-	assert.ErrorContains(t, annotateSealedActionClaims(&input, []byte(`{"actions":[]}`)), "no claiming action")
+	assert.ErrorContains(t, annotateSealedActionClaims(&input, []byte(`{"actions":[]}`), &systemmodel.SystemModel{}), "no claiming action")
 
 	output := RunReport{SealedBindings: []wiring.SealedBindingEvidence{{
 		Direction: "output", ProducerPhase: "converge", Output: "RESULT",
@@ -873,16 +944,16 @@ func TestAnnotateSealedActionClaimsRejectsMissingAndAmbiguousRouting(t *testing.
 		{"id":"a","sealed_outputs":{"RESULT":"pass:result"}},
 		{"id":"b","sealed_outputs":{"RESULT":"pass:result"}}
 	]}`)
-	assert.ErrorContains(t, annotateSealedActionClaims(&output, plan), "multiple producing actions")
+	assert.ErrorContains(t, annotateSealedActionClaims(&output, plan, &systemmodel.SystemModel{}), "multiple producing actions")
 }
 
 func TestCanonicalMutationPlanNormalizesOnlyEphemeralWorkspaceIdentity(t *testing.T) {
-	left, err := canonicalMutationPlan([]byte(`{
+	left, err := canonicalMutationPlan(signedMuPlan(`{
 		"version":2,
 		"actions":[{"id":"apply","action_key":"sha256:left","work_dir":"/tmp/left","inputs":{"/tmp/left/desired.json":"sha256:content"},"sealed_output_modes":{"TOKEN":"create"}}]
 	}`), "/tmp/left")
 	require.NoError(t, err)
-	right, err := canonicalMutationPlan([]byte(`{
+	right, err := canonicalMutationPlan(signedMuPlan(`{
 		"actions":[{"sealed_output_modes":{"TOKEN":"create"},"inputs":{"/tmp/right/desired.json":"sha256:content"},"work_dir":"/tmp/right","action_key":"sha256:right","id":"apply"}],
 		"version":2
 	}`), "/tmp/right")
@@ -891,10 +962,32 @@ func TestCanonicalMutationPlanNormalizesOnlyEphemeralWorkspaceIdentity(t *testin
 	assert.NotContains(t, string(left), "action_key")
 	assert.Contains(t, string(left), "pudl-reconcile-workspace")
 
-	changed, err := canonicalMutationPlan([]byte(`{
+	changed, err := canonicalMutationPlan(signedMuPlan(`{
 		"version":2,
 		"actions":[{"id":"apply","work_dir":"/tmp/changed","inputs":{"/tmp/changed/desired.json":"sha256:content"},"sealed_output_modes":{"TOKEN":"overwrite"}}]
 	}`), "/tmp/changed")
 	require.NoError(t, err)
 	assert.NotEqual(t, string(left), string(changed), "store mode remains exact plan identity")
+}
+
+func TestCanonicalMutationPlanRejectsIncompleteOrTamperedPlanV2(t *testing.T) {
+	_, err := canonicalMutationPlan([]byte(`{"version":1,"actions":[]}`), "")
+	assert.ErrorContains(t, err, "version must be exactly 2")
+
+	valid := signedMuPlan(`{"version":2,"actions":[{"id":"apply","command":["true"]}]}`)
+	var tampered map[string]any
+	require.NoError(t, json.Unmarshal(valid, &tampered))
+	tampered["targets"] = []any{"//changed"}
+	payload, marshalErr := json.Marshal(tampered)
+	require.NoError(t, marshalErr)
+	_, err = canonicalMutationPlan(payload, "")
+	assert.ErrorContains(t, err, "does not match")
+}
+
+func TestAnnotateSealedActionClaimsRejectsReferenceInActionID(t *testing.T) {
+	model := &systemmodel.SystemModel{Converge: &systemmodel.PluginPlan{
+		SealedOutputs: map[string]systemmodel.SealedOutput{"TOKEN": {Ref: "pass:apps/token"}},
+	}}
+	err := annotateSealedActionClaims(&RunReport{}, []byte(`{"actions":[{"id":"write-pass:apps/token"}]}`), model)
+	assert.ErrorContains(t, err, "contains a sealed provider reference")
 }

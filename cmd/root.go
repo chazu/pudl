@@ -54,7 +54,7 @@ Key features:
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
 - Schema generation from imported data
 - Observe-only and converging #SystemModel runs through mu
-- Exact producer/consumer run-sets with plain wiring and fail-closed sealed contracts`,
+- Exact producer/consumer run-sets with strict sealed action routing and approval`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error

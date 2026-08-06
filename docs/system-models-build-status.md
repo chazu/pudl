@@ -4,15 +4,16 @@
 > `pudl run <model>` for one model and `pudl run-set <models...>` for an exact
 > producer/consumer set. There is no `--file` model selector. Observe-only is the
 > default; `--converge --dry-run` plans a single-model mutation. Mutating
-> run-sets perform whole-set preflight. Non-sealed exact-plan approval is live;
-> sealed run-sets currently fail closed because mu's JSON plan omits sealed
-> action claims (`pudl-olm`). See `docs/cli-reference.md` and
+> run-sets perform whole-set preflight. Exact-plan approval/resume is live;
+> sealed-output run-sets are gated automatically and validate strict action
+> claims from mu's version-2 JSON plan. See `docs/cli-reference.md` and
 > `docs/design/2026-07-28-cross-resource-value-wiring.md`.
 
-Implementation status of the V1 convergence build (the design lives in the **mu**
-repo: `mu/docs/design/system-models/` — `V1-BUILD-SPEC.md` is canonical, `issue-ledger.md`
-is the rationale). This doc is the **pudl-side build state**: what's built, what's
-validated, what's next.
+Implementation status of the V1 convergence build. The older documents under
+`mu/docs/design/system-models/` preserve the design history but are superseded
+as operator guidance. Current behavior is defined by `mu guide pudl`,
+`docs/cli-reference.md`, and the cross-resource wiring design linked above.
+This doc is the **pudl-side build state**: what's built and validated.
 
 Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go`,
 `internal/acute/`, and `internal/systemmodel/`.

@@ -201,10 +201,13 @@ provenance plus a value digest in the run report.
 completeness and cycles before execution, orders producers first, and pins each
 successful producer observation for its consumers. It never starts an omitted
 producer implicitly. Without `--converge` the set is observe-only. Mutating
-run-sets complete read-only planning before any apply. Single-model sealed
-values stay in mu's provider channel. Sealed run-sets currently fail closed at
-planning because mu v0.3.3's JSON plan omits the action-level claims required
-for PUDL's strict exact-plan validation (`pudl-olm`).
+run-sets complete read-only preflight and exact planning before any apply.
+Sealed values stay in mu's provider channel, and durable PUDL evidence retains
+only schemes and fingerprints. Generated targets require explicit per-action
+claims; invalid or ambiguous routing fails during planning. A set that can write
+a sealed output always pauses for approval of the exact version-2 mu plan. The
+plan commits resolved plugin identities; every apply is guarded by mu's raw
+plan SHA-256 comparison before provider access.
 
 ## Fixed-Point Verification
 

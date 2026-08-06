@@ -15,6 +15,9 @@ import (
 // planConverge runs `mu build --plan` against the workspace target: it shows the
 // actions the converge plugin would apply, executing nothing.
 func (w *reconcileWorkspace) planConverge() (string, error) {
+	if err := w.activateConfig(w.ConvergeConfig); err != nil {
+		return "", err
+	}
 	out, err := w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--plan", "--json")
 	if err != nil {
 		return "", fmt.Errorf("mu build --plan %s: %w", w.Target, err)
@@ -28,7 +31,31 @@ func (w *reconcileWorkspace) planConverge() (string, error) {
 // to stderr). Returns the manifest bytes so the caller can record per-resource
 // status. A non-zero exit is an execute_error (V1.4).
 func (w *reconcileWorkspace) applyConverge() ([]byte, error) {
-	return w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, "--emit-manifest")
+	if err := w.activateConfig(w.ConvergeConfig); err != nil {
+		return nil, err
+	}
+	flags := []string{"--emit-manifest"}
+	if w.ExpectedMuPlanSHA256 != "" {
+		planned, err := w.planConverge()
+		if err != nil {
+			return nil, err
+		}
+		canonical, err := canonicalMutationPlan([]byte(planned), w.Dir)
+		if err != nil {
+			return nil, err
+		}
+		digest := sha256.Sum256(canonical)
+		actual := hex.EncodeToString(digest[:])
+		if actual != w.ExpectedMuPlanSHA256 {
+			return nil, fmt.Errorf("approved mu plan changed before apply: expected %s, planned %s", w.ExpectedMuPlanSHA256, actual)
+		}
+		_, rawDigest, err := validateMuMutationPlan([]byte(planned))
+		if err != nil {
+			return nil, err
+		}
+		flags = append(flags, "--expect-plan-sha256", rawDigest)
+	}
+	return w.Mu.Build(filepath.Join(w.MuRoot, "mu.cue"), w.Target, flags...)
 }
 
 // ingestConvergeManifest records the apply's build manifest in the catalog,
@@ -90,11 +117,16 @@ func (e *muConvergeExecutor) Apply() ([]byte, error) {
 // Loop shape (build-spec §4): fixed-point test at the top, cap as the halting
 // guarantee, apply, then re-observe at the next iteration.
 func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool, budget *int) (*ConvergeReport, error) {
+	return runConvergeLoopExact(cat, mu, m, muRoot, modelDir, runID, maxIters, dryRun, budget, "")
+}
+
+func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, runID string, maxIters int, dryRun bool, budget *int, expectedMuPlanSHA256 string) (*ConvergeReport, error) {
 	w, err := setupReconcileWorkspace(cat, mu, m, muRoot, modelDir, runID, dryRun)
 	if err != nil {
 		return nil, err
 	}
 	defer w.Cleanup()
+	w.ExpectedMuPlanSHA256 = expectedMuPlanSHA256
 
 	live := !jsonOutput // suppress progress chatter when emitting machine JSON
 	lastIteration := 0
@@ -108,7 +140,8 @@ func runConvergeLoop(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, m
 			return beginDurableMutationAttempt(cat, runID)
 		},
 		RecordManifest: func(manifest []byte) error {
-			if err := ingestConvergeManifest(cat, m.Name, runID, manifest); err != nil {
+			redactedManifest := []byte(redactSealedText(string(manifest), m))
+			if err := ingestConvergeManifest(cat, m.Name, runID, redactedManifest); err != nil {
 				return err
 			}
 			if err := completeDurableMutationReceipt(cat, runID); err != nil {

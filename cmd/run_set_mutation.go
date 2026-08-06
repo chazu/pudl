@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -31,6 +33,9 @@ type preparedMutationMember struct {
 	modelDir   string
 	muRoot     string
 	required   bool
+	// expectedMuPlanSHA256 is the workspace-normalized mu plan identity that
+	// was included in the approved run-set mutation plan.
+	expectedMuPlanSHA256 string
 }
 
 func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetReport, stored *acute.RunSetMutationPlan, request runSetMutationRequest) (*acute.RunSetPlan, *runSetExecutionContext, error) {
@@ -335,10 +340,10 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 			reconcile.Cleanup()
 			reconcile = nil
 			if planErr != nil {
-				return nil, nil, fmt.Errorf("plan mutation for %q: %w", name, planErr)
+				return nil, nil, fmt.Errorf("plan mutation for %q: %w", name, redactSealedError(planErr, model))
 			}
 			rawPlan := []byte(planned)
-			if err := annotateSealedActionClaims(&memberReport, rawPlan); err != nil {
+			if err := annotateSealedActionClaims(&memberReport, rawPlan, model); err != nil {
 				return nil, nil, fmt.Errorf("record sealed action routing for %q: %w", name, err)
 			}
 			muPlan, err = canonicalMutationPlan(rawPlan, stagingDir)
@@ -356,6 +361,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 		if err != nil {
 			return nil, nil, err
 		}
+		member.expectedMuPlanSHA256 = planMember.MuPlanSHA256
 		prepared[name] = member
 		members = append(members, planMember)
 	}
@@ -374,11 +380,9 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 }
 
 func canonicalMutationPlan(plan []byte, stagingDir string) ([]byte, error) {
-	var document any
-	decoder := json.NewDecoder(strings.NewReader(string(plan)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&document); err != nil {
-		return nil, fmt.Errorf("decode mu JSON plan: %w", err)
+	document, _, err := validateMuMutationPlan(plan)
+	if err != nil {
+		return nil, err
 	}
 	canonical := canonicalPlanValue(document, stagingDir)
 	payload, err := json.Marshal(canonical)
@@ -393,7 +397,7 @@ func canonicalPlanValue(value any, stagingDir string) any {
 	case map[string]any:
 		out := make(map[string]any, len(typed))
 		for key, item := range typed {
-			if key == "action_key" {
+			if key == "action_key" || key == "plan_sha256" {
 				continue
 			}
 			out[canonicalPlanString(key, stagingDir)] = canonicalPlanValue(item, stagingDir)
@@ -412,6 +416,76 @@ func canonicalPlanValue(value any, stagingDir string) any {
 	}
 }
 
+func validateMuMutationPlan(plan []byte) (any, string, error) {
+	var document any
+	decoder := json.NewDecoder(strings.NewReader(string(plan)))
+	decoder.UseNumber()
+	if err := decoder.Decode(&document); err != nil {
+		return nil, "", fmt.Errorf("decode mu JSON plan: %w", err)
+	}
+	root, ok := document.(map[string]any)
+	if !ok {
+		return nil, "", fmt.Errorf("mu JSON plan must be an object")
+	}
+	version, ok := root["version"].(json.Number)
+	if !ok || version.String() != "2" {
+		return nil, "", fmt.Errorf("mu JSON plan version must be exactly 2")
+	}
+	digest, ok := root["plan_sha256"].(string)
+	if !ok || len(digest) != sha256.Size*2 {
+		return nil, "", fmt.Errorf("mu JSON plan is missing a valid plan_sha256")
+	}
+	plugins, exists := root["plugins"].([]any)
+	if !exists {
+		return nil, "", fmt.Errorf("mu JSON plan v2 is missing plugin identities")
+	}
+	for index, item := range plugins {
+		identity, ok := item.(map[string]any)
+		if !ok || stringField(identity, "name") == "" || stringField(identity, "digest") == "" || stringField(identity, "version") == "" {
+			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks immutable name, digest, or version identity", index)
+		}
+		protocol, ok := identity["protocol_version"].(json.Number)
+		if !ok || protocol.String() == "0" {
+			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks protocol identity", index)
+		}
+		if _, ok := identity["capabilities"].([]any); !ok {
+			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks capability identity", index)
+		}
+	}
+	actions, ok := root["actions"].([]any)
+	if !ok {
+		return nil, "", fmt.Errorf("mu JSON plan v2 is missing actions")
+	}
+	for index, item := range actions {
+		action, ok := item.(map[string]any)
+		if !ok || stringField(action, "id") == "" || stringField(action, "action_key") == "" {
+			return nil, "", fmt.Errorf("mu JSON plan action %d lacks id or action_key", index)
+		}
+		for _, field := range []string{"command", "inputs", "outputs", "depends_on"} {
+			if _, exists := action[field]; !exists {
+				return nil, "", fmt.Errorf("mu JSON plan action %d lacks required %s field", index, field)
+			}
+		}
+	}
+
+	delete(root, "plan_sha256")
+	payload, err := json.Marshal(root)
+	if err != nil {
+		return nil, "", fmt.Errorf("encode mu JSON plan identity: %w", err)
+	}
+	actual := sha256.Sum256(payload)
+	if hex.EncodeToString(actual[:]) != digest {
+		return nil, "", fmt.Errorf("mu JSON plan_sha256 does not match its plan content")
+	}
+	root["plan_sha256"] = digest
+	return document, digest, nil
+}
+
+func stringField(value map[string]any, key string) string {
+	text, _ := value[key].(string)
+	return text
+}
+
 func canonicalPlanString(value, stagingDir string) string {
 	if stagingDir == "" {
 		return value
@@ -427,13 +501,20 @@ type plannedMuActions struct {
 	} `json:"actions"`
 }
 
-func annotateSealedActionClaims(report *RunReport, plan []byte) error {
-	if len(report.SealedBindings) == 0 {
-		return nil
-	}
+func annotateSealedActionClaims(report *RunReport, plan []byte, model *systemmodel.SystemModel) error {
 	var document plannedMuActions
 	if err := json.Unmarshal(plan, &document); err != nil {
 		return fmt.Errorf("decode mu JSON plan: %w", err)
+	}
+	for _, action := range document.Actions {
+		for _, ref := range modelSealedReferences(model) {
+			if strings.Contains(action.ID, ref) {
+				return fmt.Errorf("mu plan action id contains a sealed provider reference")
+			}
+		}
+	}
+	if len(report.SealedBindings) == 0 {
+		return nil
 	}
 	for index := range report.SealedBindings {
 		evidence := &report.SealedBindings[index]
@@ -537,9 +618,9 @@ func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetRep
 		budget := resolveApplyBudget(cat, name, runFlags{
 			converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
 		}, !jsonOutput)
-		convergeReport, runErr := runConvergeLoop(
+		convergeReport, runErr := runConvergeLoopExact(
 			cat, runMuRunnerFactory(), member.model, member.muRoot, member.modelDir,
-			member.runID, plan.Options.MaxIterations, false, budget,
+			member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
 		)
 		member.report.Converge = convergeReport
 		applyRunError(member.report, runErr)

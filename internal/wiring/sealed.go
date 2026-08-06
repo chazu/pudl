@@ -34,24 +34,24 @@ type ResolvedSealedMember struct {
 // fingerprint. It intentionally has no field capable of carrying the provider
 // path or a resolved secret value.
 type SealedBindingEvidence struct {
-	Direction              string   `json:"direction"` // input | output
-	ConsumerModel          string   `json:"consumer_model,omitempty"`
-	ConsumerRunID          string   `json:"consumer_run_id,omitempty"`
-	ConsumerPhase          string   `json:"consumer_phase,omitempty"`
-	Input                  string   `json:"input,omitempty"`
-	DeliveryMode           string   `json:"delivery_mode,omitempty"`
-	ClaimingActionIDs      []string `json:"claiming_action_ids,omitempty"`
-	SourceKind             string   `json:"source_kind,omitempty"` // direct-ref | producer-output
-	ProducerModel          string   `json:"producer_model,omitempty"`
-	ProducerRunID          string   `json:"producer_run_id,omitempty"`
-	ProducerPhase          string   `json:"producer_phase,omitempty"`
-	Output                 string   `json:"output,omitempty"`
-	StoreMode              string   `json:"store_mode,omitempty"`
-	ProducingActionID      string   `json:"producing_action_id,omitempty"`
-	ProviderScheme         string   `json:"provider_scheme"`
-	ReferenceSHA256        string   `json:"reference_sha256"`
-	MatchedWritablePattern string   `json:"matched_writable_pattern,omitempty"`
-	LifecycleStatus        string   `json:"lifecycle_status"`
+	Direction                    string   `json:"direction"` // input | output
+	ConsumerModel                string   `json:"consumer_model,omitempty"`
+	ConsumerRunID                string   `json:"consumer_run_id,omitempty"`
+	ConsumerPhase                string   `json:"consumer_phase,omitempty"`
+	Input                        string   `json:"input,omitempty"`
+	DeliveryMode                 string   `json:"delivery_mode,omitempty"`
+	ClaimingActionIDs            []string `json:"claiming_action_ids,omitempty"`
+	SourceKind                   string   `json:"source_kind,omitempty"` // direct-ref | producer-output
+	ProducerModel                string   `json:"producer_model,omitempty"`
+	ProducerRunID                string   `json:"producer_run_id,omitempty"`
+	ProducerPhase                string   `json:"producer_phase,omitempty"`
+	Output                       string   `json:"output,omitempty"`
+	StoreMode                    string   `json:"store_mode,omitempty"`
+	ProducingActionID            string   `json:"producing_action_id,omitempty"`
+	ProviderScheme               string   `json:"provider_scheme"`
+	ReferenceSHA256              string   `json:"reference_sha256"`
+	MatchedWritablePatternSHA256 string   `json:"matched_writable_pattern_sha256,omitempty"`
+	LifecycleStatus              string   `json:"lifecycle_status"`
 }
 
 type sealedOutputOwner struct {
@@ -111,7 +111,7 @@ func ResolveSealedSources(members []SealedMember, policy SealedPolicy) ([]Resolv
 					Direction: "output", ProducerModel: name, ProducerRunID: member.RunID,
 					ProducerPhase: phase.name, Output: outputName, StoreMode: output.StoreMode,
 					ProviderScheme: scheme, ReferenceSHA256: fingerprint,
-					MatchedWritablePattern: matched, LifecycleStatus: "planned",
+					MatchedWritablePatternSHA256: fingerprintSealedMetadata(matched), LifecycleStatus: "planned",
 				})
 			}
 		}
@@ -229,8 +229,15 @@ func validateProviderRef(ref string) (scheme, fingerprint string, err error) {
 	if !found || remainder == "" || !providerSchemePattern.MatchString(scheme) {
 		return "", "", fmt.Errorf("provider reference must be scheme:non-empty-path")
 	}
-	digest := sha256.Sum256([]byte(ref))
-	return scheme, hex.EncodeToString(digest[:]), nil
+	return scheme, fingerprintSealedMetadata(ref), nil
+}
+
+func fingerprintSealedMetadata(value string) string {
+	if value == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(digest[:])
 }
 
 func validateWritablePatterns(policy SealedPolicy) error {

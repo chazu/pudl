@@ -74,6 +74,13 @@ def action_for(request):
     if drop == "output":
         sealed_outputs = {}
         sealed_output_modes = {}
+    extra = os.environ.get("PUDL_KICK_EXTRA_CLAIM")
+    if extra == "input":
+        sealed_inputs["UNDECLARED"] = "kicksecret:undeclared"
+        sealed_input_modes["UNDECLARED"] = "env"
+    if extra == "output":
+        sealed_outputs["UNDECLARED"] = "kicksecret:undeclared"
+        sealed_output_modes["UNDECLARED"] = "overwrite"
     if role == "sealed-producer":
         script = (
             f'mkdir -p "$(dirname {state})" && : > "{state}" && '
@@ -103,7 +110,13 @@ def action_for(request):
 def plan(request):
     target = request.get("target", {}).get("name", "")
     record("plan", target)
-    return {"actions": [action_for(request)], "declared_outputs": {}}
+    action = action_for(request)
+    actions = [action]
+    if os.environ.get("PUDL_KICK_DUPLICATE_OUTPUT_CLAIM"):
+        duplicate = dict(action)
+        duplicate["id"] = f'{action["id"]}-duplicate'
+        actions.append(duplicate)
+    return {"actions": actions, "declared_outputs": {}}
 
 
 def secret_store_path():

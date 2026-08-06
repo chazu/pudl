@@ -529,9 +529,12 @@ CROSS-MODEL VALUES
   orders producers first, and pins their successful snapshots. It never expands
   the set implicitly.
 
-  Single-model sealed values stay inside mu's provider channel. Sealed
-  run-sets currently fail closed during planning because mu v0.3.3 JSON plans
-  omit the action claims required for exact approval (issue pudl-olm).
+  Sealed values stay inside mu's provider channel. PUDL-generated targets use
+  strict action routing, and a run-set that can write a sealed output always
+  pauses for exact-plan approval. Invalid or ambiguous claims fail during
+  whole-set planning before mutation or provider traffic. Each approved apply
+  passes mu the raw plan digest; mu compares before provider access and executes
+  that same in-memory graph.
 
 SEE ALSO
 
@@ -570,10 +573,10 @@ THE ACUTE LOOP (driven by 'pudl run')
 VALUE ROUTING
 
   Plain scalar bindings come from PUDL catalog snapshots and carry durable
-  producer/run/snapshot/path evidence. Single-model sealed values stay in mu's
-  provider channel and PUDL records only redacted evidence. Sealed run-sets
-  currently fail closed during planning: mu v0.3.3 JSON plans omit the
-  per-action claims required for exact-plan validation (issue pudl-olm).
+  producer/run/snapshot/path evidence. Sealed values stay in mu's provider
+  channel and PUDL records only schemes and fingerprints. Generated targets use
+  strict per-action claims. Sealed-output run-sets pause for exact approval;
+  resume rebuilds the plan before producer-first execution.
 
 INGESTING MU RESULTS
 

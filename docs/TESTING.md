@@ -54,12 +54,13 @@ make test-kick-tires
 ```
 
 This checked-in matrix requires `git`, `python3`, and `mu` on `PATH`. CI pins
-mu v0.3.3 and runs the target on every push and pull request. It exercises the
+mu v0.3.5 and runs the target on every push and pull request. It exercises the
 tracked `.pudl/schema` and `.pudl/populators` fixtures through the public CLI:
 plain producer/consumer ordering and reuse, fail-fast validation, projection
 authorization, failed-producer propagation, approval/resume/reject and stale
-plans, single-model sealed provider I/O, the known fail-closed sealed run-set
-boundary, write-policy denial, and simultaneous run-sets.
+plans, single-model and producer/consumer sealed provider I/O, strict-routing
+rejection for unused/undeclared/ambiguous claims, catalog/output redaction,
+write-policy denial, and simultaneous run-sets.
 
 Each test initializes a nested repository beneath
 `.pudl/data/kick-tires/test-runs/`; the fresh PUDL binary is built beneath
@@ -158,9 +159,9 @@ test/
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
 - Run verdict mapping, `--only` scope selection, and the `pudl run` phase plan (`cmd` run tests)
 - Plain/sealed binding classification, exact run-set ordering, producer snapshot
-  pinning, non-sealed approval/resume/reject, and durable linked reports. Sealed
-  coordination tests use synthetic action claims; the real mu plan bridge is
-  tracked by `pudl-olm`.
+  pinning, approval/resume/reject, and durable linked reports. Unit tests cover
+  synthetic claims; the required repository smoke also runs strict sealed
+  planning, provider I/O, approval resume, and redaction through a real mu.
 - Bootstrap installation and repair derived from the complete embedded schema
   tree, including built-in `@pudl(binding=plain)` projections
 
@@ -170,7 +171,7 @@ The database initialization test intentionally exercises an unwritable path;
 its assertion is about returning an error, not a particular host `errno` string.
 The generic `make smoke` suite skips cases whose external tools are unavailable.
 `make test-kick-tires` is a required named contract and fails immediately when
-`git`, `mu`, or `python3` is missing; its CI job installs the pinned mu version.
+`git`, `mu`, or `python3` is missing; its CI job installs pinned mu v0.3.5.
 
 ### Mubridge Tests
 - Observe-result ingestion into the catalog (content-hash dedup, schema routing)

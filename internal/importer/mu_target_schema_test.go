@@ -30,6 +30,46 @@ func TestMuTargetRegistration(t *testing.T) {
 	}
 }
 
+func TestMuPlanV2BootstrapSchemaCoversExactExecutionIdentity(t *testing.T) {
+	plan := map[string]interface{}{
+		"version": 2, "plan_sha256": "0123456789abcdef", "targets": []interface{}{"//app"},
+		"plugins": []interface{}{map[string]interface{}{
+			"name": "apply", "digest": "sha256:abc", "version": "1.2.3",
+			"protocol_version": 1, "capabilities": []interface{}{"plan", "store_secret"},
+		}},
+		"actions": []interface{}{map[string]interface{}{
+			"id": "//app:apply", "action_key": "sha256:def", "command": nil,
+			"body": []interface{}{"apply"}, "inputs": map[string]interface{}{"desired": "sha256:123"},
+			"outputs": []interface{}{"receipt.json"}, "depends_on": []interface{}{},
+			"env":                 map[string]interface{}{"MODE": "exact"},
+			"sealed_inputs":       map[string]interface{}{"TOKEN": "fake:apps/token"},
+			"sealed_input_modes":  map[string]interface{}{"TOKEN": "file"},
+			"sealed_outputs":      map[string]interface{}{"RESULT": "fake:apps/result"},
+			"sealed_output_modes": map[string]interface{}{"RESULT": "create_if_absent"},
+			"network":             true, "work_dir": "deploy", "impure": true,
+			"timeout_s": 30, "retries": 2, "retry_backoff_ms": 250,
+			"toolchain": map[string]interface{}{"bin/apply": "sha256:456"},
+			"sources":   []interface{}{"desired.json"},
+		}},
+		"summary": map[string]interface{}{"total": 1},
+	}
+	if err := ValidateAgainstBootstrapDef("pudl/mu/mu.cue", "#PlanOutput", plan); err != nil {
+		t.Fatalf("current mu plan v2 rejected by bootstrap schema: %v", err)
+	}
+}
+
+func TestMuTargetBootstrapSchemaCoversStrictSealedRouting(t *testing.T) {
+	target := map[string]interface{}{
+		"target": "//app", "toolchain": "apply",
+		"sealed_outputs":      map[string]interface{}{"RESULT": "fake:apps/result"},
+		"sealed_output_modes": map[string]interface{}{"RESULT": "create_if_absent"},
+		"sealed_routing":      "strict",
+	}
+	if err := ValidateAgainstBootstrapDef("pudl/mu/mu.cue", "#Target", target); err != nil {
+		t.Fatalf("current strict target rejected by bootstrap schema: %v", err)
+	}
+}
+
 // TestMuTargetInference verifies a real `mu target list --json` record
 // classifies as pudl/mu.#Target. The decisive disambiguation from
 // pudl/brick.#Target is the identity field: mu emits `target`, brick keys on
