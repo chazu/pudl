@@ -97,8 +97,11 @@ numbers can receive corrected IDs on a new insertion; replay an exported fact
 with its original ID to preserve an existing reference. A corrected ID that
 collides with different legacy content returns an explicit error for review.
 Values already discarded by old deduplication cannot be reconstructed from the
-catalog; recover those from their original source. The numeric change here is
-to fact identity, not the query engine's numeric arithmetic or catalog-item IDs.
+catalog; recover those from their original source. Fact identity accepts a
+wider numeric domain than the query evaluator. Queries now preserve supported
+numeric values and reject unsupported ones explicitly; see the
+[numeric query contract](library-api.md#numeric-query-contract). Catalog-item
+IDs and the query engine's REAL arithmetic are unchanged.
 
 ### Retraction vs Invalidation
 

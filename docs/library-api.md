@@ -95,6 +95,39 @@ of the same relation. It combines new tuples with accumulated results until no
 new tuples remain. The existing 100-iteration limit and rejection of recursive
 aggregation still apply.
 
+### Numeric query contract
+
+`Store.Query` returns integral fact values and SQLite INTEGER results as Go
+`int64`, including `count` results. Non-integral fact values and SQLite REAL
+results use `float64`. This changes the previous behavior that returned every
+number as `float64`; callers asserting that type must also handle `int64`.
+JSON output preserves the integer digits. Nested base-fact arguments follow
+the same conversion rules.
+
+The supported input domain is signed 64-bit integers
+(`-9223372036854775808` through `9223372036854775807`) and non-integral decimals
+whose value survives `float64` conversion and Go JSON serialization unchanged.
+Equivalent spellings such as `9007199254740993` and `9.007199254740993e15`
+compare equally without converting the integer through floating point.
+`0.1` is supported; `0.123456789012345678901` is rejected. Integer values
+outside int64, precision-losing decimals, overflow, and underflow produce an
+`unsupported query number` error when accessed, rather than rounded results.
+
+Constraints accept Go numeric types and `json.Number`; use `int64` or
+`json.Number` for exact integer operands. A supplied `float64` already denotes
+a binary value, so PUDL cannot recover digits a caller previously rounded.
+String constraints remain strings. CUE rule loaders retain numeric
+`Term.Value` operands as `json.Number` until compilation validates them.
+This contract applies to current and historical queries, SQL joins and filters,
+and recursive temporary tables.
+
+Raw `Fact.Args` returned by `QueryFacts` and `FactHistory`, stored IDs, and
+`AddFact` remain unchanged and retain numbers outside the query domain.
+Arithmetic over REAL values, including mixed/real `sum` and computed decay
+scores, retains SQLite's binary64 semantics; this is not an arbitrary-precision
+decimal arithmetic engine. Integer-only `sum` retains SQLite's integer overflow
+error. Built-in catalog columns describe their native SQLite values.
+
 ### Store/workspace resolution
 
 ```go

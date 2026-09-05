@@ -24,10 +24,10 @@ harmful_count: {
 		t.Fatalf("evaluate: %v", err)
 	}
 
-	got := map[string]float64{}
+	got := map[string]int64{}
 	for _, r := range results {
 		tgt, _ := r.Args["target"].(string)
-		n, _ := r.Args["n"].(float64)
+		n, _ := r.Args["n"].(int64)
 		got[tgt] = n
 	}
 	if got["X"] != 3 {
@@ -60,7 +60,7 @@ hc: {
 	if len(results) != 1 {
 		t.Fatalf("want 1 row for target X, got %d: %v", len(results), results)
 	}
-	if n, _ := results[0].Args["n"].(float64); n != 2 {
+	if n, _ := results[0].Args["n"].(int64); n != 2 {
 		t.Errorf("target X count = %v, want 2", n)
 	}
 }
@@ -84,7 +84,7 @@ total: {
 	if len(results) != 1 {
 		t.Fatalf("pure aggregate should yield 1 row, got %d", len(results))
 	}
-	if n, _ := results[0].Args["n"].(float64); n != 3 {
+	if n, _ := results[0].Args["n"].(int64); n != 3 {
 		t.Errorf("total count = %v, want 3", n)
 	}
 }

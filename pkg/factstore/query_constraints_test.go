@@ -28,7 +28,7 @@ project: {
 		})
 		require.NoError(t, err)
 		require.Equal(t, []factstore.Tuple{{Relation: "project", Args: map[string]interface{}{
-			"a": float64(1), "b": float64(2),
+			"a": int64(1), "b": int64(2),
 		}}}, rows, "query %d must enforce both constraints", i)
 	}
 }

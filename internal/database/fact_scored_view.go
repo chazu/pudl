@@ -31,8 +31,8 @@ func (c *CatalogDB) ensureFactScoredView() error {
 			cf.relation  AS relation,
 			cf.source    AS source,
 			(unixepoch() - f.valid_start) AS age_seconds,
-			json_extract(cf.args, '$.worth') AS worth,
-			json_extract(cf.args, '$.worth') * pow(0.5, (unixepoch() - f.valid_start) / %d.0) AS decayed_worth
+			pudl_query_value(cf.args -> '$.worth') AS worth,
+			pudl_query_value(cf.args -> '$.worth') * pow(0.5, (unixepoch() - f.valid_start) / %d.0) AS decayed_worth
 		FROM current_facts cf
 		JOIN facts f ON f.id = cf.id;`, FactScoredView, halfLifeSeconds)
 

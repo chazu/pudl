@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/chazu/pudl/internal/database"
 )
 
 type TemporalScope struct {
@@ -71,7 +73,7 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 			if hasOverride {
 				expr = fmt.Sprintf("%s.\"%s\"", alias, key)
 			} else {
-				expr = fmt.Sprintf("json_extract(%s.args, '$.%s')", alias, key)
+				expr = fmt.Sprintf("pudl_query_value(%s.args -> '$.%s')", alias, strings.ReplaceAll(key, "'", "''"))
 			}
 
 			if term.IsVariable() {
@@ -84,10 +86,18 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 				// Numeric comparison constraint, e.g. decayed_worth > 0.25. The
 				// operator is validated by cmpTermPattern, so it is safe to inline.
 				whereParts = append(whereParts, fmt.Sprintf("%s %s ?", expr, term.Cmp))
-				params = append(params, term.Value)
+				value, err := database.QueryParameter(term.Value)
+				if err != nil {
+					return nil, fmt.Errorf("rule %s argument %s: %w", rule.Name, key, err)
+				}
+				params = append(params, value)
 			} else {
 				whereParts = append(whereParts, fmt.Sprintf("%s = ?", expr))
-				params = append(params, term.Value)
+				value, err := database.QueryParameter(term.Value)
+				if err != nil {
+					return nil, fmt.Errorf("rule %s argument %s: %w", rule.Name, key, err)
+				}
+				params = append(params, value)
 			}
 		}
 
