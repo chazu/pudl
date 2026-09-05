@@ -57,7 +57,12 @@ versioned migrations.
 guarded by its own emptiness check.
 
 The rule: **a migration changes the schema's shape; a view or a sync restates it
-from the current source.** Only the first is versioned.
+from the current source.** Only the first is normally versioned.
+
+**2026-09-05 repair exception:** migration 17 repairs known historical replay
+corruption in `current_facts` and its search index. The ledger records this
+one-time data repair so subsequent opens avoid a complete rebuild. The repair
+is atomic and idempotent; authoritative facts and their IDs remain unchanged.
 
 ## 3. Part two: memberships as the sole collection source
 

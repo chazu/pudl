@@ -20,6 +20,10 @@ type CompiledQuery struct {
 
 type CompileOptions struct {
 	TableOverrides map[string]string
+	// AtomTableOverrides takes precedence for a body position. Recursive
+	// evaluation needs this to read one occurrence from delta and another
+	// occurrence of the same relation from the accumulated result.
+	AtomTableOverrides map[int]string
 }
 
 func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
@@ -46,6 +50,9 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		alias := fmt.Sprintf("t%d", i)
 
 		override, hasOverride := opts.TableOverrides[atom.Rel]
+		if atomOverride, ok := opts.AtomTableOverrides[i]; ok {
+			override, hasOverride = atomOverride, true
+		}
 		if hasOverride {
 			fromParts = append(fromParts, fmt.Sprintf("%s %s", override, alias))
 		} else {

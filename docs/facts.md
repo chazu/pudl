@@ -73,6 +73,33 @@ f, err := db.AddFact(database.Fact{
 
 If `ValidStart` and `TxStart` are zero, they default to now. The `ID` is computed automatically as SHA256(relation + args + valid_start + source), providing content-addressed deduplication.
 
+Fact ID canonicalization sorts object keys and normalizes decimal number
+spellings without converting them through floating point. Distinct integers
+such as `9007199254740992` and `9007199254740993` remain distinct; equivalent
+spellings such as `1`, `1.0`, and `1e0` deduplicate. This also applies to numbers
+inside nested objects and arrays. The original `args` JSON remains stored.
+
+Replaying the same ID returns the original stored fact, including its temporal
+bounds, transaction timestamp, and provenance. A replay does not revive a
+retracted or invalidated fact. Reusing an ID with different relation, arguments,
+valid start, or source returns an error instead of silently discarding evidence.
+
+### Existing-store compatibility
+
+Migration 17 atomically rebuilds `current_facts` and its search index from the
+authoritative `facts` table on the next writable catalog open. This repairs stale
+rows produced by the old replay behavior. The repair preserves all historical
+rows and IDs and runs once, with work proportional to the live fact count.
+
+Existing fact IDs are never renumbered. Number spellings whose values survived
+the old floating-point round trip retain their hashes. Previously rounded
+numbers can receive corrected IDs on a new insertion; replay an exported fact
+with its original ID to preserve an existing reference. A corrected ID that
+collides with different legacy content returns an explicit error for review.
+Values already discarded by old deduplication cannot be reconstructed from the
+catalog; recover those from their original source. The numeric change here is
+to fact identity, not the query engine's numeric arithmetic or catalog-item IDs.
+
 ### Retraction vs Invalidation
 
 Two distinct operations for two distinct meanings:

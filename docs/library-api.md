@@ -39,6 +39,13 @@ func (s *Store) ListCatalog(filter CatalogFilter, query CatalogQuery) (*CatalogR
 Re-exported types: `Fact`, `FactFilter`, `Rule`, `Tuple`, `Tx`, `CatalogEntry`,
 `CatalogFilter`, `CatalogQuery`, `CatalogResult`.
 
+`AddFact` and `Tx.AddFact` return the stored fact on an identical-ID replay,
+including original provenance and terminal temporal bounds. They reject reuse
+of an ID for different identity content. Fact ID canonicalization preserves
+exact decimal numbers and normalizes equivalent numeric spellings. See
+[existing-store compatibility](facts.md#existing-store-compatibility) for the
+one-time projection repair and handling of IDs created by older releases.
+
 ### `Transact`
 
 `Transact` runs its callback inside a single store transaction that holds the
@@ -81,6 +88,12 @@ type QueryOptions struct {
 Both `ValidAt` and `TxAt` nil evaluates over current facts; setting either evaluates
 over the historical `facts` table. A query against a base relation with no producing
 rule returns matching facts directly.
+
+Every supplied constraint is applied as a conjunction. Recursive evaluation
+supports multiple derived atoms in one rule body, including repeated occurrences
+of the same relation. It combines new tuples with accumulated results until no
+new tuples remain. The existing 100-iteration limit and rejection of recursive
+aggregation still apply.
 
 ### Store/workspace resolution
 

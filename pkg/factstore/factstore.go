@@ -41,7 +41,9 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
-// AddFact inserts a new fact.
+// AddFact inserts a new fact, or returns the stored fact on an identical-ID
+// replay, preserving its lifecycle and provenance. Reusing an ID for different
+// identity content returns an error. Numeric ID canonicalization is lossless.
 func (s *Store) AddFact(f Fact) (Fact, error) {
 	return s.db.AddFact(f)
 }
