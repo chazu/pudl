@@ -92,7 +92,8 @@ type QueryOptions struct {
 	// Relation is the head relation to query (required).
 	Relation string
 
-	// Constraints filter results by argument value (field=value pairs).
+	// Constraints filter results by argument value (field=value pairs). Use
+	// int64 or json.Number for exact numeric operands; strings remain strings.
 	Constraints map[string]interface{}
 
 	// Rules are the Datalog rules to evaluate. Load them with
@@ -110,6 +111,10 @@ type QueryOptions struct {
 // Query evaluates Datalog rules over the store and returns tuples for the
 // requested relation. It runs the SQL evaluator for non-recursive rules and a
 // recursive fixpoint fallback for recursive rules.
+// Integral fact values and SQLite INTEGER results are int64; fractions and
+// SQLite REAL results are float64. Accessed JSON numbers outside int64 or whose
+// decimal value would change on a float64/JSON round trip return an error.
+// QueryFacts retains raw JSON without these numeric domain restrictions.
 func (s *Store) Query(opts QueryOptions) ([]Tuple, error) {
 	scope := datalog.TemporalScope{ValidAt: opts.ValidAt, TxAt: opts.TxAt}
 	return datalog.Evaluate(s.db, opts.Rules, opts.Relation, opts.Constraints, scope)

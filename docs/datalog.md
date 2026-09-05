@@ -4,7 +4,7 @@ PUDL includes a Datalog evaluator that derives new facts from existing ones usin
 
 ## How It Works
 
-Rules are compiled to **parameterized SQL** and executed directly inside SQLite. Each body atom becomes a self-join on the `current_facts` table (or `facts` for temporal queries), with `json_extract()` for arg access. Shared variables across body atoms become equi-join conditions. Ground terms become WHERE predicates.
+Rules are compiled to **parameterized SQL** and executed directly inside SQLite. Each body atom becomes a self-join on the `current_facts` table (or `facts` for temporal queries). Argument access uses JSON text extraction and a checked numeric conversion before SQLite evaluates joins or filters. Shared variables across body atoms become equi-join conditions. Ground terms become WHERE predicates.
 
 **Non-recursive rules** are compiled to a single SQL query per rule. Multiple rules deriving the same relation are combined with UNION ALL.
 
@@ -92,6 +92,28 @@ This joins observations against catalog entries, finding origins that have obsta
 
 **Ground terms** (`"obstacle"`, `42`, `true`) match only the exact value.
 
+### Numeric values
+
+Queries preserve signed 64-bit integers, including values above `2^53`, across
+base, derived, recursive, and historical results. Integer spellings with a
+decimal point or exponent normalize before comparison. Non-integral decimals
+must round-trip through `float64` and Go JSON serialization without changing
+their decimal value. Unsupported numeric operands and accessed values fail
+with `unsupported query number`; raw evidence remains available through
+`pudl facts list` or `Store.QueryFacts`.
+
+For example, `9007199254740992` and `9007199254740993` stay distinct, while
+`9007199254740993` and `9.007199254740993e15` compare equally. See the
+[library numeric contract](library-api.md#numeric-query-contract) for the range,
+Go result types, and arithmetic limits.
+
+The compiler uses SQLite's [`->` operator](https://www.sqlite.org/json1.html#the_and_operators)
+to obtain the JSON token before `pudl_query_value` checks it. Using
+`json_extract` directly would convert the token to INTEGER/REAL before PUDL
+could detect lost precision. PUDL registers this function on its catalog
+connections; direct SQLite clients reading the computed `fact_scored_edb`
+view also need that function.
+
 ## Where Rules Live
 
 Rules follow PUDL's workspace scoping pattern:
@@ -124,6 +146,15 @@ pudl query at_risk -f my-analysis.cue
 
 # Machine-readable output
 pudl query depends_transitive --json
+```
+
+Numeric constraints are parsed without rounding. Preserve JSON quotes to match
+a numeric-looking string instead:
+
+```bash
+pudl query numbers n=9007199254740993 --json
+pudl query numbers n=9.007199254740993e15 --json
+pudl query numbers 'n="9007199254740993"' --json
 ```
 
 Rules are compiled to SQL, executed, and results filtered by the requested relation and constraints. Temporal flags switch from `current_facts` to the full `facts` table with time-scoped filters.

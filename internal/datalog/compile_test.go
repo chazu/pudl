@@ -65,10 +65,10 @@ func TestCompileTwoAtomJoin(t *testing.T) {
 	if !strings.Contains(cq.SQL, "current_facts t0, current_facts t1") {
 		t.Error("expected two table aliases")
 	}
-	if !strings.Contains(cq.SQL, "json_extract(t0.args, '$.to') = json_extract(t1.args, '$.target')") {
+	if !strings.Contains(cq.SQL, "pudl_query_value(t0.args -> '$.to') = pudl_query_value(t1.args -> '$.target')") {
 		t.Errorf("expected equi-join on shared variable $D, got:\n%s", cq.SQL)
 	}
-	if !strings.Contains(cq.SQL, "json_extract(t1.args, '$.kind') = ?") {
+	if !strings.Contains(cq.SQL, "pudl_query_value(t1.args -> '$.kind') = ?") {
 		t.Error("expected ground term binding for kind")
 	}
 
@@ -102,7 +102,7 @@ func TestCompileGroundTerms(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(cq.SQL, "json_extract(t0.args, '$.kind') = ?") {
+	if !strings.Contains(cq.SQL, "pudl_query_value(t0.args -> '$.kind') = ?") {
 		t.Error("expected ground term filter")
 	}
 
@@ -223,7 +223,7 @@ func TestCompileThreeWayJoin(t *testing.T) {
 		t.Error("expected three table aliases")
 	}
 
-	joinCount := strings.Count(cq.SQL, "json_extract(t") - 2 // subtract the SELECT projections
+	joinCount := strings.Count(cq.SQL, "pudl_query_value(t") - 2 // subtract the SELECT projections
 	if joinCount < 3 {
 		t.Errorf("expected multiple join/filter conditions, got SQL:\n%s", cq.SQL)
 	}

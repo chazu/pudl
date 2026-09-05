@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -193,12 +194,14 @@ func extractTerm(v cue.Value) (Term, error) {
 	case cue.StringKind:
 		s, _ := v.String()
 		return ParseTerm(s), nil
-	case cue.IntKind:
-		n, _ := v.Int64()
-		return Val(n), nil
-	case cue.FloatKind:
-		f, _ := v.Float64()
-		return Val(f), nil
+	case cue.IntKind, cue.FloatKind:
+		raw, err := v.MarshalJSON()
+		if err != nil {
+			return Term{}, err
+		}
+		// Retain the literal until the compiler checks the query numeric domain.
+		// Ignoring Int64/Float64 conversion errors used to clamp/round constants.
+		return Val(json.Number(raw)), nil
 	case cue.BoolKind:
 		b, _ := v.Bool()
 		return Val(b), nil

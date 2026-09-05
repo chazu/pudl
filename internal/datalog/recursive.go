@@ -11,6 +11,10 @@ import (
 const maxFixpointIterations = 100
 
 func EvalRecursive(db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
+	constraints, err := database.QueryConstraints(constraints)
+	if err != nil {
+		return nil, err
+	}
 	recRules, baseRules := PartitionRules(rules)
 
 	derivedRels := derivedRelations(rules)
@@ -203,7 +207,7 @@ func extractResults(tx *sql.Tx, relation string, headCols map[string][]string, c
 	var whereParts []string
 	var params []interface{}
 	for k, v := range constraints {
-		whereParts = append(whereParts, fmt.Sprintf("\"%s\" = ?", k))
+		whereParts = append(whereParts, fmt.Sprintf("\"%s\" = ?", strings.ReplaceAll(k, `"`, `""`)))
 		params = append(params, v)
 	}
 	if len(whereParts) > 0 {

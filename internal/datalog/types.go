@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -106,7 +105,7 @@ var aggTermPattern = regexp.MustCompile(`^(count|sum|min|max)\((\$[A-Za-z_][A-Za
 
 // cmpTermPattern matches a numeric comparison constraint, e.g. ">0.25" or "<=10".
 // Two-character operators are listed first so they win the alternation.
-var cmpTermPattern = regexp.MustCompile(`^(>=|<=|!=|>|<)\s*(-?\d+(?:\.\d+)?)$`)
+var cmpTermPattern = regexp.MustCompile(`^(>=|<=|!=|>|<)\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$`)
 
 // ParseTerm converts a raw value (from CUE or JSON) into a Term.
 // Strings starting with "$" are variables; "agg($Var)" (count/sum/min/max) are
@@ -118,22 +117,11 @@ func ParseTerm(v interface{}) Term {
 			return Term{Variable: m[2], Agg: m[1]}
 		}
 		if m := cmpTermPattern.FindStringSubmatch(s); m != nil {
-			return Term{Cmp: m[1], Value: parseNumber(m[2])}
+			return Term{Cmp: m[1], Value: json.Number(m[2])}
 		}
 		if strings.HasPrefix(s, "$") {
 			return Term{Variable: s}
 		}
 	}
 	return Term{Value: v}
-}
-
-// parseNumber parses a numeric literal as int64 when integral, else float64.
-func parseNumber(s string) interface{} {
-	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return i
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f
-	}
-	return s
 }

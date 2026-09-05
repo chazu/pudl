@@ -27,7 +27,8 @@ func LoadRulesFromPaths(paths ...string) ([]Rule, error) {
 	return datalog.LoadRulesFromPaths(paths...)
 }
 
-// ParseRulesFromSource parses rules from a CUE source string.
+// ParseRulesFromSource parses rules from a CUE source string. Numeric ground
+// terms retain json.Number values; query compilation checks their numeric range.
 func ParseRulesFromSource(source string) ([]Rule, error) {
 	return datalog.ParseRulesFromSource(source)
 }

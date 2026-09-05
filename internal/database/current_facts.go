@@ -106,8 +106,12 @@ func (c *CatalogDB) QueryCurrentFactsFiltered(relation string, argFilters map[st
 	args := []interface{}{relation}
 
 	for key, val := range argFilters {
-		conditions = append(conditions, "json_extract(args, ?) = ?")
-		args = append(args, "$."+key, val)
+		value, err := QueryParameter(val)
+		if err != nil {
+			return nil, err
+		}
+		conditions = append(conditions, "pudl_query_value(args -> ?) = ?")
+		args = append(args, "$."+key, value)
 	}
 
 	query := fmt.Sprintf(

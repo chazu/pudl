@@ -35,7 +35,9 @@ Repo-scoped rules shadow global rules with the same name.
 
 Ad-hoc rules can be loaded from a file with -f.
 
-Positional constraints filter results (field=value pairs).
+Positional constraints filter results (field=value pairs). JSON numeric values
+are parsed without rounding; other unquoted values are strings. To match a
+numeric-looking string, retain JSON quotes, e.g. 'id="123"'.
 
 Temporal modes (determined by which flags are set):
   (none)           Evaluate over current facts
@@ -73,7 +75,11 @@ Examples:
 		for _, arg := range args[1:] {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) == 2 {
-				constraints[parts[0]] = parts[1]
+				value, err := parseQueryConstraint(parts[1])
+				if err != nil {
+					return fmt.Errorf("constraint %s: %w", parts[0], err)
+				}
+				constraints[parts[0]] = value
 			}
 		}
 
@@ -144,6 +150,28 @@ Examples:
 		fmt.Printf("\n%d result(s)\n", len(results))
 		return nil
 	},
+}
+
+func parseQueryConstraint(raw string) (interface{}, error) {
+	// Preserve ordinary unquoted string operands, including identifiers such as
+	// 00123 that are not JSON numbers. JSON quotes explicitly request a string.
+	if !json.Valid([]byte(raw)) {
+		return raw, nil
+	}
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var value interface{}
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	switch v := value.(type) {
+	case json.Number:
+		return database.QueryNumber(v)
+	case string:
+		return v, nil
+	default:
+		return raw, nil
+	}
 }
 
 func printTuple(t datalog.Tuple) {

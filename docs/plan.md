@@ -4,6 +4,22 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Numeric query values and equality (2026-09-05)
+
+Completed `pudl-wby`, following the fact-identity repairs in `pudl-yrn`:
+
+- Integral results stay `int64` through base queries, SQL projections,
+  recursive temporary tables, and JSON output.
+- Current and historical filters, rule constants, comparisons, and joins share
+  a checked numeric domain. Equivalent decimal/exponent spellings normalize
+  before SQLite conversion; unsupported values fail explicitly.
+- CLI numeric constraints retain their digits; JSON-quoted operands select
+  numeric-looking strings. CUE numeric terms retain `json.Number` until checked.
+- Raw evidence and IDs remain intact, including values outside the query range.
+
+See [numeric query compatibility](library-api.md#numeric-query-contract) and
+[`implog/2026_09_05_numeric_query_contract.md`](../implog/2026_09_05_numeric_query_contract.md).
+
 ### Fact and query evidence correctness (2026-09-05)
 
 Completed assessment item 1, tracked as `pudl-yrn`:
@@ -328,6 +344,17 @@ affinity for numeric view columns.
 ## What's Next
 
 Potential future work, roughly ordered by value.
+
+### Maintained inventory workflow and reports
+
+1. **`pudl-sjk`: Self-contained Git inventory and drift walkthrough.** Supply
+   fixture data, a runnable model, copyable commands, and an end-to-end check.
+   A fresh user should obtain and explain a drift finding in five minutes.
+   Depends on completed numeric-query correctness ticket `pudl-wby`.
+2. **`pudl-qrl`: Explainable human and JSON reports.** Use that walkthrough to
+   verify observed/expected/previous values, observation age, failed checks,
+   durable evidence references, and machine-output consistency. Depends on
+   `pudl-sjk`.
 
 ### Cross-Resource Value Wiring — Implementation at the Populate/Approval Boundary
 

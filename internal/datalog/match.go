@@ -1,8 +1,8 @@
 package datalog
 
 import (
-	"encoding/json"
-	"fmt"
+	"math/big"
+	"reflect"
 )
 
 // matchConstraints checks if a tuple satisfies the given field constraints.
@@ -16,34 +16,22 @@ func matchConstraints(t Tuple, constraints map[string]interface{}) bool {
 	return true
 }
 
-// valuesEqual compares two values for equality, handling numeric type coercion.
+// valuesEqual compares normalized query values. Mixed INTEGER/REAL comparison
+// uses exact binary values, as SQLite does, never converting the integer to REAL.
 func valuesEqual(a, b interface{}) bool {
-	// Try direct comparison
-	if fmt.Sprintf("%v", a) == fmt.Sprintf("%v", b) {
-		return true
+	af, bf := numericRat(a), numericRat(b)
+	if af != nil && bf != nil {
+		return af.Cmp(bf) == 0
 	}
-	// Numeric coercion: JSON numbers are float64, Go literals might be int
-	af, aOk := toFloat64(a)
-	bf, bOk := toFloat64(b)
-	if aOk && bOk {
-		return af == bf
-	}
-	return false
+	return reflect.DeepEqual(a, b)
 }
 
-func toFloat64(v interface{}) (float64, bool) {
+func numericRat(v interface{}) *big.Rat {
 	switch n := v.(type) {
 	case float64:
-		return n, true
-	case float32:
-		return float64(n), true
-	case int:
-		return float64(n), true
+		return new(big.Rat).SetFloat64(n)
 	case int64:
-		return float64(n), true
-	case json.Number:
-		f, err := n.Float64()
-		return f, err == nil
+		return new(big.Rat).SetInt64(n)
 	}
-	return 0, false
+	return nil
 }

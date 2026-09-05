@@ -2,7 +2,6 @@ package datalog
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,6 +19,10 @@ func NewSQLEvaluator(db *database.CatalogDB, rules []Rule, scope TemporalScope) 
 }
 
 func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}) ([]Tuple, error) {
+	constraints, err := database.QueryConstraints(constraints)
+	if err != nil {
+		return nil, err
+	}
 	matching := e.rulesForRelation(relation)
 	if len(matching) == 0 {
 		return e.fallbackEDB(relation, constraints)
@@ -113,8 +116,12 @@ func (e *SQLEvaluator) fallbackEDB(relation string, constraints map[string]inter
 
 	tuples := make([]Tuple, 0, len(facts))
 	for _, f := range facts {
-		var args map[string]interface{}
-		if err := json.Unmarshal([]byte(f.Args), &args); err != nil {
+		value, err := database.DecodeQueryJSON(f.Args)
+		if err != nil {
+			return nil, fmt.Errorf("fact %s: %w", f.ID, err)
+		}
+		args, ok := value.(map[string]interface{})
+		if !ok {
 			continue
 		}
 		t := Tuple{Relation: relation, Args: args}
@@ -155,8 +162,6 @@ func normalizeValue(v interface{}) interface{} {
 	switch val := v.(type) {
 	case []byte:
 		return string(val)
-	case int64:
-		return float64(val)
 	default:
 		return val
 	}
