@@ -42,21 +42,17 @@ func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}
 
 	if len(constraints) > 0 {
 		fullSQL = fmt.Sprintf("SELECT * FROM (\n%s\n) AS derived", fullSQL)
-		for key, val := range constraints {
-			fullSQL += fmt.Sprintf(" WHERE \"%s\" = ?", key)
-			allParams = append(allParams, val)
-			break // first constraint as WHERE
+		keys := make([]string, 0, len(constraints))
+		for key := range constraints {
+			keys = append(keys, key)
 		}
-		// remaining constraints as AND
-		first := true
-		for key, val := range constraints {
-			if first {
-				first = false
-				continue
-			}
-			fullSQL += fmt.Sprintf(" AND \"%s\" = ?", key)
-			allParams = append(allParams, val)
+		sortStrings(keys)
+		var predicates []string
+		for _, key := range keys {
+			predicates = append(predicates, fmt.Sprintf("derived.\"%s\" = ?", strings.ReplaceAll(key, `"`, `""`)))
+			allParams = append(allParams, constraints[key])
 		}
+		fullSQL += " WHERE " + strings.Join(predicates, " AND ")
 	}
 
 	rows, err := e.db.DB().Query(fullSQL, allParams...)

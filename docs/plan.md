@@ -4,6 +4,25 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Fact and query evidence correctness (2026-09-05)
+
+Completed assessment item 1, tracked as `pudl-yrn`:
+
+- Fact replay preserves stored lifecycle and provenance; current and historical
+  query paths agree after retraction or invalidation, including transactional
+  replay. Migration 17 repairs legacy current rows and search indexes atomically
+  without changing historical facts or their IDs.
+- Derived queries apply every constraint consistently.
+- Fact identity uses exact decimal canonicalization. Adjacent large integers
+  remain distinct, equivalent spellings deduplicate, and conflicting legacy IDs
+  fail explicitly. Existing-ID compatibility and source recovery limits are
+  documented in `docs/facts.md`.
+- Nonlinear recursive rules combine new and accumulated tuples correctly,
+  including cycles, historical queries, and inputs produced in different rounds.
+
+Public-interface regressions cover all four defects. See
+[`implog/2026_09_05_fact_query_correctness.md`](../implog/2026_09_05_fact_query_correctness.md).
+
 ### Repository-local run-set kick-the-tires (2026-08-05)
 
 The in-repository `.pudl` fixture now exercises real mu observe, planning,

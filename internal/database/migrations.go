@@ -22,6 +22,9 @@ import (
 // guarded by their own emptiness checks. A migration changes the schema's shape;
 // a view or a sync restates it from the current source. Versioning a view would
 // make a change to its body a no-op until someone bumped a number.
+// Version 17 is a one-time data repair for a historical replay bug, rather than
+// a recurring view definition or sync. Recording it avoids rebuilding both fact
+// projections on every open; its transaction preserves the authoritative facts.
 
 // migration is one ordered, recorded schema change.
 type migration struct {
@@ -58,6 +61,7 @@ var migrations = []migration{
 	{14, "run_approvals", (*CatalogDB).ensureRunApprovalsTable},
 	{15, "run_set_reports", (*CatalogDB).ensureRunSetReportsTable},
 	{16, "run_set_approvals", (*CatalogDB).ensureRunSetApprovalsTable},
+	{17, "repair_fact_projections", (*CatalogDB).repairFactProjections},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step

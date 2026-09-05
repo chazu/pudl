@@ -112,82 +112,80 @@ func seedBase(tx *sql.Tx, baseRules []Rule, derived map[string]bool, headCols ma
 	return nil
 }
 
-func fixpointLoop(tx *sql.Tx, recRules []Rule, derived map[string]bool, headCols map[string][]string, scope TemporalScope) error {
-	for iter := 0; iter < maxFixpointIterations; iter++ {
-		totalNew := 0
+// recursiveQueries compiles one semi-naive variant per derived body atom:
+// that occurrence reads delta, and every other occurrence reads all known rows.
+// A relation-level override alone cannot represent nonlinear self-joins.
+func recursiveQueries(rules []Rule, derived map[string]bool, scope TemporalScope) ([]*CompiledQuery, error) {
+	overrides := make(map[string]string, len(derived))
+	for rel := range derived {
+		overrides[rel] = fmt.Sprintf("\"_rule_%s\"", rel)
+	}
+	overrides = withBuiltinEDB(overrides)
+	var queries []*CompiledQuery
+	for _, rule := range rules {
+		for i, atom := range rule.Body {
+			if !derived[atom.Rel] {
+				continue
+			}
+			cq, err := CompileWithOptions(rule, scope, CompileOptions{
+				TableOverrides:     overrides,
+				AtomTableOverrides: map[int]string{i: fmt.Sprintf("\"_delta_%s\"", atom.Rel)},
+			})
+			if err != nil {
+				return nil, fmt.Errorf("compile recursive rule %s: %w", rule.Name, err)
+			}
+			queries = append(queries, cq)
+		}
+	}
+	return queries, nil
+}
 
+func fixpointLoop(tx *sql.Tx, recRules []Rule, derived map[string]bool, headCols map[string][]string, scope TemporalScope) error {
+	queries, err := recursiveQueries(recRules, derived, scope)
+	if err != nil {
+		return err
+	}
+	for iter := 0; iter < maxFixpointIterations; iter++ {
+		var totalNew int64
 		for rel := range derived {
 			if _, err := tx.Exec(fmt.Sprintf("DELETE FROM \"_new_%s\"", rel)); err != nil {
 				return fmt.Errorf("clear _new_%s: %w", rel, err)
 			}
 		}
-
-		for _, rule := range recRules {
-			overrides := make(map[string]string)
-			for _, atom := range rule.Body {
-				if derived[atom.Rel] {
-					overrides[atom.Rel] = fmt.Sprintf("\"_delta_%s\"", atom.Rel)
-				}
-			}
-
-			cq, err := CompileWithOptions(rule, scope, CompileOptions{TableOverrides: withBuiltinEDB(overrides)})
-			if err != nil {
-				return fmt.Errorf("compile recursive rule %s: %w", rule.Name, err)
-			}
-
-			cols := headCols[rule.Head.Rel]
-			colList := colDefList(cols)
-
-			// Insert into _new_, skipping rows already in _rule_
-			insertSQL := fmt.Sprintf("INSERT OR IGNORE INTO \"_new_%s\" (%s) %s", rule.Head.Rel, colList, cq.SQL)
+		for _, cq := range queries {
+			rel := cq.Head.Rel
+			insertSQL := fmt.Sprintf("INSERT OR IGNORE INTO \"_new_%s\" (%s) %s", rel, colDefList(headCols[rel]), cq.SQL)
 			if _, err := tx.Exec(insertSQL, cq.Params...); err != nil {
-				return fmt.Errorf("insert _new_%s iter %d: %w", rule.Name, iter, err)
+				return fmt.Errorf("derive %s iter %d: %w", rel, iter, err)
 			}
 		}
 
-		// Move genuinely new rows from _new_ into _rule_ and count
+		// Compute each delta BEFORE merging it, so the next round only sees
+		// genuinely new tuples. All rule variants above see the same round.
 		for rel := range derived {
-			cols := headCols[rel]
-			colList := colDefList(cols)
-
-			insertSQL := fmt.Sprintf(
-				"INSERT OR IGNORE INTO \"_rule_%s\" (%s) SELECT %s FROM \"_new_%s\"",
-				rel, colList, colList, rel,
-			)
-			res, err := tx.Exec(insertSQL)
-			if err != nil {
-				return fmt.Errorf("merge _new_ to _rule_%s iter %d: %w", rel, iter, err)
-			}
-			n, _ := res.RowsAffected()
-			totalNew += int(n)
-		}
-
-		if totalNew == 0 {
-			return nil
-		}
-
-		// Rebuild delta: only the genuinely new rows (those that were just added to _rule_)
-		for rel := range derived {
-			cols := headCols[rel]
-			colList := colDefList(cols)
-
+			cols := colDefList(headCols[rel])
 			if _, err := tx.Exec(fmt.Sprintf("DELETE FROM \"_delta_%s\"", rel)); err != nil {
 				return fmt.Errorf("clear delta %s: %w", rel, err)
 			}
-			// _new_ may contain rows already in _rule_ before this iteration.
-			// The genuinely new ones are in _new_ AND were just inserted (RowsAffected counted them).
-			// Since _rule_ has PK dedup, the rows in _new_ that are also new in _rule_ are the delta.
-			// We can get them by: _new_ EXCEPT rows that were in _rule_ before. But we don't have the "before" snapshot.
-			// Alternative: since _new_ was built from _delta_ joins, and _rule_ only grew, just use _new_ as delta.
-			// This is slightly less efficient (may re-derive known facts) but still terminates because
-			// _rule_ grows monotonically and is finite, so eventually no new rows ⇒ totalNew == 0.
-			rebuildSQL := fmt.Sprintf(
-				"INSERT OR IGNORE INTO \"_delta_%s\" (%s) SELECT %s FROM \"_new_%s\"",
-				rel, colList, colList, rel,
-			)
-			if _, err := tx.Exec(rebuildSQL); err != nil {
-				return fmt.Errorf("rebuild delta %s: %w", rel, err)
+			deltaSQL := fmt.Sprintf(
+				"INSERT INTO \"_delta_%s\" (%s) SELECT %s FROM \"_new_%s\" EXCEPT SELECT %s FROM \"_rule_%s\"",
+				rel, cols, cols, rel, cols, rel)
+			res, err := tx.Exec(deltaSQL)
+			if err != nil {
+				return fmt.Errorf("compute delta %s iter %d: %w", rel, iter, err)
 			}
+			n, err := res.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("count delta %s: %w", rel, err)
+			}
+			totalNew += n
+			mergeSQL := fmt.Sprintf("INSERT INTO \"_rule_%s\" (%s) SELECT %s FROM \"_delta_%s\"", rel, cols, cols, rel)
+			if _, err := tx.Exec(mergeSQL); err != nil {
+				return fmt.Errorf("merge delta %s iter %d: %w", rel, iter, err)
+			}
+		}
+		if totalNew == 0 {
+			return nil
 		}
 	}
 	return fmt.Errorf("fixpoint not reached after %d iterations", maxFixpointIterations)

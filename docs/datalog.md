@@ -275,6 +275,14 @@ For details on fact lifecycle (retraction vs invalidation) and the bitemporal mo
 
 ## Performance
 
+Recursive rules may contain multiple derived body atoms, including nonlinear
+self-joins such as `reach(X,Z) :- reach(X,Y), reach(Y,Z)`. Each round evaluates
+one variant per derived occurrence: that occurrence reads newly derived tuples,
+and the others read accumulated tuples. The next delta excludes tuples already
+known. This also handles derived inputs that become available in different
+rounds, and applies identically to current and historical queries. Recursive
+aggregation remains unsupported.
+
 Rules compile to SQL, so SQLite's query planner handles join ordering and index selection. The `current_facts` table is indexed on `relation` for fast base-case lookups. Recursive evaluation uses temp tables with primary key dedup, avoiding redundant re-derivation.
 
 The safety limit for recursive fixpoint is 100 iterations. For typical workloads (hundreds of rules, thousands of facts), evaluation completes in milliseconds.

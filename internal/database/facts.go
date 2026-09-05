@@ -1,9 +1,7 @@
 package database
 
 import (
-	"crypto/sha256"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,29 +34,6 @@ type FactFilter struct {
 	Relation string // required
 	ValidAt  *int64 // optional: filter by valid time
 	TxAt     *int64 // optional: filter by transaction time
-}
-
-// ComputeFactID produces a content-addressed ID for a fact.
-// ID = SHA256(relation + "\x00" + canonical_args + "\x00" + valid_start + "\x00" + source)
-func ComputeFactID(relation, args string, validStart int64, source string) string {
-	// Canonicalize args JSON to ensure consistent hashing
-	canonical := canonicalizeJSON(args)
-	payload := fmt.Sprintf("%s\x00%s\x00%d\x00%s", relation, canonical, validStart, source)
-	hash := sha256.Sum256([]byte(payload))
-	return fmt.Sprintf("%x", hash)
-}
-
-// canonicalizeJSON re-serializes JSON with sorted keys for consistent hashing.
-func canonicalizeJSON(raw string) string {
-	var obj map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
-		return raw // not valid JSON object, use as-is
-	}
-	canonical, err := json.Marshal(obj)
-	if err != nil {
-		return raw
-	}
-	return string(canonical)
 }
 
 // ensureFactsTable creates the facts table and indexes. Idempotent.
@@ -146,7 +121,7 @@ func addFactIn(q dbtx, f Fact) (Fact, error) {
 	// INSERT OR IGNORE: facts are content-addressed by ID, so re-adding an
 	// identical fact is a no-op (natural deduplication), making replays and
 	// imports idempotent.
-	_, err := q.Exec(
+	result, err := q.Exec(
 		`INSERT OR IGNORE INTO facts (id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		f.ID, f.Relation, f.Args, f.ValidStart, f.ValidEnd,
@@ -154,10 +129,35 @@ func addFactIn(q dbtx, f Fact) (Fact, error) {
 	if err != nil {
 		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to add fact", err)
 	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to read fact insert result", err)
+	}
+	if inserted == 0 {
+		// A replay must project the stored fact, not the caller's stale copy.
+		// In particular, terminal bounds and original provenance survive dedup.
+		stored, err := scanFact(q.QueryRow(
+			`SELECT id, relation, args, valid_start, valid_end, tx_start, tx_end, source, provenance
+			 FROM facts WHERE id = ?`, f.ID))
+		if err != nil {
+			return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to read deduplicated fact", err)
+		}
+		if stored.Relation != f.Relation || stored.ValidStart != f.ValidStart || stored.Source != f.Source ||
+			canonicalizeJSON(stored.Args) != canonicalizeJSON(f.Args) {
+			return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput,
+				fmt.Sprintf("fact ID %s conflicts with stored content; preserve the stored fact and review the incoming evidence", f.ID), nil)
+		}
+		f = *stored
+	}
 
 	if f.ValidEnd == nil && f.TxEnd == nil {
 		if err := insertCurrentFact(q, f); err != nil {
 			return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to update current_facts", err)
+		}
+	} else if inserted == 0 {
+		// Also repair a stale materialized row left by an older replay.
+		if err := deleteCurrentFact(q, f.ID); err != nil {
+			return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to remove terminal current fact", err)
 		}
 	}
 
