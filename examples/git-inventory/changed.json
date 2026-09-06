@@ -1,0 +1,13 @@
+[
+  {
+    "_schema": "git.repository",
+    "name": "local/demo",
+    "default_branch": "release",
+    "bare": false,
+    "remotes": [],
+    "branches": [
+      {"name": "main", "sha": "1111111111111111111111111111111111111111"},
+      {"name": "release", "sha": "2222222222222222222222222222222222222222"}
+    ]
+  }
+]

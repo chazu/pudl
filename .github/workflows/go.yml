@@ -53,6 +53,7 @@ jobs:
           cache: true
       - run: go install github.com/chazu/mu/cmd/mu@${MU_VERSION}
       - run: make test-kick-tires
+      - run: make test-git-walkthrough
 
   smoke:
     name: smoke (external tools/infrastructure)

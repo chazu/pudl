@@ -17,6 +17,7 @@ Overview of the testing strategy for PUDL.
 | Integration | `test/integration/` | End-to-end import-to-catalog workflows |
 | System | `test/system/` | Reliability, config, edge cases, stress tests |
 | Repository smoke | `test/smoke/repository_kick_tires*_test.go` | Real-mu run-sets, approvals, sealed boundaries, and concurrency |
+| Getting-started smoke | `test/smoke/git_inventory_walkthrough_test.go` | Documented Git inventory commands, drift, snapshot evidence, and isolation |
 
 ## Running Tests
 
@@ -66,6 +67,21 @@ Each test initializes a nested repository beneath
 `.pudl/data/kick-tires/test-runs/`; the fresh PUDL binary is built beneath
 `.pudl/data/smoke/bin/`. Cleanup removes individual test workspaces, and no
 PUDL catalog or provider state is written outside the checkout.
+
+### Git inventory walkthrough
+
+```bash
+mise exec -- make test-git-walkthrough
+```
+
+Requires Bash, Git, Python 3, and mu (CI pins v0.3.5). The test builds a fresh
+PUDL binary and executes the marked command blocks from
+[getting-started.md](getting-started.md) verbatim. It verifies the clean baseline,
+changed inventory, repeat finding, durable report replay, and typed snapshot
+members through CLI commands. Source and temporary workspace paths include
+spaces. Test workspaces stay below `.pudl/data/git-walkthrough/test-runs/` and
+are removed afterward; the test checks that no global PUDL or mu state appears.
+CI runs this check alongside the repository kick-the-tires matrix.
 
 ### By category
 ```bash
