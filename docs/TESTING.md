@@ -22,9 +22,14 @@ Overview of the testing strategy for PUDL.
 
 ## Running Tests
 
-The repository targets Go 1.25.8. The CI quality gate also runs the generated
-skill check and uses the explicit `checkptr` exception below because the CDC
-dependency uses unsafe pointer arithmetic.
+The repository targets Go 1.26.2, pinned in `mise.toml` and CI. Run
+`mise install` once, then use `mise exec --` before the Go and Make commands
+below to select the project toolchain. With mise activated in your shell,
+the toolchain is selected automatically inside this checkout.
+
+The CI quality gate also runs the generated skill check and uses the explicit
+`checkptr` exception below because the CDC dependency uses unsafe pointer
+arithmetic.
 
 ### All tests
 ```bash
