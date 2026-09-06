@@ -4,6 +4,24 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Self-contained Git inventory walkthrough (2026-09-05)
+
+Completed `pudl-sjk`:
+
+- `examples/git-inventory/` supplies the observe-only model, Python mu observer,
+  and clean/changed inventory fixtures using the shipped Git schema.
+- [Getting started](getting-started.md) creates an isolated temporary workspace,
+  captures a clean baseline, finds `release` versus expected `main` drift, repeats
+  the observation, and follows durable run IDs to snapshots and raw records.
+- `make test-git-walkthrough` executes the guide's command blocks verbatim with
+  real mu, checking findings, historical report replay, typed snapshot members,
+  and workspace isolation. CI runs it on every push and pull request.
+- The workflow exposed and fixed desired-record decoding: quoted CUE labels
+  retain their actual field names, and absent optional fields no longer become
+  invented expectations.
+
+See [`implog/2026_09_05_git_inventory_walkthrough.md`](../implog/2026_09_05_git_inventory_walkthrough.md).
+
 ### Numeric query values and equality (2026-09-05)
 
 Completed `pudl-wby`, following the fact-identity repairs in `pudl-yrn`:
@@ -347,14 +365,12 @@ Potential future work, roughly ordered by value.
 
 ### Maintained inventory workflow and reports
 
-1. **`pudl-sjk`: Self-contained Git inventory and drift walkthrough.** Supply
-   fixture data, a runnable model, copyable commands, and an end-to-end check.
-   A fresh user should obtain and explain a drift finding in five minutes.
-   Depends on completed numeric-query correctness ticket `pudl-wby`.
-2. **`pudl-qrl`: Explainable human and JSON reports.** Use that walkthrough to
-   verify observed/expected/previous values, observation age, failed checks,
-   durable evidence references, and machine-output consistency. Depends on
-   `pudl-sjk`.
+**`pudl-qrl`: Explainable human and JSON reports.** Use the completed Git
+walkthrough to verify observed/expected/previous values, observation age, failed
+checks, durable evidence references, and machine-output consistency. Its
+prerequisite `pudl-sjk` is complete. The current walkthrough documents the
+existing report semantics: `ok` records successful execution, populate counts
+newly stored records, and snapshot evidence is reached through the JSON report.
 
 ### Cross-Resource Value Wiring — Implementation at the Populate/Approval Boundary
 

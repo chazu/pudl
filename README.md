@@ -4,28 +4,24 @@ PUDL is a CLI tool for building a local, schema-validated data lake. Import JSON
 
 ## Quick Start
 
+Start with the [Git inventory walkthrough](docs/getting-started.md). It supplies
+the model, observer, inventory fixtures, and copyable commands to obtain a drift
+finding in about five minutes once the local tools are installed. You will
+capture a clean baseline, change the observed default branch from `main` to
+`release`, and inspect the report and its retained snapshot. Everything stays
+inside a temporary repository; no external account or credentials are needed.
+
+From this checkout, build with the pinned toolchain:
+
 ```bash
-# Build and initialize this repository
-go build -o pudl .
-./pudl repo init
+mise exec -- make build
+```
 
-# Import some data
-pudl import --path aws-ec2-instances.json
-pudl import --path k8s-pods.yaml
+Then follow the guide's setup and run commands. It requires Git, Python 3, Bash,
+and mu (tested with v0.3.5). The documented workflow is also an automated check:
 
-# Query your catalog
-pudl list
-pudl show mivof-duhij --raw
-
-# Check schema health
-pudl verify
-
-# Run a system model: populate, detect drift, run checks, report
-pudl model list
-pudl run my-server
-
-# Run exactly the named producer/consumer models in dependency order
-pudl run-set network my-server
+```bash
+mise exec -- make test-git-walkthrough
 ```
 
 ## What Happens When You Import

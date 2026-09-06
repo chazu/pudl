@@ -1,288 +1,162 @@
-# Getting Started
+# Getting started: Git inventory and drift
+
+This walkthrough captures a supplied Git repository inventory, checks its default
+branch against a declared expectation, and retains the evidence for each run.
+It uses the built-in `pudl/git.#GitRepository` schema and takes about five minutes
+once the local tools are installed. No external account or credentials are needed.
+The inventory describes a fictional `local/demo` repository; the observer reads
+JSON fixtures rather than contacting a Git hosting service.
 
 ## Prerequisites
 
-- Go 1.25.8+ (for building from source)
-- Git (for schema version control)
-
-## 1. Install and Initialize
+Use Bash on macOS or Linux, Git, Python 3, and `mu` on your `PATH`. This workflow
+is tested with **mu v0.3.5**. Install that version with Go if needed:
 
 ```bash
-# Build PUDL
-go build -o pudl .
-
-# Initialize this repository's self-contained workspace
-./pudl repo init
+go install github.com/chazu/mu/cmd/mu@v0.3.5
+export PATH="$(go env GOPATH)/bin:$PATH"
+mu version
 ```
 
-This creates `.pudl/` in the repository with:
-- A configuration file (`config.yaml`)
-- A CUE module with all built-in resource schemas, rules,
-  and `pudl/systemmodel.#SystemModel`
-- Repository-local raw data, metadata, SQLite catalog, facts, reports,
-  snapshots, and approvals
-
-`pudl repo init` is safe to repeat and repairs missing owned files. Outside a
-repository workspace, `pudl init` creates the equivalent global `~/.pudl/`
-layout and ordinary commands auto-initialize that global mode on first use.
-
-## 2. Import Some Data
+From a PUDL source checkout, build the CLI using the repository's pinned toolchain
+(`mise`), or use `make build` with the Go version declared in `go.mod`:
 
 ```bash
-pudl import --path aws-ec2-instances.json
+mise exec -- make build
 ```
 
-PUDL will:
-1. Hash the file contents (SHA256) for deduplication
-2. Detect the format (JSON, NDJSON, YAML, or CSV)
-3. Infer the best matching CUE schema
-4. Extract resource identity fields
-5. Store the raw file and metadata
-6. Add a catalog entry
+Run the following blocks in order, in the same Bash shell, starting at the root
+of that checkout. Setup checks the required tools before creating the workspace.
 
-Output looks like:
+## 1. Create an isolated workspace
 
+<!-- walkthrough:setup -->
+```bash
+pudl_source="$PWD"
+pudl_bin="$pudl_source/pudl"
+test -x "$pudl_bin" || { echo 'Build PUDL first: mise exec -- make build' >&2; exit 1; }
+for tool in git mu python3; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "Missing required tool: $tool" >&2; exit 1; }
+done
+walkthrough="$(mktemp -d "${TMPDIR:-/tmp}/pudl-git-inventory.XXXXXX")"
+git init -q "$walkthrough"
+cd "$walkthrough"
+"$pudl_bin" repo init
+mkdir -p .pudl/populators/git-inventory .pudl/data/mu .pudl/data/walkthrough
+cp "$pudl_source/examples/git-inventory/model.cue" .pudl/schema/models/git_inventory.cue
+for file in observe.py baseline.json changed.json; do
+  cp "$pudl_source/examples/git-inventory/$file" .pudl/populators/git-inventory/
+done
+cp .pudl/populators/git-inventory/baseline.json .pudl/populators/git-inventory/current.json
+python3 - <<'PY' > .pudl/data/mu/mu.cue
+import json
+from pathlib import Path
+print('package mu')
+print('cache: backends: [{type: "disk", path: ' + json.dumps(str(Path('.pudl/data/mu/cache').resolve())) + '}]')
+PY
+"$pudl_bin" model validate git-inventory
+printf 'Workspace: %s\n' "$walkthrough"
 ```
-Imported: aws-ec2-instances.json
-   ID:       mivof-duhij
-   Schema:   aws/ec2.#Instance (confidence: 0.85)
-   Format:   json
-   Records:  1
+
+The supplied model in `.pudl/schema/models/git_inventory.cue` declares
+`default_branch: "main"` for `local/demo`. Its observer reads `current.json`;
+PUDL resolves the `git.repository` resource type to the shipped Git schema.
+The model runs the local Python observer through mu's `command` form, so mu does
+not install a global plugin copy. `--mu-root` and the explicit disk backend keep
+mu's project and cache local. PUDL's catalog lives at `.pudl/data/sqlite/catalog.db`.
+
+## 2. Capture the clean baseline
+
+<!-- walkthrough:baseline -->
+```bash
+"$pudl_bin" run git-inventory --mu-root .pudl/data/mu --json > .pudl/data/walkthrough/baseline.json
+"$pudl_bin" run report
 ```
 
-You can override detection when needed:
+The report shows one observed record and clean drift: the observed default
+branch and the model's expectation are both `main`. The JSON report retains
+`run_id` and `populate.snapshot_id` for inspecting this exact observation later.
+
+## 3. Change the inventory and find drift
+
+Replace the observed inventory with the supplied version whose default branch
+is `release`. The model continues to expect `main`.
+
+<!-- walkthrough:change -->
+```bash
+cp .pudl/populators/git-inventory/changed.json .pudl/populators/git-inventory/current.json
+"$pudl_bin" run git-inventory --mu-root .pudl/data/mu --json > .pudl/data/walkthrough/changed.json
+"$pudl_bin" run report
+```
+
+The drift section identifies the resource and both values:
+
+```text
+git.repository/local/demo (changed): default_branch: release → want main
+```
+
+In JSON, `drift.clean` is `false` and `drift.drifted` contains that finding.
+`ok: true` and a zero exit status mean this observation completed successfully;
+they do not mean the inventory matches. This model declares no fail-severity
+checks and performs no convergence. For automation, inspect `drift.clean`.
+
+## 4. Repeat the observation
+
+<!-- walkthrough:repeat -->
+```bash
+"$pudl_bin" run git-inventory --mu-root .pudl/data/mu --json > .pudl/data/walkthrough/repeat.json
+"$pudl_bin" run report
+```
+
+The same mismatch remains, with a new run ID and snapshot ID. Each run compares
+the expectation against its own snapshot. The earlier clean observation is
+still available by its run ID. The repeat's populate count is zero because its
+record content is already stored; the new snapshot still contains one member.
+
+## 5. Follow the finding to its evidence
+
+Use the changed run's stored IDs, even though the repeat run is now the latest.
+The snapshot identifies its run and observed record count; listing its members
+and showing the record reveals the actual `release` value.
+Run observations use origin `pudl-run`; specify it when listing to override the
+default filter for imports named after the workspace.
+
+<!-- walkthrough:evidence -->
+```bash
+changed_run_id="$(python3 -c 'import json; print(json.load(open(".pudl/data/walkthrough/changed.json"))["run_id"])')"
+changed_snapshot_id="$(python3 -c 'import json; print(json.load(open(".pudl/data/walkthrough/changed.json"))["populate"]["snapshot_id"])')"
+"$pudl_bin" run report "$changed_run_id"
+"$pudl_bin" run report "$changed_run_id" --json
+"$pudl_bin" show "$changed_snapshot_id" --raw
+"$pudl_bin" list --origin pudl-run --collection-id "$changed_snapshot_id" --json > .pudl/data/walkthrough/changed-records.json
+changed_record_id="$(python3 -c 'import json; print(json.load(open(".pudl/data/walkthrough/changed-records.json"))["entries"][0]["id"])')"
+"$pudl_bin" show "$changed_record_id" --raw
+baseline_run_id="$(python3 -c 'import json; print(json.load(open(".pudl/data/walkthrough/baseline.json"))["run_id"])')"
+"$pudl_bin" run report "$baseline_run_id"
+```
+
+The baseline report remains clean. The changed and repeat reports retain the
+observed/expected comparison. The raw record is typed as
+`pudl/git.#GitRepository`. All catalogs, snapshots, generated mu projects, and
+saved reports are inside the temporary workspace printed during setup.
+
+Keep that directory to explore, or return to your source checkout and delete
+the printed temporary directory when finished. Running setup again from the
+checkout creates a new independent workspace.
+
+## Maintained acceptance check
+
+From the source checkout, run:
 
 ```bash
-# Specify origin manually
-pudl import --path data.json --origin my-custom-source
-
-# Specify schema explicitly (skips inference)
-pudl import --path data.json --schema aws/ec2.#Instance
+mise exec -- make test-git-walkthrough
 ```
 
-NDJSON files are automatically detected and split into collections. Typed envelope JSON
-is handled by the same import path: its `{schema, definitions?, data}` metadata is
-recorded and the inner `data` payload is imported.
-
-```bash
-pudl import --path cloud-inventory.json
-# Output: Detected format: ndjson
-#         Created collection with 832 items
-```
-
-## 3. List and Show Entries
-
-### List entries
-
-```bash
-# All entries
-pudl list
-
-# Filter by schema, origin, or format
-pudl list --schema aws/ec2.#Instance
-pudl list --origin k8s --format yaml
-
-# Sort and limit
-pudl list --sort-by size --reverse --limit 10
-
-# Verbose mode with file paths and statistics
-pudl list --verbose
-
-# Interactive TUI
-pudl list --fancy
-
-# Collections only, or items from a specific collection
-pudl list --collections-only
-pudl list --collection-id cloud-inventory
-```
-
-### Inspect an entry
-
-```bash
-# Summary view
-pudl show mivof-duhij
-
-# Show raw data
-pudl show mivof-duhij --raw
-
-# Show import metadata
-pudl show mivof-duhij --metadata
-```
-
-### View the schema catalog
-
-```bash
-# List all registered schema types
-pudl catalog
-
-# With additional metadata
-pudl catalog --verbose
-```
-
-## 4. Write a Schema
-
-Generate a schema from existing data:
-
-```bash
-# Generate from an imported entry
-pudl schema new --from mivof-duhij --path mypackage/#MyResource
-```
-
-Or write one by hand. A PUDL schema is a CUE definition with a `_pudl` metadata block:
-
-```cue
-package mypackage
-
-#MyResource: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "mypackage.myresource"
-        identity_fields: ["id"]
-        tracked_fields:  ["status", "name"]
-    }
-    id:     string
-    name:   string
-    status: string
-    ...
-}
-```
-
-Add it to the schema repository:
-
-```bash
-pudl schema add mypackage.my-resource my-schema.cue
-pudl schema status    # See uncommitted changes
-pudl schema commit -m "Add custom resource schema"
-```
-
-After adding schemas, re-classify existing entries:
-
-```bash
-pudl schema reinfer
-```
-
-See [schema-authoring.md](schema-authoring.md) for the full guide on writing schemas.
-
-## 5. Validate Data Against Schemas
-
-Check whether imported data conforms to its assigned schema:
-
-```bash
-# Validate a specific entry by proquint ID
-pudl validate --entry mivof-duhij
-
-# Validate all catalog entries
-pudl validate --all
-
-# Validate all with detailed output
-pudl validate --all --verbose
-```
-
-Validation uses native CUE unification. If the assigned schema rejects the data, PUDL falls through to the base schema, then to the catchall. Data is never rejected outright.
-
-## 6. Work with System Models
-
-A model is a `#SystemModel` instance -- a named CUE value declaring how to observe the world, the `desired` shape it should have, and the `checks` that must hold. Each entry in a model's `desired` block is a desired resource: the per-status unit of intended state.
-
-```bash
-# List models
-pudl model list
-
-# Show a specific model
-pudl model show prod_stack
-
-# Validate a model against #SystemModel
-pudl model validate prod_stack
-```
-
-See [definition-authoring.md](definition-authoring.md) for the full guide.
-
-## 7. Run a Model
-
-`pudl run` drives a model through an observe-only ACUTE loop -- populate, drift, checks, report:
-
-```bash
-# Observe only: populate sources, compute drift, run checks, record a verdict
-pudl run prod_stack
-
-# Converge: close drift by rendering desired state to sources (the mu plugin reconciles)
-pudl run prod_stack --converge
-```
-
-By default `pudl run` changes nothing in the world; it computes drift and reports. `--converge` closes that drift -- pudl declares state, mu executes.
-
-When one model consumes an observed scalar from another, declare a required
-`inputs` slot and a matching `bindings` entry. Both the consumer slot and the
-source schema field must opt into `@pudl(binding=plain)`. Run the closed set
-explicitly so the producer's observation is pinned for the consumer:
-
-```bash
-pudl run-set network prod_stack
-```
-
-PUDL does not add omitted producers. A missing producer, cycle, invalid
-projection, or incomplete binding fails preflight. Add `--converge` only when
-the whole set should be allowed to mutate. Use `--require-approval` to pause any
-mutating set. Sets that can write sealed outputs pause automatically. PUDL
-validates mu's action-level sealed claims and resolved plugin identities during
-exact planning, persists only redacted provider metadata, and rebuilds the plan
-before approval resume. Each apply is then guarded by mu's raw plan SHA-256
-comparison before provider access.
-
-Check the latest convergence verdict recorded in the catalog:
-
-```bash
-pudl status
-```
-
-## 8. Run Verification
-
-Verify that schema inference is a fixed point -- re-running inference on all catalog entries produces the same schema assignments:
-
-```bash
-pudl verify
-```
-
-Any mismatches indicate drift between the stored schema and the current inference rules. This is a correctness invariant for ensuring inference determinism.
-
-## Other Useful Commands
-
-### Delete entries
-
-```bash
-pudl delete mivof-duhij
-pudl delete mivof-duhij --force
-pudl delete govim-nupab --cascade --force   # Delete collection memberships and orphaned items
-```
-
-### Configuration
-
-```bash
-pudl config                          # View current configuration
-pudl config set data_path ~/my-data  # Change a setting
-pudl config reset                    # Reset to defaults
-```
-
-### Health check
-
-```bash
-pudl doctor
-```
-
-Checks workspace structure, database integrity, schema repository setup, git initialization, directory structure, and orphaned files.
-
-### Large files
-
-All imports use streaming by default. For very large files:
-
-```bash
-pudl import --path huge-file.json --streaming-memory 500
-pudl import --path massive-data.json --streaming-chunk-size 0.064
-```
-
-## Next Steps
-
-- Read [concepts.md](concepts.md) to understand the identity system and schema inference
-- Read [schema-authoring.md](schema-authoring.md) to write custom schemas
-- Read [collections.md](collections.md) for advanced collection handling
-- Run `pudl --help` or `pudl <command> --help` for inline CLI help
+The test executes this guide's marked setup, baseline, change, repeat, and
+evidence blocks verbatim, with the real mu executable. It checks clean/drift
+verdicts, durable report replay, typed snapshot records, and workspace isolation.
+CI runs it on every push and pull request with mu v0.3.5.
+
+For your own data and models, continue with [concepts](concepts.md), the
+[CLI reference](cli-reference.md), [mu integration](mu-integration.md), or
+[cross-model dependencies](cross-model-dependencies.md).

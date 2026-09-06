@@ -177,7 +177,9 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 	var out []map[string]any
 	for iter.Next() {
 		rec := map[string]any{}
-		fields, err := iter.Value().Fields(cue.Hidden(true), cue.Optional(true))
+		// Optional constraints are not observed fields. Including them would
+		// invent expectations such as an unset depends_on list.
+		fields, err := iter.Value().Fields(cue.Hidden(true))
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +188,14 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 			if err := fields.Value().Decode(&val); err != nil {
 				return nil, err
 			}
-			rec[fields.Selector().String()] = val
+			selector := fields.Selector()
+			name := selector.String()
+			if selector.IsString() {
+				// String() is CUE syntax, including quotes for labels such as
+				// "_schema". Desired records need the actual field name.
+				name = selector.Unquoted()
+			}
+			rec[name] = val
 		}
 		out = append(out, rec)
 	}
