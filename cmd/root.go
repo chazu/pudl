@@ -92,7 +92,7 @@ func Execute() {
 
 func shouldAutoInitializeGlobal(command string) bool {
 	switch command {
-	case "help", "version", "init", "repo", "--help", "-h", "--version", "-v":
+	case "help", "version", "init", "repo", "example", "--help", "-h", "--version", "-v":
 		return false
 	default:
 		return true

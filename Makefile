@@ -48,15 +48,12 @@ test-kick-tires:
 	@command -v git >/dev/null 2>&1 || (echo "git is required for test-kick-tires" && exit 1)
 	@command -v mu >/dev/null 2>&1 || (echo "mu is required for test-kick-tires" && exit 1)
 	@command -v python3 >/dev/null 2>&1 || (echo "python3 is required for test-kick-tires" && exit 1)
-	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_RepositoryKickTires' -v -count=1 -timeout 5m
+	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(RepositoryKickTires|GitInventoryObservation)' -v -count=1 -timeout 5m
 
 # Execute the getting-started guide's command blocks against a fresh workspace.
 test-git-walkthrough:
 	@command -v git >/dev/null 2>&1 || (echo "git is required for test-git-walkthrough" && exit 1)
-	@command -v mu >/dev/null 2>&1 || (echo "mu is required for test-git-walkthrough" && exit 1)
-	@command -v python3 >/dev/null 2>&1 || (echo "python3 is required for test-git-walkthrough" && exit 1)
-	@command -v bash >/dev/null 2>&1 || (echo "bash is required for test-git-walkthrough" && exit 1)
-	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_GitInventoryWalkthrough$$' -v -count=1 -timeout 5m
+	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(GitInventoryWalkthrough|ExampleInstall.*)$$' -v -count=1 -timeout 5m
 
 # Sync embedded skill copies (internal/skills/files/*.md) from their canonical
 # sources in skills/<name>/SKILL.md.

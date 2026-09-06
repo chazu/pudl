@@ -18,6 +18,7 @@ Overview of the testing strategy for PUDL.
 | System | `test/system/` | Reliability, config, edge cases, stress tests |
 | Repository smoke | `test/smoke/repository_kick_tires*_test.go` | Real-mu run-sets, approvals, sealed boundaries, and concurrency |
 | Getting-started smoke | `test/smoke/git_inventory_walkthrough_test.go` | Documented Git inventory commands, drift, snapshot evidence, and isolation |
+| Example smoke | `test/smoke/example_install_test.go`, `test/smoke/git_inventory_observation_test.go` | Embedded example installation, conflict preservation, and optional real-mu observation |
 
 ## Running Tests
 
@@ -62,6 +63,8 @@ authorization, failed-producer propagation, approval/resume/reject and stale
 plans, single-model and producer/consumer sealed provider I/O, strict-routing
 rejection for unused/undeclared/ambiguous claims, catalog/output redaction,
 write-policy denial, and simultaneous run-sets.
+It also checks baseline/change/repeat live observation from the installed
+Git inventory example, including typed snapshot members and retained evidence.
 
 Each test initializes a nested repository beneath
 `.pudl/data/kick-tires/test-runs/`; the fresh PUDL binary is built beneath
@@ -74,14 +77,19 @@ PUDL catalog or provider state is written outside the checkout.
 mise exec -- make test-git-walkthrough
 ```
 
-Requires Bash, Git, Python 3, and mu (CI pins v0.3.5). The test builds a fresh
-PUDL binary and executes the marked command blocks from
-[getting-started.md](getting-started.md) verbatim. It verifies the clean baseline,
-changed inventory, repeat finding, durable report replay, and typed snapshot
-members through CLI commands. Source and temporary workspace paths include
-spaces. Test workspaces stay below `.pudl/data/git-walkthrough/test-runs/` and
-are removed afterward; the test checks that no global PUDL or mu state appears.
-CI runs this check alongside the repository kick-the-tires matrix.
+Requires Git. The test builds a fresh PUDL binary, places it and Git on an
+otherwise empty `PATH`, and executes the marked commands from
+[getting-started.md](getting-started.md). No shell scripts or copied source
+fixtures are used. Printed ID placeholders are filled from CLI results as the
+guide instructs the reader. It verifies the clean baseline, changed inventory,
+repeat finding, durable report replay, typed evidence, and absence of global
+PUDL/mu state. Installer checks cover idempotence, conflicts, and use outside an
+initialized workspace. Paths include spaces, and test workspaces below
+`.pudl/data/git-walkthrough/test-runs/` are removed afterward.
+
+CI runs this check in the ordinary test job without installing mu or Python.
+The optional live observation path remains in `make test-kick-tires`, whose CI
+job pins mu v0.3.5.
 
 ### By category
 ```bash
