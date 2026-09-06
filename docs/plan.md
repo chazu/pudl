@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Go 1.26.2 toolchain (2026-09-05)
+
+- The module requires Go 1.26.2. Project-local mise configuration and all Go CI
+  jobs select that exact version.
+- Installation and development documentation, plus the generated GitLab pipeline
+  example, use Go 1.26.2.
+
+See [implementation log](../implog/2026_09_05_go_1_26_2.md).
+
 ### Self-contained Git inventory walkthrough (2026-09-05)
 
 Completed `pudl-sjk`:
