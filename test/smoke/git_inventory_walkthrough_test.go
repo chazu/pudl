@@ -74,6 +74,16 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 				args[len(args)-1] = reports[0].RunID
 			}
 			output := cli(args...)
+			if len(args) > 2 && args[1] == "model" && args[2] == "show" {
+				require.Contains(t, string(output), "Desired:   1 resource(s)")
+				require.Contains(t, string(output), "pudl/git.#GitRepository (resource type: git.repository)")
+				// Follow the printed reference through the public schema command.
+				references := regexp.MustCompile(`(?m)^    - (\S+\.#\S+)`).FindAllStringSubmatch(string(output), -1)
+				require.Len(t, references, 1)
+				schema := cli("pudl", "schema", "show", references[0][1])
+				require.Contains(t, string(schema), "#GitRepository:")
+				require.Contains(t, string(schema), "default_branch: string")
+			}
 			if len(args) > 2 && args[1] == "show" {
 				require.Contains(t, string(output), `"default_branch": "release"`)
 				require.Contains(t, string(output), "pudl/git.#GitRepository")

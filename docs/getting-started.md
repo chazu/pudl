@@ -39,6 +39,7 @@ cd pudl-tutorial
 pudl repo init
 pudl example install git-inventory
 pudl model show git-inventory
+pudl schema show pudl/git.#GitRepository
 pudl model validate git-inventory
 ```
 
@@ -47,6 +48,13 @@ inventories describe that fictional repository; they do not inspect or change
 your new repository's branches. PUDL installs the model and data under `.pudl/`.
 Reinstalling is safe: identical files are left alone, and edited files are
 preserved with a conflict message.
+
+`model show` lists one desired resource with schema `pudl/git.#GitRepository`
+and resource type `git.repository`. Schema names use `package.#Definition`;
+pass the full name to `pudl schema show` to inspect the CUE data shape. The
+resource type is the model's `_schema` routing tag. `schema show` prints the
+containing file; look for `#GitRepository` and its remote and branch types.
+Use `pudl model show git-inventory --json` to inspect the model's desired values.
 
 ## 3. Import and check the baseline
 

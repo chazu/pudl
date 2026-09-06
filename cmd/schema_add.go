@@ -3,12 +3,14 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/schema"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // schemaAddCmd represents the schema add command
@@ -109,30 +111,39 @@ func runSchemaAddCommand(args []string) error {
 	// Check if schema already exists
 	if manager.SchemaExists(packageName, schemaName) {
 		return errors.NewInputError(
-			fmt.Sprintf("Schema already exists: %s.%s", packageName, schemaName),
+			fmt.Sprintf("Schema file already exists: %s", filepath.Join(packageName, schemaName+".cue")),
 			"Use a different schema name",
 			"Remove the existing schema first if you want to replace it")
 	}
 
 	// Add the schema
-	fmt.Printf("Adding schema: %s.%s\n", packageName, schemaName)
+	fmt.Printf("Adding schema file: %s\n", filepath.Join(packageName, schemaName+".cue"))
 	if err := manager.AddSchema(packageName, schemaName, sourceFile); err != nil {
 		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to add schema", err)
 	}
 
-	fmt.Printf("✅ Schema added successfully: %s.%s\n", packageName, schemaName)
+	fmt.Printf("✅ Schema file added successfully: %s\n", filepath.Join(effectiveSchemaPath(cfg), packageName, schemaName+".cue"))
 
 	// Show definitions found in the added file
+	var references []string
+	for _, definition := range result.Definitions {
+		references = append(references, schemaname.Format(packageName, definition))
+	}
 	if len(result.Definitions) > 0 {
 		fmt.Printf("   Package: %s\n", packageName)
-		fmt.Printf("   Definitions: %s\n", strings.Join(result.Definitions, ", "))
+		fmt.Printf("   Definitions: %s\n", strings.Join(references, ", "))
 	}
 
 	fmt.Println()
 	fmt.Println("💡 Next steps:")
 	fmt.Println("   - Review the schema: pudl schema list --package " + packageName)
-	fmt.Println("   - Import data using this schema: pudl import --path <file> --schema " + fullSchemaName)
-	fmt.Println("   - Commit schema changes: pudl schema commit -m \"Add " + fullSchemaName + " schema\"")
+	for _, reference := range references {
+		fmt.Println("   - Inspect the schema: pudl schema show " + reference)
+	}
+	if len(references) == 1 {
+		fmt.Println("   - Import data using this schema: pudl import --path <file> --schema " + references[0])
+	}
+	fmt.Println("   - Commit schema changes: pudl schema commit -m \"Add schema file " + filepath.Join(packageName, schemaName+".cue") + "\"")
 
 	return nil
 }

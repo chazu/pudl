@@ -13,6 +13,7 @@ import (
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemagen"
+	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/ui"
 )
 
@@ -161,7 +162,7 @@ func runSchemaNewCommand() error {
 		// Check for schema exists error and provide better message
 		if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
 			return errors.NewInputError(
-				fmt.Sprintf("Schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+				fmt.Sprintf("Schema already exists: %s", schemaname.Format(packagePath, existsErr.DefinitionName)),
 				"Use --force to overwrite the existing schema",
 			)
 		}
@@ -188,7 +189,7 @@ func runSchemaNewCommand() error {
 	fmt.Println()
 	fmt.Printf("📄 File created: %s\n", result.FilePath)
 	fmt.Printf("📦 Package: %s\n", result.PackageName)
-	fmt.Printf("📋 Definition: #%s\n", result.DefinitionName)
+	fmt.Printf("📋 Definition: %s\n", schemaname.Format(packagePath, result.DefinitionName))
 	fmt.Printf("🔢 Fields: %d\n", result.FieldCount)
 
 	if len(result.InferredIdentityFields) > 0 {
@@ -197,8 +198,9 @@ func runSchemaNewCommand() error {
 
 	fmt.Println()
 	fmt.Println("💡 Next steps:")
-	fmt.Printf("   - Edit the schema: pudl schema edit %s:#%s\n", packagePath, result.DefinitionName)
-	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", result.DefinitionName)
+	fmt.Printf("   - Inspect the schema: pudl schema show %s\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Printf("   - Edit the schema: pudl schema edit %s\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", schemaname.Format(packagePath, result.DefinitionName))
 
 	return nil
 }
@@ -254,7 +256,7 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 			// Check for schema exists error and provide better message
 			if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
 				return errors.NewInputError(
-					fmt.Sprintf("Item schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+					fmt.Sprintf("Item schema already exists: %s", schemaname.Format(packagePath, existsErr.DefinitionName)),
 					"Use --force to overwrite existing schemas",
 				)
 			}
@@ -269,7 +271,8 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 		// Only print if not JSON output
 		output := GetOutputWriter()
 		if output.Format != ui.OutputFormatJSON {
-			fmt.Printf("📄 Created item schema: %s\n", itemSchema.FilePath)
+			fmt.Printf("📄 Created item schema: %s\n", schemaname.Format(packagePath, itemSchema.DefinitionName))
+			fmt.Printf("   File: %s\n", itemSchema.FilePath)
 		}
 	}
 
@@ -278,7 +281,7 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 		// Check for schema exists error and provide better message
 		if existsErr, ok := err.(*schemagen.SchemaExistsError); ok {
 			return errors.NewInputError(
-				fmt.Sprintf("Collection schema already exists: %s:#%s", existsErr.PackagePath, existsErr.DefinitionName),
+				fmt.Sprintf("Collection schema already exists: %s", schemaname.Format(packagePath, existsErr.DefinitionName)),
 				"Use --force to overwrite existing schemas",
 			)
 		}
@@ -306,15 +309,15 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 	fmt.Println()
 	fmt.Println("✅ Collection schema generated successfully!")
 	fmt.Println()
-	fmt.Printf("📄 Collection schema: %s\n", result.CollectionSchema.FilePath)
+	fmt.Printf("📄 Collection schema file: %s\n", result.CollectionSchema.FilePath)
 	fmt.Printf("📦 Package: %s\n", result.CollectionSchema.PackageName)
-	fmt.Printf("📋 Definition: #%s\n", result.CollectionSchema.DefinitionName)
+	fmt.Printf("📋 Definition: %s\n", schemaname.Format(packagePath, result.CollectionSchema.DefinitionName))
 
 	if len(result.ExistingSchemaRefs) > 0 {
 		fmt.Println()
 		fmt.Println("🔗 Reused existing schemas:")
 		for _, ref := range result.ExistingSchemaRefs {
-			fmt.Printf("   - %s\n", ref)
+			fmt.Printf("   - %s\n", schemaname.Normalize(ref))
 		}
 	}
 
@@ -322,17 +325,18 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 		fmt.Println()
 		fmt.Println("✨ Generated new item schemas:")
 		for _, schema := range result.NewItemSchemas {
-			fmt.Printf("   - #%s (%d fields)\n", schema.DefinitionName, schema.FieldCount)
+			fmt.Printf("   - %s (%d fields)\n", schemaname.Format(packagePath, schema.DefinitionName), schema.FieldCount)
 		}
 	}
 
 	fmt.Println()
 	fmt.Println("💡 Next steps:")
-	fmt.Printf("   - Edit the collection schema: pudl schema edit %s:#%s\n", packagePath, definitionName)
+	fmt.Printf("   - Inspect the collection schema: pudl schema show %s\n", schemaname.Format(packagePath, definitionName))
+	fmt.Printf("   - Edit the collection schema: pudl schema edit %s\n", schemaname.Format(packagePath, definitionName))
 	if len(result.NewItemSchemas) > 0 {
 		fmt.Printf("   - Edit item schemas as needed\n")
 	}
-	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", definitionName)
+	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", schemaname.Format(packagePath, definitionName))
 
 	return nil
 }
