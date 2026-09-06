@@ -8,19 +8,22 @@ Living document tracking what is built and what comes next.
 
 Completed `pudl-sjk`:
 
-- `examples/git-inventory/` supplies the observe-only model, Python mu observer,
-  and clean/changed inventory fixtures using the shipped Git schema.
-- [Getting started](getting-started.md) creates an isolated temporary workspace,
-  captures a clean baseline, finds `release` versus expected `main` drift, repeats
-  the observation, and follows durable run IDs to snapshots and raw records.
-- `make test-git-walkthrough` executes the guide's command blocks verbatim with
-  real mu, checking findings, historical report replay, typed snapshot members,
-  and workspace isolation. CI runs it on every push and pull request.
+- `pudl example install git-inventory` installs the embedded model, baseline and
+  changed observations, and optional live observer into an initialized workspace.
+  Identical files are preserved; conflicts fail before any writes.
+- [Getting started](getting-started.md) starts from PUDL on `PATH` and a new Git
+  repository. PUDL commands install the example, import saved observations, find
+  `release` versus expected `main` through catalog replay, and inspect evidence.
+  It requires no source checkout, scripts, mu, or Python.
+- `make test-git-walkthrough` executes the guide with only PUDL and Git on `PATH`.
+  CI checks installation, findings, historical report replay, typed evidence, and
+  isolation. `make test-kick-tires` retains real-mu observation coverage.
 - The workflow exposed and fixed desired-record decoding: quoted CUE labels
   retain their actual field names, and absent optional fields no longer become
   invented expectations.
 
-See [`implog/2026_09_05_git_inventory_walkthrough.md`](../implog/2026_09_05_git_inventory_walkthrough.md).
+See [`implog/2026_09_05_git_inventory_walkthrough.md`](../implog/2026_09_05_git_inventory_walkthrough.md)
+and the [installed CLI follow-up](../implog/2026_09_05_installed_cli_getting_started.md).
 
 ### Numeric query values and equality (2026-09-05)
 
@@ -369,8 +372,8 @@ Potential future work, roughly ordered by value.
 walkthrough to verify observed/expected/previous values, observation age, failed
 checks, durable evidence references, and machine-output consistency. Its
 prerequisite `pudl-sjk` is complete. The current walkthrough documents the
-existing report semantics: `ok` records successful execution, populate counts
-newly stored records, and snapshot evidence is reached through the JSON report.
+existing report semantics: `ok` records successful execution, and catalog replay
+leaves `drift.verified` false while retaining its report and imported evidence.
 
 ### Cross-Resource Value Wiring — Implementation at the Populate/Approval Boundary
 

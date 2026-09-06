@@ -4,25 +4,24 @@ PUDL is a CLI tool for building a local, schema-validated data lake. Import JSON
 
 ## Quick Start
 
-Start with the [Git inventory walkthrough](docs/getting-started.md). It supplies
-the model, observer, inventory fixtures, and copyable commands to obtain a drift
-finding in about five minutes once the local tools are installed. You will
-capture a clean baseline, change the observed default branch from `main` to
-`release`, and inspect the report and its retained snapshot. Everything stays
-inside a temporary repository; no external account or credentials are needed.
-
-From this checkout, build with the pinned toolchain:
+Install the current development version with Go 1.25.8 or newer and put Go's
+binary directory (normally `~/go/bin`) on your `PATH`:
 
 ```bash
-mise exec -- make build
+go install github.com/chazu/pudl@main
 ```
 
-Then follow the guide's setup and run commands. It requires Git, Python 3, Bash,
-and mu (tested with v0.3.5). The documented workflow is also an automated check:
+Then follow the [Git inventory walkthrough](docs/getting-started.md). Create a
+new Git repository and install its bundled model and data using PUDL commands:
 
 ```bash
-mise exec -- make test-git-walkthrough
+pudl repo init
+pudl example install git-inventory
 ```
+
+The guide imports a clean baseline and a changed observation, finds `release`
+versus expected `main`, and inspects retained evidence. It needs only PUDL and
+Git, with no source checkout, scripts, external accounts, mu, or Python.
 
 ## What Happens When You Import
 
@@ -133,6 +132,7 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 | `pudl verify` | Fixed-point check: re-run inference on all entries, confirm stability |
 | `pudl doctor` | Workspace health checks |
 | `pudl repo init` | Initialize or repair a self-contained repository `.pudl/` and install Claude skills |
+| `pudl example install git-inventory` | Install the bundled Git inventory model and sample observations |
 | `pudl config` | Show current configuration |
 | `pudl validate --all` | Validate catalog data against assigned schemas |
 

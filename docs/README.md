@@ -6,7 +6,7 @@ Start with the [root README](../README.md) for a project overview.
 
 | Document | Description |
 |----------|-------------|
-| [getting-started.md](getting-started.md) | Supplied Git inventory model, clean baseline, drift finding, and retained evidence |
+| [getting-started.md](getting-started.md) | Install PUDL, create a repository, and find Git inventory drift using PUDL commands |
 | [concepts.md](concepts.md) | Core concepts: identity, schemas, inference, collections, and value wiring |
 | [cli-reference.md](cli-reference.md) | All commands, flags, and examples |
 | [schema-authoring.md](schema-authoring.md) | Writing custom CUE schemas with `_pudl` metadata |
