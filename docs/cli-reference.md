@@ -251,7 +251,8 @@ Any mismatch indicates drift between stored assignments and current inference ru
 
 ### `pudl schema list`
 
-List available schemas.
+List available schemas using full `package.#Definition` names that can be
+passed directly to `pudl schema show`.
 
 ```bash
 pudl schema list
@@ -355,7 +356,11 @@ pudl model list --json
 
 ### `pudl model show <name>`
 
-Display detailed information about a single model.
+Display detailed information about a single model. Desired resources show full
+schema names accepted by `pudl schema show`, with resource-type routing tags
+labeled separately. Resource types that match several schemas list all matches;
+missing schemas are identified explicitly. `--json` preserves the authored
+model values, including `_schema` routing tags.
 
 ```bash
 pudl model show my_model

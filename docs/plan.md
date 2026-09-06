@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Retrievable CLI schema references (2026-09-05)
+
+Completed `pudl-sma`:
+
+- `pudl model show` resolves desired resource-type tags through workspace schema
+  metadata and prints full `package.#Definition` names. Ambiguous and missing
+  mappings are explicit; desired counts are labeled as resources.
+- Schema listing and authoring output uses full definition names, including
+  nested packages, and distinguishes schema files from schema definitions.
+- The getting-started tutorial inspects the Git repository data shape with
+  `pudl schema show`. Its acceptance check follows the name printed by the model.
+
+See [implementation log](../implog/2026_09_05_cli_schema_references.md).
+
 ### Go 1.26.2 toolchain (2026-09-05)
 
 - The module requires Go 1.26.2. Project-local mise configuration and all Go CI

@@ -7,7 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/systemmodel"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 var modelShowJSON bool
@@ -34,12 +36,20 @@ converge arm, checks, and declared plugins.`,
 			fmt.Println(string(b))
 			return nil
 		}
-		printModel(m)
+		cfg, err := loadEffectiveConfig()
+		if err != nil {
+			return err
+		}
+		schemas, err := validator.NewChainValidator(effectiveSchemaPaths(cfg)...)
+		if err != nil {
+			return fmt.Errorf("load schemas: %w", err)
+		}
+		printModel(m, schemas)
 		return nil
 	},
 }
 
-func printModel(m *systemmodel.SystemModel) {
+func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 	fmt.Printf("Model: %s\n", m.Name)
 	fmt.Println(strings.Repeat("-", 60))
 
@@ -62,10 +72,10 @@ func printModel(m *systemmodel.SystemModel) {
 	}
 
 	// Desired state.
-	fmt.Printf("  Desired:   %d definition(s)\n", len(m.Desired))
+	fmt.Printf("  Desired:   %d resource(s)\n", len(m.Desired))
 	for _, d := range m.Desired {
 		if s, ok := d["_schema"].(string); ok {
-			fmt.Printf("    - %s\n", s)
+			fmt.Printf("    - %s\n", describeDesiredSchema(s, schemas))
 		}
 	}
 
@@ -84,6 +94,27 @@ func printModel(m *systemmodel.SystemModel) {
 			names = append(names, p.Name)
 		}
 		fmt.Printf("  Plugins:   %s\n", strings.Join(names, ", "))
+	}
+}
+
+// Desired records may carry a resource type instead of a CUE schema reference.
+// Resolve through metadata, not a guessed package/definition naming convention.
+func describeDesiredSchema(ref string, schemas *validator.ChainValidator) string {
+	if strings.Contains(ref, ".#") || strings.Contains(ref, ":#") {
+		name := schemaname.Normalize(ref)
+		if schemas.HasSchema(name) {
+			return name
+		}
+		return name + " (not registered)"
+	}
+	matches := schemas.GetSchemasByResourceType(ref)
+	switch len(matches) {
+	case 0:
+		return fmt.Sprintf("resource type: %s (no registered schema)", ref)
+	case 1:
+		return fmt.Sprintf("%s (resource type: %s)", matches[0], ref)
+	default:
+		return fmt.Sprintf("resource type: %s (multiple schemas: %s)", ref, strings.Join(matches, ", "))
 	}
 }
 

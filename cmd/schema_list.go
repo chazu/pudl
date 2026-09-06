@@ -16,7 +16,7 @@ var schemaListCmd = &cobra.Command{
 	Short: "List available schemas",
 	Long: `List all available schemas organized by package.
 
-Schemas are displayed with their package, name, file size, and main definition.
+Schemas use full package.#Definition names accepted by 'pudl schema show'.
 Use --verbose for additional details including file paths and metadata information.
 
 Filtering Options:
@@ -96,13 +96,12 @@ func listAllSchemas(manager *schema.Manager) error {
 		for _, schemaInfo := range packageSchemas {
 			totalSchemas++
 			if schemaVerbose {
-				fmt.Printf("   ├─ %s\n", schemaInfo.Name)
-				fmt.Printf("   │  Full name: %s\n", schemaInfo.FullName)
+				fmt.Printf("   ├─ %s\n", schemaInfo.FullName)
 				fmt.Printf("   │  File: %s\n", schemaInfo.FilePath)
 				fmt.Printf("   │  Size: %s\n", formatBytes(schemaInfo.Size))
 				fmt.Printf("   │\n")
 			} else {
-				fmt.Printf("   ├─ %s\n", schemaInfo.Name)
+				fmt.Printf("   ├─ %s\n", schemaInfo.FullName)
 			}
 		}
 		fmt.Println()
@@ -134,13 +133,12 @@ func listSchemasInPackage(manager *schema.Manager, packageName string) error {
 
 	for _, schemaInfo := range schemas {
 		if schemaVerbose {
-			fmt.Printf("📄 %s\n", schemaInfo.Name)
-			fmt.Printf("   Full name: %s\n", schemaInfo.FullName)
+			fmt.Printf("📄 %s\n", schemaInfo.FullName)
 			fmt.Printf("   File: %s\n", schemaInfo.FilePath)
 			fmt.Printf("   Size: %s\n", formatBytes(schemaInfo.Size))
 			fmt.Println()
 		} else {
-			fmt.Printf("  %s\n", schemaInfo.Name)
+			fmt.Printf("  %s\n", schemaInfo.FullName)
 		}
 	}
 
