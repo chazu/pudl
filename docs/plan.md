@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Batcave operator feedback recorded (2026-09-10)
+
+Documented the Mu/PUDL user experience from operating three BC-250 servers,
+including effective workflows, integration friction and proposed improvements.
+The recommendations remain proposals; this entry records documentation only.
+
+See [operator feedback](mu-pudl-batcave-user-experience.md) and
+[implementation log](../implog/2026_09_10_batcave_user_experience.md).
+
 ### Retrievable CLI schema references (2026-09-05)
 
 Completed `pudl-sma`:

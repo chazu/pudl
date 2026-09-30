@@ -20,6 +20,7 @@ Start with the [root README](../README.md) for a project overview.
 | [library-api.md](library-api.md) | Public Go API (`pkg/factstore`, `pkg/eval`) for external programs |
 | [VISION.md](VISION.md) | Project vision and roadmap |
 | [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |
+| [mu-pudl-batcave-user-experience.md](mu-pudl-batcave-user-experience.md) | Operator feedback from configuring and testing the three-board Batcave fleet |
 | [cross-model-dependencies.md](cross-model-dependencies.md) | Exact model sets, dependency facts, and current value-wiring contract |
 | [inference-algorithm.md](inference-algorithm.md) | Schema inference engine: heuristics, CUE unification, scoring |
 | [plan.md](plan.md) | Living development plan: what's built, what's next |
