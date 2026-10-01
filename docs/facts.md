@@ -1,6 +1,6 @@
 # Bitemporal Fact Store
 
-The fact store is a general-purpose, bitemporal persistence layer for structured facts. It lives alongside the catalog in the same SQLite database and serves as the foundation for agent observations, Datalog-derived facts, and the nous reasoning engine.
+The fact store is a general-purpose, bitemporal persistence layer for structured facts. It lives alongside the catalog in the same SQLite database and supports configuration assertions, model dependencies, and Datalog-derived facts.
 
 ## Why a Separate Table
 
@@ -27,7 +27,7 @@ CREATE TABLE facts (
     valid_end   INTEGER,             -- unix timestamp: when it stopped being true (NULL = still true)
     tx_start    INTEGER NOT NULL,    -- unix timestamp: when we recorded this fact
     tx_end      INTEGER,             -- unix timestamp: when we retracted this record (NULL = current)
-    source      TEXT,                -- who asserted this: agent name, "human", "nous", "mu"
+    source      TEXT,                -- who asserted this: agent name, "human", "operator", "mu"
     provenance  TEXT                 -- JSON: additional context (agent, activity, etc.)
 );
 ```
@@ -197,35 +197,34 @@ Args are stored as JSON objects with meaningful keys. There is no enforced schem
 {"key": "timeout", "value": "30s", "service": "api"}
 ```
 
-As specific relations stabilize, their args structure can be formalized with CUE schemas (e.g., `pudl/nous.#Observation` for the observation relation, or the built-in `pudl/dlktk` package, which types the args of every `dlktk/*` relation written by the dlktk dialectic toolkit).
+Use `facts add --schema package.#Definition` when an assertion has an authored
+CUE contract. Without `--schema`, relations accept arbitrary JSON objects;
+observation and feedback relations have no automatic schema or maturity policy.
+The built-in `pudl/dlktk` package remains available to type `dlktk/*` assertions.
 
 ## CLI Commands
 
-### `pudl facts observe`
+### `pudl facts add`
 
-Record a structured observation:
+Write an assertion under an explicit relation:
 
 ```bash
-pudl facts observe "auth package has circular dependency with user package" \
-    --kind obstacle \
-    --scope pudl:pkg/auth
-
-pudl facts observe "all database calls go through a single connection pool" \
-    --kind pattern
-
-pudl facts observe "the Config struct has 47 fields, should be split" \
-    --kind suggestion \
-    --scope pudl:internal/config \
-    --source claude-code
+pudl facts add --relation depends --args '{"from":"api","to":"database"}' --source operator
+pudl facts add --relation config --args '{"key":"timeout","value":30}' --schema user/config.#Setting
+pudl facts add --relation config --args '{"key":"timeout","value":30}' --json
 ```
 
-Observations are stored as facts in the `observation` relation. The `--kind` flag accepts: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity. The `--source` flag defaults to the current OS user.
+`--relation` and `--args` are required; args must be a JSON object. `--source`
+defaults to the OS username. Optional `--schema` validates before storing.
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--kind` | Observation kind | `fact` |
-| `--scope` | Scope as repo:path (e.g. `pudl:internal/database`) | (none) |
-| `--source` | Who made the observation | current OS user |
+### Agent memory retirement
+
+The recall, reflection, curation, promotion, and decay application is removed.
+Existing observations, feedback, and maturity fields remain ordinary stored
+facts, accessible through current and historical queries and full-text search.
+Migration 18 drops only `fact_scored_edb`; it does not rewrite fact bodies, IDs,
+temporal bounds, provenance, or the search index. The removed `fact_scored`
+relation is no longer a special built-in.
 
 ### `pudl facts list`
 

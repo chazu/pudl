@@ -111,8 +111,8 @@ The compiler uses SQLite's [`->` operator](https://www.sqlite.org/json1.html#the
 to obtain the JSON token before `pudl_query_value` checks it. Using
 `json_extract` directly would convert the token to INTEGER/REAL before PUDL
 could detect lost precision. PUDL registers this function on its catalog
-connections; direct SQLite clients reading the computed `fact_scored_edb`
-view also need that function.
+connections. Direct SQLite clients reading PUDL query projections need that
+function.
 
 ## Where Rules Live
 

@@ -102,11 +102,11 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl run resume/reject <id>` | Approve or reject a pending standalone/set operation |
 | `pudl status` | Read catalog convergence status recorded by the last model run |
 
-### Observations and Facts
+### Facts
 
 | Command | Description |
 |---------|-------------|
-| `pudl facts observe <description>` | Record a structured observation (`--kind`, `--scope`, `--source`) |
+| `pudl facts add --relation NAME --args JSON` | Record a generic assertion (`--source`, optional `--schema`) |
 | `pudl facts list --relation <name>` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
 | `pudl facts show <id>` | Inspect a single fact (supports ID prefix matching) |
 | `pudl facts retract <id>` | Mark a fact as retracted (assertion was wrong) |
@@ -153,6 +153,23 @@ Former paths are removed rather than retained as aliases. Schema/Git and
 module/CUE helper commands remain available. Standalone runs and exact sets
 retain their existing evidence-selection and approval semantics; shared report
 and approval commands route by the stored operation ID.
+
+## Agent memory removal
+
+The agent self-improvement application has been removed: `memory`, `hooks`,
+`pull`, `facts observe/promote/curate`, automatic observation/feedback schemas,
+and the `fact_scored` decay relation. `reflect_command` is no longer used.
+
+Generic `facts add/list/show/search/stats/retract/invalidate`, temporal history,
+transactions, and Datalog remain available. Stored facts are preserved.
+Migration 18 drops only the old derived scoring view on the next writable
+catalog open. Workspace initialization retires the unmodified shipped nous
+schema while preserving authored replacements and symlinks.
+
+For existing integrations, remove hooks invoking `pudl memory context`,
+`pudl facts curate`, or `pudl hooks suggest`, and retire generated Mu
+`//memory:*` targets. Customized workflows are user-owned; PUDL no longer
+installs or runs them.
 
 ## Writing Custom Schemas
 

@@ -326,7 +326,7 @@ func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 		"schema":        true,
 		"config.yaml":   true,
 		"workspace.cue": true,
-		"mu.cue":        true, // memory cycle config written by 'pudl memory init'
+		"mu.cue":        true, // optional authored Mu workspace
 	}
 	unexpectedEntries := []string{}
 	if entries, err := os.ReadDir(pudlDir); err == nil {

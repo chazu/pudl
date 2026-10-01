@@ -18,7 +18,7 @@ Use the binary as the source of truth for the current command surface:
 
 - `pudl help --json` — complete command tree, flags, and descriptions.
 - `pudl guide <topic>` — operational guidance (`overview`, `models`, `mu`,
-  `troubleshooting`, `memory`, and the other listed topics).
+  `troubleshooting`, and the other listed topics).
 - `pudl model show <name> --json` — a model's actual runtime contract.
 
 Scaffold first, then edit the returned path:
@@ -73,7 +73,6 @@ global catalogs are independent; mutable state never falls back across them.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl pull [scope]` — retrieve facts by scope prefix (plus kind/source/relation filters)
 
 ### #SystemModel loop
 - `pudl model list` — list registered `#SystemModel` definitions + last-run status

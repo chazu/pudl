@@ -8,7 +8,7 @@ import (
 // mu acts"); these subcommands move data across the boundary: rendering desired
 // state through a model run, and ingesting mu's observe/build results back into the
 // catalog. Keeping them under one namespace separates the mu bridge from the
-// fact/agent-memory door (`pudl facts`) and the data-lake door (`pudl import`).
+// fact store (`pudl facts`) and the data-lake door (`pudl import`).
 var muCmd = &cobra.Command{
 	Use:   "mu",
 	Short: "Bridge commands between pudl and the mu execution layer",

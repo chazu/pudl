@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-30
 
-**Status:** Partially implemented. Command consolidation is delivered; broader scope and workflow proposals remain open.
+**Status:** Partially implemented. Command consolidation and agent memory removal are delivered; broader workflow proposals remain open.
 
 **Scope:** Product purpose, CLI, documentation, authoring, and workflows for humans and agents.
 
@@ -36,11 +36,29 @@ This consolidation preserves the existing distinction between standalone
 recorded-input reuse and exact-set producer selection. It also preserves
 standalone request-level approvals and set exact-plan approvals. The proposed
 `check`/`apply` interface, a universal result contract, saved-input shorthand,
-memory extraction, and stronger standalone approvals remain proposals.
+and stronger standalone approvals remain proposals.
 
 See [command migration](../../README.md#command-consolidation) and the
 [implementation log](../../implog/2026_09_30_command_consolidation.md).
 The analysis below describes the review baseline and broader recommendations.
+
+## Implemented memory removal
+
+The agent-memory application has been removed at the user's request. The CLI
+now has 25 explicit root commands and 59 leaf paths, excluding help, generated
+completion, and aliases. Recall, reflection cycles, harness hooks, observation
+maturity and curation, scoped recall, built-in decay scoring, and their
+configuration and schemas are retired.
+
+Generic facts, temporal history, full-text search, transactions, and Datalog
+remain. Migration 18 removes the scoring view without deleting facts; bootstrap
+repair removes only the exact unmodified shipped memory schema. Customized
+schemas and symlinks are preserved. The unmodified installed global cycle and
+schema were retired with backups; no managed hooks were found in the checked
+settings files.
+
+See [memory removal](../../README.md#agent-memory-removal) and the
+[implementation log](../../implog/2026_09_30_agent_memory_removal.md).
 
 ## Review scope and evidence
 
@@ -100,13 +118,11 @@ Dependencies and checks use them, and [the public library](../library-api.md)
 supports independent consumers. Ordinary model users should not need to learn
 arbitrary relations, two temporal axes, or fact lifecycle operations first.
 
-Extract the agent-memory application from the core CLI: memory context and
-cycles, reflection-agent orchestration, maturity and curation policies, and
-harness hooks. These are live capabilities, not dead code. Their retirement
-needs an explicit migration decision that preserves existing data. A separate
-consumer can use the fact-store library if those workflows remain valuable.
-See [memory](../../cmd/memory.go), [hooks](../../cmd/hooks.go), and
-[curation](../../cmd/facts_curate.go).
+The review recommended separating the agent-memory application from the core.
+The subsequent decision was to remove it. Generic facts and Datalog remain
+available to independent consumers, without bundled recall, reflection, maturity,
+scoring, or harness policies. See the implemented removal above for migration
+and preservation behavior.
 
 ## Proposed everyday command surface
 
@@ -244,11 +260,10 @@ global state. Install agent-specific integrations only when requested; current
 [repository initialization](../../internal/repo/init.go) installs Claude skills
 as part of creating a data workspace.
 
-Bare `list` should show the active catalog unless the caller explicitly requests
-an origin filter. Today [listing](../../cmd/list.go) defaults its origin filter
-to the workspace name, so imports with a custom origin can disappear from the
-default view. `--all-workspaces` only removes that filter inside the same
-catalog; its name suggests a broader operation than it performs.
+The review found an implicit workspace-origin filter that hid custom-origin
+imports from bare `list`. Consolidation removed it: [listing](../../cmd/list.go)
+now shows the active catalog unless an origin filter is explicitly requested.
+The former list-only `--all-workspaces` flag is retired.
 
 Workspace selection, source provenance, and evidence selection are distinct
 concepts. Present them when they affect the answer, rather than making users
@@ -259,10 +274,11 @@ learn their storage relationships before they can list what they imported.
 Humans and agents should use the same commands and semantics. JSON is an
 alternate representation of the same result.
 
-The current global `--json` promise is inconsistent. For example,
-[facts observe](../../cmd/observe.go) prints prose before JSON and returns a
-text-only response for duplicates. Several other commands ignore the flag or
-bind separate local JSON flags.
+The review found inconsistent global `--json` handling, including prose mixed
+into memory-oriented fact writes and separate local flags on model inspection.
+The memory commands are retired, [generic fact writes](../../cmd/facts_write.go)
+now emit one JSON document, and model inspection uses the shared flag. A
+universal result contract across every remaining command is still a proposal.
 
 For the retained surface:
 
@@ -355,10 +371,9 @@ guarantees.
 ## Decisions needed before implementation
 
 The recommendations do not yet settle the exact result schema, exit-code
-mapping, approval syntax, or upstream evidence policy. Extraction of memory
-also requires deciding whether to maintain a separate consumer and how existing
-integrations migrate. These are implementation design questions, not reasons
-to keep the entire current surface indefinitely.
+mapping, approval syntax, or upstream evidence policy. The memory application has been removed; PUDL maintains its generic substrate
+without a separate bundled memory consumer. The remaining questions concern
+the proposed unified operational interface.
 
 The governing acceptance criterion is practical: **a human or agent can discover
 a model, check it, understand the result, and inspect its evidence without first
