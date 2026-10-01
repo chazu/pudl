@@ -4,6 +4,21 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Agent memory application removed (2026-09-30)
+
+Completed `pudl-epk`: removed memory recall/reflection, harness hooks, scoped
+recall, observation maturity and curation, decay scoring, reflection config,
+and shipped observation/feedback schemas. Generic facts, historical assertions,
+full-text search, transactions, Datalog, and model workflows remain supported.
+
+Migration 18 removes the legacy scoring view without deleting facts. Bootstrap
+repair retires only pristine shipped memory schemas. The CLI now has 25 explicit
+root commands and 59 leaf paths. Current guidance is updated; older memory-related
+entries below are historical records rather than supported features.
+
+See [implementation log](../implog/2026_09_30_agent_memory_removal.md) and
+[retirement guidance](../README.md#agent-memory-removal).
+
 ### Overlapping CLI commands consolidated (2026-09-30)
 
 Completed `pudl-0ne`: schema metadata and model inspection now have one command

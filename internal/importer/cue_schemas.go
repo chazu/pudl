@@ -21,6 +21,9 @@ func CopyBootstrapSchemas(schemaPath string) error {
 
 // copyBootstrapSchemasTo copies bootstrap CUE schema files to the specified directory
 func copyBootstrapSchemasTo(schemaPath string) error {
+	if err := retireMemorySchema(schemaPath); err != nil {
+		return fmt.Errorf("retire memory schema: %w", err)
+	}
 	// Walk the embedded bootstrap schemas and copy them to the schema path
 	if err := fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {

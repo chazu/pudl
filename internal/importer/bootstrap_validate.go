@@ -12,7 +12,7 @@ import (
 // embedded bootstrap schema file, using strict CUE unification.
 //
 // embedFile is the path under the bootstrap root (e.g. "pudl/nous/nous.cue");
-// defName is the definition to validate against (e.g. "#Feedback"). The data is
+// defName is the definition to validate against (e.g. "#PlanOutput"). The data is
 // JSON-encoded and unified with the definition; a non-nil error means the data
 // does not satisfy the schema (missing required field, bad enum value, or — since
 // CUE definitions are closed — an unknown field).

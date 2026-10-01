@@ -51,7 +51,6 @@ var guideTopics = map[string]func(){
 	"mu":              printGuideMu,
 	"agents":          printGuideAgents,
 	"troubleshooting": printGuideTroubleshooting,
-	"memory":          printGuideMemory,
 }
 
 func init() {
@@ -72,7 +71,7 @@ Data management:
 
 Reasoning and state:
 
-  pudl guide facts          Bitemporal fact store: observations, retraction, time-travel
+  pudl guide facts          Bitemporal assertions, retraction, and historical queries
   pudl guide datalog        Datalog query engine: rules, recursive evaluation
 
 Convergence:
@@ -84,7 +83,6 @@ For agents:
 
   pudl guide agents         Conventions, best practices, and tips for AI agents
   pudl guide troubleshooting Common failure modes and recovery commands
-  pudl guide memory          The facts/memory loop and hook integration
 `)
 }
 
@@ -116,9 +114,9 @@ THE DAY-TO-DAY VERBS
   pudl import --path <file>   Import data (auto-detects format + schema).
   pudl list                   Browse catalog entries.
   pudl show <id>              Inspect an entry's content and metadata.
-  pudl facts list --relation observation  Query observations in the fact store.
+  pudl facts list --relation depends   Query assertions in the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
-  pudl facts observe "<text>"       Record a structured observation.
+  pudl facts add --relation <name> --args '<json-object>'   Record an assertion.
   pudl run <model>            Run a #SystemModel (observe-only, or --converge).
   pudl status                 Show recorded convergence status.
   pudl doctor                 Health check the workspace.
@@ -292,89 +290,34 @@ SEE ALSO
 }
 
 func printGuideFacts() {
-	fmt.Print(`pudl guide facts — bitemporal fact store
+	fmt.Print(`pudl guide facts — generic bitemporal assertions
 
-OVERVIEW
+WRITE AND QUERY
 
-  The fact store holds structured assertions about the world. Each
-  fact has two time dimensions:
+  pudl facts add --relation depends --args '{"from":"api","to":"database"}'
+  pudl facts add --relation config --args '{"key":"timeout","value":30}' --source operator
+  pudl facts list --relation depends --json
+  pudl facts search "timeout" --relation config --json
+  pudl facts show <id>
 
-    valid_start / valid_end      When the fact was true in reality
-    tx_start / tx_end            When pudl learned/forgot the fact
+  Args are arbitrary JSON objects. Use --schema to validate against an authored
+  CUE definition; no relation has a built-in maturity or scoring policy.
 
-  This lets you ask both "what was true at time X" and "what did
-  we believe at time X."
+LIFECYCLE AND HISTORY
 
-WRITING FACTS — ONE DOOR
+  pudl facts retract <id>      Withdraw an incorrect assertion
+  pudl facts invalidate <id>   Record that a previously true assertion expired
+  pudl facts list --relation config --as-of-valid "2026-04-01T14:30:00Z"
+  pudl facts list --relation config --as-of-tx "2026-04-01T14:30:00Z"
 
-  pudl facts add --relation <rel> --args '<json-object>'   The canonical write.
-  pudl facts observe "<text>" --kind <kind> --scope <s>    Sugar for observations.
-
-  Every fact write goes through facts add (observe is just the ergonomic
-  observation path). Import data with 'pudl import'; bridge to mu with
-  'pudl mu …' — those are different doors, not fact writes.
-
-  Known agent relations are validated on write against their built-in schema:
-
-    observation   kind ∈ {fact, obstacle, pattern, antipattern, suggestion,
-                  bug, opportunity}; scope is repo:path
-    feedback      verdict ∈ {helpful, harmful, neutral}; target = fact/rule id
-
-  Examples:
-    pudl facts observe "auth module has no rate limiting" \
-      --kind suggestion --scope myapp:pkg/auth --source claude-code
-    pudl facts add --relation feedback \
-      --args '{"target":"<fact-id>","verdict":"helpful","source":"claude-code"}'
-
-QUERYING FACTS
-
-  pudl facts list --relation <name>         List current facts in a relation
-  pudl facts list --relation observation    Filter by relation
-  pudl facts list --relation observation --source claude-code
-  pudl facts search "<text>"                Full-text search (FTS5, ranked)
-  pudl facts show <id>                      Full fact details
-  pudl facts stats                          Aggregate statistics
-
-FACT LIFECYCLE
-
-  Facts are append-only. You never update a fact — instead:
-
-  pudl facts promote <id> --to reviewed     Advance maturity
-                               (raw → reviewed → promoted | rejected)
-  pudl facts promote <id> --to promoted --rule <ref>
-  pudl facts curate            Auto-advance maturity from feedback
-                               (deterministic, no LLM; --dry-run to preview)
-  pudl facts retract <id>      Mark as no longer asserted
-                               (we were wrong about this)
-  pudl facts invalidate <id>   Mark as no longer true
-                               (it was true but isn't anymore)
-
-  promote, retract, and invalidate set tx_end/valid_end and append a new
-  version, preserving the original assertion for historical queries.
-
-TIME-TRAVEL QUERIES
-
-  pudl facts list --relation observation --as-of-valid "2025-01-15T00:00:00Z"
-  pudl facts list --relation observation --as-of-tx "2025-01-15T00:00:00Z"
-
-  --as-of-valid: "What was true at this time?"
-  --as-of-tx:    "What did we believe at this time?"
-
-PULLING RELATED FACTS
-
-  pudl pull <scope>                  All facts for a scope prefix
-  pudl pull --relation <relation>    All facts of a relation type
-
-TABLES
-
-  facts           Append-only, full bitemporal history
-  current_facts   Materialized view of currently-valid facts
-                  (synced transactionally by AddFact/RetractFact/InvalidateFact)
+  valid_start / valid_end describe when a fact was true in reality.
+  tx_start / tx_end describe when PUDL held that belief.
+  Historical assertions remain retained; current_facts and its full-text index
+  track currently valid, non-retracted facts transactionally.
 
 SEE ALSO
 
-  pudl guide datalog       Derive new facts with rules
-  pudl guide agents        Conventions for agent-recorded observations
+  pudl guide datalog       Joins and recursive rules over facts and catalog data
 `)
 }
 
@@ -609,93 +552,53 @@ SEE ALSO
 }
 
 func printGuideAgents() {
-	fmt.Print(`pudl guide agents — conventions for AI agents
+	fmt.Print(`pudl guide agents — operate models and inspect evidence
 
-OVERVIEW
+START WITH THE PROJECT
 
-  pudl is designed for both human and agent use. This guide covers
-  conventions and best practices for AI agents working with pudl.
+  pudl model list --json
+  pudl model show <name> --json
+  pudl run <name>
+  pudl run report --json
 
-  See also: 'pudl prime' outputs a structured prompt you can include
-  in agent configuration files (CLAUDE.md, etc.).
+  Existing repository state lives under .pudl/. Create it with pudl init if
+  needed; use --global explicitly for global initialization.
 
-RECORDING OBSERVATIONS
+EXECUTION SCOPE
 
-  Always pass --source with your agent name:
+  pudl run set <producer> <consumer>   Observe exactly the named set
+  pudl run set <models...> --converge --require-approval
+  pudl run resume <operation-id>
+  pudl run reject <operation-id>
 
-    pudl facts observe "auth module lacks rate limiting" \
-      --kind suggestion \
-      --scope myapp:pkg/auth \
-      --source claude-code
+  Ordinary runs observe. --converge enables mutation through Mu. Missing
+  producers are not started implicitly. Set approval covers an exact plan;
+  changed plans are rejected. Sealed values stay inside Mu's provider path.
 
-  This makes observations attributable and filterable.
+INTERPRET THE RESULT
 
-SCOPE FORMAT
+  Operation completion, resource conformity, check results, and verification
+  are distinct. Read the stored report by ID for provenance and findings.
+  Stored replay is not fresh live verification. Uncertain mutation outcomes
+  require verification, and partial scope cannot prove a whole model clean.
 
-  Use repo:path format for globally unambiguous scoping:
+DATA AND RULES
 
-    pudl:internal/database
-    myapp:pkg/auth
-    infra:terraform/vpc
+  pudl import --path <file>
+  pudl list --json
+  pudl show <id> --raw
+  pudl query <relation> key=value --json
+  pudl facts add --relation <name> --args '<json-object>' --source <origin>
 
-  Consistent scoping makes observations joinable across repos.
+  Schema inference is automatic. Generic fact writes should name their source;
+  use explicit --schema validation when an assertion has an authored contract.
+  facts list --as-of-valid/--as-of-tx supports historical evidence queries.
 
-MACHINE-READABLE OUTPUT
+DISCOVERY
 
-  Pass --json on any command for structured output:
-
-    pudl help --json
-    pudl help run --json
-    pudl list --json
-    pudl facts list --relation observation --json
-    pudl query stale-items --json
-    pudl status --json
-
-ID FORMAT
-
-  IDs are content-addressed SHA256 displayed as proquints
-  (e.g. "babam-babam"). Short prefixes work when unambiguous.
-
-TEMPORAL QUERIES
-
-  Query historical state with time-travel flags:
-
-    pudl facts list --relation observation --as-of-valid "2025-01-15T00:00:00Z"
-    pudl facts list --relation observation --as-of-tx "2025-01-15T00:00:00Z"
-
-  --as-of-valid: "What was true at this time?"
-  --as-of-tx:    "What did we believe at this time?"
-
-SCHEMA INFERENCE
-
-  Schema inference is automatic on import. You usually don't need
-  --schema unless forcing a specific classification.
-
-RECOMMENDED WORKFLOWS
-
-  Explore a codebase and record findings:
-    1. Analyze code
-    2. pudl facts observe "<finding>" --kind <kind> --scope <repo:path>
-    3. pudl facts list --relation observation --source claude-code
-
-  Query existing knowledge:
-    1. pudl pull <repo:path>          (all facts for a scope prefix)
-    2. pudl query <relation>         (derived facts from rules)
-
-  Import external data:
-    1. curl ... | pudl import --path - --format json
-    2. pudl list --schema <name>     (verify import)
-    3. pudl show <id>                (inspect details)
-
-INTEGRATING WITH AGENT CONFIG
-
-  Add this line to your CLAUDE.md or agent config:
-
-    Run 'pudl prime' to learn how to use the pudl data lake CLI.
-
-  Or for the full reference:
-
-    Run 'pudl guide overview' for a quick introduction to pudl.
+  pudl help <command> --json
+  pudl guide <topic>
+  pudl prime
 `)
 }
 
@@ -739,28 +642,5 @@ COMMON CASES
     pudl run report <run-id> --json
     pudl run resume <run-id>       # approve and execute
     pudl run reject <run-id>       # terminal no-op
-`)
-}
-
-func printGuideMemory() {
-	fmt.Print(`pudl guide memory — durable agent knowledge
-
-LOOP
-
-  pudl facts observe "<finding>" --kind <kind> --scope repo:path --source <agent>
-  pudl facts curate                 deterministic maturity advancement
-  pudl memory context --task "..."  ranked promoted context
-  pudl memory cycle                 reflect → curate (schedule it; do not run it
-                                     from every Stop hook)
-
-HOOKS
-
-  pudl hooks print
-  pudl hooks install --scope project
-
-  The installed hooks are idempotent: SessionStart recalls context, Stop runs
-  the deterministic curator, and PreToolUse may add advisory PUDL/mu context for
-  raw kubectl/aws/terraform JSON reads. The PreToolUse hook never blocks the
-  underlying command and stays quiet when no matching plugin/model is available.
 `)
 }

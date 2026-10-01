@@ -14,6 +14,7 @@ import (
 var factsCmd = &cobra.Command{
 	Use:   "facts",
 	Short: "Query the bitemporal fact store",
+	Args:  cobra.NoArgs,
 	Long: `Query facts stored in the bitemporal fact store.
 
 Facts are typed assertions — observations, dependencies, derived facts — with
@@ -356,8 +357,8 @@ var factsStatsCmd = &cobra.Command{
 	Short: "Aggregate statistics over the fact store",
 	Long: `Show counts grouped by relation, kind, scope, source, or any arg field.
 
-Without --group-by, shows count per relation. With --relation, defaults to
-grouping by 'kind'. Explicit --group-by overrides the default.
+Without --group-by, shows count per relation, including when --relation filters
+the data. Explicit --group-by selects source or an arbitrary args field.
 
 Supports comma-separated field names for cross-tabulation.
 
@@ -376,7 +377,7 @@ Examples:
 		}
 		defer db.Close()
 
-		groupFields := resolveGroupBy(statsRelation, statsGroupBy)
+		groupFields := resolveGroupBy(statsGroupBy)
 
 		var selectParts []string
 		var groupParts []string
@@ -476,7 +477,7 @@ Examples:
 	},
 }
 
-func resolveGroupBy(relation, groupBy string) []string {
+func resolveGroupBy(groupBy string) []string {
 	if groupBy != "" {
 		parts := strings.Split(groupBy, ",")
 		var trimmed []string
@@ -484,9 +485,6 @@ func resolveGroupBy(relation, groupBy string) []string {
 			trimmed = append(trimmed, strings.TrimSpace(p))
 		}
 		return trimmed
-	}
-	if relation != "" {
-		return []string{"kind"}
 	}
 	return []string{"relation"}
 }

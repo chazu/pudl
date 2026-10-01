@@ -1,4 +1,15 @@
-package nous
+package importer
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+// Historical shipped bytes exercise ownership-based retirement.
+const retiredMemorySchemaFixture = `package nous
 
 // Observation represents a structured observation about a codebase or system,
 // recorded by an agent or human. Observations are stored as facts in the
@@ -33,4 +44,43 @@ package nous
 	outcome?: "success" | "failure"                 // task result, if the feedback follows an action
 	source:   string                                // agent name or "human"
 	note?:    string                                // optional free-text rationale
+}
+`
+
+func TestBootstrapRepairRetiresOnlyUnmodifiedMemorySchema(t *testing.T) {
+	for _, edited := range []bool{false, true} {
+		t.Run(map[bool]string{false: "shipped", true: "authored"}[edited], func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "pudl", "nous", "nous.cue")
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+			content := retiredMemorySchemaFixture
+			if edited {
+				content += "\n// authored extension\n"
+			}
+			require.NoError(t, os.WriteFile(path, []byte(content), 0644))
+			require.NoError(t, CopyBootstrapSchemas(root))
+			after, err := os.ReadFile(path)
+			if edited {
+				require.NoError(t, err)
+				require.Equal(t, content, string(after))
+			} else {
+				require.True(t, os.IsNotExist(err))
+			}
+			require.NoError(t, CopyBootstrapSchemas(root))
+			require.False(t, BootstrapPackages()["pudl/nous"])
+		})
+	}
+}
+
+func TestBootstrapRepairPreservesMemorySchemaSymlink(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(t.TempDir(), "authored.cue")
+	require.NoError(t, os.WriteFile(target, []byte(retiredMemorySchemaFixture), 0644))
+	path := filepath.Join(root, "pudl", "nous", "nous.cue")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+	require.NoError(t, os.Symlink(target, path))
+	require.NoError(t, CopyBootstrapSchemas(root))
+	info, err := os.Lstat(path)
+	require.NoError(t, err)
+	require.NotZero(t, info.Mode()&os.ModeSymlink)
 }

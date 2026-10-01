@@ -1,4 +1,8 @@
-# Agent-Memory Substrate Plan (cass-inspired)
+# Retired agent memory substrate plan
+
+**Status:** Retired on 2026-09-30. The application, scoring policy, and commands
+described here have been removed. Generic facts, search, transactions, and
+Datalog remain supported. This document records the historical design.
 
 Status: DRAFT / proposal. Not yet committed to `plan.md`.
 Last revised after design discussion covering substrate, command shape, loop

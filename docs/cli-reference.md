@@ -567,23 +567,28 @@ Backfill `resource_id`, `content_hash`, and `version` columns for catalog entrie
 pudl migrate identity
 ```
 
-## Observations and Facts
+## Facts
 
-### `pudl facts observe`
+### `pudl facts add`
 
-Record a structured observation about the codebase. Observations are stored as facts in the bitemporal fact store.
+Store a generic JSON assertion under a relation. `--relation` and `--args` are
+required. `--source` attributes the assertion; optional `--schema` validates the
+object against an authored CUE definition. JSON output contains one fact object.
 
 ```bash
-pudl facts observe "auth has circular dependency with user" --kind obstacle --scope pudl:pkg/auth
-pudl facts observe "all db calls use single connection pool" --kind pattern
-pudl facts observe "Config struct has 47 fields" --kind suggestion --scope pudl:internal/config --source claude-code
+pudl facts add --relation depends --args '{"from":"api","to":"database"}' --source operator
+pudl facts add --relation config --args '{"key":"timeout","value":30}' --json
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--kind` | `fact` | Observation kind: fact, obstacle, pattern, antipattern, suggestion, bug, opportunity |
-| `--scope` | (none) | Scope as repo:path (e.g. `pudl:internal/database`) |
-| `--source` | OS username | Who made the observation |
+### `pudl facts search`
+
+Full-text search of currently valid fact values, ordered by text relevance.
+Use `--relation` to filter and `--limit` to bound results. Search uses FTS5 syntax
+and supports the global `--json` flag. Ranking has no maturity or decay policy.
+
+```bash
+pudl facts search "timeout" --relation config --json
+```
 
 ### `pudl facts list`
 
@@ -636,7 +641,7 @@ Aggregate statistics over the fact store. Groups facts by relation, kind, scope,
 
 ```bash
 pudl facts stats                                        # count by relation
-pudl facts stats --relation observation                 # count by kind (default for single relation)
+pudl facts stats --relation config                      # count this relation
 pudl facts stats --relation observation --group-by kind # explicit grouping
 pudl facts stats --group-by scope                       # count per scope
 pudl facts stats --group-by kind,scope                  # cross-tabulation
@@ -648,28 +653,8 @@ pudl facts stats --relation observation --group-by source
 | `--relation` | Filter to specific relation |
 | `--group-by` | Comma-separated arg fields to group by (e.g. `kind,scope`) |
 
-Without `--group-by`: defaults to grouping by `relation` (or `kind` if `--relation` is set).
-
-### `pudl pull`
-
-Retrieve all facts related to a scope or entity. Supports prefix matching on scope, plus filtering by kind, source, and relation.
-
-```bash
-pudl pull procyon-park:src/cli          # all facts scoped here
-pudl pull procyon-park                  # all facts in this repo (prefix match)
-pudl pull --kind bug                    # all bugs across all scopes
-pudl pull --source claude-code          # everything from this source
-pudl pull procyon-park --kind bug       # bugs in procyon-park
-pudl pull maggie:vm --json              # machine-readable
-```
-
-| Flag | Description |
-|------|-------------|
-| `--kind` | Filter by observation kind (bug, obstacle, pattern, etc.) |
-| `--source` | Filter by source |
-| `--relation` | Filter by relation (default: all) |
-
-Output is grouped by scope, showing description, kind, source, and date.
+Without `--group-by`, counts are grouped by `relation`, including when a relation
+filter is supplied. Explicit grouping can select source or any args field.
 
 ## Datalog and Rules
 

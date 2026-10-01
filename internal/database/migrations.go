@@ -16,9 +16,9 @@ import (
 //
 // Migrations are now an ordered list, applied in order and recorded on success.
 //
-// What is NOT here: views and syncs. `ensureCatalogEntryView` and
-// `ensureFactScoredView` drop and recreate their views on every open so the
-// definition always matches the Go source declaring it, and backfills are
+// What is NOT here: recurring views and syncs. `ensureCatalogEntryView`
+// drops and recreates its view on every open so its definition matches the
+// current source, and backfills are
 // guarded by their own emptiness checks. A migration changes the schema's shape;
 // a view or a sync restates it from the current source. Versioning a view would
 // make a change to its body a no-op until someone bumped a number.
@@ -62,6 +62,7 @@ var migrations = []migration{
 	{15, "run_set_reports", (*CatalogDB).ensureRunSetReportsTable},
 	{16, "run_set_approvals", (*CatalogDB).ensureRunSetApprovalsTable},
 	{17, "repair_fact_projections", (*CatalogDB).repairFactProjections},
+	{18, "retire_agent_memory_view", (*CatalogDB).retireAgentMemoryView},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step
