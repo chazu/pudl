@@ -2,148 +2,91 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 
-	"github.com/spf13/cobra"
-
-	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/schema"
+	"github.com/chazu/pudl/internal/validator"
+	"github.com/spf13/cobra"
 )
 
-// schemaListCmd represents the schema list command
 var schemaListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List available schemas",
-	Long: `List all available schemas organized by package.
+	Short: "List schema definitions and resource metadata",
+	Long: `List schemas using full package.#Definition names accepted by 'pudl schema show'.
+The listing includes resource types. Use --verbose for source paths, identity fields,
+tracked fields, and collection metadata, or --json for the complete representation.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error { return runSchemaListCommand() },
+}
 
-Schemas use full package.#Definition names accepted by 'pudl schema show'.
-Use --verbose for additional details including file paths and metadata information.
+type schemaListing struct {
+	schema.SchemaInfo
+	Metadata *validator.SchemaMetadata `json:"metadata,omitempty"`
+}
 
-Filtering Options:
-- --package: Show only schemas from a specific package
-
-Examples:
-    pudl schema list                    # List all schemas
-    pudl schema list --package aws      # List only AWS schemas
-    pudl schema list --verbose          # Show detailed information`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema list command and handle any errors
-		if err := runSchemaListCommand(); err != nil {
-			errorHandler.HandleError(err)
+func runSchemaListCommand() error {
+	cfg, err := loadEffectiveConfig()
+	if err != nil {
+		return err
+	}
+	paths := effectiveSchemaPaths(cfg)
+	manager := schema.NewManagerWithPaths(paths...)
+	manager.SetBuiltInPackages(importer.BootstrapPackages())
+	packages, err := manager.ListSchemas()
+	if err != nil {
+		return err
+	}
+	schemas, err := validator.NewChainValidator(paths...)
+	if err != nil {
+		return err
+	}
+	entries := make([]schemaListing, 0)
+	for pkg, definitions := range packages {
+		if schemaPackage != "" && pkg != schemaPackage {
+			continue
 		}
-	},
+		for _, definition := range definitions {
+			entry := schemaListing{SchemaInfo: definition}
+			if metadata, found := schemas.GetSchemaMetadata(definition.FullName); found {
+				entry.Metadata = &metadata
+			}
+			entries = append(entries, entry)
+		}
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].FullName < entries[j].FullName })
+	if jsonOutput {
+		return GetOutputWriter().WriteJSON(entries)
+	}
+	if len(entries) == 0 {
+		fmt.Println("No schemas found.")
+		return nil
+	}
+	fmt.Println("Available Schemas:")
+	for _, entry := range entries {
+		builtIn := ""
+		if entry.BuiltIn {
+			builtIn = " [built-in]"
+		}
+		fmt.Printf("  %s%s", entry.FullName, builtIn)
+		if entry.Metadata != nil {
+			fmt.Printf("  type=%s resource=%s", entry.Metadata.SchemaType, entry.Metadata.ResourceType)
+		}
+		fmt.Println()
+		if schemaVerbose {
+			fmt.Printf("    File: %s\n    Size: %s\n", entry.FilePath, formatBytes(entry.Size))
+			if entry.Metadata != nil {
+				fmt.Printf("    identity_fields: %v\n    tracked_fields: %v\n    list_type: %t\n", entry.Metadata.IdentityFields, entry.Metadata.TrackedFields, entry.Metadata.IsListType)
+			}
+		}
+	}
+	fmt.Printf("\nTotal: %d schemas\n", len(entries))
+	return nil
 }
 
 func init() {
 	schemaCmd.AddCommand(schemaListCmd)
-
-	schemaListCmd.Flags().BoolVarP(&schemaVerbose, "verbose", "v", false, "Show detailed information")
+	schemaListCmd.Flags().BoolVarP(&schemaVerbose, "verbose", "v", false, "Show paths and schema metadata")
 	schemaListCmd.Flags().StringVar(&schemaPackage, "package", "", "Filter by package name")
-
 	schemaListCmd.RegisterFlagCompletionFunc("package", completeSchemaPackages)
-}
-
-// runSchemaListCommand contains the actual schema list logic with structured error handling
-func runSchemaListCommand() error {
-	// Load configuration
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return errors.NewConfigError("Failed to load configuration", err)
-	}
-
-	// Create schema manager
-	manager := schema.NewManagerWithPaths(effectiveSchemaPaths(cfg)...)
-	manager.SetBuiltInPackages(importer.BootstrapPackages())
-
-	if schemaPackage != "" {
-		// List schemas in specific package
-		return listSchemasInPackage(manager, schemaPackage)
-	} else {
-		// List all schemas
-		return listAllSchemas(manager)
-	}
-}
-
-// listAllSchemas lists all schemas organized by package
-func listAllSchemas(manager *schema.Manager) error {
-	schemas, err := manager.ListSchemas()
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to list schemas", err)
-	}
-
-	if len(schemas) == 0 {
-		fmt.Println("No schemas found.")
-		fmt.Println()
-		fmt.Println("💡 Add your first schema:")
-		fmt.Println("   pudl schema add aws.ec2-instance my-schema.cue")
-		return nil
-	}
-
-	fmt.Println("Available Schemas:")
-	fmt.Println()
-
-	totalSchemas := 0
-	for packageName, packageSchemas := range schemas {
-		builtInTag := ""
-		if len(packageSchemas) > 0 && packageSchemas[0].BuiltIn {
-			builtInTag = " [built-in]"
-		}
-		fmt.Printf("📦 Package: %s (%d schemas)%s\n", packageName, len(packageSchemas), builtInTag)
-
-		for _, schemaInfo := range packageSchemas {
-			totalSchemas++
-			if schemaVerbose {
-				fmt.Printf("   ├─ %s\n", schemaInfo.FullName)
-				fmt.Printf("   │  File: %s\n", schemaInfo.FilePath)
-				fmt.Printf("   │  Size: %s\n", formatBytes(schemaInfo.Size))
-				fmt.Printf("   │\n")
-			} else {
-				fmt.Printf("   ├─ %s\n", schemaInfo.FullName)
-			}
-		}
-		fmt.Println()
-	}
-
-	fmt.Printf("Total: %d schemas in %d packages\n", totalSchemas, len(schemas))
-	return nil
-}
-
-// listSchemasInPackage lists schemas in a specific package
-func listSchemasInPackage(manager *schema.Manager, packageName string) error {
-	schemas, err := manager.GetSchemasInPackage(packageName)
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem,
-			fmt.Sprintf("Failed to list schemas in package '%s'", packageName), err)
-	}
-
-	if len(schemas) == 0 {
-		fmt.Printf("No schemas found in package '%s'.\n", packageName)
-		return nil
-	}
-
-	builtInTag := ""
-	if len(schemas) > 0 && schemas[0].BuiltIn {
-		builtInTag = " [built-in]"
-	}
-	fmt.Printf("Schemas in package '%s'%s:\n", packageName, builtInTag)
-	fmt.Println()
-
-	for _, schemaInfo := range schemas {
-		if schemaVerbose {
-			fmt.Printf("📄 %s\n", schemaInfo.FullName)
-			fmt.Printf("   File: %s\n", schemaInfo.FilePath)
-			fmt.Printf("   Size: %s\n", formatBytes(schemaInfo.Size))
-			fmt.Println()
-		} else {
-			fmt.Printf("  %s\n", schemaInfo.FullName)
-		}
-	}
-
-	if !schemaVerbose {
-		fmt.Printf("\nTotal: %d schemas\n", len(schemas))
-	}
-	return nil
 }

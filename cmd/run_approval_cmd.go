@@ -32,11 +32,18 @@ func restoreApprovalRequest(request approvalRequest) {
 }
 
 var runResumeCmd = &cobra.Command{
-	Use:     "resume <run-id>",
-	Short:   "Approve and continue a pending converge run",
+	Use:     "resume <operation-id>",
+	Short:   "Approve and continue a pending run or exact set plan",
 	Aliases: []string{"approve"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		isSet, err := isRunSetOperation(args[0])
+		if err != nil {
+			return err
+		}
+		if isSet {
+			return resumeRunSet(args[0])
+		}
 		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return err
@@ -73,10 +80,17 @@ var runResumeCmd = &cobra.Command{
 }
 
 var runRejectCmd = &cobra.Command{
-	Use:   "reject <run-id>",
-	Short: "Reject a pending converge run",
+	Use:   "reject <operation-id>",
+	Short: "Reject a pending run or exact set plan",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		isSet, err := isRunSetOperation(args[0])
+		if err != nil {
+			return err
+		}
+		if isSet {
+			return rejectRunSet(args[0])
+		}
 		db, err := database.NewCatalogDB(effectivePudlDir())
 		if err != nil {
 			return err

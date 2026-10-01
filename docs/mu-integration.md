@@ -45,7 +45,7 @@ in one command.
 
 ## Exact multi-model runs and value channels
 
-`pudl run-set <models...>` is the bounded coordinator for cross-model values.
+`pudl run set <models...>` is the bounded coordinator for cross-model values.
 It runs exactly the named models, orders declared/binding producers first, and
 pins successful producer observations for their consumers. It never discovers
 and starts an omitted producer. Without `--converge` every member is
@@ -78,9 +78,9 @@ for exact mutations. Direct `command` plugins remain an ordinary mu escape hatch
 but are rejected by guarded exact execution because their bytes are not pinned.
 
 ```bash
-pudl run-set network app --converge
+pudl run set network app --converge
 # sealed-output sets return pending-approval; resume after review
-pudl run-set resume <run-set-id>
+pudl run resume <run-set-id>
 ```
 
 ## Example: Converging Kubernetes State

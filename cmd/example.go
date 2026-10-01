@@ -28,11 +28,11 @@ and catalog replay tutorial needs only PUDL; live observation also needs mu
 and Python 3.
 
 Example:
-    pudl repo init
+    pudl init
     pudl example install git-inventory`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if wsPolicy == nil || !wsPolicy.InWorkspace() {
-			return fmt.Errorf("example installation needs a repository workspace; run pudl repo init first")
+			return fmt.Errorf("example installation needs a repository workspace; run pudl init first")
 		}
 		files, err := examples.Install(wsPolicy.Workspace.PudlDir, args[0])
 		if err != nil {

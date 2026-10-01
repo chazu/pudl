@@ -1,6 +1,8 @@
 # CLI Reference
 
-All commands support `--json` for machine-readable output and `--help` for inline documentation.
+Use `--help` for inline documentation. Initialization, schema/model inspection,
+diagnostics, and stored run reports support the global `--json` flag. Individual
+command sections describe additional output options.
 
 ## Workspace
 
@@ -13,7 +15,7 @@ are left alone. Conflicting edits or symlinked destinations cause an error befor
 installation writes files. This command does not initialize global state.
 
 ```bash
-pudl repo init
+pudl init
 pudl example install git-inventory
 pudl model show git-inventory
 ```
@@ -24,15 +26,19 @@ tutorial. Live observation additionally requires mu and Python 3.
 
 ### `pudl init`
 
-Initialize global-mode PUDL state at `~/.pudl/`. For repository-local state,
-use `pudl repo init`.
-
-Creates the configuration file, data directories, and a git-tracked schema repository with bootstrap schemas. Safe to run multiple times -- skips if already initialized.
+Create or repair a self-contained `.pudl/` in the current directory. This installs
+configuration, a local CUE module and built-in schemas, authoring and data
+directories, and bundled Claude skills. Repeated initialization preserves
+authored configuration; `--force` replaces configuration while preserving data.
+Use `--global` to initialize `~/.pudl/` instead.
 
 ```bash
 pudl init
-pudl init --force  # Reinitialize (preserves existing data)
+pudl init --force
+pudl init --global
 ```
+
+`--json` returns the workspace `path` and `mode`.
 
 ### `pudl config`
 
@@ -54,7 +60,21 @@ Show version, commit, and build date.
 
 ### `pudl doctor`
 
-Run health checks on the PUDL workspace.
+Check workspace health and catalog correctness. Every record is validated against
+its assigned schema; ordinary inferred imports also receive a fixed-point
+inference check. Explicit producer assignments are never heuristically
+reclassified, and retained records are not repaired or changed.
+
+```bash
+pudl doctor                         # Health, validation, and inference checks
+pudl doctor --entry babod-fakak      # One record, by proquint or full ID
+pudl doctor --health-only           # Workspace checks without a catalog scan
+pudl doctor --json                  # Structured health and catalog findings
+```
+
+`--entry` and `--health-only` are mutually exclusive. JSON includes `ok`, `health`,
+`catalog`, and any setup `error`; invalid records, inference mismatches, and
+failed health checks produce a nonzero exit status. An empty catalog is valid.
 
 ### `pudl setup`
 
@@ -219,46 +239,23 @@ pudl delete mivof-duhij --json       # JSON output for scripting
 
 Collections with items cannot be deleted without `--cascade`. Individual items can always be deleted.
 
-### `pudl validate`
-
-Validate catalog data against assigned CUE schemas.
-
-```bash
-pudl validate --entry babod-fakak      # Validate a specific entry by proquint
-pudl validate --all                     # Validate all catalog entries
-```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--entry` | Validate a specific entry by proquint ID |
-| `--all` | Validate all catalog entries |
-
-Exactly one of `--entry` or `--all` is required.
-
-### `pudl verify`
-
-Verify that schema inference is a fixed point for all catalog entries. Re-runs inference on every entry and confirms each still resolves to the same schema it was originally assigned.
-
-```bash
-pudl verify
-```
-
-Any mismatch indicates drift between stored assignments and current inference rules.
-
 ## Schema Management
 
 ### `pudl schema list`
 
-List available schemas using full `package.#Definition` names that can be
-passed directly to `pudl schema show`.
+One listing combines schema definitions, source information, and catalog metadata.
+Full `package.#Definition` names can be passed directly to `schema show`.
+Workspace definitions shadow global definitions.
 
 ```bash
 pudl schema list
-pudl schema list --package aws
-pudl schema list --package k8s --verbose
+pudl schema list --package pudl/git
+pudl schema list --verbose
+pudl schema list --json
 ```
+
+JSON includes source paths, built-in status, and available `_pudl` metadata.
+Verbose text includes identity fields, tracked fields, and list type information.
 
 ### `pudl schema add <name> <file>`
 
@@ -297,10 +294,6 @@ Print schema file contents to stdout.
 
 Open a schema file in `$EDITOR`.
 
-### `pudl schema validate`
-
-Validate CUE schema files for correctness.
-
 ### `pudl schema reinfer`
 
 Re-run schema inference on all existing catalog entries. Use after adding or modifying schemas to reclassify data.
@@ -324,23 +317,6 @@ pudl schema log                        # Show commit history
 pudl schema log --verbose              # Detailed history
 ```
 
-## Schema Catalog
-
-### `pudl catalog`
-
-Display the schema catalog -- a central inventory of all registered schema types with their metadata.
-
-```bash
-pudl catalog              # List all registered types
-pudl catalog --verbose    # Show identity fields, tracked fields, etc.
-```
-
-**Flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--verbose` / `-v` | Show additional metadata fields (identity_fields, tracked_fields) |
-
 ## Models
 
 A model is a registered `#SystemModel` describing a `desired` state and the sources that populate observed state. Catalog rows carry a `target` — the mu target / run target that produced them (e.g. `//models/<name>`, a populate phase `//models/<name>:populate`, or a standalone observe like `home/odroid`); status is recorded per target. Drift detection is a phase of `pudl run`, not a standalone command.
@@ -356,16 +332,19 @@ pudl model list --json
 
 ### `pudl model show <name>`
 
-Display detailed information about a single model. Desired resources show full
-schema names accepted by `pudl schema show`, with resource-type routing tags
-labeled separately. Resource types that match several schemas list all matches;
-missing schemas are identified explicitly. `--json` preserves the authored
-model values, including `_schema` routing tags.
+Inspect a model's populate and converge arms, desired resources, checks, plugins,
+dependencies, and freshness. Human output resolves desired resource-type tags to
+retrievable schema names; JSON retains the model's original routing tags.
 
 ```bash
 pudl model show my_model
 pudl model show my_model --json
+pudl model show my_model --discover --json
 ```
+
+`--discover` explicitly queries Mu for plugin capabilities and includes results
+or discovery errors under `plugin_discovery`. Ordinary inspection does not need
+Mu. The global `--json` flag works before or after the command path.
 
 ### `pudl model validate <name>`
 
@@ -435,7 +414,7 @@ reported.
 
 A standalone `pudl run` never starts another model automatically. If the model
 has a plain binding, PUDL reuses the latest eligible successful producer
-snapshot in the same workspace; use `pudl run-set` to observe and pin producers
+snapshot in the same workspace; use `pudl run set` to observe and pin producers
 in the current operation.
 
 `--max-iters` bounds the applies inside one process; `--max-applies` bounds them
@@ -479,19 +458,19 @@ plus a note naming the scope. `drifted` and `failed` *are* written: a defect
 found in a subset is a defect in the model. Re-run without `--only` to establish
 a whole-model `clean`.
 
-### `pudl run-set <model> [<model>...]`
+### `pudl run set <model> [<model>...]`
 
 Run exactly the named producer/consumer models in dependency order. The set is
 closed: missing producers are errors, not requests for implicit expansion.
 
 ```bash
-pudl run-set network app                         # observe-only
-pudl run-set network app --max-observation-age 15m
-pudl run-set network app --converge              # whole-set plan, then apply
-pudl run-set network app --converge --require-approval
-pudl run-set report [run-set-id]
-pudl run-set resume <run-set-id>
-pudl run-set reject <run-set-id>
+pudl run set network app                         # observe-only
+pudl run set network app --max-observation-age 15m
+pudl run set network app --converge              # whole-set plan, then apply
+pudl run set network app --converge --require-approval
+pudl run report [run-set-id]
+pudl run resume <run-set-id>
+pudl run reject <run-set-id>
 ```
 
 Observe-only sets continue independent branches after a member failure while
@@ -519,6 +498,23 @@ provider access and executes that same in-memory graph.
 | `--max-applies` | Durable per-member apply budget (default 20; `0` disables) |
 | `--mu-root` | Mu project root for member runs; otherwise discover per model |
 
+### Shared operation reports and approvals
+
+Standalone runs and exact sets share these commands:
+
+```bash
+pudl run report [operation-id]
+pudl run report --json
+pudl run resume <operation-id>
+pudl run reject <operation-id>
+```
+
+With no ID, `report` selects the newest persisted standalone or aggregate set
+report. With an ID, it reads that exact report. The JSON payload retains its
+existing standalone or set representation. `resume` and `reject` look up the
+stored operation kind; set approvals still rebuild and validate the exact plan,
+while standalone approvals retain their request-level behavior.
+
 ### `pudl status [target]`
 
 Read convergence status from the catalog. A model run records its verdict on the instance row, keyed by target `models/<name>`. With no argument, reports status for all targets; with a target name, reports just that one.
@@ -537,24 +533,6 @@ Lifecycle:
 `drifted → converging` (apply, via `ingest-manifest`) `→ clean` (verified ∅ by the drift
 re-check) `| failed`. `clean` is the single in-sync state (drift == ∅), written only off
 an actual observation with successful receipt persistence — never a bare apply.
-
-## Repository Operations
-
-### `pudl repo init`
-
-Initialize a `.pudl/` directory in the current repository and install Claude skills into `.claude/skills/`.
-
-```bash
-pudl repo init
-pudl repo init --force    # Replace authored workspace configuration
-```
-
-The command is idempotent and repairs missing PUDL-owned files. It installs a
-local CUE module and all built-in schemas, creates `schema/models/`,
-`definitions/`, and `populators/` authoring directories, and creates
-`.pudl/data/` for the repository's independent catalog, imports, facts,
-snapshots, reports, and approvals. Runtime data is ignored by the enclosing Git
-repository.
 
 ## Interoperability
 

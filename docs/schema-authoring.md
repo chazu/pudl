@@ -301,7 +301,7 @@ This re-runs inference on all entries and updates their schema assignments. Entr
 You can also verify that inference is stable after changes:
 
 ```bash
-pudl verify
+pudl doctor
 ```
 
 This confirms that re-running inference on every entry produces the same schema assignment it already has.

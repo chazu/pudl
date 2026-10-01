@@ -106,7 +106,7 @@ var (
 )
 
 var runSetCmd = &cobra.Command{
-	Use:   "run-set <model> [<model>...]",
+	Use:   "set <model> [<model>...]",
 	Short: "Run an explicit producer/consumer model set in dependency order",
 	Long: `Run exactly the named models in dependency order.
 
@@ -124,13 +124,13 @@ planning before mutation or provider traffic. Resume rebuilds and revalidates
 the exact plan before producer-first execution.
 
 Examples:
-  pudl run-set network app
-  pudl run-set network app --max-observation-age 15m
-  pudl run-set network app --converge
-  pudl run-set network app --converge --require-approval
-  pudl run-set report
-  pudl run-set resume <run-set-id>
-  pudl run-set reject <run-set-id>`,
+  pudl run set network app
+  pudl run set network app --max-observation-age 15m
+  pudl run set network app --converge
+  pudl run set network app --converge --require-approval
+  pudl run report
+  pudl run resume <run-set-id>
+  pudl run reject <run-set-id>`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runObserveSet,
 }
@@ -430,7 +430,7 @@ func printRunSetReport(report *acute.RunSetReport) error {
 }
 
 func init() {
-	rootCmd.AddCommand(runSetCmd)
+	runCmd.AddCommand(runSetCmd)
 	runSetCmd.Flags().DurationVar(&runSetMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runSetCmd.Flags().StringVar(&runSetMuRoot, "mu-root", "", "mu project root for member runs (default: discover per model)")
 	runSetCmd.Flags().BoolVar(&runSetConverge, "converge", false, "plan and execute mutations only after every member completes read-only preflight")

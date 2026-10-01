@@ -15,7 +15,7 @@ Then follow the [Git inventory walkthrough](docs/getting-started.md). Create a
 new Git repository and install its bundled model and data using PUDL commands:
 
 ```bash
-pudl repo init
+pudl init
 pudl example install git-inventory
 ```
 
@@ -52,9 +52,9 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **Value wiring**: required scalar `inputs` bind to explicitly authorized
   `@pudl(binding=plain)` fields from successful producer snapshots; sealed values
   stay inside mu's provider path
-- **Exact run-sets**: `pudl run-set <models...>` orders only the named models,
+- **Exact run-sets**: `pudl run set <models...>` orders only the named models,
   pins producer observations, and never expands the set implicitly
-- **Repository isolation**: `pudl repo init` creates a self-contained `.pudl/`;
+- **Repository isolation**: `pudl init` creates a self-contained `.pudl/`;
   its schemas, imports, catalog, facts, reports, snapshots, and approvals do not
   mutate the global `~/.pudl/` state
 - **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
@@ -69,13 +69,12 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 
 | Command | Description |
 |---------|-------------|
-| `pudl init` | Initialize global mode (`~/.pudl/`) |
+| `pudl init` | Initialize or repair local `.pudl/` (`--global` selects `~/.pudl/`) |
 | `pudl import --path <file>` | Import data with automatic detection |
 | `pudl list` | Query catalog (filter by `--schema`, `--origin`, `--format`, etc.) |
 | `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`) |
 | `pudl delete <id>` | Remove entry from catalog |
 | `pudl export` | Export data by ID, schema, or origin to JSON/YAML/CSV/NDJSON |
-| `pudl catalog` | List all registered schema types with metadata |
 
 ### Schema Management
 
@@ -85,7 +84,6 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl schema add <name> <file>` | Add a schema to the repository |
 | `pudl schema new --from <id>` | Generate CUE schema from imported data |
 | `pudl schema show <name>` | Display schema details |
-| `pudl schema validate` | Validate schemas |
 | `pudl schema migrate` | Run schema migrations |
 | `pudl schema reinfer` | Re-infer schemas for existing entries |
 
@@ -98,10 +96,10 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl model validate <name>` | Validate an authored model template; bound values are concretely revalidated at run time |
 | `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
 | `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
-| `pudl run-set <models...>` | Observe an exact producer/consumer set in dependency order |
-| `pudl run-set <models...> --converge` | Preflight and plan the whole exact set, then mutate; sealed-output sets pause for mandatory exact-plan approval |
-| `pudl run-set report [id]` | Read the latest or named durable run-set report |
-| `pudl run-set resume/reject <id>` | Approve or reject a pending exact mutation plan |
+| `pudl run set <models...>` | Observe an exact producer/consumer set in dependency order |
+| `pudl run set <models...> --converge` | Preflight and plan the whole exact set, then mutate; sealed-output sets pause for mandatory exact-plan approval |
+| `pudl run report [id]` | Read the latest or named standalone/set report |
+| `pudl run resume/reject <id>` | Approve or reject a pending standalone/set operation |
 | `pudl status` | Read catalog convergence status recorded by the last model run |
 
 ### Observations and Facts
@@ -129,14 +127,32 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 
 | Command | Description |
 |---------|-------------|
-| `pudl verify` | Fixed-point check: re-run inference on all entries, confirm stability |
-| `pudl doctor` | Workspace health checks |
-| `pudl repo init` | Initialize or repair a self-contained repository `.pudl/` and install Claude skills |
+| `pudl doctor` | Workspace health, catalog validation, and inference stability |
 | `pudl example install git-inventory` | Install the bundled Git inventory model and sample observations |
 | `pudl config` | Show current configuration |
-| `pudl validate --all` | Validate catalog data against assigned schemas |
 
 See [docs/cli-reference.md](docs/cli-reference.md) for the full command reference.
+
+## Command consolidation
+
+The overlapping command paths have been consolidated. Update existing scripts:
+
+| Former command | Current command |
+| --- | --- |
+| `pudl repo init` | `pudl init` |
+| `pudl init` for global state | `pudl init --global` |
+| `pudl catalog` | `pudl schema list` (`--verbose` includes metadata details) |
+| `pudl model describe NAME` | `pudl model show NAME` (`--discover` adds Mu capabilities) |
+| `pudl validate --all` or `pudl verify` | `pudl doctor` |
+| `pudl validate --entry ID` | `pudl doctor --entry ID` |
+| `pudl run-set MODELS...` | `pudl run set MODELS...` |
+| `pudl run-set report/resume/reject ID` | `pudl run report/resume/reject ID` |
+| `pudl list --all-workspaces` | `pudl list` (active catalog, explicit `--origin` filter) |
+
+Former paths are removed rather than retained as aliases. Schema/Git and
+module/CUE helper commands remain available. Standalone runs and exact sets
+retain their existing evidence-selection and approval semantics; shared report
+and approval commands route by the stored operation ID.
 
 ## Writing Custom Schemas
 
@@ -173,7 +189,7 @@ pudl run my-server
 pudl run my-server --converge
 
 # Coordinate cross-model values without implicit producer discovery
-pudl run-set network my-server
+pudl run set network my-server
 ```
 
 Plain values are persisted with source/snapshot provenance. Sealed inputs and

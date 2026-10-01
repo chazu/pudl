@@ -2,106 +2,58 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/errors"
 	pudlInit "github.com/chazu/pudl/internal/init"
+	"github.com/chazu/pudl/internal/repo"
 )
 
-var (
-	initForce bool
-)
+var initForce, initGlobal bool
 
-// initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize PUDL workspace",
-	Long: `Initialize the PUDL workspace by creating the necessary directory structure
-and configuration files with proper CUE module support.
-
-This command creates:
-- ~/.pudl/ directory structure
-- ~/.pudl/schema/ directory with a CUE module, git repository, all built-in
-  resource schemas, convergence rules, and pudl/systemmodel.#SystemModel
-- ~/.pudl/data/ directory for data storage
-- ~/.pudl/config.yaml configuration file
-
-The schema directory is initialized with:
-- A proper CUE module with cue.mod/module.cue
-- A git repository for version control
-- Built-in schema packages under pudl/ (including aws, git, k8s, linux, mu,
-  nous, rules, and systemmodel)
-- Example files showing third-party module usage
-
-This enables you to use third-party CUE modules like Kubernetes schemas
-alongside your local PUDL schemas.
-
-By default, this command will not overwrite an existing workspace. Use the
---force flag to reinitialize an existing workspace.
-
-Example usage:
-    pudl init                    # Initialize workspace with CUE module support
-    pudl init --force            # Force reinitialize existing workspace`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the init command and handle any errors
-		if err := runInitCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	Short: "Initialize or repair a local PUDL workspace (--global for ~/.pudl)",
+	Long: `Create a self-contained .pudl/ in the current directory, including
+configuration, schemas, local data directories, and bundled agent skills.
+Repeating initialization repairs owned files while preserving authored configuration.
+Use --force to replace configuration, or --global to initialize ~/.pudl instead.`,
+	Args: cobra.NoArgs,
+	RunE: runInitCommand,
 }
 
-// runInitCommand contains the actual init logic with structured error handling
 func runInitCommand(cmd *cobra.Command, args []string) error {
-	// Check if already initialized
-	if !initForce && config.Exists() {
-		pudlDir := config.GetPudlDir()
-		fmt.Printf("PUDL workspace already initialized at %s\n", pudlDir)
-		fmt.Println("Use --force to reinitialize")
-		return nil
+	root := config.GetPudlDir()
+	mode := "global"
+	if initGlobal {
+		if initForce || !config.Exists() {
+			if err := pudlInit.Initialize(pudlInit.InitOptions{Force: initForce, Verbose: !jsonOutput}); err != nil {
+				return err
+			}
+		}
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		root, mode = filepath.Join(cwd, ".pudl"), "workspace"
+		if err := repo.Init(repo.InitOptions{Dir: cwd, Force: initForce, Verbose: !jsonOutput}); err != nil {
+			return err
+		}
 	}
-
-	// Perform initialization
-	opts := pudlInit.InitOptions{
-		Force:   initForce,
-		Verbose: true,
+	if jsonOutput {
+		return GetOutputWriter().WriteJSON(map[string]string{"path": root, "mode": mode})
 	}
-
-	if err := pudlInit.Initialize(opts); err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to initialize PUDL workspace", err)
-	}
-
-	// Show next steps
-	fmt.Println()
-	fmt.Println("🚀 Next steps:")
-	fmt.Println("   1. Import data: pudl import --path <file>")
-	fmt.Println("   2. Inspect built-ins: pudl schema list")
-	fmt.Println("   3. Initialize a repository workspace: pudl repo init")
-	fmt.Println("   4. List and validate models: pudl model list")
-	fmt.Println("   5. Run one model: pudl run <model>")
-	fmt.Println("   6. Run an exact dependency set: pudl run-set <producer> <consumer>")
-	fmt.Println()
-	fmt.Println("📚 Module management:")
-	fmt.Println("   - List dependencies: pudl module list")
-	fmt.Println("   - Update dependencies: pudl module tidy")
-	fmt.Println("   - Module information: pudl module info")
-	fmt.Println()
-	fmt.Println("🧠 Self-improvement loop (optional):")
-	fmt.Println("   Run 'pudl memory init' to enable the agent memory cycle, then")
-	fmt.Println("   'pudl hooks install' to wire it into Claude Code.")
-	fmt.Println()
-	fmt.Println("For help with any command, use: pudl <command> --help")
-
+	fmt.Printf("PUDL workspace ready: %s\n", root)
+	fmt.Println("Next: pudl model list, or pudl import --path <file>")
 	return nil
 }
 
 func init() {
 	rootCmd.AddCommand(initCmd)
-
-	// Add flags
-	initCmd.Flags().BoolVar(&initForce, "force", false, "Force reinitialize existing workspace")
+	initCmd.Flags().BoolVar(&initForce, "force", false, "Replace authored workspace configuration")
+	initCmd.Flags().BoolVar(&initGlobal, "global", false, "Initialize ~/.pudl instead of a local .pudl")
 }

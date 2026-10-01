@@ -624,32 +624,24 @@ func CheckOrphanedFilesAt(pudlDir string) *CheckResult {
 		}
 	}
 
-	// Initialize catalog database
-	catalogDB, err := database.NewCatalogDB(pudlDir)
-	if err != nil {
-		return &CheckResult{
-			Status:  "warning",
-			Message: "Failed to access catalog database",
-			Details: err.Error(),
-			Fix:     "Check database integrity",
-		}
-	}
-	defer catalogDB.Close()
-
-	// Get all catalog entries
-	result, err := catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
-	if err != nil {
-		return &CheckResult{
-			Status:  "warning",
-			Message: "Failed to query catalog",
-			Details: err.Error(),
-		}
-	}
-
-	// Build map of stored paths
+	// Read existing evidence without creating or migrating a catalog.
 	catalogedPaths := make(map[string]bool)
-	for _, entry := range result.Entries {
-		catalogedPaths[entry.StoredPath] = true
+	dbPath := filepath.Join(pudlDir, "data", "sqlite", "catalog.db")
+	if _, statErr := os.Stat(dbPath); statErr == nil {
+		catalogDB, err := database.OpenCatalogDBReadOnly(pudlDir)
+		if err != nil {
+			return &CheckResult{Status: "warning", Message: "Failed to access catalog database", Details: err.Error(), Fix: "Check database integrity"}
+		}
+		defer catalogDB.Close()
+		result, err := catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
+		if err != nil {
+			return &CheckResult{Status: "warning", Message: "Failed to query catalog", Details: err.Error()}
+		}
+		for _, entry := range result.Entries {
+			catalogedPaths[entry.StoredPath] = true
+		}
+	} else if !os.IsNotExist(statErr) {
+		return &CheckResult{Status: "warning", Message: "Failed to access catalog database", Details: statErr.Error()}
 	}
 
 	// Count orphaned files

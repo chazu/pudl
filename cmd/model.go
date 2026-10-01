@@ -16,6 +16,8 @@ var modelPopulatorGlobal bool
 var modelCmd = &cobra.Command{
 	Use:   "model",
 	Short: "Manage #SystemModel definitions and their assets",
+	Args:  cobra.NoArgs,
+	RunE:  func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 	Long: `Manage registered #SystemModel definitions and the assets they reference.
 
 A #SystemModel is registered as a CUE definition inheriting #SystemModel in the

@@ -20,7 +20,7 @@ func TestSmoke_RepositoryKickTires(t *testing.T) {
 	if stdout, stderr, err := w.pudl("model", "validate", "kick-consumer"); err != nil {
 		t.Fatalf("validate bound model template: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
-	stdout, stderr, err := w.pudl("run-set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
+	stdout, stderr, err := w.pudl("run", "set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
 	if err != nil {
 		t.Fatalf("reverse-order producer/consumer run-set failed: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 	}
@@ -66,10 +66,10 @@ func TestSmoke_RepositoryKickTiresFailFast(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "missing producer", args: []string{"run-set", "kick-consumer"}, want: "outside the explicit run set"},
-		{name: "dependency cycle", args: []string{"run-set", "kick-cycle-a", "kick-cycle-b"}, want: "dependency cycle"},
-		{name: "invalid pointer", args: []string{"run-set", "kick-invalid-pointer", "kick-producer"}, want: "RFC 6901 JSON Pointer"},
-		{name: "unannotated input", args: []string{"run-set", "kick-unannotated-input", "kick-producer"}, want: "must declare @pudl(binding=plain)"},
+		{name: "missing producer", args: []string{"run", "set", "kick-consumer"}, want: "outside the explicit run set"},
+		{name: "dependency cycle", args: []string{"run", "set", "kick-cycle-a", "kick-cycle-b"}, want: "dependency cycle"},
+		{name: "invalid pointer", args: []string{"run", "set", "kick-invalid-pointer", "kick-producer"}, want: "RFC 6901 JSON Pointer"},
+		{name: "unannotated input", args: []string{"run", "set", "kick-unannotated-input", "kick-producer"}, want: "must declare @pudl(binding=plain)"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestSmoke_RepositoryKickTiresFailurePropagation(t *testing.T) {
 	requireTools(t, "git", "mu", "python3")
 	w := newKickTiresWorkspace(t)
 
-	stdout, stderr, err := w.pudl("run-set", "kick-denied-source", "kick-producer", "--mu-root", w.muRoot)
+	stdout, stderr, err := w.pudl("run", "set", "kick-denied-source", "kick-producer", "--mu-root", w.muRoot)
 	if err == nil {
 		t.Fatalf("unauthorized projection unexpectedly succeeded:\n%s", stdout)
 	}
@@ -111,7 +111,7 @@ func TestSmoke_RepositoryKickTiresFailurePropagation(t *testing.T) {
 		t.Fatal(err)
 	}
 	stdout, stderr, err = w.pudlWithEnv(map[string]string{"PUDL_KICK_FAIL_ROLE": "producer"},
-		"run-set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
+		"run", "set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
 	if err == nil {
 		t.Fatalf("failed producer run-set unexpectedly succeeded:\n%s", stdout)
 	}
@@ -139,7 +139,7 @@ func TestSmoke_RepositoryKickTiresApprovals(t *testing.T) {
 	t.Run("resume exact plan in a new process", func(t *testing.T) {
 		w := newKickTiresWorkspace(t)
 		state := filepath.Join(w.muRoot, "state", "mutator")
-		stdout, stderr, err := w.pudl("run-set", "kick-mutator", "--converge", "--require-approval", "--mu-root", w.muRoot)
+		stdout, stderr, err := w.pudl("run", "set", "kick-mutator", "--converge", "--require-approval", "--mu-root", w.muRoot)
 		if err != nil {
 			t.Fatalf("create pending approval: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -151,7 +151,7 @@ func TestSmoke_RepositoryKickTiresApprovals(t *testing.T) {
 			t.Fatalf("pending plan mutated state; stat error = %v", statErr)
 		}
 
-		stdout, stderr, err = w.pudl("run-set", "resume", report.RunSetID)
+		stdout, stderr, err = w.pudl("run", "resume", report.RunSetID)
 		if err != nil {
 			t.Fatalf("resume exact plan: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -168,13 +168,13 @@ func TestSmoke_RepositoryKickTiresApprovals(t *testing.T) {
 		w := newKickTiresWorkspace(t)
 		state := filepath.Join(w.muRoot, "state", "mutator-stale")
 		stdout, stderr, err := w.pudlWithEnv(map[string]string{"PUDL_KICK_PLAN_VARIANT": "A"},
-			"run-set", "kick-mutator-stale", "--converge", "--require-approval", "--mu-root", w.muRoot)
+			"run", "set", "kick-mutator-stale", "--converge", "--require-approval", "--mu-root", w.muRoot)
 		if err != nil {
 			t.Fatalf("create stale-plan fixture: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
 		report := decodeKickRunSetReport(t, stdout)
 		stdout, stderr, err = w.pudlWithEnv(map[string]string{"PUDL_KICK_PLAN_VARIANT": "B"},
-			"run-set", "resume", report.RunSetID)
+			"run", "resume", report.RunSetID)
 		if err == nil || !strings.Contains(stderr, "approval is stale") {
 			t.Fatalf("changed plan was not rejected as stale: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -186,12 +186,12 @@ func TestSmoke_RepositoryKickTiresApprovals(t *testing.T) {
 	t.Run("explicit rejection does not mutate", func(t *testing.T) {
 		w := newKickTiresWorkspace(t)
 		state := filepath.Join(w.muRoot, "state", "mutator-stale")
-		stdout, stderr, err := w.pudl("run-set", "kick-mutator-stale", "--converge", "--require-approval", "--mu-root", w.muRoot)
+		stdout, stderr, err := w.pudl("run", "set", "kick-mutator-stale", "--converge", "--require-approval", "--mu-root", w.muRoot)
 		if err != nil {
 			t.Fatalf("create rejection fixture: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
 		report := decodeKickRunSetReport(t, stdout)
-		stdout, stderr, err = w.pudl("run-set", "reject", report.RunSetID)
+		stdout, stderr, err = w.pudl("run", "reject", report.RunSetID)
 		if err != nil {
 			t.Fatalf("reject plan: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -252,7 +252,7 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 		producerState := filepath.Join(w.muRoot, "state", "sealed-producer")
 		consumerState := filepath.Join(w.muRoot, "state", "sealed-consumer")
 		stdout, stderr, err := w.pudl(
-			"run-set", "kick-sealed-consumer", "kick-sealed-producer",
+			"run", "set", "kick-sealed-consumer", "kick-sealed-producer",
 			"--converge", "--mu-root", w.muRoot,
 		)
 		if err != nil {
@@ -268,7 +268,7 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 			}
 		}
 
-		stdout, stderr, err = w.pudl("run-set", "resume", pending.RunSetID)
+		stdout, stderr, err = w.pudl("run", "resume", pending.RunSetID)
 		if err != nil {
 			t.Fatalf("resume sealed run-set: %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -341,7 +341,7 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 	} {
 		t.Run(test.name+" fails before mutation or provider traffic", func(t *testing.T) {
 			w := newKickTiresWorkspace(t)
-			args := append([]string{"run-set"}, test.models...)
+			args := append([]string{"run", "set"}, test.models...)
 			args = append(args, "--converge", "--mu-root", w.muRoot)
 			stdout, stderr, err := w.pudlWithEnv(test.env, args...)
 			if err == nil || !strings.Contains(stdout+stderr, test.wantErr) {
@@ -368,7 +368,7 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 
 	t.Run("workspace policy denies output before plugin traffic", func(t *testing.T) {
 		w := newKickTiresWorkspace(t)
-		stdout, stderr, err := w.pudl("run-set", "kick-denied-output", "--converge", "--mu-root", w.muRoot)
+		stdout, stderr, err := w.pudl("run", "set", "kick-denied-output", "--converge", "--mu-root", w.muRoot)
 		if err == nil || !strings.Contains(stdout, "provider reference is not allowed") {
 			t.Fatalf("denied output did not fail policy: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
@@ -392,7 +392,7 @@ func TestSmoke_RepositoryKickTiresConcurrentRunSets(t *testing.T) {
 		group.Add(1)
 		go func() {
 			defer group.Done()
-			stdout, stderr, err := w.pudl("run-set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
+			stdout, stderr, err := w.pudl("run", "set", "kick-consumer", "kick-producer", "--mu-root", w.muRoot)
 			results <- result{stdout: stdout, stderr: stderr, err: err}
 		}()
 	}

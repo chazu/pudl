@@ -14,8 +14,6 @@ import (
 	"github.com/chazu/pudl/internal/validator"
 )
 
-var modelListJSON bool
-
 // ModelInfo is a registered #SystemModel definition discovered in the schema repo.
 type ModelInfo struct {
 	Name       string                   // the instance's display identity (`name:` field)
@@ -163,7 +161,7 @@ resolve — independent of whether a model has been run yet.`,
 		if err != nil {
 			return err
 		}
-		if modelListJSON {
+		if jsonOutput {
 			return printModelsJSON(models)
 		}
 		if len(searched) == 0 {
@@ -239,5 +237,4 @@ func printModelsJSON(models []ModelInfo) error {
 
 func init() {
 	modelCmd.AddCommand(modelListCmd)
-	modelListCmd.Flags().BoolVar(&modelListJSON, "json", false, "output as JSON")
 }

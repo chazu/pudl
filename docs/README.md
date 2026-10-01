@@ -14,6 +14,7 @@ Start with the [root README](../README.md) for a project overview.
 | [workspace.md](workspace.md) | Self-contained repository state, local schema resolution, and global fallback |
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
 | [architecture-improvement-report.md](architecture-improvement-report.md) | Highest-leverage architecture improvements and design questions |
+| [UX simplification design report](design/2026-09-30-ux-simplification-report.md) | Project evolution, proposed scope reduction, and simpler workflows for humans and agents |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |
@@ -29,6 +30,7 @@ Start with the [root README](../README.md) for a project overview.
 
 | Directory | Description |
 |-----------|-------------|
+| [design/](design/) | Design reports and contracts; each document records its proposal or delivery status |
 | [research/](research/) | Design proposals and research notes |
 | [issues/](issues/) | Open issues and known gaps |
 | [implog/](implog/) | Implementation logs (chronological) |

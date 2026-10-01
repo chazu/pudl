@@ -190,7 +190,7 @@ func continueMutatingRunSet(db *database.CatalogDB, graph *acute.RunSetPlan, rep
 			return err
 		}
 		if !jsonOutput {
-			fmt.Printf("approval pending: pudl run-set resume %s | pudl run-set reject %s\n", report.RunSetID, report.RunSetID)
+			fmt.Printf("approval pending: pudl run resume %s | pudl run reject %s\n", report.RunSetID, report.RunSetID)
 		}
 		return nil
 	}

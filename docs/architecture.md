@@ -41,7 +41,7 @@ In global mode the schema directory is a standalone Git repository. In a
 repository workspace it is versioned by the enclosing repository. Every
 built-in resource schema and rule package is embedded in the PUDL binary; the programmatic
 `pudl/systemmodel.#SystemModel` schema is installed beside them. `pudl init`
-and `pudl repo init` copy the complete owned set; repository initialization is
+and `pudl init --global` copy the complete owned set; repository initialization is
 idempotent and repairs missing built-ins. User schemas and model instances are
 added alongside them.
 
@@ -292,7 +292,7 @@ otherwise expose duplicate targets or remove files from a live invocation.
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
-- **Validated** against assigned schemas via `pudl validate`
+- **Validated** against assigned schemas via `pudl doctor`
 - **Exported** in various formats via `pudl export`
 - **Reconciled** by `pudl run <model>`: a `#SystemModel` declares desired and observed
   state, `pudl run` computes drift as one phase (and converges with `--converge`, with

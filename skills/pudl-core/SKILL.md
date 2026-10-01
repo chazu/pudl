@@ -19,7 +19,7 @@ Use the binary as the source of truth for the current command surface:
 - `pudl help --json` — complete command tree, flags, and descriptions.
 - `pudl guide <topic>` — operational guidance (`overview`, `models`, `mu`,
   `troubleshooting`, `memory`, and the other listed topics).
-- `pudl model describe <name> --json` — a model's actual runtime contract.
+- `pudl model show <name> --json` — a model's actual runtime contract.
 
 Scaffold first, then edit the returned path:
 
@@ -49,17 +49,17 @@ trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
     sqlite/catalog.db    # catalog, facts, reports, snapshots, approvals
 ```
 
-`pudl repo init` is idempotent and repairs this local layout. Repository and
+`pudl init` is idempotent and repairs this local layout. Repository and
 global catalogs are independent; mutable state never falls back across them.
 
 ## Common Commands
 
 ### Data pipeline
 - `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` takes globs and `-` for stdin)
-- `pudl list` — list entries for the current workspace origin
-  (`--all-workspaces` removes that origin filter; `--artifacts` = run outputs)
+- `pudl list` — list entries in the active catalog
+  (`--origin` filters explicitly; `--artifacts` = run outputs)
 - `pudl show <id>` / `pudl export --id <id>` / `pudl delete <id>`
-- `pudl validate --all` — validate catalog data against assigned schemas
+- `pudl doctor` — workspace health, assigned-schema validation, and inference stability
 
 ### Schema
 - `pudl schema list|show <name>` — browse schemas
@@ -83,16 +83,16 @@ global catalogs are independent; mutable state never falls back across them.
 - `pudl run <model> --converge` — close drift (mutates the target via mu)
 - `pudl run <model> --from-catalog` — explicitly replay ingested records for inventory drift; a normal inventory run populates and compares its own current snapshot
 - `pudl run <model> --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
-- `pudl run-set <models...>` — run exactly the named models in producer-first order; no implicit producer expansion
-- `pudl run-set <models...> --converge` — whole-set read-only preflight and exact planning before mutation; sealed-output sets pause for mandatory approval, while other sets may opt in with `--require-approval`
-- `pudl run-set report|resume|reject` — inspect or decide durable run-set plans
+- `pudl run set <models...>` — run exactly the named models in producer-first order; no implicit producer expansion
+- `pudl run set <models...> --converge` — whole-set read-only preflight and exact planning before mutation; sealed-output sets pause for mandatory approval, while other sets may opt in with `--require-approval`
+- `pudl run report|resume|reject` — inspect or decide standalone/set operations
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
 - `pudl model deps --derive` — also derive edges from desired↔produced identity matching
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
 - `pudl status [target]` — recorded convergence status by catalog target (a run records its verdict)
 
 ### Utilities
-- `pudl repo init` / `pudl init` / `pudl doctor` / `pudl config` / `pudl version`
+- `pudl init` / `pudl init --global` / `pudl doctor` / `pudl config` / `pudl version`
 - `pudl guide` / `pudl prime` — agent-facing usage reference
 
 ## How pudl drives mu (the #SystemModel loop)
@@ -127,7 +127,7 @@ ACUTE cycle:
 
 ### mu bridge
 
-mu writes its results back into the pudl catalog via:
+mu writes its results back into the pudl schema list via:
 - `pudl mu ingest-observe` — ingest observe results (`entry_type=observe`)
 - `pudl mu ingest-manifest` — ingest a build manifest (`entry_type=manifest`,
   per-action `manifest-action`); `--model <name>` tags rows so a later clean
@@ -182,7 +182,7 @@ scheduler's job). See `docs/cross-model-dependencies.md`.
 For actual value flow, a model template declares required scalar `inputs` and
 matching `bindings`. Both the consumer slot and source schema field must carry
 `@pudl(binding=plain)`. A standalone run may reuse the latest successful scoped
-producer snapshot but never starts it. `pudl run-set` names the exact closed set,
+producer snapshot but never starts it. `pudl run set` names the exact closed set,
 rejects missing producers/cycles before execution, and pins current-run producer
 observations for downstream resolution.
 

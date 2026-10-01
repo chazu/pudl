@@ -6,45 +6,98 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/doctor"
-	"github.com/chazu/pudl/internal/errors"
 )
 
-// doctorCmd represents the doctor command
+var doctorEntry string
+var doctorHealthOnly bool
+
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Check PUDL workspace health",
-	Long: `Run health checks on your PUDL workspace.
-
-This command performs a series of checks to ensure your PUDL workspace
-is properly configured and healthy. It checks:
-
-- Workspace structure (required directories)
-- Database integrity
-- Schema repository setup
-- Git repository initialization
-- Directory structure validation
-- Schema namespace (no user schemas under reserved pudl/)
-- Identity fields (consistent across schema inheritance families)
-- Orphaned files
-
-Use this command to diagnose issues with your PUDL installation.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		if err := runDoctorCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	Short: "Check workspace health, catalog validation, and inference stability",
+	Long: `Check workspace structure, integrity, schemas, and retained catalog data.
+Catalog records are validated against their assigned schemas. Ordinary inferred imports
+also receive a fixed-point inference check; explicit producer assignments are never
+reclassified. This command does not repair or change retained data.
+Use --entry ID to inspect one catalog record, or --health-only for workspace checks.`,
+	Args: cobra.NoArgs,
+	RunE: runDoctorCommand,
 }
 
-func init() {
-	rootCmd.AddCommand(doctorCmd)
+type healthDiagnostic struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Details string `json:"details,omitempty"`
+	Fix     string `json:"fix,omitempty"`
+}
+
+type doctorReport struct {
+	OK      bool                `json:"ok"`
+	Health  []healthDiagnostic  `json:"health"`
+	Catalog []catalogDiagnostic `json:"catalog"`
+	Error   string              `json:"error,omitempty"`
 }
 
 func runDoctorCommand(cmd *cobra.Command, args []string) error {
-	pudlDir := effectivePudlDir()
-	// Define all health checks
-	checks := []doctor.HealthCheck{
+	report := doctorReport{OK: true, Health: []healthDiagnostic{}, Catalog: []catalogDiagnostic{}}
+	if doctorEntry == "" {
+		for _, check := range workspaceHealthChecks(effectivePudlDir()) {
+			result := check.CheckFunc()
+			report.Health = append(report.Health, healthDiagnostic{Name: check.Name, Status: result.Status, Message: result.Message, Details: result.Details, Fix: result.Fix})
+			if result.Status == "error" {
+				report.OK = false
+			}
+		}
+	}
+	if !doctorHealthOnly && report.OK {
+		entries, err := checkCatalogEntries(doctorEntry)
+		if err != nil {
+			report.OK, report.Error = false, err.Error()
+		} else {
+			report.Catalog = entries
+			for _, entry := range entries {
+				if entry.Status != "ok" {
+					report.OK = false
+				}
+			}
+		}
+	}
+	if jsonOutput {
+		if err := GetOutputWriter().WriteJSON(report); err != nil {
+			return err
+		}
+	} else {
+		for _, health := range report.Health {
+			displayCheckResult(health.Name, &doctor.CheckResult{Status: health.Status, Message: health.Message, Details: health.Details, Fix: health.Fix})
+		}
+		for _, entry := range report.Catalog {
+			fmt.Printf("%s [%s]: %s", entry.Proquint, entry.Schema, entry.Status)
+			if entry.InferredSchema != "" {
+				fmt.Printf(" (inferred %s)", entry.InferredSchema)
+			}
+			if entry.Error != "" {
+				fmt.Printf(" — %s", entry.Error)
+			}
+			fmt.Println()
+		}
+		if report.Error != "" {
+			fmt.Println(report.Error)
+		}
+		fmt.Printf("Catalog: %d entries checked\n", len(report.Catalog))
+		if report.OK {
+			fmt.Println("Health check passed")
+		} else {
+			fmt.Println("Health check failed")
+		}
+	}
+	if !report.OK {
+		return fmt.Errorf("PUDL diagnostics failed; inspect the reported problems")
+	}
+	return nil
+}
+
+func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
+	return []doctor.HealthCheck{
 		{
 			Name:      "Workspace Structure",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckWorkspaceStructureAt(pudlDir) },
@@ -78,55 +131,14 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckOrphanedFilesAt(pudlDir) },
 		},
 	}
+}
 
-	// Run all checks and collect results
-	fmt.Println("🏥 PUDL Health Check")
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Println()
-
-	var hasErrors bool
-	var hasWarnings bool
-	var results []struct {
-		name   string
-		result *doctor.CheckResult
-	}
-
-	for _, check := range checks {
-		result := check.CheckFunc()
-		results = append(results, struct {
-			name   string
-			result *doctor.CheckResult
-		}{check.Name, result})
-
-		// Track if we have errors or warnings
-		if result.Status == "error" {
-			hasErrors = true
-		} else if result.Status == "warning" {
-			hasWarnings = true
-		}
-	}
-
-	// Display results
-	for _, r := range results {
-		displayCheckResult(r.name, r.result)
-	}
-
-	// Summary
-	fmt.Println()
-	fmt.Println("═══════════════════════════════════════════════════════════════")
-
-	if hasErrors {
-		fmt.Println("❌ Health check failed - errors detected")
-		return errors.NewSystemError("PUDL workspace has errors", nil)
-	}
-
-	if hasWarnings {
-		fmt.Println("⚠️  Health check passed with warnings")
-		return nil
-	}
-
-	fmt.Println("✅ Health check passed - workspace is healthy")
-	return nil
+func init() {
+	rootCmd.AddCommand(doctorCmd)
+	doctorCmd.Flags().StringVar(&doctorEntry, "entry", "", "Check one catalog entry by proquint or full ID")
+	doctorCmd.Flags().BoolVar(&doctorHealthOnly, "health-only", false, "Check workspace health without scanning catalog records")
+	doctorCmd.MarkFlagsMutuallyExclusive("entry", "health-only")
+	doctorCmd.RegisterFlagCompletionFunc("entry", completeProquintIDs)
 }
 
 func displayCheckResult(name string, result *doctor.CheckResult) {

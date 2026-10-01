@@ -19,7 +19,7 @@ dependency discovery into implicit downstream execution.
 - **mu** receives desired-state sources and executes them (plugin protocol, effect dispatch).
 - `pudl run --converge` bridges the two: it renders the selected model and ingests
   mu's observe and manifest results.
-- `pudl run-set <model>...` is the bounded multi-model coordinator: the operator
+- `pudl run set <model>...` is the bounded multi-model coordinator: the operator
   names the exact set, PUDL resolves cross-model values and approvals, and mu
   executes each member graph.
 
@@ -28,7 +28,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 ## What Exists Today
 
 ### Data Lake Structure
-- **Repository Workspace**: `pudl repo init` creates a self-contained `.pudl/`
+- **Repository Workspace**: `pudl init` creates a self-contained `.pudl/`
   with schemas, local configuration, imported data, provenance, and catalog
 - **Global Mode**: outside an initialized repository, the same state layout is
   rooted at `~/.pudl/`
@@ -61,7 +61,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 
 ### Catalog Layer
 - **Bootstrap `catalog.cue`**: Defines `#CatalogEntry` and registers core types
-- **`pudl catalog`**: Lists all registered schema types with metadata
+- **`pudl schema list`**: Lists all registered schema types with metadata
 - **Extensible**: Users add their own catalog entries
 
 ### Drift Detection
@@ -70,7 +70,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Run Reports**: Verdicts and reports are recorded with the model run and catalog entries
 
 ### Fixed-Point Verification
-- **`pudl verify`**: Re-runs inference on all catalog entries and confirms schema assignments are stable
+- **`pudl doctor`**: Re-runs inference on all catalog entries and confirms schema assignments are stable
 - **Schema Stability**: Detects when schema changes cause existing data to be classified differently
 
 ### Mu Bridge
@@ -79,11 +79,11 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Convergence**: `pudl run --converge` renders desired state and delegates mutation to mu
 
 ### Structural Validation
-- **`pudl validate`**: Validates data against CUE schemas
+- **`pudl doctor`**: Validates data against CUE schemas
 - **Workspace Resolution**: Schema and model commands search project-local CUE before global CUE
 
 ### CLI Commands
-- `pudl init` -- Initialize the global data lake
+- `pudl init` -- Initialize local state; `--global` selects the global data lake
 - `pudl setup` -- Set up shell integration
 - `pudl config` -- View and manage configuration
 - `pudl import` -- Import data files
@@ -91,14 +91,12 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl show` -- Show details of a catalog entry
 - `pudl export` -- Export data in various formats
 - `pudl delete` -- Remove catalog entries
-- `pudl validate` -- Validate data against schemas
-- `pudl verify` -- Fixed-point verification of schema stability
-- `pudl catalog` -- Browse registered schema types
-- `pudl schema *` -- Full schema lifecycle (list, add, new, show, edit, reinfer, migrate, generate-type, status, commit, log)
+- `pudl doctor` -- Workspace health, schema validation, and inference stability
+- `pudl schema list` -- Browse registered schema types
+- `pudl schema *` -- Full schema lifecycle (list, add, new, show, edit, reinfer, migrate, status, commit, log)
 - `pudl model list/show/validate` -- Inspect registered system models
 - `pudl run` -- Populate, detect drift, check, report, and optionally converge
 - `pudl status` -- Read recorded model/resource convergence status
-- `pudl repo init` -- Initialize or repair a self-contained repo data lake and Claude skills
 - `pudl model validate` -- Validate a system model against its schema
 - `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
 - `pudl mu ingest-manifest` -- Ingest mu build manifests
@@ -108,7 +106,6 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
 - `pudl query` -- Evaluate Datalog rules and query derived facts
 - `pudl rule add` -- Validate and install Datalog rule files
-- `pudl doctor` -- Health check utility
 - `pudl completion` -- Generate shell completion scripts
 
 ### Agent Observations
@@ -141,7 +138,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 
 ### Deeper CUE Integration
 - **Catalog-driven generation**: Use the schema catalog to drive code generation, documentation, and tooling
-- **Fixed-point properties**: Extend `pudl verify` to check broader invariants (e.g., all definitions resolve, all schemas have at least one matching entry)
+- **Fixed-point properties**: Extend `pudl doctor` to check broader invariants (e.g., all definitions resolve, all schemas have at least one matching entry)
 - **Richer constraints**: Policy-tier schemas for compliance checking layered on top of base schemas
 
 ### Richer Mu Plugin Protocol

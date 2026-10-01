@@ -46,7 +46,7 @@ provides a bitemporal fact store with Datalog query support.
   dependencies, derived facts) with valid-time and transaction-time tracking.
 - **Datalog rules**: CUE-defined rules evaluated over the fact store and catalog
   for derived queries.
-- **Workspace**: pudl repo init creates a self-contained .pudl/ with config,
+- **Workspace**: pudl init creates a self-contained .pudl/ with config,
   built-ins, models, raw data, metadata, and catalog. Global mode uses ~/.pudl/.
 
 ## Commands you should know
@@ -83,10 +83,10 @@ pudl model show <name>                       # show populate/converge/desired/ch
 pudl model validate <name>                   # structural validation without running
 pudl run <name>                              # observe-only run (populate → drift → checks)
 pudl run <name> --converge                   # close drift via mu
-pudl run-set <models...>                     # observe exact producer/consumer set
-pudl run-set <models...> --converge          # whole-set preflight, then mutate
-pudl run-set report [run-set-id]             # durable orchestration report
-pudl run-set resume|reject <run-set-id>      # decide a pending exact plan
+pudl run set <models...>                     # observe exact producer/consumer set
+pudl run set <models...> --converge          # whole-set preflight, then mutate
+pudl run report [run-set-id]             # durable orchestration report
+pudl run resume|reject <run-set-id>      # decide a pending exact plan
 pudl run <name> --check-upstream             # warn if a depends_on upstream is drifted/failed
 pudl model deps                              # show the cross-model dependency graph (no run)
 pudl model deps --derive                     # also derive edges from desired↔produced identities
@@ -112,7 +112,7 @@ makes deps queryable but does not re-run downstream models (that is mu's job).
 Model templates can declare required scalar ` + "`inputs`" + ` and ` + "`bindings`" + `. Both
 the consumer slot and source schema field must opt into
 ` + "`@pudl(binding=plain)`" + `. A standalone run reuses an eligible successful
-producer snapshot but never starts the producer. Use ` + "`pudl run-set <models...>`" + `
+producer snapshot but never starts the producer. Use ` + "`pudl run set <models...>`" + `
 to name the closed set, order producers first, and pin current-run observations.
 
 Sealed values stay in mu's provider channel and PUDL persists only schemes and
@@ -186,8 +186,8 @@ Rules are CUE files in .pudl/schema/pudl/rules/ (repo) or ~/.pudl/schema/pudl/ru
 
 ### Workspace setup
 ` + "```" + `
-pudl init                                    # initialize ~/.pudl/
-pudl repo init                               # initialize .pudl/ in current repo
+pudl init --global                           # initialize ~/.pudl/
+pudl init                               # initialize .pudl/ in current repo
 pudl doctor                                  # health check
 pudl status                                  # recorded convergence status
 ` + "```" + `
