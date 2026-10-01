@@ -22,7 +22,7 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 		require.NoError(t, err, "%s", out)
 		return out
 	}
-	cli("repo", "init")
+	cli("init")
 	cli("example", "install", "git-inventory")
 	var saved [][]byte
 	for _, stage := range []string{"baseline", "changed", "repeat"} {

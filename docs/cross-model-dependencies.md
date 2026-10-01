@@ -20,7 +20,7 @@ work (`docs/system-models-build-status.md`).
 > and all downstream coordination are out of scope are superseded by
 > `docs/design/2026-07-28-cross-resource-value-wiring.md`. Standalone
 > `pudl run` still never starts producers implicitly; the new bounded contract
-> adds an explicit, exact-set `pudl run-set` coordinator while mu continues to
+> adds an explicit, exact-set `pudl run set` coordinator while mu continues to
 > execute each model's internal graph.
 
 ## The problem
@@ -330,7 +330,7 @@ Phase-1 actions are **read-only advisories**:
 **Implicit downstream triggering remains out of scope.** Standalone resolution
 does not start a missing producer, and there is no graph-discovering
 `pudl run --with-downstream`. The successor design adds explicit
-`pudl run-set <model>...`: PUDL coordinates exactly the operator-named model
+`pudl run set <model>...`: PUDL coordinates exactly the operator-named model
 set because catalog selection and CUE elaboration occur between members; mu
 still plans and executes each member's internal target/action graph.
 
@@ -354,7 +354,7 @@ still plans and executes each member's internal target/action graph.
    value threading (out of scope) — keep it model-level. **Resolved:
    model-level, by instance `name`.**
 2. **Where rules ship.** Built-in (`bootstrap/pudl/rules/` → copied to
-   `~/.pudl/schema/pudl/rules/` by `pudl init`) so every workspace gets
+   `~/.pudl/schema/pudl/rules/` by `pudl init --global`) so every workspace gets
    `depends_transitive`/`impacted_by` for free. **Resolved: built-in** — this is
    core convergence reasoning, not a user rule.
 3. **Graph answer ergonomics.** A topo-sorted run order is a sequence, not a

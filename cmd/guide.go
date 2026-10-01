@@ -125,7 +125,7 @@ THE DAY-TO-DAY VERBS
 
 WHERE DATA LIVES
 
-  Inside a repo initialized with pudl repo init, all durable state is local:
+  Inside a repo initialized with pudl init, all durable state is local:
   .pudl/data/sqlite/catalog.db    Catalog, reports, approvals, and facts.
   .pudl/data/{raw,metadata}/      Imported content and provenance.
   .pudl/schema/                   Local CUE module, built-ins, models, rules.
@@ -490,10 +490,10 @@ COMMANDS
   pudl model validate <name>           Structurally validate without running
   pudl run <name>                      Observe-only run (populate → drift → checks)
   pudl run <name> --converge           Close drift (mutates the target via mu)
-  pudl run-set <models...>             Observe an exact dependency set
-  pudl run-set <models...> --converge  Plan the whole set, then mutate
-  pudl run-set report [id]             Read a durable run-set report
-  pudl run-set resume|reject <id>      Decide a pending exact plan
+  pudl run set <models...>             Observe an exact dependency set
+  pudl run set <models...> --converge  Plan the whole set, then mutate
+  pudl run report [id]             Read a durable run-set report
+  pudl run resume|reject <id>      Decide a pending exact plan
   pudl status                          Show recorded convergence status
 
 WHAT A MODEL DECLARES
@@ -513,7 +513,7 @@ WHAT A MODEL DECLARES
 SCAFFOLD FIRST
 
   pudl model new pods --populate plugin:k8s --input namespace=default
-  pudl model describe pods --json
+  pudl model show pods --json
   pudl run --populate plugin:k8s --input inventory='{"kinds":["pods"]}'
 
   The ad-hoc form writes no model definition and is observe-only. For a durable
@@ -524,7 +524,7 @@ SCAFFOLD FIRST
 CROSS-MODEL VALUES
 
   Required scalar inputs can bind to a producer observation. Both the consumer
-  input and source schema field must declare @pudl(binding=plain). 'run-set'
+  input and source schema field must declare @pudl(binding=plain). 'run set'
   runs exactly the named models, rejects omitted producers/cycles in preflight,
   orders producers first, and pins their successful snapshots. It never expands
   the set implicitly.
@@ -568,7 +568,7 @@ THE ACUTE LOOP (driven by 'pudl run')
 
   pudl run github-chazu                 # observe-only
   pudl run k8sPolicy --converge         # close drift via mu
-  pudl run-set network k8sPolicy        # exact producer/consumer set
+  pudl run set network k8sPolicy        # exact producer/consumer set
 
 VALUE ROUTING
 
@@ -705,7 +705,7 @@ func printGuideTroubleshooting() {
 DISCOVER THE ACTUAL SURFACE
 
   pudl help --json                 command tree and flags
-  pudl model describe <name> --json
+  pudl model show <name> --json
   mu plugin info <name> --json     plugin capabilities/config schema
 
 RUN DIAGNOSTICS

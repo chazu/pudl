@@ -4,30 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 )
-
-var runSetResumeCmd = &cobra.Command{
-	Use:     "resume <run-set-id>",
-	Short:   "Revalidate, approve, and execute a pending exact run-set plan",
-	Aliases: []string{"approve"},
-	Args:    cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return resumeRunSet(args[0])
-	},
-}
-
-var runSetRejectCmd = &cobra.Command{
-	Use:   "reject <run-set-id>",
-	Short: "Reject a pending mutating run-set plan",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return rejectRunSet(args[0])
-	},
-}
 
 func resumeRunSet(runSetID string) error {
 	db, err := database.NewCatalogDB(effectivePudlDir())
@@ -212,8 +191,4 @@ func retainReportSnapshots(db *database.CatalogDB, report *acute.RunSetReport, r
 		}
 	}
 	return nil
-}
-
-func init() {
-	runSetCmd.AddCommand(runSetResumeCmd, runSetRejectCmd)
 }

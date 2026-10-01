@@ -1,7 +1,7 @@
 # `pudl run` / #SystemModel — historical build status & current handoff
 
 > This records the V1 implementation journey. The current command contract is
-> `pudl run <model>` for one model and `pudl run-set <models...>` for an exact
+> `pudl run <model>` for one model and `pudl run set <models...>` for an exact
 > producer/consumer set. There is no `--file` model selector. Observe-only is the
 > default; `--converge --dry-run` plans a single-model mutation. Mutating
 > run-sets perform whole-set preflight. Exact-plan approval/resume is live;

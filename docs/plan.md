@@ -4,6 +4,33 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Overlapping CLI commands consolidated (2026-09-30)
+
+Completed `pudl-0ne`: schema metadata and model inspection now have one command
+each, initialization selects local or global state explicitly, and doctor
+combines health, validation, and inference checks. Exact sets use `run set` and
+share report/resume/reject commands with standalone operations. Listing shows
+the active catalog without an implicit origin filter. Schema/Git and module/CUE
+helpers remain available; existing evidence and approval semantics are preserved.
+
+The root command count is reduced from 33 to 28. Current guides and smoke
+journeys use the new paths; the README provides a migration table. Broader scope
+and workflow recommendations remain proposals.
+
+See [implementation log](../implog/2026_09_30_command_consolidation.md) and
+[design report](design/2026-09-30-ux-simplification-report.md).
+
+### UX simplification assessment recorded (2026-09-30)
+
+Completed the project history and UX review and saved a design report covering
+product scope, command consolidation, aggregate results, machine output,
+workspace behavior, and authoring. The report proposes phased delivery while
+preserving evidence, execution scope, and exact-plan guarantees. Its
+recommendations remain proposals; this entry records documentation only.
+
+See [design report](design/2026-09-30-ux-simplification-report.md) and
+[implementation log](../implog/2026_09_30_ux_simplification_report.md).
+
 ### Batcave operator feedback recorded (2026-09-10)
 
 Documented the Mu/PUDL user experience from operating three BC-250 servers,

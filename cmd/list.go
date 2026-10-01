@@ -29,7 +29,6 @@ var (
 	listPage            int
 	listPerPage         int
 	listArtifacts       bool
-	listAllWorkspaces   bool
 )
 
 // listCmd represents the list command
@@ -41,8 +40,7 @@ var listCmd = &cobra.Command{
 
 This command displays imported data from the active catalog, including metadata
 such as schema assignments, timestamps, sizes, and record counts. In a repository
-workspace the default origin filter is that workspace; use --all-workspaces to
-remove the origin filter within the same repository-local catalog.
+workspace all records in its local catalog are visible unless --origin is supplied.
 
 Filtering Options:
 - --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)
@@ -61,8 +59,7 @@ Display Options:
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
 Examples:
-    pudl list                                    # List this workspace origin
-    pudl list --all-workspaces                   # Remove the origin filter
+    pudl list                                    # List the active catalog
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
     pudl list --origin k8s-pods                  # List Kubernetes pod data
     pudl list --format ndjson --verbose         # List NDJSON collections with details
@@ -107,17 +104,10 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		entryTypes = []string{"manifest", "manifest-action"}
 	}
 
-	// Default origin to workspace name when inside a workspace,
-	// unless --all-workspaces is set or --origin is explicitly provided.
-	effectiveOrigin := listOrigin
-	if effectiveOrigin == "" && !listAllWorkspaces && wsPolicy.InWorkspace() {
-		effectiveOrigin = wsPolicy.EffectiveOrigin
-	}
-
 	// Set up filter options
 	filters := lister.FilterOptions{
 		Schema:         listSchema,
-		Origin:         effectiveOrigin,
+		Origin:         listOrigin,
 		Format:         listFormat,
 		CollectionID:   listCollectionID,
 		CollectionType: determineCollectionType(),
@@ -262,10 +252,6 @@ func init() {
 
 	// Entry type flags
 	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only run outputs (manifest, manifest-action)")
-
-	// Workspace flags
-	listCmd.Flags().BoolVar(&listAllWorkspaces, "all-workspaces", false,
-		"Show entries from all workspaces (default: current workspace only)")
 
 	// UI flags
 	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")

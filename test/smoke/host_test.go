@@ -54,7 +54,7 @@ func TestSmoke_DockerHostInventory(t *testing.T) {
 	}}
 
 	home := isolatedHome(t)
-	pudlOK(t, home, "init")
+	pudlOK(t, home, "init", "--global")
 	obsPath := filepath.Join(home, "observe.json")
 	data, _ := json.Marshal(observe)
 	if err := os.WriteFile(obsPath, data, 0o644); err != nil {

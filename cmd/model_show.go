@@ -12,8 +12,6 @@ import (
 	"github.com/chazu/pudl/internal/validator"
 )
 
-var modelShowJSON bool
-
 var modelShowCmd = &cobra.Command{
 	Use:   "show <name>",
 	Short: "Show a registered #SystemModel definition",
@@ -28,8 +26,12 @@ converge arm, checks, and declared plugins.`,
 		if err != nil {
 			return err
 		}
-		if modelShowJSON {
-			b, err := json.MarshalIndent(m, "", "  ")
+		if jsonOutput {
+			view := modelInspection{SystemModel: m}
+			if modelDiscover {
+				view.PluginDiscovery = discoverModelPlugins(m, loadMuPluginInfo)
+			}
+			b, err := json.MarshalIndent(view, "", "  ")
 			if err != nil {
 				return err
 			}
@@ -45,6 +47,15 @@ converge arm, checks, and declared plugins.`,
 			return fmt.Errorf("load schemas: %w", err)
 		}
 		printModel(m, schemas)
+		if modelDiscover {
+			for _, plugin := range discoverModelPlugins(m, loadMuPluginInfo) {
+				fmt.Printf("  Discovery: %s", plugin.Name)
+				if plugin.Error != "" {
+					fmt.Printf(" (%s)", plugin.Error)
+				}
+				fmt.Println()
+			}
+		}
 		return nil
 	},
 }
@@ -85,6 +96,13 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		for _, c := range m.Checks {
 			fmt.Printf("    - %s (%s, expect %s)\n", c.Name, c.Severity, c.Expect)
 		}
+	}
+
+	if len(m.DependsOn) > 0 {
+		fmt.Printf("  Depends:   %s\n", strings.Join(m.DependsOn, ", "))
+	}
+	if m.Freshness != nil {
+		fmt.Printf("  Freshness: every=%s drift=%t\n", m.Freshness.Every, m.Freshness.Drift)
 	}
 
 	// Plugins.
@@ -135,5 +153,5 @@ func completeModelNames(cmd *cobra.Command, args []string, toComplete string) ([
 
 func init() {
 	modelCmd.AddCommand(modelShowCmd)
-	modelShowCmd.Flags().BoolVar(&modelShowJSON, "json", false, "output as JSON")
+	modelShowCmd.Flags().BoolVar(&modelDiscover, "discover", false, "Include live Mu plugin capability discovery")
 }

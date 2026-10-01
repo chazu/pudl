@@ -33,7 +33,7 @@ func Init(opts InitOptions) error {
 
 	pudlDir := filepath.Join(dir, pudlDirName)
 
-	// Initialization is deliberately idempotent. Running `pudl repo init`
+	// Initialization is deliberately idempotent. Running `pudl init`
 	// again repairs the owned layout and built-ins while preserving authored
 	// workspace configuration unless --force was requested.
 	if err := os.MkdirAll(pudlDir, 0755); err != nil {

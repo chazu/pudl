@@ -16,13 +16,13 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	require.True(t, ok, "root help must expose the run command")
 	assert.True(t, hasHelpFlag(run, "populate"))
 	assert.True(t, hasHelpFlag(run, "require-approval"))
-	report, ok := helpChild(run, "report [run-id]")
+	report, ok := helpChild(run, "report [operation-id]")
 	require.True(t, ok, "run help must expose durable reports")
 	assert.Equal(t, "custom", report.Args)
 
 	model, ok := helpChild(tree, "model")
 	require.True(t, ok)
-	describe, ok := helpChild(model, "describe <name>")
+	describe, ok := helpChild(model, "show <name>")
 	require.True(t, ok)
 	assert.Equal(t, "custom", describe.Args)
 }
@@ -79,18 +79,20 @@ func TestDescribeSystemModelIncludesRuntimeContract(t *testing.T) {
 		Freshness: &systemmodel.Freshness{Every: "10m", Drift: true},
 	}
 
-	d := describeSystemModel(m, func(name string) (map[string]any, error) {
+	discovery := discoverModelPlugins(m, func(name string) (map[string]any, error) {
 		return map[string]any{"name": name, "capabilities": []any{"observe", "plan"}}, nil
 	})
-	assert.Equal(t, "pods", d.Name)
-	assert.Equal(t, "k8s", d.Populate["plugin"])
-	assert.Len(t, d.Desired, 1)
-	assert.Len(t, d.Checks, 1)
-	assert.Equal(t, []string{"network"}, d.DependsOn)
-	assert.NotNil(t, d.Converge)
-	assert.NotNil(t, d.Freshness)
-	require.Len(t, d.Plugins, 1)
-	assert.NotNil(t, d.Plugins[0].(map[string]any)["discovery"])
+	view := modelInspection{SystemModel: m, PluginDiscovery: discovery}
+	assert.Equal(t, "pods", view.Name)
+	assert.Equal(t, "k8s", view.Populate.Plugin)
+	assert.Len(t, view.Desired, 1)
+	assert.Len(t, view.Checks, 1)
+	assert.Equal(t, []string{"network"}, view.DependsOn)
+	assert.NotNil(t, view.Converge)
+	assert.NotNil(t, view.Freshness)
+	require.Len(t, view.PluginDiscovery, 1)
+	assert.NotNil(t, view.PluginDiscovery[0].Info)
+
 }
 
 func helpChild(parent commandHelpJSON, use string) (commandHelpJSON, bool) {

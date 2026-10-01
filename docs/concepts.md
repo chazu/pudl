@@ -197,7 +197,7 @@ carry `@pudl(binding=plain)`. PUDL selects a successful observation snapshot,
 projects one scalar, type-checks the elaborated model, and records snapshot/run
 provenance plus a value digest in the run report.
 
-`pudl run-set <models...>` coordinates exactly the named set. It validates
+`pudl run set <models...>` coordinates exactly the named set. It validates
 completeness and cycles before execution, orders producers first, and pins each
 successful producer observation for its consumers. It never starts an omitted
 producer implicitly. Without `--converge` the set is observe-only. Mutating
@@ -211,11 +211,11 @@ plan SHA-256 comparison before provider access.
 
 ## Fixed-Point Verification
 
-The `pudl verify` command re-runs schema inference on all catalog entries and confirms every entry still resolves to the same schema it was originally assigned. This is an idempotency check: if inference is deterministic, re-running it on stored data should always produce the same schema assignment. Any mismatch indicates drift between the stored schema and the current inference rules.
+The `pudl doctor` command re-runs schema inference on all catalog entries and confirms every entry still resolves to the same schema it was originally assigned. This is an idempotency check: if inference is deterministic, re-running it on stored data should always produce the same schema assignment. Any mismatch indicates drift between the stored schema and the current inference rules.
 
 ## Catalog Layer
 
-The catalog (`pudl catalog`) is a central registry of all known schema types. It lists each registered type along with its `schema_type`, `resource_type`, and description. This includes built-in types (`pudl/core.#Item`, `pudl/core.#Collection`) and any user-defined types that include `_pudl` metadata.
+The catalog (`pudl schema list`) is a central registry of all known schema types. It lists each registered type along with its `schema_type`, `resource_type`, and description. This includes built-in types (`pudl/core.#Item`, `pudl/core.#Collection`) and any user-defined types that include `_pudl` metadata.
 
 ## Doctor
 

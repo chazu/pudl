@@ -435,8 +435,8 @@ func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	require.NoError(t, runSetReportCmd.RunE(runSetReportCmd, []string{"set_1"}))
-	require.ErrorContains(t, runSetReportCmd.RunE(runSetReportCmd, []string{"missing"}), "not found")
+	require.NoError(t, runReportCmd.RunE(runReportCmd, []string{"set_1"}))
+	require.ErrorContains(t, runReportCmd.RunE(runReportCmd, []string{"missing"}), "not found")
 }
 
 func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource(t *testing.T) {
@@ -728,7 +728,7 @@ func TestMutatingRunSetExactApprovalRevalidatesBeforeApplying(t *testing.T) {
 	require.Len(t, pending.Members, 1)
 	assert.Equal(t, database.RunStatusRunning, pending.Members[0].Result)
 
-	require.NoError(t, resumeRunSet(pending.RunSetID))
+	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
 	assert.NotEqual(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
 	require.Len(t, runner.expectDigests, 1, "apply must be guarded by the raw same-workspace mu plan identity")
 	assert.Len(t, runner.expectDigests[0], 64)
@@ -751,7 +751,7 @@ func TestMutatingRunSetChangedPlanInvalidatesApprovalWithoutApplying(t *testing.
 	pending := latestRunSetReportForTest(t, pudlDir)
 	runner.planSuffix = " changed"
 
-	err := resumeRunSet(pending.RunSetID)
+	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
 	require.ErrorContains(t, err, "approval is stale")
 	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
 	stale := latestRunSetReportForTest(t, pudlDir)
@@ -765,7 +765,7 @@ func TestMutatingRunSetRejectionPerformsNoMutation(t *testing.T) {
 	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-a"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
 
-	require.NoError(t, rejectRunSet(pending.RunSetID))
+	require.NoError(t, runRejectCmd.RunE(runRejectCmd, []string{pending.RunSetID}))
 	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
 	rejected := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, rejected.Status)
@@ -799,7 +799,7 @@ func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing
 	assert.NotContains(t, string(approval.Plan), "pass:apps/token", "durable exact plan must redact provider paths")
 	require.NoError(t, db.Close())
 
-	require.NoError(t, resumeRunSet(pending.RunSetID))
+	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
 	completed := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
 	require.Len(t, completed.Members, 1)
@@ -825,7 +825,7 @@ func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T
 	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
 	runner.failApply = "sealed-mutator"
-	err := resumeRunSet(pending.RunSetID)
+	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "apps/token")
 
@@ -855,7 +855,7 @@ func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *test
 	assert.NotContains(t, runner.configs["//models/mutator-secret-consumer:drift"], "sealed_inputs",
 		"read-only preflight must not resolve converge-owned sealed inputs")
 
-	require.NoError(t, resumeRunSet(pending.RunSetID))
+	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
 	producerApply := indexOfString(runner.operations, "apply //models/mutator-secret-producer:drift")
 	consumerApply := indexOfString(runner.operations, "apply //models/mutator-secret-consumer:drift")
 	assert.Greater(t, producerApply, -1)
@@ -891,7 +891,7 @@ func TestCompletedSealedWriteRemainsRecordedWhenLaterConsumerFails(t *testing.T)
 	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-secret-consumer", "mutator-secret-producer"}))
 	pending := latestRunSetReportForTest(t, pudlDir)
 	runner.failApply = "mutator-secret-consumer"
-	err := resumeRunSet(pending.RunSetID)
+	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
 	require.ErrorContains(t, err, "run set")
 
 	completed := latestRunSetReportForTest(t, pudlDir)

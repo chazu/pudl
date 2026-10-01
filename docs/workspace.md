@@ -24,7 +24,7 @@ Repository `schema_path` and `data_path` are fixed to `.pudl/schema` and
 `.pudl/data`; PUDL rejects configuration that would redirect mutable state
 outside the workspace boundary.
 
-`pudl repo init` is safe to repeat. It creates or repairs the local data layout,
+`pudl init` is safe to repeat. It creates or repairs the local data layout,
 CUE module, every built-in schema, `pudl/systemmodel.#SystemModel`, and
 `.pudl/schema/models/` (the path used by `pudl model new`) while preserving an
 authored `workspace.cue` unless `--force` is requested. Outside a repository

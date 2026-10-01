@@ -22,7 +22,7 @@ func TestSmoke_ExampleInstall(t *testing.T) {
 		require.NoError(t, err, "%s", out)
 		return string(out)
 	}
-	cli("repo", "init")
+	cli("init")
 	cli("example", "install", "git-inventory")
 	require.Contains(t, cli("model", "validate", "git-inventory"), "is valid")
 	var installed struct{ Files []string }
@@ -55,7 +55,7 @@ func TestSmoke_ExampleInstallRequiresWorkspace(t *testing.T) {
 	command.Env = envWith(map[string]string{"HOME": home})
 	out, err := command.CombinedOutput()
 	require.Error(t, err)
-	require.Contains(t, string(out), "run pudl repo init first")
+	require.Contains(t, string(out), "run pudl init first")
 	require.NoDirExists(t, filepath.Join(root, ".pudl"))
 	require.NoDirExists(t, filepath.Join(home, ".pudl"))
 }

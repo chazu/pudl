@@ -206,9 +206,9 @@ See the **examples/** directory for more usage patterns.
 ## System Models
 
 ` + "`pudl/systemmodel.#SystemModel`" + ` is installed with the other built-ins.
-Repository models normally live under ` + "`.pudl/models/`" + ` and can be inspected
+Repository models normally live under ` + "`.pudl/schema/models/`" + ` and can be inspected
 with ` + "`pudl model list`" + `. Run one model with ` + "`pudl run <model>`" + ` or an
-explicit producer/consumer set with ` + "`pudl run-set <models...>`" + `.
+explicit producer/consumer set with ` + "`pudl run set <models...>`" + `.
 `
 
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {

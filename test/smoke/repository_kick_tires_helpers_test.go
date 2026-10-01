@@ -83,12 +83,12 @@ func newKickTiresWorkspace(t *testing.T) *kickTiresWorkspace {
 		sentinel:    filepath.Join(root, ".pudl", "data", "kick-tires", "sentinel.log"),
 		secretStore: filepath.Join(root, ".pudl", "data", "kick-tires", "secrets.json"),
 	}
-	if _, stderr, err := w.pudl("repo", "init"); err != nil {
-		t.Fatalf("pudl repo init: %v\n%s", err, stderr)
+	if _, stderr, err := w.pudl("init"); err != nil {
+		t.Fatalf("pudl init: %v\n%s", err, stderr)
 	}
 	installKickTiresFixtures(t, repo, root)
-	if _, stderr, err := w.pudl("repo", "init"); err != nil {
-		t.Fatalf("idempotent pudl repo init: %v\n%s", err, stderr)
+	if _, stderr, err := w.pudl("init"); err != nil {
+		t.Fatalf("idempotent pudl init: %v\n%s", err, stderr)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".pudl", "schema", "models", "kick_tires.cue")); err != nil {
 		t.Fatalf("repo init did not preserve authored fixture: %v", err)

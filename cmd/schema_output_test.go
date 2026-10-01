@@ -67,9 +67,9 @@ func TestModelShowSchemaReferences(t *testing.T) {
 }
 `
 	writeSchemaOutputFile(t, root, "models/model.cue", model)
-	previousJSON := modelShowJSON
-	modelShowJSON = false
-	t.Cleanup(func() { modelShowJSON = previousJSON })
+	previousJSON := jsonOutput
+	jsonOutput = false
+	t.Cleanup(func() { jsonOutput = previousJSON })
 	output := captureQueryOutput(t, func() error { return modelShowCmd.RunE(modelShowCmd, []string{"demo"}) })
 	require.Contains(t, output, "Desired:   6 resource(s)")
 	require.Contains(t, output, "user/resources.#Project (resource type: custom.project)")
@@ -85,7 +85,7 @@ func TestModelShowSchemaReferences(t *testing.T) {
 	}
 
 	// Schema display must not rewrite the model's routing tags or JSON payload.
-	modelShowJSON = true
+	jsonOutput = true
 	output = captureQueryOutput(t, func() error { return modelShowCmd.RunE(modelShowCmd, []string{"demo"}) })
 	var decoded systemmodel.SystemModel
 	require.NoError(t, json.Unmarshal([]byte(output), &decoded))

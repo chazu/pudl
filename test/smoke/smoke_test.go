@@ -257,7 +257,7 @@ func extractCueList(content, key string) string {
 // queries, idempotency, and retraction.
 func TestSmoke_CrossModelDeps(t *testing.T) {
 	home := isolatedHome(t)
-	pudlOK(t, home, "init")
+	pudlOK(t, home, "init", "--global")
 
 	// network produces Namespace "foo"; workloads' Deployment references it via
 	// metadata.namespace — but declares NO depends_on (must be DERIVED).

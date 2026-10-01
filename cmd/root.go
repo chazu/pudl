@@ -73,13 +73,20 @@ func Execute() {
 	// A local workspace is self-contained; touching ~/.pudl before Cobra resolves
 	// it would violate the repo-local persistence boundary.
 	if len(os.Args) > 1 {
-		cmd := os.Args[1]
+		command, _, commandErr := rootCmd.Find(os.Args[1:])
+		var topCommand *cobra.Command
+		if commandErr == nil {
+			topCommand = command
+			for topCommand.Parent() != nil && topCommand.Parent() != rootCmd {
+				topCommand = topCommand.Parent()
+			}
+		}
 		cwd, _ := os.Getwd()
 		localWorkspace, discoverErr := workspace.Discover(cwd)
-		if discoverErr == nil && localWorkspace == nil && shouldAutoInitializeGlobal(cmd) {
+		if commandErr == nil && command != rootCmd && discoverErr == nil && localWorkspace == nil && shouldAutoInitializeGlobal(topCommand.Name()) && shouldAutoInitializeGlobal(command.Name()) {
 			if err := pudlInit.AutoInitialize(); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to auto-initialize PUDL workspace: %v\n", err)
-				fmt.Fprintf(os.Stderr, "You may need to run 'pudl init' manually.\n")
+				fmt.Fprintf(os.Stderr, "You may need to run 'pudl init --global' manually.\n")
 			}
 		}
 	}
@@ -92,7 +99,7 @@ func Execute() {
 
 func shouldAutoInitializeGlobal(command string) bool {
 	switch command {
-	case "help", "version", "init", "repo", "example", "--help", "-h", "--version", "-v":
+	case "help", "version", "init", "example", "prime", "guide", "completion", "report", "resume", "reject", "--help", "-h", "--version", "-v":
 		return false
 	default:
 		return true

@@ -48,7 +48,7 @@ func TestSmoke_K3sConvergence(t *testing.T) {
 	}
 
 	home := isolatedHome(t)
-	pudlOK(t, home, "init")
+	pudlOK(t, home, "init", "--global")
 
 	writeModel(t, home, "network.cue", fmt.Sprintf(`package models
 import sm "pudl.schemas/pudl/systemmodel@v0"

@@ -36,7 +36,7 @@ cd pudl-tutorial
 
 <!-- walkthrough:setup -->
 ```bash
-pudl repo init
+pudl init
 pudl example install git-inventory
 pudl model show git-inventory
 pudl schema show pudl/git.#GitRepository
