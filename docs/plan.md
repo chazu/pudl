@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### CUE functions experiment evaluated (2026-10-04)
+
+Research only, no code changes. Evaluated CUE v0.18.0-alpha.2's
+`@experiment(functions)` against pudl with verified prototypes (typed datalog
+rule constructors, `#Check`/system-model factories, `_pudl` metadata helpers)
+and a trial upgrade. Functions help authoring but don't replace Go engines.
+The v0.18 upgrade needs `#SealedInputs...` rewrites and fixture
+language-version bumps.
+
+See [report](research/cue-functions-experiment.md) and
+[implementation log](../implog/2026_10_04_cue_functions_evaluation.md).
+
 ### Agent memory application removed (2026-09-30)
 
 Completed `pudl-epk`: removed memory recall/reflection, harness hooks, scoped
