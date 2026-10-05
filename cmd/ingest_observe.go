@@ -75,6 +75,8 @@ Examples:
 		// be picked up as some model's current observation.
 		result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
 			Reader:         reader,
+			Context:        cmd.Context(),
+			Limits:         observeIngestLimits(),
 			DataDir:        cfg.DataPath,
 			Graph:          inferrer.GetInheritanceGraph(),
 			Inferrer:       inferrer,

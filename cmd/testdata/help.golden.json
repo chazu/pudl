@@ -175,7 +175,7 @@
     {
       "use": "delete \u003cid\u003e",
       "short": "Delete a data entry from the catalog",
-      "long": "Delete a data entry from the PUDL catalog, including its data file and metadata.\n\nThe ID parameter should be the proquint identifier of the data entry as shown\nin the 'pudl list' command output.\n\nFor collections, use --cascade to also delete all items in the collection.\nWithout --cascade, deleting a collection with items will fail.\n\nExamples:\n    pudl delete mivof-duhij                    # Delete with confirmation prompt\n    pudl delete mivof-duhij --force            # Delete without confirmation\n    pudl delete govim-nupab --cascade          # Delete collection and all its items\n    pudl delete mivof-duhij --json             # Output result as JSON",
+      "long": "Delete a data entry from the PUDL catalog, including its data file and metadata.\n\nThe ID parameter should be the proquint identifier of the data entry as shown\nin the 'pudl list' command output.\n\nFor collections, use --cascade to remove their memberships and delete items\nthat no other collection references.\nWithout --cascade, deleting a collection with items will fail.\n\nExamples:\n    pudl delete mivof-duhij                    # Delete with confirmation prompt\n    pudl delete mivof-duhij --force            # Delete without confirmation\n    pudl delete govim-nupab --cascade          # Delete collection and all its items\n    pudl delete mivof-duhij --json             # Output result as JSON",
       "args": "custom",
       "flags": [
         {
@@ -222,6 +222,12 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "verify-payloads",
+          "usage": "Verify referenced raw payload hashes without repairing evidence",
+          "type": "bool",
+          "default": "false"
         }
       ]
     },
@@ -261,6 +267,17 @@
       "long": "Export data from the PUDL catalog to various formats.\n\nYou can export entries by ID, schema, or origin. The data is exported in the\nspecified format (JSON, YAML, CSV, or NDJSON).\n\nExamples:\n    pudl export --id babod-fakak                  # Export single entry by proquint ID\n    pudl export --schema aws.#EC2Instance         # Export all EC2 instances\n    pudl export --origin k8s-pods --format yaml   # Export K8s pods as YAML\n    pudl export --id babod-fakak --output out.json  # Export to file",
       "flags": [
         {
+          "name": "allow-partial",
+          "usage": "Publish readable entries on input errors; report incomplete output with a nonzero exit",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "bundle",
+          "usage": "Write a verified portable workspace bundle",
+          "type": "string"
+        },
+        {
           "name": "format",
           "usage": "Output format: json, yaml, csv, ndjson",
           "type": "string",
@@ -277,6 +294,12 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "max-bundle-bytes",
+          "usage": "Maximum uncompressed bundle bytes",
+          "type": "int64",
+          "default": "17179869184"
         },
         {
           "name": "origin",
@@ -522,6 +545,12 @@
       "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nThe --path flag accepts a single file, a wildcard pattern, or a directory:\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Manual schema specification with --schema flag (chained validation)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: policy → base → generic → catchall\n- Never rejects data - always finds appropriate schema\n- Envelope wire format: a JSON file shaped like\n    {\"schema\": {\"module\": \"mu/aws\", \"version\": \"v1\"},\n     \"definitions\": [...],   // optional inline CUE\n     \"data\": \u003cpayload\u003e}\n  is auto-detected on import. The declared CUE schema ref is recorded\n  in the item_schemas table; inline definitions are written to pudl's\n  schema cache for future imports. Raw JSON without the envelope shape\n  is imported untouched.\n- Multiple schemas per item: items can satisfy more than one schema\n  (declared, inferred, unresolved) — see 'pudl reclassify --help'.\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.compliant-ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n    # CUE schema reference (e.g. emitted by a mu plugin)\n    pudl import --path out.json --schema mu/aws@v1#EC2Instance\n\n    # Wildcard batch import\n    pudl import --path *.json\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # From stdin\n    cat data.json | pudl import",
       "flags": [
         {
+          "name": "explain",
+          "usage": "Explain original schema candidates, fallback, and search-path shadowing",
+          "type": "bool",
+          "default": "false"
+        },
+        {
           "name": "format",
           "usage": "Specify format for stdin data (json, yaml, csv, ndjson)",
           "type": "string"
@@ -532,6 +561,24 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "max-decoded-bytes",
+          "usage": "Maximum decoded source bytes per file",
+          "type": "int64",
+          "default": "1073741824"
+        },
+        {
+          "name": "max-record-bytes",
+          "usage": "Maximum decoded JSON record size",
+          "type": "int64",
+          "default": "67108864"
+        },
+        {
+          "name": "max-staging-bytes",
+          "usage": "Maximum prepared source and record bytes per file",
+          "type": "int64",
+          "default": "2147483648"
         },
         {
           "name": "origin",
@@ -582,6 +629,11 @@
           "default": "false"
         },
         {
+          "name": "from-bundle",
+          "usage": "Restore verified history into a new local workspace; approvals require replanning",
+          "type": "string"
+        },
+        {
           "name": "global",
           "usage": "Initialize ~/.pudl instead of a local .pudl",
           "type": "bool",
@@ -593,6 +645,12 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "max-bundle-bytes",
+          "usage": "Maximum uncompressed restored bundle bytes",
+          "type": "int64",
+          "default": "17179869184"
         }
       ]
     },
@@ -1045,6 +1103,24 @@
               "persistent": true
             },
             {
+              "name": "max-decoded-bytes",
+              "usage": "Maximum observation input bytes",
+              "type": "int64",
+              "default": "1073741824"
+            },
+            {
+              "name": "max-record-bytes",
+              "usage": "Maximum decoded observation target envelope size",
+              "type": "int64",
+              "default": "67108864"
+            },
+            {
+              "name": "max-staging-bytes",
+              "usage": "Maximum prepared observation bytes",
+              "type": "int64",
+              "default": "2147483648"
+            },
+            {
               "name": "origin",
               "usage": "Override origin",
               "type": "string",
@@ -1124,6 +1200,12 @@
           "shorthand": "f",
           "usage": "Load additional rules from a CUE file",
           "type": "string"
+        },
+        {
+          "name": "timeout",
+          "usage": "Maximum query duration (0 disables deadline)",
+          "type": "duration",
+          "default": "0s"
         },
         {
           "name": "topo",
@@ -1858,7 +1940,7 @@
         {
           "use": "retain \u003csnapshot-id\u003e",
           "short": "Pin a snapshot against pruning (--release to unpin)",
-          "long": "Pin a snapshot so no retention policy removes it.\n\nSnapshots recorded before snapshot provenance existed cannot be pinned — they\ncarry no contract row — but they are never pruned either, for the same reason.",
+          "long": "Add a manual pin so no retention policy removes this snapshot.\n--release removes only the manual pin; approval and retained-report owners remain.\nReports preserve referenced snapshot evidence for 30 days after their last save.\n\nSnapshots recorded before snapshot provenance existed cannot be pinned — they\ncarry no contract row — but they are never pruned either, for the same reason.",
           "args": "custom",
           "flags": [
             {

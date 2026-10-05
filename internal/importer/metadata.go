@@ -2,6 +2,7 @@ package importer
 
 import (
 	"encoding/json"
+	"github.com/chazu/pudl/internal/inference"
 	"os"
 )
 
@@ -32,13 +33,16 @@ type ImportMeta struct {
 
 // SchemaInfo contains information about schema assignment
 type SchemaInfo struct {
-	CuePackage       string   `json:"cue_package"`
-	CueDefinition    string   `json:"cue_definition"`
-	SchemaFile       string   `json:"schema_file"`
-	SchemaVersion    string   `json:"schema_version"`
-	ValidationStatus string   `json:"validation_status"`
-	ValidationErrors []string `json:"validation_errors,omitempty"`
-	IntendedSchema   string   `json:"intended_schema,omitempty"`
+	AssignmentReason string                    `json:"assignment_reason,omitempty"`
+	SourcePath       string                    `json:"source_path,omitempty"`
+	Explanation      *inference.InferenceTrace `json:"explanation,omitempty"`
+	CuePackage       string                    `json:"cue_package"`
+	CueDefinition    string                    `json:"cue_definition"`
+	SchemaFile       string                    `json:"schema_file"`
+	SchemaVersion    string                    `json:"schema_version"`
+	ValidationStatus string                    `json:"validation_status"`
+	ValidationErrors []string                  `json:"validation_errors,omitempty"`
+	IntendedSchema   string                    `json:"intended_schema,omitempty"`
 }
 
 // ResourceTracking contains information for tracking resource changes

@@ -4,6 +4,7 @@
 package factstore
 
 import (
+	"context"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 )
@@ -130,6 +131,11 @@ type QueryOptions struct {
 // decimal value would change on a float64/JSON round trip return an error.
 // QueryFacts retains raw JSON without these numeric domain restrictions.
 func (s *Store) Query(opts QueryOptions) ([]Tuple, error) {
+	return s.QueryContext(context.Background(), opts)
+}
+
+// QueryContext evaluates a query until completion or ctx cancellation.
+func (s *Store) QueryContext(ctx context.Context, opts QueryOptions) ([]Tuple, error) {
 	scope := datalog.TemporalScope{ValidAt: opts.ValidAt, TxAt: opts.TxAt}
-	return datalog.Evaluate(s.db, opts.Rules, opts.Relation, opts.Constraints, scope)
+	return datalog.EvaluateContext(ctx, s.db, opts.Rules, opts.Relation, opts.Constraints, scope, datalog.EvalOptions{})
 }

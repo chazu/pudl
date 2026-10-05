@@ -1,11 +1,13 @@
 package database
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/chazu/pudl/internal/artifacts"
 )
 
 // PruneOptions selects which snapshots a prune may remove.
@@ -59,19 +61,24 @@ type PruneResult struct {
 // and no retention flag, so there is no policy to evaluate against them, and
 // deleting what cannot be evaluated is not a policy.
 func (c *CatalogDB) PruneObserveSnapshots(opts PruneOptions) (PruneResult, error) {
-	victims, err := c.selectPruneVictims(opts)
-	if err != nil {
-		return PruneResult{}, err
+	return c.PruneObserveSnapshotsContext(context.Background(), opts)
+}
+
+func (c *CatalogDB) PruneObserveSnapshotsContext(ctx context.Context, opts PruneOptions) (PruneResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	result := PruneResult{Snapshots: victims}
-	if len(victims) == 0 || opts.DryRun {
+	var result PruneResult
+	err := artifacts.WithLock(ctx, c.configDir, func() error {
 		if opts.DryRun {
-			// Report the record and file counts a real run would produce, without
-			// touching anything: a dry run that reports only snapshot ids cannot
-			// answer the question people actually ask it.
+			victims, err := c.selectPruneVictims(opts)
+			if err != nil {
+				return err
+			}
+			result.Snapshots = victims
 			records, paths, err := c.pruneImpact(victims)
 			if err != nil {
-				return PruneResult{}, err
+				return err
 			}
 			result.Records = records
 			for _, path := range paths {
@@ -81,64 +88,109 @@ func (c *CatalogDB) PruneObserveSnapshots(opts PruneOptions) (PruneResult, error
 					result.FilesSkipped = append(result.FilesSkipped, path)
 				}
 			}
+			return nil
 		}
-		return result, nil
-	}
-
-	var orphanPaths []string
-	err = c.WithCatalogTx(func(tx *CatalogTx) error {
-		for _, snapshotID := range victims {
-			paths, err := deleteSnapshotIn(tx.q, snapshotID)
+		var orphanPaths []string
+		err := c.WithCatalogTxContext(ctx, func(tx *CatalogTx) error {
+			// Selection occurs under the same write lock as deletion, so a pin which
+			// commits before this step can never be missed by a stale victim list.
+			victims, err := selectPruneVictimsIn(tx.q, opts)
 			if err != nil {
 				return err
 			}
-			orphanPaths = append(orphanPaths, paths...)
+			result.Snapshots = victims
+			for _, id := range victims {
+				paths, err := deleteSnapshotIn(tx.q, id)
+				if err != nil {
+					return err
+				}
+				orphanPaths = append(orphanPaths, paths...)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		result.Records = len(orphanPaths)
+		for _, path := range orphanPaths {
+			if !prunableRawFile(path, opts.DataDir) {
+				if path != "" {
+					result.FilesSkipped = append(result.FilesSkipped, path)
+				}
+				continue
+			}
+			removed, err := c.removeCommittedOrphanAt(path, opts.DataDir)
+			if err != nil {
+				result.FilesSkipped = append(result.FilesSkipped, path)
+			} else if removed {
+				result.FilesRemoved++
+			}
 		}
 		return nil
 	})
-	if err != nil {
-		return PruneResult{}, err
-	}
-	result.Records = len(orphanPaths)
-
-	// Files are unlinked after the transaction commits. A file removed inside it
-	// could not be restored by a rollback, so the durable record has to be gone
-	// first: a missing row with a surviving file wastes disk, the reverse loses
-	// evidence an entry still points at.
-	for _, path := range orphanPaths {
-		if !prunableRawFile(path, opts.DataDir) {
-			if path != "" {
-				result.FilesSkipped = append(result.FilesSkipped, path)
-			}
-			continue
-		}
-		if err := os.Remove(path); err == nil {
-			result.FilesRemoved++
-		} else if !os.IsNotExist(err) {
-			result.FilesSkipped = append(result.FilesSkipped, path)
-		}
-	}
-	return result, nil
+	return result, err
 }
 
 // selectPruneVictims lists the snapshots the policy removes, newest-first per
 // model so the Keep window is the newest N.
 func (c *CatalogDB) selectPruneVictims(opts PruneOptions) ([]string, error) {
-	snapshots, err := c.ListObserveSnapshots(opts.Model, 0)
+	return selectPruneVictimsIn(c.db, opts)
+}
+
+func selectPruneVictimsIn(q dbtx, opts PruneOptions) ([]string, error) {
+	query := `SELECT ` + observeSnapshotColumns + ` FROM observe_snapshots`
+	var args []any
+	if opts.Model != "" {
+		query += ` WHERE model=?`
+		args = append(args, opts.Model)
+	}
+	query += ` ORDER BY created_at DESC,rowid DESC`
+	rows, err := q.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
-
+	defer rows.Close()
+	var snapshots []ObserveSnapshot
+	for rows.Next() {
+		snapshot, err := scanObserveSnapshot(rows)
+		if err != nil {
+			rows.Close()
+			return nil, err
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
 	seenPerModel := map[string]int{}
+	latestSuccessful := map[string]bool{}
 	var victims []string
 	for _, snapshot := range snapshots {
-		// ListObserveSnapshots is newest-first, so the first Keep of each model are
-		// its newest — which is also what makes the current snapshot unprunable
-		// whenever Keep >= 1.
 		position := seenPerModel[snapshot.Model]
-		seenPerModel[snapshot.Model] = position + 1
-
-		if snapshot.Retained || position < opts.Keep {
+		seenPerModel[snapshot.Model]++
+		var pinned int
+		if err := q.QueryRow(`SELECT COUNT(*) FROM snapshot_pins WHERE snapshot_id=? AND (expires_at IS NULL OR julianday(expires_at)>julianday(?))`, snapshot.SnapshotID, formatCatalogTime(time.Now().UTC())).Scan(&pinned); err != nil {
+			return nil, err
+		}
+		eligible := false
+		for _, source := range observationSources {
+			if source == snapshot.Source {
+				var count int
+				if err := q.QueryRow(`SELECT COUNT(*) FROM runs WHERE run_id=? AND model=? AND completion_status=? AND NOT EXISTS(SELECT 1 FROM snapshot_reuse_blocks b WHERE b.snapshot_id=?)`, snapshot.RunID, snapshot.Model, RunStatusSucceeded, snapshot.SnapshotID).Scan(&count); err != nil {
+					return nil, err
+				}
+				eligible = count > 0
+				break
+			}
+		}
+		scope := snapshot.Model + "\x00" + snapshot.Workspace
+		protectsLatest := eligible && !latestSuccessful[scope]
+		if eligible {
+			latestSuccessful[scope] = true
+		}
+		if pinned > 0 || position < opts.Keep || protectsLatest {
 			continue
 		}
 		if !opts.OlderThan.IsZero() && !snapshot.CreatedAt.Before(opts.OlderThan) {
@@ -208,6 +260,11 @@ func (c *CatalogDB) itemCitedOutside(itemID string, doomed map[string]bool) (boo
 // deleteSnapshotIn removes one snapshot and returns the stored paths of the
 // records it orphaned.
 func deleteSnapshotIn(q dbtx, snapshotID string) ([]string, error) {
+	// Preserve just enough history to distinguish a pruned earlier observation
+	// from a model that never had a baseline.
+	if _, err := q.Exec(`INSERT OR IGNORE INTO observe_snapshot_tombstones(snapshot_id,model,workspace,created_at,run_id,source,snapshot_order) SELECT snapshot_id,model,workspace,created_at,run_id,source,rowid FROM observe_snapshots WHERE snapshot_id=?`, snapshotID); err != nil {
+		return nil, err
+	}
 	// Read the members before the memberships go, and decide each one's fate by
 	// what still cites it afterwards.
 	itemIDs, err := snapshotMemberIDs(q, snapshotID)
@@ -245,6 +302,9 @@ func deleteSnapshotIn(q dbtx, snapshotID string) ([]string, error) {
 
 	if _, err := q.Exec(`DELETE FROM catalog_entries WHERE id = ?`, snapshotID); err != nil {
 		return nil, fmt.Errorf("delete snapshot entry %q: %w", snapshotID, err)
+	}
+	if _, err := q.Exec(`DELETE FROM snapshot_pins WHERE snapshot_id=?`, snapshotID); err != nil {
+		return nil, err
 	}
 	if _, err := q.Exec(`DELETE FROM observe_snapshots WHERE snapshot_id = ?`, snapshotID); err != nil {
 		return nil, fmt.Errorf("delete snapshot %q: %w", snapshotID, err)

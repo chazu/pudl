@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -52,22 +53,48 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		return fmt.Errorf("no persisted operation reports")
 	}
 	if set != nil && (single == nil || !single.CreatedAt.After(set.CreatedAt)) {
-		if jsonOutput {
-			fmt.Fprintln(outw(), string(set.Report))
-			return nil
-		}
 		var report acute.RunSetReport
 		if err := json.Unmarshal(set.Report, &report); err != nil {
 			return fmt.Errorf("decode stored set report %q: %w", set.RunSetID, err)
 		}
-		return printRunSetReport(&report)
+		evidence, err := operationSetEvidence(db, &report)
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			payload, err := reportWithEvidenceAvailability(set.Report, evidence)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(outw(), string(payload))
+			return nil
+		}
+		if err := printRunSetReport(&report); err != nil {
+			return err
+		}
+		printEvidenceAvailability(evidence)
+		return nil
+	}
+	refs, err := db.RunReportEvidence(single.RunID)
+	if err != nil {
+		return err
+	}
+	evidence := make([]operationEvidence, 0, len(refs))
+	for _, ref := range refs {
+		evidence = append(evidence, operationEvidence{ReportEvidence: ref})
 	}
 	if jsonOutput {
-		fmt.Fprintln(outw(), string(single.Report))
+		payload, err := reportWithEvidenceAvailability(single.Report, evidence)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(outw(), string(payload))
 		return nil
 	}
 	var report RunReport
-	if err := json.Unmarshal(single.Report, &report); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(single.Report))
+	decoder.UseNumber()
+	if err := decoder.Decode(&report); err != nil {
 		return fmt.Errorf("decode stored run report %q: %w", single.RunID, err)
 	}
 	text, err := report.render(false)
@@ -75,7 +102,67 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		return err
 	}
 	fmt.Fprint(outw(), text)
+	printEvidenceAvailability(evidence)
 	return nil
+}
+
+// Availability is a current annotation alongside immutable recorded findings.
+// RawMessage preserves unknown report fields and exact historical numbers.
+type operationEvidence struct {
+	RunID string `json:"run_id,omitempty"`
+	database.ReportEvidence
+}
+
+func reportWithEvidenceAvailability(payload []byte, evidence []operationEvidence) ([]byte, error) {
+	if len(evidence) == 0 {
+		return payload, nil
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		return nil, fmt.Errorf("decode report for evidence availability: %w", err)
+	}
+	if fields == nil {
+		return nil, fmt.Errorf("report must be a JSON object")
+	}
+	encoded, err := json.Marshal(evidence)
+	if err != nil {
+		return nil, err
+	}
+	fields["evidence_availability"] = encoded
+	return json.MarshalIndent(fields, "", "  ")
+}
+
+func operationSetEvidence(db *database.CatalogDB, report *acute.RunSetReport) ([]operationEvidence, error) {
+	var evidence []operationEvidence
+	seen := map[string]bool{}
+	for _, member := range report.Members {
+		if member.RunID == "" || seen[member.RunID] {
+			continue
+		}
+		seen[member.RunID] = true
+		refs, err := db.RunReportEvidence(member.RunID)
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range refs {
+			evidence = append(evidence, operationEvidence{RunID: member.RunID, ReportEvidence: ref})
+		}
+	}
+	return evidence, nil
+}
+
+func printEvidenceAvailability(evidence []operationEvidence) {
+	if len(evidence) == 0 {
+		return
+	}
+	fmt.Fprintln(outw(), "\n## evidence availability")
+	for _, ref := range evidence {
+		owner := ""
+		if ref.RunID != "" {
+			owner = " (run " + ref.RunID + ")"
+		}
+		fmt.Fprintf(outw(), "- %s: %s%s\n", ref.SnapshotID, ref.Status, owner)
+	}
 }
 
 func isRunSetOperation(id string) (bool, error) {

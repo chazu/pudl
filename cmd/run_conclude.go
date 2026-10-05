@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -14,9 +15,13 @@ import (
 // one. persisted reports whether the report was saved, so the caller's
 // deferred save does not repeat it.
 func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error, deps runDeps) (persisted bool, err error) {
+	ctx := in.ctx
+	if ctx == nil {
+		ctx = runOperationContext(in.mu)
+	}
 	fin, err := finalizeRun(runFinalizeInput{
 		cat: in.cat, model: in.model, effective: in.effective, modelDir: in.modelDir,
-		runID: in.session.RunID, flags: in.flags, live: in.live,
+		runID: in.session.RunID, flags: in.flags, live: in.live, ctx: ctx,
 	}, report, finishState, runErr)
 	if err != nil {
 		return false, err
@@ -43,6 +48,7 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 
 // runFinalizeInput is what finalizeRun needs from a finished run.
 type runFinalizeInput struct {
+	ctx context.Context
 	cat *runCatalog
 	// model is the model as declared; effective is the scoped model the run
 	// actually planned and executed (the same model when unscoped).
@@ -93,7 +99,11 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 	// promotion and scope-sensitive checks. Handing checks the unscoped
 	// model would let a check assert over resources this run excluded.
 	if len(in.effective.Checks) > 0 && !flags.dryRun {
-		results, err := runChecks(cat, in.effective, in.modelDir, checkContext{
+		evalCtx := in.ctx
+		if evalCtx == nil {
+			evalCtx = context.Background()
+		}
+		results, err := runChecksContext(evalCtx, cat, in.effective, in.modelDir, checkContext{
 			runID:       in.runID,
 			fromCatalog: flags.fromCatalog,
 			scope:       acute.NewTupleScope(in.model, in.effective),

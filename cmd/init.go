@@ -26,6 +26,9 @@ Use --force to replace configuration, or --global to initialize ~/.pudl instead.
 }
 
 func runInitCommand(cmd *cobra.Command, args []string) error {
+	if initBundle != "" {
+		return runRestoreBundle(cmd)
+	}
 	root := config.GetPudlDir()
 	mode := "global"
 	if initGlobal {

@@ -111,10 +111,15 @@ var snapshotShowCmd = &cobra.Command{
 			return fmt.Errorf("no such snapshot: %s", args[0])
 		}
 
+		pins, err := db.SnapshotPins(args[0])
+		if err != nil {
+			return err
+		}
 		if jsonOutput {
 			return printJSON(map[string]any{
 				"snapshot": snapshot,
 				"records":  len(entries),
+				"pins":     pins,
 			})
 		}
 		if snapshot == nil {
@@ -131,6 +136,13 @@ var snapshotShowCmd = &cobra.Command{
 			fmt.Fprintf(outw(), "  targets:   %v\n", snapshot.Targets)
 			fmt.Fprintf(outw(), "  created:   %s\n", snapshot.CreatedAt.Format(time.RFC3339))
 			fmt.Fprintf(outw(), "  retained:  %t\n", snapshot.Retained)
+			for _, pin := range pins {
+				fmt.Fprintf(outw(), "  pin:       %s %s", pin.OwnerKind, pin.OwnerID)
+				if pin.ExpiresAt != nil {
+					fmt.Fprintf(outw(), " until %s", pin.ExpiresAt.Format(time.RFC3339))
+				}
+				fmt.Fprintln(outw())
+			}
 		}
 		fmt.Fprintf(outw(), "  records:   %d\n", len(entries))
 		return nil
@@ -169,7 +181,9 @@ var snapshotCurrentCmd = &cobra.Command{
 var snapshotRetainCmd = &cobra.Command{
 	Use:   "retain <snapshot-id>",
 	Short: "Pin a snapshot against pruning (--release to unpin)",
-	Long: `Pin a snapshot so no retention policy removes it.
+	Long: `Add a manual pin so no retention policy removes this snapshot.
+--release removes only the manual pin; approval and retained-report owners remain.
+Reports preserve referenced snapshot evidence for 30 days after their last save.
 
 Snapshots recorded before snapshot provenance existed cannot be pinned — they
 carry no contract row — but they are never pruned either, for the same reason.`,
@@ -186,7 +200,11 @@ carry no contract row — but they are never pruned either, for the same reason.
 			return err
 		}
 		if jsonOutput {
-			return printJSON(map[string]any{"snapshot_id": args[0], "retained": !snapshotRelease})
+			snapshot, err := db.GetObserveSnapshot(args[0])
+			if err != nil {
+				return err
+			}
+			return printJSON(map[string]any{"snapshot_id": args[0], "manual_pin": !snapshotRelease, "retained": snapshot.Retained})
 		}
 		if snapshotRelease {
 			fmt.Fprintf(outw(), "released %s\n", args[0])
@@ -234,7 +252,7 @@ before the snapshot contract existed, are never removed.`,
 			opts.OlderThan = time.Now().Add(-snapshotOlderThan)
 		}
 
-		result, err := db.PruneObserveSnapshots(opts)
+		result, err := db.PruneObserveSnapshotsContext(cmd.Context(), opts)
 		if err != nil {
 			return err
 		}

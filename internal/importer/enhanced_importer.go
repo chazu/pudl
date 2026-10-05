@@ -1,7 +1,9 @@
 package importer
 
 import (
+	"context"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
 	"os"
 	"path/filepath"
 	"time"
@@ -45,6 +47,17 @@ func NewEnhancedImporterWithSchemaPaths(dataPath, configDir string, schemaPaths 
 
 // ImportFileWithFriendlyIDs imports a file using content-based ID generation
 func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*ImportResult, error) {
+	if opts.Context == nil {
+		opts.Context = context.Background()
+	}
+	var err error
+	opts.Limits, err = opts.Limits.Resolve()
+	if err != nil {
+		return nil, err
+	}
+	if err := opts.Context.Err(); err != nil {
+		return nil, err
+	}
 	// Ensure basic schemas exist
 	if err := e.ensureBasicSchemas(); err != nil {
 		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
@@ -58,6 +71,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("%s is a directory; import its files individually or with a wildcard", opts.SourcePath)
 	}
 
+	plainOwnedBytes := int64(0)
 	// A compressed source is decompressed once, up front, and every later step —
 	// format detection, hashing, storage, decoding — reads the plain bytes. The
 	// original path still names the import (origin, reported source).
@@ -66,13 +80,18 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		if err != nil {
 			return nil, err
 		}
-		plainPath, err := DecompressTo(opts.SourcePath, tempDir)
+		plainPath, err := DecompressToLimited(opts.Context, opts.SourcePath, tempDir, min(opts.Limits.DecodedBytes, opts.Limits.StagingBytes/2))
 		if err != nil {
 			return nil, fmt.Errorf("failed to decompress %s: %w", opts.SourcePath, err)
 		}
 		defer os.Remove(plainPath)
 		opts.OriginPath = opts.originPath()
 		opts.SourcePath = plainPath
+		if info, err := os.Stat(plainPath); err == nil {
+			plainOwnedBytes = info.Size()
+		} else {
+			return nil, err
+		}
 	}
 
 	format, err := e.detectFormat(opts.SourcePath)
@@ -105,82 +124,76 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	// Writing to a temp file and renaming is also what makes staging atomic: a
 	// killed import leaves a temp file, not a half-written record in the raw tree
 	// that a later read would treat as evidence.
-	staged, err := stageSource(opts.SourcePath, rawDir)
+	staged, err := stageSourceLimited(opts.Context, opts.SourcePath, rawDir, min(opts.Limits.DecodedBytes, opts.Limits.StagingBytes-plainOwnedBytes))
 	if err != nil {
 		return nil, err
 	}
 	defer staged.Discard() // no-op once committed
+	if plainOwnedBytes > 0 {
+		if err := os.Remove(opts.SourcePath); err != nil {
+			return nil, err
+		}
+	}
 
 	contentHash := staged.ContentHash
 	mainID := contentHash
 
-	// Content hash dedup: check if this exact content exists anywhere in the catalog
-	existingEntry, err := e.catalogDB.FindByContentHash(contentHash)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing content: %w", err)
-	}
-	if existingEntry != nil {
-		// The staged bytes are already in the catalog; the deferred Discard
-		// removes the copy just written.
-		return &ImportResult{
-			ID:             mainID,
-			SourcePath:     opts.originPath(),
-			StoredPath:     existingEntry.StoredPath,
-			MetadataPath:   existingEntry.MetadataPath,
-			DetectedFormat: existingEntry.Format,
-			DetectedOrigin: existingEntry.Origin,
-			AssignedSchema: existingEntry.Schema,
-			RecordCount:    existingEntry.RecordCount,
-			SizeBytes:      existingEntry.SizeBytes,
-			ContentHash:    contentHash,
-			Skipped:        true,
-			SkipReason:     "content already exists in catalog",
-		}, nil
-	}
-
-	// Create filename using content hash (truncated for filesystem compatibility)
-	ext := filepath.Ext(opts.SourcePath)
-	filename := fmt.Sprintf("%s%s", mainID[:16], ext)
-	storedPath, err := staged.Commit(filepath.Join(rawDir, filename))
-	if err != nil {
-		return nil, err
-	}
-
-	// Record collections stream: NDJSON, and a top-level JSON array. Both used to
-	// be decoded whole into a slice before a single row was written, so peak
-	// memory was the record set rather than one record.
-	if collectionFormat, ok := streamableCollectionFormat(opts.SourcePath, format); ok {
-		// Decoded from the staged copy, not the source: the bytes are identical
-		// (that is what the hash asserts) and it is the copy that is warm in the
-		// page cache, having just been written.
+	storedPath := filepath.Join(rawDir, fmt.Sprintf("%s%s", mainID[:16], filepath.Ext(opts.SourcePath)))
+	var stream *collectionStream
+	if collectionFormat, ok := streamableCollectionFormat(staged.Path(storedPath), format); ok {
 		opts.collectionFormat = format
-		result, err := e.importCollectionStreamed(opts, mainID, timestamp, origin, storedPath,
-			staged.Size, rawDir, metadataDir, collectionFormat)
-		if err != nil {
-			_ = os.Remove(storedPath)
+		opts.Limits.StagingBytes -= staged.Size
+		stream = &collectionStream{importer: e, opts: opts, collectionID: mainID, timestamp: timestamp, rawDir: rawDir, metadataDir: metadataDir}
+		if err := stream.prepare(staged.Path(storedPath), collectionFormat); err != nil {
 			return nil, err
 		}
-		result.SourcePath = opts.originPath()
-		return result, nil
+		defer stream.close()
 	}
-
-	result, err := e.importDocument(opts, documentImport{
-		id:          mainID,
-		contentHash: contentHash,
-		format:      format,
-		origin:      origin,
-		timestamp:   timestamp,
-		storedPath:  storedPath,
-		metadataDir: metadataDir,
-		sizeBytes:   staged.Size,
-	})
+	if stream == nil && staged.Size > opts.Limits.RecordBytes {
+		return nil, fmt.Errorf("document exceeds record byte limit (%d)", opts.Limits.RecordBytes)
+	}
+	tempDir, err := e.TempDir()
 	if err != nil {
-		// The raw file is committed; a failure must not leave it behind as
-		// evidence with no catalog row.
-		_ = os.Remove(storedPath)
 		return nil, err
 	}
-	return result, nil
+	var result *ImportResult
+	err = artifacts.WithLock(opts.Context, e.catalogDB.Root(), func() error {
+		existing, err := e.catalogDB.FindByContentHash(contentHash)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			result = existingImportResult(existing, opts.originPath())
+			if opts.Explain {
+				result.Explanation = loadOriginalExplanation(existing.MetadataPath)
+			}
+			return nil
+		}
+		journal, err := artifacts.NewJournalContext(opts.Context, tempDir)
+		if err != nil {
+			return err
+		}
+		defer journal.Close()
+		opts.publication = journal
+		if err := journal.Publish(staged.Path(storedPath), storedPath); err != nil {
+			return err
+		}
+		if stream != nil {
+			stream.opts.publication = journal
+			result, err = stream.commit(origin, storedPath, staged.Size, journal)
+		} else {
+			opts.OriginPath = opts.originPath()
+			opts.SourcePath = storedPath
+			result, err = e.importDocument(opts, documentImport{id: mainID, contentHash: contentHash, format: format, origin: origin, timestamp: timestamp, storedPath: storedPath, metadataDir: metadataDir, sizeBytes: staged.Size})
+		}
+		if err != nil {
+			journal.Rollback()
+			return err
+		}
+		result.SourcePath = opts.originPath()
+		return nil
+	})
+	return result, err
 }
 
 // CatalogDB returns the catalog the importer writes to, so callers recording
@@ -199,19 +212,6 @@ func (e *EnhancedImporter) TempDir() (string, error) {
 		return "", fmt.Errorf("create import temp directory: %w", err)
 	}
 	return dir, nil
-}
-
-// importCollectionStreamed imports a record collection one record at a time.
-func (e *EnhancedImporter) importCollectionStreamed(opts ImportOptions, collectionID string, timestamp time.Time, origin, storedPath string, sizeBytes int64, rawDir, metadataDir, format string) (*ImportResult, error) {
-	stream := &collectionStream{
-		importer:     e,
-		opts:         opts,
-		collectionID: collectionID,
-		timestamp:    timestamp,
-		rawDir:       rawDir,
-		metadataDir:  metadataDir,
-	}
-	return stream.run(storedPath, format, origin, storedPath, sizeBytes)
 }
 
 // GetIDDisplayFormat returns a proquint display format for a content hash ID
@@ -286,7 +286,7 @@ func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opt
 	}
 
 	metadataPath := filepath.Join(metadataDir, collectionID+".meta")
-	if err := e.saveMetadata(*metadata, metadataPath); err != nil {
+	if err := e.publishMetadata(*metadata, metadataPath, opts); err != nil {
 		return nil, fmt.Errorf("failed to save collection metadata: %w", err)
 	}
 

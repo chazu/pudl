@@ -104,7 +104,7 @@ func (c *CatalogDB) SavePendingRunSetApproval(pending PendingRunSetApproval) err
 			}
 		}
 		for _, snapshotID := range pending.SnapshotIDs {
-			if err := retainObserveSnapshotIn(tx.q, snapshotID, true); err != nil {
+			if err := setSnapshotPinIn(tx.q, SnapshotPin{SnapshotID: snapshotID, OwnerKind: SnapshotPinApproval, OwnerID: pending.RunSetID}, true); err != nil {
 				return fmt.Errorf("retain mutation-plan snapshot %q: %w", snapshotID, err)
 			}
 		}

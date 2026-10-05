@@ -198,6 +198,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	}
 
 	phases := runPhaseInput{
+		ctx: ctx,
 		cat: cat, mu: deps.mu, model: model, effective: effectiveModel, flags: flags,
 		muRoot: muRoot, modelDir: modelDir, pudlRoot: pudlRoot, session: session, live: live,
 	}
@@ -337,6 +338,7 @@ func recordRunContext(cat *runCatalog, model *systemmodel.SystemModel, runID str
 
 // runPhaseInput is what the phase dispatch and the conclusion share.
 type runPhaseInput struct {
+	ctx       context.Context
 	cat       *runCatalog
 	mu        muRunner
 	model     *systemmodel.SystemModel
@@ -352,6 +354,9 @@ type runPhaseInput struct {
 // executeRunPhases runs the converge loop or the observe-only arm. runErr is a
 // run outcome recorded on the report (a converge failure); err aborts the run.
 func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err error) {
+	if in.ctx == nil {
+		in.ctx = runOperationContext(in.mu)
+	}
 	model, flags := in.model, in.flags
 	switch {
 	case flags.converge && model.Convergent():
@@ -411,7 +416,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		if err != nil {
 			return nil, err
 		}
-		res, err := runInventoryDrift(db, scope, model.Desired, identity)
+		res, err := runInventoryDriftContext(in.ctx, db, scope, model.Desired, identity)
 		if err != nil {
 			return nil, err
 		}

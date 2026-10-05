@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/chazu/pudl/internal/acute"
@@ -24,14 +25,17 @@ const (
 // `expect: nonempty` checks, which count evidence rather than violations —
 // AdvisoryCount is zero and Count is the full result size.
 type CheckResult struct {
-	Name          string `json:"name"`
-	Query         string `json:"query"`
-	Severity      string `json:"severity"`
-	Count         int    `json:"count"`
-	AdvisoryCount int    `json:"advisory_count,omitempty"`
-	Scope         string `json:"scope"`
-	Passed        bool   `json:"passed"`
-	Message       string `json:"message,omitempty"`
+	Expect             string         `json:"expect,omitempty"`
+	Witnesses          []CheckWitness `json:"witnesses,omitempty"`
+	WitnessesTruncated bool           `json:"witnesses_truncated,omitempty"`
+	Name               string         `json:"name"`
+	Query              string         `json:"query"`
+	Severity           string         `json:"severity"`
+	Count              int            `json:"count"`
+	AdvisoryCount      int            `json:"advisory_count,omitempty"`
+	Scope              string         `json:"scope"`
+	Passed             bool           `json:"passed"`
+	Message            string         `json:"message,omitempty"`
 }
 
 // checkContext is what a run knows that scopes its checks: the run's own ID,
@@ -83,6 +87,10 @@ func headExposesRunID(rules []datalog.Rule, relation string) bool {
 // catalog) and returns the per-check verdicts. Rules are loaded from the standard
 // pudl paths plus the model's rules/ subdir.
 func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx checkContext) ([]CheckResult, error) {
+	return runChecksContext(context.Background(), cat, m, modelDir, ctx)
+}
+
+func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx checkContext) ([]CheckResult, error) {
 	if len(m.Checks) == 0 {
 		return nil, nil
 	}
@@ -105,13 +113,15 @@ func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx
 			constraints = map[string]interface{}{"run_id": ctx.runID}
 		}
 
-		tuples, err := datalog.Evaluate(db, rules, c.Query, constraints, datalog.TemporalScope{})
+		tuples, err := datalog.EvaluateContext(evalCtx, db, rules, c.Query, constraints, datalog.TemporalScope{}, datalog.EvalOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("check %q (relation %q): %w", c.Name, c.Query, err)
 		}
 
 		gating, advisory := partitionCheckTuples(tuples, c.Expect, ctx.scope)
+		witnesses, truncated := checkWitnesses(tuples, c.Expect, ctx.scope, m)
 		results = append(results, CheckResult{
+			Expect: c.Expect, Witnesses: witnesses, WitnessesTruncated: truncated,
 			Name:          c.Name,
 			Query:         c.Query,
 			Severity:      c.Severity,
@@ -119,7 +129,7 @@ func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx
 			AdvisoryCount: advisory,
 			Scope:         scope,
 			Passed:        checkPasses(c.Expect, gating),
-			Message:       c.Message,
+			Message:       redactSealedText(c.Message, m),
 		})
 	}
 	return results, nil
@@ -172,6 +182,7 @@ func printChecks(results []CheckResult) (failedFail bool) {
 			fmt.Fprintf(outw(), "  ✗ %s [%s] FAIL — %d match(es)%s: %s\n",
 				r.Name, r.Severity, r.Count, outside, r.Message)
 		}
+		writeCheckFindings(outw(), r)
 	}
 	return failedFail
 }

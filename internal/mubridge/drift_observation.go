@@ -1,9 +1,11 @@
 package mubridge
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
 	"os"
 	"path/filepath"
 	"time"
@@ -57,6 +59,14 @@ func RecordDriftObservation(
 	observation DriftObservation,
 	dataDir string,
 ) (string, error) {
+	if db == nil {
+		return "", fmt.Errorf("record drift observation: nil catalog")
+	}
+	var id string
+	err := artifacts.WithLock(context.Background(), db.Root(), func() error { var err error; id, err = recordDriftObservation(db, observation, dataDir); return err })
+	return id, err
+}
+func recordDriftObservation(db *database.CatalogDB, observation DriftObservation, dataDir string) (string, error) {
 	if db == nil {
 		return "", fmt.Errorf("record drift observation: nil catalog")
 	}

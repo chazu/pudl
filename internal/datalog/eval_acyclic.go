@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 // TableOverrides — the same mechanism that maps catalog_entry to its view.
 // Aggregates compose freely: a CTE that aggregates is just another table to
 // the rules above it.
-func evalAcyclic(db *database.CatalogDB, plan *queryPlan, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
+func evalAcyclicContext(ctx context.Context, db *database.CatalogDB, plan *queryPlan, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
 	overrides := withBuiltinEDB(nil)
 	var ctes []string
 	var params []interface{}
@@ -31,7 +32,7 @@ func evalAcyclic(db *database.CatalogDB, plan *queryPlan, constraints map[string
 	query := "WITH " + strings.Join(ctes, ",\n") + "\nSELECT * FROM " + cteName(plan.relation) + " AS derived"
 	query, params = whereConstraints(query, "derived.", constraints, params)
 
-	rows, err := db.DB().Query(query, params...)
+	rows, err := db.DB().QueryContext(ctx, query, params...)
 	if err != nil {
 		return nil, fmt.Errorf("sql query: %w", err)
 	}

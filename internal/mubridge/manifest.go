@@ -1,9 +1,11 @@
 package mubridge
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
 	"io"
 	"os"
 	"path/filepath"
@@ -71,6 +73,12 @@ func IngestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 }
 
 func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, configDir, model, runIDOverride string) (*IngestManifestResult, error) {
+	return IngestManifestContext(context.Background(), db, reader, origin, configDir, model, runIDOverride)
+}
+func IngestManifestContext(ctx context.Context, db *database.CatalogDB, reader io.Reader, origin, configDir, model, runIDOverride string) (*IngestManifestResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	// Read entire JSON from reader
 	data, err := io.ReadAll(reader)
 	if err != nil {
@@ -97,10 +105,12 @@ func ingestManifestWithRunID(db *database.CatalogDB, reader io.Reader, origin, c
 	// both find nothing and both insert. BEGIN IMMEDIATE takes the write lock
 	// before the check, so the second one now sees the first's manifest.
 	var result *IngestManifestResult
-	err = db.WithCatalogTx(func(tx *database.CatalogTx) error {
-		var stepErr error
-		result, stepErr = ingestManifestIn(tx, data, manifest, contentHash, origin, configDir, model, runIDOverride)
-		return stepErr
+	err = artifacts.WithLock(ctx, db.Root(), func() error {
+		return db.WithCatalogTxContext(ctx, func(tx *database.CatalogTx) error {
+			var stepErr error
+			result, stepErr = ingestManifestIn(tx, data, manifest, contentHash, origin, configDir, model, runIDOverride)
+			return stepErr
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -174,7 +184,7 @@ func ingestManifestIn(
 	manifestEntry := database.CatalogEntry{
 		ID:              manifestID,
 		StoredPath:      manifestStoredPath,
-		MetadataPath:    manifestStoredPath + ".meta",
+		MetadataPath:    "",
 		ImportTimestamp: now,
 		Format:          format,
 		Origin:          origin,
@@ -233,7 +243,7 @@ func ingestManifestIn(
 		actionEntry := database.CatalogEntry{
 			ID:              actionID,
 			StoredPath:      actionStoredPath,
-			MetadataPath:    actionStoredPath + ".meta",
+			MetadataPath:    "",
 			ImportTimestamp: now,
 			Format:          format,
 			Origin:          origin,
@@ -351,7 +361,7 @@ func storeRawData(configDir string, data []byte, filename string) (string, error
 	}
 
 	// Use timestamp + filename to avoid collisions
-	storedName := fmt.Sprintf("%s_%s", now.Format("20060102_150405"), filename)
+	storedName := fmt.Sprintf("%s_%s_%s", now.Format("20060102_150405"), idgen.ComputeContentID(data), filename)
 	storedPath := filepath.Join(dateDir, storedName)
 
 	if err := os.WriteFile(storedPath, data, 0644); err != nil {

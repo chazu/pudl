@@ -76,3 +76,17 @@ func (m execMu) run(args []string) ([]byte, error) {
 	}
 	return proc.Output(ctx, m.timeout, "mu", args...)
 }
+
+// runOperationContext uses the same invocation context as subprocess execution.
+func runOperationContext(mu muRunner) context.Context {
+	if m, ok := mu.(interface{ OperationContext() context.Context }); ok {
+		return m.OperationContext()
+	}
+	return context.Background()
+}
+func (m execMu) OperationContext() context.Context {
+	if m.ctx == nil {
+		return context.Background()
+	}
+	return m.ctx
+}

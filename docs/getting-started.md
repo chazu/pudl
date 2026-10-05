@@ -146,3 +146,5 @@ See the [CLI reference](cli-reference.md) for import and report options, or
 
 The [automated acceptance check](TESTING.md#git-inventory-walkthrough) executes
 these tutorial commands with only PUDL and Git on `PATH`.
+
+Live observations can also report previous/current/expected values and failed-check witnesses. A catalog replay without an eligible prior snapshot records an explicit unavailable baseline; it does not invent observation history. See [evidence and recovery](evidence.md) for report retention, faithful exports, and portable backups.

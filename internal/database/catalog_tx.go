@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"time"
 
 	"github.com/chazu/pudl/internal/errors"
 )
@@ -108,29 +109,31 @@ func (t *CatalogTx) InvalidateFact(id string) error {
 // and inert without a row pointing at them, so an abandoned step leaves unused
 // bytes rather than a corrupt catalog.
 //
-// Cost: the write lock is held for the whole step, where it used to be taken and
-// released per row. An observe ingest also stages its raw files inside that
-// window, so a concurrent writer waits for the batch rather than interleaving
-// with it, bounded by the connection's busy_timeout (5s). Small file writes make
-// this tens of milliseconds for a normal observation; a step large enough to
-// approach the timeout wants its file staging hoisted out of the transaction,
-// which is a change to the ingest loop rather than to this boundary.
+// Preparation of collection/observation payloads happens before this boundary.
+// Publication and SQL writes still commit as one recorded step; the artifact
+// lock prevents a concurrent prune/delete from reclaiming a published path.
 func (c *CatalogDB) WithCatalogTx(fn func(*CatalogTx) error) error {
-	ctx := context.Background()
+	return c.WithCatalogTxContext(context.Background(), fn)
+}
+
+// WithCatalogTxContext binds acquisition and every transaction operation to ctx.
+func (c *CatalogDB) WithCatalogTxContext(ctx context.Context, fn func(*CatalogTx) error) error {
 	conn, err := c.db.Conn(ctx)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to acquire connection", err)
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+	if err := beginImmediateContext(ctx, conn); err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin immediate transaction", err)
 	}
 
 	committed := false
 	defer func() {
 		if !committed {
-			rollbackConn(ctx, conn)
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			rollbackConn(cleanup, conn)
 		}
 	}()
 

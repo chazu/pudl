@@ -17,6 +17,10 @@ import (
 // numbers compare by value whatever their Go representation, but a number never
 // equals a string, so 1 and "1" differ.
 func CompareDesired(desired, observed map[string]any) []FieldDiff {
+	return compareDesired(desired, observed, false)
+}
+
+func compareDesired(desired, observed map[string]any, structural bool) []FieldDiff {
 	var diffs []FieldDiff
 	for _, k := range sortedKeys(desired) {
 		if k == "_schema" {
@@ -24,31 +28,32 @@ func CompareDesired(desired, observed map[string]any) []FieldDiff {
 		}
 		ov, ok := observed[k]
 		if !ok {
-			diffs = append(diffs, FieldDiff{Path: k, Expected: desired[k], Missing: true})
+			diffs = append(diffs, fieldAt(FieldDiff{Path: k, Expected: desired[k], Missing: true}, []PathComponent{{Key: &k}}, structural))
 			continue
 		}
-		diffs = compareValue(k, desired[k], ov, diffs)
+		diffs = compareValueAt(k, desired[k], ov, diffs, []PathComponent{{Key: &k}}, structural)
 	}
 	return diffs
 }
 
 // compareValue appends the differences between an expected and an observed
 // value at path to diffs.
-func compareValue(path string, expected, observed any, diffs []FieldDiff) []FieldDiff {
+func compareValueAt(path string, expected, observed any, diffs []FieldDiff, components []PathComponent, structural bool) []FieldDiff {
 	em, eIsMap := asMap(expected)
 	om, oIsMap := asMap(observed)
 	if eIsMap && oIsMap {
 		for _, k := range unionKeys(em, om) {
 			child := joinPath(path, k)
+			childParts := append(append([]PathComponent{}, components...), PathComponent{Key: &k})
 			ev, declared := em[k]
 			ov, present := om[k]
 			switch {
 			case !present:
-				diffs = append(diffs, FieldDiff{Path: child, Expected: ev, Missing: true})
+				diffs = append(diffs, fieldAt(FieldDiff{Path: child, Expected: ev, Missing: true}, childParts, structural))
 			case !declared:
-				diffs = append(diffs, FieldDiff{Path: child, Observed: ov, Unexpected: true})
+				diffs = append(diffs, fieldAt(FieldDiff{Path: child, Observed: ov, Unexpected: true}, childParts, structural))
 			default:
-				diffs = compareValue(child, ev, ov, diffs)
+				diffs = compareValueAt(child, ev, ov, diffs, childParts, structural)
 			}
 		}
 		return diffs
@@ -58,13 +63,13 @@ func compareValue(path string, expected, observed any, diffs []FieldDiff) []Fiel
 	ol, oIsList := observed.([]any)
 	if eIsList && oIsList && len(el) == len(ol) {
 		for i := range el {
-			diffs = compareValue(fmt.Sprintf("%s[%d]", path, i), el[i], ol[i], diffs)
+			diffs = compareValueAt(fmt.Sprintf("%s[%d]", path, i), el[i], ol[i], diffs, append(append([]PathComponent{}, components...), PathComponent{Index: &i}), structural)
 		}
 		return diffs
 	}
 
 	if !ValuesEqual(expected, observed) {
-		diffs = append(diffs, FieldDiff{Path: path, Expected: expected, Observed: observed})
+		diffs = append(diffs, fieldAt(FieldDiff{Path: path, Expected: expected, Observed: observed}, components, structural))
 	}
 	return diffs
 }
@@ -208,4 +213,11 @@ func joinPath(parent, key string) string {
 		return key
 	}
 	return parent + "." + key
+}
+
+func fieldAt(diff FieldDiff, components []PathComponent, structural bool) FieldDiff {
+	if structural {
+		diff.PathComponents = components
+	}
+	return diff
 }

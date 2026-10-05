@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -20,6 +22,7 @@ var (
 	queryList          bool
 	queryTopo          bool
 	queryMaxIterations int
+	queryTimeout       time.Duration
 )
 
 var queryCmd = &cobra.Command{
@@ -66,6 +69,15 @@ Examples:
 		return cobra.MinimumNArgs(1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if queryTimeout < 0 {
+			return fmt.Errorf("--timeout must not be negative")
+		}
+		ctx := cmd.Context()
+		if queryTimeout > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, queryTimeout)
+			defer cancel()
+		}
 		if queryList {
 			return runQueryList()
 		}
@@ -117,7 +129,7 @@ Examples:
 		// Evaluate only the relation's dependency closure: one SQL statement
 		// when it has no cycles, stratified fixpoint iteration when it does.
 		scope := datalog.TemporalScope{ValidAt: validAt, TxAt: txAt}
-		results, err := datalog.EvaluateWithOptions(db, rules, relation, constraints, scope,
+		results, err := datalog.EvaluateContext(ctx, db, rules, relation, constraints, scope,
 			datalog.EvalOptions{MaxIterations: queryMaxIterations})
 		if err != nil {
 			return err
@@ -200,6 +212,7 @@ func init() {
 	queryCmd.Flags().StringVar(&queryAsOfTx, "as-of-tx", "", "Evaluate over facts known at this time (RFC3339 or Unix)")
 	queryCmd.Flags().BoolVar(&queryList, "list", false, "List queryable relations (rule heads + EDB facts) and their arg keys")
 	queryCmd.Flags().BoolVar(&queryTopo, "topo", false, "Read the relation's from/to edges as a topological run order (errors on a cycle)")
+	queryCmd.Flags().DurationVar(&queryTimeout, "timeout", 0, "Maximum query duration (0 disables deadline)")
 	queryCmd.Flags().IntVar(&queryMaxIterations, "max-iterations", datalog.DefaultMaxIterations, "Cap on fixpoint rounds per recursive cycle (the longest chain a recursive rule can follow)")
 
 	queryCmd.ValidArgsFunction = completeRelations

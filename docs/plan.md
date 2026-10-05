@@ -458,8 +458,31 @@ thirteen branches merged into main. Each has an implementation log in
 | CI and docs | Go 1.26.6; golangci-lint and govulncheck jobs; generated `docs/cli-reference.md` with `-check`; `help --json` golden | `ci_hardening`, `cli_docs` |
 | Hygiene | Stray files removed; implog directories merged; FEATURES/VISION corrected; `make clean-local` | `repo_hygiene` |
 
-**Remaining from `pudl-qrl`:** previous-observation values in findings and
-failed checks presented alongside drift findings.
+Previous-observation values, failed-check witnesses, and current report evidence
+availability are delivered by the second evidence improvement round below.
+
+## Evidence Improvement Round — 2026-10-05 (done)
+
+Eleven retained recommendations implemented in one integrated delivery:
+
+| Recommendation | Supported behavior |
+|---|---|
+| Exact observations | JSON digits survive Mu observation and Ewe output ingestion |
+| Faithful export | Format-aware streaming, exact JSON, deterministic CSV, explicit partial failures, atomic file destinations |
+| Atomic deletion | Catalog changes commit before coordinated orphan cleanup; protected/shared evidence survives |
+| Atomic versions | Document dedup/version allocation commits under one writer lock; legacy duplicates remain inspectable |
+| Retention owners | Independent manual/approval/report pins, 30-day default report evidence window, latest eligible snapshot protection |
+| Previous findings | Frozen expected/current/previous values and explicit absent/unavailable/incompatible states |
+| Check witnesses | Deterministic bounded gating/advisory evidence and combined human findings |
+| Prepared ingestion | Private record preparation/spools before SQL, explicit byte limits, owned abort cleanup |
+| Cancellation | Context-bound SQL/recursion/transactions/locks and query timeout, including SQLite contention |
+| Classification explanations | Opt-in candidate/fallback/source traces, persisted original assignment reasons |
+| Verified bundles | Consistent rowid-preserving SQLite backup, byte checksums, safe new-workspace restore, inert approvals and restored producer evidence |
+
+Migrations 21 and 22 add retention ownership and restored-snapshot eligibility.
+The generic facts/Datalog store, exact model-set scope, sealed provider boundaries,
+and Mu execution ownership remain intact. See [evidence and recovery](evidence.md)
+and the second-round implementation log for acceptance results and limitations.
 
 ## What's Next
 
@@ -467,9 +490,9 @@ Potential future work, roughly ordered by value.
 
 ### Maintained inventory workflow and reports
 
-**`pudl-qrl`: Explainable human and JSON reports.** Use the completed Git
-walkthrough to verify observed/expected/previous values, observation age, failed
-checks, durable evidence references, and machine-output consistency. Its
+**`pudl-qrl`: Explainable human and JSON reports delivered.** The completed Git
+walkthrough and report integration tests verify observed/expected/previous values,
+failed-check witnesses, durable evidence references, and machine-output consistency. Its
 prerequisite `pudl-sjk` is complete. The current walkthrough documents the
 existing report semantics: `ok` records successful execution, and catalog replay
 leaves `drift.verified` false while retaining its report and imported evidence.

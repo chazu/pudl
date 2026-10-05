@@ -2,7 +2,6 @@ package importer
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -58,12 +57,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		}
 	}
 
-	latestVersion, err := e.catalogDB.GetLatestVersion(resourceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest version: %w", err)
-	}
-	version := latestVersion + 1
-
+	version, latestVersion := 0, 0
 	metadata := ImportMetadata{
 		ID: doc.id,
 		SourceInfo: SourceInfo{
@@ -93,11 +87,8 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		},
 	}
 
+	enrichAssignment(&metadata.SchemaInfo, nil, assigned)
 	metadataPath := filepath.Join(doc.metadataDir, doc.id+".meta")
-	if err := e.saveMetadata(metadata, metadataPath); err != nil {
-		return nil, fmt.Errorf("failed to save metadata: %w", err)
-	}
-
 	var identityJSONPtr *string
 	if identityJSON != "" {
 		identityJSONPtr = &identityJSON
@@ -119,9 +110,40 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		IdentityJSON:    identityJSONPtr,
 		Version:         &version,
 	}
-	if err := e.catalogDB.AddEntry(entry); err != nil {
-		_ = os.Remove(metadataPath)
-		return nil, fmt.Errorf("failed to add to catalog: %w", err)
+
+	var existing *database.CatalogEntry
+	err = e.catalogDB.WithCatalogTxContext(opts.Context, func(tx *database.CatalogTx) error {
+		var err error
+		existing, err = tx.FindByContentHash(doc.contentHash)
+		if err != nil {
+			return err
+		}
+		if existing != nil {
+			return nil
+		}
+		latestVersion, err = tx.GetLatestVersion(resourceID)
+		if err != nil {
+			return fmt.Errorf("get latest version: %w", err)
+		}
+		version = latestVersion + 1
+		metadata.ResourceTracking.Version = version
+		if err := e.publishMetadata(metadata, metadataPath, opts); err != nil {
+			return fmt.Errorf("save metadata: %w", err)
+		}
+		return tx.AddEntry(entry)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("commit document: %w", err)
+	}
+	if existing != nil {
+		result := &ImportResult{ID: existing.ID, SourcePath: opts.originPath(), StoredPath: existing.StoredPath, MetadataPath: existing.MetadataPath, DetectedFormat: existing.Format, DetectedOrigin: existing.Origin, AssignedSchema: existing.Schema, SchemaConfidence: existing.Confidence, RecordCount: existing.RecordCount, SizeBytes: existing.SizeBytes, ImportTimestamp: existing.ImportTimestamp.Format(time.RFC3339), ContentHash: doc.contentHash, Skipped: true, SkipReason: "content already exists in catalog"}
+		if existing.Version != nil {
+			result.Version = *existing.Version
+		}
+		if existing.ResourceID != nil {
+			result.ResourceID = *existing.ResourceID
+		}
+		return result, nil
 	}
 
 	return &ImportResult{
@@ -137,6 +159,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		SizeBytes:        doc.sizeBytes,
 		ImportTimestamp:  doc.timestamp.Format(time.RFC3339),
 		ValidationResult: assigned.Validation,
+		Explanation:      assigned.Trace,
 		ResourceID:       resourceID,
 		ContentHash:      doc.contentHash,
 		Version:          version,

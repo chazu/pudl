@@ -451,7 +451,7 @@ func executePreparedMutationPlan(ctx context.Context, db *database.CatalogDB, mu
 
 		member.report.PendingApproval = false
 		member.report.ApprovalStatus = report.ApprovalStatus
-		runErr, err := executeMutationMember(cat, mu, plan, member)
+		runErr, err := executeMutationMember(ctx, cat, mu, plan, member)
 		if err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func runSetStatus(ctx context.Context, report *acute.RunSetReport) string {
 // run, the verdict is recorded on the model row, and a verified-clean member's
 // resources are promoted from `converging`. runErr is the member's outcome
 // (non-nil means the member failed); err aborts the set.
-func executeMutationMember(cat *runCatalog, mu muRunner, plan *acute.RunSetMutationPlan, member *preparedMutationMember) (runErr error, err error) {
+func executeMutationMember(ctx context.Context, cat *runCatalog, mu muRunner, plan *acute.RunSetMutationPlan, member *preparedMutationMember) (runErr error, err error) {
 	live := !jsonOutput
 	flags := runFlags{
 		converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
@@ -531,7 +531,7 @@ func executeMutationMember(cat *runCatalog, mu muRunner, plan *acute.RunSetMutat
 	state := runFinishState{}
 	fin, checkErr := finalizeRun(runFinalizeInput{
 		cat: cat, model: member.model, effective: member.model, modelDir: member.modelDir,
-		runID: member.runID, flags: flags, live: live,
+		runID: member.runID, flags: flags, live: live, ctx: ctx,
 	}, member.report, &state, runErr)
 	runErr = fin.runErr
 	if checkErr != nil {
@@ -593,9 +593,9 @@ func saveMemberRunReport(db *database.CatalogDB, report *RunReport) error {
 	return db.SaveRunReport(report.RunID, report.Model, payload)
 }
 
-func retainMutationPlanSnapshots(db *database.CatalogDB, prepared map[string]*preparedMutationMember, retain bool) error {
+func retainMutationPlanSnapshots(db *database.CatalogDB, ownerID string, prepared map[string]*preparedMutationMember, retain bool) error {
 	for _, snapshotID := range mutationPlanSnapshotIDs(prepared) {
-		if err := db.RetainObserveSnapshot(snapshotID, retain); err != nil {
+		if err := db.SetSnapshotPin(database.SnapshotPin{SnapshotID: snapshotID, OwnerKind: database.SnapshotPinApproval, OwnerID: ownerID}, retain); err != nil {
 			return fmt.Errorf("retain mutation-plan snapshot %q: %w", snapshotID, err)
 		}
 	}

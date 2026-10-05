@@ -220,7 +220,7 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	}
 	rm := *m
 	rm.Plugins = absolutizePlugins(m.Plugins, modelDir)
-	projectLock, err := acquireMuProjectLock(muRoot)
+	projectLock, err := acquireMuProjectLockContext(runOperationContext(mu), muRoot)
 	if err != nil {
 		return nil, err
 	}

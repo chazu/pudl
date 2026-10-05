@@ -102,7 +102,8 @@ FUZZ_TARGETS := \
 	./internal/importer:FuzzDetectFormat \
 	./internal/idgen:FuzzCanonicalJSON \
 	./internal/schemaname:FuzzNormalizeIdempotent \
-	./internal/datalog:FuzzParseRulesCompile
+	./internal/datalog:FuzzParseRulesCompile \
+	./internal/ingestprep:FuzzArrayMatchesJSON
 
 fuzz:
 	@set -e; for t in $(FUZZ_TARGETS); do \
@@ -142,8 +143,11 @@ lint:
 vulncheck:
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
+# The 300-seed differential oracle is intentionally comprehensive. Pure-Go
+# SQLite under race/checkptr instrumentation needs a longer bound on macOS;
+# limiting package concurrency also avoids contention in cancellation tests.
 test-race:
-	$(GO) test -race ./...
+	$(GO) test -race -p 2 -timeout 20m ./...
 
 coverage:
 	$(GO) test -coverprofile=coverage.out ./...

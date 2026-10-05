@@ -48,7 +48,7 @@ Examples:
 		defer db.Close()
 
 		// Ingest the manifest
-		result, err := mubridge.IngestManifest(db, reader, manifestOrigin, pudlDir, manifestModel)
+		result, err := mubridge.IngestManifestContext(cmd.Context(), db, reader, manifestOrigin, pudlDir, manifestModel, "")
 		if err != nil {
 			return fmt.Errorf("failed to ingest manifest: %w", err)
 		}

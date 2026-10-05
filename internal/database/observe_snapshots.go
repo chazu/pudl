@@ -123,6 +123,9 @@ func recordObserveSnapshotIn(q dbtx, snapshot ObserveSnapshot) error {
 	if err != nil {
 		return fmt.Errorf("record observe snapshot %q: %w", snapshot.SnapshotID, err)
 	}
+	if snapshot.Retained {
+		return setSnapshotPinIn(q, SnapshotPin{SnapshotID: snapshot.SnapshotID, OwnerKind: SnapshotPinManual, OwnerID: "manual"}, true)
+	}
 	return nil
 }
 
@@ -132,7 +135,7 @@ func recordObserveSnapshotIn(q dbtx, snapshot ObserveSnapshot) error {
 // this table existed are still valid scopes, they simply carry no metadata.
 func (c *CatalogDB) GetObserveSnapshot(snapshotID string) (*ObserveSnapshot, error) {
 	row := c.db.QueryRow(
-		`SELECT `+observeSnapshotColumns+` FROM observe_snapshots WHERE snapshot_id = ?`, snapshotID)
+		`SELECT `+c.snapshotSelectColumns("observe_snapshots")+` FROM observe_snapshots WHERE snapshot_id = ?`, snapshotID)
 	snapshot, err := scanObserveSnapshot(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -157,7 +160,7 @@ func (c *CatalogDB) CurrentObserveSnapshot(model string) (*ObserveSnapshot, erro
 		args = append(args, source)
 	}
 	row := c.db.QueryRow(
-		`SELECT `+observeSnapshotColumns+` FROM observe_snapshots
+		`SELECT `+c.snapshotSelectColumns("observe_snapshots")+` FROM observe_snapshots
 		 WHERE model = ? AND source IN (`+strings.Join(placeholders, ", ")+`)
 		 ORDER BY created_at DESC, rowid DESC LIMIT 1`, args...)
 	snapshot, err := scanObserveSnapshot(row)
@@ -203,9 +206,14 @@ func (c *CatalogDB) ObserveSnapshotByIDForRun(snapshotID, model, workspace, runI
 		placeholders[i] = "?"
 		args = append(args, source)
 	}
-	query := `SELECT ` + observeSnapshotColumns + ` FROM observe_snapshots
+	query := `SELECT ` + c.snapshotSelectColumns("observe_snapshots") + ` FROM observe_snapshots
 		WHERE snapshot_id = ? AND model = ? AND workspace = ? AND run_id = ?
-		AND source IN (` + strings.Join(placeholders, ", ") + `) LIMIT 1`
+		AND source IN (` + strings.Join(placeholders, ", ") + `)`
+	condition, err := c.snapshotReuseCondition("observe_snapshots")
+	if err != nil {
+		return nil, err
+	}
+	query += condition + " LIMIT 1"
 	snapshot, err := scanObserveSnapshot(c.db.QueryRow(query, args...))
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -223,11 +231,16 @@ func (c *CatalogDB) successfulObserveSnapshot(model, workspace, runID string) (*
 		placeholders[i] = "?"
 		args = append(args, source)
 	}
-	query := `SELECT ` + prefixedObserveSnapshotColumns("s") + `
+	query := `SELECT ` + c.snapshotSelectColumns("s") + `
 		FROM observe_snapshots s
 		JOIN runs r ON r.run_id = s.run_id AND r.model = s.model
 		WHERE s.model = ? AND s.workspace = ? AND r.completion_status = ?
 		AND s.source IN (` + strings.Join(placeholders, ", ") + `)`
+	condition, err := c.snapshotReuseCondition("s")
+	if err != nil {
+		return nil, err
+	}
+	query += condition
 	if runID != "" {
 		query += ` AND s.run_id = ?`
 		args = append(args, runID)
@@ -246,16 +259,27 @@ func (c *CatalogDB) successfulObserveSnapshot(model, workspace, runID string) (*
 
 func prefixedObserveSnapshotColumns(alias string) string {
 	columns := strings.Split(strings.ReplaceAll(observeSnapshotColumns, "\n", ""), ",")
-	for i := range columns {
-		columns[i] = alias + "." + strings.TrimSpace(columns[i])
+	for i, column := range columns {
+		columns[i] = alias + "." + strings.TrimSpace(column)
 	}
 	return strings.Join(columns, ", ")
+}
+
+// snapshotSelectColumns preserves read-only inspection of legacy catalogs;
+// opening them must not imply a migration merely to inspect existing evidence.
+func (c *CatalogDB) snapshotSelectColumns(alias string) string {
+	columns := prefixedObserveSnapshotColumns(alias)
+	if !c.hasSnapshotPins() {
+		return columns
+	}
+	retained := `EXISTS(SELECT 1 FROM snapshot_pins p WHERE p.snapshot_id=` + alias + `.snapshot_id AND (p.expires_at IS NULL OR julianday(p.expires_at)>julianday('now')))`
+	return strings.Replace(columns, alias+".retained", retained, 1)
 }
 
 // ListObserveSnapshots returns snapshots newest-first, for one model when model
 // is non-empty, otherwise across all models. A limit of 0 means no limit.
 func (c *CatalogDB) ListObserveSnapshots(model string, limit int) ([]ObserveSnapshot, error) {
-	query := `SELECT ` + observeSnapshotColumns + ` FROM observe_snapshots`
+	query := `SELECT ` + c.snapshotSelectColumns("observe_snapshots") + ` FROM observe_snapshots`
 	var args []any
 	if model != "" {
 		query += ` WHERE model = ?`
@@ -285,24 +309,7 @@ func (c *CatalogDB) ListObserveSnapshots(model string, limit int) ([]ObserveSnap
 
 // RetainObserveSnapshot pins a snapshot against pruning, or releases it.
 func (c *CatalogDB) RetainObserveSnapshot(snapshotID string, retained bool) error {
-	return retainObserveSnapshotIn(c.db, snapshotID, retained)
-}
-
-func retainObserveSnapshotIn(q dbtx, snapshotID string, retained bool) error {
-	result, err := q.Exec(
-		`UPDATE observe_snapshots SET retained = ? WHERE snapshot_id = ?`,
-		boolToInt(retained), snapshotID)
-	if err != nil {
-		return fmt.Errorf("retain observe snapshot %q: %w", snapshotID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("retain observe snapshot %q: %w", snapshotID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("retain observe snapshot %q: no such snapshot (snapshots created before the snapshot contract existed cannot be retained)", snapshotID)
-	}
-	return nil
+	return c.SetSnapshotPin(SnapshotPin{SnapshotID: snapshotID, OwnerKind: SnapshotPinManual, OwnerID: "manual"}, retained)
 }
 
 func scanObserveSnapshot(row rowScanner) (ObserveSnapshot, error) {

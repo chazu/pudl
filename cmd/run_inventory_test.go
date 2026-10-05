@@ -47,7 +47,8 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 
 	changed := res.Drifted[1]
 	assert.Equal(t, "changed", changed.Reason)
-	assert.Equal(t, []acute.FieldDiff{{Path: "state", Expected: "absent", Observed: "present"}}, changed.Fields)
+	state := "state"
+	assert.Equal(t, []acute.FieldDiff{{Path: "state", Expected: "absent", Observed: "present", PathComponents: []acute.PathComponent{{Key: &state}}, Previous: &acute.PreviousValue{Status: "no-baseline"}}}, changed.Fields)
 	require.NotNil(t, changed.ObservedAt, "the compared record's import time is the observation time")
 }
 

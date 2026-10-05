@@ -12,8 +12,10 @@ type IdentityResolver func(schema string) []string
 
 // ObservedRecord is one observed inventory record and when it was recorded.
 type ObservedRecord struct {
-	Data       map[string]any
-	ObservedAt *time.Time
+	// IdentityFields are the field names recorded on the catalog entry at ingestion.
+	IdentityFields []string
+	Data           map[string]any
+	ObservedAt     *time.Time
 }
 
 // RecordIdentity derives a stable match key for a record: its _schema plus the
@@ -69,6 +71,14 @@ func schemaLabel(s string) string {
 // differing observed records is ambiguous. Results follow desired order, and
 // each changed resource lists every unsatisfied field in path order.
 func InventorySetDiff(desired []map[string]any, observed []ObservedRecord, identity IdentityResolver) []ResourceDrift {
+	return inventorySetDiff(desired, observed, identity, nil)
+}
+
+func InventorySetDiffWithPrevious(desired []map[string]any, observed []ObservedRecord, identity IdentityResolver, history PreviousInventory) []ResourceDrift {
+	return inventorySetDiff(desired, observed, identity, &history)
+}
+
+func inventorySetDiff(desired []map[string]any, observed []ObservedRecord, identity IdentityResolver, history *PreviousInventory) []ResourceDrift {
 	byKey := make(map[string][]ObservedRecord, len(observed))
 	for _, o := range observed {
 		if k, _, ok := RecordIdentity(o.Data, identity); ok {
@@ -78,6 +88,7 @@ func InventorySetDiff(desired []map[string]any, observed []ObservedRecord, ident
 
 	var drifted []ResourceDrift
 	for i, d := range desired {
+		before := len(drifted)
 		k, label, ok := RecordIdentity(d, identity)
 		if !ok {
 			drifted = append(drifted, ResourceDrift{
@@ -85,6 +96,9 @@ func InventorySetDiff(desired []map[string]any, observed []ObservedRecord, ident
 				Reason:   DriftUnidentifiable,
 				Diff:     "desired record has no identity (no identity_fields, name, path or id) to match an observation",
 			})
+			if history != nil {
+				attachPrevious(&drifted[len(drifted)-1], d, identity, *history)
+			}
 			continue
 		}
 		matches := byKey[k]
@@ -92,7 +106,7 @@ func InventorySetDiff(desired []map[string]any, observed []ObservedRecord, ident
 		case 0:
 			drifted = append(drifted, ResourceDrift{Resource: label, Reason: DriftMissing})
 		case 1:
-			if fields := CompareDesired(d, matches[0].Data); len(fields) > 0 {
+			if fields := compareDesired(d, matches[0].Data, history != nil); len(fields) > 0 {
 				drifted = append(drifted, ResourceDrift{
 					Resource:   label,
 					Reason:     DriftChanged,
@@ -108,6 +122,9 @@ func InventorySetDiff(desired []map[string]any, observed []ObservedRecord, ident
 				ObservedAt: latestObservedAt(matches),
 				Diff:       fmt.Sprintf("%d differing observed records share this identity", len(matches)),
 			})
+		}
+		if history != nil && len(drifted) > before {
+			attachPrevious(&drifted[len(drifted)-1], d, identity, *history)
 		}
 	}
 	return drifted

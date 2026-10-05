@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/ingestprep"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -14,86 +18,144 @@ import (
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
-// collectionStream is the streamed import of a record collection — NDJSON or a
-// top-level JSON array.
-//
-// The path it replaces decoded every record into one slice, wrote the collection
-// entry, then walked the slice writing items. Peak memory was the whole decoded
-// record set, and a failure part-way through unwound by hand through
-// cleanupFailedCollectionImport, reconstructing item paths from an index.
-//
-// Now: records arrive one at a time from the decoder, and the catalog writes are
-// one transaction. The record count is only known when the stream ends, so items
-// stream first and the collection entry lands last with the true count — which
-// also removes the window in which a collection row exists describing items that
-// were never written.
+// collectionStream prepares one record at a time into private files and a
+// descriptor spool. Only authoritative dedup/version allocation and publication
+// run inside the atomic catalog commit.
 type collectionStream struct {
-	importer     *EnhancedImporter
-	opts         ImportOptions
-	collectionID string
-	timestamp    time.Time
-	rawDir       string
-	metadataDir  string
-
-	// stagedFiles are the item artifacts written so far. A rollback cannot
-	// unwrite a file, so they are removed after the transaction aborts: an orphan
-	// file is wasted disk, an orphan row is a lie.
-	stagedFiles []string
+	importer            *EnhancedImporter
+	opts                ImportOptions
+	collectionID        string
+	timestamp           time.Time
+	rawDir, metadataDir string
+	dir                 string
+	spool               *os.File
+	recordCount         int
+	stagedBytes         int64
+	explanations        []ItemExplanation
+	truncated           bool
+}
+type preparedItem struct {
+	Entry    database.CatalogEntry
+	Metadata ImportMetadata
 }
 
-// run decodes the staged source and writes every item plus the collection entry
-// inside one transaction.
-func (c *collectionStream) run(sourcePath, format, origin, storedPath string, sizeBytes int64) (*ImportResult, error) {
-	var (
-		result      *ImportResult
-		recordCount int
-	)
-
-	err := c.importer.catalogDB.WithCatalogTx(func(tx *database.CatalogTx) error {
-		c.stagedFiles = nil
-
-		source, err := os.Open(sourcePath)
-		if err != nil {
-			return fmt.Errorf("open staged source: %w", err)
-		}
-		defer source.Close()
-
-		sink := func(index int, raw json.RawMessage) error {
-			return c.writeItem(tx, index, raw)
-		}
-
-		switch format {
-		case "ndjson":
-			recordCount, err = streamNDJSON(source, sink)
-		case "json-array":
-			recordCount, err = streamJSONArray(source, sink)
-		default:
-			return fmt.Errorf("collectionStream: unsupported format %q", format)
-		}
-		if err != nil {
-			return err
-		}
-		if recordCount == 0 {
-			return fmt.Errorf("no records found in %s", c.opts.SourcePath)
-		}
-
-		result, err = c.importer.createCollectionEntryIn(tx, c.opts, c.timestamp, origin,
-			c.collectionID, storedPath, c.metadataDir, sizeBytes, recordCount)
-		return err
-	})
-
+func (c *collectionStream) close() {
+	if c.spool != nil {
+		_ = c.spool.Close()
+	}
+	_ = os.RemoveAll(c.dir)
+}
+func (c *collectionStream) prepare(sourcePath, format string) (resultErr error) {
+	tmp, err := c.importer.TempDir()
 	if err != nil {
-		// The rows are already rolled back; only the files need removing.
-		for _, path := range c.stagedFiles {
-			_ = os.Remove(path)
+		return err
+	}
+	c.dir, err = os.MkdirTemp(tmp, "collection-prepare-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if resultErr != nil {
+			c.close()
 		}
+	}()
+	c.spool, err = os.Create(filepath.Join(c.dir, "entries.ndjson"))
+	if err != nil {
+		return err
+	}
+	source, err := os.Open(sourcePath)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	reader := &ingestprep.Reader{Context: c.opts.Context, Source: source, Remaining: c.opts.Limits.DecodedBytes}
+	sink := func(index int, raw json.RawMessage) error { return c.prepareItem(index, raw) }
+	switch format {
+	case "ndjson":
+		c.recordCount, err = ingestprep.NDJSON(reader, c.opts.Limits.RecordBytes, sink)
+	case "json-array":
+		c.recordCount, err = ingestprep.Array(reader, c.opts.Limits.RecordBytes, sink)
+	default:
+		return fmt.Errorf("unsupported collection format %q", format)
+	}
+	if err != nil {
+		return err
+	}
+	if c.recordCount == 0 {
+		return fmt.Errorf("no records found in %s", c.opts.SourcePath)
+	}
+	return nil
+}
+
+// commit is called with the workspace artifact lock held.
+func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, journal *artifacts.Journal) (*ImportResult, error) {
+	if _, err := c.spool.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
-	return result, nil
+	var result *ImportResult
+	err := c.importer.catalogDB.WithCatalogTxContext(c.opts.Context, func(tx *database.CatalogTx) error {
+		dec := json.NewDecoder(c.spool)
+		dec.UseNumber()
+		for {
+			var item preparedItem
+			if err := dec.Decode(&item); err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+			entry := item.Entry
+			trace := item.Metadata.SchemaInfo.Explanation
+			existing, err := tx.FindByContentHash(*entry.ContentHash)
+			if err != nil {
+				return err
+			}
+			if existing != nil {
+				if c.opts.Explain {
+					trace = loadOriginalExplanation(existing.MetadataPath)
+					c.appendExplanation(*entry.ItemIndex, trace)
+				}
+				if err := tx.AddCollectionMembership(c.collectionID, existing.ID, *entry.ItemIndex); err != nil {
+					return err
+				}
+				continue
+			}
+			latest, err := tx.GetLatestVersion(*entry.ResourceID)
+			if err != nil {
+				return err
+			}
+			version := latest + 1
+			entry.Version = &version
+			item.Metadata.ResourceTracking.Version = version
+			rawDestination := filepath.Join(c.rawDir, filepath.Base(entry.StoredPath))
+			if err := journal.Publish(entry.StoredPath, rawDestination); err != nil {
+				return err
+			}
+			entry.StoredPath = rawDestination
+			if err := c.importer.publishMetadata(item.Metadata, entry.MetadataPath, c.opts); err != nil {
+				return err
+			}
+			c.appendExplanation(*entry.ItemIndex, trace)
+
+			if err := tx.AddEntry(entry); err != nil {
+				return err
+			}
+		}
+		var err error
+		result, err = c.importer.createCollectionEntryIn(tx, c.opts, c.timestamp, origin, c.collectionID, storedPath, c.metadataDir, sizeBytes, c.recordCount)
+		return err
+	})
+	if result != nil {
+		result.ItemExplanations = c.explanations
+		result.ExplanationsTruncated = c.truncated
+	}
+	return result, err
 }
 
 // writeItem records one streamed record as a collection item.
-func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json.RawMessage) error {
+func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
+	if err := c.opts.Context.Err(); err != nil {
+		return err
+	}
 	e := c.importer
 
 	// Decode without rounding numbers through float64: an integer beyond 2^53
@@ -112,19 +174,8 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 	}
 	itemContentHash := idgen.ComputeContentID(canonical)
 
-	// Content-addressed dedup: a record already in the catalog gains a membership
-	// rather than a second copy. Read through the transaction, so a repeated
-	// record *within this import* deduplicates against itself.
-	existing, err := tx.FindByContentHash(itemContentHash)
-	if err != nil {
-		return fmt.Errorf("check for existing item %d: %w", index, err)
-	}
-	if existing != nil {
-		return tx.AddCollectionMembership(c.collectionID, existing.ID, index)
-	}
-
 	itemFilename := fmt.Sprintf("%s_item_%d", c.collectionID, index)
-	itemPath := filepath.Join(c.rawDir, itemFilename+".json")
+	itemPath := filepath.Join(c.dir, itemFilename+".json")
 	// Store the record as it arrived (indented), not a re-encoding of the
 	// decoded value, so retained evidence keeps the source's exact numbers.
 	var indented bytes.Buffer
@@ -132,12 +183,15 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 		return fmt.Errorf("format record %d for storage: %w", index, err)
 	}
 	stored := indented.Bytes()
+	if c.stagedBytes+int64(len(stored)) > c.opts.Limits.StagingBytes {
+		return fmt.Errorf("collection exceeds staging byte limit")
+	}
 	if err := os.WriteFile(itemPath, stored, 0o644); err != nil {
 		return fmt.Errorf("write item %d: %w", index, err)
 	}
-	c.stagedFiles = append(c.stagedFiles, itemPath)
 
-	schema, confidence := e.assignItemSchema(itemData, c.opts)
+	assigned := e.assignItemSchemaDetailed(itemData, c.opts)
+	schema, confidence := assigned.Schema, assigned.Confidence
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
 	if extractErr != nil {
@@ -152,16 +206,12 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 		}
 	}
 
-	latestVersion, err := tx.GetLatestVersion(resourceID)
-	if err != nil {
-		return fmt.Errorf("get latest version for item %d: %w", index, err)
-	}
-	version := latestVersion + 1
+	version := 0
 
 	itemMetadata := ImportMetadata{
 		ID: itemContentHash,
 		SourceInfo: SourceInfo{
-			OriginalPath: c.opts.SourcePath,
+			OriginalPath: c.opts.originPath(),
 			Origin:       fmt.Sprintf("%s_item_%d", c.collectionID, index),
 			Confidence:   "high",
 		},
@@ -186,12 +236,8 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 			Version:        version,
 		},
 	}
+	enrichAssignment(&itemMetadata.SchemaInfo, nil, assigned)
 	itemMetadataPath := filepath.Join(c.metadataDir, itemFilename+".meta")
-	if err := e.saveMetadata(itemMetadata, itemMetadataPath); err != nil {
-		return fmt.Errorf("save item %d metadata: %w", index, err)
-	}
-	c.stagedFiles = append(c.stagedFiles, itemMetadataPath)
-
 	collectionType := "item"
 	itemID := itemContentHash
 	var identityJSONPtr *string
@@ -199,7 +245,7 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 		identityJSONPtr = &identityJSON
 	}
 
-	return tx.AddEntry(database.CatalogEntry{
+	entry := database.CatalogEntry{
 		ID:              itemID,
 		StoredPath:      itemPath,
 		MetadataPath:    itemMetadataPath,
@@ -218,5 +264,27 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 		ContentHash:     &itemContentHash,
 		IdentityJSON:    identityJSONPtr,
 		Version:         &version,
-	})
+	}
+	prepared := preparedItem{Entry: entry, Metadata: itemMetadata}
+	descriptor, err := json.Marshal(prepared)
+	if err != nil {
+		return err
+	}
+	c.stagedBytes += int64(len(stored) + len(descriptor) + 1)
+	if c.stagedBytes > c.opts.Limits.StagingBytes {
+		return fmt.Errorf("collection exceeds staging byte limit")
+	}
+	_, err = c.spool.Write(append(descriptor, '\n'))
+	return err
+}
+
+func (c *collectionStream) appendExplanation(index int, trace *inference.InferenceTrace) {
+	if !c.opts.Explain {
+		return
+	}
+	if len(c.explanations) < 32 {
+		c.explanations = append(c.explanations, ItemExplanation{Index: index, Trace: trace})
+	} else {
+		c.truncated = true
+	}
 }

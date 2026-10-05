@@ -1,9 +1,11 @@
 package importer
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/chazu/pudl/internal/ingestprep"
 	"io"
 	"os"
 	"path/filepath"
@@ -34,6 +36,10 @@ type stagedSource struct {
 // killed import leaves a temp file rather than a half-written record in the raw
 // tree that a later read would treat as evidence.
 func stageSource(sourcePath, rawDir string) (*stagedSource, error) {
+	return stageSourceLimited(context.Background(), sourcePath, rawDir, 1<<63-1)
+}
+
+func stageSourceLimited(ctx context.Context, sourcePath, rawDir string, maxBytes int64) (*stagedSource, error) {
 	source, err := os.Open(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("open source: %w", err)
@@ -49,7 +55,7 @@ func stageSource(sourcePath, rawDir string) (*stagedSource, error) {
 	}
 
 	hasher := sha256.New()
-	size, copyErr := io.Copy(io.MultiWriter(temp, hasher), source)
+	size, copyErr := io.Copy(io.MultiWriter(temp, hasher), &ingestprep.Reader{Context: ctx, Source: source, Remaining: maxBytes})
 	closeErr := temp.Close()
 	if copyErr != nil {
 		os.Remove(temp.Name())

@@ -574,3 +574,24 @@ func TestIngestObservePersistsAndEnrichesSchemaRelativeIdentity(t *testing.T) {
 	require.NotNil(t, entry.IdentityJSON)
 	assert.Equal(t, `{"name":"thing-1"}`, *entry.IdentityJSON)
 }
+
+func TestIngestObserveExactNumbersAndTrailingData(t *testing.T) {
+	db, dir := setupIngestTestDB(t)
+	defer db.Close()
+	input := `[{"target":"//exact","current":{"name":"exact","serial":9007199254740993,"nested":{"fraction":0.1234567890123456789,"exponent":1e30}}}]`
+	result, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), DataDir: dir})
+	require.NoError(t, err)
+	require.Equal(t, 1, result.Records)
+	entry, err := db.GetLatestObserve("exact")
+	require.NoError(t, err)
+	data, err := os.ReadFile(entry.StoredPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "9007199254740993")
+	assert.Contains(t, string(data), "0.1234567890123456789")
+	assert.Contains(t, string(data), "1e30")
+	rejected, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input + `{}`), DataDir: dir, SnapshotID: "trailing-rejected"})
+	require.Error(t, err)
+	assert.Empty(t, rejected.SnapshotID)
+	_, err = db.GetCollectionByID("trailing-rejected")
+	require.Error(t, err)
+}

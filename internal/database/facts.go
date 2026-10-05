@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -366,7 +367,16 @@ func (c *CatalogDB) GetFactByPrefix(prefix string) (*Fact, error) {
 
 // QueryFacts returns facts matching the filter with bitemporal scoping.
 func (c *CatalogDB) QueryFacts(filter FactFilter) ([]Fact, error) {
-	return queryFactsIn(c.db, filter)
+	return c.QueryFactsContext(context.Background(), filter)
+}
+
+func (c *CatalogDB) QueryFactsContext(ctx context.Context, filter FactFilter) ([]Fact, error) {
+	conn, err := c.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return queryFactsIn(connExec{ctx: ctx, conn: conn}, filter)
 }
 
 // queryFactsIn runs the bitemporal fact query on q.

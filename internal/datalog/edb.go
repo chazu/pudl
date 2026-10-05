@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -8,18 +9,18 @@ import (
 )
 
 // evalEDB answers a query on a relation no rule produces: its stored facts.
-func evalEDB(db *database.CatalogDB, relation string, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
+func evalEDBContext(ctx context.Context, db *database.CatalogDB, relation string, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
 	var facts []database.Fact
 	var err error
 
 	if scope.ValidAt == nil && scope.TxAt == nil {
 		if len(constraints) > 0 {
-			facts, err = db.QueryCurrentFactsFiltered(relation, constraints)
+			facts, err = db.QueryCurrentFactsFilteredContext(ctx, relation, constraints)
 		} else {
-			facts, err = db.QueryCurrentFacts(relation)
+			facts, err = db.QueryCurrentFactsContext(ctx, relation)
 		}
 	} else {
-		facts, err = db.QueryFacts(database.FactFilter{
+		facts, err = db.QueryFactsContext(ctx, database.FactFilter{
 			Relation: relation,
 			ValidAt:  scope.ValidAt,
 			TxAt:     scope.TxAt,

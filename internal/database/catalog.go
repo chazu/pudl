@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/url"
@@ -365,6 +366,11 @@ func (c *CatalogDB) GetEntryByProquint(proquint string) (*CatalogEntry, error) {
 
 // QueryEntries queries catalog entries with filtering, sorting, and pagination
 func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*QueryResult, error) {
+	return c.QueryEntriesContext(context.Background(), filters, options)
+}
+
+// QueryEntriesContext binds counts and row scanning to ctx.
+func (c *CatalogDB) QueryEntriesContext(ctx context.Context, filters FilterOptions, options QueryOptions) (*QueryResult, error) {
 	// Build WHERE clause
 	var whereConditions []string
 	var args []interface{}
@@ -409,7 +415,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 
 	// Get total count (without filters)
 	var totalCount int
-	err := c.db.QueryRow("SELECT COUNT(*) FROM catalog_entries").Scan(&totalCount)
+	err := c.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM catalog_entries").Scan(&totalCount)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get total count", err)
 	}
@@ -417,7 +423,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	// Get filtered count
 	var filteredCount int
 	countSQL := "SELECT COUNT(*) FROM catalog_entries " + whereClause
-	err = c.db.QueryRow(countSQL, args...).Scan(&filteredCount)
+	err = c.db.QueryRowContext(ctx, countSQL, args...).Scan(&filteredCount)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get filtered count", err)
 	}
@@ -459,7 +465,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 	}
 
 	// Execute query
-	rows, err := c.db.Query(selectSQL, args...)
+	rows, err := c.db.QueryContext(ctx, selectSQL, args...)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
 	}
@@ -665,40 +671,8 @@ func updateEntryIdentityIn(q dbtx, id, resourceID, identityJSON string) error {
 
 // DeleteEntry removes a catalog entry by ID
 func (c *CatalogDB) DeleteEntry(id string) error {
-	var collectionType string
-	err := c.db.QueryRow("SELECT COALESCE(collection_type, '') FROM catalog_entries WHERE id = ?", id).Scan(&collectionType)
-	if err == sql.ErrNoRows {
-		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
-	}
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to inspect catalog entry", err)
-	}
-	if collectionType == "collection" {
-		if err := c.RemoveCollectionMemberships(id); err != nil {
-			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to delete collection memberships", err)
-		}
-	} else {
-		if _, err := c.db.Exec("DELETE FROM collection_memberships WHERE item_id = ?", id); err != nil {
-			return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to delete item memberships", err)
-		}
-	}
-	deleteSQL := "DELETE FROM catalog_entries WHERE id = ?"
-
-	result, err := c.db.Exec(deleteSQL, id)
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to delete catalog entry", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to get rows affected", err)
-	}
-
-	if rowsAffected == 0 {
-		return errors.WrapError(errors.ErrCodeNotFound, fmt.Sprintf("Catalog entry not found: %s", id), nil)
-	}
-
-	return nil
+	_, err := c.DeleteEntriesAtomic(id, false)
+	return err
 }
 
 // MigrateSchemaNames normalizes all existing schema names in the database to canonical format.

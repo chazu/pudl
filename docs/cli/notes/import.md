@@ -17,3 +17,5 @@ Behavior:
 - Format is detected from extension and content; origin from the filename.
 
 Set `PUDL_DEBUG=1` for detailed error output.
+
+`--explain` exposes classification/fallback reasons and schema sources. Byte limits bound records, decoded input, and staging; failures never truncate records. See [evidence](evidence.md).

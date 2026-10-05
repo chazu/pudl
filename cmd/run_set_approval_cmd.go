@@ -44,7 +44,7 @@ func resumeRunSet(ctx context.Context, runSetID string, deps runDeps) error {
 	if err := db.ApproveRunSetPlan(runSetID, approval.PlanDigest, reportJSON); err != nil {
 		return err
 	}
-	defer func() { _ = retainMutationPlanSnapshots(db, prepared, false) }()
+	defer func() { _ = retainMutationPlanSnapshots(db, report.RunSetID, prepared, false) }()
 	return executePreparedMutationPlan(ctx, db, deps.mu, report, rebuilt, prepared)
 }
 
@@ -187,7 +187,7 @@ func retainReportSnapshots(db *database.CatalogDB, report *acute.RunSetReport, r
 		if snapshotID == "" {
 			continue
 		}
-		if err := db.RetainObserveSnapshot(snapshotID, retain); err != nil {
+		if err := db.SetSnapshotPin(database.SnapshotPin{SnapshotID: snapshotID, OwnerKind: database.SnapshotPinApproval, OwnerID: report.RunSetID}, retain); err != nil {
 			return err
 		}
 	}

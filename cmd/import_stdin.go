@@ -42,6 +42,8 @@ func importFromStdin(cmd *cobra.Command) error {
 		return err
 	}
 	defer session.Close()
+	session.ctx = cmd.Context()
+	session.limits = importIngestLimits()
 
 	// Set origin to "stdin" if not specified
 	origin := importOrigin

@@ -216,3 +216,14 @@ The generic `make smoke` suite skips cases whose external tools are unavailable.
 - Concurrent stress testing (multiple workers, thousands of operations)
 - Resource exhaustion and graceful degradation
 - Edge cases: empty databases, boundary values, error propagation
+
+The full race gate keeps all 300 differential-oracle seeds. It uses a 20-minute
+package timeout and two concurrent packages because pure-Go SQLite plus race
+instrumentation is substantially slower than ordinary tests. `make test-race`
+and CI use the same command; pointer checks and race detection remain enabled.
+
+Evidence acceptance also covers portable bundles, payload corruption, historic
+report values, check witnesses, retention owners, cancellation, prepared
+collections, and the actual Git example CLI journey. The native
+`internal/ingestprep` array framer has a differential JSON fuzz target included
+in `make fuzz`.

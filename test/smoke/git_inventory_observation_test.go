@@ -52,7 +52,47 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 		require.True(t, report.Drift.Verified)
 		// Replay after every run has completed: later observations must not
 		// overwrite the baseline verdict or any run's retained evidence.
-		require.JSONEq(t, string(data), string(cli("run", "report", report.RunID, "--json")))
+		var replay map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(cli("run", "report", report.RunID, "--json"), &replay))
+		var availability []struct {
+			SnapshotID string `json:"snapshot_id"`
+			Status     string `json:"status"`
+		}
+		require.NoError(t, json.Unmarshal(replay["evidence_availability"], &availability))
+		require.Contains(t, availability, struct {
+			SnapshotID string `json:"snapshot_id"`
+			Status     string `json:"status"`
+		}{report.Populate.SnapshotID, "available"})
+		delete(replay, "evidence_availability")
+		frozen, err := json.Marshal(replay)
+		require.NoError(t, err)
+		require.JSONEq(t, string(data), string(frozen))
+		if stage != "baseline" {
+			var detail struct {
+				Drift struct {
+					Drifted []struct {
+						Fields []struct {
+							Previous struct {
+								Status     string          `json:"status"`
+								SnapshotID string          `json:"snapshot_id"`
+								Value      json.RawMessage `json:"value"`
+							} `json:"previous"`
+						} `json:"fields"`
+					} `json:"drifted"`
+				} `json:"drift"`
+			}
+			require.NoError(t, json.Unmarshal(data, &detail))
+			require.Len(t, detail.Drift.Drifted, 1)
+			require.Len(t, detail.Drift.Drifted[0].Fields, 1)
+			previous := detail.Drift.Drifted[0].Fields[0].Previous
+			require.Equal(t, "available", previous.Status)
+			require.Equal(t, reports[len(reports)-1].Populate.SnapshotID, previous.SnapshotID)
+			want := `"main"`
+			if stage == "repeat" {
+				want = `"release"`
+			}
+			require.Equal(t, want, string(previous.Value))
+		}
 		snapshot := string(cli("show", report.Populate.SnapshotID, "--raw"))
 		require.Contains(t, snapshot, `"run_id": "`+report.RunID+`"`)
 		require.Contains(t, snapshot, `"snapshot_id": "`+report.Populate.SnapshotID+`"`)

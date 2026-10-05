@@ -11,6 +11,7 @@ import (
 
 var doctorEntry string
 var doctorHealthOnly bool
+var doctorVerifyPayloads bool
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -48,6 +49,13 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 			if result.Status == "error" {
 				report.OK = false
 			}
+		}
+	}
+	if doctorVerifyPayloads {
+		result := doctor.CheckPayloadsAt(cmd.Context(), effectivePudlDir())
+		report.Health = append(report.Health, healthDiagnostic{Name: "Payload Hashes", Status: result.Status, Message: result.Message, Details: result.Details, Fix: result.Fix})
+		if result.Status == "error" {
+			report.OK = false
 		}
 	}
 	if !doctorHealthOnly && report.OK {
@@ -108,6 +116,10 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckDatabaseIntegrityAt(pudlDir) },
 		},
 		{
+			Name:      "Resource Versions",
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckResourceVersionsAt(pudlDir) },
+		},
+		{
 			Name:      "Schema Repository",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(pudlDir) },
 		},
@@ -142,6 +154,7 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 
 func init() {
 	rootCmd.AddCommand(doctorCmd)
+	doctorCmd.Flags().BoolVar(&doctorVerifyPayloads, "verify-payloads", false, "Verify referenced raw payload hashes without repairing evidence")
 	doctorCmd.Flags().StringVar(&doctorEntry, "entry", "", "Check one catalog entry by proquint or full ID")
 	doctorCmd.Flags().BoolVar(&doctorHealthOnly, "health-only", false, "Check workspace health without scanning catalog records")
 	doctorCmd.MarkFlagsMutuallyExclusive("entry", "health-only")

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -40,11 +41,15 @@ func (c *CatalogDB) ensureCurrentFactsTable() error {
 // QueryCurrentFacts returns currently-valid facts for a relation.
 // Faster than QueryFacts with AsOfNow because it avoids temporal filtering.
 func (c *CatalogDB) QueryCurrentFacts(relation string) ([]Fact, error) {
+	return c.QueryCurrentFactsContext(context.Background(), relation)
+}
+
+func (c *CatalogDB) QueryCurrentFactsContext(ctx context.Context, relation string) ([]Fact, error) {
 	if relation == "" {
 		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "relation is required", nil)
 	}
 
-	rows, err := c.db.Query(
+	rows, err := c.db.QueryContext(ctx,
 		`SELECT id, relation, args, source, provenance FROM current_facts WHERE relation = ?`,
 		relation)
 	if err != nil {
@@ -78,6 +83,10 @@ func (c *CatalogDB) QueryCurrentFacts(relation string) ([]Fact, error) {
 
 // QueryCurrentFactsFiltered returns currently-valid facts matching relation and arg constraints.
 func (c *CatalogDB) QueryCurrentFactsFiltered(relation string, argFilters map[string]interface{}) ([]Fact, error) {
+	return c.QueryCurrentFactsFilteredContext(context.Background(), relation, argFilters)
+}
+
+func (c *CatalogDB) QueryCurrentFactsFilteredContext(ctx context.Context, relation string, argFilters map[string]interface{}) ([]Fact, error) {
 	if relation == "" {
 		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "relation is required", nil)
 	}
@@ -98,7 +107,7 @@ func (c *CatalogDB) QueryCurrentFactsFiltered(relation string, argFilters map[st
 		`SELECT id, relation, args, source, provenance FROM current_facts WHERE %s`,
 		strings.Join(conditions, " AND "))
 
-	rows, err := c.db.Query(query, args...)
+	rows, err := c.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "failed to query current facts", err)
 	}

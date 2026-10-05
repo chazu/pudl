@@ -20,6 +20,8 @@ type SchemaSet struct {
 	Modules  map[string]*LoadedModule
 	Schemas  map[string]cue.Value
 	Metadata map[string]SchemaMetadata
+	Sources  map[string]string
+	Shadowed map[string][]string
 	// Errors lists the packages (or whole paths) that failed to load, and
 	// schemas that loaded but failed integrity checks.
 	Errors []SchemaLoadError
@@ -37,6 +39,8 @@ func LoadSchemaSet(schemaPaths []string) *SchemaSet {
 		Modules:  make(map[string]*LoadedModule),
 		Schemas:  make(map[string]cue.Value),
 		Metadata: make(map[string]SchemaMetadata),
+		Sources:  make(map[string]string),
+		Shadowed: make(map[string][]string),
 	}
 	moduleRoots := make(map[string]string)
 
@@ -63,6 +67,9 @@ func LoadSchemaSet(schemaPaths []string) *SchemaSet {
 		for name, val := range loader.GetAllSchemas(modules) {
 			if _, exists := set.Schemas[name]; !exists {
 				set.Schemas[name] = val
+				set.Sources[name] = sp
+			} else if set.Sources[name] != sp {
+				set.Shadowed[name] = append(set.Shadowed[name], sp)
 			}
 		}
 		for name, meta := range loader.GetAllMetadata(modules) {

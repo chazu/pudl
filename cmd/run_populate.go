@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/idgen"
 	"os"
 	"path/filepath"
 	"strings"
@@ -136,7 +138,7 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 	if err != nil {
 		return nil, err
 	}
-	projectLock, err := acquireMuProjectLock(muRoot)
+	projectLock, err := acquireMuProjectLockContext(runOperationContext(mu), muRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -160,6 +162,7 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 	}
 
 	count, snapshotID, err := ingestPopulateOutput(cat, stdout, populateIngest{
+		ctx:        runOperationContext(mu),
 		snapshotID: snapshotID0,
 		runID:      runID,
 		model:      m.Name,
@@ -361,9 +364,10 @@ func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, mo
 		if err != nil {
 			return nil, fmt.Errorf("read ewe output %q: %w", out, err)
 		}
-		var arr []any
-		if err := json.Unmarshal(data, &arr); err != nil {
-			return nil, fmt.Errorf("ewe output %q is not a JSON records array: %w", out, err)
+		decoded, err := idgen.DecodeJSONExact(data)
+		arr, ok := decoded.([]any)
+		if err != nil || !ok {
+			return nil, fmt.Errorf("ewe output %q is not a JSON records array", out)
 		}
 		results = append(results, mubridge.ObserveResult{
 			Target:  target,
@@ -376,6 +380,7 @@ func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, mo
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
 	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{
+		ctx:        runOperationContext(mu),
 		snapshotID: snapshotID0,
 		runID:      runID,
 		model:      m.Name,
@@ -415,6 +420,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	}
 	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
 		Reader:         bytes.NewReader(observeJSON),
+		Context:        in.ctx,
 		DataDir:        cfg.DataPath,
 		Graph:          inferrer.GetInheritanceGraph(),
 		Inferrer:       inferrer,
@@ -431,6 +437,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 
 // populateIngest is the provenance a populate phase attaches to its snapshot.
 type populateIngest struct {
+	ctx        context.Context
 	snapshotID string
 	runID      string
 	model      string
