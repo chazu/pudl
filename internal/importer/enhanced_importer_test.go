@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/chazu/pudl/internal/streaming"
 	"github.com/chazu/pudl/test/testutil"
 )
 
@@ -83,8 +82,7 @@ func TestImport_JSON(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := ImportOptions{
-		SourcePath:   jsonFile,
-		UseStreaming: false,
+		SourcePath: jsonFile,
 	}
 
 	result, err := imp.ImportFileWithFriendlyIDs(opts)
@@ -141,22 +139,7 @@ func TestImport_WithStreaming(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := ImportOptions{
-		SourcePath:   largeFile,
-		UseStreaming: true,
-		StreamingConfig: &streaming.StreamingConfig{
-			ChunkAlgorithm: "fastcdc",
-			MinChunkSize:   512,
-			MaxChunkSize:   2048,
-			AvgChunkSize:   1024,
-			BufferSize:     4096,
-			MaxMemoryMB:    10,
-			ErrorTolerance: 0.1,
-			SkipMalformed:  true,
-			SampleSize:     100,
-			Confidence:     0.8,
-			ReportEveryMB:  1,
-			MaxConcurrency: 0,
-		},
+		SourcePath: largeFile,
 	}
 
 	result, err := imp.ImportFileWithFriendlyIDs(opts)
@@ -323,8 +306,7 @@ func TestImportNDJSON_LinuxSchemaRouting(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := imp.ImportFileWithFriendlyIDs(ImportOptions{
-		SourcePath:      ndjsonFile,
-		StreamingConfig: streaming.DefaultStreamingConfig(),
+		SourcePath: ndjsonFile,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -391,8 +373,7 @@ func TestImport_NDJSONUsesNDJSONPath(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := imp.ImportFileWithFriendlyIDs(ImportOptions{
-		SourcePath:      ndjsonFile,
-		StreamingConfig: streaming.DefaultStreamingConfig(),
+		SourcePath: ndjsonFile,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)

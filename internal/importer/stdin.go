@@ -83,18 +83,14 @@ func IsStdinAvailable() bool {
 	return (stat.Mode() & os.ModeCharDevice) == 0
 }
 
-// GetStdinFilename generates a filename for stdin data
-// Uses the provided format or detects it from content
-func GetStdinFilename(format string) string {
-	if format == "" || format == "unknown" {
-		format = "json" // Default to JSON for stdin
+// StdinExtension returns the file extension stdin data of the given format is
+// staged under, so extension-based format detection sees the declared format.
+// Unknown and empty formats default to JSON.
+func StdinExtension(format string) string {
+	switch format {
+	case "yaml", "csv", "ndjson":
+		return "." + format
+	default:
+		return ".json"
 	}
-
-	// Create a filename based on format
-	ext := "." + format
-	if format == "ndjson" {
-		ext = ".json" // NDJSON files have .json extension
-	}
-
-	return "stdin" + ext
 }

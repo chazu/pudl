@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +12,7 @@ import (
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
 )
 
@@ -182,7 +182,7 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 	}
 
 	// Load data from stored path
-	data, err := loadReinferData(entry.StoredPath)
+	data, err := loadReinferData(entry.StoredPath, entry.Format)
 	if err != nil {
 		return errors.NewSystemError(fmt.Sprintf("Failed to load data from %s", entry.StoredPath), err)
 	}
@@ -275,7 +275,7 @@ func analyzeReinferChanges(entries []database.CatalogEntry, catalogDB *database.
 		proquint := idgen.HashToProquint(entry.ID)
 
 		// Load data
-		data, err := loadReinferData(entry.StoredPath)
+		data, err := loadReinferData(entry.StoredPath, entry.Format)
 		if err != nil {
 			changes.errors = append(changes.errors, fmt.Sprintf("%s: failed to load data", proquint))
 			continue
@@ -410,17 +410,18 @@ func recomputeEntryIdentity(entry *database.CatalogEntry, data interface{}, infe
 	}
 }
 
-// loadReinferData loads data from a stored file path for re-inference
-func loadReinferData(storedPath string) (interface{}, error) {
-	data, err := os.ReadFile(storedPath)
+// loadReinferData decodes a stored file for re-inference with the same decoder
+// the import used, so YAML, CSV and NDJSON entries are classified from their
+// parsed records rather than from their raw text (which only the catchall
+// matches). Entries stored compressed by older imports are decompressed first.
+func loadReinferData(storedPath, format string) (interface{}, error) {
+	plainPath, err := importer.DecompressFile(storedPath)
 	if err != nil {
 		return nil, err
 	}
-
-	var jsonData interface{}
-	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return string(data), nil
+	if plainPath != storedPath {
+		defer os.Remove(plainPath)
 	}
-
-	return jsonData, nil
+	data, _, err := importer.DecodeFile(plainPath, format)
+	return data, err
 }

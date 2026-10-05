@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -299,7 +300,7 @@ func TestAnalyzeData_JSON(t *testing.T) {
 				require.True(t, ok, "Data should be a map")
 				assert.Equal(t, "test-item", dataMap["name"])
 				assert.Equal(t, "example", dataMap["type"])
-				assert.Equal(t, float64(42), dataMap["count"])
+				assert.Equal(t, json.Number("42"), dataMap["count"])
 			},
 		},
 		{
@@ -330,8 +331,8 @@ func TestAnalyzeData_JSON(t *testing.T) {
 			// Create test file
 			filePath := setup.WriteFile("test.json", tt.content)
 
-			// Test data analysis using streaming
-			data, count, err := importer.analyzeDataStreaming(filePath, "json", nil)
+			// Decode the file the way an import does
+			data, count, err := importer.analyzeData(filePath, "json")
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -379,8 +380,8 @@ func TestAnalyzeData_YAML(t *testing.T) {
 			// Create test file
 			filePath := setup.WriteFile("test.yaml", tt.content)
 
-			// Test data analysis using streaming
-			data, count, err := importer.analyzeDataStreaming(filePath, "yaml", nil)
+			// Decode the file the way an import does
+			data, count, err := importer.analyzeData(filePath, "yaml")
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -405,8 +406,8 @@ func TestAnalyzeData_CSV(t *testing.T) {
 	// Create test file
 	filePath := setup.WriteFile("test.csv", fixtures.CSVData())
 
-	// Test data analysis using streaming
-	data, count, err := importer.analyzeDataStreaming(filePath, "csv", nil)
+	// Decode the file the way an import does
+	data, count, err := importer.analyzeData(filePath, "csv")
 	require.NoError(t, err)
 
 	// CSV should return 3 records (excluding header)
@@ -430,8 +431,8 @@ func TestAnalyzeData_UnknownFormat(t *testing.T) {
 	// Create test file with unknown format
 	filePath := setup.WriteFile("test.bin", "binary data")
 
-	// Test data analysis using streaming
-	data, count, err := importer.analyzeDataStreaming(filePath, "unknown", nil)
+	// Decode the file the way an import does
+	data, count, err := importer.analyzeData(filePath, "unknown")
 	require.NoError(t, err)
 
 	// Unknown format should return basic info
