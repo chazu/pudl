@@ -130,6 +130,7 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 			Name:      "Orphaned Files",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckOrphanedFilesAt(pudlDir) },
 		},
+		{Name: "Datalog Rules", CheckFunc: func() *doctor.CheckResult { return doctor.CheckRulesAt(queryRulePaths(pudlDir)...) }},
 	}
 }
 

@@ -22,6 +22,11 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 		return nil, fmt.Errorf("relation %q is a join-only built-in (catalog) relation: reference it in a rule body, or list catalog entries directly instead of querying it", relation)
 	}
 
+	rules, err := rulesForQuery(rules, relation)
+	if err != nil {
+		return nil, err
+	}
+
 	recursive, nonRecursive := PartitionRules(rules)
 
 	// Aggregation is compiled to SQL GROUP BY and is only defined for

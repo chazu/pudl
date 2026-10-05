@@ -63,12 +63,13 @@ func loadRulesFromDir(ctx *cue.Context, dir string) ([]Rule, error) {
 			continue
 		}
 
-		data, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		path := filepath.Join(dir, entry.Name())
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
 
-		fileRules, err := ParseRules(ctx, string(data))
+		fileRules, err := parseRules(ctx, string(data), path)
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %w", entry.Name(), err)
 		}
@@ -85,9 +86,22 @@ func ParseRulesFromSource(source string) ([]Rule, error) {
 }
 
 // ParseRules extracts Rule values from a CUE source string.
-// Each top-level field with a "head" and "body" is treated as a rule.
+//
+// A top-level struct field with a "head" or a "body" is a rule. Other fields are
+// ignored. A rule that cannot be read as written is returned with LoadErr set
+// (see Rule) instead of being skipped; only a source that does not compile at
+// all is an error.
 func ParseRules(ctx *cue.Context, source string) ([]Rule, error) {
-	v := ctx.CompileString(source)
+	return parseRules(ctx, source, "")
+}
+
+// parseRules is ParseRules with a filename for source positions.
+func parseRules(ctx *cue.Context, source, filename string) ([]Rule, error) {
+	var opts []cue.BuildOption
+	if filename != "" {
+		opts = append(opts, cue.Filename(filename))
+	}
+	v := ctx.CompileString(source, opts...)
 	if v.Err() != nil {
 		return nil, fmt.Errorf("CUE compile: %w", v.Err())
 	}
@@ -102,9 +116,12 @@ func ParseRules(ctx *cue.Context, source string) ([]Rule, error) {
 
 	for iter.Next() {
 		fieldVal := iter.Value()
-		rule, err := extractRule(iter.Selector().String(), fieldVal)
-		if err != nil {
-			continue // skip non-rule fields
+		if !looksLikeRule(fieldVal) {
+			continue
+		}
+		rule := extractRule(iter.Selector().String(), fieldVal)
+		if rule.LoadErr == nil {
+			rule.LoadErr = checkRule(rule)
 		}
 		rules = append(rules, rule)
 	}
@@ -112,47 +129,72 @@ func ParseRules(ctx *cue.Context, source string) ([]Rule, error) {
 	return rules, nil
 }
 
-// extractRule converts a CUE value into a Rule.
-func extractRule(fieldName string, v cue.Value) (Rule, error) {
-	headVal := v.LookupPath(cue.ParsePath("head"))
-	bodyVal := v.LookupPath(cue.ParsePath("body"))
-
-	if headVal.Err() != nil || bodyVal.Err() != nil {
-		return Rule{}, fmt.Errorf("not a rule: missing head or body")
+// looksLikeRule reports whether a top-level field is meant to be a rule: a
+// struct with a head or a body. Anything else (constants, helper values) is not
+// a rule and is ignored.
+func looksLikeRule(v cue.Value) bool {
+	if v.IncompleteKind() != cue.StructKind {
+		return false
 	}
+	return v.LookupPath(cue.ParsePath("head")).Exists() || v.LookupPath(cue.ParsePath("body")).Exists()
+}
 
-	// Extract name (optional)
-	name := fieldName
-	if nameVal := v.LookupPath(cue.ParsePath("name")); nameVal.Err() == nil {
+// extractRule converts a CUE value into a Rule. A rule that cannot be read is
+// returned with LoadErr set and as much of its head as could be read.
+func extractRule(fieldName string, v cue.Value) Rule {
+	rule := Rule{Name: fieldName, Source: positionOf(v)}
+
+	if nameVal := v.LookupPath(cue.ParsePath("name")); nameVal.Exists() {
 		if s, err := nameVal.String(); err == nil {
-			name = s
+			rule.Name = s
 		}
 	}
 
+	fail := func(err error) Rule {
+		rule.LoadErr = err
+		return rule
+	}
+
+	headVal := v.LookupPath(cue.ParsePath("head"))
+	if !headVal.Exists() {
+		return fail(fmt.Errorf("missing head"))
+	}
+	if rel, err := headVal.LookupPath(cue.ParsePath("rel")).String(); err == nil {
+		rule.Head.Rel = rel
+	}
 	head, err := extractAtom(headVal)
 	if err != nil {
-		return Rule{}, fmt.Errorf("bad head: %w", err)
+		return fail(fmt.Errorf("bad head: %w", err))
 	}
+	rule.Head = head
 
+	bodyVal := v.LookupPath(cue.ParsePath("body"))
+	if !bodyVal.Exists() {
+		return fail(fmt.Errorf("missing body"))
+	}
 	bodyList, err := bodyVal.List()
 	if err != nil {
-		return Rule{}, fmt.Errorf("body not a list: %w", err)
+		return fail(fmt.Errorf("body not a list: %w", err))
 	}
 
-	var body []Atom
-	for bodyList.Next() {
+	for i := 0; bodyList.Next(); i++ {
 		atom, err := extractAtom(bodyList.Value())
 		if err != nil {
-			return Rule{}, fmt.Errorf("bad body atom: %w", err)
+			return fail(fmt.Errorf("bad body atom %d: %w", i, err))
 		}
-		body = append(body, atom)
+		rule.Body = append(rule.Body, atom)
 	}
 
-	if len(body) == 0 {
-		return Rule{}, fmt.Errorf("empty body")
-	}
+	return rule
+}
 
-	return Rule{Name: name, Head: head, Body: body}, nil
+// positionOf renders a CUE value's source position, or "" when unknown.
+func positionOf(v cue.Value) string {
+	pos := v.Pos()
+	if !pos.IsValid() {
+		return ""
+	}
+	return pos.String()
 }
 
 // extractAtom converts a CUE value into an Atom.
@@ -160,7 +202,7 @@ func extractAtom(v cue.Value) (Atom, error) {
 	relVal := v.LookupPath(cue.ParsePath("rel"))
 	argsVal := v.LookupPath(cue.ParsePath("args"))
 
-	if relVal.Err() != nil {
+	if !relVal.Exists() {
 		return Atom{}, fmt.Errorf("missing rel")
 	}
 
