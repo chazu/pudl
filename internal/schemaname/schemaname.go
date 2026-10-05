@@ -25,7 +25,31 @@ var versionSuffixRegex = regexp.MustCompile(`@v\d+`)
 //	"aws/ec2:#Instance"                 → "aws/ec2.#Instance"
 //	"aws/ec2.#Instance"                 → "aws/ec2.#Instance"
 //	"core.#Item"                        → "pudl/core.#Item"
+//	"core.Item"                         → "pudl/core.#Item"
+//
+// Normalize is idempotent: a canonical name normalizes to itself. One pass of
+// the steps is not enough on its own, because a later step can create input an
+// earlier step rewrites ("core.Item" only gains its "#" after the legacy-prefix
+// check has run), so the steps repeat until the name stops changing. Each pass
+// either shortens the name or completes a definition marker or prefix, so this
+// settles within a few passes.
 func Normalize(name string) string {
+	for i := 0; i < maxNormalizePasses; i++ {
+		next := normalizeOnce(name)
+		if next == name {
+			break
+		}
+		name = next
+	}
+	return name
+}
+
+// maxNormalizePasses bounds Normalize's fixed-point loop; real names settle in
+// one or two passes.
+const maxNormalizePasses = 16
+
+// normalizeOnce applies one pass of the normalization steps.
+func normalizeOnce(name string) string {
 	if name == "" {
 		return ""
 	}
@@ -37,8 +61,8 @@ func Normalize(name string) string {
 	name = versionSuffixRegex.ReplaceAllString(name, "")
 
 	// Step 3: Convert ":" separator to "."
-	name = strings.Replace(name, ":#", ".#", 1)
-	name = strings.Replace(name, ":", ".#", 1) // Handle case without # after :
+	name = strings.ReplaceAll(name, ":#", ".#")
+	name = strings.ReplaceAll(name, ":", ".#") // Handle case without # after :
 
 	// Step 4: Handle legacy short names (core.#Item -> pudl/core.#Item)
 	if strings.HasPrefix(name, "core.#") {
