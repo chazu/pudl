@@ -1,12 +1,9 @@
 package cmd
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/chazu/pudl/internal/acute"
@@ -38,7 +35,7 @@ type preparedMutationMember struct {
 	expectedMuPlanSHA256 string
 }
 
-func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetReport, stored *acute.RunSetMutationPlan, request runSetMutationRequest) (*acute.RunSetPlan, *runSetExecutionContext, error) {
+func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetReport, stored *acute.RunSetMutationPlan, request runSetMutationRequest, mu muRunner) (*acute.RunSetPlan, *runSetExecutionContext, error) {
 	selected := make([]acute.RunSetModel, 0, len(request.Models))
 	for _, requested := range request.Models {
 		template, _, _, err := resolveModelTemplate(requested)
@@ -60,7 +57,7 @@ func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetRepor
 	aliases := make(map[string][]string, len(graph.Models))
 	pinned := map[string]wiring.PinnedProducerSnapshot{}
 	context := &runSetExecutionContext{
-		runSetID: report.RunSetID, successfulRuns: map[string]wiring.ProducerRun{},
+		runSetID: report.RunSetID, mu: mu, successfulRuns: map[string]wiring.ProducerRun{},
 		successfulModels: map[string]*systemmodel.SystemModel{}, snapshotIDs: map[string]string{},
 		modelDirs: map[string]string{}, bindingEvidence: map[string][]wiring.BindingEvidence{},
 		sealedEvidence: map[string][]wiring.SealedBindingEvidence{}, aliases: aliases,
@@ -199,7 +196,7 @@ func continueMutatingRunSet(db *database.CatalogDB, graph *acute.RunSetPlan, rep
 		return err
 	}
 	report.ApprovalStatus = "not-required"
-	return executePreparedMutationPlan(db, report, mutationPlan, prepared)
+	return executePreparedMutationPlan(db, context.mu, report, mutationPlan, prepared)
 }
 
 func printRunSetApprovalReview(plan *acute.RunSetMutationPlan, context *runSetExecutionContext) {
@@ -295,7 +292,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 				}
 				reconcile, err = setupReconcileWorkspace(
 					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
-					runMuRunnerFactory(), model, memberRoot, context.modelDirs[name], run.RunID, true,
+					context.mu, model, memberRoot, context.modelDirs[name], run.RunID, true,
 				)
 				if err != nil {
 					return nil, nil, fmt.Errorf("revalidate mutation for %q: %w", name, err)
@@ -329,7 +326,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 			if reconcile == nil {
 				reconcile, err = setupReconcileWorkspace(
 					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
-					runMuRunnerFactory(), model, member.muRoot, member.modelDir, member.runID, true,
+					context.mu, model, member.muRoot, member.modelDir, member.runID, true,
 				)
 				if err != nil {
 					return nil, nil, fmt.Errorf("plan mutation for %q: %w", name, err)
@@ -379,180 +376,6 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 	}, prepared, nil
 }
 
-func canonicalMutationPlan(plan []byte, stagingDir string) ([]byte, error) {
-	document, _, err := validateMuMutationPlan(plan)
-	if err != nil {
-		return nil, err
-	}
-	canonical := canonicalPlanValue(document, stagingDir)
-	payload, err := json.Marshal(canonical)
-	if err != nil {
-		return nil, fmt.Errorf("encode canonical mu plan: %w", err)
-	}
-	return payload, nil
-}
-
-func canonicalPlanValue(value any, stagingDir string) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(typed))
-		for key, item := range typed {
-			if key == "action_key" || key == "plan_sha256" {
-				continue
-			}
-			out[canonicalPlanString(key, stagingDir)] = canonicalPlanValue(item, stagingDir)
-		}
-		return out
-	case []any:
-		out := make([]any, len(typed))
-		for index, item := range typed {
-			out[index] = canonicalPlanValue(item, stagingDir)
-		}
-		return out
-	case string:
-		return canonicalPlanString(typed, stagingDir)
-	default:
-		return value
-	}
-}
-
-func validateMuMutationPlan(plan []byte) (any, string, error) {
-	var document any
-	decoder := json.NewDecoder(strings.NewReader(string(plan)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&document); err != nil {
-		return nil, "", fmt.Errorf("decode mu JSON plan: %w", err)
-	}
-	root, ok := document.(map[string]any)
-	if !ok {
-		return nil, "", fmt.Errorf("mu JSON plan must be an object")
-	}
-	version, ok := root["version"].(json.Number)
-	if !ok || version.String() != "2" {
-		return nil, "", fmt.Errorf("mu JSON plan version must be exactly 2")
-	}
-	digest, ok := root["plan_sha256"].(string)
-	if !ok || len(digest) != sha256.Size*2 {
-		return nil, "", fmt.Errorf("mu JSON plan is missing a valid plan_sha256")
-	}
-	plugins, exists := root["plugins"].([]any)
-	if !exists {
-		return nil, "", fmt.Errorf("mu JSON plan v2 is missing plugin identities")
-	}
-	for index, item := range plugins {
-		identity, ok := item.(map[string]any)
-		if !ok || stringField(identity, "name") == "" || stringField(identity, "digest") == "" || stringField(identity, "version") == "" {
-			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks immutable name, digest, or version identity", index)
-		}
-		protocol, ok := identity["protocol_version"].(json.Number)
-		if !ok || protocol.String() == "0" {
-			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks protocol identity", index)
-		}
-		if _, ok := identity["capabilities"].([]any); !ok {
-			return nil, "", fmt.Errorf("mu JSON plan plugin %d lacks capability identity", index)
-		}
-	}
-	actions, ok := root["actions"].([]any)
-	if !ok {
-		return nil, "", fmt.Errorf("mu JSON plan v2 is missing actions")
-	}
-	for index, item := range actions {
-		action, ok := item.(map[string]any)
-		if !ok || stringField(action, "id") == "" || stringField(action, "action_key") == "" {
-			return nil, "", fmt.Errorf("mu JSON plan action %d lacks id or action_key", index)
-		}
-		for _, field := range []string{"command", "inputs", "outputs", "depends_on"} {
-			if _, exists := action[field]; !exists {
-				return nil, "", fmt.Errorf("mu JSON plan action %d lacks required %s field", index, field)
-			}
-		}
-	}
-
-	delete(root, "plan_sha256")
-	payload, err := json.Marshal(root)
-	if err != nil {
-		return nil, "", fmt.Errorf("encode mu JSON plan identity: %w", err)
-	}
-	actual := sha256.Sum256(payload)
-	if hex.EncodeToString(actual[:]) != digest {
-		return nil, "", fmt.Errorf("mu JSON plan_sha256 does not match its plan content")
-	}
-	root["plan_sha256"] = digest
-	return document, digest, nil
-}
-
-func stringField(value map[string]any, key string) string {
-	text, _ := value[key].(string)
-	return text
-}
-
-func canonicalPlanString(value, stagingDir string) string {
-	if stagingDir == "" {
-		return value
-	}
-	return strings.ReplaceAll(value, stagingDir, "<pudl-reconcile-workspace>")
-}
-
-type plannedMuActions struct {
-	Actions []struct {
-		ID            string            `json:"id"`
-		SealedInputs  map[string]string `json:"sealed_inputs,omitempty"`
-		SealedOutputs map[string]string `json:"sealed_outputs,omitempty"`
-	} `json:"actions"`
-}
-
-func annotateSealedActionClaims(report *RunReport, plan []byte, model *systemmodel.SystemModel) error {
-	var document plannedMuActions
-	if err := json.Unmarshal(plan, &document); err != nil {
-		return fmt.Errorf("decode mu JSON plan: %w", err)
-	}
-	for _, action := range document.Actions {
-		for _, ref := range modelSealedReferences(model) {
-			if strings.Contains(action.ID, ref) {
-				return fmt.Errorf("mu plan action id contains a sealed provider reference")
-			}
-		}
-	}
-	if len(report.SealedBindings) == 0 {
-		return nil
-	}
-	for index := range report.SealedBindings {
-		evidence := &report.SealedBindings[index]
-		switch evidence.Direction {
-		case "input":
-			if evidence.ConsumerPhase != "converge" {
-				continue
-			}
-			for _, action := range document.Actions {
-				if _, claimed := action.SealedInputs[evidence.Input]; claimed {
-					evidence.ClaimingActionIDs = append(evidence.ClaimingActionIDs, action.ID)
-				}
-			}
-			sort.Strings(evidence.ClaimingActionIDs)
-			if len(evidence.ClaimingActionIDs) == 0 {
-				return fmt.Errorf("converge sealed input %q has no claiming action", evidence.Input)
-			}
-		case "output":
-			if evidence.ProducerPhase != "converge" {
-				continue
-			}
-			for _, action := range document.Actions {
-				if _, claimed := action.SealedOutputs[evidence.Output]; !claimed {
-					continue
-				}
-				if evidence.ProducingActionID != "" {
-					return fmt.Errorf("converge sealed output %q has multiple producing actions", evidence.Output)
-				}
-				evidence.ProducingActionID = action.ID
-			}
-			if evidence.ProducingActionID == "" {
-				return fmt.Errorf("converge sealed output %q has no producing action", evidence.Output)
-			}
-		}
-	}
-	return nil
-}
-
 func mutationMuRoot(requested, modelDir string) (string, error) {
 	if requested != "" {
 		return requested, nil
@@ -587,7 +410,7 @@ func prepareMutationMemberRuns(db *database.CatalogDB, report *acute.RunSetRepor
 	return nil
 }
 
-func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
+func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
 	cat := &runCatalog{dir: effectivePudlDir(), opened: true, db: db}
 	results := make(map[string]string, len(report.Members))
 	for _, member := range report.Members {
@@ -615,43 +438,14 @@ func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetRep
 
 		member.report.PendingApproval = false
 		member.report.ApprovalStatus = report.ApprovalStatus
-		budget := resolveApplyBudget(cat, name, runFlags{
-			converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
-		}, !jsonOutput)
-		convergeReport, runErr := runConvergeLoopExact(
-			cat, runMuRunnerFactory(), member.model, member.muRoot, member.modelDir,
-			member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
-		)
-		member.report.Converge = convergeReport
-		applyRunError(member.report, runErr)
+		runErr, err := executeMutationMember(cat, mu, plan, member)
+		if err != nil {
+			return err
+		}
 		status := database.RunStatusSucceeded
-		if runErr != nil || convergeReport == nil || convergeReport.Outcome != string(outcomeClean) {
+		if runErr != nil {
 			status = database.RunStatusFailed
 			mutationFailed = true
-			if runErr == nil {
-				runErr = fmt.Errorf("convergence ended %s", convergeReport.Outcome)
-				applyRunError(member.report, runErr)
-			}
-		} else {
-			member.report.CompletionStatus = status
-		}
-		if convergeReport != nil && len(convergeReport.MutationReceipts) > 0 {
-			advanceSealedLifecycle(member.report)
-		}
-		verdict := runVerdict(member.report, runFlags{converge: true})
-		conclusion := database.RunConclusion{CompletionStatus: status, Verdict: verdict}
-		if convergeReport != nil {
-			conclusion.Outcome = convergeReport.Outcome
-			conclusion.NeedsVerification = convergeReport.NeedsVerification
-		}
-		if runErr != nil {
-			conclusion.Note = runErr.Error()
-		}
-		if err := db.FinishRun(member.runID, conclusion); err != nil {
-			return err
-		}
-		if err := saveMemberRunReport(db, member.report); err != nil {
-			return err
 		}
 		updateRunSetMember(report, name, status, errorString(runErr))
 		results[name] = status
@@ -677,6 +471,59 @@ func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetRep
 		return fmt.Errorf("run set %s failed", report.RunSetID)
 	}
 	return nil
+}
+
+// executeMutationMember converges one approved member, then concludes it
+// through finalizeRun exactly as a standalone converge run concludes: checks
+// run, the verdict is recorded on the model row, and a verified-clean member's
+// resources are promoted from `converging`. runErr is the member's outcome
+// (non-nil means the member failed); err aborts the set.
+func executeMutationMember(cat *runCatalog, mu muRunner, plan *acute.RunSetMutationPlan, member *preparedMutationMember) (runErr error, err error) {
+	live := !jsonOutput
+	flags := runFlags{
+		converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
+	}
+	// As for a standalone converge: the model's previous verdict stops being
+	// trustworthy once mutation may begin, so a crash leaves `unknown`.
+	persistRunStatus(cat, member.model.Name, "unknown", live)
+
+	budget := resolveApplyBudget(cat, member.model.Name, flags, live)
+	convergeReport, runErr := runConvergeLoopExact(
+		cat, mu, member.model, member.muRoot, member.modelDir,
+		member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
+	)
+	member.report.Converge = convergeReport
+	if runErr == nil && (convergeReport == nil || convergeReport.Outcome != string(outcomeClean)) {
+		outcome := "without a report"
+		if convergeReport != nil {
+			outcome = convergeReport.Outcome
+		}
+		runErr = fmt.Errorf("convergence ended %s", outcome)
+	}
+	if convergeReport != nil && len(convergeReport.MutationReceipts) > 0 {
+		advanceSealedLifecycle(member.report)
+	}
+
+	state := runFinishState{}
+	fin, checkErr := finalizeRun(runFinalizeInput{
+		cat: cat, model: member.model, effective: member.model, modelDir: member.modelDir,
+		runID: member.runID, flags: flags, live: live,
+	}, member.report, &state, runErr)
+	runErr = fin.runErr
+	if checkErr != nil {
+		// The mutation already happened; failing to evaluate its checks fails the
+		// member rather than abandoning the set with unfinished run rows.
+		runErr = fmt.Errorf("evaluate checks: %w", checkErr)
+		applyRunError(member.report, runErr)
+	}
+
+	if err := cat.db.FinishRun(member.runID, runConclusion(state, runErr)); err != nil {
+		return runErr, err
+	}
+	if err := saveMemberRunReport(cat.db, member.report); err != nil {
+		return runErr, err
+	}
+	return runErr, nil
 }
 
 func finishUnstartedMutationMember(db *database.CatalogDB, report *acute.RunSetReport, member *preparedMutationMember, status, note string) error {
