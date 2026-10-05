@@ -41,7 +41,9 @@ var (
 	factsSource    string
 	factsAsOfValid string
 	factsAsOfTx    string
+	factsAsOfTxSeq int64
 	factsVerbose   bool
+	factsShowExact bool
 )
 
 var factsListCmd = &cobra.Command{
@@ -54,8 +56,12 @@ Temporal modes (determined by which flags are set):
   --as-of-valid    What was true at a point in time (current knowledge)
   --as-of-tx       What we believed at a point in time
   (both)           What we believed at --as-of-tx about what was true at --as-of-valid
+  --as-of-tx-seq   What we believed right after write sequence N (exact; use
+                   instead of --as-of-tx to separate writes in the same second)
 
 Time format: RFC3339 (e.g. 2026-04-01T14:30:00Z) or Unix timestamp.
+--as-of-tx means the state after every write during or before that second, so
+a fact recorded and retracted within one second appears only by sequence.
 
 Examples:
     pudl facts list --relation observation
@@ -86,6 +92,13 @@ Examples:
 			}
 			filter.TxAt = &t
 		}
+		if cmd.Flags().Changed("as-of-tx-seq") {
+			if filter.TxAt != nil {
+				return fmt.Errorf("use --as-of-tx or --as-of-tx-seq, not both")
+			}
+			seq := factsAsOfTxSeq
+			filter.TxSeqAt = &seq
+		}
 
 		// Open database
 		configDir := effectivePudlDir()
@@ -102,7 +115,7 @@ Examples:
 
 		// Filter by source if specified (post-query filter)
 		if factsSource != "" {
-			var filtered []database.Fact
+			filtered := []database.Fact{}
 			for _, f := range facts {
 				if f.Source == factsSource {
 					filtered = append(filtered, f)
@@ -146,9 +159,19 @@ func printFact(f database.Fact, verbose bool) {
 		fmt.Println()
 		fmt.Printf("Tx:       %s", time.Unix(f.TxStart, 0).Format(time.RFC3339))
 		if f.TxEnd != nil {
-			fmt.Printf(" → %s (retracted)", time.Unix(*f.TxEnd, 0).Format(time.RFC3339))
+			// A closed belief was either retracted or superseded by an
+			// invalidation; `facts show` names the successor when there is one.
+			fmt.Printf(" → %s (no longer believed)", time.Unix(*f.TxEnd, 0).Format(time.RFC3339))
 		}
 		fmt.Println()
+		fmt.Printf("Seq:      %d", f.TxSeq)
+		if f.TxEndSeq != nil {
+			fmt.Printf(" → %d", *f.TxEndSeq)
+		}
+		fmt.Println()
+		if f.Supersedes != "" {
+			fmt.Printf("Supersedes: %s\n", f.Supersedes)
+		}
 		if f.Provenance != "" {
 			fmt.Printf("Prov:     %s\n", f.Provenance)
 		}
@@ -226,14 +249,17 @@ var factsShowCmd = &cobra.Command{
 
 Accepts the full 64-character hex ID or a unique prefix.
 
+Invalidation records a new version of a fact rather than rewriting the old
+one. An ID of a superseded version shows the fact's newest version; pass
+--exact to show the version the ID names as it was recorded.
+
 Examples:
     pudl facts show c0b4392d347aca8e517c9bb8775a78951c6214e07f04f9168dbe3fbfa862e32a
     pudl facts show c0b4392d347a
+    pudl facts show c0b4392d347a --exact
     pudl facts show c0b4392d347a --json`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		id := args[0]
-
 		configDir := effectivePudlDir()
 		db, err := database.NewCatalogDB(configDir)
 		if err != nil {
@@ -241,13 +267,18 @@ Examples:
 		}
 		defer db.Close()
 
-		// Try exact match first, then prefix match
-		f, err := db.GetFact(id)
+		id, err := resolveFactID(db, args[0])
 		if err != nil {
-			f, err = db.GetFactByPrefix(id)
-			if err != nil {
-				return fmt.Errorf("fact not found: %s", id)
-			}
+			return err
+		}
+		var f *database.Fact
+		if factsShowExact {
+			f, err = db.GetFact(id)
+		} else {
+			f, err = db.LatestFactVersion(id)
+		}
+		if err != nil {
+			return fmt.Errorf("fact not found: %s", args[0])
 		}
 
 		if jsonOutput {
@@ -256,6 +287,9 @@ Examples:
 			return nil
 		}
 
+		if f.ID != id {
+			fmt.Printf("Version %s was superseded; showing the newest version.\n\n", id[:12])
+		}
 		printFact(*f, true)
 		return nil
 	},
@@ -301,11 +335,15 @@ Examples:
 var factsInvalidateCmd = &cobra.Command{
 	Use:   "invalidate <id>",
 	Short: "Invalidate a fact (mark as no longer true)",
-	Long: `Mark a fact as no longer valid by setting its valid end time.
+	Long: `Record that a fact stopped being true now.
 
 Use this when reality changed — the fact was correct when recorded but
 is no longer true. The fact remains visible in historical queries
 (--as-of-valid) but disappears from current queries.
+
+History is not rewritten: the recorded version is closed and a new version
+with a valid end time supersedes it, so --as-of-tx queries for earlier
+moments still show what was believed then. The new version's ID is printed.
 
 Examples:
     pudl facts invalidate c0b4392d347aca8e...`,
@@ -328,8 +366,12 @@ Examples:
 		if err := db.InvalidateFact(resolved); err != nil {
 			return fmt.Errorf("failed to invalidate: %w", err)
 		}
+		latest, err := db.LatestFactVersion(resolved)
+		if err != nil {
+			return fmt.Errorf("read invalidated fact: %w", err)
+		}
 
-		fmt.Printf("Invalidated fact %s\n", resolved[:12])
+		fmt.Printf("Invalidated fact %s (new version %s)\n", resolved[:12], latest.ID[:12])
 		return nil
 	},
 }
@@ -501,7 +543,9 @@ func init() {
 	factsListCmd.Flags().StringVar(&factsSource, "source", "", "Filter by source")
 	factsListCmd.Flags().StringVar(&factsAsOfValid, "as-of-valid", "", "Query valid time (RFC3339 or Unix timestamp)")
 	factsListCmd.Flags().StringVar(&factsAsOfTx, "as-of-tx", "", "Query transaction time (RFC3339 or Unix timestamp)")
+	factsListCmd.Flags().Int64Var(&factsAsOfTxSeq, "as-of-tx-seq", 0, "Query by write sequence instead of --as-of-tx (exact within one second)")
 	factsListCmd.Flags().BoolVarP(&factsVerbose, "verbose", "v", false, "Show full fact details")
+	factsShowCmd.Flags().BoolVar(&factsShowExact, "exact", false, "Show the version this ID names instead of the newest version")
 
 	factsListCmd.RegisterFlagCompletionFunc("relation", completeRelations)
 	factsListCmd.RegisterFlagCompletionFunc("source", completeSources)
