@@ -238,12 +238,12 @@ func FormatErrorForUser(err error) string {
 	}
 
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("Error: %s", pudlErr.Message))
+	fmt.Fprintf(&result, "Error: %s", pudlErr.Message)
 
 	if len(pudlErr.Suggestions) > 0 {
 		result.WriteString("\n\nSuggestions:")
 		for _, suggestion := range pudlErr.Suggestions {
-			result.WriteString(fmt.Sprintf("\n  • %s", suggestion))
+			fmt.Fprintf(&result, "\n  • %s", suggestion)
 		}
 	}
 

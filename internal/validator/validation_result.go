@@ -58,12 +58,12 @@ func (vr *ValidationResult) GetSummary() string {
 func (vr *ValidationResult) GetDetailedReport() string {
 	var report strings.Builder
 
-	report.WriteString(fmt.Sprintf("Intended Schema: %s\n", vr.IntendedSchema))
-	report.WriteString(fmt.Sprintf("Assigned Schema: %s\n", vr.AssignedSchema))
-	report.WriteString(fmt.Sprintf("Valid: %t\n", vr.Valid))
+	fmt.Fprintf(&report, "Intended Schema: %s\n", vr.IntendedSchema)
+	fmt.Fprintf(&report, "Assigned Schema: %s\n", vr.AssignedSchema)
+	fmt.Fprintf(&report, "Valid: %t\n", vr.Valid)
 
 	if vr.FallbackReason != "" {
-		report.WriteString(fmt.Sprintf("Fallback Reason: %s\n", vr.FallbackReason))
+		fmt.Fprintf(&report, "Fallback Reason: %s\n", vr.FallbackReason)
 	}
 
 	if len(vr.ChainAttempts) > 1 {
@@ -73,9 +73,9 @@ func (vr *ValidationResult) GetDetailedReport() string {
 			if attempt.Success {
 				status = "OK"
 			}
-			report.WriteString(fmt.Sprintf("   %d. [%s] %s", i+1, status, attempt.SchemaName))
+			fmt.Fprintf(&report, "   %d. [%s] %s", i+1, status, attempt.SchemaName)
 			if attempt.Reason != "" {
-				report.WriteString(fmt.Sprintf(" (%s)", attempt.Reason))
+				fmt.Fprintf(&report, " (%s)", attempt.Reason)
 			}
 			report.WriteString("\n")
 		}
@@ -84,9 +84,9 @@ func (vr *ValidationResult) GetDetailedReport() string {
 	if len(vr.ValidationErrors) > 0 {
 		report.WriteString("\nValidation Errors:\n")
 		for _, err := range vr.ValidationErrors {
-			report.WriteString(fmt.Sprintf("   %s: %s", err.Path, err.Message))
+			fmt.Fprintf(&report, "   %s: %s", err.Path, err.Message)
 			if err.SchemaName != "" {
-				report.WriteString(fmt.Sprintf(" (from %s)", err.SchemaName))
+				fmt.Fprintf(&report, " (from %s)", err.SchemaName)
 			}
 			report.WriteString("\n")
 		}

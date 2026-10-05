@@ -19,11 +19,6 @@ import (
 // inference graph (see schemaIdentityResolver); tests inject a stub.
 type identityResolver = acute.IdentityResolver
 
-// recordIdentity derives a stable match key for a record; see acute.RecordIdentity.
-func recordIdentity(rec map[string]any, identity identityResolver) (key string, label string, ok bool) {
-	return acute.RecordIdentity(rec, identity)
-}
-
 // modelResourceDefs returns the candidate catalog definition names for a model's
 // desired resources — the bare resource names that `ingest-manifest` keys
 // per-resource status on (targetToDefinition(action.Target)). Each desired record

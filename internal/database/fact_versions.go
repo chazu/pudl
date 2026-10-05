@@ -96,29 +96,8 @@ func backfillFactSequences(tx *sql.Tx) (int64, error) {
 		return 0, fmt.Errorf("read fact sequences: %w", err)
 	}
 
-	type event struct {
-		at     int64
-		closes bool
-		rowid  int64
-	}
-	rows, err := tx.Query(`SELECT rowid, tx_start, tx_end FROM facts WHERE tx_seq IS NULL`)
+	events, err := unsequencedFactEvents(tx)
 	if err != nil {
-		return 0, fmt.Errorf("read unsequenced facts: %w", err)
-	}
-	var events []event
-	for rows.Next() {
-		var rowid, txStart int64
-		var txEnd sql.NullInt64
-		if err := rows.Scan(&rowid, &txStart, &txEnd); err != nil {
-			rows.Close()
-			return 0, err
-		}
-		events = append(events, event{at: txStart, rowid: rowid})
-		if txEnd.Valid {
-			events = append(events, event{at: txEnd.Int64, closes: true, rowid: rowid})
-		}
-	}
-	if err := rows.Close(); err != nil {
 		return 0, err
 	}
 
@@ -231,4 +210,36 @@ func (c *CatalogDB) FactVersions(id string) ([]Fact, error) {
 	}
 	return nil, errors.WrapError(errors.ErrCodeDatabaseError,
 		fmt.Sprintf("fact %s: supersession chain exceeds %d versions", id, maxFactVersions), nil)
+}
+
+// factSequenceEvent is one transaction-time boundary of an unsequenced fact:
+// its tx_start, or its tx_end when closes is set.
+type factSequenceEvent struct {
+	at     int64
+	closes bool
+	rowid  int64
+}
+
+// unsequencedFactEvents reads the transaction-time boundaries of every fact that
+// has no tx_seq yet. The rows are closed before returning, so the caller can
+// issue further statements on the same transaction.
+func unsequencedFactEvents(tx *sql.Tx) ([]factSequenceEvent, error) {
+	rows, err := tx.Query(`SELECT rowid, tx_start, tx_end FROM facts WHERE tx_seq IS NULL`)
+	if err != nil {
+		return nil, fmt.Errorf("read unsequenced facts: %w", err)
+	}
+	defer rows.Close()
+	var events []factSequenceEvent
+	for rows.Next() {
+		var rowid, txStart int64
+		var txEnd sql.NullInt64
+		if err := rows.Scan(&rowid, &txStart, &txEnd); err != nil {
+			return nil, err
+		}
+		events = append(events, factSequenceEvent{at: txStart, rowid: rowid})
+		if txEnd.Valid {
+			events = append(events, factSequenceEvent{at: txEnd.Int64, closes: true, rowid: rowid})
+		}
+	}
+	return events, rows.Err()
 }

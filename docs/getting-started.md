@@ -7,7 +7,7 @@ you do not need a source checkout, scripts, mu, Python, or external credentials.
 
 ## 1. Install PUDL
 
-With Go 1.26.2 or newer installed, install the current development version, which
+With Go 1.26.6 or newer installed, install the current development version, which
 includes the bundled example command:
 
 ```bash

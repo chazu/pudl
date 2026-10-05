@@ -290,11 +290,13 @@ func (m *Manager) copyFile(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer destFile.Close()
 
 	// Copy file contents
-	_, err = destFile.ReadFrom(sourceFile)
-	if err != nil {
+	if _, err := destFile.ReadFrom(sourceFile); err != nil {
+		destFile.Close()
+		return err
+	}
+	if err := destFile.Close(); err != nil {
 		return err
 	}
 

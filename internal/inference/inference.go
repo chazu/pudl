@@ -20,7 +20,6 @@ type SchemaInferrer struct {
 	schemas     map[string]cue.Value
 	metadata    map[string]validator.SchemaMetadata
 	graph       *InheritanceGraph
-	ctx         *cue.Context
 	schemaPaths []string
 	loadErrors  []validator.SchemaLoadError
 	cycles      [][]string

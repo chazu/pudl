@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strconv"
 )
 
 // ComputeContentID generates a content-based ID from data using SHA256
@@ -35,11 +36,7 @@ func HashToProquint(hashHex string) string {
 		return GenerateRandomProquint()
 	}
 
-	// Parse hex to uint32
-	var num uint32
-	fmt.Sscanf(hashHex[:8], "%x", &num)
-
-	return NumberToProquint(num)
+	return NumberToProquint(hexPrefixUint32(hashHex))
 }
 
 // GenerateRandomProquint generates a random proquint ID
@@ -166,9 +163,7 @@ func HashToUint32(hashHex string) uint32 {
 		return 0
 	}
 
-	var num uint32
-	fmt.Sscanf(hashHex[:8], "%x", &num)
-	return num
+	return hexPrefixUint32(hashHex)
 }
 
 // Uint32ToHash converts a uint32 back to a partial hash string
@@ -177,4 +172,15 @@ func Uint32ToHash(num uint32) string {
 	bytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(bytes, num)
 	return fmt.Sprintf("%08x", num)
+}
+
+// hexPrefixUint32 parses the first 8 hex characters of hashHex (callers ensure
+// there are at least 8). A non-hex prefix yields 0, as the previous Sscanf-based
+// parse did.
+func hexPrefixUint32(hashHex string) uint32 {
+	n, err := strconv.ParseUint(hashHex[:8], 16, 32)
+	if err != nil {
+		return 0
+	}
+	return uint32(n)
 }

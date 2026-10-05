@@ -23,23 +23,23 @@ func NewTestFileGenerator() *TestFileGenerator {
 // GenerateAWSEC2Response creates synthetic AWS EC2 describe-instances response
 func (g *TestFileGenerator) GenerateAWSEC2Response(instanceCount int) string {
 	instances := make([]map[string]interface{}, instanceCount)
-	
+
 	for i := 0; i < instanceCount; i++ {
 		instances[i] = map[string]interface{}{
-			"InstanceId":   fmt.Sprintf("i-%016x", g.rand.Int63()),
-			"ImageId":      fmt.Sprintf("ami-%08x", g.rand.Int31()),
+			"InstanceId": fmt.Sprintf("i-%016x", g.rand.Int63()),
+			"ImageId":    fmt.Sprintf("ami-%08x", g.rand.Int31()),
 			"State": map[string]interface{}{
 				"Code": 16,
 				"Name": "running",
 			},
-			"PrivateDnsName": fmt.Sprintf("ip-%d-%d-%d-%d.ec2.internal", 
+			"PrivateDnsName": fmt.Sprintf("ip-%d-%d-%d-%d.ec2.internal",
 				g.rand.Intn(256), g.rand.Intn(256), g.rand.Intn(256), g.rand.Intn(256)),
 			"PublicDnsName": fmt.Sprintf("ec2-%d-%d-%d-%d.compute-1.amazonaws.com",
 				g.rand.Intn(256), g.rand.Intn(256), g.rand.Intn(256), g.rand.Intn(256)),
 			"StateTransitionReason": "",
-			"InstanceType": []string{"t3.micro", "t3.small", "t3.medium", "m5.large", "c5.xlarge"}[g.rand.Intn(5)],
-			"KeyName": fmt.Sprintf("test-key-%d", g.rand.Intn(10)),
-			"LaunchTime": time.Now().Add(-time.Duration(g.rand.Intn(168)) * time.Hour).Format(time.RFC3339),
+			"InstanceType":          []string{"t3.micro", "t3.small", "t3.medium", "m5.large", "c5.xlarge"}[g.rand.Intn(5)],
+			"KeyName":               fmt.Sprintf("test-key-%d", g.rand.Intn(10)),
+			"LaunchTime":            time.Now().Add(-time.Duration(g.rand.Intn(168)) * time.Hour).Format(time.RFC3339),
 			"Placement": map[string]interface{}{
 				"AvailabilityZone": []string{"us-east-1a", "us-east-1b", "us-east-1c"}[g.rand.Intn(3)],
 				"GroupName":        "",
@@ -65,13 +65,13 @@ func (g *TestFileGenerator) GenerateAWSEC2Response(instanceCount int) string {
 			},
 		}
 	}
-	
+
 	response := map[string]interface{}{
 		"Reservations": []map[string]interface{}{
 			{
-				"Instances": instances,
-				"OwnerId":   fmt.Sprintf("%012d", g.rand.Int63n(999999999999)),
-				"RequesterId": "",
+				"Instances":     instances,
+				"OwnerId":       fmt.Sprintf("%012d", g.rand.Int63n(999999999999)),
+				"RequesterId":   "",
 				"ReservationId": fmt.Sprintf("r-%08x", g.rand.Int31()),
 			},
 		},
@@ -86,7 +86,7 @@ func (g *TestFileGenerator) GenerateAWSEC2Response(instanceCount int) string {
 			},
 		},
 	}
-	
+
 	jsonBytes, _ := json.MarshalIndent(response, "", "  ")
 	return string(jsonBytes)
 }
@@ -94,19 +94,19 @@ func (g *TestFileGenerator) GenerateAWSEC2Response(instanceCount int) string {
 // GenerateAWSS3Response creates synthetic AWS S3 list-buckets response
 func (g *TestFileGenerator) GenerateAWSS3Response(bucketCount int) string {
 	buckets := make([]map[string]interface{}, bucketCount)
-	
+
 	for i := 0; i < bucketCount; i++ {
 		buckets[i] = map[string]interface{}{
-			"Name": fmt.Sprintf("test-bucket-%d-%08x", i+1, g.rand.Int31()),
+			"Name":         fmt.Sprintf("test-bucket-%d-%08x", i+1, g.rand.Int31()),
 			"CreationDate": time.Now().Add(-time.Duration(g.rand.Intn(365)) * 24 * time.Hour).Format(time.RFC3339),
 		}
 	}
-	
+
 	response := map[string]interface{}{
 		"Buckets": buckets,
 		"Owner": map[string]interface{}{
 			"DisplayName": "test-user",
-			"ID": fmt.Sprintf("%064x", g.rand.Int63()),
+			"ID":          fmt.Sprintf("%064x", g.rand.Int63()),
 		},
 		"ResponseMetadata": map[string]interface{}{
 			"RequestId": fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
@@ -115,7 +115,7 @@ func (g *TestFileGenerator) GenerateAWSS3Response(bucketCount int) string {
 			"HTTPStatusCode": 200,
 		},
 	}
-	
+
 	jsonBytes, _ := json.MarshalIndent(response, "", "  ")
 	return string(jsonBytes)
 }
@@ -123,20 +123,20 @@ func (g *TestFileGenerator) GenerateAWSS3Response(bucketCount int) string {
 // GenerateKubernetesPods creates synthetic Kubernetes Pod list
 func (g *TestFileGenerator) GenerateKubernetesPods(podCount int) string {
 	pods := make([]map[string]interface{}, podCount)
-	
+
 	namespaces := []string{"default", "kube-system", "production", "staging", "monitoring"}
-	
+
 	for i := 0; i < podCount; i++ {
 		namespace := namespaces[g.rand.Intn(len(namespaces))]
 		podName := fmt.Sprintf("test-pod-%d-%08x", i+1, g.rand.Int31())
-		
+
 		pods[i] = map[string]interface{}{
 			"apiVersion": "v1",
 			"kind":       "Pod",
 			"metadata": map[string]interface{}{
 				"name":      podName,
 				"namespace": namespace,
-				"uid":       fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+				"uid": fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 					g.rand.Int31(), g.rand.Int31n(65536), g.rand.Int31n(65536),
 					g.rand.Int31n(65536), g.rand.Int63()),
 				"creationTimestamp": time.Now().Add(-time.Duration(g.rand.Intn(168)) * time.Hour).Format(time.RFC3339),
@@ -174,13 +174,13 @@ func (g *TestFileGenerator) GenerateKubernetesPods(podCount int) string {
 			},
 			"status": map[string]interface{}{
 				"phase": []string{"Running", "Pending", "Succeeded"}[g.rand.Intn(3)],
-				"podIP": fmt.Sprintf("10.%d.%d.%d", 
+				"podIP": fmt.Sprintf("10.%d.%d.%d",
 					g.rand.Intn(256), g.rand.Intn(256), g.rand.Intn(256)),
 				"startTime": time.Now().Add(-time.Duration(g.rand.Intn(168)) * time.Hour).Format(time.RFC3339),
 			},
 		}
 	}
-	
+
 	// Convert to proper YAML format
 	var yamlLines []string
 	yamlLines = append(yamlLines, "apiVersion: v1")
@@ -221,20 +221,20 @@ func (g *TestFileGenerator) GenerateKubernetesPods(podCount int) string {
 // GenerateKubernetesServices creates synthetic Kubernetes Service list
 func (g *TestFileGenerator) GenerateKubernetesServices(serviceCount int) string {
 	services := make([]map[string]interface{}, serviceCount)
-	
+
 	namespaces := []string{"default", "kube-system", "production", "staging"}
-	
+
 	for i := 0; i < serviceCount; i++ {
 		namespace := namespaces[g.rand.Intn(len(namespaces))]
 		serviceName := fmt.Sprintf("test-service-%d", i+1)
-		
+
 		services[i] = map[string]interface{}{
 			"apiVersion": "v1",
 			"kind":       "Service",
 			"metadata": map[string]interface{}{
 				"name":      serviceName,
 				"namespace": namespace,
-				"uid":       fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+				"uid": fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 					g.rand.Int31(), g.rand.Int31n(65536), g.rand.Int31n(65536),
 					g.rand.Int31n(65536), g.rand.Int63()),
 				"creationTimestamp": time.Now().Add(-time.Duration(g.rand.Intn(168)) * time.Hour).Format(time.RFC3339),
@@ -257,7 +257,7 @@ func (g *TestFileGenerator) GenerateKubernetesServices(serviceCount int) string 
 			},
 		}
 	}
-	
+
 	// Convert to proper YAML format
 	var yamlLines []string
 	yamlLines = append(yamlLines, "apiVersion: v1")
@@ -294,7 +294,7 @@ func (g *TestFileGenerator) GenerateKubernetesServices(serviceCount int) string 
 // GenerateLargeNDJSON creates a large NDJSON file for performance testing
 func (g *TestFileGenerator) GenerateLargeNDJSON(recordCount int) string {
 	var lines []string
-	
+
 	for i := 0; i < recordCount; i++ {
 		record := map[string]interface{}{
 			"id":        fmt.Sprintf("record-%08d", i+1),
@@ -309,11 +309,11 @@ func (g *TestFileGenerator) GenerateLargeNDJSON(recordCount int) string {
 				"disk":   g.rand.Float64() * 1024,
 			},
 		}
-		
+
 		jsonBytes, _ := json.Marshal(record)
 		lines = append(lines, string(jsonBytes))
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -329,7 +329,7 @@ func (g *TestFileGenerator) GenerateCorruptedJSON(corruptionType string) string 
     "tags": ["test", "example"]
   }
 }`
-	
+
 	switch corruptionType {
 	case "missing_brace":
 		return strings.TrimSuffix(baseJSON, "}")

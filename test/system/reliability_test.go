@@ -20,11 +20,11 @@ func TestSystemErrorHandling(t *testing.T) {
 
 	t.Run("database corruption recovery", func(t *testing.T) {
 		dbPath := filepath.Join(suite.TempDir, "corruption")
-		
+
 		// Create database and add data
 		db, err := database.NewCatalogDB(dbPath)
 		require.NoError(t, err)
-		
+
 		testEntry := database.CatalogEntry{
 			ID:              "corruption-test-001",
 			StoredPath:      "/test/corruption.json",
@@ -37,18 +37,18 @@ func TestSystemErrorHandling(t *testing.T) {
 			RecordCount:     1,
 			SizeBytes:       100,
 		}
-		
+
 		err = db.AddEntry(testEntry)
 		require.NoError(t, err)
-		
+
 		// Close database properly
 		err = db.Close()
 		require.NoError(t, err)
-		
+
 		// Simulate corruption by writing garbage to database file
 		dbFiles, err := filepath.Glob(filepath.Join(dbPath, "*"))
 		require.NoError(t, err)
-		
+
 		if len(dbFiles) > 0 {
 			// Find a database file (not a directory)
 			var dbFile string
@@ -210,7 +210,7 @@ func TestSystemErrorHandling(t *testing.T) {
 				} else {
 					// If accepted, database should remain functional
 					t.Logf("Invalid data was accepted (%s)", test.name)
-					
+
 					// Verify we can still query
 					result, queryErr := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{Limit: 1})
 					assert.NoError(t, queryErr, "Database should remain functional after invalid data")
@@ -229,14 +229,14 @@ func TestSystemErrorHandling(t *testing.T) {
 		// Concurrent operations stress test
 		const numWorkers = 10
 		const operationsPerWorker = 100
-		
+
 		results := make(chan error, numWorkers)
-		
+
 		// Start concurrent workers
 		for workerID := 0; workerID < numWorkers; workerID++ {
 			go func(id int) {
 				var lastErr error
-				
+
 				for i := 0; i < operationsPerWorker; i++ {
 					// Mix of operations
 					switch i % 4 {
@@ -254,15 +254,15 @@ func TestSystemErrorHandling(t *testing.T) {
 							SizeBytes:       int64(100 + i),
 						}
 						lastErr = db.AddEntry(entry)
-						
+
 					case 1: // Query entries
 						_, lastErr = db.QueryEntries(database.FilterOptions{
 							Origin: fmt.Sprintf("stress-worker-%d", id),
 						}, database.QueryOptions{Limit: 10})
-						
+
 					case 2: // Query all
 						_, lastErr = db.QueryEntries(database.FilterOptions{}, database.QueryOptions{Limit: 5})
-						
+
 					case 3: // Try to get specific entry
 						entryID := fmt.Sprintf("stress-worker-%d-op-%d", id, i-1)
 						_, lastErr = db.GetEntry(entryID)
@@ -271,16 +271,16 @@ func TestSystemErrorHandling(t *testing.T) {
 							lastErr = nil
 						}
 					}
-					
+
 					if lastErr != nil {
 						break
 					}
 				}
-				
+
 				results <- lastErr
 			}(workerID)
 		}
-		
+
 		// Collect results
 		errorCount := 0
 		for i := 0; i < numWorkers; i++ {
@@ -290,12 +290,12 @@ func TestSystemErrorHandling(t *testing.T) {
 				t.Logf("Worker error: %v", err)
 			}
 		}
-		
+
 		t.Logf("Stress test completed: %d workers, %d errors", numWorkers, errorCount)
-		
+
 		// Some errors are acceptable under stress, but not too many
 		assert.Less(t, errorCount, numWorkers/2, "Most workers should succeed under stress")
-		
+
 		// Database should still be functional
 		result, err := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{Limit: 10})
 		require.NoError(t, err, "Database should be functional after stress test")
@@ -353,7 +353,7 @@ func TestSystemEdgeCases(t *testing.T) {
 
 		// Test with progressively larger entries
 		sizes := []int{1, 100, 1000, 10000, 100000}
-		
+
 		for _, size := range sizes {
 			entry := database.CatalogEntry{
 				ID:              fmt.Sprintf("size-test-%d", size),

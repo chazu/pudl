@@ -3,7 +3,6 @@ package validator
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -321,20 +320,6 @@ func (cv *ChainValidator) ResolveSchemaName(userInput string) (string, error) {
 }
 
 // Helper functions
-
-func extractPackageFromPath(schemaPath, filePath string) string {
-	relPath, err := filepath.Rel(schemaPath, filePath)
-	if err != nil {
-		return "unknown"
-	}
-
-	dir := filepath.Dir(relPath)
-	if dir == "." {
-		return "root"
-	}
-
-	return strings.ReplaceAll(dir, string(filepath.Separator), ".")
-}
 
 func contains(slice []string, item string) bool {
 	for _, s := range slice {

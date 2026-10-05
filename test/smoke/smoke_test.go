@@ -160,13 +160,6 @@ func mustContain(t *testing.T, out, want, ctx string) {
 	}
 }
 
-func mustNotContain(t *testing.T, out, bad, ctx string) {
-	t.Helper()
-	if strings.Contains(out, bad) {
-		t.Errorf("%s: expected output NOT to contain %q\n--- output ---\n%s", ctx, bad, out)
-	}
-}
-
 // realHome is the user's actual home (HOME is only overridden for child pudl
 // processes, never the test process), used to reach the warm ~/.mu/cache.
 func realHome(t *testing.T) string {

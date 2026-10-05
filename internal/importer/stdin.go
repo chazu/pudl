@@ -15,12 +15,15 @@ func ReadStdinToTempFile() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %w", err)
 	}
-	defer tmpFile.Close()
-
 	// Copy stdin to temporary file
 	if _, err := io.Copy(tmpFile, os.Stdin); err != nil {
+		tmpFile.Close()
 		os.Remove(tmpFile.Name())
 		return "", fmt.Errorf("failed to read from stdin: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to write stdin copy: %w", err)
 	}
 
 	return tmpFile.Name(), nil
