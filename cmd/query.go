@@ -129,7 +129,7 @@ Examples:
 
 		if jsonOutput {
 			// Convert tuples to JSON-friendly format
-			var out []map[string]interface{}
+			out := []map[string]interface{}{}
 			for _, t := range results {
 				entry := map[string]interface{}{
 					"relation": t.Relation,
@@ -138,19 +138,19 @@ Examples:
 				out = append(out, entry)
 			}
 			data, _ := json.MarshalIndent(out, "", "  ")
-			fmt.Println(string(data))
+			fmt.Fprintln(outw(), string(data))
 			return nil
 		}
 
 		if len(results) == 0 {
-			fmt.Println("No results.")
+			fmt.Fprintln(outw(), "No results.")
 			return nil
 		}
 
 		for _, t := range results {
 			printTuple(t)
 		}
-		fmt.Printf("\n%d result(s)\n", len(results))
+		fmt.Fprintf(outw(), "\n%d result(s)\n", len(results))
 		return nil
 	},
 }
@@ -179,7 +179,7 @@ func parseQueryConstraint(raw string) (interface{}, error) {
 
 func printTuple(t datalog.Tuple) {
 	args, _ := json.Marshal(t.Args)
-	fmt.Printf("%s(%s)\n", t.Relation, string(args))
+	fmt.Fprintf(outw(), "%s(%s)\n", t.Relation, string(args))
 }
 
 func loadRulesFromFile(path string) ([]datalog.Rule, error) {

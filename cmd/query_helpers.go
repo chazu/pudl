@@ -56,12 +56,12 @@ func runQueryList() error {
 		}
 	}
 
-	fmt.Println("Derived relations (from Datalog rules — query by constraining the arg keys):")
+	fmt.Fprintln(outw(), "Derived relations (from Datalog rules — query by constraining the arg keys):")
 	if len(derived) == 0 {
-		fmt.Println("  (none — no rules loaded)")
+		fmt.Fprintln(outw(), "  (none — no rules loaded)")
 	}
 	for _, rel := range sortedStringKeys(derived) {
-		fmt.Printf("  %s(%s)\n", rel, strings.Join(sortedSetKeys(derived[rel]), ", "))
+		fmt.Fprintf(outw(), "  %s(%s)\n", rel, strings.Join(sortedSetKeys(derived[rel]), ", "))
 	}
 
 	// EDB fact relations actually present in the store.
@@ -75,14 +75,14 @@ func runQueryList() error {
 	if err != nil {
 		return fmt.Errorf("failed to list fact relations: %w", err)
 	}
-	fmt.Println("\nEDB fact relations (stored facts you can query or join against):")
+	fmt.Fprintln(outw(), "\nEDB fact relations (stored facts you can query or join against):")
 	if len(rels) == 0 {
-		fmt.Println("  (none recorded yet)")
+		fmt.Fprintln(outw(), "  (none recorded yet)")
 	}
 	for _, r := range rels {
-		fmt.Printf("  %s\n", r)
+		fmt.Fprintf(outw(), "  %s\n", r)
 	}
-	fmt.Println("\nBuilt-in (join-only): catalog_entry — usable as a rule body atom, not queried directly.")
+	fmt.Fprintln(outw(), "\nBuilt-in (join-only): catalog_entry — usable as a rule body atom, not queried directly.")
 	return nil
 }
 
@@ -114,7 +114,7 @@ func printTopoOrder(relation string, results []datalog.Tuple) error {
 	}
 
 	if len(nodes) == 0 {
-		fmt.Println("No edges; nothing to order.")
+		fmt.Fprintln(outw(), "No edges; nothing to order.")
 		return nil
 	}
 
@@ -143,7 +143,7 @@ func printTopoOrder(relation string, results []datalog.Tuple) error {
 	}
 
 	for i, n := range order {
-		fmt.Printf("%d. %s\n", i+1, n)
+		fmt.Fprintf(outw(), "%d. %s\n", i+1, n)
 	}
 	return nil
 }

@@ -42,9 +42,9 @@ var ruleNewCmd = &cobra.Command{
 		}
 		if jsonOutput {
 			b, _ := json.Marshal(map[string]any{"path": path, "name": strings.TrimSpace(args[0])})
-			fmt.Println(string(b))
+			fmt.Fprintln(outw(), string(b))
 		} else {
-			fmt.Printf("created rule scaffold: %s\n", path)
+			fmt.Fprintf(outw(), "created rule scaffold: %s\n", path)
 		}
 		warnInvalidRules(cmd, dir)
 		return nil

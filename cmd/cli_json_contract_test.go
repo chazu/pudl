@@ -41,7 +41,6 @@ var jsonContractExempt = map[string]string{
 	"pudl model new":             "scaffold authoring; needs a plugin",
 	"pudl model populator add":   "scaffold authoring; needs a populator",
 	"pudl model populator new":   "scaffold authoring",
-	"pudl query":                 "covered by the datalog query tests",
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
 	"pudl run set":               "observes live through mu",
@@ -128,6 +127,8 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "show", factID)
 	run("facts", "search", "h1")
 	run("facts", "stats")
+	run("query", "host")
+	run("query", "nothing-here")
 	run("facts", "invalidate", factID)
 	otherID := field(run("facts", "add", "--relation", "host", "--args", `{"name":"h2"}`), "id")
 	run("facts", "retract", otherID)
