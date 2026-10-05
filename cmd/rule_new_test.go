@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/chazu/pudl/internal/datalog"
@@ -19,5 +22,20 @@ func TestRuleScaffoldSourceLoads(t *testing.T) {
 	}
 	if rules[0].Head.Rel != "derived_relation" || len(rules[0].Body) != 1 {
 		t.Errorf("unexpected rule shape: %+v", rules[0])
+	}
+	if !rules[0].Valid() {
+		t.Errorf("scaffold must be a valid rule: %v", rules[0].LoadErr)
+	}
+}
+
+func TestRuleAddRejectsInvalidRule(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.cue")
+	src := "broken: {\n\thead: {rel: \"b\", args: {id: \"$X\"}}\n\tbody: [{args: {id: \"$X\"}}]\n}\n"
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := ruleAddCmd.RunE(ruleAddCmd, []string{path})
+	if err == nil || !strings.Contains(err.Error(), "invalid rule") || !strings.Contains(err.Error(), "missing rel") {
+		t.Fatalf("want invalid-rule validation error, got %v", err)
 	}
 }
