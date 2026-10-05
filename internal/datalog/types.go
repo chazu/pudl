@@ -64,10 +64,38 @@ type Atom struct {
 }
 
 // Rule defines a Datalog inference rule: head :- body.
+//
+// A rule loaded from CUE that is malformed keeps its place in the rule set with
+// LoadErr set, rather than being dropped: a silently missing rule makes every
+// query that depends on it return nothing, which a model check reads as a pass.
+// Evaluate refuses to answer a query whose dependency closure contains such a
+// rule. Head.Rel is filled in when the head relation could still be read.
 type Rule struct {
 	Name string
 	Head Atom
 	Body []Atom
+
+	// Source is the rule's CUE position ("file:line:col"), when known.
+	Source string
+	// LoadErr is non-nil when the rule could not be loaded as written.
+	LoadErr error
+}
+
+// Valid reports whether the rule loaded without error.
+func (r Rule) Valid() bool {
+	return r.LoadErr == nil
+}
+
+// Describe names the rule for error messages: its name and source position.
+func (r Rule) Describe() string {
+	name := r.Name
+	if name == "" {
+		name = "(unnamed)"
+	}
+	if r.Source != "" {
+		return fmt.Sprintf("%s (%s)", name, r.Source)
+	}
+	return name
 }
 
 // Tuple is a ground fact — a relation with concrete argument values.

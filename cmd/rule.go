@@ -68,6 +68,9 @@ Examples:
 		if len(rules) == 0 {
 			return fmt.Errorf("no rules found in %s — file must contain at least one field with head and body", srcPath)
 		}
+		if invalid := datalog.InvalidRules(rules); len(invalid) > 0 {
+			return fmt.Errorf("validation failed: %d invalid rule(s) in %s:\n%s", len(invalid), srcPath, describeInvalidRules(invalid))
+		}
 
 		// Determine target directory
 		var targetDir string
@@ -115,6 +118,15 @@ Examples:
 
 		return nil
 	},
+}
+
+// describeInvalidRules renders one indented line per invalid rule.
+func describeInvalidRules(rules []datalog.Rule) string {
+	lines := make([]string, 0, len(rules))
+	for _, r := range rules {
+		lines = append(lines, fmt.Sprintf("  %s: %v", r.Describe(), r.LoadErr))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func ruleBodySummary(r datalog.Rule) string {
