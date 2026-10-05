@@ -7,14 +7,14 @@ import (
 // GetTestDataSet returns a curated test dataset by name
 func GetTestDataSet(name string) (*TestDataSet, bool) {
 	datasets := map[string]*TestDataSet{
-		"aws-production-sample":    getAWSProductionSample(),
-		"k8s-cluster-snapshot":     getK8sClusterSnapshot(),
-		"mixed-environment":        getMixedEnvironment(),
-		"large-dataset":           getLargeDataset(),
-		"corrupted-data":          getCorruptedDataset(),
-		"minimal-test":            getMinimalTestDataset(),
+		"aws-production-sample": getAWSProductionSample(),
+		"k8s-cluster-snapshot":  getK8sClusterSnapshot(),
+		"mixed-environment":     getMixedEnvironment(),
+		"large-dataset":         getLargeDataset(),
+		"corrupted-data":        getCorruptedDataset(),
+		"minimal-test":          getMinimalTestDataset(),
 	}
-	
+
 	dataset, exists := datasets[name]
 	return dataset, exists
 }
@@ -22,7 +22,7 @@ func GetTestDataSet(name string) (*TestDataSet, bool) {
 // getAWSProductionSample returns a realistic AWS production environment sample
 func getAWSProductionSample() *TestDataSet {
 	generator := NewTestFileGenerator()
-	
+
 	return &TestDataSet{
 		Name:        "AWS Production Environment Sample",
 		Description: "Realistic AWS resource data from production-like environment (100% synthetic)",
@@ -58,7 +58,7 @@ func getAWSProductionSample() *TestDataSet {
 // getK8sClusterSnapshot returns a Kubernetes cluster state snapshot
 func getK8sClusterSnapshot() *TestDataSet {
 	generator := NewTestFileGenerator()
-	
+
 	return &TestDataSet{
 		Name:        "Kubernetes Cluster State Snapshot",
 		Description: "Complete cluster state from kubectl get all --all-namespaces (100% synthetic)",
@@ -94,7 +94,7 @@ func getK8sClusterSnapshot() *TestDataSet {
 // getMixedEnvironment returns a mixed cloud/on-prem environment dataset
 func getMixedEnvironment() *TestDataSet {
 	generator := NewTestFileGenerator()
-	
+
 	return &TestDataSet{
 		Name:        "Mixed Environment Dataset",
 		Description: "Combination of AWS, Kubernetes, and generic data sources (100% synthetic)",
@@ -138,7 +138,7 @@ func getMixedEnvironment() *TestDataSet {
 // getLargeDataset returns a large dataset for performance testing
 func getLargeDataset() *TestDataSet {
 	generator := NewTestFileGenerator()
-	
+
 	return &TestDataSet{
 		Name:        "Large Dataset for Performance Testing",
 		Description: "Large synthetic dataset for testing performance and scalability",
@@ -182,7 +182,7 @@ func getLargeDataset() *TestDataSet {
 // getCorruptedDataset returns a dataset with various types of data corruption
 func getCorruptedDataset() *TestDataSet {
 	generator := NewTestFileGenerator()
-	
+
 	return &TestDataSet{
 		Name:        "Corrupted Data Test Dataset",
 		Description: "Dataset with various types of data corruption for error handling tests",
@@ -238,16 +238,16 @@ func getMinimalTestDataset() *TestDataSet {
 		Description: "Small dataset for quick validation tests",
 		Files: []TestFile{
 			{
-				Name:    "simple-aws.json",
-				Content: getSimpleAWSInstance(),
+				Name:            "simple-aws.json",
+				Content:         getSimpleAWSInstance(),
 				ExpectedRecords: 1,
 				ExpectedSchema:  "aws.#EC2Instance",
 				ExpectedOrigin:  "aws-ec2-describe-instances",
 				Format:          "json",
 			},
 			{
-				Name:    "simple-k8s.yaml",
-				Content: getSimpleK8sPod(),
+				Name:            "simple-k8s.yaml",
+				Content:         getSimpleK8sPod(),
 				ExpectedRecords: 1,
 				ExpectedSchema:  "k8s.#Pod",
 				ExpectedOrigin:  "k8s-get-pods",
@@ -346,7 +346,7 @@ status:
 func ListAvailableDataSets() []string {
 	return []string{
 		"aws-production-sample",
-		"k8s-cluster-snapshot", 
+		"k8s-cluster-snapshot",
 		"mixed-environment",
 		"large-dataset",
 		"corrupted-data",
@@ -360,7 +360,7 @@ func GetDataSetInfo(name string) string {
 	if !exists {
 		return fmt.Sprintf("Dataset '%s' not found", name)
 	}
-	
+
 	return fmt.Sprintf(`Dataset: %s
 Description: %s
 Files: %d

@@ -56,7 +56,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 		// Verify database remains stable after errors
 		totalCount, err := suite.GetDatabaseEntryCount()
 		require.NoError(t, err)
-		
+
 		// Should have few or no entries from corrupted files
 		assert.LessOrEqual(t, totalCount, len(results), "Database should not be corrupted by failed imports")
 
@@ -95,7 +95,7 @@ func TestImportWorkflow_ErrorHandling(t *testing.T) {
 
 		// Validate that bad import failed but didn't corrupt database
 		assert.Error(t, badErr, "Bad file should fail to import")
-		
+
 		suite.LogInfo("Partial Recovery Test Results:")
 		suite.LogInfo("  Good Import: Success (%d records)", goodResult.RecordCount)
 		suite.LogInfo("  Bad Import: Failed as expected (%v)", badErr)
