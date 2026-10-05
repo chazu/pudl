@@ -26,17 +26,22 @@ CREATE TABLE facts (
     valid_start INTEGER NOT NULL,    -- unix timestamp: when the fact became true
     valid_end   INTEGER,             -- unix timestamp: when it stopped being true (NULL = still true)
     tx_start    INTEGER NOT NULL,    -- unix timestamp: when we recorded this fact
-    tx_end      INTEGER,             -- unix timestamp: when we retracted this record (NULL = current)
+    tx_end      INTEGER,             -- unix timestamp: when this belief ended (retracted or superseded; NULL = current)
     source      TEXT,                -- who asserted this: agent name, "human", "operator", "mu"
-    provenance  TEXT                 -- JSON: additional context (agent, activity, etc.)
+    provenance  TEXT,                -- JSON: additional context (agent, activity, etc.)
+    supersedes  TEXT,                -- ID of the version an invalidation replaced (migration 19)
+    tx_seq      INTEGER,             -- store-wide sequence of the write that recorded this row
+    tx_end_seq  INTEGER              -- sequence of the write that ended this belief
 );
 ```
 
-Three indexes cover the primary query patterns:
+Indexes cover the primary query patterns:
 
 - `idx_facts_relation` -- filter by relation name
 - `idx_facts_valid` -- temporal range queries on valid time
 - `idx_facts_tx` -- temporal range queries on transaction time
+- `idx_facts_tx_seq` -- per-relation write order (history, sequence queries)
+- `idx_facts_supersedes` -- following an invalidated fact to its newest version
 
 As query patterns stabilize, SQLite [generated columns](https://www.sqlite.org/gencol.html) can be added to index specific JSON fields within `args` without changing the storage model.
 
@@ -58,6 +63,33 @@ This gives four query modes:
 | **AsOf(validT, txT)** | What we believed at txT about what was true at validT | Both valid and tx constraints combined |
 
 **AsOfNow** is the common case -- "show me what's true right now." The other modes support post-mortem analysis ("what did we know last Tuesday?") and historical reconstruction ("was this dependency present three months ago?").
+
+### Transaction time is append-only
+
+No operation rewrites what the store believed at an earlier moment. Retraction
+only ends a belief (`tx_end`). Invalidation ends the belief in the open version
+and records a successor version, in one transaction, that carries the bounded
+`valid_end` (see [Retraction vs Invalidation](#retraction-vs-invalidation)). So
+an as-of query for a moment before an invalidation still returns the fact with
+the unbounded valid time that was believed then.
+
+### Whole seconds and write sequence
+
+Timestamps are whole Unix seconds and belief intervals are half-open,
+`[tx_start, tx_end)`. `TxAt = t` means "the state after every write committed
+during or before second t." A fact recorded and retracted within the same
+second was never part of any whole-second state, so `--as-of-tx` correctly
+omits it. It is not lost: it stays in `FactHistory`, and the write sequence
+observes it exactly.
+
+Every write allocates the next store-wide sequence number. A row records the
+write that created it (`tx_seq`) and the one that ended its belief
+(`tx_end_seq`). `FactFilter.TxSeqAt` (`pudl facts list --as-of-tx-seq N`)
+selects the state right after write N: `tx_seq <= N AND (tx_end_seq IS NULL OR
+tx_end_seq > N)`. It replaces `TxAt`; setting both is an error. Sequences are
+monotonic but not dense: an idempotent replay or a failed write consumes a
+number. They reflect write order in this store, not caller-supplied
+`TxStart` values.
 
 ## Operations
 
@@ -103,6 +135,15 @@ numeric values and reject unsupported ones explicitly; see the
 [numeric query contract](library-api.md#numeric-query-contract). Catalog-item
 IDs and the query engine's REAL arithmetic are unchanged.
 
+Migration 19 adds the supersession and write-sequence columns and backfills
+sequences for existing rows in recorded time order. Within a single second the
+original write order was never recorded, so the backfill places a row's
+creation before its closing and, within one second, creations before closings.
+Facts that an older pudl invalidated by rewriting `valid_end` in place keep
+that row as it is: the belief held before the rewrite was not recorded and
+cannot be reconstructed, so as-of-transaction queries over those facts still
+reflect the rewritten bound.
+
 ### Retraction vs Invalidation
 
 Two distinct operations for two distinct meanings:
@@ -113,13 +154,31 @@ Two distinct operations for two distinct meanings:
 err := db.RetractFact(factID)
 ```
 
-**Invalidate** -- "this was true but isn't anymore." Sets `valid_end`. The fact is still part of our knowledge (tx_end stays NULL) but is no longer currently valid. Use this when reality changes.
+**Invalidate** -- "this was true but isn't anymore." Records a new version of the fact whose `valid_end` is now. The fact is still part of our knowledge (the new version's tx_end stays NULL) but is no longer currently valid. Use this when reality changes.
 
 ```go
 err := db.InvalidateFact(factID)
+latest, err := db.LatestFactVersion(factID) // the version with valid_end set
 ```
 
-Example: an agent observes "api depends on db." Later, someone removes that dependency. The original fact gets *invalidated* (valid_end set to when the dependency was removed), not *retracted* (it was a correct observation at the time).
+Invalidation does not edit the recorded row. In one transaction it:
+
+1. ends the belief in the open version (`tx_end`, `tx_end_seq`), and
+2. inserts a successor with the same relation, args, `valid_start` and source,
+   `valid_end` = now, `tx_start` = now, and `supersedes` = the old ID.
+
+The successor's ID is `SHA256("supersedes" + "\x00" + old_id + "\x00" + valid_end)`
+(`database.SupersededFactID`); it is not a content address, because the
+content matches its predecessor.
+
+Old IDs keep working. `GetFact` returns the exact version an ID names.
+`LatestFactVersion` follows the chain to the newest version, and
+`FactVersions` returns the whole chain, oldest first. `RetractFact` and
+`InvalidateFact` act on the newest version of the ID's fact, so retracting the
+old ID of an invalidated fact retracts its successor, and invalidating it again
+reports that it is already invalidated. A retracted fact cannot be invalidated.
+
+Example: an agent observes "api depends on db." Later, someone removes that dependency. The original fact gets *invalidated* (a successor with valid_end set to when the dependency was removed), not *retracted* (it was a correct observation at the time).
 
 ### Querying
 
@@ -246,8 +305,11 @@ pudl facts list --relation observation --as-of-tx 2026-03-31T00:00:00Z
 # Full details
 pudl facts list --relation observation --verbose
 
-# Machine-readable output
+# Machine-readable output (an empty result is [])
 pudl facts list --relation observation --json
+
+# What did we believe right after write 42?
+pudl facts list --relation observation --as-of-tx-seq 42
 ```
 
 | Flag | Description |
@@ -256,14 +318,18 @@ pudl facts list --relation observation --json
 | `--source` | Filter by source |
 | `--as-of-valid` | Query valid time (RFC3339 or Unix timestamp) |
 | `--as-of-tx` | Query transaction time (RFC3339 or Unix timestamp) |
+| `--as-of-tx-seq` | Query by write sequence instead of `--as-of-tx` |
 | `-v, --verbose` | Show full fact details |
 
 ### `pudl facts show`
 
-Inspect a single fact by ID. Accepts the full 64-character hex ID or a unique prefix:
+Inspect a single fact by ID. Accepts the full 64-character hex ID or a unique
+prefix. The ID of a version superseded by invalidation shows the fact's newest
+version; `--exact` shows the version the ID names:
 
 ```bash
 pudl facts show c0b4392d347a
+pudl facts show c0b4392d347a --exact
 pudl facts show c0b4392d347a --json
 ```
 
@@ -277,7 +343,7 @@ pudl facts retract c0b4392d347a
 
 ### `pudl facts invalidate`
 
-Mark a fact as no longer valid -- "reality changed." Sets `valid_end` so the fact is no longer current but remains visible in historical queries (`--as-of-valid`):
+Mark a fact as no longer valid -- "reality changed." Records a superseding version with `valid_end` set (and prints its ID), so the fact is no longer current but remains visible in historical queries (`--as-of-valid`, and `--as-of-tx` before the invalidation):
 
 ```bash
 pudl facts invalidate c0b4392d347a

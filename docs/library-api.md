@@ -25,6 +25,8 @@ func (s *Store) QueryFacts(filter FactFilter) ([]Fact, error)
 func (s *Store) RetractFact(id string) error
 func (s *Store) InvalidateFact(id string) error
 func (s *Store) FactHistory(relation string) ([]Fact, error)
+func (s *Store) LatestFactVersion(id string) (*Fact, error)
+func (s *Store) FactVersions(id string) ([]Fact, error)
 
 // Atomic check-and-write
 func (s *Store) Transact(fn func(tx *Tx) error) error
@@ -45,6 +47,22 @@ of an ID for different identity content. Fact ID canonicalization preserves
 exact decimal numbers and normalizes equivalent numeric spellings. See
 [existing-store compatibility](facts.md#existing-store-compatibility) for the
 one-time projection repair and handling of IDs created by older releases.
+
+Transaction time is append-only. `InvalidateFact` ends the belief in the open
+version and records a successor version with `valid_end` set; its
+`Fact.Supersedes` names the old ID, and the old row is never edited, so
+`TxAt` queries for earlier moments return what was believed then.
+`LatestFactVersion` follows an ID to the newest version, and `FactVersions`
+returns the whole chain. `RetractFact` and `InvalidateFact` act on the newest
+version of the ID's fact. See [retraction vs
+invalidation](facts.md#retraction-vs-invalidation).
+
+`Fact.TxSeq`/`Fact.TxEndSeq` record the store-wide write sequence that
+created and ended each version. `FactFilter.TxSeqAt` queries the state right
+after a given write. That is exact where whole-second `TxAt` cannot separate
+two writes in the same second (see [whole seconds and write
+sequence](facts.md#whole-seconds-and-write-sequence)). `QueryFacts` and
+`FactHistory` return an empty, non-nil slice when nothing matches.
 
 ### `Transact`
 
