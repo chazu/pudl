@@ -22,6 +22,8 @@ type SchemaInferrer struct {
 	graph       *InheritanceGraph
 	ctx         *cue.Context
 	schemaPaths []string
+	loadErrors  []validator.SchemaLoadError
+	cycles      [][]string
 }
 
 // InferenceResult represents the result of schema inference.
@@ -41,66 +43,38 @@ func NewSchemaInferrer(schemaPaths ...string) (*SchemaInferrer, error) {
 		return nil, fmt.Errorf("at least one schema path is required")
 	}
 
-	schemas, metadata, loaders, modules, err := loadSchemasFromPaths(schemaPaths)
-	if err != nil {
-		return nil, err
-	}
-
-	graph := BuildInheritanceGraph(metadata)
-
-	return &SchemaInferrer{
-		loaders:     loaders,
-		modules:     modules,
-		schemas:     schemas,
-		metadata:    metadata,
-		graph:       graph,
-		schemaPaths: schemaPaths,
-	}, nil
+	si := &SchemaInferrer{schemaPaths: schemaPaths}
+	si.apply(validator.LoadSchemaSet(schemaPaths))
+	return si, nil
 }
 
-// loadSchemasFromPaths loads schemas from multiple paths with first-found-wins shadowing.
-// Earlier paths take priority: if the same schema name appears in multiple paths,
-// only the version from the first path is kept.
-func loadSchemasFromPaths(schemaPaths []string) (map[string]cue.Value, map[string]validator.SchemaMetadata, []*validator.CUEModuleLoader, map[string]*validator.LoadedModule, error) {
-	allSchemas := make(map[string]cue.Value)
-	allMetadata := make(map[string]validator.SchemaMetadata)
-	allModules := make(map[string]*validator.LoadedModule)
-	var allLoaders []*validator.CUEModuleLoader
+// apply installs a freshly loaded schema set. Loading uses first-found-wins
+// shadowing: earlier paths take priority, so a per-repo schema shadows a global
+// one of the same name. Callers hold si.mu for writing, or own si exclusively.
+func (si *SchemaInferrer) apply(set *validator.SchemaSet) {
+	si.loaders = set.Loaders
+	si.modules = set.Modules
+	si.schemas = set.Schemas
+	si.metadata = set.Metadata
+	si.graph = BuildInheritanceGraph(set.Metadata)
+	si.loadErrors = set.Errors
+	si.cycles = set.Cycles
+}
 
-	for _, sp := range schemaPaths {
-		// Shared: two callers naming the same schema path share one compile, and
-		// one caller loading twice compiles once. See internal/validator/module_cache.go.
-		loader := validator.SharedLoader(sp)
-		allLoaders = append(allLoaders, loader)
+// LoadErrors reports the schema packages that failed to load, and loaded
+// schemas that failed integrity checks. Data that one of them would have matched
+// falls back to the catch-all, so callers should surface these.
+func (si *SchemaInferrer) LoadErrors() []validator.SchemaLoadError {
+	si.mu.RLock()
+	defer si.mu.RUnlock()
+	return append([]validator.SchemaLoadError(nil), si.loadErrors...)
+}
 
-		modules, err := loader.LoadAllModules()
-		if err != nil {
-			// Skip inaccessible or invalid schema directories
-			continue
-		}
-
-		schemas := loader.GetAllSchemas(modules)
-		metadata := loader.GetAllMetadata(modules)
-
-		// First-found wins: only add schemas not already seen
-		for name, val := range schemas {
-			if _, exists := allSchemas[name]; !exists {
-				allSchemas[name] = val
-			}
-		}
-		for name, meta := range metadata {
-			if _, exists := allMetadata[name]; !exists {
-				allMetadata[name] = meta
-			}
-		}
-		for name, mod := range modules {
-			if _, exists := allModules[name]; !exists {
-				allModules[name] = mod
-			}
-		}
-	}
-
-	return allSchemas, allMetadata, allLoaders, allModules, nil
+// BaseSchemaCycles reports base_schema cycles among the loaded schemas.
+func (si *SchemaInferrer) BaseSchemaCycles() [][]string {
+	si.mu.RLock()
+	defer si.mu.RUnlock()
+	return append([][]string(nil), si.cycles...)
 }
 
 // Infer determines the best matching schema for the given data.
@@ -235,16 +209,7 @@ func (si *SchemaInferrer) Reload() error {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 
-	schemas, metadata, loaders, modules, err := loadSchemasFromPaths(si.schemaPaths)
-	if err != nil {
-		return fmt.Errorf("failed to reload CUE modules: %w", err)
-	}
-
-	si.loaders = loaders
-	si.modules = modules
-	si.schemas = schemas
-	si.metadata = metadata
-	si.graph = BuildInheritanceGraph(si.metadata)
+	si.apply(validator.LoadSchemaSet(si.schemaPaths))
 
 	return nil
 }

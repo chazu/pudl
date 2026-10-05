@@ -13,6 +13,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/muschemas"
 	"github.com/chazu/pudl/internal/streaming"
@@ -103,6 +104,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeInvalidInput, "Error getting path flag", err)
 	}
+	inference.WarnLoadErrors(os.Stderr, effectiveSchemaPaths(nil)...)
 
 	// Check if reading from stdin
 	if filePath == "-" || (filePath == "" && importer.IsStdinAvailable()) {

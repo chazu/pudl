@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -56,37 +57,73 @@ type LoadedModule struct {
 	LoadPath    string                    `json:"load_path"`
 }
 
-// LoadAllModules loads all CUE modules from the schema directory.
-// If any instances have missing dependencies, it runs "cue mod tidy" to fetch
-// them and retries the load once.
+// LoadAllModules loads all CUE modules from the schema directory, failing if
+// any package does not load. If any instances have missing dependencies, it
+// runs "cue mod tidy" to fetch them and retries the load once.
+//
+// Callers that must see a broken package as an error (resolving a named model)
+// use this. Callers that should keep working with the packages that did load
+// (inference, validation) use LoadModules.
 func (loader *CUEModuleLoader) LoadAllModules() (map[string]*LoadedModule, error) {
-	return loader.loadAllModulesCached()
-}
-
-// loadAllModulesUncached is the real load, behind the memo in module_cache.go.
-func (loader *CUEModuleLoader) loadAllModulesUncached() (map[string]*LoadedModule, error) {
-	moduleLoads.Add(1)
-	modules, needsTidy, err := loader.loadAllModulesOnce()
-	if err != nil && !needsTidy {
+	modules, loadErrs, err := loader.LoadModules()
+	if err != nil {
 		return nil, err
 	}
-	if needsTidy {
-		loader.log("Missing CUE dependencies detected, running cue mod tidy")
-		if tidyErr := loader.runCueModTidy(); tidyErr != nil {
-			return nil, fmt.Errorf("missing CUE dependencies and cue mod tidy failed: %w", tidyErr)
-		}
-		modules, _, err = loader.loadAllModulesOnce()
-		if err != nil {
-			return nil, err
-		}
+	if len(loadErrs) > 0 {
+		return nil, loadErrs[0].Err
 	}
 	return modules, nil
 }
 
-// loadAllModulesOnce attempts a single load pass. It returns needsTidy=true
-// if any instance has an error indicating missing packages/modules.
-func (loader *CUEModuleLoader) loadAllModulesOnce() (map[string]*LoadedModule, bool, error) {
-	modules := make(map[string]*LoadedModule)
+// LoadModules loads every package in the schema directory that can be loaded,
+// and reports each one that cannot. The error return is reserved for a failure
+// of the path as a whole (ErrNoInstances, an unreadable directory).
+func (loader *CUEModuleLoader) LoadModules() (map[string]*LoadedModule, []SchemaLoadError, error) {
+	return loader.loadAllModulesCached()
+}
+
+// LoadErrors reports the packages under this loader's schema path that do not
+// load, or the path's own failure. Served from the same memo as LoadModules.
+func (loader *CUEModuleLoader) LoadErrors() []SchemaLoadError {
+	_, loadErrs, err := loader.LoadModules()
+	if err != nil {
+		return []SchemaLoadError{{Path: loader.schemaPath, Err: err}}
+	}
+	return loadErrs
+}
+
+// loadAllModulesUncached is the real load, behind the memo in module_cache.go.
+func (loader *CUEModuleLoader) loadAllModulesUncached() (map[string]*LoadedModule, []SchemaLoadError, error) {
+	moduleLoads.Add(1)
+	modules, loadErrs, missing, err := loader.loadAllModulesOnce()
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(missing) == 0 {
+		return modules, loadErrs, nil
+	}
+
+	loader.log("Missing CUE dependencies detected, running cue mod tidy")
+	if tidyErr := loader.runCueModTidy(); tidyErr != nil {
+		for _, m := range missing {
+			m.Err = fmt.Errorf("missing CUE dependencies and cue mod tidy failed: %w (load error: %v)", tidyErr, m.Err)
+			loadErrs = append(loadErrs, m)
+		}
+		return modules, loadErrs, nil
+	}
+	modules, loadErrs, missing, err = loader.loadAllModulesOnce()
+	if err != nil {
+		return nil, nil, err
+	}
+	return modules, append(loadErrs, missing...), nil
+}
+
+// loadAllModulesOnce attempts a single load pass, one package at a time. A
+// package that fails is reported and skipped; the rest still load. Packages
+// that fail only for missing dependencies are returned separately in missing,
+// because "cue mod tidy" may resolve them.
+func (loader *CUEModuleLoader) loadAllModulesOnce() (modules map[string]*LoadedModule, loadErrs, missing []SchemaLoadError, err error) {
+	modules = make(map[string]*LoadedModule)
 
 	loader.log("Loading CUE modules from: %s", loader.schemaPath)
 
@@ -97,42 +134,66 @@ func (loader *CUEModuleLoader) loadAllModulesOnce() (map[string]*LoadedModule, b
 	instances := load.Instances([]string{"./..."}, config)
 
 	if len(instances) == 0 {
-		return nil, false, fmt.Errorf("no CUE instances found in schema module")
+		return nil, nil, nil, ErrNoInstances
 	}
 
 	loader.log("Found %d CUE instances to load", len(instances))
 
 	for _, inst := range instances {
-		loader.log("Processing instance: %s (dir: %s)", inst.PkgName, inst.Dir)
+		name := loader.moduleName(inst)
+		loader.log("Processing instance: %s (dir: %s)", name, inst.Dir)
+		fail := func(err error) {
+			loader.log("Error loading %s: %v", name, err)
+			loadErrs = append(loadErrs, SchemaLoadError{Path: loader.schemaPath, Package: name, Err: err})
+		}
 
 		if inst.Err != nil {
 			if isMissingDependencyErr(inst.Err) {
-				return nil, true, inst.Err
+				missing = append(missing, SchemaLoadError{Path: loader.schemaPath, Package: name, Err: inst.Err})
+				continue
 			}
-			loader.log("Error loading instance %s: %v", inst.PkgName, inst.Err)
-			return nil, false, fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err)
+			fail(fmt.Errorf("failed to load CUE instance %s: %w", inst.PkgName, inst.Err))
+			continue
 		}
 
 		// Build the CUE value from the loaded instance
 		value := loader.ctx.BuildInstance(inst)
 		if value.Err() != nil {
-			loader.log("Error building CUE value for %s: %v", inst.PkgName, value.Err())
-			return nil, false, fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err())
+			fail(fmt.Errorf("failed to build CUE value for package %s: %w", inst.PkgName, value.Err()))
+			continue
 		}
 
-		// Create module from instance
 		module, err := loader.createModuleFromInstance(inst, value)
 		if err != nil {
-			loader.log("Error creating module from %s: %v", inst.PkgName, err)
-			return nil, false, fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err)
+			fail(fmt.Errorf("failed to create module from instance %s: %w", inst.PkgName, err))
+			continue
 		}
 
-		loader.log("Successfully loaded module %s with %d schemas", inst.PkgName, len(module.Schemas))
-		modules[inst.PkgName] = module
+		// Keyed by the schema-root-relative directory, not the CUE package name:
+		// pudl/k8s and vendor/k8s are both package "k8s", and keying by package
+		// name let the second silently replace the first.
+		loader.log("Successfully loaded module %s with %d schemas", name, len(module.Schemas))
+		modules[name] = module
 	}
 
 	loader.log("Loaded %d modules total", len(modules))
-	return modules, false, nil
+	return modules, loadErrs, missing, nil
+}
+
+// moduleName is the namespace a package's schemas are registered under: its
+// schema-root-relative directory, falling back to the CUE package name for a
+// package at the root itself.
+//
+// The schema directory is the authoritative namespace. CUE's package name
+// collapses nested paths (pudl/k8s becomes just k8s), and module import paths
+// vary between pudl.schemas/pudl/k8s and pudl.schemas@v0/pudl/k8s. Deriving the
+// name from the directory keeps validation aligned with inference and catalog
+// schema references.
+func (loader *CUEModuleLoader) moduleName(inst *build.Instance) string {
+	if rel, err := filepath.Rel(loader.schemaPath, inst.Dir); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return filepath.ToSlash(rel)
+	}
+	return inst.PkgName
 }
 
 // isMissingDependencyErr returns true if the error indicates unfetched CUE
@@ -162,15 +223,7 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 	schemas := make(map[string]cue.Value)
 	metadata := make(map[string]SchemaMetadata)
 
-	// The schema directory is the authoritative namespace. CUE's package name
-	// collapses nested paths (pudl/k8s becomes just k8s), and module import paths
-	// vary between pudl.schemas/pudl/k8s and pudl.schemas@v0/pudl/k8s. Deriving
-	// the name from the schema-root-relative directory keeps validation aligned
-	// with inference and catalog schema references.
-	moduleName := inst.PkgName
-	if rel, err := filepath.Rel(loader.schemaPath, inst.Dir); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		moduleName = filepath.ToSlash(rel)
-	}
+	moduleName := loader.moduleName(inst)
 
 	// Iterate through all definitions in the package
 	iter, err := value.Fields(cue.Definitions(true))
@@ -261,43 +314,57 @@ func (loader *CUEModuleLoader) GetAllMetadata(modules map[string]*LoadedModule) 
 	return allMetadata
 }
 
-// ValidateModuleIntegrity performs integrity checks on loaded modules
+// ValidateModuleIntegrity performs integrity checks on loaded modules,
+// returning the first problem found. LoadSchemaSet uses CheckModuleIntegrity
+// instead, which reports every problem without discarding the path.
 func (loader *CUEModuleLoader) ValidateModuleIntegrity(modules map[string]*LoadedModule) error {
+	if problems := loader.CheckModuleIntegrity(modules); len(problems) > 0 {
+		return problems[0].Err
+	}
 	for _, module := range modules {
-		// A package may contain only reusable components or rule definitions.
-		// Those are valid parts of the schema tree even though they are not
-		// independently registered validation targets.
-		if len(module.Schemas) == 0 {
-			continue
-		}
-
-		// Validate that all schemas in the module are valid CUE values
-		for schemaName, schemaValue := range module.Schemas {
-			if err := schemaValue.Validate(); err != nil {
-				return fmt.Errorf("schema %s failed validation: %w", schemaName, err)
-			}
-		}
-
-		// Check for cross-reference consistency
-		// If a schema has a base_schema in its metadata, verify it exists
+		// If a schema has a base_schema in its metadata, verify it exists in
+		// this path's modules.
 		for schemaName, meta := range module.Metadata {
-			if meta.BaseSchema != "" {
-				// Check if the base schema exists in any loaded module
-				baseSchemaExists := false
-				for _, otherModule := range modules {
-					if _, exists := otherModule.Schemas[meta.BaseSchema]; exists {
-						baseSchemaExists = true
-						break
-					}
+			if meta.BaseSchema == "" {
+				continue
+			}
+			baseSchemaExists := false
+			for _, otherModule := range modules {
+				if _, exists := otherModule.Schemas[meta.BaseSchema]; exists {
+					baseSchemaExists = true
+					break
 				}
-				if !baseSchemaExists {
-					return fmt.Errorf("schema %s references non-existent base schema %s", schemaName, meta.BaseSchema)
-				}
+			}
+			if !baseSchemaExists {
+				return fmt.Errorf("schema %s references non-existent base schema %s", schemaName, meta.BaseSchema)
 			}
 		}
 	}
-
 	return nil
+}
+
+// CheckModuleIntegrity reports every registered schema whose CUE value does
+// not validate. A package may contain only reusable components or rule
+// definitions; those are valid parts of the schema tree even though they are
+// not independently registered validation targets.
+//
+// base_schema references are not checked here: a schema in one path may extend
+// one in another, so LoadSchemaSet checks them across the merged set.
+func (loader *CUEModuleLoader) CheckModuleIntegrity(modules map[string]*LoadedModule) []SchemaLoadError {
+	var problems []SchemaLoadError
+	for name, module := range modules {
+		for schemaName, schemaValue := range module.Schemas {
+			if err := schemaValue.Validate(); err != nil {
+				problems = append(problems, SchemaLoadError{
+					Path:    loader.schemaPath,
+					Package: name,
+					Err:     fmt.Errorf("schema %s failed validation: %w", schemaName, err),
+				})
+			}
+		}
+	}
+	sort.Slice(problems, func(i, j int) bool { return problems[i].Error() < problems[j].Error() })
+	return problems
 }
 
 // GetModuleInfo returns information about a specific loaded module
