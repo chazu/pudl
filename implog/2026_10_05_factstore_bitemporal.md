@@ -73,6 +73,24 @@ rewrite was never recorded.
   (retracted or superseded) rather than "retracted".
 - `pudl facts invalidate` prints the new version's ID.
 
+### Catalog open no longer rewrites schema (plan S)
+
+- `ensureCatalogEntryView` dropped and recreated `catalog_entry_edb` on every
+  `NewCatalogDB`, outside a transaction. Every open, including every
+  `factstore.Open`, took the write lock and bumped the schema version for every
+  other connection. A concurrent reader could also query between the DROP and
+  the CREATE and fail with "no such table".
+- The definition now lives in `catalogEntryViewSQL`. Its SHA-256 is recorded in
+  a new `catalog_meta` key/value table (migration 20, `catalog_meta`, key
+  `view:catalog_entry_edb`). The view is rebuilt only when that hash differs or
+  the view is missing (column migrations drop it), and the drop, create and hash
+  update run in one transaction. An unchanged open performs no schema write.
+  Editing the SQL changes the hash, so no version number needs bumping.
+- `backfillCurrentFacts` is deleted. It ran a COUNT on every open and, when
+  `current_facts` was empty, rebuilt it without the search index, which would
+  have desynchronized the two projections. Fact writes maintain both
+  transactionally; migration 17 is their one-time rebuild path.
+
 ## Public API
 
 - `database.Fact`: new fields `TxSeq int64`, `TxEndSeq *int64`,
@@ -101,3 +119,18 @@ rewrite was never recorded.
 
 Existing tests that asserted in-place invalidation now assert the two-version
 shape (`facts_test.go`, `facts_tx_test.go`, `pkg/factstore/replay_test.go`).
+
+`internal/database/catalog_entry_view_test.go`:
+
+- reopening with an unchanged definition leaves `PRAGMA schema_version`
+  untouched, and the definition hash is recorded;
+- a stale recorded hash triggers a rebuild.
+
+`TestMigrations_MissingViewIsRestoredOnOpen` (renamed) covers a dropped view.
+`TestCurrentFacts_BackfillOnReopen` is renamed `TestCurrentFacts_SurviveReopen`;
+it never exercised the backfill.
+
+`CGO_ENABLED=0 go build ./... && go vet ./... && CGO_ENABLED=0 go test ./...`
+passes. End to end with the built binary, the reproduced as-of query now
+returns the fact (it returned `null`), and `facts list --json` on an empty
+relation prints `[]`.

@@ -104,9 +104,9 @@ func TestMigrations_FailureIsNotRecorded(t *testing.T) {
 	assert.Equal(t, 0, count)
 }
 
-func TestMigrations_ViewsAreRecreatedEveryOpen(t *testing.T) {
-	// Views are not versioned: they restate the Go source that declares them, so
-	// a change to a view body must take effect without anyone bumping a number.
+func TestMigrations_MissingViewIsRestoredOnOpen(t *testing.T) {
+	// Views are not versioned migrations: they restate the Go source that
+	// declares them. A view a column migration dropped is restored on open.
 	dir := t.TempDir()
 	first, err := NewCatalogDB(dir)
 	require.NoError(t, err)
