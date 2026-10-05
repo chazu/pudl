@@ -41,8 +41,7 @@ func TestSQLEvalSimpleFactLookup(t *testing.T) {
 	addTestFact(t, db, "depends", `{"from":"api","to":"svc-a"}`)
 	addTestFact(t, db, "depends", `{"from":"api","to":"svc-b"}`)
 
-	eval := NewSQLEvaluator(db, nil, TemporalScope{})
-	results, err := eval.Query("depends", nil)
+	results, err := Evaluate(db, nil, "depends", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,8 +74,7 @@ func TestSQLEvalSingleRuleDerivation(t *testing.T) {
 		},
 	}
 
-	eval := NewSQLEvaluator(db, rules, TemporalScope{})
-	results, err := eval.Query("at_risk", nil)
+	results, err := Evaluate(db, rules, "at_risk", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,8 +107,7 @@ func TestSQLEvalMultiJoin(t *testing.T) {
 		},
 	}
 
-	eval := NewSQLEvaluator(db, rules, TemporalScope{})
-	results, err := eval.Query("chain", nil)
+	results, err := Evaluate(db, rules, "chain", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,8 +145,7 @@ func TestSQLEvalConstraintFiltering(t *testing.T) {
 		},
 	}
 
-	eval := NewSQLEvaluator(db, rules, TemporalScope{})
-	results, err := eval.Query("at_risk", map[string]interface{}{"service": "api"})
+	results, err := Evaluate(db, rules, "at_risk", map[string]interface{}{"service": "api"}, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +171,7 @@ func TestSQLEvalFallbackEDB(t *testing.T) {
 		},
 	}
 
-	eval := NewSQLEvaluator(db, rules, TemporalScope{})
-	results, err := eval.Query("depends", nil)
+	results, err := Evaluate(db, rules, "depends", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,8 +204,7 @@ func TestSQLEvalTemporalMode(t *testing.T) {
 	}
 
 	validAt := int64(600)
-	eval := NewSQLEvaluator(db, rules, TemporalScope{ValidAt: &validAt})
-	results, err := eval.Query("derived", nil)
+	results, err := Evaluate(db, rules, "derived", nil, TemporalScope{ValidAt: &validAt})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,8 +216,7 @@ func TestSQLEvalTemporalMode(t *testing.T) {
 	}
 
 	earlyValid := int64(100)
-	eval2 := NewSQLEvaluator(db, rules, TemporalScope{ValidAt: &earlyValid})
-	results2, err := eval2.Query("derived", nil)
+	results2, err := Evaluate(db, rules, "derived", nil, TemporalScope{ValidAt: &earlyValid})
 	if err != nil {
 		t.Fatal(err)
 	}

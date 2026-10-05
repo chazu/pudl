@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/chazu/pudl/internal/datalog"
 )
 
 var ruleNewForce bool
@@ -44,8 +46,22 @@ var ruleNewCmd = &cobra.Command{
 		} else {
 			fmt.Printf("created rule scaffold: %s\n", path)
 		}
+		warnInvalidRules(cmd, dir)
 		return nil
 	},
+}
+
+// warnInvalidRules reports, on stderr, rules in dir that fail to load, so a
+// broken neighbour is noticed while the author is already editing rules.
+func warnInvalidRules(cmd *cobra.Command, dir string) {
+	rules, err := datalog.LoadRulesFromPaths(dir)
+	if err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: rules in %s do not load: %v\n", dir, err)
+		return
+	}
+	if invalid := datalog.InvalidRules(rules); len(invalid) > 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %d invalid rule(s) in %s:\n%s\n", len(invalid), dir, describeInvalidRules(invalid))
+	}
 }
 
 // ruleScaffoldSource renders a rule as a plain top-level field. The rule loader

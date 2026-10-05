@@ -71,9 +71,9 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 			}
 			var expr string
 			if hasOverride {
-				expr = fmt.Sprintf("%s.\"%s\"", alias, key)
+				expr = fmt.Sprintf("%s.%s", alias, quoteIdent(key))
 			} else {
-				expr = fmt.Sprintf("pudl_query_value(%s.args -> '$.%s')", alias, strings.ReplaceAll(key, "'", "''"))
+				expr = fmt.Sprintf("pudl_query_value(%s.args -> %s)", alias, jsonKeyPath(key))
 			}
 
 			if term.IsVariable() {
@@ -122,13 +122,24 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		}
 	}
 
+	// Head columns are projected in sorted key order, which is the canonical
+	// column order every rule of a relation shares (see headKeyProblems). A
+	// constant head argument is projected as a bound parameter; its parameters
+	// precede the body's because SELECT precedes FROM/WHERE in the SQL text.
 	var selectParts []string
+	var selectParams []interface{}
 	var groupParts []string
 	hasAgg := false
 	headKeys := sortedArgKeys(rule.Head.Args)
 	for _, key := range headKeys {
 		term := rule.Head.Args[key]
 		if !term.IsVariable() {
+			value, err := database.QueryParameter(term.Value)
+			if err != nil {
+				return nil, fmt.Errorf("rule %s head argument %s: %w", rule.Name, key, err)
+			}
+			selectParts = append(selectParts, fmt.Sprintf("? AS %s", quoteIdent(key)))
+			selectParams = append(selectParams, value)
 			continue
 		}
 		expr, ok := varExprs[term.Variable]
@@ -137,16 +148,17 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		}
 		if term.IsAggregate() {
 			hasAgg = true
-			selectParts = append(selectParts, fmt.Sprintf("%s(%s) AS \"%s\"", strings.ToUpper(term.Agg), expr, key))
+			selectParts = append(selectParts, fmt.Sprintf("%s(%s) AS %s", strings.ToUpper(term.Agg), expr, quoteIdent(key)))
 		} else {
-			selectParts = append(selectParts, fmt.Sprintf("%s AS \"%s\"", expr, key))
+			selectParts = append(selectParts, fmt.Sprintf("%s AS %s", expr, quoteIdent(key)))
 			groupParts = append(groupParts, expr)
 		}
 	}
 
 	if len(selectParts) == 0 {
-		return nil, fmt.Errorf("rule %s head has no variable projections", rule.Name)
+		return nil, fmt.Errorf("rule %s head has no arguments", rule.Name)
 	}
+	params = append(selectParams, params...)
 
 	// A body of a single override (derived/EDB) atom whose args are all
 	// first-occurrence variables yields no WHERE conditions — e.g. a reverse
@@ -186,6 +198,20 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		Head:   rule.Head,
 		Vars:   varExprs,
 	}, nil
+}
+
+// quoteIdent renders s as a double-quoted SQL identifier, doubling embedded
+// quotes. Head keys and relation-derived table names come from rule files, so
+// they are never interpolated unquoted.
+func quoteIdent(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+}
+
+// jsonKeyPath renders the SQL string literal for a JSON path selecting the
+// top-level key. The label is double-quoted so a key containing "." or "[" is
+// one key, not a nested path. The loader rejects keys containing '"'.
+func jsonKeyPath(key string) string {
+	return "'" + strings.ReplaceAll(`$."`+key+`"`, "'", "''") + "'"
 }
 
 func sortedArgKeys(args map[string]Term) []string {
