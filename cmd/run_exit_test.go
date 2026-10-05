@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -89,17 +90,17 @@ func TestRunSetDetailedExitThroughRealSets(t *testing.T) {
 	h, _ := setupMutatingRunSetFixture(t, false)
 
 	h.opts.converge = false
-	result, err := executeRunSet([]string{"producer"}, h.opts, h.deps)
+	result, err := executeRunSet(context.Background(), []string{"producer"}, h.opts, h.deps)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "a populate-only member finds nothing")
 
-	result, err = executeRunSet([]string{"mutator-a"}, h.opts, h.deps)
+	result, err = executeRunSet(context.Background(), []string{"mutator-a"}, h.opts, h.deps)
 	assert.NoError(t, err, "observe-only drift is a result, not an error")
 	assert.True(t, result.findings)
 	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(result, err)))
 
 	h.opts.converge = true
-	result, err = executeRunSet([]string{"mutator-a"}, h.opts, h.deps)
+	result, err = executeRunSet(context.Background(), []string{"mutator-a"}, h.opts, h.deps)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "converging closed the drift")
 }

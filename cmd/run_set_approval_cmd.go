@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-func resumeRunSet(runSetID string, deps runDeps) error {
+func resumeRunSet(ctx context.Context, runSetID string, deps runDeps) error {
 	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return err
@@ -44,7 +45,7 @@ func resumeRunSet(runSetID string, deps runDeps) error {
 		return err
 	}
 	defer func() { _ = retainMutationPlanSnapshots(db, prepared, false) }()
-	return executePreparedMutationPlan(db, deps.mu, report, rebuilt, prepared)
+	return executePreparedMutationPlan(ctx, db, deps.mu, report, rebuilt, prepared)
 }
 
 func rejectRunSet(runSetID string) error {

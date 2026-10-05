@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -109,6 +110,10 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 		{
 			Name:      "Schema Repository",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(pudlDir) },
+		},
+		{
+			Name:      "mu",
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckMu(context.Background()) },
 		},
 		{
 			Name:      "Git Repository",

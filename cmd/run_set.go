@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,9 @@ import (
 // member runs. A standalone run carries a nil context; every method is nil-safe
 // so the run path reads it without branching on whether it is a set member.
 type runSetExecutionContext struct {
+	// ctx is the invocation's lifetime. Once it is cancelled no further member
+	// starts: the rest of the set is recorded cancelled.
+	ctx              context.Context
 	runSetID         string
 	mu               muRunner
 	successfulRuns   map[string]wiring.ProducerRun
@@ -37,6 +41,18 @@ type runSetExecutionContext struct {
 	lastRunID        string
 	suppressOutput   bool
 }
+
+// interrupted reports the cancellation that stops the set, or nil.
+func (c *runSetExecutionContext) interrupted() error {
+	if c == nil || c.ctx == nil {
+		return nil
+	}
+	return c.ctx.Err()
+}
+
+// runSetCancelledNote explains a member that never started because the set was
+// interrupted.
+const runSetCancelledNote = "cancelled: the run set was interrupted before this member started"
 
 // id is the run set's ID, or "" for a standalone run.
 func (c *runSetExecutionContext) id() string {
@@ -177,7 +193,7 @@ Examples:
   pudl run reject <run-set-id>`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := executeRunSet(args, runSetOptionsFromFlags(cmd), defaultRunDeps())
+		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd), defaultRunDeps(cmd.Context(), runMuTimeout))
 		if !runSetDetailedExitCode {
 			return err
 		}
@@ -197,16 +213,16 @@ type runSetResult struct {
 // is an observe-only executeRun with its own options; a converging set then
 // plans and executes mutations across the whole set. The result is nil when
 // the set failed before it had a report.
-func executeRunSet(args []string, opts runSetOptions, deps runDeps) (*runSetResult, error) {
+func executeRunSet(ctx context.Context, args []string, opts runSetOptions, deps runDeps) (*runSetResult, error) {
 	result := &runSetResult{}
-	err := runSetMembers(args, opts, deps, result)
+	err := runSetMembers(ctx, args, opts, deps, result)
 	if result.report == nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runSetResult) error {
+func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps runDeps, result *runSetResult) error {
 	selected := make([]acute.RunSetModel, 0, len(args))
 	hasSealedOutputs := false
 	for _, requested := range args {
@@ -268,6 +284,7 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 		aliases[name] = append([]string(nil), member.Aliases...)
 	}
 	context := &runSetExecutionContext{
+		ctx:      ctx,
 		runSetID: report.RunSetID, mu: deps.mu, successfulRuns: map[string]wiring.ProducerRun{},
 		successfulModels: map[string]*systemmodel.SystemModel{},
 		snapshotIDs:      map[string]string{}, modelDirs: map[string]string{},
@@ -279,6 +296,18 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 
 	results := map[string]string{}
 	for _, model := range plan.Ordered {
+		if context.interrupted() != nil {
+			runID := acute.NewMemberRunID()
+			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusCancelled, runSetCancelledNote, nil); err != nil {
+				return err
+			}
+			results[model] = database.RunStatusCancelled
+			report.Members = append(report.Members, acute.RunSetMemberReport{Model: model, RunID: runID, Result: database.RunStatusCancelled, Error: runSetCancelledNote})
+			if err := saveRunSetReport(db, report); err != nil {
+				return err
+			}
+			continue
+		}
 		if blocker := firstNonSuccessfulPrerequisite(model, plan.Edges, results); blocker != "" {
 			runID := acute.NewMemberRunID()
 			note := fmt.Sprintf("blocked by unsuccessful prerequisite %q", blocker)
@@ -300,7 +329,7 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 		context.lastSealed = nil
 		context.lastSnapshotID = ""
 		context.lastModelDir = ""
-		memberReport, runErr := executeRun(memberRunOptions(model, opts), memberDeps)
+		memberReport, runErr := executeRun(ctx, memberRunOptions(model, opts), memberDeps)
 		result.findings = result.findings || reportHasFindings(memberReport)
 		runID := context.lastRunID
 		if runID == "" {
@@ -316,9 +345,9 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 		}
 		member := acute.RunSetMemberReport{Model: model, RunID: runID}
 		if runErr != nil {
-			member.Result = database.RunStatusFailed
+			member.Result = failureStatus(runErr)
 			member.Error = runErr.Error()
-			results[model] = database.RunStatusFailed
+			results[model] = member.Result
 		} else {
 			member.Result = database.RunStatusSucceeded
 			results[model] = database.RunStatusSucceeded
@@ -341,13 +370,7 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 		}
 	}
 
-	report.Status = database.RunStatusSucceeded
-	for _, member := range report.Members {
-		if member.Result != database.RunStatusSucceeded {
-			report.Status = database.RunStatusFailed
-			break
-		}
-	}
+	report.Status = runSetStatus(ctx, report)
 	if report.Status == database.RunStatusSucceeded && opts.converge {
 		return continueMutatingRunSet(db, plan, report, context, runSetMutationRequest{
 			Models: append([]string(nil), args...), MaxObservationAge: agePolicy,
@@ -360,6 +383,9 @@ func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runS
 	}
 	if err := printRunSetReport(report); err != nil {
 		return err
+	}
+	if report.Status == database.RunStatusCancelled {
+		return fmt.Errorf("run set %s %s: %w", report.RunSetID, database.RunStatusCancelled, ctx.Err())
 	}
 	if report.Status != database.RunStatusSucceeded {
 		return fmt.Errorf("run set %s failed", report.RunSetID)

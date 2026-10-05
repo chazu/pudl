@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -28,7 +29,15 @@ type resolvedRun struct {
 // command's handler.
 //
 // The returned report is nil when the run failed before it had one.
-func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError error) {
+//
+// ctx is the invocation's lifetime. Cancelling it (the first Ctrl-C) stops the
+// mu subprocess deps.mu is bound to, and the run then concludes `cancelled`
+// through its ordinary exit path — with needs-verification if an apply may have
+// been in flight. There is no resume: an interrupted run is simply re-run.
+func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport *RunReport, runError error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	approvalStatus := ""
 	if opts.resumeID != "" {
 		// Approval state belongs only to a resumed invocation.
@@ -49,7 +58,7 @@ func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError
 		return nil, err
 	}
 
-	resolved, err := resolveRunModel(cat, opts, deps)
+	resolved, err := resolveRunModel(ctx, cat, opts, deps)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +201,11 @@ func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError
 		cat: cat, mu: deps.mu, model: model, effective: effectiveModel, flags: flags,
 		muRoot: muRoot, modelDir: modelDir, pudlRoot: pudlRoot, session: session, live: live,
 	}
+	// An interrupt that arrived while the run was being prepared stops it before
+	// any phase starts; the deferred finalizers record it as cancelled.
+	if err := ctx.Err(); err != nil {
+		return report, fmt.Errorf("run interrupted before its phases began: %w", err)
+	}
 	runErr, err := executeRunPhases(phases, report)
 	if err != nil {
 		return report, err
@@ -202,12 +216,12 @@ func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError
 
 // resolveRunModel loads the model the options name — or builds the ad-hoc one
 // --populate describes — elaborates its bindings, and resolves sealed sources.
-func resolveRunModel(cat *runCatalog, opts runOptions, deps runDeps) (*resolvedRun, error) {
+func resolveRunModel(ctx context.Context, cat *runCatalog, opts runOptions, deps runDeps) (*resolvedRun, error) {
 	resolved := &resolvedRun{}
 	var err error
 	name := opts.model
 	if opts.populateSpec != "" {
-		resolved.model, resolved.modelDir, resolved.pudlRoot, err = adHocModel(opts.populateSpec, opts.populateInput)
+		resolved.model, resolved.modelDir, resolved.pudlRoot, err = adHocModel(ctx, opts.populateSpec, opts.populateInput)
 	} else {
 		resolved.model, err = elaborateRunTemplate(cat, opts, deps, resolved)
 	}

@@ -1,10 +1,11 @@
 package cmd
 
 import (
-	"bytes"
+	"context"
 	"fmt"
-	"os/exec"
-	"strings"
+	"time"
+
+	"github.com/chazu/pudl/internal/proc"
 )
 
 // muRunner is the subprocess seam between PUDL's run policy and mu's execution
@@ -35,30 +36,43 @@ type muRunner interface {
 
 // execMu is the production runner: it invokes the real mu binary, preserving
 // exactly the argument order and error wrapping the direct calls used.
-type execMu struct{}
+//
+// It is bound to the invocation's context, so an interrupted run stops mu
+// (SIGTERM, then SIGKILL after proc.DefaultGrace) instead of waiting on it, and
+// a call cut short that way returns an error wrapping context.Canceled. A
+// non-zero timeout bounds each individual mu invocation (--mu-timeout).
+type execMu struct {
+	ctx     context.Context
+	timeout time.Duration
+}
 
-func (execMu) Observe(configPath, target string) ([]byte, error) {
-	out, err := runMu([]string{"observe", "--config", configPath, "--json", target})
+// newExecMu returns the production runner bound to ctx.
+func newExecMu(ctx context.Context, timeout time.Duration) execMu {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return execMu{ctx: ctx, timeout: timeout}
+}
+
+func (m execMu) Observe(configPath, target string) ([]byte, error) {
+	out, err := m.run([]string{"observe", "--config", configPath, "--json", target})
 	if err != nil {
 		return nil, fmt.Errorf("mu observe %s: %w", target, err)
 	}
 	return out, nil
 }
 
-func (execMu) Build(configPath, target string, flags ...string) ([]byte, error) {
+func (m execMu) Build(configPath, target string, flags ...string) ([]byte, error) {
 	args := append([]string{"build"}, flags...)
 	args = append(args, "--config", configPath, target)
-	return runMu(args)
+	return m.run(args)
 }
 
-// runMu executes mu, returning stdout and folding stderr into any error.
-func runMu(args []string) ([]byte, error) {
-	command := exec.Command("mu", args...)
-	var stdout, stderr bytes.Buffer
-	command.Stdout = &stdout
-	command.Stderr = &stderr
-	if err := command.Run(); err != nil {
-		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+// run executes mu, returning stdout and folding stderr into any error.
+func (m execMu) run(args []string) ([]byte, error) {
+	ctx := m.ctx
+	if ctx == nil {
+		ctx = context.Background()
 	}
-	return stdout.Bytes(), nil
+	return proc.Output(ctx, m.timeout, "mu", args...)
 }

@@ -144,11 +144,11 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 
 	// Non-hidden temp subdir under the project root so mergeSubdirConfigs picks
 	// it up (it skips hidden dirs, mu/internal/config/loader.go:105).
-	dir, err := os.MkdirTemp(muRoot, "pudl_run_")
+	dir, err := os.MkdirTemp(muRoot, workspacePrefix)
 	if err != nil {
 		return nil, fmt.Errorf("create populate workspace: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer workspaces.track(dir)()
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte(src), 0o644); err != nil {
 		return nil, fmt.Errorf("write populate mu.cue: %w", err)
 	}
@@ -328,7 +328,7 @@ func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, mo
 	if err != nil {
 		return nil, fmt.Errorf("create populate workspace: %w", err)
 	}
-	defer os.RemoveAll(dir)
+	defer workspaces.track(dir)()
 
 	progData, err := os.ReadFile(srcPath)
 	if err != nil {

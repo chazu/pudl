@@ -24,6 +24,8 @@ var (
 	runRequireApproval   bool
 	runMaxObservationAge time.Duration
 	runDetailedExitCode  bool
+	// runMuTimeout bounds each mu invocation of run, run set and run resume.
+	runMuTimeout time.Duration
 )
 
 // Defaults for the convergence caps, shared by the flags and by run-set members
@@ -65,7 +67,7 @@ Examples:
 	},
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report, err := executeRun(runOptionsFromFlags(cmd, args), defaultRunDeps())
+		report, err := executeRun(cmd.Context(), runOptionsFromFlags(cmd, args), defaultRunDeps(cmd.Context(), runMuTimeout))
 		if !runDetailedExitCode {
 			return err
 		}
@@ -89,4 +91,5 @@ func init() {
 	runCmd.Flags().DurationVar(&runMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runCmd.Flags().BoolVar(&runRequireApproval, "require-approval", false, "persist the converge request and wait for `pudl run resume <run-id>`")
 	runCmd.Flags().BoolVar(&runDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
+	runCmd.PersistentFlags().DurationVar(&runMuTimeout, "mu-timeout", 0, "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit")
 }

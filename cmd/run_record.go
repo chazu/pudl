@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/proc"
 )
 
 // resolveApplyBudget works out how many applies this run may make, from how many
@@ -119,6 +120,18 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 	}
 }
 
+// failureStatus is the terminal completion status of a run that ended with err:
+// `cancelled` when the operator interrupted it, `failed` otherwise. A
+// --mu-timeout expiry is a failure, not a cancellation — nobody asked it to stop.
+// Cancellation says nothing about the system's state: whether an apply may have
+// been in flight is carried separately, as needs-verification.
+func failureStatus(err error) string {
+	if proc.Cancelled(err) {
+		return database.RunStatusCancelled
+	}
+	return database.RunStatusFailed
+}
+
 // runConclusion is the terminal run row for a run that concluded in state and
 // ended with runErr.
 func runConclusion(state runFinishState, runErr error) database.RunConclusion {
@@ -133,7 +146,7 @@ func runConclusion(state runFinishState, runErr error) database.RunConclusion {
 	}
 	completionStatus := database.RunStatusSucceeded
 	if runErr != nil {
-		completionStatus = database.RunStatusFailed
+		completionStatus = failureStatus(runErr)
 	}
 	return database.RunConclusion{
 		CompletionStatus:  completionStatus,
