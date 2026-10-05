@@ -165,22 +165,22 @@ resolve — independent of whether a model has been run yet.`,
 			return printModelsJSON(models)
 		}
 		if len(searched) == 0 {
-			fmt.Println("No schema repository found (run `pudl init`).")
+			fmt.Fprintln(outw(), "No schema repository found (run `pudl init`).")
 			return nil
 		}
 		if len(models) == 0 {
-			fmt.Println("No registered models. Register one as a #SystemModel-derived definition, then `pudl schema add`.")
+			fmt.Fprintln(outw(), "No registered models. Register one as a #SystemModel-derived definition, then `pudl schema add`.")
 			return nil
 		}
 		statuses := modelRunStatuses()
-		fmt.Printf("Registered models (%d):\n\n", len(models))
-		fmt.Printf("  %-24s %-9s %-12s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
+		fmt.Fprintf(outw(), "Registered models (%d):\n\n", len(models))
+		fmt.Fprintf(outw(), "  %-24s %-9s %-12s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
 		for _, mi := range models {
 			status := statuses[modelTargetKey(mi.Name)]
 			if status == "" {
 				status = "-"
 			}
-			fmt.Printf("  %-24s %-9s %-12s %-8d %-7d %-10s %s\n",
+			fmt.Fprintf(outw(), "  %-24s %-9s %-12s %-8d %-7d %-10s %s\n",
 				mi.Name,
 				string(mi.Summary.PopulateKind),
 				mi.convergeName(),
@@ -231,7 +231,7 @@ func printModelsJSON(models []ModelInfo) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(b))
+	fmt.Fprintln(outw(), string(b))
 	return nil
 }
 

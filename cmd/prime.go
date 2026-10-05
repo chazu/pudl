@@ -18,7 +18,7 @@ Include a line like this in your CLAUDE.md or similar agent config:
 The agent will then know to execute the command and read the output
 to understand pudl's capabilities and conventions.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Print(primeText)
+		fmt.Fprint(outw(), primeText)
 	},
 }
 

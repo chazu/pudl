@@ -91,9 +91,9 @@ Examples:
 
 		if jsonOutput {
 			out, _ := json.MarshalIndent(f, "", "  ")
-			fmt.Println(string(out))
+			fmt.Fprintln(outw(), string(out))
 		} else {
-			fmt.Printf("Added fact %s\n", f.ID[:12])
+			fmt.Fprintf(outw(), "Added fact %s\n", f.ID[:12])
 		}
 		return nil
 	},
@@ -128,17 +128,17 @@ Examples:
 
 		if jsonOutput {
 			out, _ := json.MarshalIndent(facts, "", "  ")
-			fmt.Println(string(out))
+			fmt.Fprintln(outw(), string(out))
 			return nil
 		}
 		if len(facts) == 0 {
-			fmt.Println("No matching facts.")
+			fmt.Fprintln(outw(), "No matching facts.")
 			return nil
 		}
 		for _, f := range facts {
 			printFact(f, false)
 		}
-		fmt.Printf("\n%d match(es)\n", len(facts))
+		fmt.Fprintf(outw(), "\n%d match(es)\n", len(facts))
 		return nil
 	},
 }

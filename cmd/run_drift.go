@@ -325,14 +325,14 @@ func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, 
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		if !jsonOutput {
-			fmt.Printf("warning: could not load config to record the observation: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not load config to record the observation: %v\n", err)
 		}
 		return ""
 	}
 	db, err := cat.optional()
 	if err != nil {
 		if !jsonOutput {
-			fmt.Printf("warning: could not open catalog to record the observation: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not open catalog to record the observation: %v\n", err)
 		}
 		return ""
 	}
@@ -359,7 +359,7 @@ func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, 
 	}, cfg.DataPath)
 	if err != nil {
 		if !jsonOutput {
-			fmt.Printf("warning: could not record the observation: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not record the observation: %v\n", err)
 		}
 		return ""
 	}

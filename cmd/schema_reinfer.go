@@ -106,8 +106,8 @@ func runSchemaReinferCommand() error {
 		return errors.NewSystemError("Failed to initialize schema inferrer", err)
 	}
 
-	fmt.Printf("🔄 Schema Re-inference\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
+	fmt.Fprintf(outw(), "🔄 Schema Re-inference\n")
+	fmt.Fprintf(outw(), "═══════════════════════════════════════════════════════════════\n")
 
 	// Handle single entry case
 	if reinferEntry != "" {
@@ -131,11 +131,11 @@ func runSchemaReinferCommand() error {
 	}
 
 	if len(queryResult.Entries) == 0 {
-		fmt.Println("No entries found matching the specified criteria.")
+		fmt.Fprintln(outw(), "No entries found matching the specified criteria.")
 		return nil
 	}
 
-	fmt.Printf("Found %d entries to process\n\n", len(queryResult.Entries))
+	fmt.Fprintf(outw(), "Found %d entries to process\n\n", len(queryResult.Entries))
 
 	// Analyze what would change
 	changes := analyzeReinferChanges(queryResult.Entries, catalogDB, inferrer, cfg.DataPath)
@@ -144,22 +144,22 @@ func runSchemaReinferCommand() error {
 	printReinferSummary(changes)
 
 	if reinferDryRun {
-		fmt.Println("\n🔍 Dry run - no changes applied")
+		fmt.Fprintln(outw(), "\n🔍 Dry run - no changes applied")
 		return nil
 	}
 
 	if len(changes.updated) == 0 {
-		fmt.Println("\n✅ No schema changes needed")
+		fmt.Fprintln(outw(), "\n✅ No schema changes needed")
 		return nil
 	}
 
 	// Confirm before applying
 	if !reinferForce {
-		fmt.Printf("\nApply %d schema changes? [y/N]: ", len(changes.updated))
+		fmt.Fprintf(outw(), "\nApply %d schema changes? [y/N]: ", len(changes.updated))
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			fmt.Println("Cancelled.")
+			fmt.Fprintln(outw(), "Cancelled.")
 			return nil
 		}
 	}
@@ -204,26 +204,26 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 	}
 
 	proquint := idgen.HashToProquint(entry.ID)
-	fmt.Printf("Entry: %s\n", proquint)
-	fmt.Printf("Current schema: %s\n", entry.Schema)
-	fmt.Printf("Inferred schema: %s (confidence: %.2f)\n", result.Schema, result.Confidence)
+	fmt.Fprintf(outw(), "Entry: %s\n", proquint)
+	fmt.Fprintf(outw(), "Current schema: %s\n", entry.Schema)
+	fmt.Fprintf(outw(), "Inferred schema: %s (confidence: %.2f)\n", result.Schema, result.Confidence)
 
 	if result.Schema == entry.Schema {
-		fmt.Println("\n✅ Schema unchanged")
+		fmt.Fprintln(outw(), "\n✅ Schema unchanged")
 		return nil
 	}
 
 	if reinferDryRun {
-		fmt.Println("\n🔍 Dry run - no changes applied")
+		fmt.Fprintln(outw(), "\n🔍 Dry run - no changes applied")
 		return nil
 	}
 
 	if !reinferForce {
-		fmt.Printf("\nUpdate schema to %s? [y/N]: ", result.Schema)
+		fmt.Fprintf(outw(), "\nUpdate schema to %s? [y/N]: ", result.Schema)
 		var response string
 		fmt.Scanln(&response)
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
-			fmt.Println("Cancelled.")
+			fmt.Fprintln(outw(), "Cancelled.")
 			return nil
 		}
 	}
@@ -243,7 +243,7 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 		return errors.NewSystemError("Failed to update catalog entry", err)
 	}
 
-	fmt.Printf("\n✅ Updated schema: %s → %s\n", entry.Schema, result.Schema)
+	fmt.Fprintf(outw(), "\n✅ Updated schema: %s → %s\n", entry.Schema, result.Schema)
 	return nil
 }
 
@@ -317,23 +317,23 @@ func analyzeReinferChanges(entries []database.CatalogEntry, catalogDB *database.
 
 // printReinferSummary prints a summary of the reinfer analysis
 func printReinferSummary(changes *reinferChanges) {
-	fmt.Printf("📊 Analysis Summary:\n")
-	fmt.Printf("   Would update: %d entries\n", len(changes.updated))
-	fmt.Printf("   Unchanged:    %d entries\n", len(changes.unchanged))
-	fmt.Printf("   Errors:       %d entries\n", len(changes.errors))
+	fmt.Fprintf(outw(), "📊 Analysis Summary:\n")
+	fmt.Fprintf(outw(), "   Would update: %d entries\n", len(changes.updated))
+	fmt.Fprintf(outw(), "   Unchanged:    %d entries\n", len(changes.unchanged))
+	fmt.Fprintf(outw(), "   Errors:       %d entries\n", len(changes.errors))
 
 	if len(changes.updated) > 0 {
-		fmt.Printf("\n📝 Schema changes:\n")
+		fmt.Fprintf(outw(), "\n📝 Schema changes:\n")
 		for _, change := range changes.updated {
-			fmt.Printf("   %s: %s → %s (%.2f)\n",
+			fmt.Fprintf(outw(), "   %s: %s → %s (%.2f)\n",
 				change.proquint, change.oldSchema, change.newSchema, change.confidence)
 		}
 	}
 
 	if len(changes.errors) > 0 {
-		fmt.Printf("\n⚠️  Errors:\n")
+		fmt.Fprintf(outw(), "\n⚠️  Errors:\n")
 		for _, errMsg := range changes.errors {
-			fmt.Printf("   %s\n", errMsg)
+			fmt.Fprintf(outw(), "   %s\n", errMsg)
 		}
 	}
 }
@@ -344,7 +344,7 @@ func applyReinferChanges(catalogDB *database.CatalogDB, inferrer *inference.Sche
 	for _, change := range changes.updated {
 		entry, err := catalogDB.GetEntry(change.entryID)
 		if err != nil {
-			fmt.Printf("   ❌ %s: failed to update\n", change.proquint)
+			fmt.Fprintf(outw(), "   ❌ %s: failed to update\n", change.proquint)
 			failCount++
 			continue
 		}
@@ -355,18 +355,18 @@ func applyReinferChanges(catalogDB *database.CatalogDB, inferrer *inference.Sche
 		recomputeEntryIdentity(entry, change.data, inferrer)
 
 		if err := catalogDB.UpdateEntry(*entry); err != nil {
-			fmt.Printf("   ❌ %s: failed to update\n", change.proquint)
+			fmt.Fprintf(outw(), "   ❌ %s: failed to update\n", change.proquint)
 			failCount++
 		} else {
-			fmt.Printf("   ✅ %s: %s → %s\n", change.proquint, change.oldSchema, change.newSchema)
+			fmt.Fprintf(outw(), "   ✅ %s: %s → %s\n", change.proquint, change.oldSchema, change.newSchema)
 			successCount++
 		}
 	}
 
-	fmt.Printf("\n═══════════════════════════════════════════════════════════════\n")
-	fmt.Printf("✅ Updated: %d entries\n", successCount)
+	fmt.Fprintf(outw(), "\n═══════════════════════════════════════════════════════════════\n")
+	fmt.Fprintf(outw(), "✅ Updated: %d entries\n", successCount)
 	if failCount > 0 {
-		fmt.Printf("❌ Failed:  %d entries\n", failCount)
+		fmt.Fprintf(outw(), "❌ Failed:  %d entries\n", failCount)
 	}
 
 	return nil

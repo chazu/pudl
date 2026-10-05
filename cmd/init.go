@@ -30,7 +30,7 @@ func runInitCommand(cmd *cobra.Command, args []string) error {
 	mode := "global"
 	if initGlobal {
 		if initForce || !config.Exists() {
-			if err := pudlInit.Initialize(pudlInit.InitOptions{Force: initForce, Verbose: !jsonOutput}); err != nil {
+			if err := pudlInit.Initialize(pudlInit.InitOptions{Force: initForce, Verbose: !jsonOutput, Out: outw()}); err != nil {
 				return err
 			}
 		}
@@ -40,15 +40,15 @@ func runInitCommand(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		root, mode = filepath.Join(cwd, ".pudl"), "workspace"
-		if err := repo.Init(repo.InitOptions{Dir: cwd, Force: initForce, Verbose: !jsonOutput}); err != nil {
+		if err := repo.Init(repo.InitOptions{Dir: cwd, Force: initForce, Verbose: !jsonOutput, Out: outw()}); err != nil {
 			return err
 		}
 	}
 	if jsonOutput {
 		return GetOutputWriter().WriteJSON(map[string]string{"path": root, "mode": mode})
 	}
-	fmt.Printf("PUDL workspace ready: %s\n", root)
-	fmt.Println("Next: pudl model list, or pudl import --path <file>")
+	fmt.Fprintf(outw(), "PUDL workspace ready: %s\n", root)
+	fmt.Fprintln(outw(), "Next: pudl model list, or pudl import --path <file>")
 	return nil
 }
 

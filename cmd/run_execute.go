@@ -83,7 +83,7 @@ func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError
 
 	live := !jsonOutput
 	if live {
-		fmt.Print(renderRunPlan(plan))
+		fmt.Fprint(outw(), renderRunPlan(plan))
 	}
 
 	// Audit the run for real, from here on. A dry run is exempt because it must
@@ -180,10 +180,10 @@ func executeRun(opts runOptions, deps runDeps) (finalReport *RunReport, runError
 			return report, err
 		}
 		if live && deps.set.emitOutput() {
-			fmt.Print(out)
-			fmt.Printf("approval pending: pudl run resume %s | pudl run reject %s\n", session.RunID, session.RunID)
+			fmt.Fprint(outw(), out)
+			fmt.Fprintf(outw(), "approval pending: pudl run resume %s | pudl run reject %s\n", session.RunID, session.RunID)
 		} else if deps.set.emitOutput() {
-			fmt.Print(out)
+			fmt.Fprint(outw(), out)
 		}
 		return report, nil
 	}
@@ -271,7 +271,7 @@ func elaborateRunTemplate(cat *runCatalog, opts runOptions, deps runDeps, resolv
 		if jsonOutput && deps.set == nil {
 			diagnostic := resolutionDiagnosticReport(template, opts.runFlags, err)
 			if rendered, renderErr := diagnostic.render(true); renderErr == nil {
-				fmt.Print(rendered)
+				fmt.Fprint(outw(), rendered)
 			}
 		}
 		return nil, err
@@ -294,7 +294,7 @@ func recordRunContext(cat *runCatalog, model *systemmodel.SystemModel, runID str
 		// that's been run is inventoriable via `pudl list`/`query`. Best-effort:
 		// a recording failure must not fail the run.
 		if err := recordModelInstance(cat, model, runID); err != nil && live {
-			fmt.Printf("warning: could not record model instance: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not record model instance: %v\n", err)
 		}
 
 		// Reconcile this model's declared depends_on into model_depends_on facts
@@ -302,21 +302,21 @@ func recordRunContext(cat *runCatalog, model *systemmodel.SystemModel, runID str
 		// failure must not fail the run. Warnings (e.g. unresolved deps) surface.
 		if warns, err := reconcileModelDependencies(cat, model); err != nil {
 			if live {
-				fmt.Printf("warning: could not reconcile dependencies: %v\n", err)
+				fmt.Fprintf(errw(), "warning: could not reconcile dependencies: %v\n", err)
 			}
 		} else if live {
 			for _, w := range warns {
-				fmt.Printf("warning: %s\n", w)
+				fmt.Fprintf(errw(), "warning: %s\n", w)
 			}
 		}
 	} else if live {
-		fmt.Println("dry-run: skipping model-instance and dependency-fact writes")
+		fmt.Fprintln(outw(), "dry-run: skipping model-instance and dependency-fact writes")
 	}
 
 	// Opt-in stale-input guard: warn if any transitive upstream is drifted/failed.
 	if opts.checkUpstream && live {
 		for _, w := range checkUpstreamFreshness(cat, model) {
-			fmt.Printf("warning: %s\n", w)
+			fmt.Fprintf(errw(), "warning: %s\n", w)
 		}
 	}
 }
@@ -346,7 +346,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 			report.Mode = "dry-run"
 		}
 		if in.live {
-			fmt.Println("\n— converge —")
+			fmt.Fprintln(outw(), "\n— converge —")
 		}
 		budget := resolveApplyBudget(in.cat, model.Name, flags, in.live)
 		cr, convergeErr := runConvergeLoop(in.cat, in.mu, in.effective, in.muRoot, in.modelDir, in.session.RunID, flags.maxIters, flags.dryRun, budget)

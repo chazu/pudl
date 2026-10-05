@@ -28,14 +28,14 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 		return persisted, err
 	}
 	if in.live && deps.set.emitOutput() {
-		fmt.Print("\n")
+		fmt.Fprint(outw(), "\n")
 	}
 	if deps.set.emitOutput() {
-		fmt.Print(out)
+		fmt.Fprint(outw(), out)
 	}
 	if in.live {
 		for _, notice := range fin.notices {
-			fmt.Print(notice)
+			fmt.Fprint(outw(), notice)
 		}
 	}
 	return persisted, fin.runErr
@@ -268,12 +268,12 @@ func persistRunStatus(cat *runCatalog, name, status string, live bool) {
 	db, err := cat.optional()
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not open catalog to record status %q: %v\n", status, err)
+			fmt.Fprintf(errw(), "warning: could not open catalog to record status %q: %v\n", status, err)
 		}
 		return
 	}
 	if err := db.UpdateStatus(modelTargetKey(name), status); err != nil && live {
-		fmt.Printf("warning: could not record status %q: %v\n", status, err)
+		fmt.Fprintf(errw(), "warning: could not record status %q: %v\n", status, err)
 	}
 }
 

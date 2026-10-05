@@ -50,14 +50,14 @@ func TestResolveFilePaths(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("single file - no wildcard", func(t *testing.T) {
-		paths, err := resolveFilePaths("data1.json")
+		paths, err := resolveFilePaths("data1.json", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 1)
 		assert.Contains(t, paths[0], "data1.json")
 	})
 
 	t.Run("wildcard - multiple JSON files", func(t *testing.T) {
-		paths, err := resolveFilePaths("*.json")
+		paths, err := resolveFilePaths("*.json", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 2)
 
@@ -71,33 +71,33 @@ func TestResolveFilePaths(t *testing.T) {
 	})
 
 	t.Run("wildcard - single YAML file", func(t *testing.T) {
-		paths, err := resolveFilePaths("*.yaml")
+		paths, err := resolveFilePaths("*.yaml", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 1)
 		assert.Contains(t, paths[0], "config.yaml")
 	})
 
 	t.Run("wildcard - no matches", func(t *testing.T) {
-		paths, err := resolveFilePaths("*.xml")
+		paths, err := resolveFilePaths("*.xml", false)
 		require.NoError(t, err)
 		assert.Len(t, paths, 0)
 	})
 
 	t.Run("wildcard - subdirectory pattern", func(t *testing.T) {
-		paths, err := resolveFilePaths("subdir/*.json")
+		paths, err := resolveFilePaths("subdir/*.json", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 1)
 		assert.Contains(t, paths[0], "nested.json")
 	})
 
 	t.Run("single file - file not found", func(t *testing.T) {
-		_, err := resolveFilePaths("nonexistent.json")
+		_, err := resolveFilePaths("nonexistent.json", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
 
 	t.Run("invalid wildcard pattern", func(t *testing.T) {
-		_, err := resolveFilePaths("[invalid")
+		_, err := resolveFilePaths("[invalid", false)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "Invalid wildcard pattern")
 	})
@@ -153,7 +153,7 @@ func TestResolveFilePathsFiltersDirectories(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test that only files are returned, not directories
-	paths, err := resolveFilePaths("data.json*")
+	paths, err := resolveFilePaths("data.json*", false)
 	require.NoError(t, err)
 	require.Len(t, paths, 1)
 	assert.Contains(t, paths[0], "data.json")
@@ -189,7 +189,7 @@ func TestWildcardImportIntegration(t *testing.T) {
 
 	t.Run("wildcard pattern resolves correctly", func(t *testing.T) {
 		// Test that wildcard pattern resolves to the correct files
-		paths, err := resolveFilePaths("*.json")
+		paths, err := resolveFilePaths("*.json", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 2)
 
@@ -205,7 +205,7 @@ func TestWildcardImportIntegration(t *testing.T) {
 
 	t.Run("single file still works", func(t *testing.T) {
 		// Test that single file import still works
-		paths, err := resolveFilePaths("data1.json")
+		paths, err := resolveFilePaths("data1.json", false)
 		require.NoError(t, err)
 		require.Len(t, paths, 1)
 		assert.Contains(t, paths[0], "data1.json")
@@ -213,7 +213,7 @@ func TestWildcardImportIntegration(t *testing.T) {
 
 	t.Run("no matches returns empty slice", func(t *testing.T) {
 		// Test that patterns with no matches return empty slice
-		paths, err := resolveFilePaths("*.xml")
+		paths, err := resolveFilePaths("*.xml", false)
 		require.NoError(t, err)
 		assert.Len(t, paths, 0)
 	})

@@ -59,28 +59,28 @@ func runSchemaListCommand() error {
 		return GetOutputWriter().WriteJSON(entries)
 	}
 	if len(entries) == 0 {
-		fmt.Println("No schemas found.")
+		fmt.Fprintln(outw(), "No schemas found.")
 		return nil
 	}
-	fmt.Println("Available Schemas:")
+	fmt.Fprintln(outw(), "Available Schemas:")
 	for _, entry := range entries {
 		builtIn := ""
 		if entry.BuiltIn {
 			builtIn = " [built-in]"
 		}
-		fmt.Printf("  %s%s", entry.FullName, builtIn)
+		fmt.Fprintf(outw(), "  %s%s", entry.FullName, builtIn)
 		if entry.Metadata != nil {
-			fmt.Printf("  type=%s resource=%s", entry.Metadata.SchemaType, entry.Metadata.ResourceType)
+			fmt.Fprintf(outw(), "  type=%s resource=%s", entry.Metadata.SchemaType, entry.Metadata.ResourceType)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 		if schemaVerbose {
-			fmt.Printf("    File: %s\n    Size: %s\n", entry.FilePath, formatBytes(entry.Size))
+			fmt.Fprintf(outw(), "    File: %s\n    Size: %s\n", entry.FilePath, formatBytes(entry.Size))
 			if entry.Metadata != nil {
-				fmt.Printf("    identity_fields: %v\n    tracked_fields: %v\n    list_type: %t\n", entry.Metadata.IdentityFields, entry.Metadata.TrackedFields, entry.Metadata.IsListType)
+				fmt.Fprintf(outw(), "    identity_fields: %v\n    tracked_fields: %v\n    list_type: %t\n", entry.Metadata.IdentityFields, entry.Metadata.TrackedFields, entry.Metadata.IsListType)
 			}
 		}
 	}
-	fmt.Printf("\nTotal: %d schemas\n", len(entries))
+	fmt.Fprintf(outw(), "\nTotal: %d schemas\n", len(entries))
 	return nil
 }
 

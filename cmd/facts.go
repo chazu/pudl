@@ -126,12 +126,12 @@ Examples:
 
 		if jsonOutput {
 			out, _ := json.MarshalIndent(facts, "", "  ")
-			fmt.Println(string(out))
+			fmt.Fprintln(outw(), string(out))
 			return nil
 		}
 
 		if len(facts) == 0 {
-			fmt.Println("No facts found.")
+			fmt.Fprintln(outw(), "No facts found.")
 			return nil
 		}
 
@@ -139,7 +139,7 @@ Examples:
 			printFact(f, factsVerbose)
 		}
 
-		fmt.Printf("\n%d fact(s)\n", len(facts))
+		fmt.Fprintf(outw(), "\n%d fact(s)\n", len(facts))
 		return nil
 	},
 }
@@ -148,39 +148,39 @@ func printFact(f database.Fact, verbose bool) {
 	validStart := time.Unix(f.ValidStart, 0).Format(time.RFC3339)
 
 	if verbose {
-		fmt.Printf("ID:       %s\n", f.ID)
-		fmt.Printf("Relation: %s\n", f.Relation)
-		fmt.Printf("Args:     %s\n", f.Args)
-		fmt.Printf("Source:   %s\n", f.Source)
-		fmt.Printf("Valid:    %s", validStart)
+		fmt.Fprintf(outw(), "ID:       %s\n", f.ID)
+		fmt.Fprintf(outw(), "Relation: %s\n", f.Relation)
+		fmt.Fprintf(outw(), "Args:     %s\n", f.Args)
+		fmt.Fprintf(outw(), "Source:   %s\n", f.Source)
+		fmt.Fprintf(outw(), "Valid:    %s", validStart)
 		if f.ValidEnd != nil {
-			fmt.Printf(" → %s", time.Unix(*f.ValidEnd, 0).Format(time.RFC3339))
+			fmt.Fprintf(outw(), " → %s", time.Unix(*f.ValidEnd, 0).Format(time.RFC3339))
 		}
-		fmt.Println()
-		fmt.Printf("Tx:       %s", time.Unix(f.TxStart, 0).Format(time.RFC3339))
+		fmt.Fprintln(outw())
+		fmt.Fprintf(outw(), "Tx:       %s", time.Unix(f.TxStart, 0).Format(time.RFC3339))
 		if f.TxEnd != nil {
 			// A closed belief was either retracted or superseded by an
 			// invalidation; `facts show` names the successor when there is one.
-			fmt.Printf(" → %s (no longer believed)", time.Unix(*f.TxEnd, 0).Format(time.RFC3339))
+			fmt.Fprintf(outw(), " → %s (no longer believed)", time.Unix(*f.TxEnd, 0).Format(time.RFC3339))
 		}
-		fmt.Println()
-		fmt.Printf("Seq:      %d", f.TxSeq)
+		fmt.Fprintln(outw())
+		fmt.Fprintf(outw(), "Seq:      %d", f.TxSeq)
 		if f.TxEndSeq != nil {
-			fmt.Printf(" → %d", *f.TxEndSeq)
+			fmt.Fprintf(outw(), " → %d", *f.TxEndSeq)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 		if f.Supersedes != "" {
-			fmt.Printf("Supersedes: %s\n", f.Supersedes)
+			fmt.Fprintf(outw(), "Supersedes: %s\n", f.Supersedes)
 		}
 		if f.Provenance != "" {
-			fmt.Printf("Prov:     %s\n", f.Provenance)
+			fmt.Fprintf(outw(), "Prov:     %s\n", f.Provenance)
 		}
-		fmt.Println("---")
+		fmt.Fprintln(outw(), "---")
 	} else {
 		// Compact format: ID (short) | relation | source | timestamp | key details from args
 		idShort := f.ID[:12]
 		summary := extractArgsSummary(f.Args)
-		fmt.Printf("%-12s  %-14s  %-12s  %s  %s\n", idShort, f.Relation, f.Source, validStart, summary)
+		fmt.Fprintf(outw(), "%-12s  %-14s  %-12s  %s  %s\n", idShort, f.Relation, f.Source, validStart, summary)
 	}
 }
 
@@ -283,12 +283,12 @@ Examples:
 
 		if jsonOutput {
 			out, _ := json.MarshalIndent(f, "", "  ")
-			fmt.Println(string(out))
+			fmt.Fprintln(outw(), string(out))
 			return nil
 		}
 
 		if f.ID != id {
-			fmt.Printf("Version %s was superseded; showing the newest version.\n\n", id[:12])
+			fmt.Fprintf(outw(), "Version %s was superseded; showing the newest version.\n\n", id[:12])
 		}
 		printFact(*f, true)
 		return nil
@@ -327,7 +327,7 @@ Examples:
 			return fmt.Errorf("failed to retract: %w", err)
 		}
 
-		fmt.Printf("Retracted fact %s\n", resolved[:12])
+		fmt.Fprintf(outw(), "Retracted fact %s\n", resolved[:12])
 		return nil
 	},
 }
@@ -371,7 +371,7 @@ Examples:
 			return fmt.Errorf("read invalidated fact: %w", err)
 		}
 
-		fmt.Printf("Invalidated fact %s (new version %s)\n", resolved[:12], latest.ID[:12])
+		fmt.Fprintf(outw(), "Invalidated fact %s (new version %s)\n", resolved[:12], latest.ID[:12])
 		return nil
 	},
 }
@@ -475,19 +475,19 @@ Examples:
 				results = append(results, row)
 			}
 			out, _ := json.MarshalIndent(results, "", "  ")
-			fmt.Println(string(out))
+			fmt.Fprintln(outw(), string(out))
 			return nil
 		}
 
 		// Print table header
 		for _, col := range cols {
-			fmt.Printf("%-32s", col)
+			fmt.Fprintf(outw(), "%-32s", col)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 		for range cols {
-			fmt.Printf("%-32s", "────────────────────────────────")
+			fmt.Fprintf(outw(), "%-32s", "────────────────────────────────")
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 
 		total := 0
 		for rows.Next() {
@@ -500,21 +500,21 @@ Examples:
 			for _, v := range vals {
 				switch val := v.(type) {
 				case int64:
-					fmt.Printf("%-32d", val)
+					fmt.Fprintf(outw(), "%-32d", val)
 					total += int(val)
 				case []byte:
-					fmt.Printf("%-32s", string(val))
+					fmt.Fprintf(outw(), "%-32s", string(val))
 				case string:
-					fmt.Printf("%-32s", val)
+					fmt.Fprintf(outw(), "%-32s", val)
 				case nil:
-					fmt.Printf("%-32s", "(null)")
+					fmt.Fprintf(outw(), "%-32s", "(null)")
 				default:
-					fmt.Printf("%-32v", val)
+					fmt.Fprintf(outw(), "%-32v", val)
 				}
 			}
-			fmt.Println()
+			fmt.Fprintln(outw())
 		}
-		fmt.Printf("\nTotal: %d\n", total)
+		fmt.Fprintf(outw(), "\nTotal: %d\n", total)
 		return nil
 	},
 }

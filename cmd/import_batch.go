@@ -5,11 +5,15 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+
+	"github.com/chazu/pudl/internal/ui"
 )
 
-// runBatchImport handles importing multiple files and provides summary output
+// runBatchImport imports several files. Per-file progress goes to stderr; the
+// result is a summary on stdout, or under --json one array entry per file.
 func runBatchImport(cmd *cobra.Command, filePaths []string) error {
-	fmt.Printf("🔄 Importing %d files...\n\n", len(filePaths))
+	progress := ui.FromCmd(cmd)
+	progress.Progressf("🔄 Importing %d files...\n", len(filePaths))
 
 	session, err := newImportSession()
 	if err != nil {
@@ -18,6 +22,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	defer session.Close()
 
 	var importErrors []error
+	outcomes := make([]importOutcome, 0, len(filePaths))
 	successCount := 0
 	totalRecords := 0
 	totalSize := int64(0)
@@ -26,12 +31,13 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 	// Import each file
 	for i, filePath := range filePaths {
-		fmt.Printf("📁 [%d/%d] Importing: %s\n", i+1, len(filePaths), filepath.Base(filePath))
+		progress.Progressf("📁 [%d/%d] Importing: %s", i+1, len(filePaths), filepath.Base(filePath))
 
 		result, err := importOneWithEnvelope(session.imp, session.options(filePath, origin))
+		outcomes = append(outcomes, newImportOutcome(filePath, result, err))
 		if err != nil {
 			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))
-			fmt.Printf("   ❌ Failed: %v\n", err)
+			progress.Progressf("   ❌ Failed: %v", err)
 			continue
 		}
 
@@ -39,11 +45,16 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 		totalRecords += result.RecordCount
 		totalSize += result.SizeBytes
 
-		fmt.Printf("   ✅ Success: %s (ID: %s, Records: %d)\n", result.DetectedFormat, result.ID, result.RecordCount)
+		progress.Progressf("   ✅ Success: %s (ID: %s, Records: %d)", result.DetectedFormat, result.ID, result.RecordCount)
 	}
 
-	// Display summary
-	displayBatchImportSummary(successCount, len(filePaths), totalRecords, totalSize, importErrors)
+	if jsonOutput {
+		if err := writeImportJSON(outcomes); err != nil {
+			return err
+		}
+	} else {
+		displayBatchImportSummary(successCount, len(filePaths), totalRecords, totalSize, importErrors)
+	}
 
 	// If there were any errors, return the first one
 	if len(importErrors) > 0 {
@@ -55,28 +66,28 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 
 // displayBatchImportSummary shows a summary of batch import results
 func displayBatchImportSummary(successCount, totalCount, totalRecords int, totalSize int64, importErrors []error) {
-	fmt.Println()
-	fmt.Printf("📊 Batch Import Summary\n")
-	fmt.Printf("   Files processed: %d/%d\n", successCount, totalCount)
-	fmt.Printf("   Total records: %d\n", totalRecords)
-	fmt.Printf("   Total size: %d bytes\n", totalSize)
+	fmt.Fprintln(outw())
+	fmt.Fprintf(outw(), "📊 Batch Import Summary\n")
+	fmt.Fprintf(outw(), "   Files processed: %d/%d\n", successCount, totalCount)
+	fmt.Fprintf(outw(), "   Total records: %d\n", totalRecords)
+	fmt.Fprintf(outw(), "   Total size: %d bytes\n", totalSize)
 
 	if len(importErrors) > 0 {
-		fmt.Printf("   Errors: %d\n", len(importErrors))
-		fmt.Println()
-		fmt.Println("❌ Import Errors:")
+		fmt.Fprintf(outw(), "   Errors: %d\n", len(importErrors))
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "❌ Import Errors:")
 		for _, err := range importErrors {
-			fmt.Printf("   - %v\n", err)
+			fmt.Fprintf(outw(), "   - %v\n", err)
 		}
 	}
 
 	if successCount > 0 {
-		fmt.Println()
-		fmt.Println("✅ Batch import completed!")
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "✅ Batch import completed!")
 		if successCount < totalCount {
-			fmt.Printf("   %d files imported successfully, %d failed\n", successCount, totalCount-successCount)
+			fmt.Fprintf(outw(), "   %d files imported successfully, %d failed\n", successCount, totalCount-successCount)
 		} else {
-			fmt.Printf("   All %d files imported successfully\n", successCount)
+			fmt.Fprintf(outw(), "   All %d files imported successfully\n", successCount)
 		}
 	}
 }

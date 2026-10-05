@@ -11,18 +11,18 @@ import (
 // printModelDrift renders a model-level drift verdict.
 func printModelDrift(r ModelDriftResult) {
 	if r.Clean {
-		fmt.Println("drift: ∅ (clean — all desired resources exist and match)")
+		fmt.Fprintln(outw(), "drift: ∅ (clean — all desired resources exist and match)")
 		return
 	}
-	fmt.Printf("drift: %d resource(s)\n", len(r.Drifted))
+	fmt.Fprintf(outw(), "drift: %d resource(s)\n", len(r.Drifted))
 	for _, d := range r.Drifted {
 		if d.Diff != "" {
-			fmt.Printf("  ~ %s (%s): %s\n", d.Resource, d.Reason, d.Diff)
+			fmt.Fprintf(outw(), "  ~ %s (%s): %s\n", d.Resource, d.Reason, d.Diff)
 		} else {
-			fmt.Printf("  ~ %s (%s)\n", d.Resource, d.Reason)
+			fmt.Fprintf(outw(), "  ~ %s (%s)\n", d.Resource, d.Reason)
 		}
 		for _, f := range d.Fields {
-			fmt.Printf("      %s\n", f.Detail())
+			fmt.Fprintf(outw(), "      %s\n", f.Detail())
 		}
 	}
 }

@@ -123,19 +123,19 @@ func runModuleTidyCommand() error {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
 
-	fmt.Println("Fetching CUE module dependencies...")
+	fmt.Fprintln(outw(), "Fetching CUE module dependencies...")
 
 	// Run cue mod tidy
 	cmd := exec.Command("cue", "mod", "tidy")
 	cmd.Dir = schemaPath
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = outw()
+	cmd.Stderr = errw()
 
 	if err := cmd.Run(); err != nil {
 		return errors.NewSystemError("Failed to run 'cue mod tidy'", err)
 	}
 
-	fmt.Println("✅ Module dependencies updated successfully")
+	fmt.Fprintln(outw(), "✅ Module dependencies updated successfully")
 	return nil
 }
 
@@ -159,9 +159,9 @@ func runModuleListCommand() error {
 		return errors.NewFileNotFoundError("Failed to read module.cue")
 	}
 
-	fmt.Println("CUE Module Configuration:")
-	fmt.Println("========================")
-	fmt.Printf("%s\n", content)
+	fmt.Fprintln(outw(), "CUE Module Configuration:")
+	fmt.Fprintln(outw(), "========================")
+	fmt.Fprintf(outw(), "%s\n", content)
 
 	return nil
 }
@@ -180,26 +180,26 @@ func runModuleInfoCommand() error {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
 
-	fmt.Printf("Module Information:\n")
-	fmt.Printf("==================\n")
-	fmt.Printf("Schema Directory: %s\n", effectiveSchemaPath(cfg))
-	fmt.Printf("Module File: %s\n", modulePath)
+	fmt.Fprintf(outw(), "Module Information:\n")
+	fmt.Fprintf(outw(), "==================\n")
+	fmt.Fprintf(outw(), "Schema Directory: %s\n", effectiveSchemaPath(cfg))
+	fmt.Fprintf(outw(), "Module File: %s\n", modulePath)
 
 	// Show additional module information if CUE is available
 	if _, err := exec.LookPath("cue"); err == nil {
-		fmt.Println("\nModule Dependencies:")
-		fmt.Println("===================")
+		fmt.Fprintln(outw(), "\nModule Dependencies:")
+		fmt.Fprintln(outw(), "===================")
 
 		// Try to show module dependencies using cue mod edit
 		cmd := exec.Command("cue", "mod", "edit", "--json")
 		cmd.Dir = effectiveSchemaPath(cfg)
 		if output, err := cmd.Output(); err == nil {
-			fmt.Printf("%s\n", output)
+			fmt.Fprintf(outw(), "%s\n", output)
 		} else {
-			fmt.Println("No dependencies or unable to read module information")
+			fmt.Fprintln(outw(), "No dependencies or unable to read module information")
 		}
 	} else {
-		fmt.Println("\n⚠️  CUE command not available - install from https://cuelang.org/docs/install/")
+		fmt.Fprintln(outw(), "\n⚠️  CUE command not available - install from https://cuelang.org/docs/install/")
 	}
 
 	return nil
@@ -224,20 +224,20 @@ func runModuleAddCommand(moduleSpec string) error {
 		return errors.NewFileNotFoundError("cue.mod/module.cue not found - run 'pudl init' first")
 	}
 
-	fmt.Printf("Adding module dependency: %s\n", moduleSpec)
+	fmt.Fprintf(outw(), "Adding module dependency: %s\n", moduleSpec)
 
 	// Use cue mod get to add the dependency
 	cmd := exec.Command("cue", "mod", "get", moduleSpec)
 	cmd.Dir = schemaPath
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = outw()
+	cmd.Stderr = errw()
 
 	if err := cmd.Run(); err != nil {
 		return errors.NewSystemError("Failed to add module dependency", err)
 	}
 
-	fmt.Printf("✅ Module dependency %s added successfully\n", moduleSpec)
-	fmt.Println("You can now import packages from this module in your CUE files.")
+	fmt.Fprintf(outw(), "✅ Module dependency %s added successfully\n", moduleSpec)
+	fmt.Fprintln(outw(), "You can now import packages from this module in your CUE files.")
 
 	return nil
 }
