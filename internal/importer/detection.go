@@ -113,21 +113,27 @@ func (e *EnhancedImporter) isNewlineDelimitedJSON(filePath string) (bool, error)
 		return false, nil
 	}
 
+	// A sample that filled the buffer may end mid-line; that last line is not
+	// evidence either way.
+	if n == len(buffer) {
+		lines = lines[:len(lines)-1]
+	}
+
+	// Every complete non-blank line must be a JSON value. Counting only the lines
+	// that parse would call a pretty-printed document NDJSON whenever two of its
+	// nested objects happen to sit on lines of their own, and the NDJSON import
+	// would then fail on the first line that is only a fragment.
 	jsonLines := 0
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if len(line) == 0 {
 			continue
 		}
-
-		// Check if line looks like JSON object
-		if (strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}")) ||
-			(strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]")) {
-			// Try to parse as JSON to confirm
-			var obj interface{}
-			if json.Unmarshal([]byte(line), &obj) == nil {
-				jsonLines++
-			}
+		if !json.Valid([]byte(line)) {
+			return false, nil
+		}
+		if strings.HasPrefix(line, "{") || strings.HasPrefix(line, "[") {
+			jsonLines++
 		}
 	}
 

@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean clean-local test test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
+.PHONY: all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
 
 all: build
 
@@ -81,6 +81,26 @@ release:
 
 snapshot:
 	goreleaser release --snapshot --clean
+
+# Run each native fuzz target for FUZZTIME. `go test -fuzz` accepts one target
+# per invocation, so targets are listed as package:Target pairs. New crashers
+# land in the package's testdata/fuzz and should be committed with the fix.
+FUZZTIME ?= 30s
+FUZZ_TARGETS := \
+	./internal/importer:FuzzDecodeJSONMatchesStdlib \
+	./internal/importer:FuzzDecodeYAMLMatchesYAMLv3 \
+	./internal/importer:FuzzDecodeCSVVerbatim \
+	./internal/importer:FuzzDetectFormat \
+	./internal/idgen:FuzzCanonicalJSON \
+	./internal/schemaname:FuzzNormalizeIdempotent \
+	./internal/datalog:FuzzParseRulesCompile
+
+fuzz:
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		pkg=$${t%%:*}; name=$${t##*:}; \
+		echo "fuzz $$name ($$pkg, $(FUZZTIME))"; \
+		CGO_ENABLED=0 $(GO) test -run='^$$' -fuzz="^$$name$$" -fuzztime=$(FUZZTIME) $$pkg; \
+	done
 
 bench:
 	$(GO) test -bench=. -benchmem ./...
