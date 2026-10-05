@@ -99,39 +99,28 @@ func (g *InheritanceGraph) GetMostSpecificFirst() []string {
 
 // calculateDepth returns the inheritance depth of a schema (0 = root)
 func (g *InheritanceGraph) calculateDepth(schema string) int {
-	depth := 0
-	current := schema
-	for {
-		parent, hasParent := g.parents[current]
-		if !hasParent {
-			break
-		}
-		depth++
-		current = parent
-		// Safety: prevent infinite loops from circular references
-		if depth > 100 {
-			break
-		}
-	}
-	return depth
+	return len(g.GetCascadeChain(schema)) - 1
 }
 
 // GetCascadeChain returns the chain for a schema, from most specific to least.
 // This follows the inheritance chain up to the root.
+//
+// A base_schema cycle has no root; the walk stops before revisiting a schema,
+// so a cyclic family yields each member once. validator.FindBaseSchemaCycles
+// reports such cycles so `pudl doctor` can flag them.
 func (g *InheritanceGraph) GetCascadeChain(schema string) []string {
 	chain := []string{schema}
+	seen := map[string]bool{schema: true}
 
 	current := schema
 	for {
 		parent, hasParent := g.parents[current]
-		if !hasParent {
+		if !hasParent || seen[parent] {
 			break
 		}
+		seen[parent] = true
 		chain = append(chain, parent)
 		current = parent
-		if len(chain) > 100 {
-			break
-		}
 	}
 
 	return chain

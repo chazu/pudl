@@ -122,6 +122,7 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 			Name:      "Schema Namespace",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckPudlNamespaceSchemasAt(pudlDir) },
 		},
+		{Name: "Schema Loading", CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaLoadingAt(pudlDir) }},
 		{
 			Name:      "Identity Fields",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckIdentityFieldConsistencyAt(pudlDir) },
