@@ -21,6 +21,9 @@ func printModelDrift(r ModelDriftResult) {
 		} else {
 			fmt.Printf("  ~ %s (%s)\n", d.Resource, d.Reason)
 		}
+		for _, f := range d.Fields {
+			fmt.Printf("      %s\n", f.Detail())
+		}
 	}
 }
 
