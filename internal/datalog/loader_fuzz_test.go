@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"database/sql"
 	"os"
 	"testing"
 	"time"
@@ -55,12 +56,20 @@ func FuzzParseRulesCompile(f *testing.F) {
 				if err != nil {
 					t.Fatalf("accepted rule %q does not compile: %v\nsource: %s", rule.Name, err, source)
 				}
-				stmt, err := db.DB().Prepare(compiled.SQL)
-				if err != nil {
+				if err := prepareOnly(db.DB(), compiled.SQL); err != nil {
 					t.Fatalf("accepted rule %q compiles to SQL SQLite rejects: %v\nSQL: %s\nsource: %s", rule.Name, err, compiled.SQL, source)
 				}
-				stmt.Close()
 			}
 		}
 	})
+}
+
+// prepareOnly reports whether SQLite accepts query, without running it.
+func prepareOnly(db *sql.DB, query string) error {
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	return nil
 }

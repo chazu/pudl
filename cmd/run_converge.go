@@ -74,10 +74,6 @@ func ingestConvergeManifest(cat *runCatalog, modelName, runID string, manifestJS
 	return err
 }
 
-// convergeOutcome remains a command-level alias for the ACUTE coordinator's
-// lifecycle vocabulary.
-type convergeOutcome = acute.Outcome
-
 const (
 	outcomeClean             = acute.OutcomeClean
 	outcomeCap               = acute.OutcomeCapExhausted

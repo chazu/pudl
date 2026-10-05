@@ -120,7 +120,9 @@ func Init(opts InitOptions) error {
 	for _, d := range []string{modelsDir, defsDir, populatorsDir} {
 		gitkeep := filepath.Join(d, ".gitkeep")
 		if _, err := os.Stat(gitkeep); os.IsNotExist(err) {
-			os.WriteFile(gitkeep, []byte(""), 0644)
+			if err := os.WriteFile(gitkeep, []byte(""), 0644); err != nil {
+				return fmt.Errorf("creating %s: %w", gitkeep, err)
+			}
 		}
 	}
 

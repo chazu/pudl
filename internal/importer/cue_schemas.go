@@ -100,14 +100,21 @@ func bootstrapSchemaFiles() ([]string, error) {
 // are shipped as built-in bootstrap schemas.
 func BootstrapPackages() map[string]bool {
 	packages := make(map[string]bool)
-	fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || !d.IsDir() || path == "bootstrap" {
+	err := fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() || path == "bootstrap" {
 			return nil
 		}
 		rel := path[len("bootstrap/"):]
 		packages[rel] = true
 		return nil
 	})
+	if err != nil {
+		// The tree is embedded at build time; failing to walk it is a build defect.
+		panic(fmt.Sprintf("walk embedded bootstrap schemas: %v", err))
+	}
 	// Installed programmatically (single-sourced from the systemmodel package),
 	// not from the embedded bootstrap tree — but still a built-in.
 	packages["pudl/systemmodel"] = true

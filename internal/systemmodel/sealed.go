@@ -58,7 +58,7 @@ func validateSealedMap(phaseValue cue.Value, phase, field string) error {
 		return fmt.Errorf("%s.%s must be a map: %w", phase, field, err)
 	}
 	for iter.Next() {
-		name := iter.Label()
+		name := iter.Selector().Unquoted()
 		class, err := bindingClass(iter.Value())
 		if err != nil {
 			return fmt.Errorf("%s.%s.%s: %w", phase, field, name, err)
@@ -92,7 +92,7 @@ func decodeSealedInputs(value cue.Value, path string) (map[string]SealedInput, e
 	}
 	out := make(map[string]SealedInput, len(wires))
 	for name, wire := range wires {
-		out[name] = SealedInput{Ref: wire.Ref, Source: wire.Source, DeliveryMode: wire.DeliveryMode}
+		out[name] = SealedInput(wire)
 	}
 	return out, nil
 }
@@ -108,7 +108,7 @@ func decodeSealedOutputs(value cue.Value, path string) (map[string]SealedOutput,
 	}
 	out := make(map[string]SealedOutput, len(wires))
 	for name, wire := range wires {
-		out[name] = SealedOutput{Ref: wire.Ref, StoreMode: wire.StoreMode}
+		out[name] = SealedOutput(wire)
 	}
 	return out, nil
 }

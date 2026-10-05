@@ -288,7 +288,7 @@ After import, data can be:
 
 ## Technology Stack
 
-- **Go 1.26.2** -- core application
+- **Go 1.26.6** -- core application
 - **Cobra** -- CLI framework
 - **CUE** (`cuelang.org/go v0.16`) -- schema definition, validation, unification
 - **SQLite** (`modernc.org/sqlite`, pure Go) -- catalog database

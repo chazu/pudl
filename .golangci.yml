@@ -1,0 +1,63 @@
+version: "2"
+
+run:
+  build-tags:
+    - smoke
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - bodyclose
+    - sqlclosecheck
+  settings:
+    errcheck:
+      exclude-functions:
+        # Human and JSON output goes to the command's stdout/stderr writers. A
+        # failed terminal write is not actionable, and checking each of the
+        # ~600 print calls would bury real findings.
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - fmt.Fprint
+        # Deferred after Commit, where it returns sql.ErrTxDone by design.
+        - (*database/sql.Tx).Rollback
+        # Iteration errors are reported by rows.Err(); sqlclosecheck enforces
+        # that rows are closed at all.
+        - (*database/sql.Rows).Close
+        - (*database/sql.Stmt).Close
+        # Releasing a pooled connection or a read-only handle after the work is
+        # committed (or abandoned on an error path) has nothing left to report.
+        # Code that writes a file checks Close explicitly, because Close is
+        # where a failed flush surfaces; deferred Close is for read handles.
+        - (*database/sql.Conn).Close
+        - (*database/sql.DB).Close
+        - (*os.File).Close
+        - (*github.com/chazu/pudl/internal/database.CatalogDB).Close
+        - (*github.com/chazu/pudl/cmd.runCatalog).Close
+        - (*github.com/chazu/pudl/internal/lister.Lister).Close
+        - (*github.com/chazu/pudl/internal/importer.EnhancedImporter).Close
+        - (*github.com/chazu/pudl/internal/filelock.Lock).Release
+        # Best-effort removal of temporary files and directories; the operation
+        # they clean up after has already succeeded or already failed.
+        - os.Remove
+        - os.RemoveAll
+        # Init-time command wiring: these fail only when the named flag does
+        # not exist on the command, a programming error the command tests hit.
+        - (*github.com/spf13/cobra.Command).RegisterFlagCompletionFunc
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+        - (*github.com/spf13/cobra.Command).Help
+  exclusions:
+    rules:
+      # Tests assert outcomes directly; unchecked setup/teardown errors there
+      # surface as assertion failures.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

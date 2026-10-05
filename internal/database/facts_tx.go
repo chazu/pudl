@@ -95,7 +95,7 @@ func (c *CatalogDB) WithFactTx(fn func(*FactTx) error) error {
 	committed := false
 	defer func() {
 		if !committed {
-			conn.ExecContext(ctx, "ROLLBACK")
+			rollbackConn(ctx, conn)
 		}
 	}()
 
