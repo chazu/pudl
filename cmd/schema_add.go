@@ -36,15 +36,9 @@ Examples:
     pudl schema add k8s.deployment my-deployment.cue
     pudl schema add custom.api-response api.cue`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema add command and handle any errors
-		if err := runSchemaAddCommand(args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaAddCommand(args)
+	}),
 }
 
 func init() {

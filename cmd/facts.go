@@ -327,6 +327,9 @@ Examples:
 			return fmt.Errorf("failed to retract: %w", err)
 		}
 
+		if jsonOutput {
+			return printJSON(map[string]any{"id": resolved, "retracted": true})
+		}
 		fmt.Fprintf(outw(), "Retracted fact %s\n", resolved[:12])
 		return nil
 	},
@@ -371,6 +374,9 @@ Examples:
 			return fmt.Errorf("read invalidated fact: %w", err)
 		}
 
+		if jsonOutput {
+			return printJSON(map[string]any{"id": resolved, "invalidated": true, "latest": latest})
+		}
 		fmt.Fprintf(outw(), "Invalidated fact %s (new version %s)\n", resolved[:12], latest.ID[:12])
 		return nil
 	},

@@ -36,12 +36,7 @@ Examples:
     pudl delete govim-nupab --cascade          # Delete collection and all its items
     pudl delete mivof-duhij --json             # Output result as JSON`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		errorHandler := errors.NewCLIErrorHandler(true)
-		if err := runDeleteCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runDeleteCommand),
 }
 
 func init() {

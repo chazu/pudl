@@ -25,15 +25,9 @@ This command helps you see what schema changes are pending before committing the
 Examples:
     pudl schema status                  # Show all uncommitted changes
     pudl schema status --verbose        # Show detailed file status`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema status command and handle any errors
-		if err := runSchemaStatusCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaStatusCommand()
+	}),
 }
 
 // schemaCommitCmd represents the schema commit command
@@ -53,15 +47,9 @@ Examples:
     pudl schema commit -m "Add RDS instance schema"
     pudl schema commit -m "Update EC2 schema with new fields"
     pudl schema commit -m "Remove deprecated K8s schemas"`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema commit command and handle any errors
-		if err := runSchemaCommitCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaCommitCommand()
+	}),
 }
 
 // schemaLogCmd represents the schema log command
@@ -82,15 +70,9 @@ Examples:
     pudl schema log                     # Show recent commits (default: 10)
     pudl schema log --limit 20          # Show last 20 commits
     pudl schema log --verbose           # Show detailed commit information`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema log command and handle any errors
-		if err := runSchemaLogCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaLogCommand()
+	}),
 }
 
 func init() {

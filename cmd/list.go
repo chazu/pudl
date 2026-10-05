@@ -69,15 +69,7 @@ Examples:
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries
     pudl list --fancy                           # Interactive list with filtering and detailed view`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the list command and handle any errors
-		if err := runListCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runListCommand),
 }
 
 // runListCommand contains the actual list logic with structured error handling

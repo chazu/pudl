@@ -31,6 +31,8 @@ in the 'pudl list' command output.
 Display Options:
 - --metadata: Show the metadata file content
 - --raw: Show the raw imported data content
+- --json: Print {"entry": ..., "metadata": ..., "raw": ...} as one JSON document;
+  stored JSON is embedded exactly, other formats appear as "raw_text"
 
 Examples:
     pudl show 20250825_222510_test-data           # Show basic info
@@ -38,15 +40,7 @@ Examples:
     pudl show 20250825_222510_test-data --raw      # Show with raw data
     pudl show 20250825_222510_test-data --metadata --raw # Show everything`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the show command and handle any errors
-		if err := runShowCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runShowCommand),
 }
 
 // runShowCommand contains the actual show logic with structured error handling
@@ -77,6 +71,10 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 			fmt.Sprintf("Entry with ID '%s' not found", entryID),
 			"Use 'pudl list' to see available entries",
 			"Check that the entry ID is correct")
+	}
+
+	if jsonOutput {
+		return writeEntryJSON(*entry, showMetadata, showRaw)
 	}
 
 	// Display entry information

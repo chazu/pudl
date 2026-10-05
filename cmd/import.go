@@ -87,15 +87,7 @@ Example usage:
 
     # From stdin
     cat data.json | pudl import`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
-
-		// Run the import command and handle any errors
-		if err := runImportCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runImportCommand),
 }
 
 // runImportCommand contains the actual import logic with structured error handling
