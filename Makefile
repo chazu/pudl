@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean test test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
+.PHONY: all build install uninstall clean clean-local test test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
 
 all: build
 
@@ -38,6 +38,11 @@ uninstall:
 clean:
 	rm -f $(BINARY_NAME)
 	$(GO) clean
+
+# Remove large local caches left behind by manual kick-tires and walkthrough
+# runs. Only ignored runtime state under .pudl/data/ is touched.
+clean-local:
+	rm -rf .pudl/data/kick-tires/ci-* .pudl/data/kick-tires/bin .pudl/data/git-walkthrough
 
 test:
 	$(GO) test ./...
