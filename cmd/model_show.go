@@ -29,7 +29,7 @@ converge arm, checks, and declared plugins.`,
 		if jsonOutput {
 			view := modelInspection{SystemModel: m}
 			if modelDiscover {
-				view.PluginDiscovery = discoverModelPlugins(m, loadMuPluginInfo)
+				view.PluginDiscovery = discoverModelPlugins(m, muPluginInfoFrom(cmd.Context()))
 			}
 			b, err := json.MarshalIndent(view, "", "  ")
 			if err != nil {
@@ -48,7 +48,7 @@ converge arm, checks, and declared plugins.`,
 		}
 		printModel(m, schemas)
 		if modelDiscover {
-			for _, plugin := range discoverModelPlugins(m, loadMuPluginInfo) {
+			for _, plugin := range discoverModelPlugins(m, muPluginInfoFrom(cmd.Context())) {
 				fmt.Printf("  Discovery: %s", plugin.Name)
 				if plugin.Error != "" {
 					fmt.Printf(" (%s)", plugin.Error)

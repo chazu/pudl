@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -58,9 +59,10 @@ type runDeps struct {
 	set *runSetExecutionContext
 }
 
-// defaultRunDeps is the production wiring: the real mu binary, no run set.
-func defaultRunDeps() runDeps {
-	return runDeps{mu: execMu{}}
+// defaultRunDeps is the production wiring: the real mu binary bound to the
+// invocation's context (and to --mu-timeout, when set), no run set.
+func defaultRunDeps(ctx context.Context, muTimeout time.Duration) runDeps {
+	return runDeps{mu: newExecMu(ctx, muTimeout)}
 }
 
 // runOptionsFromFlags reads `pudl run`'s flags once. Changed() is consulted

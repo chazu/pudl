@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/proc"
 )
 
 // moduleCmd represents the module command
@@ -39,7 +41,7 @@ This command runs 'cue mod tidy' in the schema directory to:
 
 This is equivalent to running 'cue mod tidy' manually in the schema directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleTidyCommand(); err != nil {
+		if err := runModuleTidyCommand(cmd.Context()); err != nil {
 			errorHandler := errors.NewCLIErrorHandler(true)
 			errorHandler.HandleError(err)
 		}
@@ -76,7 +78,7 @@ This command displays:
 - Source information
 - Dependencies count`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleInfoCommand(); err != nil {
+		if err := runModuleInfoCommand(cmd.Context()); err != nil {
 			errorHandler := errors.NewCLIErrorHandler(true)
 			errorHandler.HandleError(err)
 		}
@@ -97,23 +99,41 @@ Examples:
     pudl module add github.com/example/schemas@v1`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleAddCommand(args[0]); err != nil {
+		if err := runModuleAddCommand(cmd.Context(), args[0]); err != nil {
 			errorHandler := errors.NewCLIErrorHandler(true)
 			errorHandler.HandleError(err)
 		}
 	},
 }
 
-func runModuleTidyCommand() error {
+// requireCue reports a missing cue binary as the error every module command
+// that shells out to it returns.
+func requireCue() error {
+	if !proc.Available("cue") {
+		return errors.NewSystemError("CUE command not found", fmt.Errorf("install CUE from https://cuelang.org/docs/install/"))
+	}
+	return nil
+}
+
+// cueCommand runs `cue args...` in dir, bound to ctx so an interrupt stops it.
+func cueCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	command := proc.Command(ctx, proc.DefaultGrace, "cue", args...)
+	command.Dir = dir
+	return command
+}
+
+func runModuleTidyCommand(ctx context.Context) error {
 	// Load configuration to get schema path
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
-	// Check if CUE is available
-	if _, err := exec.LookPath("cue"); err != nil {
-		return errors.NewSystemError("CUE command not found", fmt.Errorf("install CUE from https://cuelang.org/docs/install/"))
+	if err := requireCue(); err != nil {
+		return err
 	}
 
 	// Check if module.cue exists
@@ -126,8 +146,7 @@ func runModuleTidyCommand() error {
 	fmt.Println("Fetching CUE module dependencies...")
 
 	// Run cue mod tidy
-	cmd := exec.Command("cue", "mod", "tidy")
-	cmd.Dir = schemaPath
+	cmd := cueCommand(ctx, schemaPath, "mod", "tidy")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -166,7 +185,7 @@ func runModuleListCommand() error {
 	return nil
 }
 
-func runModuleInfoCommand() error {
+func runModuleInfoCommand(ctx context.Context) error {
 	// Load configuration to get schema path
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
@@ -186,13 +205,12 @@ func runModuleInfoCommand() error {
 	fmt.Printf("Module File: %s\n", modulePath)
 
 	// Show additional module information if CUE is available
-	if _, err := exec.LookPath("cue"); err == nil {
+	if requireCue() == nil {
 		fmt.Println("\nModule Dependencies:")
 		fmt.Println("===================")
 
 		// Try to show module dependencies using cue mod edit
-		cmd := exec.Command("cue", "mod", "edit", "--json")
-		cmd.Dir = effectiveSchemaPath(cfg)
+		cmd := cueCommand(ctx, effectiveSchemaPath(cfg), "mod", "edit", "--json")
 		if output, err := cmd.Output(); err == nil {
 			fmt.Printf("%s\n", output)
 		} else {
@@ -205,16 +223,15 @@ func runModuleInfoCommand() error {
 	return nil
 }
 
-func runModuleAddCommand(moduleSpec string) error {
+func runModuleAddCommand(ctx context.Context, moduleSpec string) error {
 	// Load configuration to get schema path
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return errors.NewConfigError("Failed to load configuration", err)
 	}
 
-	// Check if CUE is available
-	if _, err := exec.LookPath("cue"); err != nil {
-		return errors.NewSystemError("CUE command not found", fmt.Errorf("install CUE from https://cuelang.org/docs/install/"))
+	if err := requireCue(); err != nil {
+		return err
 	}
 
 	// Check if module.cue exists
@@ -227,8 +244,7 @@ func runModuleAddCommand(moduleSpec string) error {
 	fmt.Printf("Adding module dependency: %s\n", moduleSpec)
 
 	// Use cue mod get to add the dependency
-	cmd := exec.Command("cue", "mod", "get", moduleSpec)
-	cmd.Dir = schemaPath
+	cmd := cueCommand(ctx, schemaPath, "mod", "get", moduleSpec)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
