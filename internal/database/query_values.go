@@ -7,6 +7,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/chazu/pudl/internal/idgen"
 )
 
 // QueryNumber maps a JSON decimal into the supported SQLite numeric domain.
@@ -17,7 +19,7 @@ func QueryNumber(n json.Number) (interface{}, error) {
 	if _, err := json.Marshal(n); err != nil || n == "" {
 		return nil, fmt.Errorf("unsupported query number %q: invalid JSON number", n)
 	}
-	canonical := canonicalNumber(n)
+	canonical := idgen.CanonicalNumber(n)
 	if i, err := strconv.ParseInt(string(canonical), 10, 64); err == nil {
 		return i, nil
 	}
@@ -26,7 +28,7 @@ func QueryNumber(n json.Number) (interface{}, error) {
 	if strings.Contains(string(canonical), ".") || strings.Contains(string(canonical), "e-") {
 		if f, err := canonical.Float64(); err == nil {
 			encoded, err := json.Marshal(f)
-			if err == nil && canonicalNumber(json.Number(encoded)) == canonical &&
+			if err == nil && idgen.CanonicalNumber(json.Number(encoded)) == canonical &&
 				!strings.Contains(string(canonical), "e+") {
 				return f, nil
 			}
