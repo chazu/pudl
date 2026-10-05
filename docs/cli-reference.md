@@ -76,6 +76,11 @@ pudl doctor --json                  # Structured health and catalog findings
 `catalog`, and any setup `error`; invalid records, inference mismatches, and
 failed health checks produce a nonzero exit status. An empty catalog is valid.
 
+The `mu` health check runs `mu version` and warns when mu is missing, its
+version cannot be read, or it is older than the minimum this PUDL is tested
+against (v0.3.5). mu is optional for imports, queries and `--from-catalog`
+replays, so these are warnings rather than failures.
+
 ### `pudl setup`
 
 Set up shell integration (aliases, completion, helper functions).
@@ -412,6 +417,16 @@ reported.
 | `--catalog-scope` | Which already-ingested records `--from-catalog` replays: an observe snapshot ID, or the origin they were ingested under |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
 | `--detailed-exitcode` | Report the result in the exit status (see below) |
+| `--mu-timeout` | Stop any single mu invocation that runs longer than this duration (e.g. `10m`); `0`, the default, means no limit. Also applies to `run set` and `run resume` |
+
+**Interrupting a run.** The first Ctrl-C (SIGINT or SIGTERM) stops the run
+cleanly: mu receives SIGTERM and has 10 seconds to finish (then it is killed),
+temporary workspaces are removed, and the run is recorded with completion status
+`cancelled`. If an apply may have been in flight, the run is also marked
+needs-verification, exactly as a lost receipt is. A second Ctrl-C exits
+immediately (status 130), still removing temporary workspaces. There is no
+resume: re-run the model. A `--mu-timeout` expiry is recorded as `failed`, not
+`cancelled`.
 
 **Exit status.** By default `pudl run` exits 0 whenever the run completed,
 including when it found drift; the report says what it found. A failing
@@ -516,6 +531,11 @@ provider access and executes that same in-memory graph.
 | `--max-applies` | Durable per-member apply budget (default 20; `0` disables) |
 | `--mu-root` | Mu project root for member runs; otherwise discover per model |
 | `--detailed-exitcode` | Exit 0 clean, 2 findings, 1 error, as for `pudl run` |
+| `--mu-timeout` | Stop any single mu invocation that runs longer than this duration; `0` (default) means no limit |
+
+An interrupted set starts no further member: the member in progress concludes
+`cancelled` (with needs-verification if it was applying), the remaining members
+are recorded `cancelled`, and the set's status is `cancelled`.
 
 With `--detailed-exitcode`, an observe-only set exits 2 when any member found
 drift, pending changes or a failing fail-severity check. A converging set exits
