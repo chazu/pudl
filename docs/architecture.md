@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes PUDL's internal architecture: storage layout, streaming pipeline, catalog database, and package structure.
+This document describes PUDL's internal architecture: storage layout, decoding pipeline, catalog database, and package structure.
 
 ## Storage Layout
 
@@ -97,53 +97,41 @@ Optimized indexes on `schema`, `origin`, `format`, `collection_id`, `collection_
 
 Database migrations run automatically on startup. Adding columns or indexes is done through migration functions that check for existing columns before altering -- safe to run on every open.
 
-## Streaming Pipeline
+## Decoding Pipeline
 
-Large imports hash and parse through bounded-memory/streaming paths. The parser still materializes the records needed for schema inference, while the unconditional whole-file read has been removed; the raw byte hash remains identical and deterministic.
+Every import stages the source once while hashing it, then decodes it with the
+standard library decoders, which read the stream in order and never discard
+input. Compressed sources (`.gz`, `.zst`, or matching magic bytes) are
+decompressed first, into the workspace's `data/tmp`; the decompressed bytes are
+what is hashed, stored, and parsed.
 
 ```
 Input File
     |
     v
-Streaming reader / CDC chunker -- hashes and parses without an unconditional whole-file buffer
+Decompress (if compressed) -> data/tmp
     |
     v
-Format Processor -- parses JSON/CSV/YAML across chunk boundaries
-    |                (maintains state for cross-chunk reassembly)
-    v
-Data Objects -- extracted records
+Stage + SHA256 in one pass -- content hash, atomic rename into raw storage
     |
+    +-- NDJSON / top-level JSON array -> record-at-a-time collection stream
+    |                                    (bounded memory, one transaction)
     v
-Schema Inference -- heuristic scoring + CUE unification
+decodeDocument -- encoding/json (UseNumber), yaml.v3 (multi-document),
+    |             encoding/csv (verbatim cells)
+    v
+Schema Assignment -- inference, or --schema validated through the chain
     |
     v
 Identity Extraction -- resource_id, content_hash, version
     |
     v
-Catalog + Storage -- SQLite insert + file copy
+Catalog + Metadata -- SQLite insert + .meta file
 ```
 
-### Content-Defined Chunking
-
-Where the format processor uses CDC, boundaries are determined by the data content itself (not fixed offsets). This makes chunking shift-resilient -- inserting data at the beginning does not change all subsequent chunk boundaries.
-
-### Format Processors
-
-Each format has a chunk processor that handles:
-- **JSON**: Object/array boundary detection, cross-chunk reassembly
-- **CSV**: Row boundary detection, header tracking
-- **YAML**: Document boundary detection (`---` separators)
-- **NDJSON**: Line-by-line parsing with individual item extraction
-
-Processors implement `ProcessChunk()`, `Finalize()`, `Reset()`, and `GetBufferSize()`.
-
-### Memory Management
-
-Configurable via CLI flags:
-- `--streaming-memory`: Total memory limit in MB (default: 100)
-- `--streaming-chunk-size`: Average chunk size in MB (default: 0.016)
-
-Small files (< 10KB) use smaller chunks for efficient processing. Large files use the configured chunk size.
+Collections are bounded-memory. A single document is decoded whole, since it is
+one record for inference; CSV and multi-document YAML are not streamed record by
+record (a recorded scope decision).
 
 ## Import Flow
 
@@ -161,7 +149,7 @@ ImportFileWithFriendlyIDs(opts)
     |       +-- createCollectionEntry()
     |       +-- createCollectionItems() + memberships (all-or-nothing)
     |
-    +-- analyzeDataStreaming() -> parse via CDC
+    +-- analyzeData() -> decodeDocument (encoding/json, yaml.v3, encoding/csv)
     |
     +-- CLI envelope detection (regular, batch, stdin share one path)
     |       +-- import inner data
@@ -194,7 +182,7 @@ ImportFileWithFriendlyIDs(opts)
 | `git` | `internal/git/` | Git operations on schema repository |
 | `identity` | `internal/identity/` | Resource identity: field extraction, ID computation (pure functions) |
 | `idgen` | `internal/idgen/` | Content IDs: SHA256, proquint encoding/decoding |
-| `importer` | `internal/importer/` | Import pipeline: format detection, streaming, NDJSON collections |
+| `importer` | `internal/importer/` | Import pipeline: format detection, decoding, NDJSON collections |
 | `importer` (enhanced) | `internal/importer/enhanced_importer.go` | Content-hash dedup wrapper, proquint IDs |
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
@@ -207,7 +195,6 @@ ImportFileWithFriendlyIDs(opts)
 | `schemagen` | `internal/schemagen/` | Schema generation from imported data |
 | `schemaname` | `internal/schemaname/` | Schema name normalization (canonical format) |
 | `skills` | `internal/skills/` | Agent skill file management and embedding |
-| `streaming` | `internal/streaming/` | CDC chunkers, format-specific chunk processors |
 | `ui` | `internal/ui/` | Output formatting, interactive TUI (bubbletea) |
 | `validator` | `internal/validator/` | CUE module loader, cascade validator, validation service |
 | `cmd` | `cmd/` | CLI command definitions (Cobra) |
@@ -235,7 +222,7 @@ PUDL is a data import, cataloging, and validation system. The core flow is:
                              v
                     +------------------+
                     | Format Detection |
-                    | + CDC Streaming  |
+                    | + Decoding       |
                     +--------+---------+
                              |
                              v
@@ -305,7 +292,6 @@ After import, data can be:
 - **Cobra** -- CLI framework
 - **CUE** (`cuelang.org/go v0.16`) -- schema definition, validation, unification
 - **SQLite** (`modernc.org/sqlite`, pure Go) -- catalog database
-- **go-cdc-chunkers** -- Content-Defined Chunking for streaming
 - **Bubbletea + Bubbles + Lipgloss** -- interactive TUI (`pudl list --fancy`)
 - **yaml.v3** -- YAML config and data parsing
 - **testify** -- test assertions
