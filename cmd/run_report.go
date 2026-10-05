@@ -152,21 +152,13 @@ func (r *RunReport) markdown() string {
 
 	if r.Populate != nil {
 		fmt.Fprintf(&b, "\n## populate\n- target: %s\n- records: %d\n", r.Populate.Target, r.Populate.Records)
+		if r.Populate.SnapshotID != "" {
+			fmt.Fprintf(&b, "- snapshot_id: %s\n", r.Populate.SnapshotID)
+		}
 	}
 	if r.Drift != nil {
 		fmt.Fprintf(&b, "\n## drift\n")
-		if r.Drift.Clean {
-			fmt.Fprintf(&b, "- ∅ (clean — all desired resources exist and match)\n")
-		} else {
-			fmt.Fprintf(&b, "- %d drifted resource(s):\n", len(r.Drift.Drifted))
-			for _, d := range r.Drift.Drifted {
-				if d.Diff != "" {
-					fmt.Fprintf(&b, "  - ~ %s (%s): %s\n", d.Resource, d.Reason, d.Diff)
-				} else {
-					fmt.Fprintf(&b, "  - ~ %s (%s)\n", d.Resource, d.Reason)
-				}
-			}
-		}
+		r.Drift.WriteMarkdown(&b)
 	}
 	if len(r.Checks) > 0 {
 		fmt.Fprintf(&b, "\n## checks\n")
@@ -187,6 +179,12 @@ func (r *RunReport) markdown() string {
 	}
 	if r.Converge != nil {
 		fmt.Fprintf(&b, "\n## converge\n- iterations: %d\n- outcome: %s\n", r.Converge.Iterations, r.Converge.Outcome)
+		if r.Converge.NeedsVerification {
+			fmt.Fprintf(&b, "- needs_verification: true\n")
+		}
+		for _, receipt := range r.Converge.MutationReceipts {
+			fmt.Fprintf(&b, "- mutation receipt: iteration %d, %s, manifest %s\n", receipt.Iteration, receipt.Status, receipt.ManifestSHA256)
+		}
 	}
 	return b.String()
 }

@@ -1,85 +1,21 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/mubridge"
 )
-
-// pure set-diff logic — synthetic records, no DB.
-func TestInventorySetDiff(t *testing.T) {
-	observed := []map[string]any{
-		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"},
-		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "present"},
-	}
-	desired := []map[string]any{
-		{"_schema": "pudl/linux.#Package", "name": "podman", "state": "present"}, // satisfied
-		{"_schema": "pudl/linux.#Package", "name": "htop", "state": "present"},   // missing
-		{"_schema": "pudl/linux.#Package", "name": "restic", "state": "absent"},  // changed
-	}
-	drift := inventorySetDiff(desired, observed, nil) // nil resolver -> name|path|id fallback
-	require.Len(t, drift, 2)
-
-	byReason := map[string]ResourceDrift{}
-	for _, d := range drift {
-		byReason[d.Reason] = d
-	}
-	assert.Contains(t, byReason["missing"].Resource, "htop")
-	assert.Contains(t, byReason["changed"].Resource, "restic")
-	assert.Contains(t, byReason["changed"].Diff, "state")
-}
-
-// schema-driven identity: match on declared identity_fields (composite), not the
-// name|path|id fallback (these records carry none of those).
-func TestInventorySetDiff_SchemaDrivenIdentity(t *testing.T) {
-	identity := func(schema string) []string {
-		if schema == "pudl/artifact.#ImageRef" {
-			return []string{"source", "tag"}
-		}
-		return nil
-	}
-	observed := []map[string]any{
-		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v1", "digest": "sha256:aaa"},
-	}
-	desired := []map[string]any{
-		// same (source,tag) identity, differing non-identity field -> changed
-		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v1", "digest": "sha256:bbb"},
-		// different tag -> different identity -> missing
-		{"_schema": "pudl/artifact.#ImageRef", "source": "ghcr.io/o/i", "tag": "v2", "digest": "sha256:aaa"},
-	}
-	drift := inventorySetDiff(desired, observed, identity)
-	require.Len(t, drift, 2)
-
-	byReason := map[string]ResourceDrift{}
-	for _, d := range drift {
-		byReason[d.Reason] = d
-	}
-	assert.Contains(t, byReason["changed"].Diff, "digest")
-	assert.Contains(t, byReason["missing"].Resource, "v2")
-}
-
-func TestInventorySetDiff_AllSatisfied(t *testing.T) {
-	recs := []map[string]any{{"_schema": "s", "name": "a", "x": "1"}}
-	drift := inventorySetDiff(recs, recs, nil)
-	assert.Empty(t, drift)
-}
-
-func TestInventorySetDiff_ExtrasIgnored(t *testing.T) {
-	// observed has an extra not in desired -> not drift (ensure-present).
-	observed := []map[string]any{
-		{"_schema": "s", "name": "a"}, {"_schema": "s", "name": "extra"},
-	}
-	desired := []map[string]any{{"_schema": "s", "name": "a"}}
-	assert.Empty(t, inventorySetDiff(desired, observed, nil))
-}
 
 // end-to-end against a real catalog seeded with CANNED host-style records (the
 // mock — exactly what an inventory observer like `host` emits). No SSH/docker.
@@ -108,6 +44,81 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 	assert.False(t, res.Clean)
 	require.Len(t, res.Drifted, 2, "htop missing + restic changed; podman satisfied")
 	assert.False(t, res.Verified, "runInventoryDrift cannot know whether its scope is fresh")
+
+	changed := res.Drifted[1]
+	assert.Equal(t, "changed", changed.Reason)
+	assert.Equal(t, []acute.FieldDiff{{Path: "state", Expected: "absent", Observed: "present"}}, changed.Fields)
+	require.NotNil(t, changed.ObservedAt, "the compared record's import time is the observation time")
+}
+
+// A model whose desired records carry no identity used to compare nothing and
+// report clean.
+func TestRunInventoryDrift_UnidentifiableDesiredIsNotClean(t *testing.T) {
+	dir := t.TempDir()
+	db, err := database.NewCatalogDB(filepath.Join(dir, "db"))
+	require.NoError(t, err)
+	defer db.Close()
+
+	canned := `[{"target":"//host:odroid","current":{"records":[
+		{"_schema":"pudl/linux.#Package","state":"present"}
+	]}}]`
+	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: filepath.Join(dir, "data"), Graph: nil})
+	require.NoError(t, err)
+
+	res, err := runInventoryDrift(db, "pudl-run", []map[string]any{
+		{"_schema": "pudl/linux.#Package", "state": "present"},
+	}, nil)
+	require.NoError(t, err)
+	assert.False(t, res.Clean)
+	require.Len(t, res.Drifted, 1)
+	assert.Equal(t, "unidentifiable", res.Drifted[0].Reason)
+}
+
+// The human run report renders drift from the same struct the JSON report
+// serializes, so both carry the same findings.
+func TestRunReportDriftHumanMatchesJSON(t *testing.T) {
+	at := time.Date(2026, 10, 5, 12, 0, 0, 0, time.UTC)
+	report := &RunReport{
+		RunID: "run-1", Model: "m", Mode: "observe-only", OK: true,
+		Drift: &ModelDriftResult{
+			Drifted: acute.InventorySetDiff(
+				[]map[string]any{{"_schema": "s", "name": "a", "port": int64(1), "state": "on"}},
+				[]acute.ObservedRecord{{Data: map[string]any{"_schema": "s", "name": "a", "port": "1", "state": "off"}, ObservedAt: &at}},
+				nil,
+			),
+			SnapshotID: "snap-1",
+			ObservedAt: &at,
+		},
+	}
+	human, err := report.render(false)
+	require.NoError(t, err)
+	machine, err := report.render(true)
+	require.NoError(t, err)
+
+	var decoded struct {
+		Drift struct {
+			Drifted []struct {
+				Resource string            `json:"resource"`
+				Reason   string            `json:"reason"`
+				Diff     string            `json:"diff"`
+				Fields   []acute.FieldDiff `json:"fields"`
+			} `json:"drifted"`
+			Verified   bool   `json:"verified"`
+			SnapshotID string `json:"snapshot_id"`
+			ObservedAt string `json:"observed_at"`
+		} `json:"drift"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(machine), &decoded))
+	require.Len(t, decoded.Drift.Drifted, 1)
+	finding := decoded.Drift.Drifted[0]
+	require.Len(t, finding.Fields, 2)
+	assert.Contains(t, human, finding.Resource+" ("+finding.Reason+"): "+finding.Diff)
+	for _, f := range finding.Fields {
+		assert.Contains(t, human, f.Detail())
+	}
+	assert.Contains(t, human, "- snapshot_id: "+decoded.Drift.SnapshotID)
+	assert.Contains(t, human, "- observed_at: "+decoded.Drift.ObservedAt)
+	assert.Contains(t, human, "- verified: false")
 }
 
 // A failed snapshot lookup used to degrade into an origin filter regardless of
