@@ -24,59 +24,66 @@ func newApprovalRequest(model string, flags runFlags, muRoot string) approvalReq
 	}
 }
 
-func restoreApprovalRequest(request approvalRequest) {
-	runOnly = request.Only
-	runMaxIters = request.MaxIters
-	runMaxApplies = request.MaxApplies
-	runMuRoot = request.MuRoot
-}
-
 var runResumeCmd = &cobra.Command{
 	Use:     "resume <operation-id>",
 	Short:   "Approve and continue a pending run or exact set plan",
 	Aliases: []string{"approve"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		isSet, err := isRunSetOperation(args[0])
-		if err != nil {
-			return err
-		}
-		if isSet {
-			return resumeRunSet(args[0])
-		}
-		db, err := database.NewCatalogDB(effectivePudlDir())
-		if err != nil {
-			return err
-		}
-		approval, err := db.GetRunApproval(args[0])
-		if err != nil {
-			db.Close()
-			return err
-		}
-		if approval == nil || approval.Status != "pending" {
-			db.Close()
-			return fmt.Errorf("run %q has no pending approval", args[0])
-		}
-		var request approvalRequest
-		if err := json.Unmarshal(approval.Request, &request); err != nil {
-			db.Close()
-			return fmt.Errorf("decode approval request %q: %w", args[0], err)
-		}
-		if err := db.ResolveRunApproval(args[0], "approved"); err != nil {
-			db.Close()
-			return err
-		}
-		db.Close()
-
-		// Re-enter the same execution path with the original run identity. The
-		// pending run row is intentionally unfinished until this invocation ends.
-		runConverge = true
-		runRequireApproval = false
-		runResumeID = args[0]
-		runApprovalStatus = "approved"
-		restoreApprovalRequest(request)
-		return runCmd.RunE(runCmd, []string{request.Model})
+		return resumeOperation(args[0], defaultRunDeps())
 	},
+}
+
+// resumeOperation approves a pending standalone run or exact set plan and
+// continues it.
+func resumeOperation(operationID string, deps runDeps) error {
+	isSet, err := isRunSetOperation(operationID)
+	if err != nil {
+		return err
+	}
+	if isSet {
+		return resumeRunSet(operationID, deps)
+	}
+	return resumeRun(operationID, deps)
+}
+
+// resumeRun approves a pending standalone converge run and re-enters the run
+// path with the stored request, under the pending run's identity.
+func resumeRun(runID string, deps runDeps) error {
+	request, err := approvePendingRun(runID)
+	if err != nil {
+		return err
+	}
+	// Re-enter the same execution path with the original run identity. The
+	// pending run row is intentionally unfinished until this invocation ends.
+	_, err = executeRun(resumedRunOptions(runID, request), deps)
+	return err
+}
+
+// approvePendingRun marks a pending standalone approval approved and returns
+// the converge request it stored. The catalog is closed before the run
+// re-opens its own handle.
+func approvePendingRun(runID string) (approvalRequest, error) {
+	var request approvalRequest
+	db, err := database.NewCatalogDB(effectivePudlDir())
+	if err != nil {
+		return request, err
+	}
+	defer db.Close()
+	approval, err := db.GetRunApproval(runID)
+	if err != nil {
+		return request, err
+	}
+	if approval == nil || approval.Status != "pending" {
+		return request, fmt.Errorf("run %q has no pending approval", runID)
+	}
+	if err := json.Unmarshal(approval.Request, &request); err != nil {
+		return request, fmt.Errorf("decode approval request %q: %w", runID, err)
+	}
+	if err := db.ResolveRunApproval(runID, "approved"); err != nil {
+		return request, err
+	}
+	return request, nil
 }
 
 var runRejectCmd = &cobra.Command{

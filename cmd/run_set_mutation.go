@@ -38,7 +38,7 @@ type preparedMutationMember struct {
 	expectedMuPlanSHA256 string
 }
 
-func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetReport, stored *acute.RunSetMutationPlan, request runSetMutationRequest) (*acute.RunSetPlan, *runSetExecutionContext, error) {
+func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetReport, stored *acute.RunSetMutationPlan, request runSetMutationRequest, mu muRunner) (*acute.RunSetPlan, *runSetExecutionContext, error) {
 	selected := make([]acute.RunSetModel, 0, len(request.Models))
 	for _, requested := range request.Models {
 		template, _, _, err := resolveModelTemplate(requested)
@@ -60,7 +60,7 @@ func reconstructApprovedRunSet(db *database.CatalogDB, report *acute.RunSetRepor
 	aliases := make(map[string][]string, len(graph.Models))
 	pinned := map[string]wiring.PinnedProducerSnapshot{}
 	context := &runSetExecutionContext{
-		runSetID: report.RunSetID, successfulRuns: map[string]wiring.ProducerRun{},
+		runSetID: report.RunSetID, mu: mu, successfulRuns: map[string]wiring.ProducerRun{},
 		successfulModels: map[string]*systemmodel.SystemModel{}, snapshotIDs: map[string]string{},
 		modelDirs: map[string]string{}, bindingEvidence: map[string][]wiring.BindingEvidence{},
 		sealedEvidence: map[string][]wiring.SealedBindingEvidence{}, aliases: aliases,
@@ -199,7 +199,7 @@ func continueMutatingRunSet(db *database.CatalogDB, graph *acute.RunSetPlan, rep
 		return err
 	}
 	report.ApprovalStatus = "not-required"
-	return executePreparedMutationPlan(db, report, mutationPlan, prepared)
+	return executePreparedMutationPlan(db, context.mu, report, mutationPlan, prepared)
 }
 
 func printRunSetApprovalReview(plan *acute.RunSetMutationPlan, context *runSetExecutionContext) {
@@ -295,7 +295,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 				}
 				reconcile, err = setupReconcileWorkspace(
 					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
-					runMuRunnerFactory(), model, memberRoot, context.modelDirs[name], run.RunID, true,
+					context.mu, model, memberRoot, context.modelDirs[name], run.RunID, true,
 				)
 				if err != nil {
 					return nil, nil, fmt.Errorf("revalidate mutation for %q: %w", name, err)
@@ -329,7 +329,7 @@ func buildRunSetMutationPlan(db *database.CatalogDB, graph *acute.RunSetPlan, re
 			if reconcile == nil {
 				reconcile, err = setupReconcileWorkspace(
 					&runCatalog{dir: effectivePudlDir(), opened: true, db: db},
-					runMuRunnerFactory(), model, member.muRoot, member.modelDir, member.runID, true,
+					context.mu, model, member.muRoot, member.modelDir, member.runID, true,
 				)
 				if err != nil {
 					return nil, nil, fmt.Errorf("plan mutation for %q: %w", name, err)
@@ -587,7 +587,7 @@ func prepareMutationMemberRuns(db *database.CatalogDB, report *acute.RunSetRepor
 	return nil
 }
 
-func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
+func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
 	cat := &runCatalog{dir: effectivePudlDir(), opened: true, db: db}
 	results := make(map[string]string, len(report.Members))
 	for _, member := range report.Members {
@@ -619,7 +619,7 @@ func executePreparedMutationPlan(db *database.CatalogDB, report *acute.RunSetRep
 			converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
 		}, !jsonOutput)
 		convergeReport, runErr := runConvergeLoopExact(
-			cat, runMuRunnerFactory(), member.model, member.muRoot, member.modelDir,
+			cat, mu, member.model, member.muRoot, member.modelDir,
 			member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
 		)
 		member.report.Converge = convergeReport
