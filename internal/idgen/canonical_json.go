@@ -3,7 +3,9 @@ package idgen
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"strings"
 )
@@ -20,7 +22,9 @@ func DecodeJSONExact(raw []byte) (interface{}, error) {
 	if err := decoder.Decode(&value); err != nil {
 		return nil, err
 	}
-	if decoder.More() {
+	// More() reports false before a stray "]" or "}", so read the next token:
+	// anything but a clean EOF is trailing content.
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("unexpected content after JSON value")
 	}
 	return NormalizeJSONNumbers(value), nil

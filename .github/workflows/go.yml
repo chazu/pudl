@@ -40,6 +40,18 @@ jobs:
           cache: true
       - run: go test -race ./...
 
+  fuzz:
+    name: fuzz (main only)
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: make fuzz FUZZTIME=30s
+
   kick-tires:
     name: repository kick-the-tires
     runs-on: ubuntu-latest
