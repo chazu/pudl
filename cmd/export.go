@@ -1,28 +1,25 @@
 package cmd
 
 import (
-	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
-	"github.com/chazu/pudl/internal/idgen"
 )
 
 var (
-	exportID     string
-	exportSchema string
-	exportOrigin string
-	exportFormat string
-	exportOutput string
-	exportPretty bool
+	exportID           string
+	exportSchema       string
+	exportOrigin       string
+	exportFormat       string
+	exportOutput       string
+	exportPretty       bool
+	exportAllowPartial bool
 )
 
 // exportCmd represents the export command
@@ -52,6 +49,8 @@ func init() {
 	exportCmd.Flags().StringVarP(&exportOutput, "output", "o", "", "Output file (default: stdout)")
 	exportCmd.Flags().BoolVar(&exportPretty, "pretty", true, "Pretty-print output")
 
+	exportCmd.Flags().BoolVar(&exportAllowPartial, "allow-partial", false, "Publish readable entries on input errors; report incomplete output with a nonzero exit")
+
 	// Register completions
 	exportCmd.RegisterFlagCompletionFunc("id", completeEntryIDs)
 	exportCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
@@ -60,9 +59,16 @@ func init() {
 }
 
 func runExportCommand(cmd *cobra.Command, args []string) error {
+	if exportBundle != "" {
+		return runExportBundle(cmd)
+	}
 	// Validate that at least one filter is specified
 	if exportID == "" && exportSchema == "" && exportOrigin == "" {
 		return errors.NewMissingRequiredError("--id, --schema, or --origin")
+	}
+
+	if err := validateExportFormat(exportFormat); err != nil {
+		return err
 	}
 
 	// Open catalog database
@@ -100,149 +106,30 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewInputError("No entries found matching the specified criteria", "", "")
 	}
 
-	// Collect data from entries
-	var exportData []map[string]interface{}
-	for _, entry := range entries {
-		data, err := loadEntryData(entry.StoredPath)
-		if err != nil {
-			fmt.Fprintf(errw(), "Warning: Failed to load data for %s: %v\n",
-				idgen.HashToProquint(entry.ID), err)
-			continue
-		}
-		exportData = append(exportData, data)
+	// Stage one record at a time before publishing the output. This keeps reads
+	// fail-closed and permits deterministic CSV headers without retaining records.
+	spool, count, omitted, err := prepareExport(cmd.Context(), catalogDB, entries, exportAllowPartial)
+	if err != nil {
+		return err
 	}
-
-	if len(exportData) == 0 {
-		return errors.NewInputError("No data could be loaded from matching entries", "", "")
+	defer os.Remove(spool.Name())
+	defer spool.Close()
+	if count == 0 {
+		return fmt.Errorf("no exportable records found")
 	}
-
+	write := func(w io.Writer) error {
+		return writeExportSpool(w, spool, count, strings.ToLower(exportFormat), exportPretty)
+	}
 	if exportOutput == "" {
-		return writeExportData(outw(), exportData, exportFormat, exportPretty)
+		err = write(outw())
+	} else {
+		err = publishExport(exportOutput, write)
 	}
-
-	file, err := os.Create(exportOutput)
 	if err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to create output file", err)
-	}
-	if err := writeExportData(file, exportData, exportFormat, exportPretty); err != nil {
-		file.Close()
 		return err
 	}
-	// Close flushes the file; a failure here means the export is incomplete.
-	if err := file.Close(); err != nil {
-		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to write output file", err)
+	if omitted > 0 {
+		return fmt.Errorf("incomplete export: omitted %d unreadable entries (partial output published)", omitted)
 	}
-	return nil
-}
-
-// loadEntryData loads the stored data from an entry's path
-func loadEntryData(storedPath string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(storedPath)
-	if err != nil {
-		return nil, err
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		// Try YAML
-		if yamlErr := yaml.Unmarshal(data, &result); yamlErr != nil {
-			return nil, fmt.Errorf("failed to parse as JSON or YAML: %v", err)
-		}
-	}
-
-	return result, nil
-}
-
-// writeExportData writes export data in the specified format
-func writeExportData(w io.Writer, data []map[string]interface{}, format string, pretty bool) error {
-	switch strings.ToLower(format) {
-	case "json":
-		return writeJSON(w, data, pretty)
-	case "yaml":
-		return writeYAML(w, data)
-	case "ndjson":
-		return writeNDJSON(w, data)
-	case "csv":
-		return writeCSV(w, data)
-	default:
-		return errors.NewInputError(fmt.Sprintf("Unknown format: %s", format),
-			"Use one of: json, yaml, csv, ndjson", "")
-	}
-}
-
-func writeJSON(w io.Writer, data []map[string]interface{}, pretty bool) error {
-	encoder := json.NewEncoder(w)
-	if pretty {
-		encoder.SetIndent("", "  ")
-	}
-	// If single entry, output just that object; otherwise output array
-	if len(data) == 1 {
-		return encoder.Encode(data[0])
-	}
-	return encoder.Encode(data)
-}
-
-func writeYAML(w io.Writer, data []map[string]interface{}) error {
-	encoder := yaml.NewEncoder(w)
-	for _, item := range data {
-		if err := encoder.Encode(item); err != nil {
-			_ = encoder.Close() // the Encode error is the one to report
-			return err
-		}
-	}
-	// Close flushes the encoder's buffered output.
-	return encoder.Close()
-}
-
-func writeNDJSON(w io.Writer, data []map[string]interface{}) error {
-	encoder := json.NewEncoder(w)
-	for _, item := range data {
-		if err := encoder.Encode(item); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeCSV(w io.Writer, data []map[string]interface{}) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	// Collect all unique keys for headers
-	keySet := make(map[string]bool)
-	for _, item := range data {
-		for key := range item {
-			keySet[key] = true
-		}
-	}
-
-	// Sort keys for consistent output
-	var headers []string
-	for key := range keySet {
-		headers = append(headers, key)
-	}
-
-	writer := csv.NewWriter(w)
-	defer writer.Flush()
-
-	// Write header
-	if err := writer.Write(headers); err != nil {
-		return err
-	}
-
-	// Write rows
-	for _, item := range data {
-		row := make([]string, len(headers))
-		for i, header := range headers {
-			if val, ok := item[header]; ok {
-				row[i] = fmt.Sprintf("%v", val)
-			}
-		}
-		if err := writer.Write(row); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }

@@ -54,6 +54,7 @@ func TestInvalidation_TxAtBeforeAndAfter(t *testing.T) {
 	defer cleanup()
 
 	f := addPastFact(t, db, 100)
+	started := time.Now().Unix()
 	require.NoError(t, db.InvalidateFact(f.ID))
 	now := time.Now().Unix()
 	validDuring := int64(150)
@@ -68,7 +69,8 @@ func TestInvalidation_TxAtBeforeAndAfter(t *testing.T) {
 	require.Len(t, current, 1, "exactly one version is believed after the invalidation")
 	assert.Equal(t, f.ID, current[0].Supersedes)
 	require.NotNil(t, current[0].ValidEnd)
-	assert.Equal(t, now, *current[0].ValidEnd)
+	assert.GreaterOrEqual(t, *current[0].ValidEnd, started)
+	assert.LessOrEqual(t, *current[0].ValidEnd, now)
 
 	// Transaction-time-only queries see whichever version was believed then.
 	assert.Equal(t, f.ID, queryHosts(t, db, FactFilter{TxAt: &before})[0].ID)

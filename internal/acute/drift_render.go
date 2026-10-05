@@ -22,6 +22,9 @@ func (r ModelDriftResult) WriteMarkdown(w io.Writer) {
 			} else {
 				fmt.Fprintf(w, "  - ~ %s (%s)\n", d.Resource, d.Reason)
 			}
+			if len(d.Fields) == 0 && d.Previous != nil {
+				fmt.Fprintf(w, "    - previous: %s\n", d.Previous.Detail())
+			}
 			for _, f := range d.Fields {
 				fmt.Fprintf(w, "    - %s\n", f.Detail())
 			}

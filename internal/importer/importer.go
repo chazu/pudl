@@ -1,7 +1,10 @@
 package importer
 
 import (
+	"context"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
+	"github.com/chazu/pudl/internal/ingestprep"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
@@ -11,6 +14,9 @@ import (
 
 // ImportOptions contains options for importing data
 type ImportOptions struct {
+	Context        context.Context
+	Limits         ingestprep.Limits
+	Explain        bool // Include classification diagnostics in the result.
 	SourcePath     string
 	Origin         string                    // Optional origin override
 	ManualSchema   string                    // Manual schema specification
@@ -24,6 +30,7 @@ type ImportOptions struct {
 	// collectionFormat is the detected format of a streamed collection, set by
 	// the importer itself so the collection entry records what was imported.
 	collectionFormat string
+	publication      *artifacts.Journal
 }
 
 // originPath returns the path that names this import for origin detection.
@@ -36,24 +43,27 @@ func (o ImportOptions) originPath() string {
 
 // ImportResult contains the results of an import operation
 type ImportResult struct {
-	ID               string                      `json:"id"`
-	SourcePath       string                      `json:"source_path"`
-	StoredPath       string                      `json:"stored_path"`
-	MetadataPath     string                      `json:"metadata_path"`
-	DetectedFormat   string                      `json:"detected_format"`
-	DetectedOrigin   string                      `json:"detected_origin"`
-	AssignedSchema   string                      `json:"assigned_schema"`
-	SchemaConfidence float64                     `json:"schema_confidence"`
-	RecordCount      int                         `json:"record_count"`
-	SizeBytes        int64                       `json:"size_bytes"`
-	ImportTimestamp  string                      `json:"import_timestamp"`
-	ValidationResult *validator.ValidationResult `json:"validation_result,omitempty"`
-	Skipped          bool                        `json:"skipped,omitempty"`
-	SkipReason       string                      `json:"skip_reason,omitempty"`
-	ResourceID       string                      `json:"resource_id,omitempty"`
-	ContentHash      string                      `json:"content_hash,omitempty"`
-	Version          int                         `json:"version,omitempty"`
-	IsNewVersion     bool                        `json:"is_new_version,omitempty"`
+	Explanation           *inference.InferenceTrace   `json:"explanation,omitempty"`
+	ItemExplanations      []ItemExplanation           `json:"item_explanations,omitempty"`
+	ExplanationsTruncated bool                        `json:"explanations_truncated,omitempty"`
+	ID                    string                      `json:"id"`
+	SourcePath            string                      `json:"source_path"`
+	StoredPath            string                      `json:"stored_path"`
+	MetadataPath          string                      `json:"metadata_path"`
+	DetectedFormat        string                      `json:"detected_format"`
+	DetectedOrigin        string                      `json:"detected_origin"`
+	AssignedSchema        string                      `json:"assigned_schema"`
+	SchemaConfidence      float64                     `json:"schema_confidence"`
+	RecordCount           int                         `json:"record_count"`
+	SizeBytes             int64                       `json:"size_bytes"`
+	ImportTimestamp       string                      `json:"import_timestamp"`
+	ValidationResult      *validator.ValidationResult `json:"validation_result,omitempty"`
+	Skipped               bool                        `json:"skipped,omitempty"`
+	SkipReason            string                      `json:"skip_reason,omitempty"`
+	ResourceID            string                      `json:"resource_id,omitempty"`
+	ContentHash           string                      `json:"content_hash,omitempty"`
+	Version               int                         `json:"version,omitempty"`
+	IsNewVersion          bool                        `json:"is_new_version,omitempty"`
 }
 
 // newImporterState builds the importer's shared state from multiple schema
@@ -136,4 +146,10 @@ func extractPackage(schema string) string {
 // identity extraction.
 func (e *EnhancedImporter) analyzeData(filePath, format string) (interface{}, int, error) {
 	return DecodeFile(filePath, format)
+}
+
+// ItemExplanation is a bounded collection item classification diagnostic.
+type ItemExplanation struct {
+	Index int                       `json:"index"`
+	Trace *inference.InferenceTrace `json:"trace"`
 }

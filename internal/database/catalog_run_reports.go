@@ -36,7 +36,7 @@ func (c *CatalogDB) ensureRunReportsTable() error {
 // SaveRunReport replaces the report for a run. A report is written after the
 // phase data is known and before the run's terminal status is finalized.
 func (c *CatalogDB) SaveRunReport(runID, model string, report []byte) error {
-	return saveRunReportIn(c.db, runID, model, report)
+	return c.WithCatalogTx(func(tx *CatalogTx) error { return saveRunReportIn(tx.q, runID, model, report) })
 }
 
 func saveRunReportIn(q dbtx, runID, model string, report []byte) error {
@@ -53,7 +53,7 @@ func saveRunReportIn(q dbtx, runID, model string, report []byte) error {
 	if err != nil {
 		return fmt.Errorf("save run report %q: %w", runID, err)
 	}
-	return nil
+	return recordReportEvidenceIn(q, runID, report)
 }
 
 // GetRunReport returns one report, or nil when no report exists for runID.

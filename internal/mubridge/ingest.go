@@ -1,9 +1,11 @@
 package mubridge
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/ingestprep"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,6 +44,8 @@ type ObserveResult struct {
 // It replaces the positional IngestObserveResults* family, which had reached six
 // parameters and would have taken ten.
 type ObserveIngest struct {
+	Context context.Context
+	Limits  ingestprep.Limits
 	Reader  io.Reader
 	DataDir string
 	Graph   *inference.InheritanceGraph
@@ -91,147 +95,15 @@ func NewSnapshotID() string {
 // individual observe entry linked to it. Records with a _schema field are routed
 // to their specific schema.
 func IngestObserve(db *database.CatalogDB, in ObserveIngest) (ObserveIngestResult, error) {
-	if in.Origin == "" {
-		in.Origin = database.SnapshotSourceMuObserve
-	}
-	if in.Source == "" {
-		in.Source = database.SnapshotSourceIngestObserve
-	}
-	if in.SnapshotID == "" {
-		in.SnapshotID = NewSnapshotID()
-	}
-
-	data, err := io.ReadAll(in.Reader)
+	prepared, err := PrepareObservation(in)
 	if err != nil {
-		return ObserveIngestResult{}, fmt.Errorf("failed to read input: %w", err)
-	}
-
-	data = []byte(strings.TrimSpace(string(data)))
-	if len(data) == 0 {
-		return ObserveIngestResult{}, nil
-	}
-
-	var results []ObserveResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		return ObserveIngestResult{}, fmt.Errorf("failed to parse observe results (expected JSON array from mu observe --json): %w", err)
-	}
-
-	origin := in.Origin
-	runID := in.RunID
-	now := time.Now()
-	rawDir := filepath.Join(in.DataDir, "raw", now.Format("2006"), now.Format("01"), now.Format("02"))
-	if err := os.MkdirAll(rawDir, 0755); err != nil {
-		return ObserveIngestResult{}, fmt.Errorf("failed to create raw directory: %w", err)
-	}
-
-	// Collect all records across targets, tracking metadata for the snapshot.
-	type targetRecord struct {
-		record map[string]any
-		target string
-	}
-	var allRecords []targetRecord
-	var targets []string
-	var errors []map[string]string
-	schemaCounts := map[string]int{}
-
-	for _, result := range results {
-		if result.Target == "" {
-			fmt.Fprintf(os.Stderr, "Warning: skipping observe result with empty target\n")
-			continue
-		}
-
-		target := strings.TrimPrefix(result.Target, "//")
-
-		if result.Error != "" {
-			fmt.Fprintf(os.Stderr, "Warning: target %s reported error: %s\n", result.Target, result.Error)
-			errors = append(errors, map[string]string{"target": target, "error": result.Error})
-			targets = append(targets, target)
-			continue
-		}
-		if result.Current == nil {
-			continue
-		}
-
-		targets = append(targets, target)
-
-		// Extract records from current.records, or treat current as a single record.
-		var records []map[string]any
-		if rawRecords, ok := result.Current["records"]; ok {
-			if arr, ok := rawRecords.([]any); ok {
-				for _, item := range arr {
-					if rec, ok := item.(map[string]any); ok {
-						records = append(records, rec)
-					}
-				}
-			}
-		}
-		if len(records) == 0 {
-			records = []map[string]any{result.Current}
-		}
-
-		for _, rec := range records {
-			allRecords = append(allRecords, targetRecord{record: rec, target: target})
-			if _, ok := rec["_schema"].(string); ok {
-				schemaCounts[resolveObserveSchemaWithMappings(rec, in.Graph, in.Inferrer, in.SchemaMappings)]++
-			} else {
-				schemaCounts["pudl/mu.#ObserveResult"]++
-			}
-		}
-	}
-
-	// Everything above is parsing; nothing has touched the catalog yet. The
-	// writes below are one step and are recorded as one: the snapshot contract,
-	// its collection entry and every membership commit together, so a failure
-	// part-way through cannot leave a snapshot describing records that were never
-	// stored, or records belonging to a snapshot that does not exist. That partial
-	// state is exactly what a later run would read as an observation.
-	ingested := 0
-
-	err = db.WithCatalogTx(func(tx *database.CatalogTx) error {
-		if err := createObserveSnapshot(tx, observeSnapshotEntry{
-			snapshotID:   in.SnapshotID,
-			now:          now,
-			origin:       origin,
-			targets:      targets,
-			recordCount:  len(allRecords),
-			schemaCounts: schemaCounts,
-			errors:       errors,
-			rawDir:       rawDir,
-			runID:        runID,
-		}); err != nil {
-			return err
-		}
-		if err := tx.RecordObserveSnapshot(database.ObserveSnapshot{
-			SnapshotID:  in.SnapshotID,
-			RunID:       runID,
-			Model:       in.Model,
-			Workspace:   in.Workspace,
-			Origin:      origin,
-			Source:      in.Source,
-			Targets:     targets,
-			RecordCount: len(allRecords),
-			CreatedAt:   now,
-		}); err != nil {
-			return err
-		}
-
-		ingested = 0
-		for i, tr := range allRecords {
-			n, err := ingestObserveRecord(tx, tr.record, tr.target, origin, rawDir, now, i, in.SnapshotID, in.Graph, in.Inferrer, in.SchemaMappings, runID)
-			if err != nil {
-				return err
-			}
-			ingested += n
-		}
-		return nil
-	})
-	if err != nil {
-		// Nothing was recorded, so report nothing recorded — the old partial
-		// count and snapshot ID described rows that had just been rolled back.
 		return ObserveIngestResult{}, err
 	}
-
-	return ObserveIngestResult{Records: ingested, SnapshotID: in.SnapshotID}, nil
+	defer prepared.Close()
+	if prepared.empty {
+		return ObserveIngestResult{}, nil
+	}
+	return prepared.Commit(db)
 }
 
 // observeSnapshotEntry is what createObserveSnapshot needs to stage the
@@ -245,6 +117,7 @@ type observeSnapshotEntry struct {
 	schemaCounts map[string]int
 	errors       []map[string]string
 	rawDir       string
+	maxBytes     int64
 	runID        string
 }
 
@@ -259,7 +132,7 @@ type observeSnapshotEntry struct {
 // what lets a failed ingest still be named.
 //
 // The content hash is retained in content_hash, where it belongs.
-func createObserveSnapshot(db database.CatalogWriter, in observeSnapshotEntry) error {
+func prepareObserveSnapshot(in observeSnapshotEntry) (database.CatalogEntry, error) {
 	// Build schema summary.
 	var schemaSummary []map[string]any
 	for schema, count := range in.schemaCounts {
@@ -286,7 +159,10 @@ func createObserveSnapshot(db database.CatalogWriter, in observeSnapshotEntry) e
 
 	snapshotJSON, err := json.Marshal(snapshot)
 	if err != nil {
-		return fmt.Errorf("failed to marshal snapshot: %w", err)
+		return database.CatalogEntry{}, fmt.Errorf("failed to marshal snapshot: %w", err)
+	}
+	if int64(len(snapshotJSON)) > in.maxBytes {
+		return database.CatalogEntry{}, fmt.Errorf("observation exceeds staging byte limit")
 	}
 	hash := sha256.Sum256(snapshotJSON)
 	contentHash := fmt.Sprintf("%x", hash)
@@ -295,7 +171,7 @@ func createObserveSnapshot(db database.CatalogWriter, in observeSnapshotEntry) e
 	filename := fmt.Sprintf("%s_snapshot.json", in.snapshotID)
 	storedPath := filepath.Join(in.rawDir, filename)
 	if err := os.WriteFile(storedPath, snapshotJSON, 0644); err != nil {
-		return fmt.Errorf("failed to write snapshot: %w", err)
+		return database.CatalogEntry{}, fmt.Errorf("failed to write snapshot: %w", err)
 	}
 
 	// No snapshot-level dedup. A snapshot is the record of *one* observation by
@@ -333,16 +209,12 @@ func createObserveSnapshot(db database.CatalogWriter, in observeSnapshotEntry) e
 		RunID:           runIDPtr,
 	}
 
-	if err := db.AddEntry(entry); err != nil {
-		return fmt.Errorf("failed to add snapshot entry: %w", err)
-	}
-	return nil
+	return entry, nil
 }
 
 // ingestObserveRecord stores a single observe record in the catalog.
 // Returns 1 if ingested, 0 if deduplicated, or an error.
-func ingestObserveRecord(
-	db database.CatalogWriter,
+func prepareObserveRecord(
 	record map[string]any,
 	target string,
 	origin string,
@@ -354,14 +226,14 @@ func ingestObserveRecord(
 	inferrer *inference.SchemaInferrer,
 	schemaMappings map[string]string,
 	runID string,
-) (int, error) {
+) (database.CatalogEntry, []byte, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
 	schema := resolveObserveSchemaWithMappings(record, graph, inferrer, schemaMappings)
 
 	// Compute content hash from the canonical JSON of the record.
 	recordJSON, err := json.Marshal(record)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal record: %w", err)
+		return database.CatalogEntry{}, nil, fmt.Errorf("failed to marshal record: %w", err)
 	}
 	hash := sha256.Sum256(recordJSON)
 	contentHash := fmt.Sprintf("%x", hash)
@@ -384,34 +256,8 @@ func ingestObserveRecord(
 	if len(identityValues) > 0 {
 		identityJSON, err = identity.CanonicalIdentityJSON(identityValues)
 		if err != nil {
-			return 0, fmt.Errorf("canonicalize observe identity: %w", err)
+			return database.CatalogEntry{}, nil, fmt.Errorf("canonicalize observe identity: %w", err)
 		}
-	}
-
-	// Dedup: skip if exact same content already exists for this target.
-	existing, err := db.GetLatestObserveByContentHash(target, contentHash)
-	if err != nil {
-		return 0, fmt.Errorf("dedup check failed for %s: %w", target, err)
-	}
-	if existing != nil {
-		if identityJSON != "" && (existing.IdentityJSON == nil || *existing.IdentityJSON == "") {
-			if err := db.UpdateEntryIdentity(existing.ID, resourceID, identityJSON); err != nil {
-				return 0, fmt.Errorf("enrich deduplicated observe identity: %w", err)
-			}
-		}
-		// The entry keeps the run that *first* observed it. Rewriting run_id to the
-		// current run made the association last-writer-wins: an entry first seen by
-		// run A silently moved to run B on the next identical observation, so a
-		// query for run A under-reported what run A actually saw. Invariant 3 wants
-		// exactly one run per observation, and re-running must not degrade the
-		// provenance that replay-by-durable-ID depends on.
-		//
-		// This run's sighting is not lost — it is recorded as snapshot membership
-		// below, which is the relationship that is legitimately many-to-many.
-		if err := db.AddCollectionMembership(collectionID, existing.ID, index); err != nil {
-			return 0, fmt.Errorf("failed to link existing observe record to snapshot: %w", err)
-		}
-		return 0, nil
 	}
 
 	// Store raw JSON.
@@ -432,10 +278,6 @@ func ingestObserveRecord(
 	safeTarget := strings.ReplaceAll(target, "/", "--")
 	filename := fmt.Sprintf("%s_observe_%s_%s.json", now.Format("20060102_150405"), safeTarget, contentHash[:16])
 	storedPath := filepath.Join(rawDir, filename)
-	if err := os.WriteFile(storedPath, recordJSON, 0644); err != nil {
-		return 0, fmt.Errorf("failed to write observe record: %w", err)
-	}
-
 	entryType := "observe"
 	collectionType := "item"
 	itemID := fmt.Sprintf("%s_item_%d", safeTarget, index)
@@ -469,11 +311,7 @@ func ingestObserveRecord(
 		RunID:           runIDPtr,
 	}
 
-	if err := db.AddEntry(entry); err != nil {
-		return 0, fmt.Errorf("failed to add observe entry: %w", err)
-	}
-
-	return 1, nil
+	return entry, recordJSON, nil
 }
 
 const genericObserveSchema = "pudl/mu.#ObserveResult"

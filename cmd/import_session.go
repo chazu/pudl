@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"github.com/chazu/pudl/internal/ingestprep"
 	"os"
 	"strings"
 
@@ -15,6 +17,8 @@ import (
 // shares: one importer, and one resolution of --schema. Before, each mode set
 // these up separately and only single-file import resolved the schema name.
 type importSession struct {
+	ctx       context.Context
+	limits    ingestprep.Limits
 	imp       *importer.EnhancedImporter
 	schema    string                    // resolved --schema, or ""
 	validator *validator.ChainValidator // set when schema is set
@@ -53,6 +57,9 @@ func (s *importSession) Close() {
 func (s *importSession) options(path, origin string) importer.ImportOptions {
 	return importer.ImportOptions{
 		SourcePath:     path,
+		Context:        s.ctx,
+		Limits:         s.limits,
+		Explain:        importExplain,
 		Origin:         origin, // auto-detected from the path when empty
 		ManualSchema:   s.schema,
 		ChainValidator: s.validator,

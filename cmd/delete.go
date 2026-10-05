@@ -27,7 +27,8 @@ var deleteCmd = &cobra.Command{
 The ID parameter should be the proquint identifier of the data entry as shown
 in the 'pudl list' command output.
 
-For collections, use --cascade to also delete all items in the collection.
+For collections, use --cascade to remove their memberships and delete items
+that no other collection references.
 Without --cascade, deleting a collection with items will fail.
 
 Examples:
@@ -104,7 +105,7 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Perform deletion
-	result, err := l.DeleteEntry(entry.ID, deleteCascade)
+	result, err := l.DeleteEntryContext(cmd.Context(), entry.ID, deleteCascade)
 	if err != nil {
 		return err
 	}
@@ -126,6 +127,9 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(outw(), "   Removed metadata file: %s\n", entry.MetadataPath)
 	}
 
+	for _, cleanupErr := range result.CleanupErrors {
+		fmt.Fprintf(outw(), "   Catalog deletion committed; file cleanup incomplete: %s\n", cleanupErr)
+	}
 	return nil
 }
 

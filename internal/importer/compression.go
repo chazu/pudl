@@ -2,12 +2,14 @@ package importer
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/chazu/pudl/internal/ingestprep"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -83,6 +85,10 @@ func DecompressFile(sourcePath string) (string, error) {
 // detection sees the real format. If the file is not compressed, returns the
 // original path.
 func DecompressTo(sourcePath, dir string) (string, error) {
+	return DecompressToLimited(context.Background(), sourcePath, dir, 1<<63-1)
+}
+
+func DecompressToLimited(ctx context.Context, sourcePath, dir string, maxBytes int64) (string, error) {
 	compression := DetectCompression(sourcePath)
 	if compression == "none" {
 		return sourcePath, nil
@@ -100,6 +106,12 @@ func DecompressTo(sourcePath, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if closer, ok := decompReader.(io.Closer); ok {
+		defer func() { _ = closer.Close() }()
+	}
+	if closer, ok := decompReader.(interface{ Close() }); ok {
+		defer closer.Close()
+	}
 
 	// Create temporary file for decompressed data
 	tmpFile, err := os.CreateTemp(dir, "pudl-decomp-*-"+innerName(sourcePath))
@@ -108,7 +120,7 @@ func DecompressTo(sourcePath, dir string) (string, error) {
 	}
 
 	// Copy decompressed data to temporary file
-	_, copyErr := io.Copy(tmpFile, decompReader)
+	_, copyErr := io.Copy(tmpFile, &ingestprep.Reader{Context: ctx, Source: decompReader, Remaining: maxBytes})
 	closeErr := tmpFile.Close()
 	if copyErr != nil {
 		os.Remove(tmpFile.Name())

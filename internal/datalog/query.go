@@ -1,6 +1,7 @@
 package datalog
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/chazu/pudl/internal/database"
@@ -43,6 +44,20 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 //   - a closure with cycles is materialized stratum by stratum, iterating only
 //     the cyclic components to a fixpoint.
 func EvaluateWithOptions(db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope, opts EvalOptions) ([]Tuple, error) {
+	return EvaluateContext(context.Background(), db, rules, relation, constraints, scope, opts)
+}
+
+// EvaluateContext evaluates with cancellable SQL and recursive rounds.
+func EvaluateContext(ctx context.Context, db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope, opts EvalOptions) (tuples []Tuple, resultErr error) {
+	defer func() {
+		if resultErr != nil && ctx.Err() != nil {
+			tuples = nil
+			resultErr = ctx.Err()
+		}
+	}()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Built-in EDB relations (e.g. catalog_entry) are join-only: they resolve
 	// inside rule bodies but cannot be queried directly. Querying one with no
 	// producing rule would silently fall through to the facts table and return
@@ -66,15 +81,15 @@ func EvaluateWithOptions(db *database.CatalogDB, rules []Rule, relation string, 
 
 	switch {
 	case !plan.derived():
-		return evalEDB(db, relation, constraints, scope)
+		return evalEDBContext(ctx, db, relation, constraints, scope)
 	case plan.hasCycle():
-		results, err := evalStratified(db, plan, constraints, scope, opts.maxIterations())
+		results, err := evalStratifiedContext(ctx, db, plan, constraints, scope, opts.maxIterations())
 		if err != nil {
 			return nil, fmt.Errorf("recursive query failed: %w", err)
 		}
 		return results, nil
 	default:
-		results, err := evalAcyclic(db, plan, constraints, scope)
+		results, err := evalAcyclicContext(ctx, db, plan, constraints, scope)
 		if err != nil {
 			return nil, fmt.Errorf("sql query failed: %w", err)
 		}

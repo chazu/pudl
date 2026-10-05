@@ -62,6 +62,9 @@ Data is never rejected -- if no specific schema matches, it falls back to the un
 - **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
 
 See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas.
+See [evidence and recovery](docs/evidence.md) for exact observations, faithful export,
+classification explanations, historical report values, bounded check witnesses,
+independent evidence retention, and verified portable workspace bundles.
 
 ## Commands
 

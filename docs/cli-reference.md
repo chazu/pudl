@@ -350,7 +350,8 @@ Delete a data entry from the PUDL catalog, including its data file and metadata.
 The ID parameter should be the proquint identifier of the data entry as shown
 in the 'pudl list' command output.
 
-For collections, use --cascade to also delete all items in the collection.
+For collections, use --cascade to remove their memberships and delete items
+that no other collection references.
 Without --cascade, deleting a collection with items will fail.
 
 Examples:
@@ -393,6 +394,7 @@ Flags:
 |------|------|---------|-------------|
 | `--entry` | string |  | Check one catalog entry by proquint or full ID |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
+| `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
 `--entry` and `--health-only` are mutually exclusive. JSON includes `ok`,
 `health`, `catalog`, and any setup `error`; invalid records, inference
@@ -407,6 +409,8 @@ The `mu` health check runs `mu version` and warns when mu is missing, its
 version cannot be read, or it is older than the minimum this PUDL is tested
 against (v0.3.5). mu is optional for imports, queries and `--from-catalog`
 replays, so these are warnings rather than failures.
+
+`--verify-payloads` checks referenced files and available SHA256 content claims, including canonical JSON items. This optional full scan never repairs or rewrites evidence.
 
 ## pudl example
 
@@ -473,12 +477,23 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--allow-partial` | bool |  | Publish readable entries on input errors; report incomplete output with a nonzero exit |
+| `--bundle` | string |  | Write a verified portable workspace bundle |
 | `--format` | string | `json` | Output format: json, yaml, csv, ndjson |
 | `--id` | string |  | Export entry by proquint ID |
+| `--max-bundle-bytes` | int64 | `17179869184` | Maximum uncompressed bundle bytes |
 | `--origin` | string |  | Export entries from origin |
 | `-o`, `--output` | string |  | Output file (default: stdout) |
 | `--pretty` | bool | `true` | Pretty-print output |
 | `--schema` | string |  | Export entries matching schema |
+
+Exports honor source formats and collection membership. Read/serialization failures
+fail by default; `--allow-partial` publishes readable entries with a nonzero exit
+and explicit diagnostics. File destinations are replaced atomically after success.
+CSV columns are sorted and support scalar object fields.
+
+`--bundle FILE` captures the complete local workspace, without entry filters.
+See [evidence and recovery](evidence.md) for portable bundles, limits, and restore.
 
 ## pudl facts
 
@@ -822,7 +837,11 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--explain` | bool |  | Explain original schema candidates, fallback, and search-path shadowing |
 | `--format` | string |  | Specify format for stdin data (json, yaml, csv, ndjson) |
+| `--max-decoded-bytes` | int64 | `1073741824` | Maximum decoded source bytes per file |
+| `--max-record-bytes` | int64 | `67108864` | Maximum decoded JSON record size |
+| `--max-staging-bytes` | int64 | `2147483648` | Maximum prepared source and record bytes per file |
 | `--origin` | string |  | Override origin detection (optional) |
 | `-p`, `--path` | string |  | Path to file or wildcard pattern to import (use '-' for stdin) |
 | `--recursive` | bool |  | When --path is a directory, also import supported files in its subdirectories |
@@ -848,6 +867,8 @@ Behavior:
 
 Set `PUDL_DEBUG=1` for detailed error output.
 
+`--explain` exposes classification/fallback reasons and schema sources. Byte limits bound records, decoded input, and staging; failures never truncate records. See [evidence](evidence.md).
+
 ## pudl init
 
 Initialize or repair a local PUDL workspace (--global for ~/.pudl)
@@ -868,7 +889,9 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace authored workspace configuration |
+| `--from-bundle` | string |  | Restore verified history into a new local workspace; approvals require replanning |
 | `--global` | bool |  | Initialize ~/.pudl instead of a local .pudl |
+| `--max-bundle-bytes` | int64 | `17179869184` | Maximum uncompressed restored bundle bytes |
 
 Initialization installs configuration, a local CUE module and built-in schemas,
 authoring and data directories, and bundled Claude skills. Repeated
@@ -876,6 +899,8 @@ initialization preserves authored configuration; `--force` replaces
 configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
+
+`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Pending approvals require replanning and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -1377,6 +1402,9 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--max-decoded-bytes` | int64 | `1073741824` | Maximum observation input bytes |
+| `--max-record-bytes` | int64 | `67108864` | Maximum decoded observation target envelope size |
+| `--max-staging-bytes` | int64 | `2147483648` | Maximum prepared observation bytes |
 | `--origin` | string | `mu-observe` | Override origin |
 | `--path` | string |  | Read from file instead of stdin |
 | `--plugin-dir` | string |  | Local mu plugin directory containing mu.cue and optional pudl.cue |
@@ -1454,12 +1482,15 @@ Flags:
 | `--list` | bool |  | List queryable relations (rule heads + EDB facts) and their arg keys |
 | `--max-iterations` | int | `100` | Cap on fixpoint rounds per recursive cycle (the longest chain a recursive rule can follow) |
 | `-f`, `--rule-file` | string |  | Load additional rules from a CUE file |
+| `--timeout` | duration |  | Maximum query duration (0 disables deadline) |
 | `--topo` | bool |  | Read the relation's from/to edges as a topological run order (errors on a cycle) |
 
 Rules are loaded from `.pudl/schema/pudl/rules/` (repo-scoped) and
 `~/.pudl/schema/pudl/rules/` (global). A query fails when the queried relation
 depends on a rule that cannot be loaded; `pudl doctor` lists such rules. See
 [datalog](datalog.md) for evaluation and rule authoring.
+
+`--timeout` bounds SQL evaluation, recursion, and writer contention independently of Mu subprocess timeouts. Cancellation returns an error and never a successful partial answer.
 
 ## pudl reclassify
 
@@ -1753,6 +1784,8 @@ With an ID, it reads that exact report. The JSON payload retains its existing
 standalone or set representation. `resume` and `reject` look up the stored
 operation kind; set approvals rebuild and validate the exact plan, while
 standalone approvals retain their request-level behavior.
+
+Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
 
 ## pudl run resume
 
@@ -2377,7 +2410,9 @@ pudl snapshot retain <snapshot-id> [flags]
 ```
 
 ```text
-Pin a snapshot so no retention policy removes it.
+Add a manual pin so no retention policy removes this snapshot.
+--release removes only the manual pin; approval and retained-report owners remain.
+Reports preserve referenced snapshot evidence for 30 days after their last save.
 
 Snapshots recorded before snapshot provenance existed cannot be pinned — they
 carry no contract row — but they are never pruned either, for the same reason.

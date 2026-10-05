@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -112,7 +113,8 @@ type observedSet struct {
 // catalog (observe items by snapshot or origin), each with the time it was
 // recorded. Numbers decode exactly so comparison against desired values does
 // not round through float64.
-func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, error) {
+
+func loadObservedRecordsContext(ctx context.Context, db *database.CatalogDB, scope string) (observedSet, error) {
 	var set observedSet
 	filter := database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}
 	// A snapshot ID is the normal scope for a live inventory run. Keep origin
@@ -138,7 +140,7 @@ func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, err
 			}
 		}
 	}
-	res, err := db.QueryEntries(database.FilterOptions{
+	res, err := db.QueryEntriesContext(ctx, database.FilterOptions{
 		EntryTypes:     filter.EntryTypes,
 		CollectionType: filter.CollectionType,
 		Origin:         filter.Origin,
@@ -148,6 +150,9 @@ func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, err
 		return set, fmt.Errorf("query observed records: %w", err)
 	}
 	for _, e := range res.Entries {
+		if err := ctx.Err(); err != nil {
+			return set, err
+		}
 		data, err := os.ReadFile(e.StoredPath)
 		if err != nil {
 			return set, fmt.Errorf("read observed record %s: %w", e.StoredPath, err)
@@ -159,6 +164,15 @@ func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, err
 			return set, fmt.Errorf("parse observed record %s: %w", e.StoredPath, err)
 		}
 		observed := acute.ObservedRecord{Data: rec, ObservedAt: set.observedAt}
+		if e.IdentityJSON != nil && *e.IdentityJSON != "" {
+			var fields map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(*e.IdentityJSON), &fields); err != nil {
+				return set, fmt.Errorf("decode historical identity for %s: %w", e.ID, err)
+			}
+			for field := range fields {
+				observed.IdentityFields = append(observed.IdentityFields, field)
+			}
+		}
 		if !e.ImportTimestamp.IsZero() {
 			at := e.ImportTimestamp
 			observed.ObservedAt = &at
@@ -183,14 +197,40 @@ func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, err
 // its scope names a fresh snapshot or a stale replay, so the caller that chose
 // the scope is the one that gets to claim verification.
 func runInventoryDrift(db *database.CatalogDB, scope string, desired []map[string]any, identity identityResolver) (ModelDriftResult, error) {
+	return runInventoryDriftContext(context.Background(), db, scope, desired, identity)
+}
+
+func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope string, desired []map[string]any, identity identityResolver) (ModelDriftResult, error) {
 	if strings.TrimSpace(scope) == "" {
 		return ModelDriftResult{}, fmt.Errorf("inventory drift requires a catalog scope (snapshot ID or origin); refusing to compare against every observation in the catalog")
 	}
-	observed, err := loadObservedRecords(db, scope)
+	observed, err := loadObservedRecordsContext(ctx, db, scope)
 	if err != nil {
 		return ModelDriftResult{}, err
 	}
-	drifted := acute.InventorySetDiff(desired, observed.records, identity)
+	history := acute.PreviousInventory{Status: "no-baseline"}
+	if observed.snapshotID != "" {
+		previous, pruned, err := db.PreviousSuccessfulObserveSnapshot(ctx, observed.snapshotID)
+		if err != nil {
+			return ModelDriftResult{}, err
+		}
+		if previous != nil {
+			at := previous.CreatedAt
+			history.SnapshotID = previous.SnapshotID
+			history.ObservedAt = &at
+			if pruned {
+				history.Status = "pruned"
+			} else {
+				prior, err := loadObservedRecordsContext(ctx, db, previous.SnapshotID)
+				if err != nil {
+					return ModelDriftResult{}, fmt.Errorf("load previous observation: %w", err)
+				}
+				history.Status = "available"
+				history.Records = prior.records
+			}
+		}
+	}
+	drifted := acute.InventorySetDiffWithPrevious(desired, observed.records, identity, history)
 	return ModelDriftResult{
 		Clean:      len(drifted) == 0,
 		Drifted:    drifted,

@@ -49,3 +49,19 @@ func TestValidateChainAcrossSchemaPaths(t *testing.T) {
 		t.Fatalf("assigned schema = %q, want pudl/core.#Item", fallback.AssignedSchema)
 	}
 }
+
+func TestSchemaSetSourceShadowing(t *testing.T) {
+	repo := writeModuleDir(t, "thing", "thing.cue", `package thing
+#Thing: {_pudl: {schema_type: "base", resource_type: "thing"}, name: string, ...}
+`)
+	global := writeModuleDir(t, "thing", "thing.cue", `package thing
+#Thing: {_pudl: {schema_type: "base", resource_type: "thing"}, name: int, ...}
+`)
+	set := LoadSchemaSet([]string{repo, global})
+	if set.Sources["thing.#Thing"] != repo {
+		t.Fatalf("source = %q", set.Sources["thing.#Thing"])
+	}
+	if len(set.Shadowed["thing.#Thing"]) != 1 || set.Shadowed["thing.#Thing"][0] != global {
+		t.Fatalf("shadowed = %v", set.Shadowed)
+	}
+}

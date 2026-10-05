@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/chazu/pudl/internal/errors"
 )
@@ -81,21 +82,26 @@ func (t *FactTx) FactHistory(relation string) ([]Fact, error) {
 // the connection's busy_timeout). If fn returns an error the transaction is
 // rolled back and the error returned; otherwise it is committed.
 func (c *CatalogDB) WithFactTx(fn func(*FactTx) error) error {
-	ctx := context.Background()
+	return c.WithFactTxContext(context.Background(), fn)
+}
+
+func (c *CatalogDB) WithFactTxContext(ctx context.Context, fn func(*FactTx) error) error {
 	conn, err := c.db.Conn(ctx)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to acquire connection", err)
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+	if err := beginImmediateContext(ctx, conn); err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin immediate transaction", err)
 	}
 
 	committed := false
 	defer func() {
 		if !committed {
-			rollbackConn(ctx, conn)
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			rollbackConn(cleanup, conn)
 		}
 	}()
 

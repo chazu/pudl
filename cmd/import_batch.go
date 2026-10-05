@@ -20,6 +20,8 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 		return err
 	}
 	defer session.Close()
+	session.ctx = cmd.Context()
+	session.limits = importIngestLimits()
 
 	var importErrors []error
 	outcomes := make([]importOutcome, 0, len(filePaths))
@@ -39,6 +41,10 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))
 			progress.Progressf("   ❌ Failed: %v", err)
 			continue
+		}
+
+		if importExplain && !jsonOutput {
+			displayImportExplanation(result)
 		}
 
 		successCount++

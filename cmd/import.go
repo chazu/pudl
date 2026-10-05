@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	importExplain     bool
 	importSchema      string
 	importOrigin      string
 	importFormat      string
@@ -131,6 +132,8 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer session.Close()
+	session.ctx = cmd.Context()
+	session.limits = importIngestLimits()
 
 	opts := session.options(absPath, workspaceImportOrigin())
 
@@ -165,6 +168,8 @@ func init() {
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 	importCmd.Flags().BoolVar(&importRecursive, "recursive", false, "When --path is a directory, also import supported files in its subdirectories")
 
+	importCmd.Flags().BoolVar(&importExplain, "explain", false, "Explain original schema candidates, fallback, and search-path shadowing")
+
 	// Retired streaming-parser tuning. Accepted so existing scripts keep
 	// working; they have no effect.
 	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Deprecated: no effect")
@@ -179,6 +184,9 @@ func init() {
 
 // displayImportResults shows the results of data import with chained validation info
 func displayImportResults(result *importer.ImportResult) {
+	if importExplain {
+		displayImportExplanation(result)
+	}
 	// Check if import was skipped due to duplicate
 	if result.Skipped {
 		fmt.Fprintf(outw(), "⏭️  Skipped: %s\n", result.SourcePath)

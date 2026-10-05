@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -70,7 +71,7 @@ func ingestConvergeManifest(cat *runCatalog, modelName, runID string, manifestJS
 	if err != nil {
 		return err
 	}
-	_, err = mubridge.IngestManifestWithRunID(db, bytes.NewReader(manifestJSON), "mu-build", cat.Dir(), modelName, runID)
+	_, err = mubridge.IngestManifestContext(context.Background(), db, bytes.NewReader(manifestJSON), "mu-build", cat.Dir(), modelName, runID)
 	return err
 }
 

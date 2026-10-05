@@ -1,6 +1,7 @@
 package acute
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -23,10 +24,26 @@ const (
 
 // FieldDiff is one desired field the observed record does not satisfy. Path is
 // a dotted path into the record ("spec.replicas", "ports[0].port").
+// PreviousValue freezes historical evidence; null, absent, and unavailable differ.
+type PreviousValue struct {
+	Status     string          `json:"status"`
+	SnapshotID string          `json:"snapshot_id,omitempty"`
+	ObservedAt *time.Time      `json:"observed_at,omitempty"`
+	Value      json.RawMessage `json:"value,omitempty"`
+}
+
+// PathComponent is a literal object key or list index, never a parsed display path.
+type PathComponent struct {
+	Key   *string `json:"key,omitempty"`
+	Index *int    `json:"index,omitempty"`
+}
+
 type FieldDiff struct {
-	Path     string `json:"path"`
-	Expected any    `json:"expected,omitempty"`
-	Observed any    `json:"observed,omitempty"`
+	PathComponents []PathComponent `json:"path_components,omitempty"`
+	Previous       *PreviousValue  `json:"previous,omitempty"`
+	Path           string          `json:"path"`
+	Expected       any             `json:"expected,omitempty"`
+	Observed       any             `json:"observed,omitempty"`
 	// Missing: the desired field is absent from the observed record.
 	Missing bool `json:"missing,omitempty"`
 	// Unexpected: a nested observed field the desired value does not declare.
@@ -37,8 +54,9 @@ type FieldDiff struct {
 
 // ResourceDrift is a single drifted resource and why.
 type ResourceDrift struct {
-	Resource string `json:"resource"` // "Kind/name"
-	Reason   string `json:"reason"`   // missing | changed | unidentifiable | ambiguous
+	Previous *PreviousValue `json:"previous,omitempty"`
+	Resource string         `json:"resource"` // "Kind/name"
+	Reason   string         `json:"reason"`   // missing | changed | unidentifiable | ambiguous
 	// Fields lists every unsatisfied desired field, in path order. Empty for a
 	// missing resource, and for a differential observer that reports only a
 	// textual diff.
@@ -119,6 +137,21 @@ func (f FieldDiff) String() string {
 // Detail renders one field difference with both values as JSON, for the
 // per-field lines of the human report.
 func (f FieldDiff) Detail() string {
+	detail := f.currentDetail()
+	if f.Previous != nil {
+		detail += ", previous " + f.Previous.Detail()
+	}
+	return detail
+}
+
+func (p PreviousValue) Detail() string {
+	if p.Status == "available" {
+		return string(p.Value) + fmt.Sprintf(" (snapshot %s)", p.SnapshotID)
+	}
+	return "(" + p.Status + ")"
+}
+
+func (f FieldDiff) currentDetail() string {
 	switch {
 	case f.Missing:
 		return fmt.Sprintf("%s: expected %s, observed (absent)", f.Path, FormatValue(f.Expected))

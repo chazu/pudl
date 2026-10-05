@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -65,6 +66,8 @@ var migrations = []migration{
 	{18, "retire_agent_memory_view", (*CatalogDB).retireAgentMemoryView},
 	{19, "fact_versioning", (*CatalogDB).ensureFactVersioning},
 	{20, "catalog_meta", (*CatalogDB).ensureCatalogMetaTable},
+	{21, "snapshot_pin_owners", (*CatalogDB).ensureSnapshotPins},
+	{22, "restored_snapshot_eligibility", (*CatalogDB).ensureSnapshotReuseBlocks},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step
@@ -139,11 +142,10 @@ func (c *CatalogDB) AppliedMigrationVersions() ([]int, error) {
 		return nil, err
 	}
 	versions := make([]int, 0, len(applied))
-	for _, m := range migrations {
-		if applied[m.version] {
-			versions = append(versions, m.version)
-		}
+	for version := range applied {
+		versions = append(versions, version)
 	}
+	sort.Ints(versions)
 	return versions, nil
 }
 

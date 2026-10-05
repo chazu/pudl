@@ -1,11 +1,12 @@
 package lister
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
@@ -92,6 +93,7 @@ type DeleteResult struct {
 	MetadataFileDeleted bool     `json:"metadata_file_deleted"`
 	ItemsDeleted        int      `json:"items_deleted,omitempty"`
 	DeletedItemIDs      []string `json:"deleted_item_ids,omitempty"`
+	CleanupErrors       []string `json:"cleanup_errors,omitempty"`
 }
 
 // CatalogEntry represents an entry from the catalog file
@@ -309,61 +311,34 @@ func (l *Lister) GetCollectionItems(collectionID string) ([]ListEntry, error) {
 
 // DeleteEntry deletes an entry and optionally its collection items
 func (l *Lister) DeleteEntry(entryID string, cascade bool) (*DeleteResult, error) {
-	// Get the entry first
-	entry, err := l.catalogDB.GetEntry(entryID)
-	if err != nil {
-		return nil, err
-	}
+	return l.DeleteEntryContext(context.Background(), entryID, cascade)
+}
 
-	result := &DeleteResult{
-		Success:  true,
-		EntryID:  entry.ID,
-		Proquint: idgen.HashToProquint(entry.ID),
-	}
-
-	// If this is a collection and cascade is enabled, delete items first
-	if entry.CollectionType != nil && *entry.CollectionType == "collection" && cascade {
-		items, err := l.catalogDB.GetCollectionItems(entry.ID)
+func (l *Lister) DeleteEntryContext(ctx context.Context, entryID string, cascade bool) (*DeleteResult, error) {
+	var result *DeleteResult
+	err := artifacts.WithLock(ctx, l.catalogDB.Root(), func() error {
+		plan, err := l.catalogDB.DeleteEntriesAtomicContext(ctx, entryID, cascade)
 		if err != nil {
-			return nil, errors.NewSystemError("Failed to get collection items", err)
+			return err
 		}
-
-		for _, item := range items {
-			// Remove only this collection's membership first. Content-addressed
-			// items may still be referenced by another collection.
-			if err := l.catalogDB.RemoveCollectionMembership(entry.ID, item.ID); err != nil {
-				return nil, errors.NewSystemError(fmt.Sprintf("Failed to remove membership for item %s", item.ID), err)
-			}
-			memberships, err := l.catalogDB.ItemMembershipCount(item.ID)
+		result = &DeleteResult{Success: true, EntryID: plan.Entry.ID, Proquint: idgen.HashToProquint(plan.Entry.ID), ItemsDeleted: len(plan.DeletedItems)}
+		cleanup := func(path string) bool {
+			removed, err := l.catalogDB.RemoveCommittedOrphan(path)
 			if err != nil {
-				return nil, errors.NewSystemError(fmt.Sprintf("Failed to inspect memberships for item %s", item.ID), err)
+				result.CleanupErrors = append(result.CleanupErrors, err.Error())
 			}
-			if memberships == 0 {
-				_ = os.Remove(item.StoredPath)
-				_ = os.Remove(item.MetadataPath)
-				if err := l.catalogDB.DeleteEntry(item.ID); err != nil {
-					return nil, errors.NewSystemError(fmt.Sprintf("Failed to delete item %s", item.ID), err)
-				}
-				result.DeletedItemIDs = append(result.DeletedItemIDs, idgen.HashToProquint(item.ID))
-			}
+			return removed
 		}
-		result.ItemsDeleted = len(items)
-	}
-
-	// Delete the entry's files
-	if err := os.Remove(entry.StoredPath); err == nil {
-		result.DataFileDeleted = true
-	}
-	if err := os.Remove(entry.MetadataPath); err == nil {
-		result.MetadataFileDeleted = true
-	}
-
-	// Delete from database
-	if err := l.catalogDB.DeleteEntry(entry.ID); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+		result.DataFileDeleted = cleanup(plan.Entry.StoredPath)
+		result.MetadataFileDeleted = cleanup(plan.Entry.MetadataPath)
+		for _, item := range plan.DeletedItems {
+			cleanup(item.StoredPath)
+			cleanup(item.MetadataPath)
+			result.DeletedItemIDs = append(result.DeletedItemIDs, idgen.HashToProquint(item.ID))
+		}
+		return nil
+	})
+	return result, err
 }
 
 // dbEntryToListEntry converts a database CatalogEntry to a ListEntry.
