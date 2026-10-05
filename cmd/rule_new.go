@@ -34,23 +34,7 @@ var ruleNewCmd = &cobra.Command{
 				return fmt.Errorf("check rule file: %w", err)
 			}
 		}
-		definition := modelDefinitionName(args[0])
-		source := fmt.Sprintf(`package rules
-
-import r "pudl.schemas/pudl/rules@v0"
-
-#%s: r.#Rule & {
-	name: %q
-	head: {
-		rel: "derived_relation"
-		args: {X: "$X"}
-	}
-	body: [{
-		rel: "source_relation"
-		args: {X: "$X"}
-	}]
-}
-`, definition, args[0])
+		source := ruleScaffoldSource(args[0])
 		if err := os.WriteFile(path, []byte(source), 0o644); err != nil {
 			return fmt.Errorf("write rule scaffold: %w", err)
 		}
@@ -62,6 +46,26 @@ import r "pudl.schemas/pudl/rules@v0"
 		}
 		return nil
 	},
+}
+
+// ruleScaffoldSource renders a rule as a plain top-level field. The rule loader
+// compiles each file standalone and skips definitions, so the scaffold must not
+// be a #-definition and must not import the rules package.
+func ruleScaffoldSource(name string) string {
+	return fmt.Sprintf(`package rules
+
+%q: {
+	name: %q
+	head: {
+		rel: "derived_relation"
+		args: {X: "$X"}
+	}
+	body: [{
+		rel: "source_relation"
+		args: {X: "$X"}
+	}]
+}
+`, name, name)
 }
 
 func init() {
