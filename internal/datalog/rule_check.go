@@ -61,13 +61,51 @@ func InvalidRules(rules []Rule) []Rule {
 }
 
 // RuleSetProblems describes every problem in a loaded rule set, one line each:
-// rules that failed to load. It is empty for a healthy rule set.
+// rules that failed to load, and relations whose rules disagree on head keys.
+// It is empty for a healthy rule set.
 func RuleSetProblems(rules []Rule) []string {
 	var problems []string
 	for _, r := range InvalidRules(rules) {
 		problems = append(problems, fmt.Sprintf("%s: %v", r.Describe(), r.LoadErr))
 	}
+	mismatches := headKeyProblems(validRules(rules))
+	for _, rel := range sortedRelations(mismatches) {
+		problems = append(problems, mismatches[rel].Error())
+	}
 	return problems
+}
+
+// headKeyProblems reports each relation whose rules do not all project the same
+// head key set. A relation's columns are its head keys, so rules that disagree
+// would union rows of different shapes.
+func headKeyProblems(rules []Rule) map[string]error {
+	first := make(map[string]Rule)
+	problems := make(map[string]error)
+	for _, r := range rules {
+		f, seen := first[r.Head.Rel]
+		if !seen {
+			first[r.Head.Rel] = r
+			continue
+		}
+		if _, done := problems[r.Head.Rel]; done {
+			continue
+		}
+		want, got := sortedArgKeys(f.Head.Args), sortedArgKeys(r.Head.Args)
+		if strings.Join(want, "\x00") != strings.Join(got, "\x00") {
+			problems[r.Head.Rel] = fmt.Errorf("relation %q: rule %s has head keys (%s) but rule %s has (%s); every rule of a relation must use the same keys",
+				r.Head.Rel, f.Describe(), strings.Join(want, ", "), r.Describe(), strings.Join(got, ", "))
+		}
+	}
+	return problems
+}
+
+func sortedRelations(m map[string]error) []string {
+	out := make([]string, 0, len(m))
+	for rel := range m {
+		out = append(out, rel)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // validRules returns the rules that loaded without error.
@@ -105,16 +143,14 @@ func dependencyClosure(rules []Rule, relation string) map[string]bool {
 	return closure
 }
 
-// rulesForQuery returns the valid rules, or an error naming every invalid rule
-// a query on relation depends on. An invalid rule whose head could not be read
-// might derive anything, so it blocks every query.
+// rulesForQuery returns the valid rules, or an error when a query on relation
+// depends on a problem: an invalid rule in its dependency closure, or a
+// relation in the closure whose rules disagree on head keys. An invalid rule
+// whose head could not be read might derive anything, so it blocks every query.
 func rulesForQuery(rules []Rule, relation string) ([]Rule, error) {
 	valid := validRules(rules)
-	if len(valid) == len(rules) {
-		return valid, nil
-	}
-
 	closure := dependencyClosure(valid, relation)
+
 	var blocking []Rule
 	for _, r := range InvalidRules(rules) {
 		if r.Head.Rel == "" || closure[r.Head.Rel] {
@@ -123,6 +159,13 @@ func rulesForQuery(rules []Rule, relation string) ([]Rule, error) {
 	}
 	if len(blocking) > 0 {
 		return nil, invalidRulesError(relation, blocking)
+	}
+
+	mismatches := headKeyProblems(valid)
+	for _, rel := range sortedRelations(mismatches) {
+		if closure[rel] {
+			return nil, mismatches[rel]
+		}
 	}
 	return valid, nil
 }

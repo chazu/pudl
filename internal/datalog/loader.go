@@ -119,7 +119,7 @@ func parseRules(ctx *cue.Context, source, filename string) ([]Rule, error) {
 		if !looksLikeRule(fieldVal) {
 			continue
 		}
-		rule := extractRule(iter.Selector().String(), fieldVal)
+		rule := extractRule(iter.Selector().Unquoted(), fieldVal)
 		if rule.LoadErr == nil {
 			rule.LoadErr = checkRule(rule)
 		}
@@ -218,7 +218,12 @@ func extractAtom(v cue.Value) (Atom, error) {
 			return Atom{}, fmt.Errorf("args not a struct: %w", err)
 		}
 		for argsIter.Next() {
-			key := argsIter.Selector().String()
+			// Unquoted: a CUE label written as "my-key" is the key my-key, not
+			// a key containing quote characters.
+			key := argsIter.Selector().Unquoted()
+			if strings.Contains(key, `"`) {
+				return Atom{}, fmt.Errorf("argument key %q must not contain a double quote", key)
+			}
 			term, err := extractTerm(argsIter.Value())
 			if err != nil {
 				return Atom{}, fmt.Errorf("bad term %s: %w", key, err)
