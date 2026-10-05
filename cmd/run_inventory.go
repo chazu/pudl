@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/inference"
@@ -14,42 +17,11 @@ import (
 // identityResolver returns the declared identity_fields for a schema, or nil when
 // the schema is unknown or declares none. In the run path it is backed by the
 // inference graph (see schemaIdentityResolver); tests inject a stub.
-type identityResolver func(schema string) []string
+type identityResolver = acute.IdentityResolver
 
-// recordIdentity derives a stable match key for a record: its _schema plus the
-// values of the schema's declared identity_fields (resolved from the inference
-// graph). When the schema declares no identity_fields — or a declared field is
-// absent from the record — it falls back to the first present of name | path | id,
-// which covers the linux/fs/k8s desired shapes.
+// recordIdentity derives a stable match key for a record; see acute.RecordIdentity.
 func recordIdentity(rec map[string]any, identity identityResolver) (key string, label string, ok bool) {
-	schema, _ := rec["_schema"].(string)
-
-	if identity != nil {
-		if fields := identity(schema); len(fields) > 0 {
-			vals := make([]string, 0, len(fields))
-			complete := true
-			for _, f := range fields {
-				v, present := rec[f]
-				if !present {
-					complete = false
-					break
-				}
-				vals = append(vals, fmt.Sprintf("%v", v))
-			}
-			if complete {
-				joined := strings.Join(vals, "/")
-				return fmt.Sprintf("%s|%s", schema, joined), fmt.Sprintf("%s/%s", shortSchema(schema), joined), true
-			}
-		}
-	}
-
-	// Fallback: schema declares no identity_fields, or one is missing from the record.
-	for _, k := range []string{"name", "path", "id"} {
-		if v, present := rec[k]; present {
-			return fmt.Sprintf("%s|%v", schema, v), fmt.Sprintf("%s/%v", shortSchema(schema), v), true
-		}
-	}
-	return "", "", false
+	return acute.RecordIdentity(rec, identity)
 }
 
 // modelResourceDefs returns the candidate catalog definition names for a model's
@@ -111,61 +83,6 @@ func schemaIdentityResolver() (identityResolver, error) {
 	}, nil
 }
 
-func shortSchema(s string) string {
-	if s == "" {
-		return "?"
-	}
-	return s
-}
-
-// fieldsDiffer returns a description of the first desired field not satisfied by
-// the observed record (missing or unequal), or "" if every desired field matches.
-// Observed may carry extra fields — ensure-present semantics, not equality.
-func fieldsDiffer(desired, observed map[string]any) string {
-	for k, dv := range desired {
-		if k == "_schema" {
-			continue
-		}
-		ov, ok := observed[k]
-		if !ok {
-			return fmt.Sprintf("%s missing (want %v)", k, dv)
-		}
-		if fmt.Sprint(ov) != fmt.Sprint(dv) {
-			return fmt.Sprintf("%s: %v → want %v", k, ov, dv)
-		}
-	}
-	return ""
-}
-
-// inventorySetDiff compares desired records against observed (inventory) records
-// by identity, ensure-present semantics: a desired record with no match is
-// "missing"; a match whose fields differ is "changed". Extra observed records are
-// ignored (prune is deferred, matching host-converge V1).
-func inventorySetDiff(desired, observed []map[string]any, identity identityResolver) []ResourceDrift {
-	obs := make(map[string]map[string]any, len(observed))
-	for _, o := range observed {
-		if k, _, ok := recordIdentity(o, identity); ok {
-			obs[k] = o
-		}
-	}
-	var drifted []ResourceDrift
-	for _, d := range desired {
-		k, label, ok := recordIdentity(d, identity)
-		if !ok {
-			continue // un-keyable desired record; skip (can't match)
-		}
-		o, found := obs[k]
-		if !found {
-			drifted = append(drifted, ResourceDrift{Resource: label, Reason: "missing"})
-			continue
-		}
-		if diff := fieldsDiffer(d, o); diff != "" {
-			drifted = append(drifted, ResourceDrift{Resource: label, Reason: "changed", Diff: diff})
-		}
-	}
-	return drifted
-}
-
 // observeScopeFilter turns a scope string and the result of looking it up as a
 // snapshot collection into the filter the observe query should use: either a
 // collection ID (the scope names a snapshot) or an origin (the compatibility
@@ -188,9 +105,20 @@ func observeScopeFilter(scope string, lookupErr error) (collectionID, origin str
 	}
 }
 
+// observedSet is the inventory observation a drift verdict compares against:
+// its records, and the snapshot that holds them when the scope named one.
+type observedSet struct {
+	records    []acute.ObservedRecord
+	snapshotID string
+	observedAt *time.Time
+}
+
 // loadObservedRecords reads the inventory records ingested for this run from the
-// catalog (observe items by origin) and returns them as maps.
-func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any, error) {
+// catalog (observe items by snapshot or origin), each with the time it was
+// recorded. Numbers decode exactly so comparison against desired values does
+// not round through float64.
+func loadObservedRecords(db *database.CatalogDB, scope string) (observedSet, error) {
+	var set observedSet
 	filter := database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}
 	// A snapshot ID is the normal scope for a live inventory run. Keep origin
 	// filtering as a compatibility path for explicit catalog callers and tests.
@@ -200,9 +128,20 @@ func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any
 		_, lookupErr := db.GetCollectionByID(scope)
 		collectionID, origin, err := observeScopeFilter(scope, lookupErr)
 		if err != nil {
-			return nil, err
+			return set, err
 		}
 		filter.CollectionID, filter.Origin = collectionID, origin
+		if collectionID != "" {
+			set.snapshotID = collectionID
+			snapshot, err := db.GetObserveSnapshot(collectionID)
+			if err != nil {
+				return set, err
+			}
+			if snapshot != nil && !snapshot.CreatedAt.IsZero() {
+				at := snapshot.CreatedAt
+				set.observedAt = &at
+			}
+		}
 	}
 	res, err := db.QueryEntries(database.FilterOptions{
 		EntryTypes:     filter.EntryTypes,
@@ -211,21 +150,27 @@ func loadObservedRecords(db *database.CatalogDB, scope string) ([]map[string]any
 		CollectionID:   filter.CollectionID,
 	}, database.QueryOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("query observed records: %w", err)
+		return set, fmt.Errorf("query observed records: %w", err)
 	}
-	var records []map[string]any
 	for _, e := range res.Entries {
 		data, err := os.ReadFile(e.StoredPath)
 		if err != nil {
-			return nil, fmt.Errorf("read observed record %s: %w", e.StoredPath, err)
+			return set, fmt.Errorf("read observed record %s: %w", e.StoredPath, err)
 		}
 		var rec map[string]any
-		if err := json.Unmarshal(data, &rec); err != nil {
-			return nil, fmt.Errorf("parse observed record %s: %w", e.StoredPath, err)
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.UseNumber()
+		if err := dec.Decode(&rec); err != nil {
+			return set, fmt.Errorf("parse observed record %s: %w", e.StoredPath, err)
 		}
-		records = append(records, rec)
+		observed := acute.ObservedRecord{Data: rec, ObservedAt: set.observedAt}
+		if !e.ImportTimestamp.IsZero() {
+			at := e.ImportTimestamp
+			observed.ObservedAt = &at
+		}
+		set.records = append(set.records, observed)
 	}
-	return records, nil
+	return set, nil
 }
 
 // runInventoryDrift computes drift for an inventory model: desired vs the
@@ -250,6 +195,11 @@ func runInventoryDrift(db *database.CatalogDB, scope string, desired []map[strin
 	if err != nil {
 		return ModelDriftResult{}, err
 	}
-	drifted := inventorySetDiff(desired, observed, identity)
-	return ModelDriftResult{Clean: len(drifted) == 0, Drifted: drifted}, nil
+	drifted := acute.InventorySetDiff(desired, observed.records, identity)
+	return ModelDriftResult{
+		Clean:      len(drifted) == 0,
+		Drifted:    drifted,
+		SnapshotID: observed.snapshotID,
+		ObservedAt: observed.observedAt,
+	}, nil
 }
