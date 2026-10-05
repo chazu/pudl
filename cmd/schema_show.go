@@ -77,21 +77,31 @@ func runSchemaShowCommand(schemaArg string) error {
 			fmt.Sprintf("Failed to read schema file: %s", schemaInfo.FilePath), err)
 	}
 
+	if jsonOutput {
+		return printJSON(map[string]any{
+			"schema":     schemaInfo.FullName,
+			"package":    schemaInfo.Package,
+			"file":       schemaInfo.FilePath,
+			"size_bytes": schemaInfo.Size,
+			"source":     string(content),
+		})
+	}
+
 	// Display metadata
-	fmt.Printf("📄 Schema: %s\n", schemaInfo.FullName)
-	fmt.Printf("   Package: %s\n", schemaInfo.Package)
-	fmt.Printf("   File: %s\n", schemaInfo.FilePath)
-	fmt.Printf("   Size: %s\n", formatBytes(schemaInfo.Size))
-	fmt.Println()
-	fmt.Println("─────────────────────────────────────────────────────────")
-	fmt.Println()
+	fmt.Fprintf(outw(), "📄 Schema: %s\n", schemaInfo.FullName)
+	fmt.Fprintf(outw(), "   Package: %s\n", schemaInfo.Package)
+	fmt.Fprintf(outw(), "   File: %s\n", schemaInfo.FilePath)
+	fmt.Fprintf(outw(), "   Size: %s\n", formatBytes(schemaInfo.Size))
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "─────────────────────────────────────────────────────────")
+	fmt.Fprintln(outw())
 
 	// Display the file content
-	fmt.Print(string(content))
+	fmt.Fprint(outw(), string(content))
 
 	// Ensure there's a trailing newline
 	if len(content) > 0 && content[len(content)-1] != '\n' {
-		fmt.Println()
+		fmt.Fprintln(outw())
 	}
 
 	return nil

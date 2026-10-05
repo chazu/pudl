@@ -57,8 +57,8 @@ func runSchemaMigrateCommand() error {
 	}
 	defer catalogDB.Close()
 
-	fmt.Printf("🔄 Schema Name Migration\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
+	fmt.Fprintf(outw(), "🔄 Schema Name Migration\n")
+	fmt.Fprintf(outw(), "═══════════════════════════════════════════════════════════════\n")
 
 	// Run migration
 	count, err := catalogDB.MigrateSchemaNames()
@@ -67,9 +67,9 @@ func runSchemaMigrateCommand() error {
 	}
 
 	if count == 0 {
-		fmt.Println("✅ All schema names are already in canonical format.")
+		fmt.Fprintln(outw(), "✅ All schema names are already in canonical format.")
 	} else {
-		fmt.Printf("✅ Migrated %d schema names to canonical format.\n", count)
+		fmt.Fprintf(outw(), "✅ Migrated %d schema names to canonical format.\n", count)
 	}
 
 	return nil

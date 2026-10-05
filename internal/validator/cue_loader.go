@@ -2,6 +2,7 @@ package validator
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -45,7 +46,7 @@ func (loader *CUEModuleLoader) SetVerbose(verbose bool) {
 // log prints a message if verbose mode is enabled
 func (loader *CUEModuleLoader) log(format string, args ...interface{}) {
 	if loader.verbose {
-		fmt.Printf("[CUE Loader] "+format+"\n", args...)
+		fmt.Fprintf(os.Stderr, "[CUE Loader] "+format+"\n", args...)
 	}
 }
 

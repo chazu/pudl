@@ -107,7 +107,7 @@ var helpJSONCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(b))
+		fmt.Fprintln(outw(), string(b))
 		return nil
 	},
 }

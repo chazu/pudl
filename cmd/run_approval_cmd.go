@@ -125,9 +125,9 @@ var runRejectCmd = &cobra.Command{
 			return err
 		}
 		if jsonOutput {
-			fmt.Println(string(report))
+			fmt.Fprintln(outw(), string(report))
 		} else {
-			fmt.Printf("rejected converge run %s\n", args[0])
+			fmt.Fprintf(outw(), "rejected converge run %s\n", args[0])
 		}
 		return nil
 	},

@@ -25,15 +25,9 @@ This command helps you see what schema changes are pending before committing the
 Examples:
     pudl schema status                  # Show all uncommitted changes
     pudl schema status --verbose        # Show detailed file status`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema status command and handle any errors
-		if err := runSchemaStatusCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaStatusCommand()
+	}),
 }
 
 // schemaCommitCmd represents the schema commit command
@@ -53,15 +47,9 @@ Examples:
     pudl schema commit -m "Add RDS instance schema"
     pudl schema commit -m "Update EC2 schema with new fields"
     pudl schema commit -m "Remove deprecated K8s schemas"`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema commit command and handle any errors
-		if err := runSchemaCommitCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaCommitCommand()
+	}),
 }
 
 // schemaLogCmd represents the schema log command
@@ -82,15 +70,9 @@ Examples:
     pudl schema log                     # Show recent commits (default: 10)
     pudl schema log --limit 20          # Show last 20 commits
     pudl schema log --verbose           # Show detailed commit information`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema log command and handle any errors
-		if err := runSchemaLogCommand(); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaLogCommand()
+	}),
 }
 
 func init() {
@@ -134,51 +116,51 @@ func runSchemaStatusCommand() error {
 
 	// Display status
 	if status.Clean {
-		fmt.Println("✅ Schema repository is clean - no uncommitted changes")
+		fmt.Fprintln(outw(), "✅ Schema repository is clean - no uncommitted changes")
 		return nil
 	}
 
-	fmt.Println("📋 Schema Repository Status:")
-	fmt.Println()
+	fmt.Fprintln(outw(), "📋 Schema Repository Status:")
+	fmt.Fprintln(outw())
 
 	if len(status.Modified) > 0 {
-		fmt.Printf("🔄 Modified files (%d):\n", len(status.Modified))
+		fmt.Fprintf(outw(), "🔄 Modified files (%d):\n", len(status.Modified))
 		for _, file := range status.Modified {
-			fmt.Printf("   M  %s\n", file)
+			fmt.Fprintf(outw(), "   M  %s\n", file)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 	}
 
 	if len(status.Added) > 0 {
-		fmt.Printf("➕ Added files (%d):\n", len(status.Added))
+		fmt.Fprintf(outw(), "➕ Added files (%d):\n", len(status.Added))
 		for _, file := range status.Added {
-			fmt.Printf("   A  %s\n", file)
+			fmt.Fprintf(outw(), "   A  %s\n", file)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 	}
 
 	if len(status.Deleted) > 0 {
-		fmt.Printf("🗑️  Deleted files (%d):\n", len(status.Deleted))
+		fmt.Fprintf(outw(), "🗑️  Deleted files (%d):\n", len(status.Deleted))
 		for _, file := range status.Deleted {
-			fmt.Printf("   D  %s\n", file)
+			fmt.Fprintf(outw(), "   D  %s\n", file)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 	}
 
 	if len(status.Untracked) > 0 {
-		fmt.Printf("❓ Untracked files (%d):\n", len(status.Untracked))
+		fmt.Fprintf(outw(), "❓ Untracked files (%d):\n", len(status.Untracked))
 		for _, file := range status.Untracked {
-			fmt.Printf("   ?  %s\n", file)
+			fmt.Fprintf(outw(), "   ?  %s\n", file)
 		}
-		fmt.Println()
+		fmt.Fprintln(outw())
 	}
 
 	totalChanges := len(status.Modified) + len(status.Added) + len(status.Deleted) + len(status.Untracked)
-	fmt.Printf("Total: %d uncommitted changes\n", totalChanges)
-	fmt.Println()
-	fmt.Println("💡 Next steps:")
-	fmt.Println("   - Commit changes: pudl schema commit -m \"Your commit message\"")
-	fmt.Println("   - Review specific files: pudl schema list --verbose")
+	fmt.Fprintf(outw(), "Total: %d uncommitted changes\n", totalChanges)
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 Next steps:")
+	fmt.Fprintln(outw(), "   - Commit changes: pudl schema commit -m \"Your commit message\"")
+	fmt.Fprintln(outw(), "   - Review specific files: pudl schema list --verbose")
 
 	return nil
 }
@@ -212,38 +194,38 @@ func runSchemaCommitCommand() error {
 	}
 
 	if !hasChanges {
-		fmt.Println("✅ No changes to commit - schema repository is clean")
+		fmt.Fprintln(outw(), "✅ No changes to commit - schema repository is clean")
 		return nil
 	}
 
 	// Show what will be committed
-	fmt.Println("📋 Committing schema changes...")
+	fmt.Fprintln(outw(), "📋 Committing schema changes...")
 	status, err := repo.Status()
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeGitOperation, "Failed to get repository status", err)
 	}
 
 	totalFiles := len(status.Modified) + len(status.Added) + len(status.Deleted) + len(status.Untracked)
-	fmt.Printf("   Files to commit: %d\n", totalFiles)
+	fmt.Fprintf(outw(), "   Files to commit: %d\n", totalFiles)
 
 	if schemaVerbose {
 		if len(status.Modified) > 0 {
-			fmt.Printf("   Modified: %s\n", strings.Join(status.Modified, ", "))
+			fmt.Fprintf(outw(), "   Modified: %s\n", strings.Join(status.Modified, ", "))
 		}
 		if len(status.Added) > 0 {
-			fmt.Printf("   Added: %s\n", strings.Join(status.Added, ", "))
+			fmt.Fprintf(outw(), "   Added: %s\n", strings.Join(status.Added, ", "))
 		}
 		if len(status.Deleted) > 0 {
-			fmt.Printf("   Deleted: %s\n", strings.Join(status.Deleted, ", "))
+			fmt.Fprintf(outw(), "   Deleted: %s\n", strings.Join(status.Deleted, ", "))
 		}
 		if len(status.Untracked) > 0 {
-			fmt.Printf("   Untracked: %s\n", strings.Join(status.Untracked, ", "))
+			fmt.Fprintf(outw(), "   Untracked: %s\n", strings.Join(status.Untracked, ", "))
 		}
 	}
 
 	// Perform the commit
-	fmt.Printf("   Message: %s\n", commitMessage)
-	fmt.Println()
+	fmt.Fprintf(outw(), "   Message: %s\n", commitMessage)
+	fmt.Fprintln(outw())
 
 	if err := repo.AddAndCommit(commitMessage); err != nil {
 		return errors.WrapError(errors.ErrCodeGitOperation, "Failed to commit changes", err)
@@ -252,18 +234,18 @@ func runSchemaCommitCommand() error {
 	// Get the new commit info
 	lastCommit, err := repo.GetLastCommit()
 	if err != nil {
-		fmt.Println("✅ Schema changes committed successfully!")
+		fmt.Fprintln(outw(), "✅ Schema changes committed successfully!")
 	} else {
-		fmt.Printf("✅ Schema changes committed successfully!\n")
-		fmt.Printf("   Commit: %s\n", lastCommit.ShortHash)
-		fmt.Printf("   Author: %s\n", lastCommit.Author)
-		fmt.Printf("   Date: %s\n", lastCommit.Date.Format("2006-01-02 15:04:05"))
+		fmt.Fprintf(outw(), "✅ Schema changes committed successfully!\n")
+		fmt.Fprintf(outw(), "   Commit: %s\n", lastCommit.ShortHash)
+		fmt.Fprintf(outw(), "   Author: %s\n", lastCommit.Author)
+		fmt.Fprintf(outw(), "   Date: %s\n", lastCommit.Date.Format("2006-01-02 15:04:05"))
 	}
 
-	fmt.Println()
-	fmt.Println("💡 Next steps:")
-	fmt.Println("   - View commit history: pudl schema log")
-	fmt.Println("   - Check repository status: pudl schema status")
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 Next steps:")
+	fmt.Fprintln(outw(), "   - View commit history: pudl schema log")
+	fmt.Fprintln(outw(), "   - Check repository status: pudl schema status")
 
 	return nil
 }
@@ -291,26 +273,26 @@ func runSchemaLogCommand() error {
 	}
 
 	if len(commits) == 0 {
-		fmt.Println("No commits found in schema repository")
-		fmt.Println()
-		fmt.Println("💡 Make your first commit:")
-		fmt.Println("   pudl schema commit -m \"Initial schema setup\"")
+		fmt.Fprintln(outw(), "No commits found in schema repository")
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "💡 Make your first commit:")
+		fmt.Fprintln(outw(), "   pudl schema commit -m \"Initial schema setup\"")
 		return nil
 	}
 
-	fmt.Printf("📚 Schema Repository History (%d commits):\n", len(commits))
-	fmt.Println()
+	fmt.Fprintf(outw(), "📚 Schema Repository History (%d commits):\n", len(commits))
+	fmt.Fprintln(outw())
 
 	for i, commit := range commits {
 		if schemaVerbose {
-			fmt.Printf("🔸 Commit %d:\n", i+1)
-			fmt.Printf("   Hash: %s (%s)\n", commit.Hash, commit.ShortHash)
-			fmt.Printf("   Author: %s\n", commit.Author)
-			fmt.Printf("   Date: %s\n", commit.Date.Format("2006-01-02 15:04:05 -0700"))
-			fmt.Printf("   Message: %s\n", commit.Message)
-			fmt.Println()
+			fmt.Fprintf(outw(), "🔸 Commit %d:\n", i+1)
+			fmt.Fprintf(outw(), "   Hash: %s (%s)\n", commit.Hash, commit.ShortHash)
+			fmt.Fprintf(outw(), "   Author: %s\n", commit.Author)
+			fmt.Fprintf(outw(), "   Date: %s\n", commit.Date.Format("2006-01-02 15:04:05 -0700"))
+			fmt.Fprintf(outw(), "   Message: %s\n", commit.Message)
+			fmt.Fprintln(outw())
 		} else {
-			fmt.Printf("%s %s %s\n",
+			fmt.Fprintf(outw(), "%s %s %s\n",
 				commit.ShortHash,
 				commit.Date.Format("2006-01-02 15:04"),
 				commit.Message)
@@ -318,13 +300,13 @@ func runSchemaLogCommand() error {
 	}
 
 	if !schemaVerbose {
-		fmt.Println()
-		fmt.Printf("Showing %d commits. Use --verbose for detailed information.\n", len(commits))
+		fmt.Fprintln(outw())
+		fmt.Fprintf(outw(), "Showing %d commits. Use --verbose for detailed information.\n", len(commits))
 	}
 
-	fmt.Println("💡 Commands:")
-	fmt.Println("   - Show repository status: pudl schema status")
-	fmt.Println("   - Make new commit: pudl schema commit -m \"message\"")
+	fmt.Fprintln(outw(), "💡 Commands:")
+	fmt.Fprintln(outw(), "   - Show repository status: pudl schema status")
+	fmt.Fprintln(outw(), "   - Make new commit: pudl schema commit -m \"message\"")
 
 	return nil
 }

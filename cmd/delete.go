@@ -36,12 +36,7 @@ Examples:
     pudl delete govim-nupab --cascade          # Delete collection and all its items
     pudl delete mivof-duhij --json             # Output result as JSON`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		errorHandler := errors.NewCLIErrorHandler(true)
-		if err := runDeleteCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runDeleteCommand),
 }
 
 func init() {
@@ -103,7 +98,7 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	output := GetOutputWriter()
 	if !deleteForce && output.Format != ui.OutputFormatJSON {
 		if !confirmDelete(entry, itemsToDelete) {
-			fmt.Println("Delete cancelled.")
+			fmt.Fprintln(outw(), "Delete cancelled.")
 			return nil
 		}
 	}
@@ -120,38 +115,38 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Human-readable output
-	fmt.Printf("✅ Deleted entry: %s\n", entry.Proquint)
+	fmt.Fprintf(outw(), "✅ Deleted entry: %s\n", entry.Proquint)
 	if result.ItemsDeleted > 0 {
-		fmt.Printf("   Also deleted %d collection items\n", result.ItemsDeleted)
+		fmt.Fprintf(outw(), "   Also deleted %d collection items\n", result.ItemsDeleted)
 	}
 	if result.DataFileDeleted {
-		fmt.Printf("   Removed data file: %s\n", entry.StoredPath)
+		fmt.Fprintf(outw(), "   Removed data file: %s\n", entry.StoredPath)
 	}
 	if result.MetadataFileDeleted {
-		fmt.Printf("   Removed metadata file: %s\n", entry.MetadataPath)
+		fmt.Fprintf(outw(), "   Removed metadata file: %s\n", entry.MetadataPath)
 	}
 
 	return nil
 }
 
 func confirmDelete(entry *lister.ListEntry, items []lister.ListEntry) bool {
-	fmt.Printf("About to delete:\n")
-	fmt.Printf("  Entry: %s [%s]\n", entry.Proquint, entry.Schema)
-	fmt.Printf("  Origin: %s\n", entry.Origin)
-	fmt.Printf("  Size: %d bytes\n", entry.SizeBytes)
+	fmt.Fprintf(outw(), "About to delete:\n")
+	fmt.Fprintf(outw(), "  Entry: %s [%s]\n", entry.Proquint, entry.Schema)
+	fmt.Fprintf(outw(), "  Origin: %s\n", entry.Origin)
+	fmt.Fprintf(outw(), "  Size: %d bytes\n", entry.SizeBytes)
 
 	if len(items) > 0 {
-		fmt.Printf("  Collection items to delete: %d\n", len(items))
+		fmt.Fprintf(outw(), "  Collection items to delete: %d\n", len(items))
 		for i, item := range items {
 			if i >= 5 {
-				fmt.Printf("    ... and %d more\n", len(items)-5)
+				fmt.Fprintf(outw(), "    ... and %d more\n", len(items)-5)
 				break
 			}
-			fmt.Printf("    - %s [%s]\n", item.Proquint, item.Schema)
+			fmt.Fprintf(outw(), "    - %s [%s]\n", item.Proquint, item.Schema)
 		}
 	}
 
-	fmt.Print("\nAre you sure? [y/N]: ")
+	fmt.Fprint(outw(), "\nAre you sure? [y/N]: ")
 	reader := bufio.NewReader(os.Stdin)
 	response, _ := reader.ReadString('\n')
 	response = strings.TrimSpace(strings.ToLower(response))

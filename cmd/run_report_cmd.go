@@ -53,7 +53,7 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 	}
 	if set != nil && (single == nil || !single.CreatedAt.After(set.CreatedAt)) {
 		if jsonOutput {
-			fmt.Println(string(set.Report))
+			fmt.Fprintln(outw(), string(set.Report))
 			return nil
 		}
 		var report acute.RunSetReport
@@ -63,7 +63,7 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		return printRunSetReport(&report)
 	}
 	if jsonOutput {
-		fmt.Println(string(single.Report))
+		fmt.Fprintln(outw(), string(single.Report))
 		return nil
 	}
 	var report RunReport
@@ -74,7 +74,7 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Print(text)
+	fmt.Fprint(outw(), text)
 	return nil
 }
 
@@ -108,20 +108,20 @@ func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 	db, err := cat.optional()
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not open catalog to persist run report: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not open catalog to persist run report: %v\n", err)
 		}
 		return false
 	}
 	b, err := json.Marshal(report)
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not encode run report: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not encode run report: %v\n", err)
 		}
 		return false
 	}
 	if err := db.SaveRunReport(report.RunID, report.Model, b); err != nil {
 		if live {
-			fmt.Printf("warning: could not persist run report: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not persist run report: %v\n", err)
 		}
 		return false
 	}

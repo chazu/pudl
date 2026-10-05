@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 )
 
 // OutputFormat represents the output format type
@@ -22,17 +23,26 @@ type OutputWriter struct {
 	Pretty bool
 }
 
-// NewOutputWriter creates a new output writer
+// NewOutputWriter creates an output writer on standard output.
 func NewOutputWriter(format OutputFormat, pretty bool) *OutputWriter {
+	return NewOutputWriterTo(os.Stdout, format, pretty)
+}
+
+// NewOutputWriterTo creates an output writer on w.
+func NewOutputWriterTo(w io.Writer, format OutputFormat, pretty bool) *OutputWriter {
 	return &OutputWriter{
 		Format: format,
-		Writer: os.Stdout,
+		Writer: w,
 		Pretty: pretty,
 	}
 }
 
-// WriteJSON writes data as JSON to the output
+// WriteJSON writes data as JSON to the output. A nil slice is written as []
+// rather than null, so an empty list result is still a list.
 func (w *OutputWriter) WriteJSON(data interface{}) error {
+	if v := reflect.ValueOf(data); v.Kind() == reflect.Slice && v.IsNil() {
+		data = []any{}
+	}
 	encoder := json.NewEncoder(w.Writer)
 	if w.Pretty {
 		encoder.SetIndent("", "  ")
@@ -65,6 +75,7 @@ func (w *OutputWriter) Write(jsonData interface{}, textFunc func()) error {
 type ListOutput struct {
 	Entries      []EntryOutput `json:"entries"`
 	TotalEntries int           `json:"total_entries"`
+	TotalMatched int           `json:"total_matched"`
 	TotalPages   int           `json:"total_pages"`
 	CurrentPage  int           `json:"current_page"`
 	Summary      *ListSummary  `json:"summary,omitempty"`

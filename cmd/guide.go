@@ -23,8 +23,8 @@ Run 'pudl guide <topic>' to read a specific guide.`,
 		topic := args[0]
 		fn, ok := guideTopics[topic]
 		if !ok {
-			fmt.Fprintf(os.Stderr, "pudl guide: unknown topic %q\n", topic)
-			fmt.Fprintln(os.Stderr, "Run 'pudl guide' for a list of topics.")
+			fmt.Fprintf(errw(), "pudl guide: unknown topic %q\n", topic)
+			fmt.Fprintln(errw(), "Run 'pudl guide' for a list of topics.")
 			os.Exit(2)
 		}
 		fn()
@@ -58,7 +58,7 @@ func init() {
 }
 
 func printGuideIndex() {
-	fmt.Print(`pudl guide — quick-reference for agents and humans
+	fmt.Fprint(outw(), `pudl guide — quick-reference for agents and humans
 
 Start here if you're new to pudl:
 
@@ -87,7 +87,7 @@ For agents:
 }
 
 func printGuideOverview() {
-	fmt.Print(`pudl guide overview — what pudl is, in 60 seconds
+	fmt.Fprint(outw(), `pudl guide overview — what pudl is, in 60 seconds
 
 WHAT PUDL IS
 
@@ -143,7 +143,7 @@ WHAT TO READ NEXT
 }
 
 func printGuideImport() {
-	fmt.Print(`pudl guide import — importing data into the catalog
+	fmt.Fprint(outw(), `pudl guide import — importing data into the catalog
 
 USAGE
 
@@ -220,7 +220,7 @@ FLAGS
 }
 
 func printGuideSchemas() {
-	fmt.Print(`pudl guide schemas — CUE schema system
+	fmt.Fprint(outw(), `pudl guide schemas — CUE schema system
 
 OVERVIEW
 
@@ -290,7 +290,7 @@ SEE ALSO
 }
 
 func printGuideFacts() {
-	fmt.Print(`pudl guide facts — generic bitemporal assertions
+	fmt.Fprint(outw(), `pudl guide facts — generic bitemporal assertions
 
 WRITE AND QUERY
 
@@ -322,7 +322,7 @@ SEE ALSO
 }
 
 func printGuideDatalog() {
-	fmt.Print(`pudl guide datalog — query engine and rules
+	fmt.Fprint(outw(), `pudl guide datalog — query engine and rules
 
 OVERVIEW
 
@@ -416,7 +416,7 @@ SEE ALSO
 }
 
 func printGuideModels() {
-	fmt.Print(`pudl guide models — declaring and running #SystemModels
+	fmt.Fprint(outw(), `pudl guide models — declaring and running #SystemModels
 
 OVERVIEW
 
@@ -487,7 +487,7 @@ SEE ALSO
 }
 
 func printGuideMu() {
-	fmt.Print(`pudl guide mu — how pudl and mu work together
+	fmt.Fprint(outw(), `pudl guide mu — how pudl and mu work together
 
 OVERVIEW
 
@@ -552,7 +552,7 @@ SEE ALSO
 }
 
 func printGuideAgents() {
-	fmt.Print(`pudl guide agents — operate models and inspect evidence
+	fmt.Fprint(outw(), `pudl guide agents — operate models and inspect evidence
 
 START WITH THE PROJECT
 
@@ -603,7 +603,7 @@ DISCOVERY
 }
 
 func printGuideTroubleshooting() {
-	fmt.Print(`pudl guide troubleshooting — diagnose the shipped path
+	fmt.Fprint(outw(), `pudl guide troubleshooting — diagnose the shipped path
 
 DISCOVER THE ACTUAL SURFACE
 
@@ -629,12 +629,12 @@ COMMON CASES
     pudl run <model> --mu-root <directory-containing-mu.cue>
 
   Observe records have an unexpected schema:
-    inspect the plugin's _schema field, then use ` + "`pudl mu ingest-observe`" + `
+    inspect the plugin's _schema field, then use `+"`pudl mu ingest-observe`"+`
     with the current schema repository. PUDL only persists references present
     in the loaded schema namespace; unresolved declarations fall back safely.
 
   Convergence stopped after mutation:
-    inspect ` + "`pudl run report <run-id> --json`" + `. A needs_verification/unknown
+    inspect `+"`pudl run report <run-id> --json`"+`. A needs_verification/unknown
     result means receipt or re-observation proof was incomplete; do not blindly
     re-apply.
 

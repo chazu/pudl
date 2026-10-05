@@ -34,7 +34,7 @@ func GetOutputWriter() *ui.OutputWriter {
 	if jsonOutput {
 		format = ui.OutputFormatJSON
 	}
-	return ui.NewOutputWriter(format, true)
+	return ui.NewOutputWriterTo(outw(), format, true)
 }
 
 // rootCmd represents the base command when called without any subcommands
@@ -138,10 +138,14 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version information",
 	Long:  `Display version, commit hash, and build date information for PUDL.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("PUDL %s\n", version)
-		fmt.Printf("Commit: %s\n", commit)
-		fmt.Printf("Built: %s\n", date)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if jsonOutput {
+			return printJSON(map[string]string{"version": version, "commit": commit, "date": date})
+		}
+		fmt.Fprintf(outw(), "PUDL %s\n", version)
+		fmt.Fprintf(outw(), "Commit: %s\n", commit)
+		fmt.Fprintf(outw(), "Built: %s\n", date)
+		return nil
 	},
 }
 

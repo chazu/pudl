@@ -2,6 +2,7 @@ package init
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,24 +14,34 @@ import (
 
 // InitOptions contains options for initialization
 type InitOptions struct {
-	Force   bool // Force re-initialization even if already exists
-	Verbose bool // Show verbose output
+	Force   bool      // Force re-initialization even if already exists
+	Verbose bool      // Show verbose output
+	Out     io.Writer // Where verbose output goes (default: stdout)
 }
 
 // Initialize sets up the PUDL workspace
+// output is where verbose progress is written.
+func (o InitOptions) output() io.Writer {
+	if o.Out != nil {
+		return o.Out
+	}
+	return os.Stdout
+}
+
 func Initialize(opts InitOptions) error {
+	out := opts.output()
 	pudlDir := config.GetPudlDir()
 
 	// Check if already initialized (unless force is specified)
 	if !opts.Force && config.Exists() {
 		if opts.Verbose {
-			fmt.Printf("PUDL workspace already initialized at %s\n", pudlDir)
+			fmt.Fprintf(out, "PUDL workspace already initialized at %s\n", pudlDir)
 		}
 		return nil
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Initializing PUDL workspace at %s\n", pudlDir)
+		fmt.Fprintf(out, "Initializing PUDL workspace at %s\n", pudlDir)
 	}
 
 	// Create the main PUDL directory
@@ -52,7 +63,7 @@ func Initialize(opts InitOptions) error {
 	}
 
 	// Initialize CUE module in schema directory
-	if err := initCUEModule(cfg.SchemaPath, opts.Verbose); err != nil {
+	if err := initCUEModule(cfg.SchemaPath, opts.Verbose, out); err != nil {
 		return fmt.Errorf("failed to initialize CUE module: %w", err)
 	}
 
@@ -61,19 +72,19 @@ func Initialize(opts InitOptions) error {
 		return fmt.Errorf("failed to copy bootstrap schemas: %w", err)
 	}
 	if opts.Verbose {
-		fmt.Println("✅ Built-in schemas, rules, and #SystemModel copied")
+		fmt.Fprintln(out, "✅ Built-in schemas, rules, and #SystemModel copied")
 	}
 
 	// Write skill files if .claude/ exists in project root
-	if err := writeSkillFiles(cfg.SchemaPath, opts.Verbose); err != nil {
+	if err := writeSkillFiles(cfg.SchemaPath, opts.Verbose, out); err != nil {
 		// Non-fatal — skill files are a convenience
 		if opts.Verbose {
-			fmt.Printf("⚠️  Failed to write skill files: %v\n", err)
+			fmt.Fprintf(out, "⚠️  Failed to write skill files: %v\n", err)
 		}
 	}
 
 	// Initialize git repository in schema directory
-	if err := initGitRepo(cfg.SchemaPath, opts.Verbose); err != nil {
+	if err := initGitRepo(cfg.SchemaPath, opts.Verbose, out); err != nil {
 		return fmt.Errorf("failed to initialize git repository: %w", err)
 	}
 
@@ -83,21 +94,21 @@ func Initialize(opts InitOptions) error {
 	}
 
 	if opts.Verbose {
-		fmt.Println("✅ PUDL workspace initialized successfully!")
-		fmt.Printf("   Schema repository: %s\n", cfg.SchemaPath)
-		fmt.Printf("   Data directory: %s\n", cfg.DataPath)
-		fmt.Printf("   Configuration: %s\n", config.GetConfigPath())
+		fmt.Fprintln(out, "✅ PUDL workspace initialized successfully!")
+		fmt.Fprintf(out, "   Schema repository: %s\n", cfg.SchemaPath)
+		fmt.Fprintf(out, "   Data directory: %s\n", cfg.DataPath)
+		fmt.Fprintf(out, "   Configuration: %s\n", config.GetConfigPath())
 	}
 
 	return nil
 }
 
 // initGitRepo initializes a git repository in the specified directory
-func initGitRepo(dir string, verbose bool) error {
+func initGitRepo(dir string, verbose bool, out io.Writer) error {
 	// Check if git is available
 	if _, err := exec.LookPath("git"); err != nil {
 		if verbose {
-			fmt.Println("⚠️  Git not found - schema repository will not be version controlled")
+			fmt.Fprintln(out, "⚠️  Git not found - schema repository will not be version controlled")
 		}
 		return nil // Not a fatal error
 	}
@@ -106,7 +117,7 @@ func initGitRepo(dir string, verbose bool) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); err == nil {
 		if verbose {
-			fmt.Printf("Git repository already exists in %s\n", dir)
+			fmt.Fprintf(out, "Git repository already exists in %s\n", dir)
 		}
 		return nil
 	}
@@ -229,19 +240,19 @@ explicit producer/consumer set with ` + "`pudl run set <models...>`" + `.
 	}
 
 	if verbose {
-		fmt.Printf("✅ Git repository initialized in %s\n", dir)
+		fmt.Fprintf(out, "✅ Git repository initialized in %s\n", dir)
 	}
 
 	return nil
 }
 
 // initCUEModule initializes a CUE module in the schema directory
-func initCUEModule(schemaDir string, verbose bool) error {
+func initCUEModule(schemaDir string, verbose bool, out io.Writer) error {
 	// Check if cue command is available
 	if _, err := exec.LookPath("cue"); err != nil {
 		if verbose {
-			fmt.Println("⚠️  CUE command not found - CUE module will not be initialized")
-			fmt.Println("   Install CUE from https://cuelang.org/docs/install/ to enable third-party module support")
+			fmt.Fprintln(out, "⚠️  CUE command not found - CUE module will not be initialized")
+			fmt.Fprintln(out, "   Install CUE from https://cuelang.org/docs/install/ to enable third-party module support")
 		}
 		return nil // Not a fatal error, but functionality will be limited
 	}
@@ -256,7 +267,7 @@ func initCUEModule(schemaDir string, verbose bool) error {
 	moduleCuePath := filepath.Join(cueModDir, "module.cue")
 	if _, err := os.Stat(moduleCuePath); err == nil {
 		if verbose {
-			fmt.Printf("CUE module already exists in %s\n", schemaDir)
+			fmt.Fprintf(out, "CUE module already exists in %s\n", schemaDir)
 		}
 		return nil
 	}
@@ -463,28 +474,28 @@ examplePipeline: #GitLabPipeline & {
 	// Run cue mod tidy to fetch dependencies
 	// This must run AFTER the example file is created so CUE can see the imports
 	if verbose {
-		fmt.Println("Fetching CUE module dependencies...")
+		fmt.Fprintln(out, "Fetching CUE module dependencies...")
 	}
 
 	tidyCmd := exec.Command("cue", "mod", "tidy")
 	tidyCmd.Dir = schemaDir
 	if output, err := tidyCmd.CombinedOutput(); err != nil {
 		if verbose {
-			fmt.Printf("⚠️  Failed to fetch CUE dependencies: %s\n", string(output))
-			fmt.Println("   You can run 'cue mod tidy' manually later in the schema directory")
+			fmt.Fprintf(out, "⚠️  Failed to fetch CUE dependencies: %s\n", string(output))
+			fmt.Fprintln(out, "   You can run 'cue mod tidy' manually later in the schema directory")
 		}
 		// Don't return error - module structure is still valid
 	} else if verbose {
-		fmt.Println("✅ CUE module dependencies fetched successfully")
+		fmt.Fprintln(out, "✅ CUE module dependencies fetched successfully")
 	}
 
 	if verbose {
-		fmt.Printf("✅ CUE module initialized in %s\n", schemaDir)
-		fmt.Println("   - Third-party dependencies:")
-		fmt.Println("     • cue.dev/x/k8s.io (complete Kubernetes API schemas)")
-		fmt.Println("     • cue.dev/x/gitlab (GitLab CI/CD pipeline schemas)")
-		fmt.Println("   - Local schemas: pudl/ (AWS, custom schemas)")
-		fmt.Println("   - Examples: examples/ (usage patterns and integrations)")
+		fmt.Fprintf(out, "✅ CUE module initialized in %s\n", schemaDir)
+		fmt.Fprintln(out, "   - Third-party dependencies:")
+		fmt.Fprintln(out, "     • cue.dev/x/k8s.io (complete Kubernetes API schemas)")
+		fmt.Fprintln(out, "     • cue.dev/x/gitlab (GitLab CI/CD pipeline schemas)")
+		fmt.Fprintln(out, "   - Local schemas: pudl/ (AWS, custom schemas)")
+		fmt.Fprintln(out, "   - Examples: examples/ (usage patterns and integrations)")
 	}
 
 	return nil
@@ -493,7 +504,7 @@ examplePipeline: #GitLabPipeline & {
 // writeSkillFiles writes embedded PUDL skill files to .claude/skills/ if
 // a .claude/ directory exists in the project root (detected by walking up
 // from the schema path) or alongside the schema directory.
-func writeSkillFiles(schemaPath string, verbose bool) error {
+func writeSkillFiles(schemaPath string, verbose bool, out io.Writer) error {
 	// Check for .claude/ in the schema path's parent (typical project root)
 	projectRoot := filepath.Dir(schemaPath)
 	claudeDir := filepath.Join(projectRoot, ".claude")
@@ -515,7 +526,7 @@ func writeSkillFiles(schemaPath string, verbose bool) error {
 
 	if verbose {
 		skillList, _ := skills.ListSkills()
-		fmt.Printf("✅ Wrote %d PUDL skill files to %s\n", len(skillList), targetDir)
+		fmt.Fprintf(out, "✅ Wrote %d PUDL skill files to %s\n", len(skillList), targetDir)
 	}
 
 	return nil
