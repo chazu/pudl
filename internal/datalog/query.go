@@ -6,14 +6,43 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-// Evaluate runs the full Datalog query path for a single relation:
-// partition rules into recursive/non-recursive, evaluate non-recursive rules
-// (and base EDB facts) via SQL, then fall back to the recursive fixpoint
-// evaluator when recursive rules exist and the SQL pass produced nothing.
+// DefaultMaxIterations is the default cap on semi-naive rounds for one cyclic
+// component. Each round extends a recursive derivation by one step, so the cap
+// bounds the longest chain a recursive relation can follow.
+const DefaultMaxIterations = 100
+
+// EvalOptions tunes evaluation. The zero value uses the defaults.
+type EvalOptions struct {
+	// MaxIterations caps semi-naive rounds per cyclic component;
+	// 0 means DefaultMaxIterations.
+	MaxIterations int
+}
+
+func (o EvalOptions) maxIterations() int {
+	if o.MaxIterations > 0 {
+		return o.MaxIterations
+	}
+	return DefaultMaxIterations
+}
+
+// Evaluate answers a query for a single relation with the default options.
 //
-// This is the single source of truth shared by the CLI (`pudl query`) and the
-// public API (pkg/factstore).
+// This is the single source of truth shared by the CLI (`pudl query`), model
+// checks, and the public API (pkg/factstore).
 func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope) ([]Tuple, error) {
+	return EvaluateWithOptions(db, rules, relation, constraints, scope, EvalOptions{})
+}
+
+// EvaluateWithOptions answers a query for a single relation. It plans only the
+// relation's dependency closure, so rules the query never reads are neither
+// checked for cycles nor evaluated:
+//
+//   - a relation no rule produces is read from stored facts;
+//   - a closure without cycles compiles to one SQL statement, each derived
+//     relation a CTE in dependency order (aggregates allowed anywhere);
+//   - a closure with cycles is materialized stratum by stratum, iterating only
+//     the cyclic components to a fixpoint.
+func EvaluateWithOptions(db *database.CatalogDB, rules []Rule, relation string, constraints map[string]interface{}, scope TemporalScope, opts EvalOptions) ([]Tuple, error) {
 	// Built-in EDB relations (e.g. catalog_entry) are join-only: they resolve
 	// inside rule bodies but cannot be queried directly. Querying one with no
 	// producing rule would silently fall through to the facts table and return
@@ -26,61 +55,31 @@ func Evaluate(db *database.CatalogDB, rules []Rule, relation string, constraints
 	if err != nil {
 		return nil, err
 	}
-
-	recursive, nonRecursive := PartitionRules(rules)
-
-	// Aggregation is compiled to SQL GROUP BY and is only defined for
-	// non-recursive rules; aggregating across a fixpoint needs stratification the
-	// recursive evaluator does not implement. Reject rather than return a wrong
-	// answer.
-	if relationHasRecursiveRule(relation, recursive) && relationHasAggregateRule(relation, rules) {
-		return nil, fmt.Errorf("relation %q uses aggregation in a recursive rule, which is not supported", relation)
+	constraints, err = database.QueryConstraints(constraints)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := planQuery(rules, relation)
+	if err != nil {
+		return nil, err
 	}
 
-	// If the queried relation is derived by a recursive rule, the fixpoint
-	// evaluator is authoritative: it seeds the base (non-recursive) rules and
-	// computes the full closure. The SQL path alone would return only the base
-	// tuples and miss the recursive expansion.
-	if relationHasRecursiveRule(relation, recursive) {
-		results, err := EvalRecursive(db, rules, relation, constraints, scope)
+	switch {
+	case !plan.derived():
+		return evalEDB(db, relation, constraints, scope)
+	case plan.hasCycle():
+		results, err := evalStratified(db, plan, constraints, scope, opts.maxIterations())
 		if err != nil {
 			return nil, fmt.Errorf("recursive query failed: %w", err)
 		}
 		return results, nil
-	}
-
-	// Non-recursive relation (or a base EDB relation): evaluate via SQL.
-	sqlEval := NewSQLEvaluator(db, nonRecursive, scope)
-	results, err := sqlEval.Query(relation, constraints)
-	if err != nil {
-		return nil, fmt.Errorf("sql query failed: %w", err)
-	}
-
-	// Safety net: a non-recursive relation may transitively depend on a
-	// recursive relation that the SQL compiler cannot expand. If SQL found
-	// nothing and recursive rules exist, retry through the fixpoint evaluator.
-	// Aggregate relations are excluded: an empty aggregate result (e.g. a count
-	// over no matching facts) is a legitimate answer, not a miss to retry — and
-	// the recursive evaluator cannot aggregate anyway.
-	if len(results) == 0 && len(recursive) > 0 && !relationHasAggregateRule(relation, rules) {
-		results, err = EvalRecursive(db, rules, relation, constraints, scope)
+	default:
+		results, err := evalAcyclic(db, plan, constraints, scope)
 		if err != nil {
-			return nil, fmt.Errorf("recursive query failed: %w", err)
+			return nil, fmt.Errorf("sql query failed: %w", err)
 		}
+		return results, nil
 	}
-
-	return results, nil
-}
-
-// relationHasRecursiveRule reports whether the given relation is the head of any
-// recursive rule.
-func relationHasRecursiveRule(relation string, recursive []Rule) bool {
-	for _, r := range recursive {
-		if r.Head.Rel == relation {
-			return true
-		}
-	}
-	return false
 }
 
 // relationHasAnyRule reports whether the given relation is the head of any rule.
@@ -88,22 +87,6 @@ func relationHasAnyRule(relation string, rules []Rule) bool {
 	for _, r := range rules {
 		if r.Head.Rel == relation {
 			return true
-		}
-	}
-	return false
-}
-
-// relationHasAggregateRule reports whether the given relation is the head of any
-// rule that uses an aggregate function.
-func relationHasAggregateRule(relation string, rules []Rule) bool {
-	for _, r := range rules {
-		if r.Head.Rel != relation {
-			continue
-		}
-		for _, t := range r.Head.Args {
-			if t.IsAggregate() {
-				return true
-			}
 		}
 	}
 	return false
