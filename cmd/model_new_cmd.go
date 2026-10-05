@@ -33,11 +33,11 @@ Example:
 		}
 		if jsonOutput {
 			b, _ := json.Marshal(map[string]any{"path": path, "name": args[0], "plugin": plugin})
-			fmt.Println(string(b))
+			fmt.Fprintln(outw(), string(b))
 			return nil
 		}
-		fmt.Printf("created model scaffold: %s\n", path)
-		fmt.Printf("next: pudl model show %s\n", args[0])
+		fmt.Fprintf(outw(), "created model scaffold: %s\n", path)
+		fmt.Fprintf(outw(), "next: pudl model show %s\n", args[0])
 		return nil
 	},
 }

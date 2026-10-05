@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,6 +15,7 @@ var (
 	importSchema      string
 	importOrigin      string
 	importFormat      string
+	importRecursive   bool
 	streamingMemoryMB int
 	streamingChunkMB  float64
 )
@@ -32,9 +31,16 @@ This command imports data from various formats (JSON, YAML, CSV, NDJSON) and sto
 in the PUDL data lake with full metadata tracking. Raw and metadata files use
 content-addressed names.
 
-The --path flag supports both single files and wildcard patterns for batch imports:
+The --path flag accepts a single file, a wildcard pattern, or a directory:
 - Single file: --path data.json
 - Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
+- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv
+  files (compressed .gz/.zst variants included); add --recursive to descend
+  into subdirectories. Hidden files and directories are skipped.
+
+With --json, the command prints one JSON array with an entry per file:
+the import result fields plus "status" (imported, skipped, or failed) and,
+for a failure, "error". Progress lines go to stderr.
 
 Data Storage:
 - In a repository workspace: .pudl/data/{raw,metadata,sqlite}/
@@ -99,7 +105,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeInvalidInput, "Error getting path flag", err)
 	}
-	inference.WarnLoadErrors(os.Stderr, effectiveSchemaPaths(nil)...)
+	inference.WarnLoadErrors(errw(), effectiveSchemaPaths(nil)...)
 
 	// Check if reading from stdin
 	if filePath == "-" || (filePath == "" && importer.IsStdinAvailable()) {
@@ -111,13 +117,13 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Resolve file paths (handles both single files and wildcard patterns)
-	filePaths, err := resolveFilePaths(filePath)
+	filePaths, err := resolveFilePaths(filePath, importRecursive)
 	if err != nil {
 		return err
 	}
 
 	if len(filePaths) == 0 {
-		return errors.NewFileNotFoundError(filePath + " (no files matched pattern)")
+		return errors.NewFileNotFoundError(filePath + " (no importable files matched)")
 	}
 
 	// If multiple files, perform batch import
@@ -138,16 +144,22 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 
 	// Perform the import with friendly IDs
 	result, err := importOneWithEnvelope(session.imp, opts)
+	if jsonOutput {
+		if writeErr := writeImportJSON([]importOutcome{newImportOutcome(absPath, result, err)}); writeErr != nil {
+			return writeErr
+		}
+	}
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG: Import error: %+v\n", err)
+			fmt.Fprintf(errw(), "DEBUG: Import error: %+v\n", err)
 		}
 		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import file", err)
 	}
 
-	// Display results
-	displayImportResults(result)
+	if !jsonOutput {
+		displayImportResults(result)
+	}
 	return nil
 }
 
@@ -159,6 +171,7 @@ func init() {
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
+	importCmd.Flags().BoolVar(&importRecursive, "recursive", false, "When --path is a directory, also import supported files in its subdirectories")
 
 	// Retired streaming-parser tuning. Accepted so existing scripts keep
 	// working; they have no effect.
@@ -176,99 +189,49 @@ func init() {
 func displayImportResults(result *importer.ImportResult) {
 	// Check if import was skipped due to duplicate
 	if result.Skipped {
-		fmt.Printf("⏭️  Skipped: %s\n", result.SourcePath)
-		fmt.Printf("   Reason: %s\n", result.SkipReason)
-		fmt.Printf("   Existing ID: %s\n", result.ID)
-		fmt.Printf("   Stored at: %s\n", result.StoredPath)
+		fmt.Fprintf(outw(), "⏭️  Skipped: %s\n", result.SourcePath)
+		fmt.Fprintf(outw(), "   Reason: %s\n", result.SkipReason)
+		fmt.Fprintf(outw(), "   Existing ID: %s\n", result.ID)
+		fmt.Fprintf(outw(), "   Stored at: %s\n", result.StoredPath)
 		return
 	}
 
-	fmt.Printf("✅ Successfully imported data!\n")
-	fmt.Printf("   Source: %s\n", result.SourcePath)
-	fmt.Printf("   Stored as: %s\n", result.StoredPath)
-	fmt.Printf("   Format: %s\n", result.DetectedFormat)
-	fmt.Printf("   Origin: %s\n", result.DetectedOrigin)
+	fmt.Fprintf(outw(), "✅ Successfully imported data!\n")
+	fmt.Fprintf(outw(), "   Source: %s\n", result.SourcePath)
+	fmt.Fprintf(outw(), "   Stored as: %s\n", result.StoredPath)
+	fmt.Fprintf(outw(), "   Format: %s\n", result.DetectedFormat)
+	fmt.Fprintf(outw(), "   Origin: %s\n", result.DetectedOrigin)
 
 	// Show validation results if available
 	if result.ValidationResult != nil {
 		vr := result.ValidationResult
-		fmt.Printf("   %s\n", vr.GetSummary())
+		fmt.Fprintf(outw(), "   %s\n", vr.GetSummary())
 
 		if vr.IntendedSchema != "" && vr.IntendedSchema != vr.AssignedSchema {
-			fmt.Printf("   🎯 Intended Schema: %s\n", vr.IntendedSchema)
+			fmt.Fprintf(outw(), "   🎯 Intended Schema: %s\n", vr.IntendedSchema)
 		}
-		fmt.Printf("   📋 Assigned Schema: %s\n", vr.AssignedSchema)
+		fmt.Fprintf(outw(), "   📋 Assigned Schema: %s\n", vr.AssignedSchema)
 
 		// Show why the intended schema was not satisfied
 		if vr.HasErrors() {
 			issues := vr.GetErrorsForSchema(vr.IntendedSchema)
-			fmt.Printf("   ❌ Validation Issues: %d\n", len(issues))
+			fmt.Fprintf(outw(), "   ❌ Validation Issues: %d\n", len(issues))
 			for i, issue := range issues {
 				if i == 5 {
-					fmt.Printf("      … and %d more\n", len(issues)-i)
+					fmt.Fprintf(outw(), "      … and %d more\n", len(issues)-i)
 					break
 				}
-				fmt.Printf("      - %s: %s\n", issue.Path, issue.Message)
+				fmt.Fprintf(outw(), "      - %s: %s\n", issue.Path, issue.Message)
 			}
 		}
 	} else {
 		// Display auto-assigned schema
-		fmt.Printf("   Schema: %s\n", result.AssignedSchema)
+		fmt.Fprintf(outw(), "   Schema: %s\n", result.AssignedSchema)
 		if result.SchemaConfidence < 0.8 {
-			fmt.Printf("   ⚠️  Low schema confidence (%.2f) - data assigned to catchall\n", result.SchemaConfidence)
+			fmt.Fprintf(outw(), "   ⚠️  Low schema confidence (%.2f) - data assigned to catchall\n", result.SchemaConfidence)
 		}
 	}
 
-	fmt.Printf("   Records: %d\n", result.RecordCount)
-	fmt.Printf("   Size: %d bytes\n", result.SizeBytes)
-}
-
-// resolveFilePaths resolves a file path that may contain wildcards to a list of actual file paths
-func resolveFilePaths(pathPattern string) ([]string, error) {
-	// Check if the path contains wildcard characters
-	if !containsWildcard(pathPattern) {
-		// Single file path - validate it exists
-		if _, err := os.Stat(pathPattern); os.IsNotExist(err) {
-			return nil, errors.NewFileNotFoundError(pathPattern)
-		}
-
-		// Get absolute path
-		absPath, err := filepath.Abs(pathPattern)
-		if err != nil {
-			return nil, errors.WrapError(errors.ErrCodeFileSystem, "Failed to get absolute path", err)
-		}
-
-		return []string{absPath}, nil
-	}
-
-	// Wildcard pattern - use filepath.Glob to resolve
-	matches, err := filepath.Glob(pathPattern)
-	if err != nil {
-		return nil, errors.WrapError(errors.ErrCodeInvalidInput, "Invalid wildcard pattern", err)
-	}
-
-	// Convert to absolute paths and filter out directories
-	var filePaths []string
-	for _, match := range matches {
-		info, err := os.Stat(match)
-		if err != nil {
-			continue // Skip files that can't be accessed
-		}
-
-		// Only include regular files, not directories
-		if info.Mode().IsRegular() {
-			absPath, err := filepath.Abs(match)
-			if err != nil {
-				continue // Skip files where we can't get absolute path
-			}
-			filePaths = append(filePaths, absPath)
-		}
-	}
-
-	return filePaths, nil
-}
-
-// containsWildcard checks if a path contains wildcard characters
-func containsWildcard(path string) bool {
-	return strings.ContainsAny(path, "*?[]")
+	fmt.Fprintf(outw(), "   Records: %d\n", result.RecordCount)
+	fmt.Fprintf(outw(), "   Size: %d bytes\n", result.SizeBytes)
 }

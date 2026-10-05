@@ -185,22 +185,22 @@ func runSchemaNewCommand() error {
 	}
 
 	// Print results (human-readable)
-	fmt.Println("✅ Schema generated successfully!")
-	fmt.Println()
-	fmt.Printf("📄 File created: %s\n", result.FilePath)
-	fmt.Printf("📦 Package: %s\n", result.PackageName)
-	fmt.Printf("📋 Definition: %s\n", schemaname.Format(packagePath, result.DefinitionName))
-	fmt.Printf("🔢 Fields: %d\n", result.FieldCount)
+	fmt.Fprintln(outw(), "✅ Schema generated successfully!")
+	fmt.Fprintln(outw())
+	fmt.Fprintf(outw(), "📄 File created: %s\n", result.FilePath)
+	fmt.Fprintf(outw(), "📦 Package: %s\n", result.PackageName)
+	fmt.Fprintf(outw(), "📋 Definition: %s\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Fprintf(outw(), "🔢 Fields: %d\n", result.FieldCount)
 
 	if len(result.InferredIdentityFields) > 0 {
-		fmt.Printf("🔑 Inferred identity fields: %s\n", strings.Join(result.InferredIdentityFields, ", "))
+		fmt.Fprintf(outw(), "🔑 Inferred identity fields: %s\n", strings.Join(result.InferredIdentityFields, ", "))
 	}
 
-	fmt.Println()
-	fmt.Println("💡 Next steps:")
-	fmt.Printf("   - Inspect the schema: pudl schema show %s\n", schemaname.Format(packagePath, result.DefinitionName))
-	fmt.Printf("   - Edit the schema: pudl schema edit %s\n", schemaname.Format(packagePath, result.DefinitionName))
-	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 Next steps:")
+	fmt.Fprintf(outw(), "   - Inspect the schema: pudl schema show %s\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Fprintf(outw(), "   - Edit the schema: pudl schema edit %s\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Fprintf(outw(), "   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", schemaname.Format(packagePath, result.DefinitionName))
 
 	return nil
 }
@@ -271,8 +271,8 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 		// Only print if not JSON output
 		output := GetOutputWriter()
 		if output.Format != ui.OutputFormatJSON {
-			fmt.Printf("📄 Created item schema: %s\n", schemaname.Format(packagePath, itemSchema.DefinitionName))
-			fmt.Printf("   File: %s\n", itemSchema.FilePath)
+			fmt.Fprintf(outw(), "📄 Created item schema: %s\n", schemaname.Format(packagePath, itemSchema.DefinitionName))
+			fmt.Fprintf(outw(), "   File: %s\n", itemSchema.FilePath)
 		}
 	}
 
@@ -306,37 +306,37 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 	}
 
 	// Print results (human-readable)
-	fmt.Println()
-	fmt.Println("✅ Collection schema generated successfully!")
-	fmt.Println()
-	fmt.Printf("📄 Collection schema file: %s\n", result.CollectionSchema.FilePath)
-	fmt.Printf("📦 Package: %s\n", result.CollectionSchema.PackageName)
-	fmt.Printf("📋 Definition: %s\n", schemaname.Format(packagePath, result.CollectionSchema.DefinitionName))
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "✅ Collection schema generated successfully!")
+	fmt.Fprintln(outw())
+	fmt.Fprintf(outw(), "📄 Collection schema file: %s\n", result.CollectionSchema.FilePath)
+	fmt.Fprintf(outw(), "📦 Package: %s\n", result.CollectionSchema.PackageName)
+	fmt.Fprintf(outw(), "📋 Definition: %s\n", schemaname.Format(packagePath, result.CollectionSchema.DefinitionName))
 
 	if len(result.ExistingSchemaRefs) > 0 {
-		fmt.Println()
-		fmt.Println("🔗 Reused existing schemas:")
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "🔗 Reused existing schemas:")
 		for _, ref := range result.ExistingSchemaRefs {
-			fmt.Printf("   - %s\n", schemaname.Normalize(ref))
+			fmt.Fprintf(outw(), "   - %s\n", schemaname.Normalize(ref))
 		}
 	}
 
 	if len(result.NewItemSchemas) > 0 {
-		fmt.Println()
-		fmt.Println("✨ Generated new item schemas:")
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "✨ Generated new item schemas:")
 		for _, schema := range result.NewItemSchemas {
-			fmt.Printf("   - %s (%d fields)\n", schemaname.Format(packagePath, schema.DefinitionName), schema.FieldCount)
+			fmt.Fprintf(outw(), "   - %s (%d fields)\n", schemaname.Format(packagePath, schema.DefinitionName), schema.FieldCount)
 		}
 	}
 
-	fmt.Println()
-	fmt.Println("💡 Next steps:")
-	fmt.Printf("   - Inspect the collection schema: pudl schema show %s\n", schemaname.Format(packagePath, definitionName))
-	fmt.Printf("   - Edit the collection schema: pudl schema edit %s\n", schemaname.Format(packagePath, definitionName))
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 Next steps:")
+	fmt.Fprintf(outw(), "   - Inspect the collection schema: pudl schema show %s\n", schemaname.Format(packagePath, definitionName))
+	fmt.Fprintf(outw(), "   - Edit the collection schema: pudl schema edit %s\n", schemaname.Format(packagePath, definitionName))
 	if len(result.NewItemSchemas) > 0 {
-		fmt.Printf("   - Edit item schemas as needed\n")
+		fmt.Fprintf(outw(), "   - Edit item schemas as needed\n")
 	}
-	fmt.Printf("   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", schemaname.Format(packagePath, definitionName))
+	fmt.Fprintf(outw(), "   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", schemaname.Format(packagePath, definitionName))
 
 	return nil
 }

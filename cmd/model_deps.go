@@ -135,27 +135,27 @@ func printDepGraph(db *database.CatalogDB, warnings []string) error {
 			out["warnings"] = warnings
 		}
 		data, _ := json.MarshalIndent(out, "", "  ")
-		fmt.Println(string(data))
+		fmt.Fprintln(outw(), string(data))
 		return nil
 	}
 
 	for _, w := range warnings {
-		fmt.Printf("warning: %s\n", w)
+		fmt.Fprintf(errw(), "warning: %s\n", w)
 	}
 	if len(edges) == 0 {
-		fmt.Println("No cross-model dependencies recorded.")
+		fmt.Fprintln(outw(), "No cross-model dependencies recorded.")
 		return nil
 	}
-	fmt.Printf("Cross-model dependencies (%d edge(s)):\n\n", len(edges))
+	fmt.Fprintf(outw(), "Cross-model dependencies (%d edge(s)):\n\n", len(edges))
 	var lastFrom string
 	for _, e := range edges {
 		if e.From != lastFrom {
-			fmt.Printf("  %s depends on:\n", e.From)
+			fmt.Fprintf(outw(), "  %s depends on:\n", e.From)
 			lastFrom = e.From
 		}
-		fmt.Printf("    → %s  [%s]\n", e.To, strings.Join(e.Sources, ", "))
+		fmt.Fprintf(outw(), "    → %s  [%s]\n", e.To, strings.Join(e.Sources, ", "))
 	}
-	fmt.Println("\nQuery: pudl query depends_transitive from=<model> | impacted_by changed=<model> | --topo model_depends_on")
+	fmt.Fprintln(outw(), "\nQuery: pudl query depends_transitive from=<model> | impacted_by changed=<model> | --topo model_depends_on")
 	return nil
 }
 

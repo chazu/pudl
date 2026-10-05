@@ -45,7 +45,10 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 	showPath, _ := cmd.Flags().GetBool("path")
 
 	if showPath {
-		fmt.Println(config.ConfigPath(effectivePudlDir()))
+		if jsonOutput {
+			return printJSON(map[string]string{"config_file": config.ConfigPath(effectivePudlDir())})
+		}
+		fmt.Fprintln(outw(), config.ConfigPath(effectivePudlDir()))
 		return nil
 	}
 
@@ -55,20 +58,40 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.Load()
 	}
 
-	fmt.Println("PUDL Configuration:")
-	fmt.Printf("  Workspace: %s\n", effectivePudlDir())
-	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-	if paths := effectiveSchemaPaths(cfg); len(paths) > 0 {
-		fmt.Printf("  Schema Search Paths: %s\n", strings.Join(paths, ", "))
+	initialized := config.ExistsAt(effectivePudlDir())
+	if jsonOutput {
+		paths := effectiveSchemaPaths(cfg)
+		if paths == nil {
+			paths = []string{}
+		}
+		if !initialized {
+			fmt.Fprintln(errw(), "⚠️  Workspace not initialized. Run 'pudl init' to set up.")
+		}
+		return printJSON(map[string]any{
+			"workspace":           effectivePudlDir(),
+			"schema_path":         cfg.SchemaPath,
+			"schema_search_paths": paths,
+			"data_path":           cfg.DataPath,
+			"config_file":         config.ConfigPath(effectivePudlDir()),
+			"version":             cfg.Version,
+			"initialized":         initialized,
+		})
 	}
-	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-	fmt.Printf("  Config File: %s\n", config.ConfigPath(effectivePudlDir()))
-	fmt.Printf("  Version: %s\n", cfg.Version)
+
+	fmt.Fprintln(outw(), "PUDL Configuration:")
+	fmt.Fprintf(outw(), "  Workspace: %s\n", effectivePudlDir())
+	fmt.Fprintf(outw(), "  Schema Path: %s\n", cfg.SchemaPath)
+	if paths := effectiveSchemaPaths(cfg); len(paths) > 0 {
+		fmt.Fprintf(outw(), "  Schema Search Paths: %s\n", strings.Join(paths, ", "))
+	}
+	fmt.Fprintf(outw(), "  Data Path: %s\n", cfg.DataPath)
+	fmt.Fprintf(outw(), "  Config File: %s\n", config.ConfigPath(effectivePudlDir()))
+	fmt.Fprintf(outw(), "  Version: %s\n", cfg.Version)
 
 	// Check if workspace exists
-	if !config.ExistsAt(effectivePudlDir()) {
-		fmt.Println()
-		fmt.Println("⚠️  Workspace not initialized. Run 'pudl init' to set up.")
+	if !initialized {
+		fmt.Fprintln(outw())
+		fmt.Fprintln(errw(), "⚠️  Workspace not initialized. Run 'pudl init' to set up.")
 	}
 
 	return nil
@@ -120,7 +143,7 @@ func runConfigSetCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.SetConfigValue()
 	}
 
-	fmt.Printf("✅ Configuration updated: %s = %s\n", key, value)
+	fmt.Fprintf(outw(), "✅ Configuration updated: %s = %s\n", key, value)
 
 	// Show the updated configuration
 	cfg, err := loadEffectiveConfig()
@@ -128,10 +151,10 @@ func runConfigSetCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.Load()
 	}
 
-	fmt.Println("Updated PUDL Configuration:")
-	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-	fmt.Printf("  Version: %s\n", cfg.Version)
+	fmt.Fprintln(outw(), "Updated PUDL Configuration:")
+	fmt.Fprintf(outw(), "  Schema Path: %s\n", cfg.SchemaPath)
+	fmt.Fprintf(outw(), "  Data Path: %s\n", cfg.DataPath)
+	fmt.Fprintf(outw(), "  Version: %s\n", cfg.Version)
 
 	return nil
 }
@@ -166,19 +189,19 @@ func runConfigResetCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.ResetToDefaults()
 	}
 
-	fmt.Println("✅ Configuration reset to defaults")
+	fmt.Fprintln(outw(), "✅ Configuration reset to defaults")
 
 	// Show the reset configuration
-	fmt.Println()
+	fmt.Fprintln(outw())
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}
 
-	fmt.Println("Reset PUDL Configuration:")
-	fmt.Printf("  Schema Path: %s\n", cfg.SchemaPath)
-	fmt.Printf("  Data Path: %s\n", cfg.DataPath)
-	fmt.Printf("  Version: %s\n", cfg.Version)
+	fmt.Fprintln(outw(), "Reset PUDL Configuration:")
+	fmt.Fprintf(outw(), "  Schema Path: %s\n", cfg.SchemaPath)
+	fmt.Fprintf(outw(), "  Data Path: %s\n", cfg.DataPath)
+	fmt.Fprintf(outw(), "  Version: %s\n", cfg.Version)
 
 	return nil
 }
@@ -195,15 +218,15 @@ func init() {
 
 	// Add help for valid keys
 	configSetCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Set a configuration value\n\n")
-		fmt.Printf("Usage:\n  %s\n\n", cmd.UseLine())
-		fmt.Printf("Valid configuration keys:\n")
+		fmt.Fprintf(outw(), "Set a configuration value\n\n")
+		fmt.Fprintf(outw(), "Usage:\n  %s\n\n", cmd.UseLine())
+		fmt.Fprintf(outw(), "Valid configuration keys:\n")
 		for _, key := range config.ValidConfigKeys() {
-			fmt.Printf("  %s\n", key)
+			fmt.Fprintf(outw(), "  %s\n", key)
 		}
-		fmt.Printf("\nExamples:\n")
-		fmt.Printf("  pudl config set schema_path ~/my-schemas\n")
-		fmt.Printf("  pudl config set data_path /tmp/pudl-data\n")
-		fmt.Printf("  pudl config set version 2.0\n")
+		fmt.Fprintf(outw(), "\nExamples:\n")
+		fmt.Fprintf(outw(), "  pudl config set schema_path ~/my-schemas\n")
+		fmt.Fprintf(outw(), "  pudl config set data_path /tmp/pudl-data\n")
+		fmt.Fprintf(outw(), "  pudl config set version 2.0\n")
 	})
 }

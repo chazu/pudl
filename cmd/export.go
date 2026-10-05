@@ -111,7 +111,7 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 	for _, entry := range entries {
 		data, err := loadEntryData(entry.StoredPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load data for %s: %v\n",
+			fmt.Fprintf(errw(), "Warning: Failed to load data for %s: %v\n",
 				idgen.HashToProquint(entry.ID), err)
 			continue
 		}
@@ -123,7 +123,7 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up output writer
-	var writer io.Writer = os.Stdout
+	var writer io.Writer = outw()
 	if exportOutput != "" {
 		file, err := os.Create(exportOutput)
 		if err != nil {

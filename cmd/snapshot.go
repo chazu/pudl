@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"text/tabwriter"
 	"time"
 
@@ -68,13 +66,13 @@ var snapshotListCmd = &cobra.Command{
 			return err
 		}
 		if jsonOutput {
-			return json.NewEncoder(os.Stdout).Encode(snapshots)
+			return printJSON(snapshots)
 		}
 		if len(snapshots) == 0 {
-			fmt.Println("no snapshots recorded")
+			fmt.Fprintln(outw(), "no snapshots recorded")
 			return nil
 		}
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := tabwriter.NewWriter(outw(), 0, 0, 2, ' ', 0)
 		fmt.Fprintln(w, "SNAPSHOT\tMODEL\tSOURCE\tRECORDS\tRUN\tCREATED\tRETAINED")
 		for _, s := range snapshots {
 			retained := ""
@@ -114,7 +112,7 @@ var snapshotShowCmd = &cobra.Command{
 		}
 
 		if jsonOutput {
-			return json.NewEncoder(os.Stdout).Encode(map[string]any{
+			return printJSON(map[string]any{
 				"snapshot": snapshot,
 				"records":  len(entries),
 			})
@@ -122,19 +120,19 @@ var snapshotShowCmd = &cobra.Command{
 		if snapshot == nil {
 			// Predates the snapshot contract: still a valid replay scope, but its
 			// model and workspace were never recorded and cannot be invented now.
-			fmt.Printf("%s\n  (recorded before snapshot provenance existed — no model, source or retention)\n", args[0])
+			fmt.Fprintf(outw(), "%s\n  (recorded before snapshot provenance existed — no model, source or retention)\n", args[0])
 		} else {
-			fmt.Printf("%s\n", snapshot.SnapshotID)
-			fmt.Printf("  model:     %s\n", orDash(snapshot.Model))
-			fmt.Printf("  run:       %s\n", orDash(snapshot.RunID))
-			fmt.Printf("  workspace: %s\n", orDash(snapshot.Workspace))
-			fmt.Printf("  source:    %s\n", orDash(snapshot.Source))
-			fmt.Printf("  origin:    %s\n", orDash(snapshot.Origin))
-			fmt.Printf("  targets:   %v\n", snapshot.Targets)
-			fmt.Printf("  created:   %s\n", snapshot.CreatedAt.Format(time.RFC3339))
-			fmt.Printf("  retained:  %t\n", snapshot.Retained)
+			fmt.Fprintf(outw(), "%s\n", snapshot.SnapshotID)
+			fmt.Fprintf(outw(), "  model:     %s\n", orDash(snapshot.Model))
+			fmt.Fprintf(outw(), "  run:       %s\n", orDash(snapshot.RunID))
+			fmt.Fprintf(outw(), "  workspace: %s\n", orDash(snapshot.Workspace))
+			fmt.Fprintf(outw(), "  source:    %s\n", orDash(snapshot.Source))
+			fmt.Fprintf(outw(), "  origin:    %s\n", orDash(snapshot.Origin))
+			fmt.Fprintf(outw(), "  targets:   %v\n", snapshot.Targets)
+			fmt.Fprintf(outw(), "  created:   %s\n", snapshot.CreatedAt.Format(time.RFC3339))
+			fmt.Fprintf(outw(), "  retained:  %t\n", snapshot.Retained)
 		}
-		fmt.Printf("  records:   %d\n", len(entries))
+		fmt.Fprintf(outw(), "  records:   %d\n", len(entries))
 		return nil
 	},
 }
@@ -159,9 +157,9 @@ var snapshotCurrentCmd = &cobra.Command{
 			return fmt.Errorf("model %q has no recorded observation", args[0])
 		}
 		if jsonOutput {
-			return json.NewEncoder(os.Stdout).Encode(snapshot)
+			return printJSON(snapshot)
 		}
-		fmt.Printf("%s  (%s, %d record(s), %s)\n",
+		fmt.Fprintf(outw(), "%s  (%s, %d record(s), %s)\n",
 			snapshot.SnapshotID, snapshot.Source, snapshot.RecordCount,
 			snapshot.CreatedAt.Format(time.RFC3339))
 		return nil
@@ -188,9 +186,9 @@ carry no contract row — but they are never pruned either, for the same reason.
 			return err
 		}
 		if snapshotRelease {
-			fmt.Printf("released %s\n", args[0])
+			fmt.Fprintf(outw(), "released %s\n", args[0])
 		} else {
-			fmt.Printf("retained %s\n", args[0])
+			fmt.Fprintf(outw(), "retained %s\n", args[0])
 		}
 		return nil
 	},
@@ -238,20 +236,20 @@ before the snapshot contract existed, are never removed.`,
 			return err
 		}
 		if jsonOutput {
-			return json.NewEncoder(os.Stdout).Encode(result)
+			return printJSON(result)
 		}
 
 		verb := "removed"
 		if snapshotDryRun {
 			verb = "would remove"
 		}
-		fmt.Printf("%s %d snapshot(s), %d record(s), %d raw file(s)\n",
+		fmt.Fprintf(outw(), "%s %d snapshot(s), %d record(s), %d raw file(s)\n",
 			verb, len(result.Snapshots), result.Records, result.FilesRemoved)
 		for _, id := range result.Snapshots {
-			fmt.Printf("  - %s\n", id)
+			fmt.Fprintf(outw(), "  - %s\n", id)
 		}
 		for _, path := range result.FilesSkipped {
-			fmt.Printf("  ! left in place (outside the data dir's raw/ tree): %s\n", path)
+			fmt.Fprintf(outw(), "  ! left in place (outside the data dir's raw/ tree): %s\n", path)
 		}
 		return nil
 	},

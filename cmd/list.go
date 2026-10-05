@@ -53,7 +53,7 @@ Filtering Options:
 
 Display Options:
 - --verbose: Show detailed information including file paths
-- --limit: Limit number of results (default: 50)
+- --limit: Cap the total number of results across all pages (default: no cap)
 - --sort-by: Sort by field (timestamp, size, records, schema, origin)
 - --reverse: Reverse sort order
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
@@ -138,12 +138,13 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		if output.Format == ui.OutputFormatJSON {
 			return output.WriteJSON(ui.ListOutput{
 				Entries:      []ui.EntryOutput{},
-				TotalEntries: 0,
-				TotalPages:   0,
-				CurrentPage:  1,
+				TotalEntries: results.TotalEntries,
+				TotalMatched: results.TotalMatched,
+				TotalPages:   results.TotalPages,
+				CurrentPage:  results.CurrentPage,
 			})
 		}
-		fmt.Println("No data found matching the specified criteria.")
+		fmt.Fprintln(outw(), "No data found matching the specified criteria.")
 		return nil
 	}
 
@@ -160,13 +161,16 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 
 	// Traditional text output
 	// Display summary with pagination info
-	fmt.Printf("Found %d entries", len(results.Entries))
+	fmt.Fprintf(outw(), "Found %d entries", len(results.Entries))
 	if results.TotalEntries > len(results.Entries) {
 		startIdx := (results.CurrentPage-1)*listPerPage + 1
 		endIdx := startIdx + len(results.Entries) - 1
-		fmt.Printf(" (showing %d-%d of %d total, page %d of %d)", startIdx, endIdx, results.TotalEntries, results.CurrentPage, results.TotalPages)
+		fmt.Fprintf(outw(), " (showing %d-%d of %d total, page %d of %d)", startIdx, endIdx, results.TotalEntries, results.CurrentPage, results.TotalPages)
 	}
-	fmt.Println()
+	if results.TotalMatched > results.TotalEntries {
+		fmt.Fprintf(outw(), " [--limit %d of %d matching]", results.TotalEntries, results.TotalMatched)
+	}
+	fmt.Fprintln(outw())
 
 	// Display filters if any are active
 	activeFilters := []string{}
@@ -192,9 +196,9 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		activeFilters = append(activeFilters, "items-only")
 	}
 	if len(activeFilters) > 0 {
-		fmt.Printf("Filters: %s\n", strings.Join(activeFilters, ", "))
+		fmt.Fprintf(outw(), "Filters: %s\n", strings.Join(activeFilters, ", "))
 	}
-	fmt.Println()
+	fmt.Fprintln(outw())
 
 	// Display entries
 	for i, entry := range results.Entries {
@@ -203,17 +207,17 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 
 	// Display summary statistics
 	if listVerbose {
-		fmt.Printf("\nSummary:\n")
-		fmt.Printf("  Total size: %s\n", formatBytes(results.TotalSize))
-		fmt.Printf("  Total records: %d\n", results.TotalRecords)
-		fmt.Printf("  Schemas: %s\n", strings.Join(results.UniqueSchemas, ", "))
+		fmt.Fprintf(outw(), "\nSummary:\n")
+		fmt.Fprintf(outw(), "  Total size: %s\n", formatBytes(results.TotalSize))
+		fmt.Fprintf(outw(), "  Total records: %d\n", results.TotalRecords)
+		fmt.Fprintf(outw(), "  Schemas: %s\n", strings.Join(results.UniqueSchemas, ", "))
 		// Format origins for display
 		formattedOrigins := make([]string, len(results.UniqueOrigins))
 		for i, origin := range results.UniqueOrigins {
 			formattedOrigins[i] = formatOriginForDisplay(origin)
 		}
-		fmt.Printf("  Origins: %s\n", strings.Join(formattedOrigins, ", "))
-		fmt.Printf("  Formats: %s\n", strings.Join(results.UniqueFormats, ", "))
+		fmt.Fprintf(outw(), "  Origins: %s\n", strings.Join(formattedOrigins, ", "))
+		fmt.Fprintf(outw(), "  Formats: %s\n", strings.Join(results.UniqueFormats, ", "))
 	}
 
 	return nil
@@ -238,7 +242,7 @@ func init() {
 	listCmd.Flags().StringVar(&listOrigin, "origin", "", "Filter by data origin (e.g., aws-ec2)")
 	listCmd.Flags().StringVar(&listFormat, "format", "", "Filter by file format (json, yaml, csv, ndjson)")
 	listCmd.Flags().BoolVarP(&listVerbose, "verbose", "v", false, "Show detailed information")
-	listCmd.Flags().IntVar(&listLimit, "limit", 50, "Limit number of results")
+	listCmd.Flags().IntVar(&listLimit, "limit", 0, "Cap the total number of results across all pages (0 = no cap)")
 	listCmd.Flags().StringVar(&listSortBy, "sort-by", "timestamp", "Sort by field (timestamp, size, records, schema, origin)")
 	listCmd.Flags().BoolVar(&listReverse, "reverse", false, "Reverse sort order")
 	listCmd.Flags().IntVar(&listPage, "page", 1, "Page number (1-based)")
@@ -285,7 +289,7 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 	if entry.Version != nil && *entry.Version > 0 {
 		versionStr = fmt.Sprintf(" v%d", *entry.Version)
 	}
-	fmt.Printf("%d. %s%s [%s]%s\n",
+	fmt.Fprintf(outw(), "%d. %s%s [%s]%s\n",
 		index,
 		entry.Proquint,
 		versionStr,
@@ -312,40 +316,40 @@ func displayEntry(entry lister.ListEntry, verbose bool, index int) {
 		}
 	}
 
-	fmt.Println(detailsLine)
+	fmt.Fprintln(outw(), detailsLine)
 
 	// Verbose details
 	if verbose {
-		fmt.Printf("   Hash: %s\n", entry.ID)
-		fmt.Printf("   Data: %s\n", entry.StoredPath)
-		fmt.Printf("   Metadata: %s\n", entry.MetadataPath)
-		fmt.Printf("   Timestamp: %s\n", entry.ImportTimestamp)
+		fmt.Fprintf(outw(), "   Hash: %s\n", entry.ID)
+		fmt.Fprintf(outw(), "   Data: %s\n", entry.StoredPath)
+		fmt.Fprintf(outw(), "   Metadata: %s\n", entry.MetadataPath)
+		fmt.Fprintf(outw(), "   Timestamp: %s\n", entry.ImportTimestamp)
 		if entry.Confidence < 0.8 {
-			fmt.Printf("   ⚠️  Low schema confidence (%.2f)\n", entry.Confidence)
+			fmt.Fprintf(outw(), "   ⚠️  Low schema confidence (%.2f)\n", entry.Confidence)
 		}
 
 		// Show identity tracking details
 		if entry.ResourceID != nil {
-			fmt.Printf("   Resource ID: %s\n", *entry.ResourceID)
+			fmt.Fprintf(outw(), "   Resource ID: %s\n", *entry.ResourceID)
 		}
 		if entry.ContentHash != nil {
-			fmt.Printf("   Content Hash: %s\n", *entry.ContentHash)
+			fmt.Fprintf(outw(), "   Content Hash: %s\n", *entry.ContentHash)
 		}
 		if entry.Version != nil {
-			fmt.Printf("   Version: %d\n", *entry.Version)
+			fmt.Fprintf(outw(), "   Version: %d\n", *entry.Version)
 		}
 
 		// Show collection details
 		if entry.CollectionType != nil {
-			fmt.Printf("   Type: %s", *entry.CollectionType)
+			fmt.Fprintf(outw(), "   Type: %s", *entry.CollectionType)
 			if *entry.CollectionType == "item" && entry.ItemID != nil {
-				fmt.Printf(" (Item ID: %s)", *entry.ItemID)
+				fmt.Fprintf(outw(), " (Item ID: %s)", *entry.ItemID)
 			}
-			fmt.Println()
+			fmt.Fprintln(outw())
 		}
 	}
 
-	fmt.Println()
+	fmt.Fprintln(outw())
 }
 
 // formatOriginForDisplay converts hash-based origins to human-readable format
@@ -414,6 +418,7 @@ func outputListAsJSON(output *ui.OutputWriter, results *lister.ListResults) erro
 	listOutput := ui.ListOutput{
 		Entries:      entries,
 		TotalEntries: results.TotalEntries,
+		TotalMatched: results.TotalMatched,
 		TotalPages:   results.TotalPages,
 		CurrentPage:  results.CurrentPage,
 		Summary: &ui.ListSummary{

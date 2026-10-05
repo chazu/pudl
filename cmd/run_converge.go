@@ -163,12 +163,12 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 		},
 		OnPlan: func(plan string) {
 			if live {
-				fmt.Print("\nplan (dry-run — nothing applied):\n", plan)
+				fmt.Fprint(outw(), "\nplan (dry-run — nothing applied):\n", plan)
 			}
 		},
 		OnApply: func(iteration int) {
 			if live {
-				fmt.Printf("iteration %d: applying converge…\n", iteration)
+				fmt.Fprintf(outw(), "iteration %d: applying converge…\n", iteration)
 			}
 		},
 		OnApplied: func(iteration int) {
@@ -179,21 +179,21 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 		},
 		OnRecordFailure: func(err error) {
 			if live {
-				fmt.Printf("warning: per-resource status not recorded: %v\n", err)
+				fmt.Fprintf(errw(), "warning: per-resource status not recorded: %v\n", err)
 			}
 		},
 	})
 	runErr = redactSealedError(runErr, m)
 
 	if runErr != nil && result.Outcome == outcomeExecErr && live {
-		fmt.Printf("converge apply failed: %v\n", runErr)
-		fmt.Println("WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
+		fmt.Fprintf(outw(), "converge apply failed: %v\n", runErr)
+		fmt.Fprintln(errw(), "WARNING: the live system may be in a partial state — no rollback (V1.5 out of scope).")
 	}
 
 	if runErr != nil && result.Outcome == acute.OutcomeBudgetExhausted && live {
-		fmt.Println("\nthis model has spent its apply budget since it was last verified clean.")
-		fmt.Println("      an unscoped run that observes it clean resets the budget;")
-		fmt.Println("      --max-applies 0 disables it for one run.")
+		fmt.Fprintln(outw(), "\nthis model has spent its apply budget since it was last verified clean.")
+		fmt.Fprintln(outw(), "      an unscoped run that observes it clean resets the budget;")
+		fmt.Fprintln(outw(), "      --max-applies 0 disables it for one run.")
 	}
 
 	rep := &ConvergeReport{
@@ -213,12 +213,12 @@ func recordDurableApply(cat *runCatalog, runID string, live bool) {
 	db, err := cat.optional()
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not open catalog to record the apply: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not open catalog to record the apply: %v\n", err)
 		}
 		return
 	}
 	if err := db.RecordApply(runID); err != nil && live {
-		fmt.Printf("warning: could not record the apply against this model's budget: %v\n", err)
+		fmt.Fprintf(errw(), "warning: could not record the apply against this model's budget: %v\n", err)
 	}
 }
 

@@ -452,17 +452,17 @@ func printRunSetReport(report *acute.RunSetReport) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println(string(payload))
+		fmt.Fprintln(outw(), string(payload))
 		return nil
 	}
-	fmt.Printf("\nrun-set %s: %s\n", report.RunSetID, report.Status)
-	fmt.Printf("plan: %s\n", report.PlanDigest)
+	fmt.Fprintf(outw(), "\nrun-set %s: %s\n", report.RunSetID, report.Status)
+	fmt.Fprintf(outw(), "plan: %s\n", report.PlanDigest)
 	for _, member := range report.Members {
 		line := fmt.Sprintf("  %s: %s (%s)", member.Model, member.Result, member.RunID)
 		if member.Error != "" {
 			line += ": " + member.Error
 		}
-		fmt.Println(strings.TrimSpace(line))
+		fmt.Fprintln(outw(), strings.TrimSpace(line))
 	}
 	return nil
 }

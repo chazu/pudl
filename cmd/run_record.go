@@ -26,16 +26,16 @@ func resolveApplyBudget(cat *runCatalog, model string, flags runFlags, live bool
 	db, err := cat.optional()
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not open catalog to read this model's apply history: %v\n", err)
-			fmt.Println("         the durable apply budget is not enforced for this run")
+			fmt.Fprintf(errw(), "warning: could not open catalog to read this model's apply history: %v\n", err)
+			fmt.Fprintln(outw(), "         the durable apply budget is not enforced for this run")
 		}
 		return nil
 	}
 	spent, err := db.AppliesSinceLastClean(model)
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not read this model's apply history: %v\n", err)
-			fmt.Println("         the durable apply budget is not enforced for this run")
+			fmt.Fprintf(errw(), "warning: could not read this model's apply history: %v\n", err)
+			fmt.Fprintln(outw(), "         the durable apply budget is not enforced for this run")
 		}
 		return nil
 	}
@@ -45,7 +45,7 @@ func resolveApplyBudget(cat *runCatalog, model string, flags runFlags, live bool
 		remaining = 0
 	}
 	if live && spent > 0 {
-		fmt.Printf("apply budget: %d of %d remaining (spent since this model was last verified clean)\n",
+		fmt.Fprintf(outw(), "apply budget: %d of %d remaining (spent since this model was last verified clean)\n",
 			remaining, flags.maxApplies)
 	}
 	return &remaining
@@ -88,18 +88,18 @@ func startRunRecord(cat *runCatalog, runID, model, mode string, live bool) {
 	db, err := cat.optional()
 	if err != nil {
 		if live {
-			fmt.Printf("warning: could not open catalog to record the run: %v\n", err)
+			fmt.Fprintf(errw(), "warning: could not open catalog to record the run: %v\n", err)
 		}
 		return
 	}
 
 	if stale, err := db.UnfinishedRuns(model); err == nil && len(stale) > 0 && live {
-		fmt.Printf("warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
+		fmt.Fprintf(errw(), "warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
 			len(stale), model, stale[0].RunID, stale[0].StartedAt.Format(time.RFC3339))
-		fmt.Println("         that model's recorded status predates those runs and may be stale")
+		fmt.Fprintln(outw(), "         that model's recorded status predates those runs and may be stale")
 	}
 	if err := db.StartRun(runID, model, mode); err != nil && live {
-		fmt.Printf("warning: could not record run start: %v\n", err)
+		fmt.Fprintf(errw(), "warning: could not record run start: %v\n", err)
 	}
 }
 
@@ -115,7 +115,7 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 	}
 
 	if err := db.FinishRun(runID, runConclusion(state, runErr)); err != nil && live {
-		fmt.Printf("warning: could not record run completion: %v\n", err)
+		fmt.Fprintf(errw(), "warning: could not record run completion: %v\n", err)
 	}
 }
 

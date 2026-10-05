@@ -41,9 +41,9 @@ Example:
 		if jsonOutput {
 			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": wsPolicy.Workspace.PudlDir, "files": files})
 		}
-		fmt.Printf("Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
-		fmt.Printf("Model: git-inventory\nObservations: .pudl/populators/git-inventory/{baseline,changed}-observe.json\n")
-		fmt.Println("Next: pudl model show git-inventory")
+		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
+		fmt.Fprintf(outw(), "Model: git-inventory\nObservations: .pudl/populators/git-inventory/{baseline,changed}-observe.json\n")
+		fmt.Fprintln(outw(), "Next: pudl model show git-inventory")
 		return nil
 	},
 }

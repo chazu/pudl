@@ -28,13 +28,27 @@ their final concrete values are validated again when pudl runs them.`,
 		if err != nil {
 			return err
 		}
-		if len(problems) == 0 {
-			fmt.Printf("✓ %s is valid\n", template.Name)
+		if jsonOutput {
+			if problems == nil {
+				problems = []string{}
+			}
+			if err := printJSON(map[string]any{
+				"model": template.Name, "valid": len(problems) == 0, "problems": problems,
+			}); err != nil {
+				return err
+			}
+			if len(problems) > 0 {
+				return fmt.Errorf("model %q failed validation", template.Name)
+			}
 			return nil
 		}
-		fmt.Printf("✗ %s has %d problem(s):\n", template.Name, len(problems))
+		if len(problems) == 0 {
+			fmt.Fprintf(outw(), "✓ %s is valid\n", template.Name)
+			return nil
+		}
+		fmt.Fprintf(outw(), "✗ %s has %d problem(s):\n", template.Name, len(problems))
 		for _, p := range problems {
-			fmt.Printf("  - %s\n", p)
+			fmt.Fprintf(outw(), "  - %s\n", p)
 		}
 		return fmt.Errorf("model %q failed validation", template.Name)
 	},

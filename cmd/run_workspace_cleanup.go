@@ -107,9 +107,9 @@ func reportSweptWorkspaces(removed []string, live bool) {
 	if !live || len(removed) == 0 {
 		return
 	}
-	fmt.Printf("note: removed %d abandoned reconcile workspace(s) from earlier run(s) that did not exit cleanly\n",
+	fmt.Fprintf(errw(), "note: removed %d abandoned reconcile workspace(s) from earlier run(s) that did not exit cleanly\n",
 		len(removed))
 	for _, path := range removed {
-		fmt.Printf("      %s\n", path)
+		fmt.Fprintf(outw(), "      %s\n", path)
 	}
 }

@@ -66,8 +66,8 @@ After installing, set the model's eweSource to the printed value.`,
 		}
 
 		eweSource := filepath.Join(model, base) // repo-relative, under populators/
-		fmt.Printf("installed populator: %s\n", dest)
-		fmt.Printf("set in the model's populate arm:  eweSource: %q\n", eweSource)
+		fmt.Fprintf(outw(), "installed populator: %s\n", dest)
+		fmt.Fprintf(outw(), "set in the model's populate arm:  eweSource: %q\n", eweSource)
 		return nil
 	},
 }

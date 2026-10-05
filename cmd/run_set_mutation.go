@@ -187,7 +187,7 @@ func continueMutatingRunSet(db *database.CatalogDB, graph *acute.RunSetPlan, rep
 			return err
 		}
 		if !jsonOutput {
-			fmt.Printf("approval pending: pudl run resume %s | pudl run reject %s\n", report.RunSetID, report.RunSetID)
+			fmt.Fprintf(outw(), "approval pending: pudl run resume %s | pudl run reject %s\n", report.RunSetID, report.RunSetID)
 		}
 		return nil
 	}
@@ -203,8 +203,8 @@ func printRunSetApprovalReview(plan *acute.RunSetMutationPlan, context *runSetEx
 	if jsonOutput || plan == nil || context == nil {
 		return
 	}
-	fmt.Printf("exact mutation plan %s\n", plan.RunSetID)
-	fmt.Printf("  digest: %s\n", mustMutationPlanDigest(plan))
+	fmt.Fprintf(outw(), "exact mutation plan %s\n", plan.RunSetID)
+	fmt.Fprintf(outw(), "  digest: %s\n", mustMutationPlanDigest(plan))
 	for _, modelName := range plan.Ordered {
 		model := context.successfulModels[modelName]
 		if model == nil {
@@ -218,7 +218,7 @@ func printRunSetApprovalReview(plan *acute.RunSetMutationPlan, context *runSetEx
 			sort.Strings(names)
 			for _, name := range names {
 				output := outputs[name]
-				fmt.Printf("  write: %s.%s.%s -> %s (%s)\n", modelName, phase, name, output.Ref, output.StoreMode)
+				fmt.Fprintf(outw(), "  write: %s.%s.%s -> %s (%s)\n", modelName, phase, name, output.Ref, output.StoreMode)
 			}
 		}
 		if model.Converge != nil {

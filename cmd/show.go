@@ -97,44 +97,44 @@ func init() {
 
 // displayDetailedEntry displays detailed information about a single entry
 func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bool) {
-	fmt.Printf("Entry: %s\n", entry.Proquint)
-	fmt.Printf("Hash: %s\n", entry.ID)
-	fmt.Printf("Schema: %s\n", entry.Schema)
-	fmt.Printf("Origin: %s\n", entry.Origin)
-	fmt.Printf("Format: %s\n", entry.Format)
-	fmt.Printf("Import Time: %s\n", entry.ImportTimestamp)
-	fmt.Printf("Records: %d\n", entry.RecordCount)
-	fmt.Printf("Size: %s\n", formatBytes(entry.SizeBytes))
-	fmt.Printf("Confidence: %.2f\n", entry.Confidence)
-	fmt.Printf("Data Path: %s\n", entry.StoredPath)
-	fmt.Printf("Metadata Path: %s\n", entry.MetadataPath)
+	fmt.Fprintf(outw(), "Entry: %s\n", entry.Proquint)
+	fmt.Fprintf(outw(), "Hash: %s\n", entry.ID)
+	fmt.Fprintf(outw(), "Schema: %s\n", entry.Schema)
+	fmt.Fprintf(outw(), "Origin: %s\n", entry.Origin)
+	fmt.Fprintf(outw(), "Format: %s\n", entry.Format)
+	fmt.Fprintf(outw(), "Import Time: %s\n", entry.ImportTimestamp)
+	fmt.Fprintf(outw(), "Records: %d\n", entry.RecordCount)
+	fmt.Fprintf(outw(), "Size: %s\n", formatBytes(entry.SizeBytes))
+	fmt.Fprintf(outw(), "Confidence: %.2f\n", entry.Confidence)
+	fmt.Fprintf(outw(), "Data Path: %s\n", entry.StoredPath)
+	fmt.Fprintf(outw(), "Metadata Path: %s\n", entry.MetadataPath)
 
 	if entry.Confidence < 0.8 {
-		fmt.Printf("⚠️  Low schema confidence - data may not match assigned schema\n")
+		fmt.Fprintf(outw(), "⚠️  Low schema confidence - data may not match assigned schema\n")
 	}
 
 	// Show metadata if requested
 	if includeMetadata {
 		separator := strings.Repeat("=", 60)
-		fmt.Printf("\n%s\n", separator)
-		fmt.Printf("METADATA\n")
-		fmt.Printf("%s\n", separator)
+		fmt.Fprintf(outw(), "\n%s\n", separator)
+		fmt.Fprintf(outw(), "METADATA\n")
+		fmt.Fprintf(outw(), "%s\n", separator)
 
 		metadataContent, err := os.ReadFile(entry.MetadataPath)
 		if err != nil {
-			fmt.Printf("Error reading metadata: %v\n", err)
+			fmt.Fprintf(outw(), "Error reading metadata: %v\n", err)
 		} else {
 			// Pretty print JSON metadata
 			var metadata map[string]interface{}
 			if err := json.Unmarshal(metadataContent, &metadata); err != nil {
-				fmt.Printf("Error parsing metadata: %v\n", err)
-				fmt.Printf("%s\n", string(metadataContent))
+				fmt.Fprintf(outw(), "Error parsing metadata: %v\n", err)
+				fmt.Fprintf(outw(), "%s\n", string(metadataContent))
 			} else {
 				prettyMetadata, err := json.MarshalIndent(metadata, "", "  ")
 				if err != nil {
-					fmt.Printf("%s\n", string(metadataContent))
+					fmt.Fprintf(outw(), "%s\n", string(metadataContent))
 				} else {
-					fmt.Printf("%s\n", string(prettyMetadata))
+					fmt.Fprintf(outw(), "%s\n", string(prettyMetadata))
 				}
 			}
 		}
@@ -143,42 +143,42 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 	// Show raw data if requested
 	if includeRaw {
 		separator := strings.Repeat("=", 60)
-		fmt.Printf("\n%s\n", separator)
-		fmt.Printf("RAW DATA\n")
-		fmt.Printf("%s\n", separator)
+		fmt.Fprintf(outw(), "\n%s\n", separator)
+		fmt.Fprintf(outw(), "RAW DATA\n")
+		fmt.Fprintf(outw(), "%s\n", separator)
 
 		rawContent, err := os.ReadFile(entry.StoredPath)
 		if err != nil {
-			fmt.Printf("Error reading raw data: %v\n", err)
+			fmt.Fprintf(outw(), "Error reading raw data: %v\n", err)
 		} else {
 			// Try to pretty print based on format
 			switch strings.ToLower(entry.Format) {
 			case "json":
 				var data interface{}
 				if err := json.Unmarshal(rawContent, &data); err != nil {
-					fmt.Printf("%s\n", string(rawContent))
+					fmt.Fprintf(outw(), "%s\n", string(rawContent))
 				} else {
 					prettyData, err := json.MarshalIndent(data, "", "  ")
 					if err != nil {
-						fmt.Printf("%s\n", string(rawContent))
+						fmt.Fprintf(outw(), "%s\n", string(rawContent))
 					} else {
-						fmt.Printf("%s\n", string(prettyData))
+						fmt.Fprintf(outw(), "%s\n", string(prettyData))
 					}
 				}
 			case "yaml":
 				var data interface{}
 				if err := yaml.Unmarshal(rawContent, &data); err != nil {
-					fmt.Printf("%s\n", string(rawContent))
+					fmt.Fprintf(outw(), "%s\n", string(rawContent))
 				} else {
 					prettyData, err := yaml.Marshal(data)
 					if err != nil {
-						fmt.Printf("%s\n", string(rawContent))
+						fmt.Fprintf(outw(), "%s\n", string(rawContent))
 					} else {
-						fmt.Printf("%s\n", string(prettyData))
+						fmt.Fprintf(outw(), "%s\n", string(prettyData))
 					}
 				}
 			default:
-				fmt.Printf("%s\n", string(rawContent))
+				fmt.Fprintf(outw(), "%s\n", string(rawContent))
 			}
 		}
 	}

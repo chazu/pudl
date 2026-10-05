@@ -306,15 +306,15 @@ func showDryRun(shell, snippet string) error {
 		return errors.NewSystemError("Failed to get config file path", err)
 	}
 
-	fmt.Printf("🔍 Dry run mode - showing what would be added to %s:\n", configFile)
-	fmt.Println()
-	fmt.Println("📝 Integration snippet:")
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Print(snippet)
-	fmt.Println(strings.Repeat("-", 60))
-	fmt.Println()
-	fmt.Println("💡 To actually install, run: pudl setup")
-	fmt.Printf("💡 To install for specific shell: pudl setup --shell %s\n", shell)
+	fmt.Fprintf(outw(), "🔍 Dry run mode - showing what would be added to %s:\n", configFile)
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "📝 Integration snippet:")
+	fmt.Fprintln(outw(), strings.Repeat("-", 60))
+	fmt.Fprint(outw(), snippet)
+	fmt.Fprintln(outw(), strings.Repeat("-", 60))
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 To actually install, run: pudl setup")
+	fmt.Fprintf(outw(), "💡 To install for specific shell: pudl setup --shell %s\n", shell)
 
 	return nil
 }
@@ -328,9 +328,9 @@ func installIntegration(shell, snippet string) error {
 
 	// Check if PUDL integration already exists
 	if hasIntegration(configFile) {
-		fmt.Printf("✅ PUDL shell integration already installed in %s\n", configFile)
-		fmt.Println()
-		fmt.Println("💡 To reinstall, first run: pudl setup --uninstall")
+		fmt.Fprintf(outw(), "✅ PUDL shell integration already installed in %s\n", configFile)
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "💡 To reinstall, first run: pudl setup --uninstall")
 		return nil
 	}
 
@@ -344,17 +344,17 @@ func installIntegration(shell, snippet string) error {
 		return errors.NewSystemError("Failed to add integration", err)
 	}
 
-	fmt.Printf("✅ PUDL shell integration installed successfully!\n")
-	fmt.Printf("📁 Config file: %s\n", configFile)
-	fmt.Println()
-	fmt.Println("🚀 New features available:")
-	fmt.Println("   - 'pcd' alias: Quick navigation to schema repository")
-	fmt.Println("   - 'pudl-cd' function: Enhanced navigation with git status")
-	fmt.Println("   - Shell completion for pudl commands (if supported)")
-	fmt.Println()
-	fmt.Println("💡 To activate the changes:")
-	fmt.Printf("   source %s\n", configFile)
-	fmt.Println("   OR restart your terminal")
+	fmt.Fprintf(outw(), "✅ PUDL shell integration installed successfully!\n")
+	fmt.Fprintf(outw(), "📁 Config file: %s\n", configFile)
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "🚀 New features available:")
+	fmt.Fprintln(outw(), "   - 'pcd' alias: Quick navigation to schema repository")
+	fmt.Fprintln(outw(), "   - 'pudl-cd' function: Enhanced navigation with git status")
+	fmt.Fprintln(outw(), "   - Shell completion for pudl commands (if supported)")
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 To activate the changes:")
+	fmt.Fprintf(outw(), "   source %s\n", configFile)
+	fmt.Fprintln(outw(), "   OR restart your terminal")
 
 	return nil
 }
@@ -376,25 +376,25 @@ func runUninstallIntegration() error {
 
 		// Create backup before removal
 		if err := createBackup(configFile); err != nil {
-			fmt.Printf("⚠️  Warning: Failed to backup %s: %v\n", configFile, err)
+			fmt.Fprintf(errw(), "⚠️  Warning: Failed to backup %s: %v\n", configFile, err)
 			continue
 		}
 
 		// Remove integration
 		if err := removeIntegration(configFile); err != nil {
-			fmt.Printf("❌ Failed to remove integration from %s: %v\n", configFile, err)
+			fmt.Fprintf(outw(), "❌ Failed to remove integration from %s: %v\n", configFile, err)
 			continue
 		}
 
-		fmt.Printf("✅ Removed PUDL integration from %s\n", configFile)
+		fmt.Fprintf(outw(), "✅ Removed PUDL integration from %s\n", configFile)
 		removed = true
 	}
 
 	if !removed {
-		fmt.Println("ℹ️  No PUDL shell integration found to remove")
+		fmt.Fprintln(outw(), "ℹ️  No PUDL shell integration found to remove")
 	} else {
-		fmt.Println()
-		fmt.Println("💡 Restart your terminal or source your config files to apply changes")
+		fmt.Fprintln(outw())
+		fmt.Fprintln(outw(), "💡 Restart your terminal or source your config files to apply changes")
 	}
 
 	return nil
