@@ -22,7 +22,7 @@ var (
 
 // importCmd represents the import command
 var importCmd = &cobra.Command{
-	Use:   "import --path <file-or-pattern>",
+	Use:   "import [--path <file|dir|pattern>]",
 	Short: "Import data into PUDL data lake",
 	Long: `Import data from files into the PUDL data lake with automatic format detection
 and schema assignment.

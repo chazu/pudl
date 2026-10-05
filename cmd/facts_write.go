@@ -80,10 +80,14 @@ Examples:
 		}
 		defer db.Close()
 
+		source := factsAddSource
+		if source == "" {
+			source = defaultFactSource()
+		}
 		f, err := db.AddFact(database.Fact{
 			Relation: factsAddRelation,
 			Args:     factsAddArgs,
-			Source:   factsAddSource,
+			Source:   source,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to add fact: %w", err)
@@ -153,7 +157,7 @@ func init() {
 
 	factsAddCmd.Flags().StringVar(&factsAddRelation, "relation", "", "Relation to write (required)")
 	factsAddCmd.Flags().StringVar(&factsAddArgs, "args", "", "Fact body as a JSON object (required)")
-	factsAddCmd.Flags().StringVar(&factsAddSource, "source", defaultFactSource(), "Source of the fact (agent name or username)")
+	factsAddCmd.Flags().StringVar(&factsAddSource, "source", "", "Source of the fact (agent name or username; defaults to the current OS user)")
 	factsAddCmd.Flags().StringVar(&factsAddSchema, "schema", "", "Validate args against a named on-disk CUE schema (e.g. user/config.#Setting)")
 	factsAddCmd.MarkFlagRequired("relation")
 	factsAddCmd.MarkFlagRequired("args")
