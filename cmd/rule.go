@@ -106,15 +106,15 @@ Examples:
 			scope = "global"
 		}
 
-		fmt.Printf("Installed %d rule(s) from %s (%s)\n", len(rules), fileName, scope)
+		fmt.Fprintf(outw(), "Installed %d rule(s) from %s (%s)\n", len(rules), fileName, scope)
 		for _, r := range rules {
 			name := r.Name
 			if name == "" {
 				name = "(unnamed)"
 			}
-			fmt.Printf("  %s: %s :- %s\n", name, r.Head.Rel, ruleBodySummary(r))
+			fmt.Fprintf(outw(), "  %s: %s :- %s\n", name, r.Head.Rel, ruleBodySummary(r))
 		}
-		fmt.Printf("Location: %s\n", targetPath)
+		fmt.Fprintf(outw(), "Location: %s\n", targetPath)
 
 		return nil
 	},
