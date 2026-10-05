@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,7 +14,7 @@ import (
 // adHocModel resolves a plugin from mu's local CAS and constructs the same
 // model shape used by registered runs. The model is intentionally not written
 // to the schema repository; only its run/snapshot artifacts are durable.
-func adHocModel(spec string, inputArgs []string) (*systemmodel.SystemModel, string, string, error) {
+func adHocModel(ctx context.Context, spec string, inputArgs []string) (*systemmodel.SystemModel, string, string, error) {
 	plugin, err := parsePluginSpec(spec)
 	if err != nil {
 		return nil, "", "", err
@@ -26,7 +27,7 @@ func adHocModel(spec string, inputArgs []string) (*systemmodel.SystemModel, stri
 	if err != nil {
 		return nil, "", "", err
 	}
-	if info, infoErr := loadMuPluginInfo(plugin); infoErr == nil {
+	if info, infoErr := loadMuPluginInfo(ctx, plugin); infoErr == nil {
 		if !hasCapability(info["capabilities"], "observe") {
 			return nil, "", "", fmt.Errorf("mu plugin %q does not advertise observe capability", plugin)
 		}
@@ -84,9 +85,10 @@ func createAdHocMuRoot() (string, func(), error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("create ad-hoc mu workspace: %w", err)
 	}
+	release := workspaces.track(dir)
 	if err := os.WriteFile(filepath.Join(dir, "mu.cue"), []byte("package mu\n"), 0o644); err != nil {
-		_ = os.RemoveAll(dir)
+		release()
 		return "", nil, fmt.Errorf("write ad-hoc mu workspace: %w", err)
 	}
-	return dir, func() { _ = os.RemoveAll(dir) }, nil
+	return dir, release, nil
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -196,7 +197,7 @@ func continueMutatingRunSet(db *database.CatalogDB, graph *acute.RunSetPlan, rep
 		return err
 	}
 	report.ApprovalStatus = "not-required"
-	return executePreparedMutationPlan(db, context.mu, report, mutationPlan, prepared)
+	return executePreparedMutationPlan(context.ctx, db, context.mu, report, mutationPlan, prepared)
 }
 
 func printRunSetApprovalReview(plan *acute.RunSetMutationPlan, context *runSetExecutionContext) {
@@ -410,7 +411,10 @@ func prepareMutationMemberRuns(db *database.CatalogDB, report *acute.RunSetRepor
 	return nil
 }
 
-func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
+func executePreparedMutationPlan(ctx context.Context, db *database.CatalogDB, mu muRunner, report *acute.RunSetReport, plan *acute.RunSetMutationPlan, prepared map[string]*preparedMutationMember) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	cat := &runCatalog{dir: effectivePudlDir(), opened: true, db: db}
 	results := make(map[string]string, len(report.Members))
 	for _, member := range report.Members {
@@ -420,6 +424,15 @@ func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *ac
 	for _, name := range plan.Ordered {
 		member := prepared[name]
 		if member == nil || !member.required {
+			continue
+		}
+		if ctx.Err() != nil {
+			// An interrupted set starts no further mutation. The member that was
+			// mid-apply concluded itself (cancelled, needs-verification).
+			if err := finishUnstartedMutationMember(db, report, member, database.RunStatusCancelled, runSetCancelledNote); err != nil {
+				return err
+			}
+			results[name] = database.RunStatusCancelled
 			continue
 		}
 		if mutationFailed {
@@ -444,7 +457,7 @@ func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *ac
 		}
 		status := database.RunStatusSucceeded
 		if runErr != nil {
-			status = database.RunStatusFailed
+			status = failureStatus(runErr)
 			mutationFailed = true
 		}
 		updateRunSetMember(report, name, status, errorString(runErr))
@@ -454,23 +467,34 @@ func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *ac
 		}
 	}
 
-	report.Status = database.RunStatusSucceeded
-	for _, member := range report.Members {
-		if member.Result != database.RunStatusSucceeded {
-			report.Status = database.RunStatusFailed
-			break
-		}
-	}
+	report.Status = runSetStatus(ctx, report)
 	if err := saveRunSetReport(db, report); err != nil {
 		return err
 	}
 	if err := printRunSetReport(report); err != nil {
 		return err
 	}
+	if report.Status == database.RunStatusCancelled {
+		return fmt.Errorf("run set %s %s: %w", report.RunSetID, database.RunStatusCancelled, ctx.Err())
+	}
 	if report.Status != database.RunStatusSucceeded {
 		return fmt.Errorf("run set %s failed", report.RunSetID)
 	}
 	return nil
+}
+
+// runSetStatus is a finished set's status: succeeded only when every member
+// succeeded, cancelled when an interrupt is why it did not, failed otherwise.
+func runSetStatus(ctx context.Context, report *acute.RunSetReport) string {
+	for _, member := range report.Members {
+		if member.Result != database.RunStatusSucceeded {
+			if ctx != nil && ctx.Err() != nil {
+				return database.RunStatusCancelled
+			}
+			return database.RunStatusFailed
+		}
+	}
+	return database.RunStatusSucceeded
 }
 
 // executeMutationMember converges one approved member, then concludes it

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -66,9 +67,23 @@ Key features:
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+// Execute runs the root command without cancellation.
 func Execute() {
+	ExecuteContext(context.Background())
+}
+
+// ExecuteContext adds all child commands to the root command and sets flags
+// appropriately, running under ctx. This is called by main.main(). It only
+// needs to happen once to the rootCmd.
+//
+// main cancels ctx on the first interrupt; commands observe it through
+// cmd.Context(). A second interrupt while the command is still unwinding
+// removes every registered temporary workspace and exits immediately.
+func ExecuteContext(ctx context.Context) {
+	done := make(chan struct{})
+	defer close(done)
+	go exitOnSecondSignal(ctx, done, workspaces, os.Exit)
+
 	// Perform global auto-initialization only outside a repository workspace.
 	// A local workspace is self-contained; touching ~/.pudl before Cobra resolves
 	// it would violate the repo-local persistence boundary.
@@ -91,7 +106,7 @@ func Execute() {
 		}
 	}
 
-	if err := rootCmd.Execute(); err != nil {
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		os.Exit(exitCodeFor(err))
 	}
 }

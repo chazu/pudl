@@ -42,7 +42,7 @@ func applyRunError(report *RunReport, err error) {
 	}
 	report.OK = false
 	report.Error = err.Error()
-	report.CompletionStatus = database.RunStatusFailed
+	report.CompletionStatus = failureStatus(err)
 }
 
 func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, flags runFlags, err error) *RunReport {

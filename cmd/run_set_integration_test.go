@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -644,12 +645,12 @@ func (h *runSetHarness) run(models ...string) error {
 }
 
 func runSetForTest(models []string, opts runSetOptions, deps runDeps) error {
-	_, err := executeRunSet(models, opts, deps)
+	_, err := executeRunSet(context.Background(), models, opts, deps)
 	return err
 }
 
 func (h *runSetHarness) resume(operationID string) error {
-	return resumeOperation(operationID, h.deps)
+	return resumeOperation(context.Background(), operationID, h.deps)
 }
 
 func setupMutatingRunSetFixture(t *testing.T, requireApproval bool) (*runSetHarness, string) {
