@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -57,18 +58,26 @@ func setConvergeFixture(t *testing.T) (*database.CatalogDB, *preparedMutationMem
 	return db, member, mu
 }
 
-func executeSetMember(t *testing.T, db *database.CatalogDB, mu muRunner, member *preparedMutationMember) (*acute.RunSetReport, error) {
-	t.Helper()
-	report := &acute.RunSetReport{
+func newSingleMemberSetReport(member *preparedMutationMember) *acute.RunSetReport {
+	return &acute.RunSetReport{
 		ReportVersion: 1, RunSetID: "set_x", Mode: "converge", Status: database.RunStatusRunning,
 		Ordered: []string{member.model.Name},
 		Members: []acute.RunSetMemberReport{{Model: member.model.Name, RunID: member.runID, Result: database.RunStatusRunning}},
 	}
-	plan := &acute.RunSetMutationPlan{
+}
+
+func singleMemberPlan(member *preparedMutationMember) *acute.RunSetMutationPlan {
+	return &acute.RunSetMutationPlan{
 		RunSetID: "set_x", Ordered: []string{member.model.Name},
 		Options: acute.RunSetMutationOptions{MaxIterations: 3, MaxApplies: 10},
 	}
-	err := executePreparedMutationPlan(db, mu, report, plan, map[string]*preparedMutationMember{member.model.Name: member})
+}
+
+func executeSetMember(t *testing.T, db *database.CatalogDB, mu muRunner, member *preparedMutationMember) (*acute.RunSetReport, error) {
+	t.Helper()
+	report := newSingleMemberSetReport(member)
+	err := executePreparedMutationPlan(context.Background(), db, mu, report, singleMemberPlan(member),
+		map[string]*preparedMutationMember{member.model.Name: member})
 	return report, err
 }
 

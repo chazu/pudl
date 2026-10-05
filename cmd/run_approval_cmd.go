@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -30,33 +31,33 @@ var runResumeCmd = &cobra.Command{
 	Aliases: []string{"approve"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return resumeOperation(args[0], defaultRunDeps())
+		return resumeOperation(cmd.Context(), args[0], defaultRunDeps(cmd.Context(), runMuTimeout))
 	},
 }
 
 // resumeOperation approves a pending standalone run or exact set plan and
 // continues it.
-func resumeOperation(operationID string, deps runDeps) error {
+func resumeOperation(ctx context.Context, operationID string, deps runDeps) error {
 	isSet, err := isRunSetOperation(operationID)
 	if err != nil {
 		return err
 	}
 	if isSet {
-		return resumeRunSet(operationID, deps)
+		return resumeRunSet(ctx, operationID, deps)
 	}
-	return resumeRun(operationID, deps)
+	return resumeRun(ctx, operationID, deps)
 }
 
 // resumeRun approves a pending standalone converge run and re-enters the run
 // path with the stored request, under the pending run's identity.
-func resumeRun(runID string, deps runDeps) error {
+func resumeRun(ctx context.Context, runID string, deps runDeps) error {
 	request, err := approvePendingRun(runID)
 	if err != nil {
 		return err
 	}
 	// Re-enter the same execution path with the original run identity. The
 	// pending run row is intentionally unfinished until this invocation ends.
-	_, err = executeRun(resumedRunOptions(runID, request), deps)
+	_, err = executeRun(ctx, resumedRunOptions(runID, request), deps)
 	return err
 }
 

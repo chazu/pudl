@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,9 +19,9 @@ import (
 //
 // A process that dies before that defer runs leaves the directory behind in the
 // project root. This file closes the two halves of that gap which are closable:
-// a signal removes the directory before exiting, and a later run sweeps up what
-// earlier ones could not. A SIGKILL still leaks — the sweep is what eventually
-// collects it.
+// an interrupt releases every registered directory (see workspaceRegistry), and
+// a later run sweeps up what earlier ones could not. A SIGKILL still leaks — the
+// sweep is what eventually collects it.
 
 // workspacePrefix is the temp-dir prefix every reconcile workspace shares. It is
 // also what the sweep matches on, so the two must not drift apart.
@@ -32,40 +33,89 @@ const workspacePrefix = "pudl_run_"
 // run has been going for longer than this, which no real run is.
 const staleWorkspaceAge = 24 * time.Hour
 
-// removeOnSignal arranges for dir to be removed if the process is interrupted
-// before the returned cleanup runs, and returns that cleanup for the caller to
-// defer. The cleanup is idempotent and safe to call after a signal.
-//
-// On SIGINT/SIGTERM the directory is removed, the handler is uninstalled, and
-// the signal is re-raised so the process still dies of the signal it was sent
-// rather than reporting a plain exit status.
-func removeOnSignal(dir string) func() {
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	done := make(chan struct{})
+// forcedExitCode is the conventional status of a process ended by SIGINT.
+const forcedExitCode = 130
 
-	go func() {
-		select {
-		case received := <-signals:
-			os.RemoveAll(dir)
-			signal.Stop(signals)
-			// Re-raise against the default disposition so the exit status is the
-			// conventional one for a signal death.
-			signal.Reset(received)
-			if process, err := os.FindProcess(os.Getpid()); err == nil {
-				_ = process.Signal(received)
-			}
-		case <-done:
-		}
-	}()
+// workspaceRegistry tracks every temporary directory a run is holding — the
+// reconcile and populate workspaces inside the user's mu project, the staged
+// ewe project, the ad-hoc mu root — so an interrupt can take them all back out.
+//
+// An interrupt is handled in two steps. The first SIGINT/SIGTERM cancels the
+// invocation's context (main's signal.NotifyContext): mu is asked to stop, the
+// run unwinds through its ordinary defers, each workspace is released, and the
+// run row records a cancelled conclusion. A second signal means the operator
+// will not wait for that; exitOnSecondSignal then removes whatever is still
+// registered and exits at once. Only a SIGKILL leaks, and the stale-workspace
+// sweep collects that later.
+type workspaceRegistry struct {
+	mu   sync.Mutex
+	dirs map[string]struct{}
+}
+
+// workspaces is process-wide because signals are.
+var workspaces = &workspaceRegistry{dirs: map[string]struct{}{}}
+
+// track registers dir and returns its release: remove the directory and stop
+// tracking it. The release is idempotent, so it can be deferred and also called
+// from a failure path.
+func (r *workspaceRegistry) track(dir string) func() {
+	r.mu.Lock()
+	r.dirs[dir] = struct{}{}
+	r.mu.Unlock()
 
 	var once sync.Once
 	return func() {
 		once.Do(func() {
-			close(done)
-			signal.Stop(signals)
-			os.RemoveAll(dir)
+			r.mu.Lock()
+			delete(r.dirs, dir)
+			r.mu.Unlock()
+			_ = os.RemoveAll(dir)
 		})
+	}
+}
+
+// removeAll removes every tracked directory and returns their paths.
+func (r *workspaceRegistry) removeAll() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	removed := make([]string, 0, len(r.dirs))
+	for dir := range r.dirs {
+		_ = os.RemoveAll(dir)
+		removed = append(removed, dir)
+		delete(r.dirs, dir)
+	}
+	return removed
+}
+
+// tracked reports the directories currently registered.
+func (r *workspaceRegistry) tracked() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	dirs := make([]string, 0, len(r.dirs))
+	for dir := range r.dirs {
+		dirs = append(dirs, dir)
+	}
+	return dirs
+}
+
+// exitOnSecondSignal waits for ctx to be cancelled by the first interrupt, then
+// for a second one, at which point it removes every registered workspace and
+// exits immediately. It returns when done closes without a cancellation.
+func exitOnSecondSignal(ctx context.Context, done <-chan struct{}, reg *workspaceRegistry, exit func(int)) {
+	select {
+	case <-ctx.Done():
+	case <-done:
+		return
+	}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	fmt.Fprintln(os.Stderr, "interrupted: stopping mu and recording the run; interrupt again to exit immediately")
+	select {
+	case <-signals:
+		reg.removeAll()
+		exit(forcedExitCode)
+	case <-done:
 	}
 }
 

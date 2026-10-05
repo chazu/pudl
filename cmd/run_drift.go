@@ -240,7 +240,7 @@ func setupReconcileWorkspace(cat *runCatalog, mu muRunner, m *systemmodel.System
 	}
 	// From here on the directory exists in the user's project, so every failure
 	// path — and an interrupt — has to take it back out again.
-	removeWorkspace := removeOnSignal(dir)
+	removeWorkspace := workspaces.track(dir)
 	var cleanupOnce sync.Once
 	cleanup := func() {
 		cleanupOnce.Do(func() {
