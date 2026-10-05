@@ -124,6 +124,7 @@ var (
 	runSetRequireApproval   bool
 	runSetMaxIters          int
 	runSetMaxApplies        int
+	runSetDetailedExitCode  bool
 )
 
 // runSetOptions is the complete input of one `pudl run set`, read once from
@@ -170,19 +171,42 @@ Examples:
   pudl run set network app --max-observation-age 15m
   pudl run set network app --converge
   pudl run set network app --converge --require-approval
+  pudl run set network app --detailed-exitcode
   pudl run report
   pudl run resume <run-set-id>
   pudl run reject <run-set-id>`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return executeRunSet(args, runSetOptionsFromFlags(cmd), defaultRunDeps())
+		result, err := executeRunSet(args, runSetOptionsFromFlags(cmd), defaultRunDeps())
+		if !runSetDetailedExitCode {
+			return err
+		}
+		return silenceBareExit(cmd, detailedRunSetExit(result, err))
 	},
+}
+
+// runSetResult is what a run set concluded.
+type runSetResult struct {
+	report *acute.RunSetReport
+	// findings records that an observe-only member found drift, pending
+	// changes or a failing fail-severity check.
+	findings bool
 }
 
 // executeRunSet runs exactly the named models in dependency order. Each member
 // is an observe-only executeRun with its own options; a converging set then
-// plans and executes mutations across the whole set.
-func executeRunSet(args []string, opts runSetOptions, deps runDeps) error {
+// plans and executes mutations across the whole set. The result is nil when
+// the set failed before it had a report.
+func executeRunSet(args []string, opts runSetOptions, deps runDeps) (*runSetResult, error) {
+	result := &runSetResult{}
+	err := runSetMembers(args, opts, deps, result)
+	if result.report == nil {
+		return nil, err
+	}
+	return result, err
+}
+
+func runSetMembers(args []string, opts runSetOptions, deps runDeps, result *runSetResult) error {
 	selected := make([]acute.RunSetModel, 0, len(args))
 	hasSealedOutputs := false
 	for _, requested := range args {
@@ -237,6 +261,7 @@ func executeRunSet(args []string, opts runSetOptions, deps runDeps) error {
 	if err := saveRunSetReport(db, report); err != nil {
 		return err
 	}
+	result.report = report
 
 	aliases := make(map[string][]string, len(plan.Models))
 	for name, member := range plan.Models {
@@ -275,7 +300,8 @@ func executeRunSet(args []string, opts runSetOptions, deps runDeps) error {
 		context.lastSealed = nil
 		context.lastSnapshotID = ""
 		context.lastModelDir = ""
-		_, runErr := executeRun(memberRunOptions(model, opts), memberDeps)
+		memberReport, runErr := executeRun(memberRunOptions(model, opts), memberDeps)
+		result.findings = result.findings || reportHasFindings(memberReport)
 		runID := context.lastRunID
 		if runID == "" {
 			runID = acute.NewMemberRunID()
@@ -449,4 +475,5 @@ func init() {
 	runSetCmd.Flags().BoolVar(&runSetRequireApproval, "require-approval", false, "persist the exact run-set plan and wait for approval before mutation")
 	runSetCmd.Flags().IntVar(&runSetMaxIters, "max-iters", defaultRunMaxIters, "maximum apply iterations per mutating member")
 	runSetCmd.Flags().IntVar(&runSetMaxApplies, "max-applies", defaultRunMaxApplies, "durable apply budget per mutating member (0 disables)")
+	runSetCmd.Flags().BoolVar(&runSetDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
 }
