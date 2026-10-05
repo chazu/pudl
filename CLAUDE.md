@@ -6,7 +6,7 @@ When debugging code, do not delete implementations and put in placeholders. If y
 
 When writing code, do not add placeholder implementations unless the plan you are following or the ask from the user explicitly asks for placeholders.
 
-When completing a task, add a file to the `implog` directory summarizing the work done, including the public API implemented. Then update the plan.md to show that youve completed the work.
+When completing a task, add a file to the top-level `implog/` directory summarizing the work done, including the public API implemented. Then update `docs/plan.md` to show that youve completed the work.
 
 ## Architecture
 

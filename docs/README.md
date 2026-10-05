@@ -33,4 +33,4 @@ Start with the [root README](../README.md) for a project overview.
 | [design/](design/) | Design reports and contracts; each document records its proposal or delivery status |
 | [research/](research/) | Design proposals and research notes |
 | [issues/](issues/) | Open issues and known gaps |
-| [implog/](implog/) | Implementation logs (chronological) |
+| [../implog/](../implog/) | Implementation logs (chronological, top-level directory) |
