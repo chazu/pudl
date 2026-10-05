@@ -338,10 +338,9 @@ func TestBatchOperations(t *testing.T) {
 		}
 
 		duration := time.Since(start)
+		// Timing is logged, not asserted: wall-clock limits flake under -race
+		// and on loaded CI machines. BenchmarkAddEntry measures throughput.
 		t.Logf("Added 1000 entries in %v (%.2f entries/sec)", duration, 1000.0/duration.Seconds())
-
-		// Performance assertion: should be able to add at least 100 entries/second
-		assert.Less(t, duration, 10*time.Second, "Batch add should complete within 10 seconds")
 
 		// Verify count
 		AssertDatabaseCount(t, suite.DB, 1000)
