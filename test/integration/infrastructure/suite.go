@@ -245,15 +245,6 @@ func (s *IntegrationTestSuite) Cleanup() {
 	}
 }
 
-// forceCleanup performs cleanup without test context (for global cleanup)
-func (s *IntegrationTestSuite) forceCleanup() {
-	// Set t to nil to avoid test context issues during global cleanup
-	originalT := s.t
-	s.t = nil
-	s.Cleanup()
-	s.t = originalT
-}
-
 // initializeSchemaModule creates the CUE module structure with bootstrap schemas
 func (s *IntegrationTestSuite) initializeSchemaModule() error {
 	// Create cue.mod directory

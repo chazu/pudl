@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -156,9 +158,7 @@ func runSchemaReinferCommand() error {
 	// Confirm before applying
 	if !reinferForce {
 		fmt.Fprintf(outw(), "\nApply %d schema changes? [y/N]: ", len(changes.updated))
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+		if !readYes(rootCmd.InOrStdin()) {
 			fmt.Fprintln(outw(), "Cancelled.")
 			return nil
 		}
@@ -220,9 +220,7 @@ func reinferSingleEntry(catalogDB *database.CatalogDB, inferrer *inference.Schem
 
 	if !reinferForce {
 		fmt.Fprintf(outw(), "\nUpdate schema to %s? [y/N]: ", result.Schema)
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+		if !readYes(rootCmd.InOrStdin()) {
 			fmt.Fprintln(outw(), "Cancelled.")
 			return nil
 		}
@@ -401,7 +399,7 @@ func recomputeEntryIdentity(entry *database.CatalogEntry, data interface{}, infe
 	entry.ResourceID = &resourceID
 
 	// Compute new identity_json
-	if identityValues != nil && len(identityValues) > 0 {
+	if len(identityValues) > 0 {
 		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
 			entry.IdentityJSON = &canonical
 		}
@@ -424,4 +422,12 @@ func loadReinferData(storedPath, format string) (interface{}, error) {
 	}
 	data, _, err := importer.DecodeFile(plainPath, format)
 	return data, err
+}
+
+// readYes reads one answer line and reports whether it was "y" or "yes". Empty
+// input or a read error is the default answer: no.
+func readYes(in io.Reader) bool {
+	line, _ := bufio.NewReader(in).ReadString('\n')
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes"
 }

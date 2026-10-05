@@ -21,7 +21,6 @@ var (
 	listSortBy          string
 	listReverse         bool
 	listCollectionID    string
-	listCollectionType  string
 	listItemID          string
 	listCollectionsOnly bool
 	listItemsOnly       bool
@@ -363,7 +362,7 @@ func formatOriginForDisplay(origin string) string {
 // isHexString checks if a string contains only hexadecimal characters
 func isHexString(s string) bool {
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}

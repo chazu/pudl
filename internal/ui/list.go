@@ -225,18 +225,18 @@ func (m Model) getStatusLine() string {
 func (m Model) formatDetailedEntry(entry lister.ListEntry) string {
 	var details strings.Builder
 
-	details.WriteString(fmt.Sprintf("\n=== Entry Details ===\n"))
-	details.WriteString(fmt.Sprintf("Entry: %s\n", entry.Proquint))
-	details.WriteString(fmt.Sprintf("Hash: %s\n", entry.ID))
-	details.WriteString(fmt.Sprintf("Schema: %s\n", entry.Schema))
-	details.WriteString(fmt.Sprintf("Origin: %s\n", entry.Origin))
-	details.WriteString(fmt.Sprintf("Format: %s\n", entry.Format))
-	details.WriteString(fmt.Sprintf("Import Time: %s\n", entry.ImportTimestamp))
-	details.WriteString(fmt.Sprintf("Records: %d\n", entry.RecordCount))
-	details.WriteString(fmt.Sprintf("Size: %s\n", formatBytes(entry.SizeBytes)))
-	details.WriteString(fmt.Sprintf("Confidence: %.2f\n", entry.Confidence))
-	details.WriteString(fmt.Sprintf("Data Path: %s\n", entry.StoredPath))
-	details.WriteString(fmt.Sprintf("Metadata Path: %s\n", entry.MetadataPath))
+	details.WriteString("\n=== Entry Details ===\n")
+	fmt.Fprintf(&details, "Entry: %s\n", entry.Proquint)
+	fmt.Fprintf(&details, "Hash: %s\n", entry.ID)
+	fmt.Fprintf(&details, "Schema: %s\n", entry.Schema)
+	fmt.Fprintf(&details, "Origin: %s\n", entry.Origin)
+	fmt.Fprintf(&details, "Format: %s\n", entry.Format)
+	fmt.Fprintf(&details, "Import Time: %s\n", entry.ImportTimestamp)
+	fmt.Fprintf(&details, "Records: %d\n", entry.RecordCount)
+	fmt.Fprintf(&details, "Size: %s\n", formatBytes(entry.SizeBytes))
+	fmt.Fprintf(&details, "Confidence: %.2f\n", entry.Confidence)
+	fmt.Fprintf(&details, "Data Path: %s\n", entry.StoredPath)
+	fmt.Fprintf(&details, "Metadata Path: %s\n", entry.MetadataPath)
 
 	if entry.Confidence < 0.8 {
 		details.WriteString("⚠️  Low schema confidence - data may not match assigned schema\n")
@@ -244,74 +244,74 @@ func (m Model) formatDetailedEntry(entry lister.ListEntry) string {
 
 	// Show collection details
 	if entry.CollectionType != nil {
-		details.WriteString(fmt.Sprintf("Type: %s", *entry.CollectionType))
+		fmt.Fprintf(&details, "Type: %s", *entry.CollectionType)
 		if *entry.CollectionType == "item" && entry.ItemID != nil {
-			details.WriteString(fmt.Sprintf(" (Item ID: %s)", *entry.ItemID))
+			fmt.Fprintf(&details, " (Item ID: %s)", *entry.ItemID)
 		}
 		details.WriteString("\n")
 	}
 
 	// Show metadata
-	details.WriteString(fmt.Sprintf("\n%s\n", strings.Repeat("=", 60)))
+	fmt.Fprintf(&details, "\n%s\n", strings.Repeat("=", 60))
 	details.WriteString("METADATA\n")
-	details.WriteString(fmt.Sprintf("%s\n", strings.Repeat("=", 60)))
+	fmt.Fprintf(&details, "%s\n", strings.Repeat("=", 60))
 
 	metadataContent, err := os.ReadFile(entry.MetadataPath)
 	if err != nil {
-		details.WriteString(fmt.Sprintf("Error reading metadata: %v\n", err))
+		fmt.Fprintf(&details, "Error reading metadata: %v\n", err)
 	} else {
 		// Pretty print JSON metadata
 		var metadata map[string]interface{}
 		if err := json.Unmarshal(metadataContent, &metadata); err != nil {
-			details.WriteString(fmt.Sprintf("Error parsing metadata: %v\n", err))
-			details.WriteString(fmt.Sprintf("%s\n", string(metadataContent)))
+			fmt.Fprintf(&details, "Error parsing metadata: %v\n", err)
+			fmt.Fprintf(&details, "%s\n", string(metadataContent))
 		} else {
 			prettyMetadata, err := json.MarshalIndent(metadata, "", "  ")
 			if err != nil {
-				details.WriteString(fmt.Sprintf("%s\n", string(metadataContent)))
+				fmt.Fprintf(&details, "%s\n", string(metadataContent))
 			} else {
-				details.WriteString(fmt.Sprintf("%s\n", string(prettyMetadata)))
+				fmt.Fprintf(&details, "%s\n", string(prettyMetadata))
 			}
 		}
 	}
 
 	// Show raw data
-	details.WriteString(fmt.Sprintf("\n%s\n", strings.Repeat("=", 60)))
+	fmt.Fprintf(&details, "\n%s\n", strings.Repeat("=", 60))
 	details.WriteString("RAW DATA\n")
-	details.WriteString(fmt.Sprintf("%s\n", strings.Repeat("=", 60)))
+	fmt.Fprintf(&details, "%s\n", strings.Repeat("=", 60))
 
 	rawContent, err := os.ReadFile(entry.StoredPath)
 	if err != nil {
-		details.WriteString(fmt.Sprintf("Error reading raw data: %v\n", err))
+		fmt.Fprintf(&details, "Error reading raw data: %v\n", err)
 	} else {
 		// Try to pretty print based on format
 		switch strings.ToLower(entry.Format) {
 		case "json":
 			var data interface{}
 			if err := json.Unmarshal(rawContent, &data); err != nil {
-				details.WriteString(fmt.Sprintf("%s\n", string(rawContent)))
+				fmt.Fprintf(&details, "%s\n", string(rawContent))
 			} else {
 				prettyData, err := json.MarshalIndent(data, "", "  ")
 				if err != nil {
-					details.WriteString(fmt.Sprintf("%s\n", string(rawContent)))
+					fmt.Fprintf(&details, "%s\n", string(rawContent))
 				} else {
-					details.WriteString(fmt.Sprintf("%s\n", string(prettyData)))
+					fmt.Fprintf(&details, "%s\n", string(prettyData))
 				}
 			}
 		case "yaml":
 			var data interface{}
 			if err := yaml.Unmarshal(rawContent, &data); err != nil {
-				details.WriteString(fmt.Sprintf("%s\n", string(rawContent)))
+				fmt.Fprintf(&details, "%s\n", string(rawContent))
 			} else {
 				prettyData, err := yaml.Marshal(data)
 				if err != nil {
-					details.WriteString(fmt.Sprintf("%s\n", string(rawContent)))
+					fmt.Fprintf(&details, "%s\n", string(rawContent))
 				} else {
-					details.WriteString(fmt.Sprintf("%s\n", string(prettyData)))
+					fmt.Fprintf(&details, "%s\n", string(prettyData))
 				}
 			}
 		default:
-			details.WriteString(fmt.Sprintf("%s\n", string(rawContent)))
+			fmt.Fprintf(&details, "%s\n", string(rawContent))
 		}
 	}
 

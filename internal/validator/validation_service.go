@@ -126,25 +126,25 @@ func (vs *ValidationService) GetValidationSummary(result *ServiceValidationResul
 	}
 
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Validation failed for schema %s\n", result.SchemaName))
+	fmt.Fprintf(&summary, "Validation failed for schema %s\n", result.SchemaName)
 
 	if result.AssignedSchema != "" && result.AssignedSchema != result.SchemaName {
-		summary.WriteString(fmt.Sprintf("   -> Data was assigned to %s instead\n", result.AssignedSchema))
+		fmt.Fprintf(&summary, "   -> Data was assigned to %s instead\n", result.AssignedSchema)
 	}
 
 	if result.ErrorMessage != "" {
-		summary.WriteString(fmt.Sprintf("   -> %s\n", result.ErrorMessage))
+		fmt.Fprintf(&summary, "   -> %s\n", result.ErrorMessage)
 	}
 
 	if len(result.Errors) > 0 {
-		summary.WriteString(fmt.Sprintf("   -> %d validation errors found\n", len(result.Errors)))
+		fmt.Fprintf(&summary, "   -> %d validation errors found\n", len(result.Errors))
 		maxErrors := 3
 		for i, err := range result.Errors {
 			if i >= maxErrors {
-				summary.WriteString(fmt.Sprintf("   -> ... and %d more errors\n", len(result.Errors)-maxErrors))
+				fmt.Fprintf(&summary, "   -> ... and %d more errors\n", len(result.Errors)-maxErrors)
 				break
 			}
-			summary.WriteString(fmt.Sprintf("   -> %s\n", err))
+			fmt.Fprintf(&summary, "   -> %s\n", err)
 		}
 	}
 

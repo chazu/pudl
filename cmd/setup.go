@@ -427,10 +427,11 @@ func appendToFile(filename, content string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	return err
+	if _, err := file.WriteString(content); err != nil {
+		file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 // removeIntegration removes PUDL integration from a config file

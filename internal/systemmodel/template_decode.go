@@ -18,7 +18,7 @@ func decodeInputSlots(value cue.Value) (map[string]cue.Value, error) {
 	}
 	out := map[string]cue.Value{}
 	for iter.Next() {
-		name := iter.Label()
+		name := iter.Selector().Unquoted()
 		if iter.IsOptional() {
 			return nil, fmt.Errorf("input %q must be required", name)
 		}

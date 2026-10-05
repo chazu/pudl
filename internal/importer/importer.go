@@ -2,8 +2,6 @@ package importer
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
@@ -121,24 +119,6 @@ func (e *EnhancedImporter) Close() error {
 		return e.catalogDB.Close()
 	}
 	return nil
-}
-
-// copyFile copies a file from src to dst
-func (e *EnhancedImporter) copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer dstFile.Close()
-
-	_, err = io.Copy(dstFile, srcFile)
-	return err
 }
 
 // extractPackage extracts the package name from a schema definition

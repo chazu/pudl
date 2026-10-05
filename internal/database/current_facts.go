@@ -2,7 +2,6 @@ package database
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -182,17 +181,4 @@ func deleteCurrentFact(q dbtx, id string) error {
 		return err
 	}
 	return deleteFactFTS(q, id)
-}
-
-// canonicalArgs re-serializes args JSON for consistent comparison.
-func canonicalArgs(raw string) string {
-	var obj map[string]interface{}
-	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
-		return raw
-	}
-	canonical, err := json.Marshal(obj)
-	if err != nil {
-		return raw
-	}
-	return string(canonical)
 }

@@ -233,7 +233,7 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 	}
 
 	for iter.Next() {
-		label := iter.Label()
+		label := iter.Selector().String()
 		if !strings.HasPrefix(label, "#") {
 			continue // Skip non-definition fields
 		}
@@ -251,11 +251,11 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 		innerIter, err := schemaValue.Fields(cue.Hidden(true))
 		if err == nil {
 			for innerIter.Next() {
-				if innerIter.Label() == "_pudl" {
+				if innerIter.Selector().String() == "_pudl" {
 					hasPudl = true
-					if err := innerIter.Value().Decode(&meta); err == nil {
-						// Metadata decoded successfully
-					}
+					// Best effort: a partially decodable block still yields the
+					// fields that did decode, and the zero value otherwise.
+					_ = innerIter.Value().Decode(&meta)
 					break
 				}
 			}

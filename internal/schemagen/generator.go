@@ -259,16 +259,16 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	var b strings.Builder
 	packageName := filepath.Base(opts.PackagePath)
 
-	b.WriteString(fmt.Sprintf("package %s\n\n", packageName))
-	b.WriteString(fmt.Sprintf("#%s: {\n", opts.DefinitionName))
+	fmt.Fprintf(&b, "package %s\n\n", packageName)
+	fmt.Fprintf(&b, "#%s: {\n", opts.DefinitionName)
 
 	// Write _pudl metadata with inline documentation comments
 	b.WriteString("\t_pudl: {\n")
-	b.WriteString(fmt.Sprintf("\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts)))
-	b.WriteString(fmt.Sprintf("\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName)))
+	fmt.Fprintf(&b, "\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts))
+	fmt.Fprintf(&b, "\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName))
 	b.WriteString("\t\tcascade_fallback: [\"pudl/core.#Item\"] // Schemas to try if this doesn't match\n")
-	b.WriteString(fmt.Sprintf("\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields)))
-	b.WriteString(fmt.Sprintf("\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis)))
+	fmt.Fprintf(&b, "\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields))
+	fmt.Fprintf(&b, "\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis))
 	b.WriteString("\t}\n\n")
 
 	// Write field definitions
@@ -336,24 +336,24 @@ func (g *Generator) writeFields(b *strings.Builder, fields map[string]*FieldInfo
 			for i, v := range fi.EnumValues {
 				quoted[i] = fmt.Sprintf("\"%s\"", v)
 			}
-			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, fieldName, optional, strings.Join(quoted, " | ")))
+			fmt.Fprintf(b, "%s%s%s: %s\n", indentStr, fieldName, optional, strings.Join(quoted, " | "))
 
 		case fi.CUEType == "struct" && fi.Nested != nil:
-			b.WriteString(fmt.Sprintf("%s%s%s: {\n", indentStr, fieldName, optional))
+			fmt.Fprintf(b, "%s%s%s: {\n", indentStr, fieldName, optional)
 			g.writeFields(b, fi.Nested, indent+1)
-			b.WriteString(fmt.Sprintf("%s}\n", indentStr))
+			fmt.Fprintf(b, "%s}\n", indentStr)
 
 		case fi.CUEType == "object_array" && fi.Nested != nil:
-			b.WriteString(fmt.Sprintf("%s%s%s: [...{\n", indentStr, fieldName, optional))
+			fmt.Fprintf(b, "%s%s%s: [...{\n", indentStr, fieldName, optional)
 			g.writeFields(b, fi.Nested, indent+1)
-			b.WriteString(fmt.Sprintf("%s}]\n", indentStr))
+			fmt.Fprintf(b, "%s}]\n", indentStr)
 
 		default:
 			typeStr := fi.CUEType
 			if fi.IsNullable && typeStr != "_" {
 				typeStr = fmt.Sprintf("null | %s", typeStr)
 			}
-			b.WriteString(fmt.Sprintf("%s%s%s: %s\n", indentStr, fieldName, optional, typeStr))
+			fmt.Fprintf(b, "%s%s%s: %s\n", indentStr, fieldName, optional, typeStr)
 		}
 	}
 }
@@ -599,7 +599,6 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 
 	// Parse schema references and collect imports needed
 	type schemaRef struct {
-		pkgPath  string // e.g., "aws/ec2"
 		pkgAlias string // e.g., "ec2" (last component)
 		defName  string // e.g., "#Instance"
 		isLocal  bool   // true if in same package
@@ -611,7 +610,7 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 	// Process existing schema references
 	for _, ref := range existingRefs {
 		parsed := parseSchemaRef(ref, opts.PackagePath)
-		refs = append(refs, parsed)
+		refs = append(refs, schemaRef{pkgAlias: parsed.pkgAlias, defName: parsed.defName, isLocal: parsed.isLocal})
 		if !parsed.isLocal {
 			importPaths[parsed.pkgPath] = parsed.pkgAlias
 		}
@@ -627,7 +626,7 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 
 	// Generate the CUE content
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("package %s\n", packageName))
+	fmt.Fprintf(&b, "package %s\n", packageName)
 
 	// Add imports if needed
 	if len(importPaths) > 0 {
@@ -641,7 +640,7 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 		for _, path := range paths {
 			alias := importPaths[path]
 			// Use pudl.schemas module path
-			b.WriteString(fmt.Sprintf("\t%s \"pudl.schemas/%s\"\n", alias, path))
+			fmt.Fprintf(&b, "\t%s \"pudl.schemas/%s\"\n", alias, path)
 		}
 		b.WriteString(")\n")
 	}
@@ -666,7 +665,7 @@ func (g *Generator) generateCollectionListSchema(opts CollectionGenerateOptions,
 		listType = fmt.Sprintf("[...(%s)]", strings.Join(itemTypes, " | "))
 	}
 
-	b.WriteString(fmt.Sprintf("#%s: %s\n", opts.CollectionName, listType))
+	fmt.Fprintf(&b, "#%s: %s\n", opts.CollectionName, listType)
 
 	return &GenerateResult{
 		FilePath:       filePath,

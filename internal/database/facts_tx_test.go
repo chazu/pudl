@@ -113,10 +113,10 @@ func TestWithFactTxRetractAndInvalidate(t *testing.T) {
 	// a retracted in place; b closed and superseded by an invalidated version.
 	require.Len(t, hist, 3)
 	for _, f := range hist {
-		switch {
-		case f.ID == a.ID:
+		switch f.ID {
+		case a.ID:
 			assert.NotNil(t, f.TxEnd, "a should be retracted")
-		case f.ID == b.ID:
+		case b.ID:
 			assert.NotNil(t, f.TxEnd, "b's open version should be closed")
 			assert.Nil(t, f.ValidEnd, "b's recorded belief is not rewritten")
 		default:

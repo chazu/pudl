@@ -430,13 +430,14 @@ Examples:
 		var selectParts []string
 		var groupParts []string
 		for _, field := range groupFields {
-			if field == "relation" {
+			switch field {
+			case "relation":
 				selectParts = append(selectParts, "relation")
 				groupParts = append(groupParts, "relation")
-			} else if field == "source" {
+			case "source":
 				selectParts = append(selectParts, "source")
 				groupParts = append(groupParts, "source")
-			} else {
+			default:
 				expr := fmt.Sprintf("json_extract(args, '$.%s')", field)
 				selectParts = append(selectParts, fmt.Sprintf("%s AS \"%s\"", expr, field))
 				groupParts = append(groupParts, expr)
@@ -473,12 +474,17 @@ Examples:
 				for i := range vals {
 					ptrs[i] = &vals[i]
 				}
-				rows.Scan(ptrs...)
+				if err := rows.Scan(ptrs...); err != nil {
+					return fmt.Errorf("read stats row: %w", err)
+				}
 				row := make(map[string]interface{})
 				for i, col := range cols {
 					row[col] = vals[i]
 				}
 				results = append(results, row)
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("read stats: %w", err)
 			}
 			out, _ := json.MarshalIndent(results, "", "  ")
 			fmt.Fprintln(outw(), string(out))
@@ -502,7 +508,9 @@ Examples:
 			for i := range vals {
 				ptrs[i] = &vals[i]
 			}
-			rows.Scan(ptrs...)
+			if err := rows.Scan(ptrs...); err != nil {
+				return fmt.Errorf("read stats row: %w", err)
+			}
 			for _, v := range vals {
 				switch val := v.(type) {
 				case int64:
@@ -519,6 +527,9 @@ Examples:
 				}
 			}
 			fmt.Fprintln(outw())
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("read stats: %w", err)
 		}
 		fmt.Fprintf(outw(), "\nTotal: %d\n", total)
 		return nil
