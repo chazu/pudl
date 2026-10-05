@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/mubridge"
@@ -60,9 +61,11 @@ func interpretDifferentialObserve(observeJSON []byte) (ModelDriftResult, error) 
 		for _, res := range r.Current.Resources {
 			switch {
 			case !res.Exists:
-				drifted = append(drifted, ResourceDrift{Resource: res.Resource, Reason: "missing"})
+				drifted = append(drifted, ResourceDrift{Resource: res.Resource, Reason: acute.DriftMissing})
 			case !res.Matches:
-				drifted = append(drifted, ResourceDrift{Resource: res.Resource, Reason: "changed", Diff: res.Diff})
+				// A differential observer reports its diff as text only, so the
+				// finding carries Diff without structured Fields.
+				drifted = append(drifted, ResourceDrift{Resource: res.Resource, Reason: acute.DriftChanged, Diff: res.Diff})
 			}
 		}
 	}
@@ -296,10 +299,12 @@ func (w *reconcileWorkspace) observeDrift() (ModelDriftResult, error) {
 	if err != nil {
 		return ModelDriftResult{}, err
 	}
+	observedAt := time.Now()
 	res, err := interpretDifferentialObserve(stdout)
 	if err != nil {
 		return res, err
 	}
+	res.StampObservedAt(observedAt)
 	// Persist the observation this verdict came from. Without it a `clean` claim
 	// rests on a value that only ever existed in memory, and the promotion it
 	// drives cannot be audited afterwards.
@@ -334,11 +339,15 @@ func recordDriftObservation(cat *runCatalog, target, runID string, dryRun bool, 
 
 	drifted := make([]map[string]any, 0, len(res.Drifted))
 	for _, d := range res.Drifted {
-		drifted = append(drifted, map[string]any{
+		finding := map[string]any{
 			"resource": d.Resource,
 			"reason":   d.Reason,
 			"diff":     d.Diff,
-		})
+		}
+		if len(d.Fields) > 0 {
+			finding["fields"] = d.Fields
+		}
+		drifted = append(drifted, finding)
 	}
 	id, err := mubridge.RecordDriftObservation(db, mubridge.DriftObservation{
 		Target:       target,

@@ -90,8 +90,18 @@ The changed inventory has default branch `release`. The model still expects
 `main`, so the report identifies the mismatch:
 
 ```text
-git.repository/local/demo (changed): default_branch: release → want main
+- ~ git.repository/local/demo (changed): default_branch: release → want main
+  - default_branch: expected "main", observed "release"
+  - observed_at: 2026-10-05T19:16:47Z
 ```
+
+Each finding names the resource and a reason: `missing` (nothing observed with
+that identity), `changed` (a desired field differs), `unidentifiable` (the
+desired record has no identity to match), or `ambiguous` (several differing
+observed records share its identity). Every differing field is listed with its
+expected and observed values, and `observed_at` says when the compared record
+was recorded. The JSON report carries the same finding under `drift.drifted`,
+with the field differences in `fields`.
 
 The two origins keep the baseline and changed inventories separate. Importing
 the changed data preserves the earlier evidence.
