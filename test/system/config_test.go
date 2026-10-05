@@ -16,17 +16,17 @@ import (
 
 // SystemTestSuite provides system-level testing infrastructure
 type SystemTestSuite struct {
-	TempDir    string
-	PUDLHome   string
-	DataDir    string
-	SchemaDir  string
-	t          *testing.T
+	TempDir   string
+	PUDLHome  string
+	DataDir   string
+	SchemaDir string
+	t         *testing.T
 }
 
 // NewSystemTestSuite creates a new system test suite
 func NewSystemTestSuite(t *testing.T) *SystemTestSuite {
 	tempDir := t.TempDir()
-	
+
 	suite := &SystemTestSuite{
 		TempDir:   tempDir,
 		PUDLHome:  filepath.Join(tempDir, ".pudl"),
@@ -34,7 +34,7 @@ func NewSystemTestSuite(t *testing.T) *SystemTestSuite {
 		SchemaDir: filepath.Join(tempDir, "schemas"),
 		t:         t,
 	}
-	
+
 	return suite
 }
 
@@ -127,21 +127,21 @@ func TestSystemConfiguration(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				dbPath := tc.setupFunc()
-				
+
 				db, err := database.NewCatalogDB(dbPath)
-				
+
 				if tc.expectErr {
 					assert.Error(t, err, "Should fail for %s", tc.name)
 					assert.Nil(t, db, "DB should be nil on error")
 				} else {
 					require.NoError(t, err, "Should succeed for %s", tc.name)
 					require.NotNil(t, db, "DB should not be nil")
-					
+
 					// Verify database is functional
 					result, err := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
 					require.NoError(t, err, "Query should work on new database")
 					assert.Equal(t, 0, len(result.Entries), "New database should be empty")
-					
+
 					// Clean up
 					err = db.Close()
 					assert.NoError(t, err, "Should be able to close database")
@@ -185,7 +185,7 @@ func TestSystemConfiguration(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				imp, err := importer.NewEnhancedImporter(tc.dataDir, tc.schemaDir, tc.pudelHome)
-				
+
 				if tc.expectErr {
 					assert.Error(t, err, "Should fail for %s", tc.name)
 					assert.Nil(t, imp, "Importer should be nil on error")
@@ -206,12 +206,12 @@ func TestSystemConfiguration(t *testing.T) {
 		if os.Getuid() != 0 {
 			readOnlyDir := filepath.Join(testDir, "readonly")
 			os.MkdirAll(readOnlyDir, 0444) // Read-only
-			
+
 			// Database creation should fail in read-only directory
 			db, err := database.NewCatalogDB(readOnlyDir)
 			assert.Error(t, err, "Should fail to create database in read-only directory")
 			assert.Nil(t, db, "DB should be nil when creation fails")
-			
+
 			// Restore permissions for cleanup
 			os.Chmod(readOnlyDir, 0755)
 		}
@@ -219,11 +219,11 @@ func TestSystemConfiguration(t *testing.T) {
 		// Test writable directory
 		writableDir := filepath.Join(testDir, "writable")
 		os.MkdirAll(writableDir, 0755)
-		
+
 		db, err := database.NewCatalogDB(writableDir)
 		require.NoError(t, err, "Should succeed in writable directory")
 		require.NotNil(t, db, "DB should not be nil")
-		
+
 		err = db.Close()
 		assert.NoError(t, err, "Should be able to close database")
 	})
@@ -232,7 +232,7 @@ func TestSystemConfiguration(t *testing.T) {
 		// Test concurrent database initialization
 		const numConcurrent = 5
 		results := make(chan error, numConcurrent)
-		
+
 		for i := 0; i < numConcurrent; i++ {
 			go func(id int) {
 				dbPath := filepath.Join(suite.TempDir, "concurrent", fmt.Sprintf("db%d", id))
@@ -241,7 +241,7 @@ func TestSystemConfiguration(t *testing.T) {
 					results <- err
 					return
 				}
-				
+
 				// Quick operation to verify functionality
 				_, queryErr := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
 				if queryErr != nil {
@@ -249,12 +249,12 @@ func TestSystemConfiguration(t *testing.T) {
 					db.Close()
 					return
 				}
-				
+
 				closeErr := db.Close()
 				results <- closeErr
 			}(i)
 		}
-		
+
 		// Collect results
 		for i := 0; i < numConcurrent; i++ {
 			err := <-results
@@ -270,11 +270,11 @@ func TestSystemReliability(t *testing.T) {
 	t.Run("database recovery", func(t *testing.T) {
 		// Test database recovery after improper shutdown
 		dbPath := filepath.Join(suite.TempDir, "recovery")
-		
+
 		// Create and populate database
 		db, err := database.NewCatalogDB(dbPath)
 		require.NoError(t, err)
-		
+
 		// Add some test data
 		testEntry := database.CatalogEntry{
 			ID:              "recovery-test-001",
@@ -288,18 +288,18 @@ func TestSystemReliability(t *testing.T) {
 			RecordCount:     1,
 			SizeBytes:       100,
 		}
-		
+
 		err = db.AddEntry(testEntry)
 		require.NoError(t, err)
-		
+
 		// Simulate improper shutdown (don't call Close())
 		db = nil
-		
+
 		// Reopen database
 		db2, err := database.NewCatalogDB(dbPath)
 		require.NoError(t, err, "Should be able to reopen database after improper shutdown")
 		defer db2.Close()
-		
+
 		// Verify data is still there
 		retrievedEntry, err := db2.GetEntry("recovery-test-001")
 		require.NoError(t, err, "Should be able to retrieve entry after recovery")
@@ -309,12 +309,12 @@ func TestSystemReliability(t *testing.T) {
 	t.Run("disk space handling", func(t *testing.T) {
 		// Test behavior when disk space is limited
 		// Note: This is a basic test - full disk simulation would require more complex setup
-		
+
 		dbPath := filepath.Join(suite.TempDir, "diskspace")
 		db, err := database.NewCatalogDB(dbPath)
 		require.NoError(t, err)
 		defer db.Close()
-		
+
 		// Try to add many entries to test space usage
 		const numEntries = 1000
 		for i := 0; i < numEntries; i++ {
@@ -330,7 +330,7 @@ func TestSystemReliability(t *testing.T) {
 				RecordCount:     1,
 				SizeBytes:       int64(100 + i),
 			}
-			
+
 			err = db.AddEntry(entry)
 			if err != nil {
 				// If we get an error, it should be a meaningful one
@@ -338,7 +338,7 @@ func TestSystemReliability(t *testing.T) {
 				break
 			}
 		}
-		
+
 		// Database should still be functional
 		result, err := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
 		require.NoError(t, err, "Database should remain functional")
@@ -347,14 +347,14 @@ func TestSystemReliability(t *testing.T) {
 
 	t.Run("file system errors", func(t *testing.T) {
 		// Test handling of various file system errors
-		
+
 		// Test with invalid characters in path (platform-specific)
 		invalidPaths := []string{
 			// These might be valid on some systems, so we test gracefully
 			filepath.Join(suite.TempDir, "test\x00invalid"),
 			filepath.Join(suite.TempDir, "test\x01invalid"),
 		}
-		
+
 		for _, invalidPath := range invalidPaths {
 			db, err := database.NewCatalogDB(invalidPath)
 			if err != nil {
