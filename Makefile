@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
+.PHONY: vulncheck all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
 
 all: build
 
@@ -122,9 +122,16 @@ bench-compare:
 	@if [ -z "$(BASELINE)" ]; then echo "Usage: make bench-compare BASELINE=benchmarks/baseline.txt"; exit 1; fi
 	$(GO) test -bench=. -benchmem ./... | benchstat $(BASELINE) -
 
+# Linters run through `go run` at pinned versions, so local runs and CI use the
+# same build (a separately installed golangci-lint may predate the Go toolchain).
+GOLANGCI_LINT_VERSION := v2.14.0
+GOVULNCHECK_VERSION := v1.8.0
+
 lint:
-	@command -v golangci-lint >/dev/null 2>&1 || (echo "golangci-lint not found. Install from https://golangci-lint.run/usage/install/" && exit 1)
-	golangci-lint run ./...
+	$(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
+
+vulncheck:
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 test-race:
 	$(GO) test -race ./...
