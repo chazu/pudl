@@ -1,4 +1,12 @@
-# PUDL Features
+# PUDL Features (historical)
+
+> **Historical document — not a reference for the current CLI.** This feature
+> inventory was last maintained in July 2026 and still lists commands that have
+> since been removed or consolidated (for example `pudl catalog`, `pudl validate`,
+> `pudl verify`, `pudl repo init`, and vendor type patterns). For the current
+> command surface see [README.md](README.md#commands) and
+> [docs/cli-reference.md](docs/cli-reference.md); for the consolidation mapping
+> see [README.md](README.md#command-consolidation).
 
 What pudl can do today. Each section links to deeper docs where available.
 

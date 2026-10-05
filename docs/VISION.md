@@ -42,7 +42,6 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Schema Generation**: `pudl schema new` generates CUE schemas from imported data
 - **Schema Name Normalization**: Canonical `<package>.#<Definition>` format
 - **Git Integration**: `pudl schema status/commit/log` for version-controlled schemas
-- **Type Patterns**: Pluggable type detection patterns (AWS, Kubernetes, GitLab, etc.)
 - **Bootstrap Schemas**: Embedded CUE files (`pudl/core.#Item`, `pudl/core.#Collection`)
 
 ### Data Management
@@ -94,10 +93,14 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl doctor` -- Workspace health, schema validation, and inference stability
 - `pudl schema list` -- Browse registered schema types
 - `pudl schema *` -- Full schema lifecycle (list, add, new, show, edit, reinfer, migrate, status, commit, log)
-- `pudl model list/show/validate` -- Inspect registered system models
+- `pudl model list/show/validate` -- Inspect and validate registered system models
+- `pudl model new` / `pudl model populator add|new` -- Scaffold models and populators
+- `pudl model deps` -- Refresh and show the cross-model dependency graph
 - `pudl run` -- Populate, detect drift, check, report, and optionally converge
+- `pudl run set` -- Observe or converge an exact, ordered set of models
+- `pudl run report/resume/reject` -- Read reports and decide pending approvals
+- `pudl snapshot list/show/current/retain/prune` -- Inspect and retain observation snapshots
 - `pudl status` -- Read recorded model/resource convergence status
-- `pudl model validate` -- Validate a system model against its schema
 - `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
 - `pudl mu ingest-manifest` -- Ingest mu build manifests
 - `pudl module` -- Manage CUE module dependencies
@@ -106,6 +109,11 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
 - `pudl query` -- Evaluate Datalog rules and query derived facts
 - `pudl rule add` -- Validate and install Datalog rule files
+- `pudl rule new` -- Scaffold a Datalog rule
+- `pudl reclassify` -- Retry classification for items with unresolved schema references
+- `pudl example install` -- Install bundled examples into a workspace
+- `pudl guide` / `pudl prime` -- Agent and human quick-reference output
+- `pudl help --json` -- Machine-readable command tree
 - `pudl completion` -- Generate shell completion scripts
 
 ### Datalog Evaluator
@@ -142,8 +150,8 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Basic outlier detection**: Given N instances of a schema, identify unusual field values
 - **DuckDB/Parquet integration**: Analytical query engine for large datasets
 
-### More Type Patterns
-- **Broader cloud coverage**: Azure, GCP, Terraform state files
+### More Schema Packages
+- **Broader cloud coverage**: Azure, GCP, Terraform state files, as CUE schema packages (vendor knowledge lives in CUE, not Go; the old Go type-pattern registry was removed)
 - **Application config**: Docker Compose, Helm values, CI/CD pipeline configs
 
 ### UI Improvements
