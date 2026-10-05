@@ -313,7 +313,7 @@ func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
 
-	err = executeRunSet([]string{"consumer", "producer"}, opts, deps)
+	err = runSetForTest([]string{"consumer", "producer"}, opts, deps)
 	require.NoError(t, err)
 	consumerConfig := runner.configs["//models/consumer:populate"]
 	assert.Contains(t, consumerConfig, `"bound":"ready"`)
@@ -370,7 +370,7 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
 
-	err = executeRunSet([]string{"consumer", "producer", "zeta"}, opts, deps)
+	err = runSetForTest([]string{"consumer", "producer", "zeta"}, opts, deps)
 	require.ErrorContains(t, err, "run set")
 	assert.NotContains(t, runner.configs, "//models/consumer:populate")
 	assert.Contains(t, runner.configs, "//models/zeta:populate")
@@ -498,7 +498,7 @@ func TestMutatingRunSetPlansAllMembersBeforeApplyingAndPersistsReceipts(t *testi
 	opts.converge, opts.requireApproval = true, false
 	opts.maxIters, opts.maxApplies = 3, 10
 
-	require.NoError(t, executeRunSet([]string{"mutator-a"}, opts, deps))
+	require.NoError(t, runSetForTest([]string{"mutator-a"}, opts, deps))
 	assert.Equal(t, []string{
 		"observe //models/mutator-a:drift",
 		"plan //models/mutator-a:drift",
@@ -560,7 +560,7 @@ func TestMutatingRunSetFailureBlocksDependentsAndCancelsIndependentMutations(t *
 	opts.converge, opts.requireApproval = true, false
 	opts.maxIters, opts.maxApplies = 3, 10
 
-	err = executeRunSet([]string{"mutator-dependent", "mutator-b", "mutator-a"}, opts, deps)
+	err = runSetForTest([]string{"mutator-dependent", "mutator-b", "mutator-a"}, opts, deps)
 	require.ErrorContains(t, err, "run set")
 	planA := indexOfString(runner.operations, "plan //models/mutator-a:drift")
 	planB := indexOfString(runner.operations, "plan //models/mutator-b:drift")
@@ -640,7 +640,12 @@ type runSetHarness struct {
 }
 
 func (h *runSetHarness) run(models ...string) error {
-	return executeRunSet(models, h.opts, h.deps)
+	return runSetForTest(models, h.opts, h.deps)
+}
+
+func runSetForTest(models []string, opts runSetOptions, deps runDeps) error {
+	_, err := executeRunSet(models, opts, deps)
+	return err
 }
 
 func (h *runSetHarness) resume(operationID string) error {

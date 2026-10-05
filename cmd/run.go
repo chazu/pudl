@@ -23,6 +23,7 @@ var (
 	runPopulateInput     []string
 	runRequireApproval   bool
 	runMaxObservationAge time.Duration
+	runDetailedExitCode  bool
 )
 
 // Defaults for the convergence caps, shared by the flags and by run-set members
@@ -43,8 +44,13 @@ resolved by name (its name field or short definition name) from the project
 "pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
 report, no mutation. Pass --converge to close drift; see the V1 build spec.
 
+With --detailed-exitcode the exit status reports the result: 0 clean,
+2 drift, pending changes (--dry-run) or a failing fail-severity check,
+1 error.
+
 Examples:
     pudl run github-chazu
+    pudl run github-chazu --detailed-exitcode
     pudl run k8sPolicy --converge
     pudl run k8sConverge --converge --only web,api
     pudl run k8sConverge --converge --dry-run`,
@@ -59,8 +65,11 @@ Examples:
 	},
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := executeRun(runOptionsFromFlags(cmd, args), defaultRunDeps())
-		return err
+		report, err := executeRun(runOptionsFromFlags(cmd, args), defaultRunDeps())
+		if !runDetailedExitCode {
+			return err
+		}
+		return silenceBareExit(cmd, detailedRunExit(report, err))
 	},
 }
 
@@ -79,4 +88,5 @@ func init() {
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 	runCmd.Flags().DurationVar(&runMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runCmd.Flags().BoolVar(&runRequireApproval, "require-approval", false, "persist the converge request and wait for `pudl run resume <run-id>`")
+	runCmd.Flags().BoolVar(&runDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
 }
