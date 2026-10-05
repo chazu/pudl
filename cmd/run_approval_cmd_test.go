@@ -23,20 +23,19 @@ func TestApprovalRequestPreservesExplicitMuRoot(t *testing.T) {
 	}`, string(payload))
 }
 
-func TestRestoreApprovalRequestRestoresExplicitMuRoot(t *testing.T) {
-	previousOnly, previousIters := runOnly, runMaxIters
-	previousApplies, previousMuRoot := runMaxApplies, runMuRoot
-	t.Cleanup(func() {
-		runOnly, runMaxIters = previousOnly, previousIters
-		runMaxApplies, runMuRoot = previousApplies, previousMuRoot
-	})
-
-	restoreApprovalRequest(approvalRequest{
-		Only: []string{"one"}, MaxIters: 3, MaxApplies: 7,
+func TestResumedRunOptionsRestoreExplicitMuRoot(t *testing.T) {
+	opts := resumedRunOptions("run_1", approvalRequest{
+		Model: "model", Only: []string{"one"}, MaxIters: 3, MaxApplies: 7,
 		MuRoot: "/repo/.pudl/data/mu",
 	})
-	assert.Equal(t, []string{"one"}, runOnly)
-	assert.Equal(t, 3, runMaxIters)
-	assert.Equal(t, 7, runMaxApplies)
-	assert.Equal(t, "/repo/.pudl/data/mu", runMuRoot)
+	assert.Equal(t, "model", opts.model)
+	assert.Equal(t, []string{"one"}, opts.only)
+	assert.Equal(t, 3, opts.maxIters)
+	assert.Equal(t, 7, opts.maxApplies)
+	assert.Equal(t, "/repo/.pudl/data/mu", opts.muRoot)
+	assert.True(t, opts.converge)
+	assert.False(t, opts.requireApproval)
+	assert.Equal(t, "run_1", opts.resumeID)
+	assert.Equal(t, "approved", opts.approvalStatus)
+	require.NoError(t, validateRunFlags(opts.runFlags))
 }

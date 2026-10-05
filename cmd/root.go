@@ -91,9 +91,8 @@ func Execute() {
 		}
 	}
 
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(exitCodeFor(err))
 	}
 }
 

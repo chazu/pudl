@@ -411,6 +411,24 @@ reported.
 | `--from-catalog` | Force inventory drift from already-ingested records, with no live observe. Requires `--catalog-scope`. Inventory observers — `#EweTarget` or `#PluginObserve` with `differential: false` — auto-route to inventory drift without this flag, and populate their own snapshot to compare against |
 | `--catalog-scope` | Which already-ingested records `--from-catalog` replays: an observe snapshot ID, or the origin they were ingested under |
 | `--mu-root` | Path to the mu workspace root used for reconciliation |
+| `--detailed-exitcode` | Report the result in the exit status (see below) |
+
+**Exit status.** By default `pudl run` exits 0 whenever the run completed,
+including when it found drift; the report says what it found. A failing
+fail-severity check, a convergence failure, or any other error exits nonzero.
+
+With `--detailed-exitcode` the exit status is the result, so a script or CI job
+can gate on it without parsing the report:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Clean: no drift, no pending changes, every fail-severity check passed |
+| `2` | Findings: drift (including a `--from-catalog` replay's), changes a `--dry-run` would apply, or a failing fail-severity check — and nothing else went wrong |
+| `1` | Error: the run could not establish the answer (bad flags, unknown model, observe or convergence failure) |
+
+A successful `--converge` that ended clean exits 0. A run paused by
+`--require-approval` exits 0. Under this flag every error exits 1, so `2`
+always means findings.
 
 A standalone `pudl run` never starts another model automatically. If the model
 has a plain binding, PUDL reuses the latest eligible successful producer
@@ -497,6 +515,18 @@ provider access and executes that same in-memory graph.
 | `--max-iters` | Maximum apply iterations per mutating member (default 5) |
 | `--max-applies` | Durable per-member apply budget (default 20; `0` disables) |
 | `--mu-root` | Mu project root for member runs; otherwise discover per model |
+| `--detailed-exitcode` | Exit 0 clean, 2 findings, 1 error, as for `pudl run` |
+
+With `--detailed-exitcode`, an observe-only set exits 2 when any member found
+drift, pending changes or a failing fail-severity check. A converging set exits
+0 once every member converged clean. A failed set exits 2 only when every
+failed member failed on its checks alone (members blocked or cancelled behind
+them do not count as separate errors); otherwise it exits 1.
+
+Each mutating member concludes as a standalone converge does: its checks run,
+its verdict is written to the model's status row, and a verified clean promotes
+its `converging` resources. A failing fail-severity check fails the member, which
+stops the set's later mutations.
 
 ### Shared operation reports and approvals
 
