@@ -3,7 +3,6 @@ package testutil
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 )
 
@@ -181,31 +180,8 @@ func (f *TestDataFixtures) CSVData() string {
 3,Bob Johnson,bob@example.com,35,true`
 }
 
-// WriteFixturesToDir writes all fixtures to a directory for testing
-func (f *TestDataFixtures) WriteFixturesToDir(setup *TempDirSetup) map[string]string {
-	fixtures := make(map[string]string)
-	
-	fixtures["valid.json"] = setup.WriteFileInSubDir("data", "valid.json", f.ValidJSON())
-	fixtures["valid_array.json"] = setup.WriteFileInSubDir("data", "valid_array.json", f.ValidJSONArray())
-	fixtures["invalid.json"] = setup.WriteFileInSubDir("data", "invalid.json", f.InvalidJSON())
-	fixtures["valid.yaml"] = setup.WriteFileInSubDir("data", "valid.yaml", f.ValidYAML())
-	fixtures["invalid.yaml"] = setup.WriteFileInSubDir("data", "invalid.yaml", f.InvalidYAML())
-	fixtures["collection.ndjson"] = setup.WriteFileInSubDir("data", "collection.ndjson", f.ValidNDJSON())
-	fixtures["large_collection.ndjson"] = setup.WriteFileInSubDir("data", "large_collection.ndjson", f.LargeNDJSON(1000))
-	fixtures["k8s_pod.yaml"] = setup.WriteFileInSubDir("data", "k8s_pod.yaml", f.KubernetesPod())
-	fixtures["aws_instance.json"] = setup.WriteFileInSubDir("data", "aws_instance.json", f.AWSInstance())
-	fixtures["data.csv"] = setup.WriteFileInSubDir("data", "data.csv", f.CSVData())
-	
-	return fixtures
-}
-
 // SchemaFixtures provides common CUE schema fixtures
 type SchemaFixtures struct{}
-
-// NewSchemaFixtures creates a new schema fixtures instance
-func NewSchemaFixtures() *SchemaFixtures {
-	return &SchemaFixtures{}
-}
 
 // BasicSchema returns a basic CUE schema for testing
 func (s *SchemaFixtures) BasicSchema() string {
@@ -261,44 +237,5 @@ func (s *SchemaFixtures) KubernetesSchema() string {
 }`
 }
 
-// WriteSchemaFixturesToDir writes schema fixtures to a directory
-func (s *SchemaFixtures) WriteSchemaFixturesToDir(setup *TempDirSetup) map[string]string {
-	fixtures := make(map[string]string)
-	
-	fixtures["basic.cue"] = setup.WriteFileInSubDir("schemas/unknown", "basic.cue", s.BasicSchema())
-	fixtures["pod.cue"] = setup.WriteFileInSubDir("schemas/k8s", "pod.cue", s.KubernetesSchema())
-	
-	return fixtures
-}
-
 // ConfigFixtures provides configuration file fixtures
 type ConfigFixtures struct{}
-
-// NewConfigFixtures creates a new config fixtures instance
-func NewConfigFixtures() *ConfigFixtures {
-	return &ConfigFixtures{}
-}
-
-// ValidConfig returns a valid PUDL configuration
-func (c *ConfigFixtures) ValidConfig(schemaPath, dataPath string) string {
-	return fmt.Sprintf(`schema_path: %s
-data_path: %s
-database_path: %s
-git_enabled: true
-validation_enabled: true
-streaming_threshold: 1048576
-`, schemaPath, dataPath, filepath.Join(dataPath, "catalog.db"))
-}
-
-// MinimalConfig returns a minimal valid configuration
-func (c *ConfigFixtures) MinimalConfig() string {
-	return `schema_path: ~/.pudl/schema
-data_path: ~/.pudl/data`
-}
-
-// InvalidConfig returns an invalid configuration for error testing
-func (c *ConfigFixtures) InvalidConfig() string {
-	return `schema_path: ""
-data_path: /nonexistent/path
-invalid_field: true`
-}
