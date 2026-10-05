@@ -141,6 +141,10 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 		cascadePath = append(cascadePath, c.Schema)
 	}
 
+	// The data is compiled once per CUE context and reused across candidates;
+	// schemas loaded from the same search path share a context.
+	dataByCtx := make(map[*cue.Context]cue.Value)
+
 	// Try each candidate schema
 	for i, candidate := range candidates {
 		schema, exists := si.schemas[candidate.Schema]
@@ -154,7 +158,7 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 		}
 
 		// Attempt CUE unification
-		if si.tryUnify(schema, jsonBytes) {
+		if si.tryUnify(schema, jsonBytes, dataByCtx) {
 			confidence := calculateConfidence(candidate.Score, i, len(candidates))
 			return &InferenceResult{
 				Schema:      candidate.Schema,
@@ -178,16 +182,21 @@ func (si *SchemaInferrer) Infer(data interface{}, hints InferenceHints) (*Infere
 }
 
 // tryUnify attempts to unify data with a schema using CUE.
-// Returns true if the data validates against the schema.
-func (si *SchemaInferrer) tryUnify(schema cue.Value, jsonBytes []byte) bool {
+// Returns true if the data validates against the schema. dataByCtx memoizes
+// the compiled data per CUE context for the duration of one Infer call.
+func (si *SchemaInferrer) tryUnify(schema cue.Value, jsonBytes []byte, dataByCtx map[*cue.Context]cue.Value) bool {
 	// Get the CUE context from the schema
 	ctx := schema.Context()
 	if ctx == nil {
 		return false
 	}
 
-	// Compile the JSON data as a CUE value
-	dataValue := ctx.CompileBytes(jsonBytes)
+	// Compile the JSON data as a CUE value, once per context
+	dataValue, compiled := dataByCtx[ctx]
+	if !compiled {
+		dataValue = ctx.CompileBytes(jsonBytes)
+		dataByCtx[ctx] = dataValue
+	}
 	if dataValue.Err() != nil {
 		return false
 	}
