@@ -132,6 +132,34 @@ currently `clean`, `drifted`, `converging`, `failed`, or `unknown`. `unknown`
 also means an external apply may have succeeded but its manifest receipt was not
 persisted, so the run requires verification.
 
+### Interrupting a run
+
+Every mu invocation is bound to the PUDL invocation's lifetime:
+
+- **First Ctrl-C (SIGINT/SIGTERM).** PUDL cancels the run instead of dying. The
+  running mu receives SIGTERM, so it can finish writing an apply's manifest
+  receipt; if it is still running 10 seconds later it is killed. The run then
+  unwinds through its ordinary exit path, so its temporary workspaces are
+  removed and its run row is finished with completion status `cancelled`.
+- **An apply in flight.** Cancellation says nothing about the live system. If
+  the interrupt arrived after the write-ahead mutation marker, the run is
+  `cancelled` *and* needs-verification with verdict `unknown`, exactly as a lost
+  receipt is. Re-run the model to observe what happened.
+- **Run sets.** No further member starts. The remaining members, and the set,
+  are recorded `cancelled`.
+- **Second Ctrl-C.** PUDL removes every registered temporary workspace and exits
+  immediately with status 130. The run row may be left unfinished; the next run
+  of that model reports it as an earlier run that never finished, and the
+  stale-workspace sweep collects anything a SIGKILL left behind.
+- **`--mu-timeout`.** A per-invocation limit. An expiry stops mu the same way,
+  but the run is recorded `failed`, not `cancelled` — nobody asked it to stop.
+
+There is no resume. A cancelled run is re-run from the start.
+
+`pudl doctor` checks that mu is on PATH and at least the version this PUDL is
+tested against, so a version mismatch is found before a run rather than during
+one.
+
 ## Design Principles
 
 **pudl doesn't execute provider actions.** It observes, models, reports, and
