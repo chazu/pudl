@@ -52,14 +52,14 @@ func (s *TempDirSetup) CreateSubDir(name string) string {
 // WriteFile writes content to a file within the temp directory
 func (s *TempDirSetup) WriteFile(filename, content string) string {
 	filePath := filepath.Join(s.tempDir, filename)
-	
+
 	// Create parent directories if they don't exist
 	parentDir := filepath.Dir(filePath)
 	if parentDir != s.tempDir {
 		err := os.MkdirAll(parentDir, 0755)
 		require.NoError(s.t, err, "Failed to create parent directory for %s", filename)
 	}
-	
+
 	err := os.WriteFile(filePath, []byte(content), 0644)
 	require.NoError(s.t, err, "Failed to write file %s", filename)
 	return filePath
@@ -70,21 +70,11 @@ func (s *TempDirSetup) WriteFileInSubDir(subDir, filename, content string) strin
 	fullSubDir := filepath.Join(s.tempDir, subDir)
 	err := os.MkdirAll(fullSubDir, 0755)
 	require.NoError(s.t, err, "Failed to create subdirectory %s", subDir)
-	
+
 	filePath := filepath.Join(fullSubDir, filename)
 	err = os.WriteFile(filePath, []byte(content), 0644)
 	require.NoError(s.t, err, "Failed to write file %s in %s", filename, subDir)
 	return filePath
-}
-
-// CopyFixture copies a fixture file to the temp directory
-func (s *TempDirSetup) CopyFixture(fixturePath, destName string) string {
-	// Read fixture file
-	content, err := os.ReadFile(fixturePath)
-	require.NoError(s.t, err, "Failed to read fixture file %s", fixturePath)
-	
-	// Write to temp directory
-	return s.WriteFile(destName, string(content))
 }
 
 // CreatePUDLWorkspace creates a mock PUDL workspace structure
@@ -139,18 +129,6 @@ type PUDLWorkspace struct {
 	SchemaDir  string
 	DataDir    string
 	ConfigFile string
-}
-
-// SchemaPath returns a path within the schema directory
-func (w *PUDLWorkspace) SchemaPath(parts ...string) string {
-	allParts := append([]string{w.SchemaDir}, parts...)
-	return filepath.Join(allParts...)
-}
-
-// DataPath returns a path within the data directory
-func (w *PUDLWorkspace) DataPath(parts ...string) string {
-	allParts := append([]string{w.DataDir}, parts...)
-	return filepath.Join(allParts...)
 }
 
 // AddBootstrapSchemas adds specific schema packages to the test workspace.

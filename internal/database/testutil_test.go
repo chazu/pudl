@@ -260,52 +260,6 @@ func (g *TestDataGenerator) GenerateMixedDataset(totalCount int) []CatalogEntry 
 	return allEntries
 }
 
-// GenerateCorruptedEntries creates entries with various data issues for error testing
-func (g *TestDataGenerator) GenerateCorruptedEntries(count int) []CatalogEntry {
-	entries := make([]CatalogEntry, count)
-
-	for i := 0; i < count; i++ {
-		g.counter++
-
-		entry := CatalogEntry{
-			ID:              fmt.Sprintf("corrupted-%06d", g.counter),
-			StoredPath:      fmt.Sprintf("/test/raw/corrupted-%06d.json", g.counter),
-			MetadataPath:    fmt.Sprintf("/test/metadata/corrupted-%06d.meta", g.counter),
-			ImportTimestamp: g.baseTime.Add(time.Duration(i) * time.Minute),
-			Format:          "json",
-			Origin:          "corrupted-test",
-			Schema:          "test.#CorruptedData",
-			Confidence:      0.1, // Very low confidence
-			RecordCount:     1,
-			SizeBytes:       int64(50 + i*5),
-			CollectionID:    nil,
-			ItemIndex:       nil,
-			CollectionType:  nil,
-			ItemID:          nil,
-		}
-
-		// Introduce various corruption patterns
-		switch i % 4 {
-		case 0:
-			// Empty ID (should cause validation error)
-			entry.ID = ""
-		case 1:
-			// Invalid confidence (outside 0-1 range)
-			entry.Confidence = 1.5
-		case 2:
-			// Negative record count
-			entry.RecordCount = -1
-		case 3:
-			// Zero timestamp
-			entry.ImportTimestamp = time.Time{}
-		}
-
-		entries[i] = entry
-	}
-
-	return entries
-}
-
 // GenerateLargeDataset generates a large number of test entries for performance testing
 func (g *TestDataGenerator) GenerateLargeDataset(count int) []CatalogEntry {
 	entries := make([]CatalogEntry, count)

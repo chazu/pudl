@@ -4,57 +4,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
-	"sync"
-	"syscall"
 	"testing"
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
 )
-
-// Global cleanup registry for process-level safety
-var (
-	globalIntegrationCleanup []func() error
-	integrationCleanupMutex  sync.Mutex
-	integrationSignalOnce    sync.Once
-)
-
-func init() {
-	// Register signal handlers for graceful cleanup on process termination
-	integrationSignalOnce.Do(func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-		
-		go func() {
-			<-c
-			log.Println("Integration test process interrupted, running cleanup...")
-			RunGlobalIntegrationCleanup()
-			os.Exit(1)
-		}()
-	})
-}
-
-// RegisterGlobalIntegrationCleanup adds a cleanup function to the global registry
-func RegisterGlobalIntegrationCleanup(fn func() error) {
-	integrationCleanupMutex.Lock()
-	defer integrationCleanupMutex.Unlock()
-	globalIntegrationCleanup = append(globalIntegrationCleanup, fn)
-}
-
-// RunGlobalIntegrationCleanup executes all registered global cleanup functions
-func RunGlobalIntegrationCleanup() {
-	integrationCleanupMutex.Lock()
-	defer integrationCleanupMutex.Unlock()
-	
-	for i := len(globalIntegrationCleanup) - 1; i >= 0; i-- {
-		if err := globalIntegrationCleanup[i](); err != nil {
-			log.Printf("Global integration cleanup error: %v", err)
-		}
-	}
-	globalIntegrationCleanup = nil
-}
 
 // IntegrationTestSuite provides comprehensive end-to-end testing infrastructure
 type IntegrationTestSuite struct {
@@ -63,22 +18,22 @@ type IntegrationTestSuite struct {
 	PUDLHome      string // PUDL configuration directory
 	DataDir       string // Raw data storage directory
 	SchemaDir     string // Schema definitions directory
-	
+
 	// Component Instances
-	Importer    *importer.EnhancedImporter // File import engine
-	Database    *database.CatalogDB   // Data catalog database
-	
+	Importer *importer.EnhancedImporter // File import engine
+	Database *database.CatalogDB        // Data catalog database
+
 	// Test Data Management
-	TestFiles     []string              // Track all created test files
+	TestFiles     []string                // Track all created test files
 	TestDataSets  map[string]*TestDataSet // Curated test datasets
-	FileGenerator *TestFileGenerator    // Dynamic file creation
-	
+	FileGenerator *TestFileGenerator      // Dynamic file creation
+
 	// Cleanup and Safety
-	cleanupFuncs []func() error        // Guaranteed cleanup functions
-	t            *testing.T            // Test context for logging
-	
+	cleanupFuncs []func() error // Guaranteed cleanup functions
+	t            *testing.T     // Test context for logging
+
 	// Validation and Metrics
-	Validators *IntegrationValidators  // End-to-end validation helpers
+	Validators *IntegrationValidators // End-to-end validation helpers
 	Metrics    *TestMetrics           // Performance tracking
 }
 
@@ -114,7 +69,7 @@ type DataSetMetadata struct {
 func NewIntegrationTestSuite(t *testing.T) *IntegrationTestSuite {
 	// Use t.TempDir() for automatic cleanup by Go's test runner
 	workspaceRoot := t.TempDir()
-	
+
 	suite := &IntegrationTestSuite{
 		WorkspaceRoot: workspaceRoot,
 		PUDLHome:      filepath.Join(workspaceRoot, ".pudl"),
@@ -125,18 +80,12 @@ func NewIntegrationTestSuite(t *testing.T) *IntegrationTestSuite {
 		cleanupFuncs:  []func() error{},
 		t:             t,
 	}
-	
+
 	// Register cleanup that ALWAYS runs, even on panic/crash
 	t.Cleanup(func() {
 		suite.Cleanup()
 	})
-	
-	// Register with global cleanup as additional safety net
-	RegisterGlobalIntegrationCleanup(func() error {
-		suite.forceCleanup()
-		return nil
-	})
-	
+
 	return suite
 }
 
@@ -168,34 +117,34 @@ func (s *IntegrationTestSuite) Initialize() error {
 		return fmt.Errorf("failed to initialize importer: %w", err)
 	}
 	s.Importer = imp
-	
+
 	// Initialize test utilities
 	s.FileGenerator = NewTestFileGenerator()
 	s.Validators = NewIntegrationValidators(s)
 	s.Metrics = NewTestMetrics()
-	
+
 	// Register component cleanup
 	s.RegisterCleanup(func() error {
 		var errors []error
-		
+
 		if s.Importer != nil {
 			// Importer doesn't have a Close method, just nil it
 			s.Importer = nil
 		}
-		
+
 		if s.Database != nil {
 			if err := s.Database.Close(); err != nil {
 				errors = append(errors, err)
 			}
 			s.Database = nil
 		}
-		
+
 		if len(errors) > 0 {
 			return fmt.Errorf("component cleanup errors: %v", errors)
 		}
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -207,21 +156,21 @@ func (s *IntegrationTestSuite) RegisterCleanup(fn func() error) {
 // CreateTestFile creates a test file and tracks it for cleanup
 func (s *IntegrationTestSuite) CreateTestFile(name, content string) (string, error) {
 	filePath := filepath.Join(s.DataDir, name)
-	
+
 	// Ensure directory exists
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
-	
+
 	// Write file
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
 		return "", fmt.Errorf("failed to write file %s: %w", filePath, err)
 	}
-	
+
 	// Track for cleanup
 	s.TestFiles = append(s.TestFiles, filePath)
-	
+
 	return filePath, nil
 }
 
@@ -231,45 +180,20 @@ func (s *IntegrationTestSuite) LoadTestDataSet(name string) (*TestDataSet, error
 	if !exists {
 		return nil, fmt.Errorf("test dataset %s not found", name)
 	}
-	
+
 	// Create all files in the dataset
 	for i, file := range dataSet.Files {
 		filePath, err := s.CreateTestFile(file.Name, file.Content)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create test file %s: %w", file.Name, err)
 		}
-		
+
 		// Update file path in dataset
 		dataSet.Files[i].Name = filePath
 	}
-	
+
 	s.TestDataSets[name] = dataSet
 	return dataSet, nil
-}
-
-// ImportTestDataSet imports all files from a test dataset
-func (s *IntegrationTestSuite) ImportTestDataSet(dataSetName string) ([]*importer.ImportResult, error) {
-	dataSet, exists := s.TestDataSets[dataSetName]
-	if !exists {
-		return nil, fmt.Errorf("test dataset %s not loaded", dataSetName)
-	}
-	
-	var results []*importer.ImportResult
-	
-	for _, file := range dataSet.Files {
-		opts := importer.ImportOptions{
-			SourcePath: file.Name,
-		}
-		
-		result, err := s.Importer.ImportFileWithFriendlyIDs(opts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to import file %s: %w", file.Name, err)
-		}
-		
-		results = append(results, result)
-	}
-	
-	return results, nil
 }
 
 // GetDatabaseEntryCount returns the total number of entries in the database
@@ -289,28 +213,28 @@ func (s *IntegrationTestSuite) QueryDatabase(filters database.FilterOptions, opt
 // Cleanup performs all registered cleanup operations
 func (s *IntegrationTestSuite) Cleanup() {
 	var cleanupErrors []error
-	
+
 	// Run all cleanup functions in reverse order (LIFO)
 	for i := len(s.cleanupFuncs) - 1; i >= 0; i-- {
 		if err := s.cleanupFuncs[i](); err != nil {
 			cleanupErrors = append(cleanupErrors, err)
 		}
 	}
-	
+
 	// Clean up test files (redundant with t.TempDir but safe)
 	for _, file := range s.TestFiles {
 		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
 			cleanupErrors = append(cleanupErrors, err)
 		}
 	}
-	
+
 	// Clean up workspace (redundant with t.TempDir but safe)
 	if s.WorkspaceRoot != "" {
 		if err := os.RemoveAll(s.WorkspaceRoot); err != nil {
 			cleanupErrors = append(cleanupErrors, err)
 		}
 	}
-	
+
 	// Log cleanup errors but don't fail the test
 	for _, err := range cleanupErrors {
 		if s.t != nil {
@@ -378,14 +302,5 @@ func (s *IntegrationTestSuite) LogInfo(format string, args ...interface{}) {
 		s.t.Logf("[INFO] "+format, args...)
 	} else {
 		log.Printf("[INFO] "+format, args...)
-	}
-}
-
-// LogError logs an error message
-func (s *IntegrationTestSuite) LogError(format string, args ...interface{}) {
-	if s.t != nil {
-		s.t.Errorf("[ERROR] "+format, args...)
-	} else {
-		log.Printf("[ERROR] "+format, args...)
 	}
 }

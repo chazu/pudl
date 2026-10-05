@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string) {
+func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string, at time.Time) {
 	t.Helper()
 	entryType := "observe"
 	schema := "pudl/mu.#ObserveResult"
@@ -13,7 +13,7 @@ func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string) {
 		ID:              id,
 		StoredPath:      "/tmp/test/" + id + ".json",
 		MetadataPath:    "/tmp/test/" + id + ".json.meta",
-		ImportTimestamp: time.Now(),
+		ImportTimestamp: at,
 		Format:          "json",
 		Origin:          "mu-observe",
 		Schema:          schema,
@@ -67,10 +67,11 @@ func TestGetLatestObserve(t *testing.T) {
 	db := setupTestCatalog(t)
 	defer db.Close()
 
-	addTestObserve(t, db, "obs111obs111obs111obs111obs111obs111obs111obs111obs111obs111obs1", "my_app", "hash1")
-
-	time.Sleep(10 * time.Millisecond)
-	addTestObserve(t, db, "obs222obs222obs222obs222obs222obs222obs222obs222obs222obs222obs2", "my_app", "hash2")
+	// Explicit, distinct timestamps make the ordering deterministic without
+	// sleeping for the clock to advance.
+	base := time.Now().Add(-time.Minute)
+	addTestObserve(t, db, "obs111obs111obs111obs111obs111obs111obs111obs111obs111obs111obs1", "my_app", "hash1", base)
+	addTestObserve(t, db, "obs222obs222obs222obs222obs222obs222obs222obs222obs222obs222obs2", "my_app", "hash2", base.Add(time.Second))
 
 	latest, err := db.GetLatestObserve("my_app")
 	if err != nil {
@@ -120,7 +121,7 @@ func TestGetLatestObserveByContentHash(t *testing.T) {
 	db := setupTestCatalog(t)
 	defer db.Close()
 
-	addTestObserve(t, db, "obs333obs333obs333obs333obs333obs333obs333obs333obs333obs333obs3", "my_app", "abcdef1234")
+	addTestObserve(t, db, "obs333obs333obs333obs333obs333obs333obs333obs333obs333obs333obs3", "my_app", "abcdef1234", time.Now())
 
 	// Should find existing
 	entry, err := db.GetLatestObserveByContentHash("my_app", "abcdef1234")
