@@ -436,6 +436,31 @@ that point. The recursive path (`fixpointLoop`) already threads `TableOverrides`
 match — expected); numeric constraints from the CLI are strings, rely on SQLite type
 affinity for numeric view columns.
 
+## Improvement Round — 2026-10-05 (done)
+
+Twenty-one verified improvements from a whole-codebase review, delivered as
+thirteen branches merged into main. Each has an implementation log in
+`implog/2026_10_05_*.md`.
+
+| Area | Delivered | Implog |
+|------|-----------|--------|
+| Import decoding | CDC streaming parser replaced by stdlib JSON/YAML/CSV decoders; compressed files decompressed through the pipeline; `go-cdc-chunkers` removed (closes `pudl-1ih`) | `import_pipeline` |
+| Import schemas | `--schema` validated through `ValidateChain` on documents and collection items; stdin, envelope-origin and JSON-array-format fixes | `import_pipeline` |
+| Collection numbers | Exact JSON numbers in stored items and content hashes, legacy-hash compatible | `collection_numbers` |
+| Schema loading | Per-package load errors reported (import warning, doctor check); modules keyed by directory; base-schema cycles detected | `schema_load_errors` |
+| Fact store | Append-only invalidation with supersession chains and `tx_seq`; catalog view rebuilt only when its definition changes | `factstore_bitemporal` |
+| Datalog | Strict rule loading with positions; constant heads; set union; SCC-based goal-directed evaluation; aggregates over acyclic derived relations | `datalog_semantics` |
+| Run loop | Explicit `runOptions`/`runDeps`; shared finalization so `run set --converge` runs checks and persists status; `--detailed-exitcode` | `run_core` |
+| Drift | Fail-closed inventory diff (`unidentifiable`, `ambiguous`); structured per-field findings shared by human and JSON reports | `structured_drift` |
+| Cancellation | Context-bound mu/cue subprocesses, `--mu-timeout`, workspace registry, cancelled conclusions, doctor mu version check | `mu_context` |
+| Output contract | All command output through injectable streams; diagnostics on stderr; `--json` on the walkthrough commands; in-process JSON contract test | `output_contract` |
+| Tests | Test helpers out of the release binary; HOME isolation; dead and always-skipped tests removed; timing flakes removed; seven fuzz targets (three bugs fixed) | `test_infra`, `fuzz_tests` |
+| CI and docs | Go 1.26.6; golangci-lint and govulncheck jobs; generated `docs/cli-reference.md` with `-check`; `help --json` golden | `ci_hardening`, `cli_docs` |
+| Hygiene | Stray files removed; implog directories merged; FEATURES/VISION corrected; `make clean-local` | `repo_hygiene` |
+
+**Remaining from `pudl-qrl`:** previous-observation values in findings and
+failed checks presented alongside drift findings.
+
 ## What's Next
 
 Potential future work, roughly ordered by value.
@@ -837,7 +862,7 @@ under the hood.
 
 | Package | Path | Responsibility |
 |---------|------|----------------|
-| `importer` | `internal/importer/` | Import pipeline, format detection, streaming, and NDJSON collections |
+| `importer` | `internal/importer/` | Import pipeline, format detection, stdlib decoding, and NDJSON collections |
 | `inference` | `internal/inference/` | Schema inference (heuristics + CUE unification) |
 | `identity` | `internal/identity/` | Resource identity extraction and computation |
 | `idgen` | `internal/idgen/` | Content IDs, SHA256, proquint encoding |
@@ -848,8 +873,11 @@ under the hood.
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |
-| `typepattern` | `internal/typepattern/` | Pluggable type detection patterns |
-| `streaming` | `internal/streaming/` | CDC chunkers, format processors |
+| `datalog` | `internal/datalog/` | Rule loading, SQL compilation, SCC-based evaluation |
+| `acute` | `internal/acute/` | Run plans, reports, drift comparison and findings |
+| `proc` | `internal/proc/` | Context-bound subprocesses (mu, cue) with graceful cancellation |
+| `clidocs` | `internal/clidocs/` | Generated CLI reference |
+| `testenv` | `internal/testenv/` | Test isolation helpers (HOME guard) |
 | `config` | `internal/config/` | YAML configuration |
 | `init` | `internal/init/` | Workspace initialization |
 | `git` | `internal/git/` | Git operations on schema repo |
