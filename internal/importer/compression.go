@@ -70,9 +70,19 @@ func WrapReader(r io.Reader, compression string) (io.Reader, error) {
 	}
 }
 
-// DecompressFile decompresses a file and returns the path to the decompressed file
-// If the file is not compressed, returns the original path
+// DecompressFile decompresses a file into the system temp directory and returns
+// the path to the decompressed file. If the file is not compressed, returns the
+// original path.
 func DecompressFile(sourcePath string) (string, error) {
+	return DecompressTo(sourcePath, "")
+}
+
+// DecompressTo decompresses a file into dir ("" for the system temp directory)
+// and returns the decompressed file's path. The name keeps the inner extension
+// ("data.json.gz" → "pudl-decomp-*-data.json") so extension-based format
+// detection sees the real format. If the file is not compressed, returns the
+// original path.
+func DecompressTo(sourcePath, dir string) (string, error) {
 	compression := DetectCompression(sourcePath)
 	if compression == "none" {
 		return sourcePath, nil
@@ -92,17 +102,32 @@ func DecompressFile(sourcePath string) (string, error) {
 	}
 
 	// Create temporary file for decompressed data
-	tmpFile, err := os.CreateTemp("", "pudl-decomp-*")
+	tmpFile, err := os.CreateTemp(dir, "pudl-decomp-*-"+innerName(sourcePath))
 	if err != nil {
 		return "", fmt.Errorf("failed to create temporary file: %w", err)
 	}
-	defer tmpFile.Close()
 
 	// Copy decompressed data to temporary file
-	if _, err := io.Copy(tmpFile, decompReader); err != nil {
+	_, copyErr := io.Copy(tmpFile, decompReader)
+	closeErr := tmpFile.Close()
+	if copyErr != nil {
 		os.Remove(tmpFile.Name())
-		return "", fmt.Errorf("failed to decompress file: %w", err)
+		return "", fmt.Errorf("failed to decompress file: %w", copyErr)
+	}
+	if closeErr != nil {
+		os.Remove(tmpFile.Name())
+		return "", fmt.Errorf("failed to write decompressed file: %w", closeErr)
 	}
 
 	return tmpFile.Name(), nil
+}
+
+// innerName strips a compression extension from a file's base name.
+func innerName(path string) string {
+	base := filepath.Base(path)
+	switch strings.ToLower(filepath.Ext(base)) {
+	case ".gz", ".zst":
+		return strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	return base
 }

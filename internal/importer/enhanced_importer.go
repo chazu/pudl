@@ -11,6 +11,7 @@ import (
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // EnhancedImporter imports files into the catalog with content-based identity.
@@ -26,6 +27,7 @@ type EnhancedImporter struct {
 	schemaPaths []string // all schema paths in priority order
 	catalogDB   *database.CatalogDB
 	inferrer    *inference.SchemaInferrer
+	chain       *validator.ChainValidator // built on first manual-schema import
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -48,30 +50,44 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
 	}
 
-	// Detect origin if not provided
-	origin := opts.Origin
-	if origin == "" {
-		format, err := e.detectFormat(opts.SourcePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to detect format: %w", err)
-		}
-		origin = e.detectOrigin(opts.SourcePath, format)
-	}
-
-	// Get file info
 	fileInfo, err := os.Stat(opts.SourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
+	if fileInfo.IsDir() {
+		return nil, fmt.Errorf("%s is a directory; import its files individually or with a wildcard", opts.SourcePath)
+	}
 
-	// Generate timestamp for metadata
-	timestamp := time.Now()
+	// A compressed source is decompressed once, up front, and every later step —
+	// format detection, hashing, storage, decoding — reads the plain bytes. The
+	// original path still names the import (origin, reported source).
+	if compression := DetectCompression(opts.SourcePath); compression != "none" {
+		tempDir, err := e.TempDir()
+		if err != nil {
+			return nil, err
+		}
+		plainPath, err := DecompressTo(opts.SourcePath, tempDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress %s: %w", opts.SourcePath, err)
+		}
+		defer os.Remove(plainPath)
+		opts.OriginPath = opts.originPath()
+		opts.SourcePath = plainPath
+	}
 
-	// Detect format
 	format, err := e.detectFormat(opts.SourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect format: %w", err)
 	}
+
+	// Detect origin if not provided
+	origin := opts.Origin
+	if origin == "" {
+		origin = e.detectOrigin(opts.originPath(), format)
+	}
+
+	// Generate timestamp for metadata
+	timestamp := time.Now()
 
 	// Create date-based directory structure up front: staging writes into it.
 	dateDir := timestamp.Format("2006/01/02")
@@ -83,8 +99,8 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 
 	// Stage and hash in one pass. The import used to hash the file, then decode
 	// it, then copy it — three reads of the same bytes, two of them for purposes
-	// an io.MultiWriter serves at once. Identity is unchanged: still SHA256 of the
-	// raw source bytes, taken as read rather than from anything decoded.
+	// an io.MultiWriter serves at once. Identity is SHA256 of the (decompressed)
+	// source bytes, taken as read rather than from anything decoded.
 	//
 	// Writing to a temp file and renaming is also what makes staging atomic: a
 	// killed import leaves a temp file, not a half-written record in the raw tree
@@ -108,7 +124,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		// removes the copy just written.
 		return &ImportResult{
 			ID:             mainID,
-			SourcePath:     opts.SourcePath,
+			SourcePath:     opts.originPath(),
 			StoredPath:     existingEntry.StoredPath,
 			MetadataPath:   existingEntry.MetadataPath,
 			DetectedFormat: existingEntry.Format,
@@ -137,145 +153,52 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		// Decoded from the staged copy, not the source: the bytes are identical
 		// (that is what the hash asserts) and it is the copy that is warm in the
 		// page cache, having just been written.
+		opts.collectionFormat = format
 		result, err := e.importCollectionStreamed(opts, mainID, timestamp, origin, storedPath,
 			staged.Size, rawDir, metadataDir, collectionFormat)
 		if err != nil {
 			_ = os.Remove(storedPath)
 			return nil, err
 		}
+		result.SourcePath = opts.originPath()
 		return result, nil
 	}
 
-	// Analyze data for schema assignment
-	var data interface{}
-	var recordCount int
-
-	data, recordCount, err = e.analyzeDataStreaming(opts.SourcePath, format, opts.StreamingConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to analyze data: %w", err)
-	}
-
-	// Assign schema using inference
-	result, err := e.inferrer.Infer(data, inference.InferenceHints{
-		Origin: origin,
-		Format: format,
+	result, err := e.importDocument(opts, documentImport{
+		id:          mainID,
+		contentHash: contentHash,
+		format:      format,
+		origin:      origin,
+		timestamp:   timestamp,
+		storedPath:  storedPath,
+		metadataDir: metadataDir,
+		sizeBytes:   staged.Size,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to infer schema: %w", err)
+		// The raw file is committed; a failure must not leave it behind as
+		// evidence with no catalog row.
+		_ = os.Remove(storedPath)
+		return nil, err
 	}
-	schema := schemaname.Normalize(result.Schema)
-	confidence := result.Confidence
+	return result, nil
+}
 
-	// Get schema metadata for identity fields
-	schemaIdentityFields := e.getSchemaIdentityFields(schema)
+// CatalogDB returns the catalog the importer writes to, so callers recording
+// related rows (item schemas) reuse the open connection.
+func (e *EnhancedImporter) CatalogDB() *database.CatalogDB {
+	return e.catalogDB
+}
 
-	// Extract identity values from parsed data
-	identityValues, extractErr := identity.ExtractFieldValues(data, schemaIdentityFields)
-	if extractErr != nil {
-		// If extraction fails, treat as catchall (identity = content hash)
-		identityValues = nil
+// TempDir returns the workspace-local scratch directory for import
+// intermediates (decompressed sources, envelope payloads), creating it on
+// demand. Keeping them under the data directory avoids writing beside the
+// user's source file and keeps them on the same filesystem as raw storage.
+func (e *EnhancedImporter) TempDir() (string, error) {
+	dir := filepath.Join(e.dataPath, "tmp")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create import temp directory: %w", err)
 	}
-
-	// Compute resource_id (namespaced by the family root, not the assigned leaf)
-	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, contentHash)
-
-	// Compute canonical identity JSON
-	identityJSON := ""
-	if identityValues != nil && len(identityValues) > 0 {
-		if canonical, err := identity.CanonicalIdentityJSON(identityValues); err == nil {
-			identityJSON = canonical
-		}
-	}
-
-	// Determine version
-	latestVersion, err := e.catalogDB.GetLatestVersion(resourceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest version: %w", err)
-	}
-	version := latestVersion + 1
-	isNewVersion := latestVersion > 0
-
-	// Create metadata
-	metadata := ImportMetadata{
-		ID: mainID,
-		SourceInfo: SourceInfo{
-			Origin:       origin,
-			OriginalPath: opts.SourcePath,
-			Confidence:   "high",
-		},
-		ImportMetadata: ImportMeta{
-			Timestamp:   timestamp.Format(time.RFC3339),
-			Format:      format,
-			SizeBytes:   fileInfo.Size(),
-			RecordCount: recordCount,
-		},
-		SchemaInfo: SchemaInfo{
-			CuePackage:       extractPackage(schema),
-			CueDefinition:    schema,
-			ValidationStatus: "auto-assigned",
-
-			SchemaVersion: "v1.0",
-		},
-		ResourceTracking: ResourceTracking{
-			IdentityFields: schemaIdentityFields,
-			TrackedFields:  []string{},
-			ResourceID:     resourceID,
-			ContentHash:    contentHash,
-			IdentityValues: identityValues,
-			Version:        version,
-		},
-	}
-
-	// Save metadata
-	metadataPath := filepath.Join(metadataDir, mainID+".meta")
-	if err := e.saveMetadata(metadata, metadataPath); err != nil {
-		return nil, fmt.Errorf("failed to save metadata: %w", err)
-	}
-
-	// Create catalog entry with identity tracking
-	var identityJSONPtr *string
-	if identityJSON != "" {
-		identityJSONPtr = &identityJSON
-	}
-
-	entry := database.CatalogEntry{
-		ID:              mainID,
-		StoredPath:      storedPath,
-		MetadataPath:    metadataPath,
-		ImportTimestamp: timestamp,
-		Format:          format,
-		Origin:          origin,
-		Schema:          schema,
-		Confidence:      confidence,
-		RecordCount:     recordCount,
-		SizeBytes:       fileInfo.Size(),
-		ResourceID:      &resourceID,
-		ContentHash:     &contentHash,
-		IdentityJSON:    identityJSONPtr,
-		Version:         &version,
-	}
-
-	if err := e.catalogDB.AddEntry(entry); err != nil {
-		return nil, fmt.Errorf("failed to add to catalog: %w", err)
-	}
-
-	return &ImportResult{
-		ID:               mainID,
-		SourcePath:       opts.SourcePath,
-		StoredPath:       storedPath,
-		MetadataPath:     metadataPath,
-		DetectedFormat:   format,
-		DetectedOrigin:   origin,
-		AssignedSchema:   schema,
-		SchemaConfidence: confidence,
-		RecordCount:      recordCount,
-		SizeBytes:        fileInfo.Size(),
-		ImportTimestamp:  timestamp.Format(time.RFC3339),
-		ResourceID:       resourceID,
-		ContentHash:      contentHash,
-		Version:          version,
-		IsNewVersion:     isNewVersion,
-	}, nil
+	return dir, nil
 }
 
 // importCollectionStreamed imports a record collection one record at a time.
@@ -321,8 +244,12 @@ func (e *EnhancedImporter) identityNamespace(schema string) string {
 
 // createCollectionEntryWithContentHash creates the main collection catalog entry with content hash IDs
 func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opts ImportOptions, timestamp time.Time, origin, collectionID, storedPath, metadataDir string, sizeBytes int64, recordCount int) (*ImportResult, error) {
-	schema := "pudl.schemas/pudl/core:#Collection"
+	schema := schemaname.Normalize("pudl.schemas/pudl/core:#Collection")
 	confidence := 0.8
+	format := opts.collectionFormat
+	if format == "" {
+		format = "ndjson"
+	}
 	contentHash := collectionID // For collections, content hash is the collection ID (file hash)
 
 	// Collections use catchall identity (no identity fields)
@@ -337,7 +264,7 @@ func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opt
 			Confidence:   "high",
 		},
 		ImportMetadata: ImportMeta{
-			Format:      "ndjson",
+			Format:      format,
 			RecordCount: recordCount,
 			SizeBytes:   sizeBytes,
 			Timestamp:   timestamp.Format(time.RFC3339),
@@ -369,7 +296,7 @@ func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opt
 		StoredPath:      storedPath,
 		MetadataPath:    metadataPath,
 		ImportTimestamp: timestamp,
-		Format:          "ndjson",
+		Format:          format,
 		Origin:          origin,
 		Schema:          schema,
 		Confidence:      confidence,
@@ -390,7 +317,7 @@ func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opt
 		SourcePath:       opts.SourcePath,
 		StoredPath:       storedPath,
 		MetadataPath:     metadataPath,
-		DetectedFormat:   "ndjson",
+		DetectedFormat:   format,
 		DetectedOrigin:   origin,
 		AssignedSchema:   schema,
 		SchemaConfidence: confidence,

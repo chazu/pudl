@@ -1,22 +1,15 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/importer"
-	"github.com/chazu/pudl/internal/mubridge"
-	"github.com/chazu/pudl/internal/muschemas"
-	"github.com/chazu/pudl/internal/streaming"
-	"github.com/chazu/pudl/internal/validator"
 )
 
 var (
@@ -63,11 +56,13 @@ Schema Assignment:
 - Multiple schemas per item: items can satisfy more than one schema
   (declared, inferred, unresolved) — see 'pudl reclassify --help'.
 
-Streaming Processing:
-- All imports use streaming for optimal performance and memory usage
-- Configure memory limits with --streaming-memory (default: 100MB)
-- Adjust chunk size with --streaming-chunk-size (default: 0.016MB)
-- Handles files of any size efficiently
+Compressed Input:
+- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;
+  the decompressed bytes are what is hashed, stored, and parsed
+
+Reading from stdin:
+- Pipe data with no --path, or use --path - ; set --format when content
+  detection is ambiguous
 
 Example usage:
     # Single file import
@@ -83,8 +78,8 @@ Example usage:
     pudl import --path data/*.yaml
     pudl import --path logs/2024-01-*.json
 
-    # Advanced options
-    pudl import --path large-dataset.json --streaming-memory 200`,
+    # From stdin
+    cat data.json | pudl import`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Create error handler for CLI context
 		errorHandler := errors.NewCLIErrorHandler(true) // Exit on non-recoverable errors
@@ -131,88 +126,16 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	// Single file import (existing logic)
 	absPath := filePaths[0]
 
-	// Load configuration to get data directory
-	cfg, err := loadEffectiveConfig()
+	session, err := newImportSession()
 	if err != nil {
-		return errors.NewConfigError("Failed to load configuration", err)
+		return err
 	}
+	defer session.Close()
 
-	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
-	if err != nil {
-		// Print detailed error for debugging
-		if os.Getenv("PUDL_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG: Enhanced importer error: %+v\n", err)
-		}
-		return errors.NewSystemError("Failed to initialize enhanced importer", err)
-	}
-	defer imp.Close()
-
-	var chainValidator *validator.ChainValidator
-	if importSchema != "" {
-		// Create chain validator for manual schema specification
-		cv, err := validator.NewChainValidator(effectiveSchemaPaths(cfg)...)
-		if err != nil {
-			return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to create chain validator", err)
-		}
-		chainValidator = cv
-
-		// Resolve schema name
-		resolvedSchema, err := cv.ResolveSchemaName(importSchema)
-		if err != nil {
-			return errors.NewSchemaNotFoundError(importSchema, nil)
-		}
-		importSchema = resolvedSchema
-	}
-
-	// Configure streaming (always enabled for optimal performance)
-	streamingConfig := streaming.DefaultStreamingConfig()
-
-	// Apply user-specified memory limit
-	if streamingMemoryMB > 0 {
-		streamingConfig.MaxMemoryMB = streamingMemoryMB
-	}
-
-	// Check file size to determine appropriate chunk sizes
-	fileInfo, err := os.Stat(absPath)
-	if err != nil {
-		return fmt.Errorf("failed to get file info: %w", err)
-	}
-	fileSize := fileInfo.Size()
-
-	// For small files (< 10KB), use very small chunk sizes
-	// For larger files, use user-specified or default chunk sizes
-	if fileSize < 10*1024 {
-		// Small file: use tiny chunks to ensure proper chunking
-		streamingConfig.MinChunkSize = 64   // 64 bytes minimum
-		streamingConfig.AvgChunkSize = 256  // 256 bytes average
-		streamingConfig.MaxChunkSize = 1024 // 1KB maximum
-	} else {
-		// Large file: use user-specified or default chunk sizes
-		chunkBytes := int(streamingChunkMB * 1024 * 1024)
-		streamingConfig.AvgChunkSize = chunkBytes
-		streamingConfig.MinChunkSize = chunkBytes / 4 // 25% of avg
-		streamingConfig.MaxChunkSize = chunkBytes * 4 // 400% of avg
-	}
-
-	// Auto-set origin from workspace when inside one and not explicitly overridden
-	effectiveImportOrigin := importOrigin
-	if effectiveImportOrigin == "" && wsPolicy.InWorkspace() {
-		effectiveImportOrigin = wsPolicy.EffectiveOrigin
-	}
-
-	// Set up import options
-	opts := importer.ImportOptions{
-		SourcePath:      absPath,
-		Origin:          effectiveImportOrigin, // Will be auto-detected if empty
-		ManualSchema:    importSchema,
-		ChainValidator:  chainValidator,
-		UseStreaming:    true, // Always use streaming for optimal performance
-		StreamingConfig: streamingConfig,
-	}
+	opts := session.options(absPath, workspaceImportOrigin())
 
 	// Perform the import with friendly IDs
-	result, err := importOneWithEnvelope(imp, opts)
+	result, err := importOneWithEnvelope(session.imp, opts)
 	if err != nil {
 		// Print detailed error for debugging
 		if os.Getenv("PUDL_DEBUG") != "" {
@@ -226,184 +149,6 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// recordItemSchemas writes the item_schemas rows associated with an
-// import. The inferred schema (whatever pudl assigned) is always
-// recorded with status=inferred. If the import came from an envelope,
-// the declared CUE ref is also recorded with one of:
-//
-//   - declared        — (module, version) already in pudl's schema cache
-//   - auto_registered — envelope carried inline definitions, written to cache
-//   - unresolved      — declared without definitions and not cached;
-//     tag for `pudl reclassify`
-func recordItemSchemas(result *importer.ImportResult, env *unwrappedEnvelope) error {
-	if result == nil || result.ID == "" {
-		return nil
-	}
-	db, err := database.NewCatalogDB(effectivePudlDir())
-	if err != nil {
-		return fmt.Errorf("open catalog: %w", err)
-	}
-	defer db.Close()
-
-	if result.AssignedSchema != "" {
-		if err := db.AddItemSchema(database.ItemSchema{
-			ItemID:    result.ID,
-			SchemaRef: result.AssignedSchema,
-			Status:    database.ItemSchemaStatusInferred,
-		}); err != nil {
-			return fmt.Errorf("record inferred: %w", err)
-		}
-	}
-	if env == nil {
-		return nil
-	}
-	cache, err := muschemas.New(SchemaCacheRoot())
-	if err != nil {
-		return fmt.Errorf("open schema cache: %w", err)
-	}
-	status, err := classifyEnvelopeSchema(cache, env.envelope)
-	if err != nil {
-		return fmt.Errorf("classify envelope: %w", err)
-	}
-	if err := db.AddItemSchema(database.ItemSchema{
-		ItemID:    result.ID,
-		SchemaRef: env.envelope.Schema.CanonicalRef(),
-		Status:    status,
-	}); err != nil {
-		return fmt.Errorf("record envelope ref: %w", err)
-	}
-	return nil
-}
-
-// importOneWithEnvelope is the single import path shared by regular, batch,
-// and stdin imports. Envelope extraction, payload import, and schema metadata
-// recording must have identical behavior in all three modes.
-func importOneWithEnvelope(imp *importer.EnhancedImporter, opts importer.ImportOptions) (*importer.ImportResult, error) {
-	originalPath := opts.SourcePath
-	envelope, cleanup, err := extractEnvelopeIfPresent(originalPath, opts.Origin)
-	if err != nil {
-		return nil, fmt.Errorf("unwrap envelope: %w", err)
-	}
-	defer cleanup()
-	if envelope != nil {
-		opts.SourcePath = envelope.dataPath
-	}
-
-	result, err := imp.ImportFileWithFriendlyIDs(opts)
-	if err != nil {
-		return nil, err
-	}
-	if result != nil {
-		result.SourcePath = originalPath
-	}
-	if result != nil && !result.Skipped {
-		if err := recordItemSchemas(result, envelope); err != nil {
-			return nil, fmt.Errorf("record import schema metadata: %w", err)
-		}
-	}
-	return result, nil
-}
-
-// classifyEnvelopeSchema resolves an envelope's schema portion against
-// pudl's schema cache and returns the status to record. Conflicts
-// between inline definitions and an existing cached version surface
-// as an error rather than silently picking one.
-func classifyEnvelopeSchema(cache *muschemas.Cache, env *mubridge.Envelope) (string, error) {
-	if cache.Has(env.Schema.Module, env.Schema.Version) {
-		if len(env.Definitions) > 0 {
-			if err := registerEnvelopeDefinitions(cache, env); err != nil {
-				return "", err
-			}
-		}
-		return database.ItemSchemaStatusDeclared, nil
-	}
-	if len(env.Definitions) > 0 {
-		if err := registerEnvelopeDefinitions(cache, env); err != nil {
-			return "", err
-		}
-		return database.ItemSchemaStatusAutoRegistered, nil
-	}
-	return database.ItemSchemaStatusUnresolved, nil
-}
-
-func registerEnvelopeDefinitions(cache *muschemas.Cache, env *mubridge.Envelope) error {
-	files := make([]muschemas.File, 0, len(env.Definitions))
-	for _, d := range env.Definitions {
-		files = append(files, muschemas.File{RelPath: d.Path, Content: []byte(d.Content)})
-	}
-	return cache.Insert(env.Schema.Module, env.Schema.Version, files)
-}
-
-// unwrappedEnvelope holds the parsed envelope plus the temp data path
-// that the importer should ingest. cleanup is called by the caller
-// (via defer) regardless of whether an envelope was detected.
-type unwrappedEnvelope struct {
-	envelope *mubridge.Envelope
-	dataPath string
-}
-
-// extractEnvelopeIfPresent reads absPath, detects whether it is an
-// envelope, and (if so) materializes the inner data to a temp file
-// alongside it. The temp file's name preserves the original basename
-// so origin/format detection in the importer is unaffected. Returns
-// (nil, noopCleanup, nil) for raw inputs.
-func extractEnvelopeIfPresent(absPath, origin string) (*unwrappedEnvelope, func(), error) {
-	noop := func() {}
-	// Avoid reading an ordinary large JSON document merely to discover that it
-	// is not an envelope. The supported wire format puts the schema key near the
-	// top-level object; only candidates are passed to the full envelope decoder,
-	// which then materializes the inner payload.
-	probeFile, err := os.Open(absPath)
-	if err != nil {
-		return nil, noop, err
-	}
-	prefix, readErr := io.ReadAll(io.LimitReader(probeFile, 64*1024))
-	closeErr := probeFile.Close()
-	if readErr != nil {
-		return nil, noop, readErr
-	}
-	if closeErr != nil {
-		return nil, noop, closeErr
-	}
-	if !bytes.Contains(prefix, []byte(`"schema"`)) {
-		return nil, noop, nil
-	}
-
-	f, err := os.Open(absPath)
-	if err != nil {
-		return nil, noop, err
-	}
-	env, _, err := mubridge.Unwrap(f)
-	f.Close()
-	if err != nil {
-		return nil, noop, err
-	}
-	if env == nil {
-		return nil, noop, nil
-	}
-
-	// Materialize the inner payload to a temp file. Use a name derived
-	// from the original so format auto-detection (.json/.yaml/etc.) and
-	// origin auto-detection continue to behave the same.
-	dir := filepath.Dir(absPath)
-	base := filepath.Base(absPath)
-	tmp, err := os.CreateTemp(dir, ".envelope-*-"+base)
-	if err != nil {
-		return nil, noop, fmt.Errorf("create temp: %w", err)
-	}
-	if _, err := tmp.Write(env.Data); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
-		return nil, noop, fmt.Errorf("write inner payload: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
-		return nil, noop, err
-	}
-	cleanup := func() { os.Remove(tmp.Name()) }
-	return &unwrappedEnvelope{envelope: env, dataPath: tmp.Name()}, cleanup, nil
-}
-
 func init() {
 	rootCmd.AddCommand(importCmd)
 
@@ -413,12 +158,12 @@ func init() {
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 
-	// Streaming options
-	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Memory limit for streaming parser (MB)")
-	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Average chunk size for streaming parser (MB)")
-
-	// Mark path as required
-	importCmd.MarkFlagRequired("path")
+	// Retired streaming-parser tuning. Accepted so existing scripts keep
+	// working; they have no effect.
+	importCmd.Flags().IntVar(&streamingMemoryMB, "streaming-memory", 100, "Deprecated: no effect")
+	importCmd.Flags().Float64Var(&streamingChunkMB, "streaming-chunk-size", 0.016, "Deprecated: no effect")
+	_ = importCmd.Flags().MarkDeprecated("streaming-memory", "imports no longer use a chunking parser; the flag has no effect")
+	_ = importCmd.Flags().MarkDeprecated("streaming-chunk-size", "imports no longer use a chunking parser; the flag has no effect")
 
 	// Register completion functions
 	importCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
@@ -452,10 +197,17 @@ func displayImportResults(result *importer.ImportResult) {
 		}
 		fmt.Printf("   📋 Assigned Schema: %s\n", vr.AssignedSchema)
 
-		// Show error count if any
+		// Show why the intended schema was not satisfied
 		if vr.HasErrors() {
-			fmt.Printf("   ❌ Validation Issues: %d (see details with 'pudl show %s --validation')\n",
-				vr.GetErrorCount(), result.ID)
+			issues := vr.GetErrorsForSchema(vr.IntendedSchema)
+			fmt.Printf("   ❌ Validation Issues: %d\n", len(issues))
+			for i, issue := range issues {
+				if i == 5 {
+					fmt.Printf("      … and %d more\n", len(issues)-i)
+					break
+				}
+				fmt.Printf("      - %s: %s\n", issue.Path, issue.Message)
+			}
 		}
 	} else {
 		// Display auto-assigned schema
@@ -467,13 +219,6 @@ func displayImportResults(result *importer.ImportResult) {
 
 	fmt.Printf("   Records: %d\n", result.RecordCount)
 	fmt.Printf("   Size: %d bytes\n", result.SizeBytes)
-
-	// Show next steps for fallback assignments
-	if result.ValidationResult != nil && result.ValidationResult.HasErrors() {
-		fmt.Println()
-		fmt.Println("Next steps:")
-		fmt.Println("   - Review validation issues: pudl show " + result.ID + " --validation")
-	}
 }
 
 // resolveFilePaths resolves a file path that may contain wildcards to a list of actual file paths
@@ -524,205 +269,4 @@ func resolveFilePaths(pathPattern string) ([]string, error) {
 // containsWildcard checks if a path contains wildcard characters
 func containsWildcard(path string) bool {
 	return strings.ContainsAny(path, "*?[]")
-}
-
-// runBatchImport handles importing multiple files and provides summary output
-func runBatchImport(cmd *cobra.Command, filePaths []string) error {
-	fmt.Printf("🔄 Importing %d files...\n\n", len(filePaths))
-
-	// Load configuration to get data directory
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return errors.NewConfigError("Failed to load configuration", err)
-	}
-
-	// Create enhanced importer with friendly ID support
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
-	if err != nil {
-		// Print detailed error for debugging
-		if os.Getenv("PUDL_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG: Enhanced importer error: %+v\n", err)
-		}
-		return errors.NewSystemError("Failed to initialize enhanced importer", err)
-	}
-	defer imp.Close()
-
-	// Set up chain validator if schema is specified
-	var chainValidator *validator.ChainValidator
-	if importSchema != "" {
-		chainValidator, err = validator.NewChainValidator(effectiveSchemaPaths(cfg)...)
-		if err != nil {
-			return errors.NewSystemError("Failed to initialize chain validator", err)
-		}
-	}
-
-	// Set up streaming configuration
-	streamingConfig := &streaming.StreamingConfig{
-		ChunkAlgorithm: "fastcdc",
-		MinChunkSize:   4096,
-		MaxChunkSize:   65536,
-		AvgChunkSize:   int(streamingChunkMB * 1024 * 1024), // Convert MB to bytes
-		MaxMemoryMB:    streamingMemoryMB,
-		BufferSize:     1048576, // 1MB
-		ErrorTolerance: 0.1,
-		SkipMalformed:  true,
-		SampleSize:     100,
-		Confidence:     0.8,
-		ReportEveryMB:  1,
-		MaxConcurrency: 0,
-	}
-
-	// Track results and errors
-	var results []*importer.ImportResult
-	var importErrors []error
-	successCount := 0
-	totalRecords := 0
-	totalSize := int64(0)
-
-	// Auto-set origin from workspace when inside one and not explicitly overridden
-	batchEffectiveOrigin := importOrigin
-	if batchEffectiveOrigin == "" && wsPolicy.InWorkspace() {
-		batchEffectiveOrigin = wsPolicy.EffectiveOrigin
-	}
-
-	// Import each file
-	for i, filePath := range filePaths {
-		fmt.Printf("📁 [%d/%d] Importing: %s\n", i+1, len(filePaths), filepath.Base(filePath))
-
-		// Set up import options for this file
-		opts := importer.ImportOptions{
-			SourcePath:      filePath,
-			Origin:          batchEffectiveOrigin, // Will be auto-detected if empty
-			ManualSchema:    importSchema,
-			ChainValidator:  chainValidator,
-			UseStreaming:    true, // Always use streaming for optimal performance
-			StreamingConfig: streamingConfig,
-		}
-
-		// Perform the import
-		result, err := importOneWithEnvelope(imp, opts)
-		if err != nil {
-			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))
-			fmt.Printf("   ❌ Failed: %v\n", err)
-			continue
-		}
-
-		// Track successful import
-		results = append(results, result)
-		successCount++
-		totalRecords += result.RecordCount
-		totalSize += result.SizeBytes
-
-		fmt.Printf("   ✅ Success: %s (ID: %s, Records: %d)\n", result.DetectedFormat, result.ID, result.RecordCount)
-	}
-
-	// Display summary
-	displayBatchImportSummary(successCount, len(filePaths), totalRecords, totalSize, importErrors)
-
-	// If there were any errors, return the first one
-	if len(importErrors) > 0 {
-		return importErrors[0]
-	}
-
-	return nil
-}
-
-// displayBatchImportSummary shows a summary of batch import results
-func displayBatchImportSummary(successCount, totalCount, totalRecords int, totalSize int64, importErrors []error) {
-	fmt.Println()
-	fmt.Printf("📊 Batch Import Summary\n")
-	fmt.Printf("   Files processed: %d/%d\n", successCount, totalCount)
-	fmt.Printf("   Total records: %d\n", totalRecords)
-	fmt.Printf("   Total size: %d bytes\n", totalSize)
-
-	if len(importErrors) > 0 {
-		fmt.Printf("   Errors: %d\n", len(importErrors))
-		fmt.Println()
-		fmt.Println("❌ Import Errors:")
-		for _, err := range importErrors {
-			fmt.Printf("   - %v\n", err)
-		}
-	}
-
-	if successCount > 0 {
-		fmt.Println()
-		fmt.Println("✅ Batch import completed!")
-		if successCount < totalCount {
-			fmt.Printf("   %d files imported successfully, %d failed\n", successCount, totalCount-successCount)
-		} else {
-			fmt.Printf("   All %d files imported successfully\n", successCount)
-		}
-	}
-}
-
-// importFromStdin reads data from stdin and imports it
-func importFromStdin(cmd *cobra.Command) error {
-	// Read stdin to temporary file
-	tmpPath, err := importer.ReadStdinToTempFile()
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to read from stdin", err)
-	}
-	defer os.Remove(tmpPath)
-
-	// Detect format if not specified
-	format := importFormat
-	if format == "" {
-		detectedFormat, err := importer.DetectFormatFromContent(tmpPath)
-		if err != nil {
-			return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to detect format from stdin", err)
-		}
-		format = detectedFormat
-	}
-
-	// Rename temp file to have proper extension
-	stdinFilename := importer.GetStdinFilename(format)
-	finalPath := filepath.Join(filepath.Dir(tmpPath), stdinFilename)
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to prepare stdin data", err)
-	}
-	defer os.Remove(finalPath)
-
-	// Load configuration
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return errors.NewConfigError("Failed to load configuration", err)
-	}
-
-	// Create importer
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
-	if err != nil {
-		return errors.NewSystemError("Failed to initialize importer", err)
-	}
-	defer imp.Close()
-
-	// Set origin to "stdin" if not specified
-	origin := importOrigin
-	if origin == "" {
-		origin = "stdin"
-	}
-
-	// Configure streaming
-	streamingConfig := streaming.DefaultStreamingConfig()
-	if streamingMemoryMB > 0 {
-		streamingConfig.MaxMemoryMB = streamingMemoryMB
-	}
-
-	// Set up import options
-	opts := importer.ImportOptions{
-		SourcePath:      finalPath,
-		Origin:          origin,
-		ManualSchema:    importSchema,
-		UseStreaming:    true,
-		StreamingConfig: streamingConfig,
-	}
-
-	// Perform import
-	result, err := importOneWithEnvelope(imp, opts)
-	if err != nil {
-		return errors.WrapError(errors.ErrCodeParsingFailed, "Failed to import stdin data", err)
-	}
-
-	// Display results
-	displayImportResults(result)
-	return nil
 }
