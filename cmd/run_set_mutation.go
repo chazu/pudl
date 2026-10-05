@@ -615,43 +615,14 @@ func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *ac
 
 		member.report.PendingApproval = false
 		member.report.ApprovalStatus = report.ApprovalStatus
-		budget := resolveApplyBudget(cat, name, runFlags{
-			converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
-		}, !jsonOutput)
-		convergeReport, runErr := runConvergeLoopExact(
-			cat, mu, member.model, member.muRoot, member.modelDir,
-			member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
-		)
-		member.report.Converge = convergeReport
-		applyRunError(member.report, runErr)
+		runErr, err := executeMutationMember(cat, mu, plan, member)
+		if err != nil {
+			return err
+		}
 		status := database.RunStatusSucceeded
-		if runErr != nil || convergeReport == nil || convergeReport.Outcome != string(outcomeClean) {
+		if runErr != nil {
 			status = database.RunStatusFailed
 			mutationFailed = true
-			if runErr == nil {
-				runErr = fmt.Errorf("convergence ended %s", convergeReport.Outcome)
-				applyRunError(member.report, runErr)
-			}
-		} else {
-			member.report.CompletionStatus = status
-		}
-		if convergeReport != nil && len(convergeReport.MutationReceipts) > 0 {
-			advanceSealedLifecycle(member.report)
-		}
-		verdict := runVerdict(member.report, runFlags{converge: true})
-		conclusion := database.RunConclusion{CompletionStatus: status, Verdict: verdict}
-		if convergeReport != nil {
-			conclusion.Outcome = convergeReport.Outcome
-			conclusion.NeedsVerification = convergeReport.NeedsVerification
-		}
-		if runErr != nil {
-			conclusion.Note = runErr.Error()
-		}
-		if err := db.FinishRun(member.runID, conclusion); err != nil {
-			return err
-		}
-		if err := saveMemberRunReport(db, member.report); err != nil {
-			return err
 		}
 		updateRunSetMember(report, name, status, errorString(runErr))
 		results[name] = status
@@ -677,6 +648,59 @@ func executePreparedMutationPlan(db *database.CatalogDB, mu muRunner, report *ac
 		return fmt.Errorf("run set %s failed", report.RunSetID)
 	}
 	return nil
+}
+
+// executeMutationMember converges one approved member, then concludes it
+// through finalizeRun exactly as a standalone converge run concludes: checks
+// run, the verdict is recorded on the model row, and a verified-clean member's
+// resources are promoted from `converging`. runErr is the member's outcome
+// (non-nil means the member failed); err aborts the set.
+func executeMutationMember(cat *runCatalog, mu muRunner, plan *acute.RunSetMutationPlan, member *preparedMutationMember) (runErr error, err error) {
+	live := !jsonOutput
+	flags := runFlags{
+		converge: true, maxIters: plan.Options.MaxIterations, maxApplies: plan.Options.MaxApplies,
+	}
+	// As for a standalone converge: the model's previous verdict stops being
+	// trustworthy once mutation may begin, so a crash leaves `unknown`.
+	persistRunStatus(cat, member.model.Name, "unknown", live)
+
+	budget := resolveApplyBudget(cat, member.model.Name, flags, live)
+	convergeReport, runErr := runConvergeLoopExact(
+		cat, mu, member.model, member.muRoot, member.modelDir,
+		member.runID, plan.Options.MaxIterations, false, budget, member.expectedMuPlanSHA256,
+	)
+	member.report.Converge = convergeReport
+	if runErr == nil && (convergeReport == nil || convergeReport.Outcome != string(outcomeClean)) {
+		outcome := "without a report"
+		if convergeReport != nil {
+			outcome = convergeReport.Outcome
+		}
+		runErr = fmt.Errorf("convergence ended %s", outcome)
+	}
+	if convergeReport != nil && len(convergeReport.MutationReceipts) > 0 {
+		advanceSealedLifecycle(member.report)
+	}
+
+	state := runFinishState{}
+	fin, checkErr := finalizeRun(runFinalizeInput{
+		cat: cat, model: member.model, effective: member.model, modelDir: member.modelDir,
+		runID: member.runID, flags: flags, live: live,
+	}, member.report, &state, runErr)
+	runErr = fin.runErr
+	if checkErr != nil {
+		// The mutation already happened; failing to evaluate its checks fails the
+		// member rather than abandoning the set with unfinished run rows.
+		runErr = fmt.Errorf("evaluate checks: %w", checkErr)
+		applyRunError(member.report, runErr)
+	}
+
+	if err := cat.db.FinishRun(member.runID, runConclusion(state, runErr)); err != nil {
+		return runErr, err
+	}
+	if err := saveMemberRunReport(cat.db, member.report); err != nil {
+		return runErr, err
+	}
+	return runErr, nil
 }
 
 func finishUnstartedMutationMember(db *database.CatalogDB, report *acute.RunSetReport, member *preparedMutationMember, status, note string) error {
