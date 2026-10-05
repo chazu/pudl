@@ -18,6 +18,16 @@ func ComputeFactID(relation, args string, validStart int64, source string) strin
 	return fmt.Sprintf("%x", hash)
 }
 
+// SupersededFactID derives the ID of the version that replaces predecessorID
+// when invalidation bounds its valid time at validEnd. It is deliberately not a
+// content address: the successor carries the same relation, args, valid_start
+// and source as its predecessor, so ComputeFactID would collide with it.
+func SupersededFactID(predecessorID string, validEnd int64) string {
+	payload := fmt.Sprintf("supersedes\x00%s\x00%d", predecessorID, validEnd)
+	hash := sha256.Sum256([]byte(payload))
+	return fmt.Sprintf("%x", hash)
+}
+
 // canonicalizeJSON sorts object keys and normalizes number spellings without
 // rounding through float64 (see idgen.CanonicalNumber). Invalid/non-object
 // input retains the legacy raw representation. Existing persisted IDs are never

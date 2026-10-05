@@ -28,7 +28,13 @@ func TestFactReplayPreservesStoredLifecycle(t *testing.T) {
 				}
 				history, err := s.FactHistory("replay")
 				require.NoError(t, err)
-				require.Len(t, history, 1)
+				// Invalidation adds a superseding version; history[0] is the
+				// original recorded version either way.
+				versions := 1
+				if terminal == "invalidated" {
+					versions = 2
+				}
+				require.Len(t, history, versions)
 
 				var replayed factstore.Fact
 				if transactional {

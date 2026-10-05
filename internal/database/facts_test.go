@@ -130,10 +130,19 @@ func TestInvalidateFact(t *testing.T) {
 	err = db.InvalidateFact(f.ID)
 	require.NoError(t, err)
 
+	// The recorded version is closed, never rewritten: its valid time stays open.
 	got, err := db.GetFact(f.ID)
 	require.NoError(t, err)
-	assert.NotNil(t, got.ValidEnd)
-	assert.Nil(t, got.TxEnd) // not retracted, just no longer valid
+	assert.Nil(t, got.ValidEnd)
+	assert.NotNil(t, got.TxEnd)
+
+	// A successor version carries the bounded valid time.
+	latest, err := db.LatestFactVersion(f.ID)
+	require.NoError(t, err)
+	assert.NotEqual(t, f.ID, latest.ID)
+	assert.Equal(t, f.ID, latest.Supersedes)
+	assert.NotNil(t, latest.ValidEnd)
+	assert.Nil(t, latest.TxEnd) // not retracted, just no longer valid
 
 	// Double invalidation fails
 	err = db.InvalidateFact(f.ID)

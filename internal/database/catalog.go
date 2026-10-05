@@ -157,23 +157,20 @@ func (c *CatalogDB) initialize() (err error) {
 	return nil
 }
 
-// createTables brings the catalog schema up to date and (re)builds the views.
+// createTables brings the catalog schema up to date and ensures the views.
 //
 // Schema changes run as ordered, recorded migrations — see migrations.go. Views
-// and syncs deliberately run every open: a view is a restatement of the Go source
-// that declares it, so versioning it would make a change to its body a no-op
-// until someone bumped a number.
+// are checked every open: a view is a restatement of the Go source that
+// declares it, and is rebuilt only when that source's definition changed.
+// current_facts and its search index are maintained transactionally by every
+// fact write; migration 17 is their one-time rebuild path, so nothing
+// re-derives them on open.
 func (c *CatalogDB) createTables() error {
 	if err := c.runMigrations(); err != nil {
 		return err
 	}
 
-	// Sync, not schema: guarded by its own emptiness check.
-	if err := c.backfillCurrentFacts(); err != nil {
-		return fmt.Errorf("failed to backfill current_facts: %w", err)
-	}
-
-	// Create the catalog_entry_edb view exposing catalog_entries to Datalog.
+	// Ensure the catalog_entry_edb view exposing catalog_entries to Datalog.
 	// Must run after the migrations: it references migration-added columns.
 	if err := c.ensureCatalogEntryView(); err != nil {
 		return fmt.Errorf("failed to ensure catalog_entry view: %w", err)

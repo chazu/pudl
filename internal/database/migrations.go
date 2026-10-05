@@ -16,12 +16,12 @@ import (
 //
 // Migrations are now an ordered list, applied in order and recorded on success.
 //
-// What is NOT here: recurring views and syncs. `ensureCatalogEntryView`
-// drops and recreates its view on every open so its definition matches the
-// current source, and backfills are
-// guarded by their own emptiness checks. A migration changes the schema's shape;
-// a view or a sync restates it from the current source. Versioning a view would
-// make a change to its body a no-op until someone bumped a number.
+// What is NOT here: views. A migration changes the schema's shape; a view
+// restates it from the current source. `ensureCatalogEntryView` runs after the
+// migrations on every open and rebuilds its view only when the definition's
+// hash differs from the one recorded in catalog_meta (or the view is missing),
+// so a change to its body takes effect without anyone bumping a number, and an
+// unchanged open performs no schema write.
 // Version 17 is a one-time data repair for a historical replay bug, rather than
 // a recurring view definition or sync. Recording it avoids rebuilding both fact
 // projections on every open; its transaction preserves the authoritative facts.
@@ -63,6 +63,8 @@ var migrations = []migration{
 	{16, "run_set_approvals", (*CatalogDB).ensureRunSetApprovalsTable},
 	{17, "repair_fact_projections", (*CatalogDB).repairFactProjections},
 	{18, "retire_agent_memory_view", (*CatalogDB).retireAgentMemoryView},
+	{19, "fact_versioning", (*CatalogDB).ensureFactVersioning},
+	{20, "catalog_meta", (*CatalogDB).ensureCatalogMetaTable},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step
