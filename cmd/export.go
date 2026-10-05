@@ -39,13 +39,7 @@ Examples:
     pudl export --schema aws.#EC2Instance         # Export all EC2 instances
     pudl export --origin k8s-pods --format yaml   # Export K8s pods as YAML
     pudl export --id babod-fakak --output out.json  # Export to file`,
-	Run: func(cmd *cobra.Command, args []string) {
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		if err := runExportCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runExportCommand),
 }
 
 func init() {

@@ -185,6 +185,9 @@ carry no contract row — but they are never pruned either, for the same reason.
 		if err := db.RetainObserveSnapshot(args[0], !snapshotRelease); err != nil {
 			return err
 		}
+		if jsonOutput {
+			return printJSON(map[string]any{"snapshot_id": args[0], "retained": !snapshotRelease})
+		}
 		if snapshotRelease {
 			fmt.Fprintf(outw(), "released %s\n", args[0])
 		} else {

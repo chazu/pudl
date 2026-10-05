@@ -38,12 +38,9 @@ This command runs 'cue mod tidy' in the schema directory to:
 - Clean up unused dependencies
 
 This is equivalent to running 'cue mod tidy' manually in the schema directory.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleTidyCommand(); err != nil {
-			errorHandler := errors.NewCLIErrorHandler(true)
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runModuleTidyCommand()
+	}),
 }
 
 // moduleListCmd represents the module list command
@@ -56,12 +53,9 @@ This command shows:
 - Module path and version
 - Dependency versions
 - Module description`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleListCommand(); err != nil {
-			errorHandler := errors.NewCLIErrorHandler(true)
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runModuleListCommand()
+	}),
 }
 
 // moduleInfoCmd represents the module info command
@@ -75,12 +69,9 @@ This command displays:
 - CUE language version
 - Source information
 - Dependencies count`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleInfoCommand(); err != nil {
-			errorHandler := errors.NewCLIErrorHandler(true)
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runModuleInfoCommand()
+	}),
 }
 
 // moduleAddCmd represents the module add command
@@ -96,12 +87,9 @@ Examples:
     pudl module add cue.dev/x/k8s.io@v0
     pudl module add github.com/example/schemas@v1`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runModuleAddCommand(args[0]); err != nil {
-			errorHandler := errors.NewCLIErrorHandler(true)
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runModuleAddCommand(args[0])
+	}),
 }
 
 func runModuleTidyCommand() error {

@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -55,36 +56,56 @@ func (h *CLIErrorHandler) HandleError(err error) error {
 	return pudlErr
 }
 
-// displayError formats and displays a PUDL error
+// displayError formats and displays a PUDL error on stderr.
 func (h *CLIErrorHandler) displayError(err *PUDLError) {
+	h.writeError(os.Stderr, err)
+}
+
+// writeError formats a PUDL error: its message, then its suggestions, plus
+// context, cause and code in verbose mode.
+func (h *CLIErrorHandler) writeError(w io.Writer, err *PUDLError) {
 	// Main error message
-	fmt.Fprintf(os.Stderr, "Error: %s\n", err.Message)
+	fmt.Fprintf(w, "Error: %s\n", err.Message)
 
 	// Show context in verbose mode
 	if h.Verbose && len(err.Context) > 0 {
-		fmt.Fprintf(os.Stderr, "\nContext:\n")
+		fmt.Fprintf(w, "\nContext:\n")
 		for key, value := range err.Context {
-			fmt.Fprintf(os.Stderr, "  %s: %v\n", key, value)
+			fmt.Fprintf(w, "  %s: %v\n", key, value)
 		}
 	}
 
 	// Show suggestions if available
 	if len(err.Suggestions) > 0 {
-		fmt.Fprintf(os.Stderr, "\nSuggestions:\n")
+		fmt.Fprintf(w, "\nSuggestions:\n")
 		for _, suggestion := range err.Suggestions {
-			fmt.Fprintf(os.Stderr, "  • %s\n", suggestion)
+			fmt.Fprintf(w, "  • %s\n", suggestion)
 		}
 	}
 
 	// Show underlying cause in verbose mode
 	if h.Verbose && err.Cause != nil {
-		fmt.Fprintf(os.Stderr, "\nUnderlying cause: %v\n", err.Cause)
+		fmt.Fprintf(w, "\nUnderlying cause: %v\n", err.Cause)
 	}
 
 	// Show error code in verbose mode
 	if h.Verbose {
-		fmt.Fprintf(os.Stderr, "\nError code: %s\n", err.Code)
+		fmt.Fprintf(w, "\nError code: %s\n", err.Code)
 	}
+}
+
+// Display writes err to w the way HandleError reports it, without exiting:
+// a PUDL error with its suggestions, any other error as one line.
+func Display(w io.Writer, err error) {
+	if err == nil {
+		return
+	}
+	var pudlErr *PUDLError
+	if !errors.As(err, &pudlErr) {
+		fmt.Fprintf(w, "Error: %v\n", err)
+		return
+	}
+	(&CLIErrorHandler{}).writeError(w, pudlErr)
 }
 
 // SetVerbose enables or disables verbose error output

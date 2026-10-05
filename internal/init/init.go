@@ -14,7 +14,7 @@ import (
 
 // InitOptions contains options for initialization
 type InitOptions struct {
-	Force   bool // Force re-initialization even if already exists
+	Force   bool      // Force re-initialization even if already exists
 	Verbose bool      // Show verbose output
 	Out     io.Writer // Where verbose output goes (default: stdout)
 }

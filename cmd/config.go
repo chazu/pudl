@@ -29,15 +29,7 @@ Example usage:
     pudl config --path           # Show configuration file path
     pudl config set <key> <value> # Set a configuration value
     pudl config reset            # Reset to default configuration`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the config command and handle any errors
-		if err := runConfigCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runConfigCommand),
 }
 
 // runConfigCommand contains the actual config logic with structured error handling
@@ -60,22 +52,10 @@ func runConfigCommand(cmd *cobra.Command, args []string) error {
 
 	initialized := config.ExistsAt(effectivePudlDir())
 	if jsonOutput {
-		paths := effectiveSchemaPaths(cfg)
-		if paths == nil {
-			paths = []string{}
-		}
 		if !initialized {
 			fmt.Fprintln(errw(), "⚠️  Workspace not initialized. Run 'pudl init' to set up.")
 		}
-		return printJSON(map[string]any{
-			"workspace":           effectivePudlDir(),
-			"schema_path":         cfg.SchemaPath,
-			"schema_search_paths": paths,
-			"data_path":           cfg.DataPath,
-			"config_file":         config.ConfigPath(effectivePudlDir()),
-			"version":             cfg.Version,
-			"initialized":         initialized,
-		})
+		return writeConfigJSON(cfg)
 	}
 
 	fmt.Fprintln(outw(), "PUDL Configuration:")
@@ -116,15 +96,7 @@ Example usage:
     pudl config set data_path /tmp/pudl-data
     pudl config set version 2.0`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the config set command and handle any errors
-		if err := runConfigSetCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runConfigSetCommand),
 }
 
 // runConfigSetCommand contains the actual config set logic with structured error handling
@@ -143,13 +115,16 @@ func runConfigSetCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.SetConfigValue()
 	}
 
-	fmt.Fprintf(outw(), "✅ Configuration updated: %s = %s\n", key, value)
-
 	// Show the updated configuration
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}
+	if jsonOutput {
+		return writeConfigJSON(cfg)
+	}
+
+	fmt.Fprintf(outw(), "✅ Configuration updated: %s = %s\n", key, value)
 
 	fmt.Fprintln(outw(), "Updated PUDL Configuration:")
 	fmt.Fprintf(outw(), "  Schema Path: %s\n", cfg.SchemaPath)
@@ -172,15 +147,7 @@ This will restore:
 
 Example usage:
     pudl config reset`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the config reset command and handle any errors
-		if err := runConfigResetCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runConfigResetCommand),
 }
 
 // runConfigResetCommand contains the actual config reset logic with structured error handling
@@ -189,14 +156,17 @@ func runConfigResetCommand(cmd *cobra.Command, args []string) error {
 		return err // Already a PUDLError from config.ResetToDefaults()
 	}
 
-	fmt.Fprintln(outw(), "✅ Configuration reset to defaults")
-
 	// Show the reset configuration
-	fmt.Fprintln(outw())
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return err // Already a PUDLError from config.Load()
 	}
+	if jsonOutput {
+		return writeConfigJSON(cfg)
+	}
+
+	fmt.Fprintln(outw(), "✅ Configuration reset to defaults")
+	fmt.Fprintln(outw())
 
 	fmt.Fprintln(outw(), "Reset PUDL Configuration:")
 	fmt.Fprintf(outw(), "  Schema Path: %s\n", cfg.SchemaPath)
@@ -228,5 +198,22 @@ func init() {
 		fmt.Fprintf(outw(), "  pudl config set schema_path ~/my-schemas\n")
 		fmt.Fprintf(outw(), "  pudl config set data_path /tmp/pudl-data\n")
 		fmt.Fprintf(outw(), "  pudl config set version 2.0\n")
+	})
+}
+
+// writeConfigJSON writes the effective configuration as one JSON document.
+func writeConfigJSON(cfg *config.Config) error {
+	paths := effectiveSchemaPaths(cfg)
+	if paths == nil {
+		paths = []string{}
+	}
+	return printJSON(map[string]any{
+		"workspace":           effectivePudlDir(),
+		"schema_path":         cfg.SchemaPath,
+		"schema_search_paths": paths,
+		"data_path":           cfg.DataPath,
+		"config_file":         config.ConfigPath(effectivePudlDir()),
+		"version":             cfg.Version,
+		"initialized":         config.ExistsAt(effectivePudlDir()),
 	})
 }

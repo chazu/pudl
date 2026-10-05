@@ -46,15 +46,7 @@ Examples:
     pudl setup --shell bash        # Force bash setup
     pudl setup --dry-run           # Show what would be added
     pudl setup --uninstall         # Remove PUDL integration`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the setup command and handle any errors
-		if err := runSetupCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runSetupCommand),
 }
 
 // Shell integration snippets
