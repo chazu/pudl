@@ -105,7 +105,7 @@ func TestReadStdinToTempFile(t *testing.T) {
 	}
 }
 
-func TestGetStdinFilename(t *testing.T) {
+func TestStdinExtension(t *testing.T) {
 	tests := []struct {
 		name     string
 		format   string
@@ -114,38 +114,38 @@ func TestGetStdinFilename(t *testing.T) {
 		{
 			name:     "JSON format",
 			format:   "json",
-			expected: "stdin.json",
+			expected: ".json",
 		},
 		{
 			name:     "YAML format",
 			format:   "yaml",
-			expected: "stdin.yaml",
+			expected: ".yaml",
 		},
 		{
 			name:     "CSV format",
 			format:   "csv",
-			expected: "stdin.csv",
+			expected: ".csv",
 		},
 		{
 			name:     "NDJSON format",
 			format:   "ndjson",
-			expected: "stdin.json",
+			expected: ".ndjson",
 		},
 		{
 			name:     "Unknown format",
 			format:   "unknown",
-			expected: "stdin.json",
+			expected: ".json",
 		},
 		{
 			name:     "Empty format",
 			format:   "",
-			expected: "stdin.json",
+			expected: ".json",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := GetStdinFilename(tt.format)
+			result := StdinExtension(tt.format)
 			if result != tt.expected {
 				t.Errorf("Expected %s, got %s", tt.expected, result)
 			}

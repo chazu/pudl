@@ -155,7 +155,7 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 		}
 
 		unified := schema.Unify(dataValue)
-		if err := unified.Validate(); err == nil {
+		if err := validateUnified(schema, unified); err == nil {
 			fallbackReason := ""
 			if schemaName != intendedSchema {
 				fallbackReason = fmt.Sprintf("Failed validation against %s", intendedSchema)
@@ -442,4 +442,16 @@ func (cv *ChainValidator) ReloadModules() error {
 	cv.metadata = allMetadata
 
 	return nil
+}
+
+// validateUnified applies the same validity rule as schema inference: data
+// must make every required field concrete, so a record missing a required
+// field does not "satisfy" a schema merely because nothing conflicts. List
+// schemas are the exception — an element disjunction cannot be resolved
+// concretely, so they are checked structurally.
+func validateUnified(schema, unified cue.Value) error {
+	if schema.IncompleteKind()&cue.ListKind != 0 {
+		return unified.Validate()
+	}
+	return unified.Validate(cue.Concrete(true))
 }
