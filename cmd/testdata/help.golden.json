@@ -1,0 +1,1925 @@
+{
+  "use": "pudl",
+  "short": "Personal Unified Data Lake - A tool for managing cloud infrastructure data",
+  "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only and converging #SystemModel runs through mu\n- Exact producer/consumer run-sets with strict sealed action routing and approval",
+  "flags": [
+    {
+      "name": "json",
+      "usage": "Output results as JSON for scripting",
+      "type": "bool",
+      "default": "false",
+      "persistent": true
+    },
+    {
+      "name": "version",
+      "shorthand": "v",
+      "usage": "Show version information",
+      "type": "bool",
+      "default": "false"
+    }
+  ],
+  "subcommands": [
+    {
+      "use": "completion",
+      "short": "Generate the autocompletion script for the specified shell",
+      "long": "Generate the autocompletion script for pudl for the specified shell.\nSee each sub-command's help for details on how to use the generated script.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "bash",
+          "short": "Generate the autocompletion script for bash",
+          "long": "Generate the autocompletion script for the bash shell.\n\nThis script depends on the 'bash-completion' package.\nIf it is not installed already, you can install it via your OS's package manager.\n\nTo load completions in your current shell session:\n\n\tsource \u003c(pudl completion bash)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\tpudl completion bash \u003e /etc/bash_completion.d/pudl\n\n#### macOS:\n\n\tpudl completion bash \u003e $(brew --prefix)/etc/bash_completion.d/pudl\n\nYou will need to start a new shell for this setup to take effect.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "no-descriptions",
+              "usage": "disable completion descriptions",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "fish",
+          "short": "Generate the autocompletion script for fish",
+          "long": "Generate the autocompletion script for the fish shell.\n\nTo load completions in your current shell session:\n\n\tpudl completion fish | source\n\nTo load completions for every new session, execute once:\n\n\tpudl completion fish \u003e ~/.config/fish/completions/pudl.fish\n\nYou will need to start a new shell for this setup to take effect.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "no-descriptions",
+              "usage": "disable completion descriptions",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "powershell",
+          "short": "Generate the autocompletion script for powershell",
+          "long": "Generate the autocompletion script for powershell.\n\nTo load completions in your current shell session:\n\n\tpudl completion powershell | Out-String | Invoke-Expression\n\nTo load completions for every new session, add the output of the above command\nto your powershell profile.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "no-descriptions",
+              "usage": "disable completion descriptions",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "zsh",
+          "short": "Generate the autocompletion script for zsh",
+          "long": "Generate the autocompletion script for the zsh shell.\n\nIf shell completion is not already enabled in your environment you will need\nto enable it.  You can execute the following once:\n\n\techo \"autoload -U compinit; compinit\" \u003e\u003e ~/.zshrc\n\nTo load completions in your current shell session:\n\n\tsource \u003c(pudl completion zsh)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\tpudl completion zsh \u003e \"${fpath[1]}/_pudl\"\n\n#### macOS:\n\n\tpudl completion zsh \u003e $(brew --prefix)/share/zsh/site-functions/_pudl\n\nYou will need to start a new shell for this setup to take effect.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "no-descriptions",
+              "usage": "disable completion descriptions",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "config",
+      "short": "View and manage PUDL configuration",
+      "long": "View and manage PUDL configuration settings.\n\nThis command allows you to view the current configuration and see where\nyour PUDL workspace is located.\n\nThe configuration includes:\n- Schema repository path (where CUE schemas are stored)\n- Data directory path (where imported data is stored)\n- Configuration file location\n\nExample usage:\n    pudl config                  # Show current configuration\n    pudl config --path           # Show configuration file path\n    pudl config set \u003ckey\u003e \u003cvalue\u003e # Set a configuration value\n    pudl config reset            # Reset to default configuration",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "path",
+          "shorthand": "p",
+          "usage": "Show configuration file path only",
+          "type": "bool",
+          "default": "false"
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "reset",
+          "short": "Reset configuration to defaults",
+          "long": "Reset the PUDL configuration to default values.\n\nThis will restore:\n- Schema path beneath the active .pudl workspace\n- Data path beneath the active .pudl workspace\n- Version to 1.0\n\nExample usage:\n    pudl config reset",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "set \u003ckey\u003e \u003cvalue\u003e",
+          "short": "Set a configuration value",
+          "long": "Set a configuration value and save it to the configuration file.\n\nValid configuration keys:\n- schema_path: Path to the schema repository directory\n- data_path: Path to the data storage directory\n- version: Configuration version\n\nInside a repository workspace, schema_path and data_path are fixed beneath\n.pudl/ and cannot be redirected outside the repository-local state boundary.\n\nExample usage:\n    pudl config set schema_path ~/my-schemas\n    pudl config set data_path /tmp/pudl-data\n    pudl config set version 2.0",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "delete \u003cid\u003e",
+      "short": "Delete a data entry from the catalog",
+      "long": "Delete a data entry from the PUDL catalog, including its data file and metadata.\n\nThe ID parameter should be the proquint identifier of the data entry as shown\nin the 'pudl list' command output.\n\nFor collections, use --cascade to also delete all items in the collection.\nWithout --cascade, deleting a collection with items will fail.\n\nExamples:\n    pudl delete mivof-duhij                    # Delete with confirmation prompt\n    pudl delete mivof-duhij --force            # Delete without confirmation\n    pudl delete govim-nupab --cascade          # Delete collection and all its items\n    pudl delete mivof-duhij --json             # Output result as JSON",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "cascade",
+          "usage": "Delete collection and all its items",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "force",
+          "usage": "Delete without confirmation prompt",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "doctor",
+      "short": "Check workspace health, catalog validation, and inference stability",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. This command does not repair or change retained data.\nUse --entry ID to inspect one catalog record, or --health-only for workspace checks.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "entry",
+          "usage": "Check one catalog entry by proquint or full ID",
+          "type": "string"
+        },
+        {
+          "name": "health-only",
+          "usage": "Check workspace health without scanning catalog records",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "example",
+      "short": "Install bundled examples into this workspace",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "install \u003cname\u003e",
+          "short": "Install a runnable example and its fixture data",
+          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main,\nbaseline and changed observations, and an optional live observer. The import\nand catalog replay tutorial needs only PUDL; live observation also needs mu\nand Python 3.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "export",
+      "short": "Export data lake entries to various formats",
+      "long": "Export data from the PUDL catalog to various formats.\n\nYou can export entries by ID, schema, or origin. The data is exported in the\nspecified format (JSON, YAML, CSV, or NDJSON).\n\nExamples:\n    pudl export --id babod-fakak                  # Export single entry by proquint ID\n    pudl export --schema aws.#EC2Instance         # Export all EC2 instances\n    pudl export --origin k8s-pods --format yaml   # Export K8s pods as YAML\n    pudl export --id babod-fakak --output out.json  # Export to file",
+      "flags": [
+        {
+          "name": "format",
+          "usage": "Output format: json, yaml, csv, ndjson",
+          "type": "string",
+          "default": "json"
+        },
+        {
+          "name": "id",
+          "usage": "Export entry by proquint ID",
+          "type": "string"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "origin",
+          "usage": "Export entries from origin",
+          "type": "string"
+        },
+        {
+          "name": "output",
+          "shorthand": "o",
+          "usage": "Output file (default: stdout)",
+          "type": "string"
+        },
+        {
+          "name": "pretty",
+          "usage": "Pretty-print output",
+          "type": "bool",
+          "default": "true"
+        },
+        {
+          "name": "schema",
+          "usage": "Export entries matching schema",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "use": "facts",
+      "short": "Query the bitemporal fact store",
+      "long": "Query facts stored in the bitemporal fact store.\n\nFacts are typed assertions — observations, dependencies, derived facts — with\nfull valid-time and transaction-time tracking.\n\nAvailable subcommands:\n- list:       Query facts by relation with temporal filtering\n- show:       Inspect a single fact by ID\n- retract:    Mark a fact as retracted (we were wrong)\n- invalidate: Mark a fact as no longer valid (reality changed)\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts show abc123...\n    pudl facts retract abc123...\n    pudl facts invalidate abc123...",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "add",
+          "short": "Add a fact to the bitemporal store (the canonical write)",
+          "long": "Add a fact under any relation using a JSON object. Facts are general-purpose.\nUse --schema to validate the args against an authored CUE schema before storing them.\n\nExamples:\n    pudl facts add --relation depends --args '{\"from\":\"api\",\"to\":\"database\"}'\n    pudl facts add --relation config --args '{\"key\":\"timeout\",\"value\":30}' --source operator",
+          "flags": [
+            {
+              "name": "args",
+              "usage": "Fact body as a JSON object (required)",
+              "type": "string"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "relation",
+              "usage": "Relation to write (required)",
+              "type": "string"
+            },
+            {
+              "name": "schema",
+              "usage": "Validate args against a named on-disk CUE schema (e.g. user/config.#Setting)",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "usage": "Source of the fact (agent name or username; defaults to the current OS user)",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "invalidate \u003cid\u003e",
+          "short": "Invalidate a fact (mark as no longer true)",
+          "long": "Record that a fact stopped being true now.\n\nUse this when reality changed — the fact was correct when recorded but\nis no longer true. The fact remains visible in historical queries\n(--as-of-valid) but disappears from current queries.\n\nHistory is not rewritten: the recorded version is closed and a new version\nwith a valid end time supersedes it, so --as-of-tx queries for earlier\nmoments still show what was believed then. The new version's ID is printed.\n\nExamples:\n    pudl facts invalidate c0b4392d347aca8e...",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List facts from the bitemporal store",
+          "long": "Query facts by relation with optional temporal and source filtering.\n\nTemporal modes (determined by which flags are set):\n  (none)           Current facts: valid now, not retracted\n  --as-of-valid    What was true at a point in time (current knowledge)\n  --as-of-tx       What we believed at a point in time\n  (both)           What we believed at --as-of-tx about what was true at --as-of-valid\n  --as-of-tx-seq   What we believed right after write sequence N (exact; use\n                   instead of --as-of-tx to separate writes in the same second)\n\nTime format: RFC3339 (e.g. 2026-04-01T14:30:00Z) or Unix timestamp.\n--as-of-tx means the state after every write during or before that second, so\na fact recorded and retracted within one second appears only by sequence.\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts list --relation observation --source claude-code\n    pudl facts list --relation depends --as-of-valid 2026-04-01T14:30:00Z\n    pudl facts list --relation observation --json",
+          "flags": [
+            {
+              "name": "as-of-tx",
+              "usage": "Query transaction time (RFC3339 or Unix timestamp)",
+              "type": "string"
+            },
+            {
+              "name": "as-of-tx-seq",
+              "usage": "Query by write sequence instead of --as-of-tx (exact within one second)",
+              "type": "int64",
+              "default": "0"
+            },
+            {
+              "name": "as-of-valid",
+              "usage": "Query valid time (RFC3339 or Unix timestamp)",
+              "type": "string"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "relation",
+              "usage": "Relation to query (required)",
+              "type": "string"
+            },
+            {
+              "name": "source",
+              "usage": "Filter by source",
+              "type": "string"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "usage": "Show full fact details",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "retract \u003cid\u003e",
+          "short": "Retract a fact (mark as no longer asserted)",
+          "long": "Mark a fact as retracted by setting its transaction end time.\n\nUse this when a fact was recorded in error — the assertion was wrong.\nThe fact remains in the store for audit purposes but disappears from\ncurrent queries.\n\nExamples:\n    pudl facts retract c0b4392d347aca8e...",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "search \u003cquery\u003e",
+          "short": "Full-text search over currently-valid facts",
+          "long": "Keyword search over the indexed text of currently-valid facts, best matches\nfirst. The index covers the values of each fact's args (not the JSON keys).\n\nThe query uses SQLite FTS5 syntax: bare terms are ANDed, \"quoted phrases\" match\nin order, a trailing * is a prefix match, and AND/OR/NOT combine terms.\n\nExamples:\n    pudl facts search \"rate limiting\"\n    pudl facts search \"circular dependency\" --relation observation\n    pudl facts search \"auth*\" --limit 10",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "Maximum results (0 = no limit)",
+              "type": "int",
+              "default": "20"
+            },
+            {
+              "name": "relation",
+              "usage": "Limit search to a relation",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "show \u003cid\u003e",
+          "short": "Show details of a single fact",
+          "long": "Display full details of a fact by its ID.\n\nAccepts the full 64-character hex ID or a unique prefix.\n\nInvalidation records a new version of a fact rather than rewriting the old\none. An ID of a superseded version shows the fact's newest version; pass\n--exact to show the version the ID names as it was recorded.\n\nExamples:\n    pudl facts show c0b4392d347aca8e517c9bb8775a78951c6214e07f04f9168dbe3fbfa862e32a\n    pudl facts show c0b4392d347a\n    pudl facts show c0b4392d347a --exact\n    pudl facts show c0b4392d347a --json",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "exact",
+              "usage": "Show the version this ID names instead of the newest version",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "stats",
+          "short": "Aggregate statistics over the fact store",
+          "long": "Show counts grouped by relation, kind, scope, source, or any arg field.\n\nWithout --group-by, shows count per relation, including when --relation filters\nthe data. Explicit --group-by selects source or an arbitrary args field.\n\nSupports comma-separated field names for cross-tabulation.\n\nExamples:\n    pudl facts stats\n    pudl facts stats --relation observation\n    pudl facts stats --relation observation --group-by kind\n    pudl facts stats --group-by scope\n    pudl facts stats --group-by kind,scope\n    pudl facts stats --relation observation --group-by source",
+          "flags": [
+            {
+              "name": "group-by",
+              "usage": "Comma-separated fields to group by (e.g. kind,scope)",
+              "type": "string"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "relation",
+              "usage": "Filter to specific relation",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "guide [topic]",
+      "short": "Quick-reference guide for agents and humans",
+      "long": "Print usage guides for pudl features and concepts.\n\nRun 'pudl guide' with no arguments to see all available topics.\nRun 'pudl guide \u003ctopic\u003e' to read a specific guide.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "import [--path \u003cfile|dir|pattern\u003e]",
+      "short": "Import data into PUDL data lake",
+      "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nThe --path flag accepts a single file, a wildcard pattern, or a directory:\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Manual schema specification with --schema flag (chained validation)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: policy → base → generic → catchall\n- Never rejects data - always finds appropriate schema\n- Envelope wire format: a JSON file shaped like\n    {\"schema\": {\"module\": \"mu/aws\", \"version\": \"v1\"},\n     \"definitions\": [...],   // optional inline CUE\n     \"data\": \u003cpayload\u003e}\n  is auto-detected on import. The declared CUE schema ref is recorded\n  in the item_schemas table; inline definitions are written to pudl's\n  schema cache for future imports. Raw JSON without the envelope shape\n  is imported untouched.\n- Multiple schemas per item: items can satisfy more than one schema\n  (declared, inferred, unresolved) — see 'pudl reclassify --help'.\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.compliant-ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n    # CUE schema reference (e.g. emitted by a mu plugin)\n    pudl import --path out.json --schema mu/aws@v1#EC2Instance\n\n    # Wildcard batch import\n    pudl import --path *.json\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # From stdin\n    cat data.json | pudl import",
+      "flags": [
+        {
+          "name": "format",
+          "usage": "Specify format for stdin data (json, yaml, csv, ndjson)",
+          "type": "string"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "origin",
+          "usage": "Override origin detection (optional)",
+          "type": "string"
+        },
+        {
+          "name": "path",
+          "shorthand": "p",
+          "usage": "Path to file or wildcard pattern to import (use '-' for stdin)",
+          "type": "string"
+        },
+        {
+          "name": "recursive",
+          "usage": "When --path is a directory, also import supported files in its subdirectories",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "schema",
+          "usage": "Specify schema for validation (e.g., aws.compliant-ec2)",
+          "type": "string"
+        },
+        {
+          "name": "streaming-chunk-size",
+          "usage": "Deprecated: no effect",
+          "type": "float64",
+          "default": "0.016"
+        },
+        {
+          "name": "streaming-memory",
+          "usage": "Deprecated: no effect",
+          "type": "int",
+          "default": "100"
+        }
+      ]
+    },
+    {
+      "use": "init",
+      "short": "Initialize or repair a local PUDL workspace (--global for ~/.pudl)",
+      "long": "Create a self-contained .pudl/ in the current directory, including\nconfiguration, schemas, local data directories, and bundled agent skills.\nRepeating initialization repairs owned files while preserving authored configuration.\nUse --force to replace configuration, or --global to initialize ~/.pudl instead.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "force",
+          "usage": "Replace authored workspace configuration",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "global",
+          "usage": "Initialize ~/.pudl instead of a local .pudl",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "list",
+      "short": "List imported data in the PUDL data lake",
+      "long": "List and query imported data in the PUDL data lake with filtering and sorting options.\n\nThis command displays imported data from the active catalog, including metadata\nsuch as schema assignments, timestamps, sizes, and record counts. In a repository\nworkspace all records in its local catalog are visible unless --origin is supplied.\n\nFiltering Options:\n- --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)\n- --origin: Filter by data origin (e.g., aws-ec2, k8s-pods)\n- --format: Filter by file format (json, yaml, csv, ndjson)\n- --collection-id: Filter by collection ID (show items from specific collection)\n- --collections-only: Show only collection entries (not individual items)\n- --items-only: Show only individual items (not collections)\n- --item-id: Filter by specific item ID\n\nDisplay Options:\n- --verbose: Show detailed information including file paths\n- --limit: Cap the total number of results across all pages (default: no cap)\n- --sort-by: Sort by field (timestamp, size, records, schema, origin)\n- --reverse: Reverse sort order\n- --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)\n\nExamples:\n    pudl list                                    # List the active catalog\n    pudl list --schema aws.#EC2Instance          # List only EC2 instances\n    pudl list --origin k8s-pods                  # List Kubernetes pod data\n    pudl list --format ndjson --verbose         # List NDJSON collections with details\n    pudl list --collections-only                # Show only collections\n    pudl list --items-only                      # Show only individual items\n    pudl list --collection-id my-collection     # Show items from specific collection\n    pudl list --sort-by size --reverse          # List by size, largest first\n    pudl list --limit 10                        # Show only first 10 entries\n    pudl list --fancy                           # Interactive list with filtering and detailed view",
+      "flags": [
+        {
+          "name": "artifacts",
+          "usage": "Show only run outputs (manifest, manifest-action)",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "collection-id",
+          "usage": "Filter by collection ID",
+          "type": "string"
+        },
+        {
+          "name": "collections-only",
+          "usage": "Show only collections",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "fancy",
+          "usage": "Use interactive bubbletea interface with filtering",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "format",
+          "usage": "Filter by file format (json, yaml, csv, ndjson)",
+          "type": "string"
+        },
+        {
+          "name": "item-id",
+          "usage": "Filter by item ID",
+          "type": "string"
+        },
+        {
+          "name": "items-only",
+          "usage": "Show only individual items",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "limit",
+          "usage": "Cap the total number of results across all pages (0 = no cap)",
+          "type": "int",
+          "default": "0"
+        },
+        {
+          "name": "origin",
+          "usage": "Filter by data origin (e.g., aws-ec2)",
+          "type": "string"
+        },
+        {
+          "name": "page",
+          "usage": "Page number (1-based)",
+          "type": "int",
+          "default": "1"
+        },
+        {
+          "name": "per-page",
+          "usage": "Results per page",
+          "type": "int",
+          "default": "20"
+        },
+        {
+          "name": "reverse",
+          "usage": "Reverse sort order",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "schema",
+          "usage": "Filter by CUE schema (e.g., aws.#EC2Instance)",
+          "type": "string"
+        },
+        {
+          "name": "sort-by",
+          "usage": "Sort by field (timestamp, size, records, schema, origin)",
+          "type": "string",
+          "default": "timestamp"
+        },
+        {
+          "name": "verbose",
+          "shorthand": "v",
+          "usage": "Show detailed information",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "use": "migrate",
+      "short": "Run data migrations",
+      "long": "Run data migrations to upgrade the PUDL catalog.\n\nAvailable migrations:\n  identity    Backfill resource identity tracking for existing entries",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "identity",
+          "short": "Backfill or recompute resource identity tracking for existing entries",
+          "long": "Compute and populate resource_id and identity_json for catalog entries.\n\nBy default this backfills entries with a NULL resource_id (e.g. data imported\nbefore identity tracking was added): it loads each entry's data file, extracts\nidentity fields from the schema metadata, and computes resource_id.\n\nWith --recompute, every entry's resource_id and identity_json are recomputed and\nversions are re-sequenced. Use this once after upgrading to root-of-family\nidentity namespacing, which changes every resource_id: identity is now keyed on\nthe inheritance-family root rather than the assigned leaf schema, so resources\nstay stable under reinference and policy refinement. Recompute is idempotent.\n\nExamples:\n    pudl migrate identity                  # Backfill entries with NULL resource_id\n    pudl migrate identity --recompute      # Recompute all resource_ids + versions\n    pudl migrate identity --recompute --dry-run  # Preview the recompute",
+          "flags": [
+            {
+              "name": "dry-run",
+              "usage": "Preview changes without applying",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "recompute",
+              "usage": "Recompute all resource_ids (family-root namespacing) and re-sequence versions",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "model",
+      "short": "Manage #SystemModel definitions and their assets",
+      "long": "Manage registered #SystemModel definitions and the assets they reference.\n\nA #SystemModel is registered as a CUE definition inheriting #SystemModel in the\nschema repository (project .pudl/schema or global ~/.pudl/schema). An\n#EweTarget populate arm references a populator program (eweSource), stored under\nthe repo's populators/ directory — kept out of the schema CUE module so it is\nnot (mis)loaded as a schema.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "deps",
+          "short": "Refresh and show the cross-model dependency graph",
+          "long": "Reconcile every registered model's declared and binding-derived dependencies into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nWith --derive, also compute Phase-2 DERIVED edges: B depends on A when a value\nin B's desired references an identity A produces (e.g. B's Deployment names a\nNamespace A declares), without a manual depends_on. Derived edges are emitted as\nthe same model_depends_on relation under a separate provenance, are heuristic\n(value-based matching can over-match), and never override a declared edge.\n\nExamples:\n    pudl model deps\n    pudl model deps --derive\n    pudl model deps --derive --json",
+          "flags": [
+            {
+              "name": "derive",
+              "usage": "also compute Phase-2 derived edges (desired↔produced identity matching)",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List registered #SystemModel definitions",
+          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project .pudl/schema shadows global ~/.pudl/schema), with its\npopulate kind, converge arm, and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl run \u003cname\u003e' can\nresolve — independent of whether a model has been run yet.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "new \u003cname\u003e",
+          "short": "Scaffold a #SystemModel observer",
+          "long": "Create a registered #SystemModel scaffold in the project schema (or the\nglobal schema outside a workspace). Always edit the returned file to add desired\nstate, checks, or a converge arm.\n\nExample:\n    pudl model new pods --populate plugin:k8s --input namespace=default",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "force",
+              "usage": "Replace an existing scaffold file",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "input",
+              "usage": "Populate input key=value (repeatable; JSON values are decoded)",
+              "type": "stringArray",
+              "default": "[]"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "populate",
+              "usage": "Populate arm, in the form plugin:\u003cname\u003e",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "populator",
+          "short": "Manage populator programs for #EweTarget models",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ],
+          "subcommands": [
+            {
+              "use": "add \u003cmodel\u003e \u003cpopulator.cue\u003e",
+              "short": "Install a populator program into the repo for a model",
+              "long": "Copy a populator (.cue) program into the pudl repo's populators/\u003cmodel\u003e/\ndirectory so a registered #SystemModel can reference it as a repo-relative\neweSource. By default it goes in the project repo (.pudl) when one is found by\nwalking up from the cwd, else the global ~/.pudl; use --global to force global.\n\nAfter installing, set the model's eweSource to the printed value.",
+              "args": "custom",
+              "flags": [
+                {
+                  "name": "global",
+                  "usage": "install into the global ~/.pudl repo (default: project repo if found)",
+                  "type": "bool",
+                  "default": "false"
+                },
+                {
+                  "name": "json",
+                  "usage": "Output results as JSON for scripting",
+                  "type": "bool",
+                  "default": "false",
+                  "persistent": true
+                }
+              ]
+            },
+            {
+              "use": "new \u003cmodel\u003e",
+              "short": "Scaffold an #EweTarget populator",
+              "long": "Create a minimal ewe populator under populators/\u003cmodel\u003e/.\nThe generated program writes a records array and already uses a quoted\n\"_schema\" field, so its output can be ingested by pudl without the hidden-CUE\nfield trap. Edit the TODO before running the model.",
+              "args": "custom",
+              "flags": [
+                {
+                  "name": "force",
+                  "usage": "Replace an existing populator scaffold",
+                  "type": "bool",
+                  "default": "false"
+                },
+                {
+                  "name": "json",
+                  "usage": "Output results as JSON for scripting",
+                  "type": "bool",
+                  "default": "false",
+                  "persistent": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "use": "show \u003cname\u003e",
+          "short": "Show a registered #SystemModel definition",
+          "long": "Show the details of a registered #SystemModel by name (the instance's\n'name:' field or its short definition name): populate arm, desired state,\nconverge arm, checks, and declared plugins.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "discover",
+              "usage": "Include live Mu plugin capability discovery",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "validate \u003cname\u003e",
+          "short": "Validate a registered #SystemModel without running it",
+          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem. Bound models remain valid templates before their catalog values exist;\ntheir final concrete values are validated again when pudl runs them.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "module",
+      "short": "Manage CUE module dependencies",
+      "long": "Manage CUE module dependencies for PUDL schemas.\n\nThis command provides utilities for managing third-party CUE modules\nthat provide schemas for common data formats like Kubernetes, AWS, etc.\n\nExamples:\n    pudl module tidy     # Fetch and update module dependencies\n    pudl module list     # List current module dependencies\n    pudl module info     # Show module information",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "add \u003cmodule@version\u003e",
+          "short": "Add a third-party module dependency",
+          "long": "Add a third-party CUE module dependency to the current module.\n\nThis command modifies the cue.mod/module.cue file to include the specified\ndependency and then runs 'cue mod tidy' to fetch it.\n\nExamples:\n    pudl module add cue.dev/x/k8s.io@v0\n    pudl module add github.com/example/schemas@v1",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "info",
+          "short": "Show module information",
+          "long": "Show information about the current CUE module.\n\nThis command displays:\n- Module path and version\n- CUE language version\n- Source information\n- Dependencies count",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List current module dependencies",
+          "long": "List the current CUE module dependencies defined in cue.mod/module.cue.\n\nThis command shows:\n- Module path and version\n- Dependency versions\n- Module description",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "tidy",
+          "short": "Fetch and update module dependencies",
+          "long": "Fetch and update CUE module dependencies.\n\nThis command runs 'cue mod tidy' in the schema directory to:\n- Download missing dependencies\n- Update the module.cue file with resolved versions\n- Clean up unused dependencies\n\nThis is equivalent to running 'cue mod tidy' manually in the schema directory.",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "mu",
+      "short": "Bridge commands between pudl and the mu execution layer",
+      "long": "Commands that move data across the pudl/mu boundary.\n\npudl knows; mu acts. These subcommands ingest mu's execution results back into\nthe catalog.\n\nAvailable subcommands:\n- ingest-observe:  Store mu observe results as live catalog state\n- ingest-manifest: Record a mu build manifest in the catalog\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    mu build --emit-manifest | pudl mu ingest-manifest",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "ingest-manifest",
+          "short": "Ingest mu build manifest into the catalog",
+          "long": "Read a mu build manifest (JSON) and store action results in the catalog.\nThis records what mu did during convergence, enabling status tracking.\n\nExamples:\n    mu build --emit-manifest | pudl mu ingest-manifest\n    pudl mu ingest-manifest --path manifest.json",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "model",
+              "usage": "Tag entries with this #SystemModel name so a later clean drift re-check promotes its converging resources to clean",
+              "type": "string"
+            },
+            {
+              "name": "origin",
+              "usage": "Origin label for catalog entries",
+              "type": "string",
+              "default": "mu-build"
+            },
+            {
+              "name": "path",
+              "usage": "Path to manifest JSON file (reads stdin if omitted)",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "ingest-observe",
+          "short": "Ingest mu observe results into the catalog",
+          "long": "Read mu observe --json output and store observed state in the catalog.\nThe observed state becomes the \"live\" side for subsequent drift checks.\n\nInput format: JSON array of ObserveResult objects from mu observe --json.\nEach target's current.records are stored as individual observe entries,\nrouted to the correct schema via the _schema field.\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    pudl mu ingest-observe --path observe-results.json\n    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "origin",
+              "usage": "Override origin",
+              "type": "string",
+              "default": "mu-observe"
+            },
+            {
+              "name": "path",
+              "usage": "Read from file instead of stdin",
+              "type": "string"
+            },
+            {
+              "name": "plugin-dir",
+              "usage": "Local mu plugin directory containing mu.cue and optional pudl.cue",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "prime",
+      "short": "Output agent prompt describing how to use pudl",
+      "long": "Print a structured prompt that teaches AI agents how to use pudl.\n\nInclude a line like this in your CLAUDE.md or similar agent config:\n\n    Run 'pudl prime' to learn how to use the pudl data lake CLI.\n\nThe agent will then know to execute the command and read the output\nto understand pudl's capabilities and conventions.",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "query \u003crelation\u003e [--field=value ...]",
+      "short": "Query derived facts using Datalog rules",
+      "long": "Evaluate Datalog rules over the fact store and catalog, then query results.\n\nRules are loaded from CUE files in:\n  1. .pudl/schema/pudl/rules/    (repo-scoped, highest priority)\n  2. ~/.pudl/schema/pudl/rules/  (global)\n\nRepo-scoped rules shadow global rules with the same name.\n\nAd-hoc rules can be loaded from a file with -f.\n\nPositional constraints filter results (field=value pairs). JSON numeric values\nare parsed without rounding; other unquoted values are strings. To match a\nnumeric-looking string, retain JSON quotes, e.g. 'id=\"123\"'.\n\nTemporal modes (determined by which flags are set):\n  (none)           Evaluate over current facts\n  --as-of-valid    Evaluate over facts true at a point in time\n  --as-of-tx       Evaluate over facts known at a point in time\n  (both)           Evaluate over what was believed at --as-of-tx about --as-of-valid\n\nUse --list to see the relations (rule heads + EDB facts) you can query and the\narg keys each expects. Use --topo to read a relation's from/to edges as a\ntopological run order (dependencies first); it errors on a cycle.\n\nExamples:\n    pudl query --list\n    pudl query depends_transitive\n    pudl query depends_transitive from=api\n    pudl query impacted_by changed=network\n    pudl query --topo model_depends_on\n    pudl query -f my-analysis.cue corroborated_obstacle\n    pudl query observation --as-of-valid 2026-04-01T14:30:00Z\n    pudl query depends_transitive --json",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "all-workspaces",
+          "usage": "Include global rules and all workspace data",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "as-of-tx",
+          "usage": "Evaluate over facts known at this time (RFC3339 or Unix)",
+          "type": "string"
+        },
+        {
+          "name": "as-of-valid",
+          "usage": "Evaluate over facts true at this time (RFC3339 or Unix)",
+          "type": "string"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "list",
+          "usage": "List queryable relations (rule heads + EDB facts) and their arg keys",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "max-iterations",
+          "usage": "Cap on fixpoint rounds per recursive cycle (the longest chain a recursive rule can follow)",
+          "type": "int",
+          "default": "100"
+        },
+        {
+          "name": "rule-file",
+          "shorthand": "f",
+          "usage": "Load additional rules from a CUE file",
+          "type": "string"
+        },
+        {
+          "name": "topo",
+          "usage": "Read the relation's from/to edges as a topological run order (errors on a cycle)",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "use": "reclassify",
+      "short": "Retry classification for items with unresolved schema references",
+      "long": "Find items in the catalog tagged with an unresolved CUE schema reference\n(schema ref declared at import time but not yet known to pudl) and\nattempt to upgrade their classification.\n\nWhen run without --ref, every unresolved row is considered. With --ref,\nonly rows tagged with that exact \"\u003cmodule\u003e@\u003cversion\u003e\" reference are\nprocessed.\n\nThis command is part of the mu plugin output schema flow — see\ndocs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W5).",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "ref",
+          "usage": "Only reclassify rows tagged with this schema ref (e.g. mu/aws@v1)",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "use": "rule",
+      "short": "Manage Datalog rules",
+      "long": "Manage Datalog rules used by pudl query.\n\nRules are CUE files stored in:\n  .pudl/schema/pudl/rules/     (repo-scoped)\n  ~/.pudl/schema/pudl/rules/   (global)\n\nAvailable subcommands:\n- add: Install a rule file into the workspace\n\nExamples:\n    pudl rule add my-rules.cue\n    pudl rule add my-rules.cue --global",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "add \u003cfile\u003e",
+          "short": "Install a Datalog rule file into the workspace",
+          "long": "Validate and install a CUE rule file into the rule directory.\n\nThe file must contain valid CUE with at least one #Rule-shaped value\n(fields with head and body). The file is validated before installation.\n\nBy default, rules are installed repo-scoped (.pudl/schema/pudl/rules/).\nUse --global to install to ~/.pudl/schema/pudl/rules/.\n\nExamples:\n    pudl rule add transitive-deps.cue\n    pudl rule add company-standards.cue --global",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Install as a global rule (~/.pudl/schema/pudl/rules/)",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "new \u003cname\u003e",
+          "short": "Scaffold a Datalog rule",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "force",
+              "usage": "Replace an existing rule scaffold",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "run [\u003cmodel\u003e]",
+      "short": "Run a #SystemModel instance (observe-only, or --converge)",
+      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema first, then the global ~/.pudl/schema. Register one with\n\"pudl schema add\". Default is OBSERVE-ONLY: populate -\u003e drift -\u003e checks -\u003e\nreport, no mutation. Pass --converge to close drift; see the V1 build spec.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift, pending changes (--dry-run) or a failing fail-severity check,\n1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run k8sPolicy --converge\n    pudl run k8sConverge --converge --only web,api\n    pudl run k8sConverge --converge --dry-run",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "catalog-scope",
+          "usage": "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under",
+          "type": "string"
+        },
+        {
+          "name": "check-upstream",
+          "usage": "warn if any transitive upstream model (depends_on) is drifted/failed",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "converge",
+          "usage": "opt into the convergence loop (mutates the target)",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "detailed-exitcode",
+          "usage": "exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "dry-run",
+          "usage": "print the plan, execute nothing (requires --converge)",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "from-catalog",
+          "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "input",
+          "usage": "Ad-hoc populate input key=value (repeatable)",
+          "type": "stringArray",
+          "default": "[]"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "max-applies",
+          "usage": "durable cap on applies since this model was last verified clean; 0 disables (requires --converge)",
+          "type": "int",
+          "default": "20"
+        },
+        {
+          "name": "max-iters",
+          "usage": "loop iteration cap (requires --converge)",
+          "type": "int",
+          "default": "5"
+        },
+        {
+          "name": "max-observation-age",
+          "usage": "reject a bound producer snapshot older than this duration",
+          "type": "duration",
+          "default": "0s"
+        },
+        {
+          "name": "mu-root",
+          "usage": "mu project root to run within (default: discover mu.cue from the model dir)",
+          "type": "string"
+        },
+        {
+          "name": "mu-timeout",
+          "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
+          "type": "duration",
+          "default": "0s",
+          "persistent": true
+        },
+        {
+          "name": "only",
+          "usage": "converge only these resource selectors (requires --converge)",
+          "type": "stringSlice",
+          "default": "[]"
+        },
+        {
+          "name": "populate",
+          "usage": "Run an unregistered observer as plugin:\u003cname\u003e",
+          "type": "string"
+        },
+        {
+          "name": "require-approval",
+          "usage": "persist the converge request and wait for `pudl run resume \u003crun-id\u003e`",
+          "type": "bool",
+          "default": "false"
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "reject \u003coperation-id\u003e",
+          "short": "Reject a pending run or exact set plan",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "mu-timeout",
+              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
+              "type": "duration",
+              "default": "0s",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "report [operation-id]",
+          "short": "Read the latest or named standalone/set operation report",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "mu-timeout",
+              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
+              "type": "duration",
+              "default": "0s",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "resume \u003coperation-id\u003e",
+          "short": "Approve and continue a pending run or exact set plan",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "mu-timeout",
+              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
+              "type": "duration",
+              "default": "0s",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "set \u003cmodel\u003e [\u003cmodel\u003e...]",
+          "short": "Run an explicit producer/consumer model set in dependency order",
+          "long": "Run exactly the named models in dependency order.\n\nThe set is closed and explicit: pudl does not add missing producers. A binding\nwhose producer is not named fails preflight before any member runs. Without\n--converge, every member is observe-only and successful producer snapshots are\npinned for downstream plain bindings.\n\nWith --converge, pudl completes read-only preflight and exact mu planning for\nthe whole set before the first mutation. --require-approval persists and pauses\nany exact plan. A set that can write a sealed output is always approval-gated,\neven without the flag. Generated targets use strict sealed routing, so unused\ndeclarations, undeclared action claims, and ambiguous output writers fail during\nplanning before mutation or provider traffic. Resume rebuilds and revalidates\nthe exact plan before producer-first execution.\n\nExamples:\n  pudl run set network app\n  pudl run set network app --max-observation-age 15m\n  pudl run set network app --converge\n  pudl run set network app --converge --require-approval\n  pudl run set network app --detailed-exitcode\n  pudl run report\n  pudl run resume \u003crun-set-id\u003e\n  pudl run reject \u003crun-set-id\u003e",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "converge",
+              "usage": "plan and execute mutations only after every member completes read-only preflight",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "detailed-exitcode",
+              "usage": "exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "max-applies",
+              "usage": "durable apply budget per mutating member (0 disables)",
+              "type": "int",
+              "default": "20"
+            },
+            {
+              "name": "max-iters",
+              "usage": "maximum apply iterations per mutating member",
+              "type": "int",
+              "default": "5"
+            },
+            {
+              "name": "max-observation-age",
+              "usage": "reject a bound producer snapshot older than this duration",
+              "type": "duration",
+              "default": "0s"
+            },
+            {
+              "name": "mu-root",
+              "usage": "mu project root for member runs (default: discover per model)",
+              "type": "string"
+            },
+            {
+              "name": "mu-timeout",
+              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
+              "type": "duration",
+              "default": "0s",
+              "persistent": true
+            },
+            {
+              "name": "require-approval",
+              "usage": "persist the exact run-set plan and wait for approval before mutation",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "schema",
+      "short": "Manage CUE schemas for data validation",
+      "long": "Manage CUE schemas used for data validation and organization in PUDL.\n\nSchemas are organized by packages (aws, k8s, unknown, etc.) and stored in the\nactive schema repository: .pudl/schema/ inside an initialized repository, or\n~/.pudl/schema/ in global mode. Each CUE file defines structure and validation\nrules for imported data.\n\nAvailable subcommands:\n- list:    Show available schemas organized by package\n- add:     Add a new schema file to the repository\n- new:     Generate a new schema from imported data\n- show:    Display the contents of a schema\n- edit:    Open a schema file in your editor\n- status:  Show uncommitted changes in the schema repository\n- commit:  Commit schema changes to version control\n- log:     Show commit history of schema changes\n- reinfer: Re-run schema inference on existing entries\n- migrate: Migrate schema names to canonical format\n\nExamples:\n    pudl schema list                           # List all schemas\n    pudl schema list --package aws             # List schemas in aws package\n    pudl schema add aws.rds-instance my.cue    # Add new schema to aws package\n    pudl schema status                         # Show uncommitted changes\n    pudl schema commit -m \"Add RDS schema\"     # Commit changes\n    pudl schema log                            # Show recent commits",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "add \u003cpackage\u003e.\u003cname\u003e \u003ccue-file\u003e",
+          "short": "Add a new schema to the repository",
+          "long": "Add a new CUE schema file to the schema repository.\n\nThe schema name should be in the format 'package.name' where:\n- package: The schema package (aws, k8s, custom, etc.)\n- name: The schema name within the package\n\nThe CUE file will be validated before adding to ensure:\n- Valid CUE syntax\n- Proper package declaration\n- Required metadata fields (_identity, _tracked, _version)\n\nThe schema file will be copied to the appropriate package directory and\nadded to the git working directory (not automatically committed).\n\nExamples:\n    pudl schema add aws.rds-instance rds-schema.cue\n    pudl schema add k8s.deployment my-deployment.cue\n    pudl schema add custom.api-response api.cue",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "commit",
+          "short": "Commit schema changes to version control",
+          "long": "Commit all pending schema changes to the git repository.\n\nThis command will:\n1. Stage all modified, added, and deleted schema files\n2. Create a commit with the provided message\n3. Update the schema repository history\n\nA commit message is required and should describe the changes being made.\n\nExamples:\n    pudl schema commit -m \"Add RDS instance schema\"\n    pudl schema commit -m \"Update EC2 schema with new fields\"\n    pudl schema commit -m \"Remove deprecated K8s schemas\"",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "message",
+              "shorthand": "m",
+              "usage": "Commit message (required)",
+              "type": "string"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "usage": "Show detailed commit information",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "edit \u003cpath\u003e",
+          "short": "Open a schema file in your editor",
+          "long": "Open a schema file in your configured editor.\n\nThe path can optionally include a definition name to position the cursor at that\ndefinition (supported for vim/nvim editors).\n\nExamples:\n    pudl schema edit aws/ec2:#Instance    # Opens the file and positions at #Instance if possible\n    pudl schema edit aws/ec2              # Opens the aws/ec2.cue file",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List schema definitions and resource metadata",
+          "long": "List schemas using full package.#Definition names accepted by 'pudl schema show'.\nThe listing includes resource types. Use --verbose for source paths, identity fields,\ntracked fields, and collection metadata, or --json for the complete representation.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "package",
+              "usage": "Filter by package name",
+              "type": "string"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "usage": "Show paths and schema metadata",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "log",
+          "short": "Show commit history of schema changes",
+          "long": "Show the commit history of the schema repository.\n\nThis command displays recent commits with information about:\n- Commit hash (short and full)\n- Author name\n- Commit date and time\n- Commit message\n\nUse --limit to control how many commits to show.\n\nExamples:\n    pudl schema log                     # Show recent commits (default: 10)\n    pudl schema log --limit 20          # Show last 20 commits\n    pudl schema log --verbose           # Show detailed commit information",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "Number of commits to show",
+              "type": "int",
+              "default": "10"
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "usage": "Show detailed commit information",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "migrate",
+          "short": "Migrate catalog schema names to canonical format",
+          "long": "Migrate all schema names in the catalog database to canonical format.\n\nThis command normalizes schema names from various formats to the canonical format:\n  \u003cpackage\u003e.\u003c#Definition\u003e  (e.g., aws/ec2.#Instance, pudl/core.#Item)\n\nInput formats that are normalized:\n  - pudl.schemas/aws/ec2@v0:#Instance  -\u003e aws/ec2.#Instance\n  - pudl.schemas/aws/ec2:#Instance     -\u003e aws/ec2.#Instance\n  - aws/ec2:#Instance                  -\u003e aws/ec2.#Instance\n  - core.#Item                         -\u003e pudl/core.#Item\n\nThis migration is idempotent - running it multiple times is safe.\n\nExamples:\n    # Migrate all schema names\n    pudl schema migrate",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "new",
+          "short": "Generate a new schema from imported data",
+          "long": "Generate a new CUE schema by analyzing data from a previously imported entry.\n\nThis command creates a new schema file based on the structure of imported data,\ninferring field types, identifying likely identity fields, and generating\nappropriate CUE type definitions.\n\nThe --from flag specifies the proquint ID of the imported data to analyze.\nThe --path flag specifies where to create the schema (package path and definition name).\n\nIf the path contains a # character, everything after it is used as the definition name.\nOtherwise, the last path component is capitalized and used as the definition name.\n\nWhen --from points to a collection entry:\n- Without --collection: analyzes individual items to create an item schema\n- With --collection: creates a schema for the collection structure itself\n\nThe --infer flag allows specifying type hints for specific fields, such as\nmarking a field as an enum type.\n\nExamples:\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance\n    pudl schema new --from govim-nupab --path aws/ec2:#Instance  # from collection\n    pudl schema new --from govim-nupab --path aws/ec2:#InstanceCollection --collection\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance --infer State=enum",
+          "flags": [
+            {
+              "name": "collection",
+              "usage": "Create a collection schema instead of item schema",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "force",
+              "usage": "Overwrite existing schema files",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "from",
+              "usage": "Proquint ID of the imported data to generate schema from (required)",
+              "type": "string"
+            },
+            {
+              "name": "infer",
+              "usage": "Field inference hints (e.g., State=enum)",
+              "type": "stringArray",
+              "default": "[]"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "path",
+              "usage": "Schema path in format 'package/path:#Definition' (required)",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "reinfer",
+          "short": "Re-run schema inference on existing catalog entries",
+          "long": "Re-run schema inference on data that has already been imported.\n\nThis command is useful when:\n- New schemas have been added and you want existing data to match against them\n- Schema cascade priorities have been modified\n- You want to batch-update schema assignments without interactive review\n\nThe command will re-analyze each matching entry and update its schema assignment\nif a better match is found.\n\nExamples:\n    # Re-infer all entries currently assigned to unknown schema\n    pudl schema reinfer --schema core.#Item\n\n    # Re-infer a specific entry\n    pudl schema reinfer --entry babod-fakak\n\n    # Preview what would change for all entries\n    pudl schema reinfer --all --dry-run\n\n    # Re-infer all entries from a specific origin\n    pudl schema reinfer --origin aws-ec2\n\n    # Force re-inference without confirmation\n    pudl schema reinfer --all --force",
+          "flags": [
+            {
+              "name": "all",
+              "usage": "Re-infer schemas for all catalog entries",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "dry-run",
+              "usage": "Show what would change without applying updates",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "entry",
+              "usage": "Re-infer schema for a specific entry by proquint ID",
+              "type": "string"
+            },
+            {
+              "name": "force",
+              "usage": "Apply changes without confirmation prompt",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "origin",
+              "usage": "Re-infer only entries from a specific origin",
+              "type": "string"
+            },
+            {
+              "name": "schema",
+              "usage": "Re-infer only entries currently assigned to this schema",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "show \u003cschema-name\u003e",
+          "short": "Display the contents of a schema",
+          "long": "Display the contents of a schema definition.\n\nThe schema name can be specified in formats like:\n  - aws/ec2.#Instance     (package.#Definition)\n  - aws/ec2:#Instance     (package:#Definition)\n\nExamples:\n    pudl schema show aws/ec2.#Instance\n    pudl schema show pudl/core.#Item\n    pudl s show aws/ec2:#Instance",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "status",
+          "short": "Show uncommitted changes in the schema repository",
+          "long": "Show the current status of the schema repository, including:\n- Modified files\n- Added files\n- Deleted files\n- Untracked files\n\nThis command helps you see what schema changes are pending before committing them.\n\nExamples:\n    pudl schema status                  # Show all uncommitted changes\n    pudl schema status --verbose        # Show detailed file status",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "verbose",
+              "shorthand": "v",
+              "usage": "Show detailed file status",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "setup",
+      "short": "Set up shell integration for PUDL",
+      "long": "Set up shell integration for PUDL by adding helpful aliases and functions\nto your shell configuration files.\n\nThis command adds the following integrations:\n- 'pcd' alias: Quick navigation to PUDL schema repository\n- 'pudl-cd' function: Enhanced directory navigation with status\n- Shell completion setup (if supported)\n\nSupported shells:\n- bash (.bashrc)\n- zsh (.zshrc)\n- fish (config.fish)\n\nThe setup will:\n1. Detect your current shell automatically\n2. Add PUDL integration snippets to the appropriate config file\n3. Backup existing config before making changes\n4. Provide instructions for activating the changes\n\nExamples:\n    pudl setup                     # Auto-detect shell and install\n    pudl setup --shell bash        # Force bash setup\n    pudl setup --dry-run           # Show what would be added\n    pudl setup --uninstall         # Remove PUDL integration",
+      "flags": [
+        {
+          "name": "dry-run",
+          "usage": "Show what would be added without making changes",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "shell",
+          "usage": "Target shell (bash, zsh, fish) - auto-detected if not specified",
+          "type": "string"
+        },
+        {
+          "name": "uninstall",
+          "usage": "Remove PUDL shell integration",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "use": "show \u003cid\u003e",
+      "short": "Show detailed information about a specific data entry",
+      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "metadata",
+          "usage": "Show metadata file content",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "raw",
+          "usage": "Show raw data content",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
+    {
+      "use": "snapshot",
+      "short": "Inspect and retain observation snapshots",
+      "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl run --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "current \u003cmodel\u003e",
+          "short": "Show the newest observation snapshot for a model",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List observation snapshots, newest first",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "maximum rows (0 = no limit)",
+              "type": "int",
+              "default": "20"
+            },
+            {
+              "name": "model",
+              "usage": "only this model's snapshots",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "prune",
+          "short": "Remove snapshots a retention policy no longer wants",
+          "long": "Remove old observation snapshots, their records and their raw files.\n\n--keep and --older-than are an AND: a snapshot goes only if it is outside the\nnewest N for its model AND older than the cutoff. That means --keep 0 alone\nremoves nothing, which is deliberate — a prune that empties a model's history\nbecause a flag defaulted to zero is the more expensive surprise.\n\nRecords are shared between snapshots by content, so a record is removed only\nwhen no remaining snapshot cites it. Retained snapshots, and snapshots recorded\nbefore the snapshot contract existed, are never removed.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "dry-run",
+              "usage": "report what would be removed, remove nothing",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "keep",
+              "usage": "always keep this many newest per model",
+              "type": "int",
+              "default": "10"
+            },
+            {
+              "name": "model",
+              "usage": "only this model's snapshots",
+              "type": "string"
+            },
+            {
+              "name": "older-than",
+              "usage": "only remove snapshots older than this (e.g. 720h)",
+              "type": "duration",
+              "default": "0s"
+            }
+          ]
+        },
+        {
+          "use": "retain \u003csnapshot-id\u003e",
+          "short": "Pin a snapshot against pruning (--release to unpin)",
+          "long": "Pin a snapshot so no retention policy removes it.\n\nSnapshots recorded before snapshot provenance existed cannot be pinned — they\ncarry no contract row — but they are never pruned either, for the same reason.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "release",
+              "usage": "unpin instead of pinning",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "show \u003csnapshot-id\u003e",
+          "short": "Show one snapshot's provenance and contents",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "status [target]",
+      "short": "Show convergence status of models and targets",
+      "long": "Display the convergence status recorded in the catalog — the per-target\nstatus the run loop writes (a model run's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted\n  clean       — observed == desired, drift re-check confirmed (in sync)\n  drifted     — observed != desired\n  converging  — actions applied, pending re-verification\n  failed      — a converge run failed (cap exhausted or execute error)\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
+      "use": "version",
+      "short": "Show version information",
+      "long": "Display version, commit hash, and build date information for PUDL.",
+      "flags": [
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    }
+  ]
+}
