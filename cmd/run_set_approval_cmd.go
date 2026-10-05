@@ -8,7 +8,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-func resumeRunSet(runSetID string) error {
+func resumeRunSet(runSetID string, deps runDeps) error {
 	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
 		return err
@@ -18,7 +18,7 @@ func resumeRunSet(runSetID string) error {
 	if err != nil {
 		return err
 	}
-	graph, context, rebuildErr := reconstructApprovedRunSet(db, report, storedPlan, request)
+	graph, context, rebuildErr := reconstructApprovedRunSet(db, report, storedPlan, request, deps.mu)
 	if rebuildErr != nil {
 		return markRunSetApprovalStale(db, approval, report, fmt.Errorf("rebuild exact plan: %w", rebuildErr))
 	}
@@ -44,7 +44,7 @@ func resumeRunSet(runSetID string) error {
 		return err
 	}
 	defer func() { _ = retainMutationPlanSnapshots(db, prepared, false) }()
-	return executePreparedMutationPlan(db, report, rebuilt, prepared)
+	return executePreparedMutationPlan(db, deps.mu, report, rebuilt, prepared)
 }
 
 func rejectRunSet(runSetID string) error {

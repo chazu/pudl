@@ -306,19 +306,14 @@ func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing
 
 	muRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	previousMuRoot := runSetMuRoot
-	runSetMuRoot = muRoot
-	t.Cleanup(func() { runSetMuRoot = previousMuRoot })
+	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
 	runner := &runSetMu{configs: map[string]string{}}
-	previousFactory := runMuRunnerFactory
-	runMuRunnerFactory = func() muRunner { return runner }
-	t.Cleanup(func() { runMuRunnerFactory = previousFactory })
+	deps := runDeps{mu: runner}
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	runSetCmd.Flags().Lookup("max-observation-age").Changed = false
 
-	err = runObserveSet(runSetCmd, []string{"consumer", "producer"})
+	err = executeRunSet([]string{"consumer", "producer"}, opts, deps)
 	require.NoError(t, err)
 	consumerConfig := runner.configs["//models/consumer:populate"]
 	assert.Contains(t, consumerConfig, `"bound":"ready"`)
@@ -368,19 +363,14 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 
 	muRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	previousMuRoot := runSetMuRoot
-	runSetMuRoot = muRoot
-	t.Cleanup(func() { runSetMuRoot = previousMuRoot })
+	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
 	runner := &runSetMu{configs: map[string]string{}, failProducer: true}
-	previousFactory := runMuRunnerFactory
-	runMuRunnerFactory = func() muRunner { return runner }
-	t.Cleanup(func() { runMuRunnerFactory = previousFactory })
+	deps := runDeps{mu: runner}
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	runSetCmd.Flags().Lookup("max-observation-age").Changed = false
 
-	err = runObserveSet(runSetCmd, []string{"consumer", "producer", "zeta"})
+	err = executeRunSet([]string{"consumer", "producer", "zeta"}, opts, deps)
 	require.ErrorContains(t, err, "run set")
 	assert.NotContains(t, runner.configs, "//models/consumer:populate")
 	assert.Contains(t, runner.configs, "//models/zeta:populate")
@@ -440,11 +430,11 @@ func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
 }
 
 func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	runner.producerEmpty = true
-	runSetConverge = false
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
+	h.runner.producerEmpty = true
+	h.opts.converge = false
 
-	err := runObserveSet(runSetCmd, []string{"consumer", "producer"})
+	err := h.run("consumer", "producer")
 	require.ErrorContains(t, err, "run set")
 	report := latestRunSetReportForTest(t, pudlDir)
 	require.Len(t, report.Members, 2)
@@ -470,12 +460,12 @@ func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource
 }
 
 func TestObserveOnlyRunSetDoesNotExecuteDormantConvergeSealedOutput(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	runSetConverge = false
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
+	h.opts.converge = false
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
-	assert.Equal(t, []string{"observe //models/sealed-mutator:drift"}, runner.operations)
-	assert.Empty(t, runner.applied)
+	require.NoError(t, h.run("sealed-mutator"))
+	assert.Equal(t, []string{"observe //models/sealed-mutator:drift"}, h.runner.operations)
+	assert.Empty(t, h.runner.applied)
 	report := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, "observe-only", report.Mode)
 	assert.Equal(t, database.RunStatusSucceeded, report.Status)
@@ -499,27 +489,16 @@ func TestMutatingRunSetPlansAllMembersBeforeApplyingAndPersistsReceipts(t *testi
 
 	muRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	previousMuRoot := runSetMuRoot
-	runSetMuRoot = muRoot
-	t.Cleanup(func() { runSetMuRoot = previousMuRoot })
+	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
 	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}}
-	previousFactory := runMuRunnerFactory
-	runMuRunnerFactory = func() muRunner { return runner }
-	t.Cleanup(func() { runMuRunnerFactory = previousFactory })
+	deps := runDeps{mu: runner}
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	previousConverge, previousApproval := runSetConverge, runSetRequireApproval
-	previousIters, previousApplies := runSetMaxIters, runSetMaxApplies
-	runSetConverge, runSetRequireApproval = true, false
-	runSetMaxIters, runSetMaxApplies = 3, 10
-	t.Cleanup(func() {
-		runSetConverge, runSetRequireApproval = previousConverge, previousApproval
-		runSetMaxIters, runSetMaxApplies = previousIters, previousApplies
-	})
-	runSetCmd.Flags().Lookup("max-observation-age").Changed = false
+	opts.converge, opts.requireApproval = true, false
+	opts.maxIters, opts.maxApplies = 3, 10
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-a"}))
+	require.NoError(t, executeRunSet([]string{"mutator-a"}, opts, deps))
 	assert.Equal(t, []string{
 		"observe //models/mutator-a:drift",
 		"plan //models/mutator-a:drift",
@@ -572,27 +551,16 @@ func TestMutatingRunSetFailureBlocksDependentsAndCancelsIndependentMutations(t *
 
 	muRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	previousMuRoot := runSetMuRoot
-	runSetMuRoot = muRoot
-	t.Cleanup(func() { runSetMuRoot = previousMuRoot })
+	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
 	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}, failApply: "mutator-a"}
-	previousFactory := runMuRunnerFactory
-	runMuRunnerFactory = func() muRunner { return runner }
-	t.Cleanup(func() { runMuRunnerFactory = previousFactory })
+	deps := runDeps{mu: runner}
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	previousConverge, previousApproval := runSetConverge, runSetRequireApproval
-	previousIters, previousApplies := runSetMaxIters, runSetMaxApplies
-	runSetConverge, runSetRequireApproval = true, false
-	runSetMaxIters, runSetMaxApplies = 3, 10
-	t.Cleanup(func() {
-		runSetConverge, runSetRequireApproval = previousConverge, previousApproval
-		runSetMaxIters, runSetMaxApplies = previousIters, previousApplies
-	})
-	runSetCmd.Flags().Lookup("max-observation-age").Changed = false
+	opts.converge, opts.requireApproval = true, false
+	opts.maxIters, opts.maxApplies = 3, 10
 
-	err = runObserveSet(runSetCmd, []string{"mutator-dependent", "mutator-b", "mutator-a"})
+	err = executeRunSet([]string{"mutator-dependent", "mutator-b", "mutator-a"}, opts, deps)
 	require.ErrorContains(t, err, "run set")
 	planA := indexOfString(runner.operations, "plan //models/mutator-a:drift")
 	planB := indexOfString(runner.operations, "plan //models/mutator-b:drift")
@@ -623,13 +591,13 @@ func TestMutatingRunSetFailureBlocksDependentsAndCancelsIndependentMutations(t *
 }
 
 func TestMutatingRunSetLostReceiptNeedsVerificationAndStopsLaterMutations(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
-	runner.invalidManifest = "mutator-a"
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
+	h.runner.invalidManifest = "mutator-a"
 
-	err := runObserveSet(runSetCmd, []string{"mutator-a", "mutator-b"})
+	err := h.run("mutator-a", "mutator-b")
 	require.ErrorContains(t, err, "run set")
-	assert.NotEqual(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-b:drift"))
+	assert.NotEqual(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
+	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-b:drift"))
 
 	report := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, report.Status)
@@ -664,7 +632,22 @@ func indexOfString(values []string, wanted string) int {
 	return -1
 }
 
-func setupMutatingRunSetFixture(t *testing.T, requireApproval bool) (*runSetMu, string) {
+// runSetHarness drives run sets with explicit options and an injected mu.
+type runSetHarness struct {
+	opts   runSetOptions
+	deps   runDeps
+	runner *runSetMu
+}
+
+func (h *runSetHarness) run(models ...string) error {
+	return executeRunSet(models, h.opts, h.deps)
+}
+
+func (h *runSetHarness) resume(operationID string) error {
+	return resumeOperation(operationID, h.deps)
+}
+
+func setupMutatingRunSetFixture(t *testing.T, requireApproval bool) (*runSetHarness, string) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	pudlDir := config.GetPudlDir()
@@ -683,26 +666,15 @@ func setupMutatingRunSetFixture(t *testing.T, requireApproval bool) (*runSetMu, 
 
 	muRoot := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	previousMuRoot := runSetMuRoot
-	runSetMuRoot = muRoot
-	t.Cleanup(func() { runSetMuRoot = previousMuRoot })
+	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
 	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}}
-	previousFactory := runMuRunnerFactory
-	runMuRunnerFactory = func() muRunner { return runner }
-	t.Cleanup(func() { runMuRunnerFactory = previousFactory })
+	deps := runDeps{mu: runner}
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	previousConverge, previousApproval := runSetConverge, runSetRequireApproval
-	previousIters, previousApplies := runSetMaxIters, runSetMaxApplies
-	runSetConverge, runSetRequireApproval = true, requireApproval
-	runSetMaxIters, runSetMaxApplies = 3, 10
-	t.Cleanup(func() {
-		runSetConverge, runSetRequireApproval = previousConverge, previousApproval
-		runSetMaxIters, runSetMaxApplies = previousIters, previousApplies
-	})
-	runSetCmd.Flags().Lookup("max-observation-age").Changed = false
-	return runner, pudlDir
+	opts.converge, opts.requireApproval = true, requireApproval
+	opts.maxIters, opts.maxApplies = 3, 10
+	return &runSetHarness{opts: opts, deps: deps, runner: runner}, pudlDir
 }
 
 func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
@@ -719,19 +691,19 @@ func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport 
 }
 
 func TestMutatingRunSetExactApprovalRevalidatesBeforeApplying(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-a"}))
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
+	h, pudlDir := setupMutatingRunSetFixture(t, true)
+	require.NoError(t, h.run("mutator-a"))
+	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
 	pending := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, "pending-approval", pending.Status)
 	assert.Equal(t, "pending", pending.ApprovalStatus)
 	require.Len(t, pending.Members, 1)
 	assert.Equal(t, database.RunStatusRunning, pending.Members[0].Result)
 
-	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
-	assert.NotEqual(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
-	require.Len(t, runner.expectDigests, 1, "apply must be guarded by the raw same-workspace mu plan identity")
-	assert.Len(t, runner.expectDigests[0], 64)
+	require.NoError(t, h.resume(pending.RunSetID))
+	assert.NotEqual(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
+	require.Len(t, h.runner.expectDigests, 1, "apply must be guarded by the raw same-workspace mu plan identity")
+	assert.Len(t, h.runner.expectDigests[0], 64)
 	completed := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
 	assert.Equal(t, "approved", completed.ApprovalStatus)
@@ -746,14 +718,14 @@ func TestMutatingRunSetExactApprovalRevalidatesBeforeApplying(t *testing.T) {
 }
 
 func TestMutatingRunSetChangedPlanInvalidatesApprovalWithoutApplying(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-a"}))
+	h, pudlDir := setupMutatingRunSetFixture(t, true)
+	require.NoError(t, h.run("mutator-a"))
 	pending := latestRunSetReportForTest(t, pudlDir)
-	runner.planSuffix = " changed"
+	h.runner.planSuffix = " changed"
 
-	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
+	err := h.resume(pending.RunSetID)
 	require.ErrorContains(t, err, "approval is stale")
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
+	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
 	stale := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, stale.Status)
 	assert.Equal(t, "stale", stale.ApprovalStatus)
@@ -761,12 +733,12 @@ func TestMutatingRunSetChangedPlanInvalidatesApprovalWithoutApplying(t *testing.
 }
 
 func TestMutatingRunSetRejectionPerformsNoMutation(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-a"}))
+	h, pudlDir := setupMutatingRunSetFixture(t, true)
+	require.NoError(t, h.run("mutator-a"))
 	pending := latestRunSetReportForTest(t, pudlDir)
 
 	require.NoError(t, runRejectCmd.RunE(runRejectCmd, []string{pending.RunSetID}))
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-a:drift"))
+	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
 	rejected := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, rejected.Status)
 	assert.Equal(t, "rejected", rejected.ApprovalStatus)
@@ -774,21 +746,21 @@ func TestMutatingRunSetRejectionPerformsNoMutation(t *testing.T) {
 }
 
 func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
 	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
 		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
+	require.NoError(t, h.run("sealed-mutator"))
 	pending := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, "pending-approval", pending.Status)
 	assert.Equal(t, "pending", pending.ApprovalStatus)
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/sealed-mutator:drift"))
+	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/sealed-mutator:drift"))
 
-	generated := runner.planConfigs["//models/sealed-mutator:drift"]
+	generated := h.runner.planConfigs["//models/sealed-mutator:drift"]
 	assert.Contains(t, generated, `sealed_routing: "strict"`)
 	assert.Contains(t, generated, `"TOKEN":"pass:apps/token"`)
 	assert.Contains(t, generated, `writable_refs: ["pass:apps/*"]`)
-	assert.NotContains(t, runner.configs["//models/sealed-mutator:drift"], "sealed_outputs",
+	assert.NotContains(t, h.runner.configs["//models/sealed-mutator:drift"], "sealed_outputs",
 		"read-only preflight must not activate converge-owned sealed outputs")
 
 	db, err := database.NewCatalogDB(pudlDir)
@@ -799,7 +771,7 @@ func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing
 	assert.NotContains(t, string(approval.Plan), "pass:apps/token", "durable exact plan must redact provider paths")
 	require.NoError(t, db.Close())
 
-	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
+	require.NoError(t, h.resume(pending.RunSetID))
 	completed := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
 	require.Len(t, completed.Members, 1)
@@ -818,14 +790,14 @@ func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing
 }
 
 func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
 	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
 		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"sealed-mutator"}))
+	require.NoError(t, h.run("sealed-mutator"))
 	pending := latestRunSetReportForTest(t, pudlDir)
-	runner.failApply = "sealed-mutator"
-	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
+	h.runner.failApply = "sealed-mutator"
+	err := h.resume(pending.RunSetID)
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "apps/token")
 
@@ -842,22 +814,22 @@ func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T
 }
 
 func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
 	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
 		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-secret-consumer", "mutator-secret-producer"}))
+	require.NoError(t, h.run("mutator-secret-consumer", "mutator-secret-producer"))
 	pending := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, []string{"mutator-secret-producer", "mutator-secret-consumer"}, pending.Ordered)
 	assert.Equal(t, "pending-approval", pending.Status)
-	assert.Contains(t, runner.planConfigs["//models/mutator-secret-consumer:drift"], `"TOKEN":"pass:apps/token"`)
-	assert.Contains(t, runner.planConfigs["//models/mutator-secret-consumer:drift"], `sealed_routing: "strict"`)
-	assert.NotContains(t, runner.configs["//models/mutator-secret-consumer:drift"], "sealed_inputs",
+	assert.Contains(t, h.runner.planConfigs["//models/mutator-secret-consumer:drift"], `"TOKEN":"pass:apps/token"`)
+	assert.Contains(t, h.runner.planConfigs["//models/mutator-secret-consumer:drift"], `sealed_routing: "strict"`)
+	assert.NotContains(t, h.runner.configs["//models/mutator-secret-consumer:drift"], "sealed_inputs",
 		"read-only preflight must not resolve converge-owned sealed inputs")
 
-	require.NoError(t, runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID}))
-	producerApply := indexOfString(runner.operations, "apply //models/mutator-secret-producer:drift")
-	consumerApply := indexOfString(runner.operations, "apply //models/mutator-secret-consumer:drift")
+	require.NoError(t, h.resume(pending.RunSetID))
+	producerApply := indexOfString(h.runner.operations, "apply //models/mutator-secret-producer:drift")
+	consumerApply := indexOfString(h.runner.operations, "apply //models/mutator-secret-consumer:drift")
 	assert.Greater(t, producerApply, -1)
 	assert.Greater(t, consumerApply, producerApply)
 
@@ -884,14 +856,14 @@ func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *test
 }
 
 func TestCompletedSealedWriteRemainsRecordedWhenLaterConsumerFails(t *testing.T) {
-	runner, pudlDir := setupMutatingRunSetFixture(t, false)
+	h, pudlDir := setupMutatingRunSetFixture(t, false)
 	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
 		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
 
-	require.NoError(t, runObserveSet(runSetCmd, []string{"mutator-secret-consumer", "mutator-secret-producer"}))
+	require.NoError(t, h.run("mutator-secret-consumer", "mutator-secret-producer"))
 	pending := latestRunSetReportForTest(t, pudlDir)
-	runner.failApply = "mutator-secret-consumer"
-	err := runResumeCmd.RunE(runResumeCmd, []string{pending.RunSetID})
+	h.runner.failApply = "mutator-secret-consumer"
+	err := h.resume(pending.RunSetID)
 	require.ErrorContains(t, err, "run set")
 
 	completed := latestRunSetReportForTest(t, pudlDir)
