@@ -19,6 +19,8 @@ type ChainValidator struct {
 	schemas     map[string]cue.Value      // Flattened schema map for quick access
 	metadata    map[string]SchemaMetadata // Flattened metadata map for quick access
 	schemaPaths []string
+	loadErrors  []SchemaLoadError
+	cycles      [][]string
 }
 
 // NewChainValidator creates a new chain validator with full CUE module support.
@@ -35,61 +37,16 @@ type ChainValidator struct {
 // 2. Uses CUE's load.Instances to load each package as a unified module
 // 3. Extracts all schema definitions and metadata from loaded modules
 // 4. Validates module integrity including cross-reference consistency
+//
+// A package that fails to load, or a schema that fails integrity checks, is
+// reported by LoadErrors rather than discarding its whole schema path.
 func NewChainValidator(schemaPaths ...string) (*ChainValidator, error) {
 	if len(schemaPaths) == 0 {
 		return nil, fmt.Errorf("at least one schema path is required")
 	}
 
-	allSchemas := make(map[string]cue.Value)
-	allMetadata := make(map[string]SchemaMetadata)
-	allModules := make(map[string]*LoadedModule)
-	var allLoaders []*CUEModuleLoader
-
-	for _, sp := range schemaPaths {
-		loader := SharedLoader(sp)
-		allLoaders = append(allLoaders, loader)
-
-		modules, err := loader.LoadAllModules()
-		if err != nil {
-			// Skip inaccessible or invalid schema directories
-			continue
-		}
-
-		// Validate module integrity for this path
-		if err := loader.ValidateModuleIntegrity(modules); err != nil {
-			// Skip paths with integrity issues
-			continue
-		}
-
-		schemas := loader.GetAllSchemas(modules)
-		metadata := loader.GetAllMetadata(modules)
-
-		// First-found wins: only add schemas not already seen
-		for name, val := range schemas {
-			if _, exists := allSchemas[name]; !exists {
-				allSchemas[name] = val
-			}
-		}
-		for name, meta := range metadata {
-			if _, exists := allMetadata[name]; !exists {
-				allMetadata[name] = meta
-			}
-		}
-		for name, mod := range modules {
-			if _, exists := allModules[name]; !exists {
-				allModules[name] = mod
-			}
-		}
-	}
-
-	cv := &ChainValidator{
-		loaders:     allLoaders,
-		modules:     allModules,
-		schemas:     allSchemas,
-		metadata:    allMetadata,
-		schemaPaths: schemaPaths,
-	}
-
+	cv := &ChainValidator{schemaPaths: schemaPaths}
+	cv.apply(LoadSchemaSet(schemaPaths))
 	return cv, nil
 }
 
@@ -123,7 +80,10 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 	result := NewValidationResult(intendedSchema)
 
 	// Build validation chain: intended → base (if any) → catchall
-	chain := cv.buildValidationChain(intendedSchema)
+	chain, err := cv.buildValidationChain(intendedSchema)
+	if err != nil {
+		return nil, err
+	}
 
 	// Convert data to CUE value using JSON encoding for proper type handling
 	jsonBytes, err := json.Marshal(data)
@@ -179,10 +139,14 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 
 // buildValidationChain builds the validation chain: intended → base (if any) → catchall.
 // Uses CUE's natural inheritance via base_schema references.
-func (cv *ChainValidator) buildValidationChain(intendedSchema string) []string {
+//
+// A base_schema cycle is an error: there is no family root to fall back to, and
+// walking the chain would never end.
+func (cv *ChainValidator) buildValidationChain(intendedSchema string) ([]string, error) {
 	fallbackSchema := cv.findFallbackSchemaName()
 
 	chain := []string{intendedSchema}
+	seen := map[string]bool{intendedSchema: true}
 
 	// Walk up the base schema chain
 	current := intendedSchema
@@ -191,9 +155,11 @@ func (cv *ChainValidator) buildValidationChain(intendedSchema string) []string {
 		if !exists || meta.BaseSchema == "" {
 			break
 		}
-		if !contains(chain, meta.BaseSchema) {
-			chain = append(chain, meta.BaseSchema)
+		if seen[meta.BaseSchema] {
+			return nil, fmt.Errorf("base_schema cycle: %s", FormatCycle(append(chain, meta.BaseSchema)))
 		}
+		seen[meta.BaseSchema] = true
+		chain = append(chain, meta.BaseSchema)
 		current = meta.BaseSchema
 	}
 
@@ -202,7 +168,7 @@ func (cv *ChainValidator) buildValidationChain(intendedSchema string) []string {
 		chain = append(chain, fallbackSchema)
 	}
 
-	return chain
+	return chain, nil
 }
 
 // extractValidationErrors converts CUE validation errors to structured format
@@ -398,48 +364,27 @@ func (cv *ChainValidator) GetModuleInfo(packageName string) (*LoadedModule, erro
 
 // ReloadModules reloads all CUE modules (useful for development/testing)
 func (cv *ChainValidator) ReloadModules() error {
-	allSchemas := make(map[string]cue.Value)
-	allMetadata := make(map[string]SchemaMetadata)
-	allModules := make(map[string]*LoadedModule)
-	var allLoaders []*CUEModuleLoader
-
-	for _, sp := range cv.schemaPaths {
-		loader := SharedLoader(sp)
-		allLoaders = append(allLoaders, loader)
-
-		modules, err := loader.LoadAllModules()
-		if err != nil {
-			continue
-		}
-
-		if err := loader.ValidateModuleIntegrity(modules); err != nil {
-			continue
-		}
-
-		schemas := loader.GetAllSchemas(modules)
-		metadata := loader.GetAllMetadata(modules)
-
-		for name, val := range schemas {
-			if _, exists := allSchemas[name]; !exists {
-				allSchemas[name] = val
-			}
-		}
-		for name, meta := range metadata {
-			if _, exists := allMetadata[name]; !exists {
-				allMetadata[name] = meta
-			}
-		}
-		for name, mod := range modules {
-			if _, exists := allModules[name]; !exists {
-				allModules[name] = mod
-			}
-		}
-	}
-
-	cv.loaders = allLoaders
-	cv.modules = allModules
-	cv.schemas = allSchemas
-	cv.metadata = allMetadata
-
+	cv.apply(LoadSchemaSet(cv.schemaPaths))
 	return nil
+}
+
+// apply installs a freshly loaded schema set.
+func (cv *ChainValidator) apply(set *SchemaSet) {
+	cv.loaders = set.Loaders
+	cv.modules = set.Modules
+	cv.schemas = set.Schemas
+	cv.metadata = set.Metadata
+	cv.loadErrors = set.Errors
+	cv.cycles = set.Cycles
+}
+
+// LoadErrors reports the schema packages that failed to load, and loaded
+// schemas that failed integrity checks, as of the last load.
+func (cv *ChainValidator) LoadErrors() []SchemaLoadError {
+	return append([]SchemaLoadError(nil), cv.loadErrors...)
+}
+
+// BaseSchemaCycles reports base_schema cycles among the loaded schemas.
+func (cv *ChainValidator) BaseSchemaCycles() [][]string {
+	return append([][]string(nil), cv.cycles...)
 }

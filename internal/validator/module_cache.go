@@ -90,8 +90,8 @@ type cachedModules struct {
 	modules     map[string]*LoadedModule
 }
 
-// loadAllModulesCached is LoadAllModules with the memo in front of it.
-func (loader *CUEModuleLoader) loadAllModulesCached() (map[string]*LoadedModule, error) {
+// loadAllModulesCached is LoadModules with the memo in front of it.
+func (loader *CUEModuleLoader) loadAllModulesCached() (map[string]*LoadedModule, []SchemaLoadError, error) {
 	loader.cacheMu.Lock()
 	defer loader.cacheMu.Unlock()
 
@@ -103,20 +103,21 @@ func (loader *CUEModuleLoader) loadAllModulesCached() (map[string]*LoadedModule,
 	}
 
 	if loader.cache != nil && loader.cache.fingerprint == fingerprint {
-		return copyModules(loader.cache.modules), nil
+		return copyModules(loader.cache.modules), nil, nil
 	}
 
-	modules, err := loader.loadAllModulesUncached()
-	if err != nil {
-		// A failed load is not cached. It is exactly the case where the caller may
-		// have fixed the problem — a dependency fetched, a syntax error corrected —
-		// between attempts, and caching the failure would hide the fix until the
-		// next process.
-		return nil, err
+	modules, loadErrs, err := loader.loadAllModulesUncached()
+	if err != nil || len(loadErrs) > 0 {
+		// A load with any failure is not cached. It is exactly the case where the
+		// caller may have fixed the problem — a dependency fetched, a syntax error
+		// corrected — between attempts, and caching the failure would hide the fix
+		// until the next process. A fetched dependency changes nothing under the
+		// schema directory, so the fingerprint alone would not notice it.
+		return modules, loadErrs, err
 	}
 
 	loader.cache = &cachedModules{fingerprint: fingerprint, modules: modules}
-	return copyModules(modules), nil
+	return copyModules(modules), nil, nil
 }
 
 // copyModules shallow-copies the module map and each module's two maps, so a
