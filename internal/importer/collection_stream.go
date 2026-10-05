@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -95,12 +96,16 @@ func (c *collectionStream) run(sourcePath, format, origin, storedPath string, si
 func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json.RawMessage) error {
 	e := c.importer
 
-	// Identity is the hash of the record's canonical JSON, unchanged from the
-	// path this replaces.
-	var itemData interface{}
-	if err := json.Unmarshal(raw, &itemData); err != nil {
+	// Decode without rounding numbers through float64: an integer beyond 2^53
+	// must reach inference, identity and storage with every digit intact.
+	itemData, err := idgen.DecodeJSONExact(raw)
+	if err != nil {
 		return fmt.Errorf("decode record %d: %w", index, err)
 	}
+	// Identity is the hash of the record's canonical JSON. For records whose
+	// numbers survive a float64 round trip the canonical bytes equal those of
+	// the earlier float64 path, so re-imports still deduplicate against items
+	// stored before.
 	canonical, err := json.Marshal(itemData)
 	if err != nil {
 		return fmt.Errorf("marshal record %d: %w", index, err)
@@ -120,10 +125,13 @@ func (c *collectionStream) writeItem(tx *database.CatalogTx, index int, raw json
 
 	itemFilename := fmt.Sprintf("%s_item_%d", c.collectionID, index)
 	itemPath := filepath.Join(c.rawDir, itemFilename+".json")
-	stored, err := json.MarshalIndent(itemData, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal record %d for storage: %w", index, err)
+	// Store the record as it arrived (indented), not a re-encoding of the
+	// decoded value, so retained evidence keeps the source's exact numbers.
+	var indented bytes.Buffer
+	if err := json.Indent(&indented, bytes.TrimSpace(raw), "", "  "); err != nil {
+		return fmt.Errorf("format record %d for storage: %w", index, err)
 	}
+	stored := indented.Bytes()
 	if err := os.WriteFile(itemPath, stored, 0o644); err != nil {
 		return fmt.Errorf("write item %d: %w", index, err)
 	}
