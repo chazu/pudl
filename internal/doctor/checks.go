@@ -470,8 +470,11 @@ func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
 	// Collect package directories under pudl/ that contain .cue files but are
 	// not part of the built-in bootstrap set.
 	unexpected := map[string]bool{}
-	filepath.Walk(pudlNS, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	walkErr := filepath.Walk(pudlNS, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return skipMissing(err)
+		}
+		if info.IsDir() {
 			return nil
 		}
 		if filepath.Ext(path) != ".cue" {
@@ -487,6 +490,9 @@ func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
 		}
 		return nil
 	})
+	if walkErr != nil {
+		return &CheckResult{Status: "warning", Message: "Failed to scan the pudl/ schema namespace", Details: walkErr.Error()}
+	}
 
 	if len(unexpected) > 0 {
 		pkgs := make([]string, 0, len(unexpected))
@@ -646,8 +652,11 @@ func CheckOrphanedFilesAt(pudlDir string) *CheckResult {
 
 	// Count orphaned files
 	orphanedCount := 0
-	filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	walkErr := filepath.Walk(dataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return skipMissing(err)
+		}
+		if info.IsDir() {
 			return nil
 		}
 		if !catalogedPaths[path] {
@@ -655,6 +664,9 @@ func CheckOrphanedFilesAt(pudlDir string) *CheckResult {
 		}
 		return nil
 	})
+	if walkErr != nil {
+		return &CheckResult{Status: "warning", Message: "Failed to scan data files for orphans", Details: walkErr.Error()}
+	}
 
 	if orphanedCount > 0 {
 		return &CheckResult{
@@ -670,4 +682,13 @@ func CheckOrphanedFilesAt(pudlDir string) *CheckResult {
 		Message: "No orphaned files found",
 		Details: "All data files are properly cataloged",
 	}
+}
+
+// skipMissing lets a directory walk treat a path that does not exist (the
+// root, or an entry removed mid-walk) as empty, and stop on any other error.
+func skipMissing(err error) error {
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }

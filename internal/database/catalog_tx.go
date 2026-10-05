@@ -2,6 +2,8 @@ package database
 
 import (
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"fmt"
 
 	"github.com/chazu/pudl/internal/errors"
@@ -128,7 +130,7 @@ func (c *CatalogDB) WithCatalogTx(fn func(*CatalogTx) error) error {
 	committed := false
 	defer func() {
 		if !committed {
-			conn.ExecContext(ctx, "ROLLBACK")
+			rollbackConn(ctx, conn)
 		}
 	}()
 
@@ -177,4 +179,13 @@ func getTargetStatusesIn(q dbtx) ([]TargetStatus, error) {
 	}
 
 	return statuses, nil
+}
+
+// rollbackConn aborts the transaction open on conn. If the rollback itself
+// fails, the connection is marked bad so the pool discards it instead of handing
+// out a connection with a transaction still open.
+func rollbackConn(ctx context.Context, conn *sql.Conn) {
+	if _, err := conn.ExecContext(ctx, "ROLLBACK"); err != nil {
+		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+	}
 }

@@ -210,24 +210,10 @@ func (c *CatalogDB) itemCitedOutside(itemID string, doomed map[string]bool) (boo
 func deleteSnapshotIn(q dbtx, snapshotID string) ([]string, error) {
 	// Read the members before the memberships go, and decide each one's fate by
 	// what still cites it afterwards.
-	rows, err := q.Query(`SELECT item_id FROM collection_memberships WHERE collection_id = ?`, snapshotID)
+	itemIDs, err := snapshotMemberIDs(q, snapshotID)
 	if err != nil {
-		return nil, fmt.Errorf("read snapshot %q members: %w", snapshotID, err)
+		return nil, err
 	}
-	var itemIDs []string
-	for rows.Next() {
-		var itemID string
-		if err := rows.Scan(&itemID); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("scan snapshot %q member: %w", snapshotID, err)
-		}
-		itemIDs = append(itemIDs, itemID)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return nil, fmt.Errorf("read snapshot %q members: %w", snapshotID, err)
-	}
-	rows.Close()
 
 	if _, err := q.Exec(`DELETE FROM collection_memberships WHERE collection_id = ?`, snapshotID); err != nil {
 		return nil, fmt.Errorf("delete snapshot %q memberships: %w", snapshotID, err)
@@ -283,4 +269,26 @@ func prunableRawFile(storedPath, dataDir string) bool {
 		return false
 	}
 	return strings.HasPrefix(absolute, rawRoot+string(filepath.Separator))
+}
+
+// snapshotMemberIDs lists the item IDs a snapshot holds. The rows are closed
+// before returning, so the caller can modify memberships on the same q.
+func snapshotMemberIDs(q dbtx, snapshotID string) ([]string, error) {
+	rows, err := q.Query(`SELECT item_id FROM collection_memberships WHERE collection_id = ?`, snapshotID)
+	if err != nil {
+		return nil, fmt.Errorf("read snapshot %q members: %w", snapshotID, err)
+	}
+	defer rows.Close()
+	var itemIDs []string
+	for rows.Next() {
+		var itemID string
+		if err := rows.Scan(&itemID); err != nil {
+			return nil, fmt.Errorf("scan snapshot %q member: %w", snapshotID, err)
+		}
+		itemIDs = append(itemIDs, itemID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read snapshot %q members: %w", snapshotID, err)
+	}
+	return itemIDs, nil
 }

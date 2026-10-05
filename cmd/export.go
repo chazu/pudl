@@ -116,19 +116,23 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 		return errors.NewInputError("No data could be loaded from matching entries", "", "")
 	}
 
-	// Set up output writer
-	var writer io.Writer = outw()
-	if exportOutput != "" {
-		file, err := os.Create(exportOutput)
-		if err != nil {
-			return errors.WrapError(errors.ErrCodeFileSystem, "Failed to create output file", err)
-		}
-		defer file.Close()
-		writer = file
+	if exportOutput == "" {
+		return writeExportData(outw(), exportData, exportFormat, exportPretty)
 	}
 
-	// Export in specified format
-	return writeExportData(writer, exportData, exportFormat, exportPretty)
+	file, err := os.Create(exportOutput)
+	if err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to create output file", err)
+	}
+	if err := writeExportData(file, exportData, exportFormat, exportPretty); err != nil {
+		file.Close()
+		return err
+	}
+	// Close flushes the file; a failure here means the export is incomplete.
+	if err := file.Close(); err != nil {
+		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to write output file", err)
+	}
+	return nil
 }
 
 // loadEntryData loads the stored data from an entry's path
@@ -180,14 +184,14 @@ func writeJSON(w io.Writer, data []map[string]interface{}, pretty bool) error {
 
 func writeYAML(w io.Writer, data []map[string]interface{}) error {
 	encoder := yaml.NewEncoder(w)
-	defer encoder.Close()
-
 	for _, item := range data {
 		if err := encoder.Encode(item); err != nil {
+			_ = encoder.Close() // the Encode error is the one to report
 			return err
 		}
 	}
-	return nil
+	// Close flushes the encoder's buffered output.
+	return encoder.Close()
 }
 
 func writeNDJSON(w io.Writer, data []map[string]interface{}) error {

@@ -437,18 +437,3 @@ type populateIngest struct {
 	source     string
 	plugin     observePluginRef
 }
-
-func localPluginDir(m *systemmodel.SystemModel, modelDir string) string {
-	if m == nil {
-		return ""
-	}
-	def, ok := m.PluginByName(m.Populate.Plugin)
-	if !ok || def.Script == "" {
-		return ""
-	}
-	script := def.Script
-	if !filepath.IsAbs(script) {
-		script = filepath.Join(modelDir, script)
-	}
-	return filepath.Dir(script)
-}
