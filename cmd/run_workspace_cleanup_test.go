@@ -147,7 +147,6 @@ func TestExitOnSecondSignal_RemovesWorkspacesAndExits(t *testing.T) {
 	assert.Equal(t, forcedExitCode, exitErr.ExitCode(), "a forced exit uses the conventional SIGINT status")
 }
 
-
 func TestSweepStaleWorkspaces(t *testing.T) {
 	muRoot := t.TempDir()
 
