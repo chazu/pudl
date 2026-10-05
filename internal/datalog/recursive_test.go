@@ -34,7 +34,7 @@ func TestRecursiveTransitiveClosure(t *testing.T) {
 		},
 	}
 
-	results, err := EvalRecursive(db, rules, "ancestor", nil, TemporalScope{})
+	results, err := Evaluate(db, rules, "ancestor", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestRecursiveReachability(t *testing.T) {
 		},
 	}
 
-	results, err := EvalRecursive(db, rules, "reachable", nil, TemporalScope{})
+	results, err := Evaluate(db, rules, "reachable", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestRecursiveConstraintFiltering(t *testing.T) {
 		},
 	}
 
-	results, err := EvalRecursive(db, rules, "ancestor", map[string]interface{}{"a": "alice"}, TemporalScope{})
+	results, err := Evaluate(db, rules, "ancestor", map[string]interface{}{"a": "alice"}, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestRecursiveFixpointTermination(t *testing.T) {
 		},
 	}
 
-	results, err := EvalRecursive(db, rules, "path", nil, TemporalScope{})
+	results, err := Evaluate(db, rules, "path", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestRecursiveEmptyBaseCase(t *testing.T) {
 		},
 	}
 
-	results, err := EvalRecursive(db, rules, "ancestor", nil, TemporalScope{})
+	results, err := Evaluate(db, rules, "ancestor", nil, TemporalScope{})
 	if err != nil {
 		t.Fatal(err)
 	}

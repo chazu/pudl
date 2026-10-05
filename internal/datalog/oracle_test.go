@@ -178,6 +178,14 @@ func oracleFixpoint(db *database.CatalogDB, all, recRules, baseRules []Rule, rel
 	return scanTuples(rows, relation)
 }
 
+func derivedRelations(rules []Rule) map[string]bool {
+	rels := make(map[string]bool)
+	for _, r := range rules {
+		rels[r.Head.Rel] = true
+	}
+	return rels
+}
+
 func headColumnsOf(rules []Rule) map[string][]string {
 	cols := map[string][]string{}
 	for _, r := range rules {

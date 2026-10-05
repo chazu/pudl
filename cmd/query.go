@@ -13,12 +13,13 @@ import (
 )
 
 var (
-	queryRuleFile     string
-	queryAllWorkspace bool
-	queryAsOfValid    string
-	queryAsOfTx       string
-	queryList         bool
-	queryTopo         bool
+	queryRuleFile      string
+	queryAllWorkspace  bool
+	queryAsOfValid     string
+	queryAsOfTx        string
+	queryList          bool
+	queryTopo          bool
+	queryMaxIterations int
 )
 
 var queryCmd = &cobra.Command{
@@ -113,9 +114,11 @@ Examples:
 			return err
 		}
 
-		// Evaluate: SQL for non-recursive rules, recursive fixpoint fallback.
+		// Evaluate only the relation's dependency closure: one SQL statement
+		// when it has no cycles, stratified fixpoint iteration when it does.
 		scope := datalog.TemporalScope{ValidAt: validAt, TxAt: txAt}
-		results, err := datalog.Evaluate(db, rules, relation, constraints, scope)
+		results, err := datalog.EvaluateWithOptions(db, rules, relation, constraints, scope,
+			datalog.EvalOptions{MaxIterations: queryMaxIterations})
 		if err != nil {
 			return err
 		}
@@ -197,6 +200,7 @@ func init() {
 	queryCmd.Flags().StringVar(&queryAsOfTx, "as-of-tx", "", "Evaluate over facts known at this time (RFC3339 or Unix)")
 	queryCmd.Flags().BoolVar(&queryList, "list", false, "List queryable relations (rule heads + EDB facts) and their arg keys")
 	queryCmd.Flags().BoolVar(&queryTopo, "topo", false, "Read the relation's from/to edges as a topological run order (errors on a cycle)")
+	queryCmd.Flags().IntVar(&queryMaxIterations, "max-iterations", datalog.DefaultMaxIterations, "Cap on fixpoint rounds per recursive cycle (the longest chain a recursive rule can follow)")
 
 	queryCmd.ValidArgsFunction = completeRelations
 }
