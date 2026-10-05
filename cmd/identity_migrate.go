@@ -87,14 +87,14 @@ func runIdentityMigrate() error {
 	}
 
 	if len(targets) == 0 {
-		fmt.Println("All entries already have resource_id. Nothing to migrate.")
+		fmt.Fprintln(outw(), "All entries already have resource_id. Nothing to migrate.")
 		return nil
 	}
 
 	if identityMigrateRecompute {
-		fmt.Printf("Recomputing identity for %d entries\n\n", len(targets))
+		fmt.Fprintf(outw(), "Recomputing identity for %d entries\n\n", len(targets))
 	} else {
-		fmt.Printf("Found %d entries without resource_id\n\n", len(targets))
+		fmt.Fprintf(outw(), "Found %d entries without resource_id\n\n", len(targets))
 	}
 
 	// Recompute resource_id + identity_json for each target, remembering the
@@ -105,7 +105,7 @@ func runIdentityMigrate() error {
 	for i := range targets {
 		oldResourceIDs[i] = targets[i].ResourceID
 		if err := migrateEntryIdentity(&targets[i], inferrer, graph); err != nil {
-			fmt.Printf("  SKIP %s: %v\n", targets[i].ID[:16], err)
+			fmt.Fprintf(outw(), "  SKIP %s: %v\n", targets[i].ID[:16], err)
 			failCount++
 			continue
 		}
@@ -145,26 +145,26 @@ func runIdentityMigrate() error {
 		newRID := *entry.ResourceID
 
 		if identityMigrateDryRun {
-			fmt.Printf("  WOULD UPDATE %s: %s -> %s%s\n",
+			fmt.Fprintf(outw(), "  WOULD UPDATE %s: %s -> %s%s\n",
 				entry.ID[:16], shortRID(oldResourceIDs[i]), newRID[:16], versionSuffix(entry.Version))
 			successCount++
 			continue
 		}
 
 		if err := catalogDB.UpdateEntry(entry); err != nil {
-			fmt.Printf("  FAIL %s: %v\n", entry.ID[:16], err)
+			fmt.Fprintf(outw(), "  FAIL %s: %v\n", entry.ID[:16], err)
 			failCount++
 			continue
 		}
 
-		fmt.Printf("  OK %s: %s -> %s%s\n",
+		fmt.Fprintf(outw(), "  OK %s: %s -> %s%s\n",
 			entry.ID[:16], shortRID(oldResourceIDs[i]), newRID[:16], versionSuffix(entry.Version))
 		successCount++
 	}
 
-	fmt.Printf("\nMigration complete: %d updated, %d failed\n", successCount, failCount)
+	fmt.Fprintf(outw(), "\nMigration complete: %d updated, %d failed\n", successCount, failCount)
 	if identityMigrateDryRun {
-		fmt.Println("(dry run — no changes applied)")
+		fmt.Fprintln(outw(), "(dry run — no changes applied)")
 	}
 
 	return nil

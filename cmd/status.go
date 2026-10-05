@@ -87,7 +87,7 @@ func runStatusAll() error {
 		if jsonOutput {
 			return GetOutputWriter().WriteJSON([]StatusOutput{})
 		}
-		fmt.Println("No statuses recorded.")
+		fmt.Fprintln(outw(), "No statuses recorded.")
 		return nil
 	}
 
@@ -154,8 +154,8 @@ func printStatusTable(statuses []database.TargetStatus) {
 		}
 	}
 
-	fmt.Printf("%-*s  %-*s  %s\n", defWidth, "Target", statusWidth, "Status", "Last Updated")
-	fmt.Printf("%s  %s  %s\n",
+	fmt.Fprintf(outw(), "%-*s  %-*s  %s\n", defWidth, "Target", statusWidth, "Status", "Last Updated")
+	fmt.Fprintf(outw(), "%s  %s  %s\n",
 		strings.Repeat("─", defWidth),
 		strings.Repeat("─", statusWidth),
 		strings.Repeat("─", 20))
@@ -171,7 +171,7 @@ func printStatusTable(statuses []database.TargetStatus) {
 		if len(s.Status) < statusWidth {
 			padding = strings.Repeat(" ", statusWidth-len(s.Status))
 		}
-		fmt.Printf("%-*s  %s%s  %s\n", defWidth, s.Target, styledStatus, padding, ts)
+		fmt.Fprintf(outw(), "%-*s  %s%s  %s\n", defWidth, s.Target, styledStatus, padding, ts)
 	}
 }
 
@@ -181,9 +181,9 @@ func printStatusDetail(ds *database.TargetStatus) {
 	if ts == "" {
 		ts = "—"
 	}
-	fmt.Printf("Target: %s\n", ds.Target)
-	fmt.Printf("Status:     %s\n", styledStatus)
-	fmt.Printf("Last Update: %s\n", ts)
+	fmt.Fprintf(outw(), "Target: %s\n", ds.Target)
+	fmt.Fprintf(outw(), "Status:     %s\n", styledStatus)
+	fmt.Fprintf(outw(), "Last Update: %s\n", ts)
 }
 
 func formatStatusTime(t time.Time) string {

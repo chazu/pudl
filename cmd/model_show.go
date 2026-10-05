@@ -35,7 +35,7 @@ converge arm, checks, and declared plugins.`,
 			if err != nil {
 				return err
 			}
-			fmt.Println(string(b))
+			fmt.Fprintln(outw(), string(b))
 			return nil
 		}
 		cfg, err := loadEffectiveConfig()
@@ -49,11 +49,11 @@ converge arm, checks, and declared plugins.`,
 		printModel(m, schemas)
 		if modelDiscover {
 			for _, plugin := range discoverModelPlugins(m, muPluginInfoFrom(cmd.Context())) {
-				fmt.Printf("  Discovery: %s", plugin.Name)
+				fmt.Fprintf(outw(), "  Discovery: %s", plugin.Name)
 				if plugin.Error != "" {
-					fmt.Printf(" (%s)", plugin.Error)
+					fmt.Fprintf(outw(), " (%s)", plugin.Error)
 				}
-				fmt.Println()
+				fmt.Fprintln(outw())
 			}
 		}
 		return nil
@@ -61,48 +61,48 @@ converge arm, checks, and declared plugins.`,
 }
 
 func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
-	fmt.Printf("Model: %s\n", m.Name)
-	fmt.Println(strings.Repeat("-", 60))
+	fmt.Fprintf(outw(), "Model: %s\n", m.Name)
+	fmt.Fprintln(outw(), strings.Repeat("-", 60))
 
 	// Populate arm.
 	switch m.Populate.Kind() {
 	case systemmodel.KindEweTarget:
-		fmt.Printf("  Populate:  ewe (%s)\n", m.Populate.EweSource)
+		fmt.Fprintf(outw(), "  Populate:  ewe (%s)\n", m.Populate.EweSource)
 		if len(m.Populate.Outputs) > 0 {
-			fmt.Printf("    outputs: %s\n", strings.Join(m.Populate.Outputs, ", "))
+			fmt.Fprintf(outw(), "    outputs: %s\n", strings.Join(m.Populate.Outputs, ", "))
 		}
 	default:
-		fmt.Printf("  Populate:  observe (plugin %q)\n", m.Populate.Plugin)
+		fmt.Fprintf(outw(), "  Populate:  observe (plugin %q)\n", m.Populate.Plugin)
 	}
 
 	// Converge arm.
 	if m.Convergent() {
-		fmt.Printf("  Converge:  %s\n", m.Converge.Plugin)
+		fmt.Fprintf(outw(), "  Converge:  %s\n", m.Converge.Plugin)
 	} else {
-		fmt.Printf("  Converge:  (observe-only)\n")
+		fmt.Fprintf(outw(), "  Converge:  (observe-only)\n")
 	}
 
 	// Desired state.
-	fmt.Printf("  Desired:   %d resource(s)\n", len(m.Desired))
+	fmt.Fprintf(outw(), "  Desired:   %d resource(s)\n", len(m.Desired))
 	for _, d := range m.Desired {
 		if s, ok := d["_schema"].(string); ok {
-			fmt.Printf("    - %s\n", describeDesiredSchema(s, schemas))
+			fmt.Fprintf(outw(), "    - %s\n", describeDesiredSchema(s, schemas))
 		}
 	}
 
 	// Checks.
 	if len(m.Checks) > 0 {
-		fmt.Printf("  Checks:    %d\n", len(m.Checks))
+		fmt.Fprintf(outw(), "  Checks:    %d\n", len(m.Checks))
 		for _, c := range m.Checks {
-			fmt.Printf("    - %s (%s, expect %s)\n", c.Name, c.Severity, c.Expect)
+			fmt.Fprintf(outw(), "    - %s (%s, expect %s)\n", c.Name, c.Severity, c.Expect)
 		}
 	}
 
 	if len(m.DependsOn) > 0 {
-		fmt.Printf("  Depends:   %s\n", strings.Join(m.DependsOn, ", "))
+		fmt.Fprintf(outw(), "  Depends:   %s\n", strings.Join(m.DependsOn, ", "))
 	}
 	if m.Freshness != nil {
-		fmt.Printf("  Freshness: every=%s drift=%t\n", m.Freshness.Every, m.Freshness.Drift)
+		fmt.Fprintf(outw(), "  Freshness: every=%s drift=%t\n", m.Freshness.Every, m.Freshness.Drift)
 	}
 
 	// Plugins.
@@ -111,7 +111,7 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		for _, p := range m.Plugins {
 			names = append(names, p.Name)
 		}
-		fmt.Printf("  Plugins:   %s\n", strings.Join(names, ", "))
+		fmt.Fprintf(outw(), "  Plugins:   %s\n", strings.Join(names, ", "))
 	}
 }
 

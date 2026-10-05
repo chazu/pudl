@@ -87,7 +87,12 @@ Examples:
 			return fmt.Errorf("ingest failed: %w", err)
 		}
 
-		fmt.Printf("Ingested %d observe results (snapshot %s)\n", result.Records, result.SnapshotID)
+		if jsonOutput {
+			return printJSON(map[string]any{
+				"records": result.Records, "snapshot_id": result.SnapshotID, "origin": ingestObserveOrigin,
+			})
+		}
+		fmt.Fprintf(outw(), "Ingested %d observe results (snapshot %s)\n", result.Records, result.SnapshotID)
 		return nil
 	},
 }

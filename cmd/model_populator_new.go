@@ -56,10 +56,10 @@ write: op.#WriteFile & { args: ["\(_env.result.MU_OUT)/records.json", _records] 
 		result := map[string]any{"path": path, "ewe_source": filepath.Join(args[0], "populate.cue"), "model": args[0]}
 		if jsonOutput {
 			b, _ := json.Marshal(result)
-			fmt.Println(string(b))
+			fmt.Fprintln(outw(), string(b))
 		} else {
-			fmt.Printf("created populator scaffold: %s\n", path)
-			fmt.Printf("set populate.eweSource to %q in the model\n", filepath.Join(args[0], "populate.cue"))
+			fmt.Fprintf(outw(), "created populator scaffold: %s\n", path)
+			fmt.Fprintf(outw(), "set populate.eweSource to %q in the model\n", filepath.Join(args[0], "populate.cue"))
 		}
 		return nil
 	},

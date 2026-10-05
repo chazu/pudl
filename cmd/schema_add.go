@@ -36,15 +36,9 @@ Examples:
     pudl schema add k8s.deployment my-deployment.cue
     pudl schema add custom.api-response api.cue`,
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		// Create error handler for CLI context
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		// Run the schema add command and handle any errors
-		if err := runSchemaAddCommand(args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(func(cmd *cobra.Command, args []string) error {
+		return runSchemaAddCommand(args)
+	}),
 }
 
 func init() {
@@ -80,7 +74,7 @@ func runSchemaAddCommand(args []string) error {
 	validator := schema.NewValidator()
 
 	// Validate the source file first
-	fmt.Printf("Validating schema file: %s\n", sourceFile)
+	fmt.Fprintf(outw(), "Validating schema file: %s\n", sourceFile)
 	result, err := validator.ValidateSchema(sourceFile)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeValidationFailed, "Failed to validate schema", err)
@@ -93,9 +87,9 @@ func runSchemaAddCommand(args []string) error {
 
 	// Show warnings if any
 	if len(result.Warnings) > 0 {
-		fmt.Println("⚠️  Validation warnings:")
+		fmt.Fprintln(outw(), "⚠️  Validation warnings:")
 		for _, warning := range result.Warnings {
-			fmt.Printf("  - %s\n", warning)
+			fmt.Fprintf(outw(), "  - %s\n", warning)
 		}
 	}
 
@@ -117,12 +111,12 @@ func runSchemaAddCommand(args []string) error {
 	}
 
 	// Add the schema
-	fmt.Printf("Adding schema file: %s\n", filepath.Join(packageName, schemaName+".cue"))
+	fmt.Fprintf(outw(), "Adding schema file: %s\n", filepath.Join(packageName, schemaName+".cue"))
 	if err := manager.AddSchema(packageName, schemaName, sourceFile); err != nil {
 		return errors.WrapError(errors.ErrCodeFileSystem, "Failed to add schema", err)
 	}
 
-	fmt.Printf("✅ Schema file added successfully: %s\n", filepath.Join(effectiveSchemaPath(cfg), packageName, schemaName+".cue"))
+	fmt.Fprintf(outw(), "✅ Schema file added successfully: %s\n", filepath.Join(effectiveSchemaPath(cfg), packageName, schemaName+".cue"))
 
 	// Show definitions found in the added file
 	var references []string
@@ -130,20 +124,20 @@ func runSchemaAddCommand(args []string) error {
 		references = append(references, schemaname.Format(packageName, definition))
 	}
 	if len(result.Definitions) > 0 {
-		fmt.Printf("   Package: %s\n", packageName)
-		fmt.Printf("   Definitions: %s\n", strings.Join(references, ", "))
+		fmt.Fprintf(outw(), "   Package: %s\n", packageName)
+		fmt.Fprintf(outw(), "   Definitions: %s\n", strings.Join(references, ", "))
 	}
 
-	fmt.Println()
-	fmt.Println("💡 Next steps:")
-	fmt.Println("   - Review the schema: pudl schema list --package " + packageName)
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "💡 Next steps:")
+	fmt.Fprintln(outw(), "   - Review the schema: pudl schema list --package "+packageName)
 	for _, reference := range references {
-		fmt.Println("   - Inspect the schema: pudl schema show " + reference)
+		fmt.Fprintln(outw(), "   - Inspect the schema: pudl schema show "+reference)
 	}
 	if len(references) == 1 {
-		fmt.Println("   - Import data using this schema: pudl import --path <file> --schema " + references[0])
+		fmt.Fprintln(outw(), "   - Import data using this schema: pudl import --path <file> --schema "+references[0])
 	}
-	fmt.Println("   - Commit schema changes: pudl schema commit -m \"Add schema file " + filepath.Join(packageName, schemaName+".cue") + "\"")
+	fmt.Fprintln(outw(), "   - Commit schema changes: pudl schema commit -m \"Add schema file "+filepath.Join(packageName, schemaName+".cue")+"\"")
 
 	return nil
 }

@@ -2,6 +2,7 @@ package repo
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -14,9 +15,18 @@ const pudlDirName = ".pudl"
 
 // InitOptions contains options for repo initialization.
 type InitOptions struct {
-	Dir     string // Directory to initialize (defaults to cwd)
-	Force   bool   // Overwrite existing .pudl/ directory
-	Verbose bool
+	Dir     string    // Directory to initialize (defaults to cwd)
+	Force   bool      // Overwrite existing .pudl/ directory
+	Verbose bool      // Report what was created
+	Out     io.Writer // Where verbose output goes (default: stdout)
+}
+
+// output is where verbose output is written.
+func (o InitOptions) output() io.Writer {
+	if o.Out != nil {
+		return o.Out
+	}
+	return os.Stdout
 }
 
 // Init initializes a .pudl/ directory in the target repo and installs
@@ -41,7 +51,7 @@ func Init(opts InitOptions) error {
 	}
 
 	if opts.Verbose {
-		fmt.Printf("Ensured %s\n", pudlDir)
+		fmt.Fprintf(opts.output(), "Ensured %s\n", pudlDir)
 	}
 
 	// Create workspace.cue
@@ -53,7 +63,7 @@ func Init(opts InitOptions) error {
 			return fmt.Errorf("creating workspace.cue: %w", err)
 		}
 		if opts.Verbose {
-			fmt.Printf("Created %s\n", workspaceCuePath)
+			fmt.Fprintf(opts.output(), "Created %s\n", workspaceCuePath)
 		}
 	}
 
@@ -115,12 +125,12 @@ func Init(opts InitOptions) error {
 	}
 
 	if opts.Verbose {
-		fmt.Printf("  workspace.cue  (workspace: %q)\n", dirName)
-		fmt.Printf("  schema/        (project-specific CUE schemas)\n")
-		fmt.Printf("  schema/models/ (registered #SystemModel definitions)\n")
-		fmt.Printf("  definitions/   (desired state definitions)\n")
-		fmt.Printf("  populators/    (#EweTarget programs and local model plugins)\n")
-		fmt.Printf("  data/          (repo-local raw data, metadata, and catalog)\n")
+		fmt.Fprintf(opts.output(), "  workspace.cue  (workspace: %q)\n", dirName)
+		fmt.Fprintf(opts.output(), "  schema/        (project-specific CUE schemas)\n")
+		fmt.Fprintf(opts.output(), "  schema/models/ (registered #SystemModel definitions)\n")
+		fmt.Fprintf(opts.output(), "  definitions/   (desired state definitions)\n")
+		fmt.Fprintf(opts.output(), "  populators/    (#EweTarget programs and local model plugins)\n")
+		fmt.Fprintf(opts.output(), "  data/          (repo-local raw data, metadata, and catalog)\n")
 	}
 
 	// Install skills into .claude/skills/
@@ -135,7 +145,7 @@ func Init(opts InitOptions) error {
 
 	skillList, _ := skills.ListSkills()
 	if opts.Verbose {
-		fmt.Printf("Installed %d PUDL skills to .claude/skills/\n", len(skillList))
+		fmt.Fprintf(opts.output(), "Installed %d PUDL skills to .claude/skills/\n", len(skillList))
 	}
 
 	return nil

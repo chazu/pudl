@@ -157,10 +157,10 @@ func printChecks(results []CheckResult) (failedFail bool) {
 	for _, r := range results {
 		switch {
 		case r.Passed && r.AdvisoryCount > 0:
-			fmt.Printf("  ⚠ %s [%s] advisory — %d match(es) outside --only scope: %s\n",
+			fmt.Fprintf(outw(), "  ⚠ %s [%s] advisory — %d match(es) outside --only scope: %s\n",
 				r.Name, r.Severity, r.AdvisoryCount, r.Message)
 		case r.Passed:
-			fmt.Printf("  ✓ %s (%s)\n", r.Name, r.Severity)
+			fmt.Fprintf(outw(), "  ✓ %s (%s)\n", r.Name, r.Severity)
 		default:
 			if r.Severity == "fail" {
 				failedFail = true
@@ -169,7 +169,7 @@ func printChecks(results []CheckResult) (failedFail bool) {
 			if r.AdvisoryCount > 0 {
 				outside = fmt.Sprintf(" (+%d outside --only scope)", r.AdvisoryCount)
 			}
-			fmt.Printf("  ✗ %s [%s] FAIL — %d match(es)%s: %s\n",
+			fmt.Fprintf(outw(), "  ✗ %s [%s] FAIL — %d match(es)%s: %s\n",
 				r.Name, r.Severity, r.Count, outside, r.Message)
 		}
 	}

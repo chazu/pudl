@@ -72,23 +72,23 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 			displayCheckResult(health.Name, &doctor.CheckResult{Status: health.Status, Message: health.Message, Details: health.Details, Fix: health.Fix})
 		}
 		for _, entry := range report.Catalog {
-			fmt.Printf("%s [%s]: %s", entry.Proquint, entry.Schema, entry.Status)
+			fmt.Fprintf(outw(), "%s [%s]: %s", entry.Proquint, entry.Schema, entry.Status)
 			if entry.InferredSchema != "" {
-				fmt.Printf(" (inferred %s)", entry.InferredSchema)
+				fmt.Fprintf(outw(), " (inferred %s)", entry.InferredSchema)
 			}
 			if entry.Error != "" {
-				fmt.Printf(" — %s", entry.Error)
+				fmt.Fprintf(outw(), " — %s", entry.Error)
 			}
-			fmt.Println()
+			fmt.Fprintln(outw())
 		}
 		if report.Error != "" {
-			fmt.Println(report.Error)
+			fmt.Fprintln(outw(), report.Error)
 		}
-		fmt.Printf("Catalog: %d entries checked\n", len(report.Catalog))
+		fmt.Fprintf(outw(), "Catalog: %d entries checked\n", len(report.Catalog))
 		if report.OK {
-			fmt.Println("Health check passed")
+			fmt.Fprintln(outw(), "Health check passed")
 		} else {
-			fmt.Println("Health check failed")
+			fmt.Fprintln(outw(), "Health check failed")
 		}
 	}
 	if !report.OK {
@@ -161,17 +161,17 @@ func displayCheckResult(name string, result *doctor.CheckResult) {
 		icon = "❓"
 	}
 
-	fmt.Printf("%s %s\n", icon, name)
-	fmt.Printf("   Status: %s\n", result.Status)
-	fmt.Printf("   Message: %s\n", result.Message)
+	fmt.Fprintf(outw(), "%s %s\n", icon, name)
+	fmt.Fprintf(outw(), "   Status: %s\n", result.Status)
+	fmt.Fprintf(outw(), "   Message: %s\n", result.Message)
 
 	if result.Details != "" {
-		fmt.Printf("   Details: %s\n", result.Details)
+		fmt.Fprintf(outw(), "   Details: %s\n", result.Details)
 	}
 
 	if result.Fix != "" {
-		fmt.Printf("   Fix: %s\n", result.Fix)
+		fmt.Fprintf(outw(), "   Fix: %s\n", result.Fix)
 	}
 
-	fmt.Println()
+	fmt.Fprintln(outw())
 }

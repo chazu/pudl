@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -59,7 +58,7 @@ func runReclassify(ref string) error {
 		return fmt.Errorf("list unresolved: %w", err)
 	}
 	if len(rows) == 0 {
-		fmt.Println("No unresolved schema references found.")
+		fmt.Fprintln(outw(), "No unresolved schema references found.")
 		return nil
 	}
 
@@ -68,7 +67,7 @@ func runReclassify(ref string) error {
 	for _, r := range rows {
 		resolved, err := tryResolveSchemaRef(cache, r.SchemaRef)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  WARN %s -> %s: %v\n", r.ItemID, r.SchemaRef, err)
+			fmt.Fprintf(errw(), "  WARN %s -> %s: %v\n", r.ItemID, r.SchemaRef, err)
 			stillUnresolved++
 			continue
 		}
@@ -86,11 +85,11 @@ func runReclassify(ref string) error {
 		upgraded++
 	}
 
-	fmt.Printf("Reclassify: %d upgraded, %d still unresolved (of %d total).\n",
+	fmt.Fprintf(outw(), "Reclassify: %d upgraded, %d still unresolved (of %d total).\n",
 		upgraded, stillUnresolved, len(rows))
 	if stillUnresolved > 0 {
-		fmt.Println("Tip: schemas referenced by these rows are not yet in pudl's schema cache.")
-		fmt.Printf("Cache root: %s\n", cache.Root())
+		fmt.Fprintln(outw(), "Tip: schemas referenced by these rows are not yet in pudl's schema cache.")
+		fmt.Fprintf(outw(), "Cache root: %s\n", cache.Root())
 	}
 	return nil
 }

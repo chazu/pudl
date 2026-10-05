@@ -72,7 +72,8 @@ type ListEntry struct {
 // ListResults contains the results of a list operation
 type ListResults struct {
 	Entries       []ListEntry `json:"entries"`
-	TotalEntries  int         `json:"total_entries"`
+	TotalEntries  int         `json:"total_entries"` // listable entries: matches capped by --limit
+	TotalMatched  int         `json:"total_matched"` // entries matching the filters, before --limit
 	TotalSize     int64       `json:"total_size"`
 	TotalRecords  int         `json:"total_records"`
 	UniqueSchemas []string    `json:"unique_schemas"`
@@ -161,8 +162,10 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 
 	// Calculate offset from page: offset = (page - 1) * perPage
 	offset := (page - 1) * perPage
+	pageSize := limitedPageSize(displayOpts.Limit, offset, perPage)
 
-	// Convert display options to database query options
+	// Convert display options to database query options. A page entirely past
+	// the limit still queries one page so the filtered count is available.
 	queryOpts := database.QueryOptions{
 		Limit:   perPage,
 		Offset:  offset,
@@ -187,15 +190,25 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 		return nil, err // Already a PUDLError from database
 	}
 
-	// Convert database entries to list entries
+	// Convert database entries to list entries, stopping at the limit
+	entries := queryResult.Entries
+	if len(entries) > pageSize {
+		entries = entries[:pageSize]
+	}
 	var listEntries []ListEntry
-	for _, dbEntry := range queryResult.Entries {
+	for _, dbEntry := range entries {
 		listEntry := dbEntryToListEntry(dbEntry)
 		listEntries = append(listEntries, listEntry)
 	}
 
+	// The listed total is the filtered count, capped by the limit.
+	totalEntries := queryResult.FilteredCount
+	if displayOpts.Limit > 0 && displayOpts.Limit < totalEntries {
+		totalEntries = displayOpts.Limit
+	}
+
 	// Calculate total pages
-	totalPages := (queryResult.FilteredCount + perPage - 1) / perPage
+	totalPages := (totalEntries + perPage - 1) / perPage
 	if totalPages < 1 {
 		totalPages = 1
 	}
@@ -203,7 +216,8 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	// Create results
 	results := &ListResults{
 		Entries:      listEntries,
-		TotalEntries: queryResult.FilteredCount, // Use filtered count as total for display
+		TotalEntries: totalEntries,
+		TotalMatched: queryResult.FilteredCount,
 		TotalPages:   totalPages,
 		CurrentPage:  page,
 	}
@@ -212,6 +226,22 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	l.calculateSummaryStats(results, listEntries)
 
 	return results, nil
+}
+
+// limitedPageSize is how many entries of the page starting at offset fall
+// within limit (0 means no limit).
+func limitedPageSize(limit, offset, perPage int) int {
+	if limit <= 0 {
+		return perPage
+	}
+	remaining := limit - offset
+	if remaining <= 0 {
+		return 0
+	}
+	if remaining < perPage {
+		return remaining
+	}
+	return perPage
 }
 
 // calculateSummaryStats calculates summary statistics for the results

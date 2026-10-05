@@ -53,14 +53,21 @@ Examples:
 			return fmt.Errorf("failed to ingest manifest: %w", err)
 		}
 
+		if jsonOutput {
+			return printJSON(map[string]any{
+				"run_id": result.RunID, "skipped": result.Skipped, "statuses_repaired": result.StatusesRepaired,
+				"actions": result.Total, "cached": result.Cached, "failed": result.Failed,
+			})
+		}
+
 		// Print summary
 		if result.Skipped {
-			fmt.Printf("Skipped duplicate manifest (already recorded by run_id: %s)\n", result.RunID)
+			fmt.Fprintf(outw(), "Skipped duplicate manifest (already recorded by run_id: %s)\n", result.RunID)
 			if result.StatusesRepaired > 0 {
-				fmt.Printf("Repaired %d resource status(es) the original ingest never recorded\n", result.StatusesRepaired)
+				fmt.Fprintf(outw(), "Repaired %d resource status(es) the original ingest never recorded\n", result.StatusesRepaired)
 			}
 		} else {
-			fmt.Printf("Ingested manifest (run_id: %s): %d actions (%d cached, %d failed)\n",
+			fmt.Fprintf(outw(), "Ingested manifest (run_id: %s): %d actions (%d cached, %d failed)\n",
 				result.RunID, result.Total, result.Cached, result.Failed)
 		}
 

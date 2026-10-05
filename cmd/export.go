@@ -39,13 +39,7 @@ Examples:
     pudl export --schema aws.#EC2Instance         # Export all EC2 instances
     pudl export --origin k8s-pods --format yaml   # Export K8s pods as YAML
     pudl export --id babod-fakak --output out.json  # Export to file`,
-	Run: func(cmd *cobra.Command, args []string) {
-		errorHandler := errors.NewCLIErrorHandler(true)
-
-		if err := runExportCommand(cmd, args); err != nil {
-			errorHandler.HandleError(err)
-		}
-	},
+	RunE: pudlRunE(runExportCommand),
 }
 
 func init() {
@@ -111,7 +105,7 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 	for _, entry := range entries {
 		data, err := loadEntryData(entry.StoredPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: Failed to load data for %s: %v\n",
+			fmt.Fprintf(errw(), "Warning: Failed to load data for %s: %v\n",
 				idgen.HashToProquint(entry.ID), err)
 			continue
 		}
@@ -123,7 +117,7 @@ func runExportCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set up output writer
-	var writer io.Writer = os.Stdout
+	var writer io.Writer = outw()
 	if exportOutput != "" {
 		file, err := os.Create(exportOutput)
 		if err != nil {

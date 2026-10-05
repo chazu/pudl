@@ -31,7 +31,7 @@ func newImportSession() (*importSession, error) {
 	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		if os.Getenv("PUDL_DEBUG") != "" {
-			fmt.Fprintf(os.Stderr, "DEBUG: Enhanced importer error: %+v\n", err)
+			fmt.Fprintf(errw(), "DEBUG: Enhanced importer error: %+v\n", err)
 		}
 		return nil, errors.NewSystemError("Failed to initialize enhanced importer", err)
 	}
