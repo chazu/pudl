@@ -8,14 +8,12 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
 
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // ChainValidator handles chained schema validation with full CUE module support
 type ChainValidator struct {
-	ctx         *cue.Context
 	loaders     []*CUEModuleLoader
 	modules     map[string]*LoadedModule
 	schemas     map[string]cue.Value      // Flattened schema map for quick access
@@ -41,8 +39,6 @@ func NewChainValidator(schemaPaths ...string) (*ChainValidator, error) {
 	if len(schemaPaths) == 0 {
 		return nil, fmt.Errorf("at least one schema path is required")
 	}
-
-	ctx := cuecontext.New()
 
 	allSchemas := make(map[string]cue.Value)
 	allMetadata := make(map[string]SchemaMetadata)
@@ -87,7 +83,6 @@ func NewChainValidator(schemaPaths ...string) (*ChainValidator, error) {
 	}
 
 	cv := &ChainValidator{
-		ctx:         ctx,
 		loaders:     allLoaders,
 		modules:     allModules,
 		schemas:     allSchemas,
@@ -135,11 +130,11 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal data to JSON: %w", err)
 	}
-	dataValue := cv.ctx.CompileBytes(jsonBytes)
 
-	if dataValue.Err() != nil {
-		return nil, fmt.Errorf("failed to encode data: %w", dataValue.Err())
-	}
+	// Schemas from different search paths live in different CUE contexts, and
+	// CUE only allows values from the same context in one operation. Compile the
+	// data once per schema context.
+	dataByCtx := make(map[*cue.Context]cue.Value)
 
 	// Try each schema in chain via CUE unification
 	for _, schemaName := range chain {
@@ -147,6 +142,16 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 		if !exists {
 			result.AddChainAttempt(schemaName, false, nil, "Schema not found")
 			continue
+		}
+
+		schemaCtx := schema.Context()
+		dataValue, compiled := dataByCtx[schemaCtx]
+		if !compiled {
+			dataValue = schemaCtx.CompileBytes(jsonBytes)
+			if dataValue.Err() != nil {
+				return nil, fmt.Errorf("failed to encode data: %w", dataValue.Err())
+			}
+			dataByCtx[schemaCtx] = dataValue
 		}
 
 		unified := schema.Unify(dataValue)
