@@ -58,16 +58,30 @@ func (s *Store) RetractFact(id string) error {
 	return s.db.RetractFact(id)
 }
 
-// FactHistory returns every fact ever recorded for a relation, including
-// retracted and invalidated ones, ordered by transaction time. This is the
-// audit trail; QueryFacts returns only live facts.
+// FactHistory returns every fact version ever recorded for a relation,
+// including retracted, superseded and invalidated ones, ordered by write
+// sequence. This is the audit trail; QueryFacts returns only live facts.
 func (s *Store) FactHistory(relation string) ([]Fact, error) {
 	return s.db.FactHistory(relation)
 }
 
-// InvalidateFact marks a fact as no longer valid (sets valid_end).
+// InvalidateFact records that a fact stopped being true now. It never rewrites
+// history: the open version's belief ends and a successor version with
+// valid_end set supersedes it. Use LatestFactVersion to read the successor.
 func (s *Store) InvalidateFact(id string) error {
 	return s.db.InvalidateFact(id)
+}
+
+// LatestFactVersion returns the newest version of the fact that id names,
+// following invalidation's supersession chain. An unsuperseded ID returns
+// itself.
+func (s *Store) LatestFactVersion(id string) (*Fact, error) {
+	return s.db.LatestFactVersion(id)
+}
+
+// FactVersions returns every version of the fact that id names, oldest first.
+func (s *Store) FactVersions(id string) ([]Fact, error) {
+	return s.db.FactVersions(id)
 }
 
 // Tx is a fact-store transaction handle, passed to the Transact callback. It

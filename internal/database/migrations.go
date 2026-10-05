@@ -63,6 +63,7 @@ var migrations = []migration{
 	{16, "run_set_approvals", (*CatalogDB).ensureRunSetApprovalsTable},
 	{17, "repair_fact_projections", (*CatalogDB).repairFactProjections},
 	{18, "retire_agent_memory_view", (*CatalogDB).retireAgentMemoryView},
+	{19, "fact_versioning", (*CatalogDB).ensureFactVersioning},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step
