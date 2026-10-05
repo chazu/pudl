@@ -41,7 +41,10 @@ func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}
 		allParams = append(allParams, cq.Params...)
 	}
 
-	fullSQL := strings.Join(queries, "\nUNION ALL\n")
+	// UNION, not UNION ALL: a relation is a set, so a tuple derived by two
+	// rules is one result. Every rule projects the relation's shared head keys
+	// in sorted order, so the positional union aligns columns by name.
+	fullSQL := strings.Join(queries, "\nUNION\n")
 
 	if len(constraints) > 0 {
 		fullSQL = fmt.Sprintf("SELECT * FROM (\n%s\n) AS derived", fullSQL)
@@ -52,7 +55,7 @@ func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}
 		sortStrings(keys)
 		var predicates []string
 		for _, key := range keys {
-			predicates = append(predicates, fmt.Sprintf("derived.\"%s\" = ?", strings.ReplaceAll(key, `"`, `""`)))
+			predicates = append(predicates, fmt.Sprintf("derived.%s = ?", quoteIdent(key)))
 			allParams = append(allParams, constraints[key])
 		}
 		fullSQL += " WHERE " + strings.Join(predicates, " AND ")
@@ -64,8 +67,7 @@ func (e *SQLEvaluator) Query(relation string, constraints map[string]interface{}
 	}
 	defer rows.Close()
 
-	headKeys := e.headKeysForRelation(matching)
-	return scanTuples(rows, relation, headKeys)
+	return scanTuples(rows, relation)
 }
 
 func (e *SQLEvaluator) rulesForRelation(relation string) []Rule {
@@ -76,21 +78,6 @@ func (e *SQLEvaluator) rulesForRelation(relation string) []Rule {
 		}
 	}
 	return result
-}
-
-func (e *SQLEvaluator) headKeysForRelation(rules []Rule) []string {
-	if len(rules) == 0 {
-		return nil
-	}
-	head := rules[0].Head
-	keys := make([]string, 0, len(head.Args))
-	for k, t := range head.Args {
-		if t.IsVariable() {
-			keys = append(keys, k)
-		}
-	}
-	sortStrings(keys)
-	return keys
 }
 
 func (e *SQLEvaluator) fallbackEDB(relation string, constraints map[string]interface{}) ([]Tuple, error) {
@@ -132,7 +119,7 @@ func (e *SQLEvaluator) fallbackEDB(relation string, constraints map[string]inter
 	return tuples, nil
 }
 
-func scanTuples(rows *sql.Rows, relation string, headKeys []string) ([]Tuple, error) {
+func scanTuples(rows *sql.Rows, relation string) ([]Tuple, error) {
 	cols, err := rows.Columns()
 	if err != nil {
 		return nil, err
