@@ -70,22 +70,25 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | Command | Description |
 |---------|-------------|
 | `pudl init` | Initialize or repair local `.pudl/` (`--global` selects `~/.pudl/`) |
-| `pudl import --path <file>` | Import data with automatic detection |
+| `pudl import --path <file\|dir\|pattern>` | Import data with automatic detection (stdin when piped; `--recursive` for directories) |
 | `pudl list` | Query catalog (filter by `--schema`, `--origin`, `--format`, etc.) |
 | `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`) |
 | `pudl delete <id>` | Remove entry from catalog |
 | `pudl export` | Export data by ID, schema, or origin to JSON/YAML/CSV/NDJSON |
+| `pudl snapshot list/show/current` | Inspect retained observation snapshots |
+| `pudl snapshot retain/prune` | Pin snapshots, or remove ones a retention policy no longer wants |
 
 ### Schema Management
 
 | Command | Description |
 |---------|-------------|
 | `pudl schema list` | List schemas (`--package`, `--verbose`) |
-| `pudl schema add <name> <file>` | Add a schema to the repository |
+| `pudl schema add <package>.<name> <cue-file>` | Add a schema to the repository |
 | `pudl schema new --from <id>` | Generate CUE schema from imported data |
-| `pudl schema show <name>` | Display schema details |
+| `pudl schema show <schema-name>` | Display schema details |
 | `pudl schema migrate` | Run schema migrations |
 | `pudl schema reinfer` | Re-infer schemas for existing entries |
+| `pudl reclassify` | Retry classification for items with unresolved schema references |
 
 ### Models
 
@@ -94,6 +97,9 @@ See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas
 | `pudl model list` | List registered `#SystemModel` instances with last-run status |
 | `pudl model show <name>` | Show a model's desired entries and details |
 | `pudl model validate <name>` | Validate an authored model template; bound values are concretely revalidated at run time |
+| `pudl model new <name>` | Scaffold a `#SystemModel` observer |
+| `pudl model populator new/add` | Scaffold or install a populator program for an `#EweTarget` model |
+| `pudl model deps` | Refresh and show the cross-model dependency graph |
 | `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
 | `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
 | `pudl run set <models...>` | Observe an exact producer/consumer set in dependency order |
@@ -120,6 +126,7 @@ See [docs/facts.md](docs/facts.md) for the bitemporal fact store documentation.
 |---------|-------------|
 | `pudl query <relation> [key=value ...]` | Evaluate rules and query derived facts |
 | `pudl rule add <file>` | Validate and install a Datalog rule file (`--global`) |
+| `pudl rule new <name>` | Scaffold a Datalog rule |
 
 See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule authoring guide.
 
@@ -130,8 +137,10 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 | `pudl doctor` | Workspace health, catalog validation, and inference stability |
 | `pudl example install git-inventory` | Install the bundled Git inventory model and sample observations |
 | `pudl config` | Show current configuration |
+| `pudl guide [topic]` / `pudl prime` | Quick-reference guide and agent prompt |
 
-See [docs/cli-reference.md](docs/cli-reference.md) for the full command reference.
+See [docs/cli-reference.md](docs/cli-reference.md) for the full command reference (generated
+from the command tree; `pudl help --json` prints it in machine-readable form).
 
 ## Command consolidation
 
