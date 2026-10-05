@@ -39,6 +39,11 @@ func commandTreeJSON(cmd *cobra.Command) commandHelpJSON {
 			return
 		}
 		fs.VisitAll(func(f *pflag.Flag) {
+			// cobra adds -h/--help lazily to whichever commands have executed in
+			// this process; omit it so the tree does not depend on history.
+			if f.Name == "help" {
+				return
+			}
 			flags[f.Name] = flagHelpJSON{
 				Name: f.Name, Shorthand: f.Shorthand, Usage: f.Usage,
 				Type: f.Value.Type(), Default: f.DefValue, Persistent: persistent,
@@ -114,4 +119,12 @@ var helpJSONCmd = &cobra.Command{
 
 func init() {
 	rootCmd.SetHelpCommand(helpJSONCmd)
+}
+
+// RootCommand returns the assembled command tree, including cobra's default
+// completion command (normally added only when the CLI executes), for tools
+// that document the CLI without running it.
+func RootCommand() *cobra.Command {
+	rootCmd.InitDefaultCompletionCmd()
+	return rootCmd
 }

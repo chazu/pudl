@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills
+.PHONY: all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint test-race coverage ci generate check-skills docs check-docs
 
 all: build
 
@@ -69,6 +69,15 @@ generate:
 # writing anything. Fails if `make generate` needs to be run and committed.
 check-skills:
 	$(GO) run ./internal/skills/gen -check
+
+# Regenerate docs/cli-reference.md from the command tree and docs/cli/notes/.
+docs:
+	$(GO) run ./internal/clidocs/gen
+
+# Verify docs/cli-reference.md is current without writing it. Fails if
+# `make docs` needs to be run and committed.
+check-docs:
+	$(GO) run ./internal/clidocs/gen -check
 
 # Gated end-to-end smoke tests (convergence + cross-model deps). They skip
 # cleanly when docker/k3d/kubectl/mu/bb/jq are missing and clean up after
@@ -134,5 +143,5 @@ coverage:
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 
-ci: check-skills lint test-race coverage
+ci: check-skills check-docs lint test-race coverage
 	@echo "All CI checks passed!"

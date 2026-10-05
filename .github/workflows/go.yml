@@ -27,6 +27,7 @@ jobs:
       - run: go build ./...
       - run: go test ./...
       - run: go run ./internal/skills/gen -check
+      - run: go run ./internal/clidocs/gen -check
       - run: make test-git-walkthrough
 
   race:
