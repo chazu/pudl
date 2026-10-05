@@ -38,25 +38,6 @@ func (c *CatalogDB) ensureCurrentFactsTable() error {
 	return nil
 }
 
-// backfillCurrentFacts populates current_facts from the facts table.
-// Only runs when current_facts is empty (first migration).
-func (c *CatalogDB) backfillCurrentFacts() error {
-	var count int
-	if err := c.db.QueryRow("SELECT COUNT(*) FROM current_facts").Scan(&count); err != nil {
-		return fmt.Errorf("failed to count current_facts: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	_, err := c.db.Exec(`
-		INSERT INTO current_facts (id, relation, args, source, provenance)
-		SELECT id, relation, args, source, provenance
-		FROM facts
-		WHERE valid_end IS NULL AND tx_end IS NULL`)
-	return err
-}
-
 // QueryCurrentFacts returns currently-valid facts for a relation.
 // Faster than QueryFacts with AsOfNow because it avoids temporal filtering.
 func (c *CatalogDB) QueryCurrentFacts(relation string) ([]Fact, error) {

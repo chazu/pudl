@@ -147,8 +147,8 @@ func TestCurrentFacts_Count(t *testing.T) {
 	assert.Equal(t, 2, obsCount)
 }
 
-func TestCurrentFacts_BackfillOnReopen(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "pudl-backfill-test-*")
+func TestCurrentFacts_SurviveReopen(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pudl-current-facts-reopen-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
@@ -159,11 +159,10 @@ func TestCurrentFacts_BackfillOnReopen(t *testing.T) {
 	require.NoError(t, err)
 	db.Close()
 
-	// Simulate pre-migration state: drop current_facts
+	// current_facts is maintained by the write itself, not re-derived on open.
 	db2, err := NewCatalogDB(tmpDir)
 	require.NoError(t, err)
 
-	// current_facts should have been backfilled on open
 	facts, err := db2.QueryCurrentFacts("obs")
 	require.NoError(t, err)
 	assert.Len(t, facts, 1)
