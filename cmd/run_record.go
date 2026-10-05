@@ -114,6 +114,14 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 		return
 	}
 
+	if err := db.FinishRun(runID, runConclusion(state, runErr)); err != nil && live {
+		fmt.Printf("warning: could not record run completion: %v\n", err)
+	}
+}
+
+// runConclusion is the terminal run row for a run that concluded in state and
+// ended with runErr.
+func runConclusion(state runFinishState, runErr error) database.RunConclusion {
 	// Both notes matter and neither supersedes the other: the scope note explains
 	// the verdict, the error explains why the run ended.
 	note := state.note
@@ -127,14 +135,12 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 	if runErr != nil {
 		completionStatus = database.RunStatusFailed
 	}
-	if err := db.FinishRun(runID, database.RunConclusion{
+	return database.RunConclusion{
 		CompletionStatus:  completionStatus,
 		Verdict:           state.verdict,
 		Outcome:           state.outcome,
 		NeedsVerification: state.needsVerification,
 		Note:              note,
 		Scoped:            state.scoped,
-	}); err != nil && live {
-		fmt.Printf("warning: could not record run completion: %v\n", err)
 	}
 }

@@ -9,12 +9,75 @@ import (
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// concludeRun evaluates checks, renders the report, and records the run's
-// verdict on the model row and its resources. runErr is the phases' outcome
-// error; the returned error is the run's final one. persisted reports whether
-// the report was saved, so the caller's deferred save does not repeat it.
+// concludeRun finalizes a standalone run, then saves and renders its report.
+// runErr is the phases' outcome error; the returned error is the run's final
+// one. persisted reports whether the report was saved, so the caller's
+// deferred save does not repeat it.
 func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error, deps runDeps) (persisted bool, err error) {
-	cat, model, flags, live := in.cat, in.model, in.flags, in.live
+	fin, err := finalizeRun(runFinalizeInput{
+		cat: in.cat, model: in.model, effective: in.effective, modelDir: in.modelDir,
+		runID: in.session.RunID, flags: in.flags, live: in.live,
+	}, report, finishState, runErr)
+	if err != nil {
+		return false, err
+	}
+
+	persisted = persistRunReport(in.cat, report, in.live)
+	out, err := report.render(jsonOutput)
+	if err != nil {
+		return persisted, err
+	}
+	if in.live && deps.set.emitOutput() {
+		fmt.Print("\n")
+	}
+	if deps.set.emitOutput() {
+		fmt.Print(out)
+	}
+	if in.live {
+		for _, notice := range fin.notices {
+			fmt.Print(notice)
+		}
+	}
+	return persisted, fin.runErr
+}
+
+// runFinalizeInput is what finalizeRun needs from a finished run.
+type runFinalizeInput struct {
+	cat *runCatalog
+	// model is the model as declared; effective is the scoped model the run
+	// actually planned and executed (the same model when unscoped).
+	model     *systemmodel.SystemModel
+	effective *systemmodel.SystemModel
+	modelDir  string
+	runID     string
+	flags     runFlags
+	live      bool
+}
+
+// runFinalization is what finalizeRun concluded.
+type runFinalization struct {
+	// runErr is the phases' error, or a fail-severity check failure when the
+	// phases succeeded.
+	runErr  error
+	verdict string
+	// notices explain a verdict to the operator; callers print them after the
+	// report.
+	notices []string
+}
+
+// errFailSeverityChecks is the run outcome when every phase succeeded but a
+// fail-severity check did not pass.
+var errFailSeverityChecks = fmt.Errorf("one or more fail-severity checks did not pass")
+
+// finalizeRun evaluates the model's checks, decides the run's verdict, and
+// records it on the model instance row and the model's resources. It is the one
+// conclusion shared by standalone runs and run-set converge members, so a set
+// member is checked, recorded and promoted exactly as a standalone run is.
+//
+// The verdict and its explanations land in state for the run row. err reports
+// a failure to evaluate the checks at all; nothing is recorded then.
+func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, runErr error) (runFinalization, error) {
+	cat, flags := in.cat, in.flags
 
 	// Checks run on every arm, converge included. They used to sit inside the
 	// observe-only branch, so a converge run reporting `clean` had evaluated
@@ -31,12 +94,12 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	// model would let a check assert over resources this run excluded.
 	if len(in.effective.Checks) > 0 && !flags.dryRun {
 		results, err := runChecks(cat, in.effective, in.modelDir, checkContext{
-			runID:       in.session.RunID,
+			runID:       in.runID,
 			fromCatalog: flags.fromCatalog,
-			scope:       acute.NewTupleScope(model, in.effective),
+			scope:       acute.NewTupleScope(in.model, in.effective),
 		})
 		if err != nil {
-			return false, err
+			return runFinalization{runErr: runErr}, err
 		}
 		report.Checks = results
 		if anyFailSeverityFailed(results) {
@@ -44,7 +107,7 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 			// First error wins: a converge failure is what the operator needs to
 			// see, and a check failure must not displace it.
 			if runErr == nil {
-				runErr = fmt.Errorf("one or more fail-severity checks did not pass")
+				runErr = errFailSeverityChecks
 			}
 		}
 	}
@@ -53,17 +116,7 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	if runErr == nil {
 		report.CompletionStatus = database.RunStatusSucceeded
 	}
-	persisted = persistRunReport(cat, report, live)
-	out, err := report.render(jsonOutput)
-	if err != nil {
-		return persisted, err
-	}
-	if live && deps.set.emitOutput() {
-		fmt.Print("\n")
-	}
-	if deps.set.emitOutput() {
-		fmt.Print(out)
-	}
+	fin := runFinalization{runErr: runErr}
 
 	// Persist the run's terminal verdict on the model instance row so
 	// `pudl model list` / `pudl status` surface last-run state, and record the
@@ -71,10 +124,11 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	// caused by a lost receipt apart from the `unknown` of a resource nobody has
 	// ever observed — they are the same value on the model row by design.
 	verdict := runVerdict(report, flags)
-	finishState.verdict = verdict
+	fin.verdict = verdict
+	state.verdict = verdict
 	if report.Converge != nil {
-		finishState.outcome = report.Converge.Outcome
-		finishState.needsVerification = report.Converge.NeedsVerification
+		state.outcome = report.Converge.Outcome
+		state.needsVerification = report.Converge.NeedsVerification
 	}
 
 	// The run row keeps the run's real verdict; the model instance row
@@ -85,12 +139,11 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	// row, so say which checks did it — otherwise an operator hunts for drift
 	// that is not there.
 	if names := failedFailSeverityNames(report.Checks); len(names) > 0 && verdict == "drifted" {
-		finishState.addNote(fmt.Sprintf("verdict demoted to %q by fail-severity check(s): %s",
+		state.addNote(fmt.Sprintf("verdict demoted to %q by fail-severity check(s): %s",
 			verdict, strings.Join(names, ", ")))
-		if live {
-			fmt.Printf("\nnote: fail-severity check(s) did not pass: %s\n", strings.Join(names, ", "))
-			fmt.Println("      the model's resources may match desired state; the failure is the check's assertion")
-		}
+		fin.notices = append(fin.notices, fmt.Sprintf("\nnote: fail-severity check(s) did not pass: %s\n"+
+			"      the model's resources may match desired state; the failure is the check's assertion\n",
+			strings.Join(names, ", ")))
 	}
 
 	restricted := len(flags.only) > 0
@@ -98,13 +151,11 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	if rowVerdict != verdict {
 		note := fmt.Sprintf("verdict %q covers only the --only scope (%s); model status left %q",
 			verdict, strings.Join(flags.only, ","), rowVerdict)
-		finishState.addNote(note)
-		if live {
-			fmt.Printf("\nnote: %s\n", note)
-			fmt.Println("      a scoped ∅ does not prove the whole model clean; re-run unscoped to establish it")
-		}
+		state.addNote(note)
+		fin.notices = append(fin.notices, fmt.Sprintf("\nnote: %s\n"+
+			"      a scoped ∅ does not prove the whole model clean; re-run unscoped to establish it\n", note))
 	}
-	persistRunStatus(cat, model.Name, rowVerdict, live)
+	persistRunStatus(cat, in.model.Name, rowVerdict, in.live)
 
 	// A verified ∅ re-check promotes this model's resources from `converging`
 	// (written by the apply's ingest-manifest, or a prior ingest-manifest run)
@@ -119,7 +170,7 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	if verifiedClean {
 		promoteConvergingResources(cat, in.effective, restricted)
 	}
-	return persisted, runErr
+	return fin, nil
 }
 
 // runVerdict maps a finished run to a catalog status, or "" when none applies:
