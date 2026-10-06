@@ -92,5 +92,7 @@ Final validation passed:
 - `make test-git-walkthrough` and `make test-kick-tires` using real Mu v0.3.5.
 - Focused native frame fuzzing and the new end-to-end/regression tests above.
 
-The implementation was staged as one combined commit and fast-forwarded to
-local main. No remote publication or infrastructure deployment was requested.
+The original implementation was staged as one combined commit and fast-forwarded
+to local main as `b3a9b34`; it had not yet been published at that point. The later
+thirty-candidate follow-up preserved that commit and published it to origin/main
+under the user's explicit push instruction. No infrastructure deployment occurred.

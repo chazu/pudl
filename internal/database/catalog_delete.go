@@ -153,7 +153,7 @@ func (c *CatalogDB) removeCommittedOrphanAt(path, dataDir string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	defer workspace.Close()
+	defer func() { _ = workspace.Close() }()
 	relativeDir, err := filepath.Rel(workspacePath, artifactDir)
 	if err != nil {
 		return false, err
@@ -164,7 +164,7 @@ func (c *CatalogDB) removeCommittedOrphanAt(path, dataDir string) (bool, error) 
 	} else if err != nil {
 		return false, fmt.Errorf("open artifact cleanup root: %w", err)
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	if err := root.Remove(relativeFile); os.IsNotExist(err) {
 		return false, nil
 	} else if err != nil {
