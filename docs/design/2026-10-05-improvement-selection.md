@@ -177,9 +177,41 @@ not a speculative rewrite of all command renderers.
 
 ## Delivery evidence
 
-Each retained item will receive its own implementation commit and implementation
-log. The existing unpublished integrated evidence commit will be preserved and
-published along with this work; it predates this selection. Completion requires
-regressions for every retained item, whole-project tests, vet/build, generated
-docs/skills verification, lint, and confirmation that local main equals remote
-main. Race and smoke results will be recorded with their actual scopes.
+All five retained ideas are implemented, each in a separate commit:
+
+| Idea | Commit | Concrete verification |
+|---|---|---|
+| 1 — Query request validation | `7a8fc45` | `TestQueryRejectsInvalidRequests`, `TestQueryConstraintsKeepEmptyValuesAndEquals`, existing exact numeric CLI tests |
+| 2 — Directory-confined cleanup | `eb3fb51` | `TestOrphanCleanupCannotFollowEscapingDirectories`, configured external data directory, shared references, rollback and prune tests |
+| 3 — SQLite snapshot budget | `9a6cf79` | `TestOnlineSnapshotBudgetBeforeDestinationCreation` rejects a copy one byte below the required size without creating it, then verifies exact-budget data recovery |
+| 4 — Manifest symmetry | `a7ec030` | `TestArchiveWriterRefusesUnreadableManifestBeforeOutputCreation` preserves an existing archive; full bundle round trips pass |
+| 5 — Query result delivery | `39f5ef0` | `TestQueryReturnsOutputFailuresInEveryMode` covers JSON, tuples, final count, empty results, lists, topology and empty topology |
+
+Each item has its own `implog/2026_10_05_*.md` entry and is marked done in
+`docs/plan.md`. The existing integrated evidence commit `b3a9b34` was preserved
+and pushed with the selection report; it predates these five item commits.
+A final verification commit explicitly discards directory-handle close results
+to meet the linter's errcheck policy; removal errors continue to be returned.
+
+Acceptance under the pinned Go 1.26.6 toolchain:
+
+- `go test ./...` passed, including the full Datalog differential oracle
+  (`internal/datalog`, 108.515 seconds). After the final close-result lint fix,
+  the affected cleanup/deletion/prune tests passed again.
+- `go test -race -p 2 -timeout 20m ./cmd ./internal/database ./internal/bundle`
+  passed (85.967, 127.731 and 7.092 seconds respectively). The final explicit
+  close-result handling also passed focused orphan-cleanup race tests.
+- `go vet ./...`, `go build ./...`, `make check-docs check-skills` passed;
+  vet/build/generated checks were rerun after the close-result lint fix.
+- `make lint vulncheck` passed: zero lint issues and no vulnerabilities found.
+- `make test-git-walkthrough test-kick-tires` passed with real Mu v0.3.5,
+  including approvals, stale plans, sealed routing and concurrent exact sets.
+- `git diff --check` passed, and `br sync --flush-only` found no dirty issues.
+
+The broad race suite over unchanged packages was not repeated in this follow-up;
+the preceding evidence round's complete race run is recorded separately. External
+Docker/Kubernetes qualification, release publication and installed-binary updates
+were not performed. This delivery is committed source and documentation on main.
+
+Publication is checked after the final push using `git rev-parse HEAD origin/main`
+and `git ls-remote origin refs/heads/main`, plus a clean-worktree check.

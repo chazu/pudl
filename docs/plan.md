@@ -497,6 +497,11 @@ Five demonstrated gaps retained after evaluating thirty candidates. See
 - Done: symmetric bundle manifest limits (idea 4).
 - Done: query output failure propagation in every presentation mode (idea 5).
 
+All five have separate implementation commits. Whole-project tests, changed-package
+race tests, vet/build, lint/vulnerability checks, generated docs/skills, the Git
+walkthrough and real-Mu smoke passed. The selection report records exact evidence
+and exclusions.
+
 Potential future work, roughly ordered by value.
 
 ### Maintained inventory workflow and reports
