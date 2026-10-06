@@ -106,6 +106,8 @@ published only on success. Keep the archive outside the captured state root.
 The SQLite copy is checked against that budget before copying and after each
 incremental backup step. Temporary step overshoot and SQLite journal/WAL bytes
 are not included in an exact filesystem quota.
+Both export and restore cap manifest metadata at 8 MiB. An inventory whose
+manifest exceeds that limit fails export without replacing an existing archive.
 
 Restore into a directory which has no `.pudl/` yet:
 
