@@ -495,7 +495,7 @@ Five demonstrated gaps retained after evaluating thirty candidates. See
 - Done: directory-confined artifact cleanup (idea 2).
 - Done: bounded SQLite backup staging (idea 3).
 - Done: symmetric bundle manifest limits (idea 4).
-- Remaining: query output failure propagation (idea 5).
+- Done: query output failure propagation in every presentation mode (idea 5).
 
 Potential future work, roughly ordered by value.
 
