@@ -136,8 +136,8 @@ more, err := backup.Step(128)
 
 Benefit: a requested backup budget applies during its most expensive preparation
 step. Downside: a growing live source may pass preflight and fail later; temporary
-overshoot is bounded by one backup step, and callers still need room for private
-staging plus the final archive. This is a disk budget, not a total process-memory
+overshoot is checked after each backup step, and callers still need room for private
+staging, SQLite journals and the final archive. This is a payload disk budget, not a total process-memory
 or compressed-output guarantee.
 
 ### 4. Make manifest limits symmetric — confidence 98%

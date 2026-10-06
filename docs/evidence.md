@@ -103,6 +103,9 @@ catalog; the manifest records this repair and the source remains unchanged.
 The default uncompressed bundle limit is 16 GiB; `--max-bundle-bytes` can increase
 it for export or restore. The archive is written beside the destination and
 published only on success. Keep the archive outside the captured state root.
+The SQLite copy is checked against that budget before copying and after each
+incremental backup step. Temporary step overshoot and SQLite journal/WAL bytes
+are not included in an exact filesystem quota.
 
 Restore into a directory which has no `.pudl/` yet:
 
