@@ -492,8 +492,9 @@ Five demonstrated gaps retained after evaluating thirty candidates. See
 [selection, plans, risks and confidence](design/2026-10-05-improvement-selection.md).
 
 - Done: strict query request validation (idea 1).
-- Remaining: confined cleanup, bounded backup staging, symmetric manifest limits,
-  and query output failure propagation (ideas 2–5).
+- Done: directory-confined artifact cleanup (idea 2).
+- Remaining: bounded backup staging, symmetric manifest limits,
+  and query output failure propagation (ideas 3–5).
 
 Potential future work, roughly ordered by value.
 

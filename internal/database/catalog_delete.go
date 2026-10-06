@@ -104,17 +104,22 @@ func (c *CatalogDB) removeCommittedOrphanAt(path, dataDir string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	allowed := false
+	var artifactDir, relativeFile string
 	for _, name := range []string{"raw", "metadata"} {
 		root, err := filepath.Abs(filepath.Join(dataDir, name))
 		if err != nil {
 			return false, err
 		}
 		if strings.HasPrefix(absolute, root+string(filepath.Separator)) {
-			allowed = true
+			artifactDir = root
+			relativeFile, err = filepath.Rel(root, absolute)
+			if err != nil {
+				return false, err
+			}
+			break
 		}
 	}
-	if !allowed {
+	if artifactDir == "" {
 		return false, fmt.Errorf("refusing artifact cleanup outside workspace: %s", path)
 	}
 	var refs int
@@ -124,7 +129,43 @@ func (c *CatalogDB) removeCommittedOrphanAt(path, dataDir string) (bool, error) 
 	if refs != 0 {
 		return false, nil
 	}
-	if err := os.Remove(path); os.IsNotExist(err) {
+	// Resolve and unlink through directory handles. A lexical prefix alone does
+	// not prevent a parent symlink from redirecting cleanup outside the workspace.
+	workspacePath, err := filepath.Abs(c.configDir)
+	if err != nil {
+		return false, err
+	}
+	dataPath, err := filepath.Abs(dataDir)
+	if err != nil {
+		return false, err
+	}
+	relativeData, err := filepath.Rel(workspacePath, dataPath)
+	if err != nil {
+		return false, err
+	}
+	// Prune explicitly permits a caller-supplied external DataDir. Treat that
+	// directory as the boundary, but anchor ordinary workspace data paths at
+	// the workspace so a symlink replacing data/ cannot escape it either.
+	if relativeData == ".." || strings.HasPrefix(relativeData, ".."+string(filepath.Separator)) {
+		workspacePath = dataPath
+	}
+	workspace, err := os.OpenRoot(workspacePath)
+	if err != nil {
+		return false, err
+	}
+	defer workspace.Close()
+	relativeDir, err := filepath.Rel(workspacePath, artifactDir)
+	if err != nil {
+		return false, err
+	}
+	root, err := workspace.OpenRoot(relativeDir)
+	if os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("open artifact cleanup root: %w", err)
+	}
+	defer root.Close()
+	if err := root.Remove(relativeFile); os.IsNotExist(err) {
 		return false, nil
 	} else if err != nil {
 		return false, err
