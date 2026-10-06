@@ -64,13 +64,19 @@ Examples:
     pudl query depends_transitive --json`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if queryList {
-			return nil // --list takes no relation
+			if queryTopo {
+				return fmt.Errorf("--list cannot be combined with --topo")
+			}
+			return cobra.NoArgs(cmd, args)
 		}
 		return cobra.MinimumNArgs(1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if queryTimeout < 0 {
 			return fmt.Errorf("--timeout must not be negative")
+		}
+		if queryMaxIterations < 0 {
+			return fmt.Errorf("--max-iterations must not be negative")
 		}
 		ctx := cmd.Context()
 		if queryTimeout > 0 {
@@ -84,16 +90,9 @@ Examples:
 		relation := args[0]
 
 		// Parse field constraints from remaining args (key=value pairs)
-		constraints := make(map[string]interface{})
-		for _, arg := range args[1:] {
-			parts := strings.SplitN(arg, "=", 2)
-			if len(parts) == 2 {
-				value, err := parseQueryConstraint(parts[1])
-				if err != nil {
-					return fmt.Errorf("constraint %s: %w", parts[0], err)
-				}
-				constraints[parts[0]] = value
-			}
+		constraints, err := parseQueryConstraints(args[1:])
+		if err != nil {
+			return err
 		}
 
 		// Open database
@@ -165,6 +164,25 @@ Examples:
 		fmt.Fprintf(outw(), "\n%d result(s)\n", len(results))
 		return nil
 	},
+}
+
+func parseQueryConstraints(args []string) (map[string]interface{}, error) {
+	constraints := make(map[string]interface{}, len(args))
+	for _, arg := range args {
+		key, raw, ok := strings.Cut(arg, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("invalid constraint %q: expected field=value with a nonblank field", arg)
+		}
+		if _, exists := constraints[key]; exists {
+			return nil, fmt.Errorf("duplicate constraint %q", key)
+		}
+		value, err := parseQueryConstraint(raw)
+		if err != nil {
+			return nil, fmt.Errorf("constraint %s: %w", key, err)
+		}
+		constraints[key] = value
+	}
+	return constraints, nil
 }
 
 func parseQueryConstraint(raw string) (interface{}, error) {
