@@ -25,6 +25,7 @@ import (
 const Version = 1
 const DefaultMaxBytes int64 = 16 << 30
 const catalogPath = "data/sqlite/catalog.db"
+const maxManifestBytes = 8 << 20
 
 type File struct {
 	Path   string `json:"path"`
@@ -219,6 +220,13 @@ func Export(ctx context.Context, root, destination string, maxBytes int64) error
 }
 
 func writeArchive(ctx context.Context, stage, destination string, m Manifest) error {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	if len(body) > maxManifestBytes {
+		return fmt.Errorf("bundle manifest exceeds size limit (%d)", maxManifestBytes)
+	}
 	abs, err := filepath.Abs(destination)
 	if err != nil {
 		return err
@@ -234,12 +242,6 @@ func writeArchive(ctx context.Context, stage, destination string, m Manifest) er
 		return err
 	}
 	tw := tar.NewWriter(encoder)
-	body, err := json.Marshal(m)
-	if err != nil {
-		_ = tw.Close()
-		_ = encoder.Close()
-		return err
-	}
 	err = tw.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0o600, Size: int64(len(body))})
 	if err == nil {
 		_, err = tw.Write(body)
@@ -350,7 +352,7 @@ func extract(ctx context.Context, source, stage string, maxBytes int64) (Manifes
 	if err != nil {
 		return m, err
 	}
-	if header.Name != "manifest.json" || header.Typeflag != tar.TypeReg || header.Size < 0 || header.Size > 8<<20 {
+	if header.Name != "manifest.json" || header.Typeflag != tar.TypeReg || header.Size < 0 || header.Size > maxManifestBytes {
 		return m, fmt.Errorf("invalid bundle manifest header")
 	}
 	dec := json.NewDecoder(io.LimitReader(tr, header.Size))
