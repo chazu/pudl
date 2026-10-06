@@ -70,6 +70,9 @@ Pruning protects the latest eligible successful observation per model/workspace,
 rechecks ownership inside its transaction, and preserves shared records. Explicit
 deletion cannot bypass active evidence protection. File cleanup happens after
 catalog deletion commits; cleanup errors are reported separately.
+Cleanup resolves raw/metadata paths through directory handles and refuses escaping
+parent symlinks. An explicitly configured external prune data directory remains
+its own removal boundary.
 
 `pudl query RELATION --timeout 10s` bounds a query independently of `--mu-timeout`.
 SQL evaluation, recursive rounds, transaction acquisition, and generated-project

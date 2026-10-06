@@ -101,7 +101,8 @@ Keep the SQL reference check and raw/metadata lexical selection. Open the owning
 workspace with `os.OpenRoot`, then the selected artifact subtree with
 `Root.OpenRoot`. Remove the relative name through that subtree's `Root.Remove`.
 For prune's configurable data directory, establish the workspace handle first
-and resolve the data subtree beneath it. Missing files remain harmless; escaping
+for paths inside the workspace, and honor an explicitly supplied external data
+directory as its own boundary. Missing files remain harmless; escaping
 directory symlinks fail and retain the external file. Test both a nested escape
 and a symlink replacing the artifact subtree, plus ordinary shared-file cleanup.
 
