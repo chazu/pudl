@@ -493,8 +493,9 @@ Five demonstrated gaps retained after evaluating thirty candidates. See
 
 - Done: strict query request validation (idea 1).
 - Done: directory-confined artifact cleanup (idea 2).
-- Remaining: bounded backup staging, symmetric manifest limits,
-  and query output failure propagation (ideas 3–5).
+- Done: bounded SQLite backup staging (idea 3).
+- Remaining: symmetric manifest limits and query output failure propagation
+  (ideas 4–5).
 
 Potential future work, roughly ordered by value.
 

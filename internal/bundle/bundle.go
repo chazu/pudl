@@ -81,7 +81,7 @@ func Export(ctx context.Context, root, destination string, maxBytes int64) error
 			return err
 		}
 		// Online backup captures committed WAL state and preserves tie ordering.
-		if err := onlineSnapshot(ctx, db.DB(), dbCopy); err != nil {
+		if err := onlineSnapshot(ctx, db.DB(), dbCopy, maxBytes); err != nil {
 			return fmt.Errorf("snapshot catalog: %w", err)
 		}
 		captured, err := database.OpenCatalogDBReadOnly(stage)
