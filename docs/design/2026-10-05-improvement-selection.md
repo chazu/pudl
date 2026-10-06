@@ -193,7 +193,7 @@ and pushed with the selection report; it predates these five item commits.
 A final verification commit explicitly discards directory-handle close results
 to meet the linter's errcheck policy; removal errors continue to be returned.
 
-Acceptance under the pinned Go 1.26.6 toolchain:
+Initial delivery acceptance under the pinned Go 1.26.6 toolchain:
 
 - `go test ./...` passed, including the full Datalog differential oracle
   (`internal/datalog`, 108.515 seconds). After the final close-result lint fix,
@@ -215,3 +215,37 @@ were not performed. This delivery is committed source and documentation on main.
 
 Publication is checked after the final push using `git rev-parse HEAD origin/main`
 and `git ls-remote origin refs/heads/main`, plus a clean-worktree check.
+
+## Completion audit (2026-10-06)
+
+The audit inspected the current source at `3c90b57`, the implementation tests,
+the plan and implementation logs, and the live remote ref. Local `main`,
+`origin/main`, and remote `refs/heads/main` all matched that commit before this
+documentation update; the worktree was clean.
+
+Every requested deliverable is present:
+
+- Exactly thirty one-line candidates, followed by thirty individual keep/reject
+  decisions and their reasons.
+- Five retained ideas, each with an actionable plan, relevant code snippets,
+  benefits, downsides and a confidence percentage.
+- All five implementations and their regression coverage, committed separately
+  in the order shown in the delivery table and published to remote `main`.
+
+Acceptance was rechecked against this source using Go 1.26.6:
+
+- `mise exec -- make test-race` passed across the whole project, using
+  `go test -race -p 2 -timeout 20m ./...`. The Datalog package completed in
+  272.032 seconds; unchanged packages with valid Go test-cache entries were
+  reported as cached.
+- `mise exec -- go vet ./...` and `mise exec -- go build ./...` passed.
+- `mise exec -- make check-docs check-skills lint vulncheck` passed, with zero
+  lint issues and no vulnerabilities found.
+- `mise exec -- make test-git-walkthrough test-kick-tires` passed, including
+  real-Mu approvals, stale plans, sealed routing and concurrent run sets.
+- `git diff --check` passed.
+
+This audit closes the earlier full-race verification gap. External
+Docker/Kubernetes qualification, release publication and installed-binary updates
+remain outside this source-delivery task. The final audit commit is pushed to
+`main`, followed by another local/remote ref and clean-worktree check.
