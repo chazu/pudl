@@ -56,12 +56,13 @@ func runQueryList() error {
 		}
 	}
 
-	fmt.Fprintln(outw(), "Derived relations (from Datalog rules — query by constraining the arg keys):")
+	var output strings.Builder
+	fmt.Fprintln(&output, "Derived relations (from Datalog rules — query by constraining the arg keys):")
 	if len(derived) == 0 {
-		fmt.Fprintln(outw(), "  (none — no rules loaded)")
+		fmt.Fprintln(&output, "  (none — no rules loaded)")
 	}
 	for _, rel := range sortedStringKeys(derived) {
-		fmt.Fprintf(outw(), "  %s(%s)\n", rel, strings.Join(sortedSetKeys(derived[rel]), ", "))
+		fmt.Fprintf(&output, "  %s(%s)\n", rel, strings.Join(sortedSetKeys(derived[rel]), ", "))
 	}
 
 	// EDB fact relations actually present in the store.
@@ -75,15 +76,16 @@ func runQueryList() error {
 	if err != nil {
 		return fmt.Errorf("failed to list fact relations: %w", err)
 	}
-	fmt.Fprintln(outw(), "\nEDB fact relations (stored facts you can query or join against):")
+	fmt.Fprintln(&output, "\nEDB fact relations (stored facts you can query or join against):")
 	if len(rels) == 0 {
-		fmt.Fprintln(outw(), "  (none recorded yet)")
+		fmt.Fprintln(&output, "  (none recorded yet)")
 	}
 	for _, r := range rels {
-		fmt.Fprintf(outw(), "  %s\n", r)
+		fmt.Fprintf(&output, "  %s\n", r)
 	}
-	fmt.Fprintln(outw(), "\nBuilt-in (join-only): catalog_entry — usable as a rule body atom, not queried directly.")
-	return nil
+	fmt.Fprintln(&output, "\nBuilt-in (join-only): catalog_entry — usable as a rule body atom, not queried directly.")
+	_, err = fmt.Fprint(outw(), output.String())
+	return err
 }
 
 // printTopoOrder reads the result tuples as from/to dependency edges and prints a
@@ -114,8 +116,8 @@ func printTopoOrder(relation string, results []datalog.Tuple) error {
 	}
 
 	if len(nodes) == 0 {
-		fmt.Fprintln(outw(), "No edges; nothing to order.")
-		return nil
+		_, err := fmt.Fprintln(outw(), "No edges; nothing to order.")
+		return err
 	}
 
 	indeg := map[string]int{}
@@ -143,7 +145,9 @@ func printTopoOrder(relation string, results []datalog.Tuple) error {
 	}
 
 	for i, n := range order {
-		fmt.Fprintf(outw(), "%d. %s\n", i+1, n)
+		if _, err := fmt.Fprintf(outw(), "%d. %s\n", i+1, n); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -8,3 +8,5 @@ Every positional constraint must be `field=value` with a nonblank field; repeate
 fields are errors. Empty values and values containing `=` remain valid.
 `--list` accepts no positional arguments and cannot be combined with `--topo`.
 `--max-iterations` must be nonnegative; zero uses the default recursion cap.
+Every query presentation mode returns output errors. A failed stdout consumer may
+receive a prefix; automation must check the command's exit status.

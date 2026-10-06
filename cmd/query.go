@@ -148,21 +148,21 @@ Examples:
 				}
 				out = append(out, entry)
 			}
-			data, _ := json.MarshalIndent(out, "", "  ")
-			fmt.Fprintln(outw(), string(data))
-			return nil
+			return printJSON(out)
 		}
 
 		if len(results) == 0 {
-			fmt.Fprintln(outw(), "No results.")
-			return nil
+			_, err := fmt.Fprintln(outw(), "No results.")
+			return err
 		}
 
 		for _, t := range results {
-			printTuple(t)
+			if err := printTuple(t); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(outw(), "\n%d result(s)\n", len(results))
-		return nil
+		_, err = fmt.Fprintf(outw(), "\n%d result(s)\n", len(results))
+		return err
 	},
 }
 
@@ -207,9 +207,13 @@ func parseQueryConstraint(raw string) (interface{}, error) {
 	}
 }
 
-func printTuple(t datalog.Tuple) {
-	args, _ := json.Marshal(t.Args)
-	fmt.Fprintf(outw(), "%s(%s)\n", t.Relation, string(args))
+func printTuple(t datalog.Tuple) error {
+	args, err := json.Marshal(t.Args)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(outw(), "%s(%s)\n", t.Relation, args)
+	return err
 }
 
 func loadRulesFromFile(path string) ([]datalog.Rule, error) {
