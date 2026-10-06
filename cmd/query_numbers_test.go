@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,6 +14,9 @@ import (
 )
 
 func TestQueryCommandPreservesNumericConstraintsAndJSON(t *testing.T) {
+	previousContext := queryCmd.Context()
+	queryCmd.SetContext(context.Background())
+	t.Cleanup(func() { queryCmd.SetContext(previousContext) })
 	root := t.TempDir()
 	dir := filepath.Join(root, ".pudl")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
