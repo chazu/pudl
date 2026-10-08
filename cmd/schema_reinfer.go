@@ -58,7 +58,14 @@ Examples:
     # Force re-inference without confirmation
     pudl schema reinfer --all --force`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runSchemaReinferCommand()
+		if err := runSchemaReinferCommand(); err != nil {
+			return err
+		}
+		if !reinferDryRun {
+			// Reclassified entries project under their new schema, if any.
+			syncProjectionsAfterWrite(cmd.Context())
+		}
+		return nil
 	},
 }
 

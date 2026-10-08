@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/ingestprep"
+	"github.com/chazu/pudl/internal/projection"
 )
 
 // PreparedObservation owns private record files and a disk-backed descriptor
@@ -26,6 +27,16 @@ type PreparedObservation struct {
 	entry    database.CatalogEntry
 	rawDir   string
 	empty    bool
+	route    observeRoute
+	// projector computes schema-declared facts; tally reports them.
+	projector *projection.Registry
+	tally     *projection.Tally
+}
+
+// observeDescriptor is one spooled record: its catalog entry and its facts.
+type observeDescriptor struct {
+	database.CatalogEntry
+	Projection *projection.Prepared `json:"projection,omitempty"`
 }
 
 func (p *PreparedObservation) Close() {
@@ -92,6 +103,16 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 		}
 		_, _ = reader.ReadByte()
 	}
+	route, err := newObserveRoute(in)
+	if err != nil {
+		return nil, err
+	}
+	p.route = route
+	p.projector = in.Projection
+	if p.projector == nil && in.Inferrer != nil {
+		p.projector = projection.NewRegistry(in.Inferrer, route.redactor)
+	}
+	p.tally = projection.NewTally()
 	counts := map[string]int{}
 	var failures []map[string]string
 	staged := int64(0)
@@ -119,11 +140,14 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 			if err := in.Context.Err(); err != nil {
 				return err
 			}
-			entry, recordJSON, err := prepareObserveRecord(record, target, in.Origin, dir, now, p.snapshot.RecordCount, in.SnapshotID, in.Graph, in.Inferrer, in.SchemaMappings, in.RunID)
+			entry, recordJSON, err := prepareObserveRecord(record, target, in.Origin, dir, now, p.snapshot.RecordCount, in.SnapshotID, in.Graph, in.Inferrer, in.SchemaMappings, in.RunID, route)
 			if err != nil {
 				return err
 			}
-			descriptor, err := json.Marshal(entry)
+			// record is redacted in place by now; facts come from that.
+			projected, projectedRes := projection.Prepare(p.projector, entry.Schema, entry.ID, *entry.ResourceID, entry.IdentityJSON != nil, record)
+			p.tally.Note(p.projector, entry.Schema, projectedRes)
+			descriptor, err := json.Marshal(observeDescriptor{CatalogEntry: entry, Projection: projected})
 			if err != nil {
 				return err
 			}
@@ -193,12 +217,13 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 			}
 			dec := json.NewDecoder(p.spool)
 			for {
-				var entry database.CatalogEntry
-				if err := dec.Decode(&entry); err == io.EOF {
+				var descriptor observeDescriptor
+				if err := dec.Decode(&descriptor); err == io.EOF {
 					break
 				} else if err != nil {
 					return err
 				}
+				entry := descriptor.CatalogEntry
 				existing, err := tx.GetLatestObserveByContentHash(*entry.Target, *entry.ContentHash)
 				if err != nil {
 					return err
@@ -212,12 +237,23 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 					if err := tx.AddCollectionMembership(p.in.SnapshotID, existing.ID, *entry.ItemIndex); err != nil {
 						return err
 					}
+					// Re-observed unchanged: it is the resource's latest state again.
+					if existing.Schema == entry.Schema && descriptor.Projection != nil {
+						reobserved := *descriptor.Projection
+						reobserved.EntryID = existing.ID
+						if err := projection.Observe(tx, &reobserved); err != nil {
+							return err
+						}
+					}
 					continue
 				}
 				if err := publishObserveEntry(journal, &entry, p.rawDir); err != nil {
 					return err
 				}
 				if err := tx.AddEntry(entry); err != nil {
+					return err
+				}
+				if err := projection.Observe(tx, descriptor.Projection); err != nil {
 					return err
 				}
 				ingested++
@@ -232,7 +268,15 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 	if err != nil {
 		return ObserveIngestResult{}, err
 	}
-	return ObserveIngestResult{Records: ingested, SnapshotID: p.in.SnapshotID}, nil
+	result := ObserveIngestResult{Records: ingested, SnapshotID: p.in.SnapshotID}
+	if p.route.redacted != nil {
+		result.Redacted = *p.route.redacted
+	}
+	if p.tally != nil {
+		result.Facts = p.tally.Facts
+		result.FactWarnings = p.tally.Warnings()
+	}
+	return result, nil
 }
 
 func publishObserveEntry(journal *artifacts.Journal, entry *database.CatalogEntry, dir string) error {

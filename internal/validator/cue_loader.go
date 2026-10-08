@@ -256,6 +256,7 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 					// Best effort: a partially decodable block still yields the
 					// fields that did decode, and the zero value otherwise.
 					_ = innerIter.Value().Decode(&meta)
+					decodeStrictPudlParts(innerIter.Value(), &meta)
 					break
 				}
 			}

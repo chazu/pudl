@@ -86,8 +86,13 @@ func renderRunPlan(plan *acute.RunPlan) string {
 // populateRef returns a short identifier for the populate arm (plugin name or
 // ewe source).
 func populateRef(p systemmodel.Populate) string {
-	if p.Kind() == systemmodel.KindEweTarget {
+	switch p.Kind() {
+	case systemmodel.KindEweTarget:
 		return p.EweSource
+	case systemmodel.KindCommand:
+		return fmt.Sprintf("%d runs", len(p.Runs))
+	case systemmodel.KindNone:
+		return "checks-only"
 	}
 	return p.Plugin
 }

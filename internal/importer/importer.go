@@ -9,6 +9,8 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -27,10 +29,17 @@ type ImportOptions struct {
 	// Empty means SourcePath.
 	OriginPath string
 
+	// Set assigns fields on every imported record (`pudl import --set`).
+	Set []FieldAssignment
+	// DryRun previews the import (see Preview) instead of performing it.
+	DryRun bool
+
 	// collectionFormat is the detected format of a streamed collection, set by
 	// the importer itself so the collection entry records what was imported.
 	collectionFormat string
 	publication      *artifacts.Journal
+	// assignments replays the pre-pass's per-record schema assignments.
+	assignments *assignmentReader
 }
 
 // originPath returns the path that names this import for origin detection.
@@ -64,6 +73,23 @@ type ImportResult struct {
 	ContentHash           string                      `json:"content_hash,omitempty"`
 	Version               int                         `json:"version,omitempty"`
 	IsNewVersion          bool                        `json:"is_new_version,omitempty"`
+	// IdentityUnresolved counts records whose schema declares identity fields
+	// that could not be extracted; such records are identified by content hash
+	// and do not join a version chain. IdentityError is the first failure.
+	IdentityUnresolved int    `json:"identity_unresolved,omitempty"`
+	IdentityError      string `json:"identity_error,omitempty"`
+	// Redacted counts sensitive values replaced before storage.
+	Redacted int `json:"redacted,omitempty"`
+	// Reassigned counts already-cataloged records moved to the explicit
+	// --schema because they now validate against it.
+	Reassigned int `json:"reassigned,omitempty"`
+	// Facts counts projected facts per relation (schemas with `_pudl.facts`);
+	// FactWarnings says what was not projected and why.
+	Facts        map[string]int `json:"facts,omitempty"`
+	FactWarnings []string       `json:"fact_warnings,omitempty"`
+	// DryRun marks a Preview result; Preview holds what it found.
+	DryRun  bool           `json:"dry_run,omitempty"`
+	Preview *PreviewReport `json:"preview,omitempty"`
 }
 
 // newImporterState builds the importer's shared state from multiple schema
@@ -118,6 +144,8 @@ func newImporterState(dataPath, pudlHome string, schemaPaths ...string) (*Enhanc
 		return nil, fmt.Errorf("failed to initialize schema inferrer: %w", err)
 	}
 	imp.inferrer = inferrer
+	imp.redactor = redact.NewRegistry(inferrer)
+	imp.projector = projection.NewRegistry(inferrer, imp.redactor)
 
 	return imp, nil
 }

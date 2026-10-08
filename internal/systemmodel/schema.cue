@@ -5,8 +5,9 @@ package systemmodel
 // of it (the run unit) and orchestrates its phases. See
 // docs/design/system-models/V1-BUILD-SPEC.md.
 //
-// V1-narrowed: populate is #PluginObserve | #EweTarget; converge is #PluginPlan
-// only (ewe-converge deferred).
+// V1-narrowed: populate is #PluginObserve | #EweTarget | #CommandObserve;
+// converge is #PluginPlan only (ewe-converge deferred). A model without populate
+// is checks-only: it evaluates checks over what is already in the catalog.
 #SystemModel: {
 	// Catalog classification: a #SystemModel instance is itself a catalog
 	// resource (so `pudl schema list` shows the schema and instances can be
@@ -52,7 +53,8 @@ package systemmodel
 	schema?: [...]
 
 	// POPULATE — Accumulate: fetch the external system into the catalog.
-	populate: #PluginObserve | #EweTarget
+	// Optional: without it the model is checks-only (no desired, no converge).
+	populate?: #PluginObserve | #EweTarget | #CommandObserve
 
 	// RELATE — derived relationships (pudl Datalog rule references).
 	relations?: [...string]
@@ -116,6 +118,35 @@ package systemmodel
 	outputs: [...string]
 	network?: bool | *false
 	impure?:  bool | *false
+}
+
+// #CommandObserve — run plain commands that print JSON records (gcloud, kubectl,
+// aws … --format=json) and ingest their output, with no plugin protocol and no
+// mu. Fan out with a CUE comprehension:
+//
+//	runs: [for p in _projects {argv: ["gcloud", "compute", "firewall-rules",
+//	    "list", "--project=\(p)", "--format=json"], set: project: p}]
+//
+// Each run's stdout is a JSON array of records, or a stream of JSON objects.
+// Any failing run fails the populate phase and nothing is ingested. argv and
+// set are recorded with the model instance: keep secrets out of them.
+#CommandObserve: {
+	runs: [#CommandRun, ...#CommandRun]
+	// schema routes every record like `pudl import --schema` (validated, with
+	// base/catchall fallback). Without it records are classified by inference.
+	schema?: string
+	// timeout applies to each run (Go duration).
+	timeout?: string
+}
+
+// #CommandRun — one command. argv is executed directly (no shell).
+#CommandRun: {
+	argv: [string, ...string]
+	// set assigns fields on every record this run prints, overwriting them
+	// (nested structs set leaf fields), e.g. the project gcloud omits.
+	set?: {...}
+	// dir is the working directory, relative to the model file.
+	dir?: string
 }
 
 // #PluginPlan — converge via a declarative-apply plugin. pudl routes `desired`

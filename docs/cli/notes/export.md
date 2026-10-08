@@ -5,3 +5,7 @@ CSV columns are sorted and support scalar object fields.
 
 `--bundle FILE` captures the complete local workspace, without entry filters.
 See [evidence and recovery](evidence.md) for portable bundles, limits, and restore.
+
+To print one entry's payload exactly as stored — no header, numbers intact —
+for piping into other tools, export it: `pudl export --id <proquint> --format json`.
+For a collection this yields its items' records.

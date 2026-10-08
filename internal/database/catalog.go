@@ -376,16 +376,17 @@ func (c *CatalogDB) QueryEntriesContext(ctx context.Context, filters FilterOptio
 	var args []interface{}
 
 	if filters.Schema != "" {
-		whereConditions = append(whereConditions, "schema LIKE ?")
-		args = append(args, "%"+filters.Schema+"%")
+		cond, condArgs := SchemaFilterCondition(filters.Schema)
+		whereConditions = append(whereConditions, cond)
+		args = append(args, condArgs...)
 	}
 	if filters.Origin != "" {
-		whereConditions = append(whereConditions, "origin LIKE ?")
-		args = append(args, "%"+filters.Origin+"%")
+		whereConditions = append(whereConditions, `origin LIKE ? ESCAPE '\'`)
+		args = append(args, "%"+EscapeLike(filters.Origin)+"%")
 	}
 	if filters.Format != "" {
-		whereConditions = append(whereConditions, "format LIKE ?")
-		args = append(args, "%"+filters.Format+"%")
+		whereConditions = append(whereConditions, `format LIKE ? ESCAPE '\'`)
+		args = append(args, "%"+EscapeLike(filters.Format)+"%")
 	}
 	if filters.CollectionID != "" {
 		whereConditions = append(whereConditions, "id IN (SELECT item_id FROM collection_memberships WHERE collection_id = ?)")

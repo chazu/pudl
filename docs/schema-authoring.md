@@ -73,6 +73,11 @@ identity_fields: ["BucketName"]                                  // S3 bucket
 
 If `identity_fields` is empty (as in the catchall), the content hash is used as the identity component.
 
+Paths nest with dots; quote a key that itself contains dots:
+`metadata.labels."cloud.googleapis.com/location"`. An identity field that does
+not resolve on a record is reported by `pudl import` (and `--dry-run`): such
+records fall back to content-hash identity and form no version chain.
+
 ### `tracked_fields`
 
 A list of fields to **monitor for changes** between versions of the same resource. These provide a weaker inference signal (+0.1 x ratio of present fields) and are used for diff/change-tracking features.
@@ -106,6 +111,13 @@ The consumer must independently declare its required scalar `inputs` slot with
 the same annotation. Unannotated source fields fail closed. Do not mark tokens,
 passwords, private keys, or other secrets as plain; model those through
 `sealed_inputs`/`sealed_outputs`, which stay inside mu's provider channel.
+
+### `facts` and `sensitive_fields` (optional)
+
+`facts` declares the relations a schema's records project into the fact store,
+so rules, `pudl query` and model checks can use imported fields.
+`sensitive_fields` lists paths redacted before anything is stored. Both are
+covered in [projection.md](projection.md).
 
 ### `base_schema` (optional)
 

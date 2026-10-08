@@ -15,10 +15,21 @@ import (
 // model shape used by registered runs. The model is intentionally not written
 // to the schema repository; only its run/snapshot artifacts are durable.
 func adHocModel(ctx context.Context, spec string, inputArgs []string) (*systemmodel.SystemModel, string, string, error) {
-	plugin, err := parsePluginSpec(spec)
+	parsed, err := parsePopulateSpec(spec)
 	if err != nil {
 		return nil, "", "", err
 	}
+	if parsed.argv != nil {
+		if len(inputArgs) > 0 {
+			return nil, "", "", fmt.Errorf("--input applies to plugin populate arms; a command takes its arguments in the command line")
+		}
+		name := "adhoc-" + strings.ToLower(nonIdentifier.ReplaceAllString(filepath.Base(parsed.argv[0]), "-"))
+		return &systemmodel.SystemModel{
+			Name:     name,
+			Populate: systemmodel.Populate{Runs: []systemmodel.CommandRun{{Argv: parsed.argv}}},
+		}, mustCurrentDir(), effectivePudlDir(), nil
+	}
+	plugin := parsed.plugin
 	input, err := parseKeyValueInputs(inputArgs)
 	if err != nil {
 		return nil, "", "", err

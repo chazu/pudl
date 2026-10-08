@@ -16,7 +16,10 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // identityNamespace returns the schema used to namespace resource identity:
@@ -72,12 +75,27 @@ type ObserveIngest struct {
 	Origin string
 	// Source is how the observation was produced; defaults to "ingest-observe".
 	Source string
+
+	// ManualSchema routes every record to this schema, validated through Chain
+	// with the usual base/catchall fallback (the command arm's `schema:`). Empty
+	// keeps the _schema-based routing.
+	ManualSchema string
+	Chain        *validator.ChainValidator
+	// Redactor supplies sensitive-field paths; nil builds one from Inferrer.
+	Redactor *redact.Registry
+	// Projection computes schema-declared facts; nil builds one from Inferrer.
+	Projection *projection.Registry
 }
 
 // ObserveIngestResult is what an ingest recorded.
 type ObserveIngestResult struct {
 	Records    int
 	SnapshotID string
+	// Redacted counts sensitive values replaced before storage.
+	Redacted int
+	// Facts counts projected facts per relation; FactWarnings explains gaps.
+	Facts        map[string]int
+	FactWarnings []string
 }
 
 // NewSnapshotID allocates a snapshot identifier. Callers that own a run should
@@ -226,9 +244,18 @@ func prepareObserveRecord(
 	inferrer *inference.SchemaInferrer,
 	schemaMappings map[string]string,
 	runID string,
+	route observeRoute,
 ) (database.CatalogEntry, []byte, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
-	schema := resolveObserveSchemaWithMappings(record, graph, inferrer, schemaMappings)
+	schema, err := route.resolve(record, graph, inferrer, schemaMappings)
+	if err != nil {
+		return database.CatalogEntry{}, nil, err
+	}
+	// Redact before hashing, identity and storage: the secret must reach
+	// neither the record file nor the content hash.
+	if err := route.redact(record, schema); err != nil {
+		return database.CatalogEntry{}, nil, err
+	}
 
 	// Compute content hash from the canonical JSON of the record.
 	recordJSON, err := json.Marshal(record)

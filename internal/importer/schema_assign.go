@@ -21,6 +21,9 @@ type schemaAssignment struct {
 	// Validation is set when the schema came from --schema and was checked by
 	// the chain validator. Nil for inferred assignments.
 	Validation *validator.ValidationResult
+	// Validated reports that the record satisfied the explicit --schema itself
+	// (not a fallback). Only such records may move an existing entry.
+	Validated bool
 }
 
 // assignSchema chooses the schema for one decoded record.
@@ -80,6 +83,7 @@ func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hi
 		Schema:     schemaname.Normalize(result.AssignedSchema),
 		Confidence: confidence,
 		Validation: result,
+		Validated:  result.Valid,
 	}
 	if opts.Explain {
 		assigned.Trace = &inference.InferenceTrace{Selected: assigned.Schema, Reason: reason, Fallback: !result.Valid, ScoreKind: "heuristic score, not a calibrated probability", Attempts: []inference.CandidateAttempt{}}

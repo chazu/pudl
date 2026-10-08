@@ -11,6 +11,26 @@ import (
 	"github.com/chazu/pudl/internal/importer"
 )
 
+// resolveAllFilePaths resolves several path arguments, keeping the first
+// occurrence of each file in argument order.
+func resolveAllFilePaths(patterns []string, recursive bool) ([]string, error) {
+	seen := make(map[string]bool)
+	var out []string
+	for _, pattern := range patterns {
+		paths, err := resolveFilePaths(pattern, recursive)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range paths {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out, nil
+}
+
 // resolveFilePaths turns --path into absolute file paths. A wildcard pattern
 // expands to its matching regular files; a directory expands to the supported
 // data files directly inside it, or beneath it when recursive is set; anything

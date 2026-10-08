@@ -124,6 +124,7 @@ Examples:
 		if err != nil {
 			return err
 		}
+		warnProjectionHealth(db, rules, []string{relation})
 
 		// Evaluate only the relation's dependency closure: one SQL statement
 		// when it has no cycles, stratified fixpoint iteration when it does.
@@ -201,6 +202,10 @@ func parseQueryConstraint(raw string) (interface{}, error) {
 	case json.Number:
 		return database.QueryNumber(v)
 	case string:
+		return v, nil
+	case bool:
+		// Projected JSON booleans compare as 1/0 (pudl_query_value), and a Go
+		// bool binds the same way, so disabled=false matches them.
 		return v, nil
 	default:
 		return raw, nil

@@ -127,6 +127,8 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "show", factID)
 	run("facts", "search", "h1")
 	run("facts", "stats")
+	run("facts", "reproject")
+	run("facts", "reproject", "--dry-run")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)

@@ -45,6 +45,7 @@ These flags apply to every command.
   - [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
   - [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
   - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
+  - [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
   - [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
   - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
   - [pudl facts show](#pudl-facts-show) — Show details of a single fact
@@ -495,6 +496,10 @@ CSV columns are sorted and support scalar object fields.
 `--bundle FILE` captures the complete local workspace, without entry filters.
 See [evidence and recovery](evidence.md) for portable bundles, limits, and restore.
 
+To print one entry's payload exactly as stored — no header, numbers intact —
+for piping into other tools, export it: `pudl export --id <proquint> --format json`.
+For a collection this yields its items' records.
+
 ## pudl facts
 
 Query the bitemporal fact store
@@ -514,6 +519,7 @@ Available subcommands:
 - show:       Inspect a single fact by ID
 - retract:    Mark a fact as retracted (we were wrong)
 - invalidate: Mark a fact as no longer valid (reality changed)
+- reproject:  Recompute facts projected from imported records (_pudl.facts)
 
 Examples:
     pudl facts list --relation observation
@@ -527,6 +533,7 @@ Subcommands:
 - [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
 - [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
 - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
+- [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
 - [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
 - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
 - [pudl facts show](#pudl-facts-show) — Show details of a single fact
@@ -627,6 +634,39 @@ believed at a moment, in whole seconds, after every write during or before that
 second. `--as-of-tx-seq` selects an exact write in the store's transaction
 sequence, which also shows facts added and retracted within one second. See
 [facts](facts.md) for the bitemporal model.
+
+## pudl facts reproject
+
+Bring schema-projected facts in line with the catalog
+
+```text
+pudl facts reproject [flags]
+```
+
+```text
+Recompute the facts schemas project from imported records (_pudl.facts).
+
+Imports and runs project facts as records arrive and sync afterwards, so this
+is rarely needed by hand. It repairs, as corrections (retractions):
+
+- resources whose facts describe an entry that was deleted, pruned,
+  re-identified or reassigned to another schema;
+- resources projected with an older facts block (the block changed);
+- resources never projected (a facts block added after the data arrived).
+
+A schema whose facts block is invalid is reported and its existing facts are
+left unchanged. pudl query warns when a reprojection is pending.
+
+Examples:
+    pudl facts reproject
+    pudl facts reproject --dry-run
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--dry-run` | bool |  | Report what would change without writing |
 
 ## pudl facts retract
 
@@ -764,7 +804,7 @@ Run 'pudl guide <topic>' to read a specific guide.
 Import data into PUDL data lake
 
 ```text
-pudl import [--path <file|dir|pattern>] [flags]
+pudl import [paths...] [--path <file|dir|pattern>] [flags]
 ```
 
 ```text
@@ -775,7 +815,9 @@ This command imports data from various formats (JSON, YAML, CSV, NDJSON) and sto
 in the PUDL data lake with full metadata tracking. Raw and metadata files use
 content-addressed names.
 
-The --path flag accepts a single file, a wildcard pattern, or a directory:
+Paths may be given as arguments, with --path, or both. Each accepts a single
+file, a wildcard pattern, or a directory (an unquoted pattern the shell has
+already expanded arrives as several arguments and is imported in full):
 - Single file: --path data.json
 - Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
 - Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv
@@ -824,10 +866,20 @@ Example usage:
     # CUE schema reference (e.g. emitted by a mu plugin)
     pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
+    # Several files, or a shell-expanded glob
+    pudl import fw-prod-a.json fw-prod-b.json
+    pudl import exports/*.json
+
     # Wildcard batch import
-    pudl import --path *.json
+    pudl import --path '*.json'
     pudl import --path data/*.yaml
     pudl import --path logs/2024-01-*.json
+
+    # Check classification, identity and redaction first; nothing is written
+    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --dry-run
+
+    # Add a field gcloud omits, on every record
+    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --set project=prod-a
 
     # From stdin
     cat data.json | pudl import
@@ -837,6 +889,7 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--dry-run` | bool |  | Show how records would be classified, identified, redacted and projected; write nothing |
 | `--explain` | bool |  | Explain original schema candidates, fallback, and search-path shadowing |
 | `--format` | string |  | Specify format for stdin data (json, yaml, csv, ndjson) |
 | `--max-decoded-bytes` | int64 | `1073741824` | Maximum decoded source bytes per file |
@@ -846,6 +899,7 @@ Flags:
 | `-p`, `--path` | string |  | Path to file or wildcard pattern to import (use '-' for stdin) |
 | `--recursive` | bool |  | When --path is a directory, also import supported files in its subdirectories |
 | `--schema` | string |  | Specify schema for validation (e.g., aws.compliant-ec2) |
+| `--set` | stringArray |  | Set a field on every record: path=value (repeatable; overwrites; JSON values keep their type, '"…"' forces a string) |
 
 Behavior:
 
@@ -868,6 +922,27 @@ Behavior:
 Set `PUDL_DEBUG=1` for detailed error output.
 
 `--explain` exposes classification/fallback reasons and schema sources. Byte limits bound records, decoded input, and staging; failures never truncate records. See [evidence](evidence.md).
+
+Paths can be given as arguments too (`pudl import a.json exports/*.json`), so a
+shell-expanded glob imports every file. Named paths win over piped stdin.
+
+`--set path=value` (repeatable) writes a field into every record before
+anything else happens — e.g. the `project` gcloud leaves out. It overwrites;
+values are typed like JSON (`'"123"'` forces a string). JSON/NDJSON only.
+
+`--dry-run` classifies, identifies, redacts and projects every record and
+writes nothing: per-schema counts, records already cataloged (and how many a
+`--schema` would move), validation failures with their first issues,
+unresolved identity, projected facts and records that matched more than one
+schema family.
+
+Re-importing data that is already cataloged with a `--schema` it satisfies
+moves those entries to that schema. A re-import is also an observation: the
+records' projected facts become current again.
+
+Records of schemas declaring `sensitive_fields` are redacted before storage;
+schemas declaring `facts` project into the fact store. See
+[projection](projection.md).
 
 ## pudl init
 
@@ -962,9 +1037,34 @@ Flags:
 | `--page` | int | `1` | Page number (1-based) |
 | `--per-page` | int | `20` | Results per page |
 | `--reverse` | bool |  | Reverse sort order |
-| `--schema` | string |  | Filter by CUE schema (e.g., aws.#EC2Instance) |
+| `--schema` | string |  | Filter by CUE schema: a value with # matches whole definition names (aws.#EC2Instance, #Route); otherwise a substring |
 | `--sort-by` | string | `timestamp` | Sort by field (timestamp, size, records, schema, origin) |
 | `-v`, `--verbose` | bool |  | Show detailed information |
+
+`--schema` with a `#` matches whole definition names: `pudl/gcp.#Route`,
+`gcp.#Route` and `#Route` all find routes but not `#Router`. A value without
+`#` (`gcp`, `Route`) is a substring match. `--origin` and `--format` are
+substring matches; `%` and `_` match literally.
+
+`--json` prints one object, not an array, and it is **paginated** (`--per-page`
+defaults to 20):
+
+```json
+{
+  "entries": [{"id": "…", "proquint": "…", "schema": "…", "origin": "…",
+               "format": "…", "size_bytes": 0, "record_count": 0,
+               "import_timestamp": "…", "stored_path": "…", "metadata_path": "…",
+               "confidence": 1, "collection_type": "item", "collection_id": "…",
+               "item_id": "…", "item_index": 0}],
+  "total_entries": 0, "total_matched": 0, "total_pages": 0, "current_page": 1,
+  "summary": {"total_size_bytes": 0, "total_records": 0, "unique_schemas": 0,
+              "unique_origins": 0, "unique_formats": 0}
+}
+```
+
+Count matches with `total_matched` (not `entries | length`). `summary` sizes
+and record totals cover the current page; its `unique_*` counts cover the whole
+catalog; it is omitted when nothing matches.
 
 ## pudl migrate
 
@@ -1113,8 +1213,12 @@ Create a registered #SystemModel scaffold in the project schema (or the
 global schema outside a workspace). Always edit the returned file to add desired
 state, checks, or a converge arm.
 
-Example:
+--populate takes plugin:<name> (a cached mu plugin) or command:<cmdline>, a
+command printing JSON records, run directly by pudl (no shell, no mu).
+
+Examples:
     pudl model new pods --populate plugin:k8s --input namespace=default
+    pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'
 ```
 
 Flags:
@@ -1123,7 +1227,7 @@ Flags:
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace an existing scaffold file |
 | `--input` | stringArray |  | Populate input key=value (repeatable; JSON values are decoded) |
-| `--populate` | string |  | Populate arm, in the form plugin:&lt;name&gt; |
+| `--populate` | string |  | Populate arm: plugin:&lt;name&gt; or command:&lt;cmdline&gt; |
 
 ## pudl model populator
 
@@ -1615,6 +1719,11 @@ resolved by name (its name field or short definition name) from the project
 "pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
 report, no mutation. Pass --converge to close drift; see the V1 build spec.
 
+A model without a populate arm is checks-only: it syncs projected facts and
+evaluates its checks over what the catalog already holds (e.g. data brought in
+with pudl import). A #CommandObserve populate runs plain commands that print
+JSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.
+
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift, pending changes (--dry-run) or a failing fail-severity check,
 1 error.
@@ -1625,6 +1734,7 @@ Examples:
     pudl run k8sPolicy --converge
     pudl run k8sConverge --converge --only web,api
     pudl run k8sConverge --converge --dry-run
+    pudl run --populate 'command:gcloud compute networks list --format=json'
 ```
 
 Flags:
@@ -1644,7 +1754,7 @@ Flags:
 | `--mu-root` | string |  | mu project root to run within (default: discover mu.cue from the model dir) |
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
 | `--only` | stringSlice |  | converge only these resource selectors (requires --converge) |
-| `--populate` | string |  | Run an unregistered observer as plugin:&lt;name&gt; |
+| `--populate` | string |  | Run an unregistered observer: plugin:&lt;name&gt;, or command:&lt;cmdline&gt; (a command printing JSON records) |
 | `--require-approval` | bool |  | persist the converge request and wait for `pudl run resume <run-id>` |
 
 Subcommands:
@@ -1755,6 +1865,31 @@ model row is left `unknown` instead, and the run row records the real verdict
 plus a note naming the scope. `drifted` and `failed` *are* written: a defect
 found in a subset is a defect in the model. Re-run without `--only` to establish
 a whole-model `clean`.
+
+**Command populate.** A `#CommandObserve` arm runs plain commands that print
+JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
+`aws … --format=json` — directly, with no shell, no mu and no plugin protocol.
+Fan out with a CUE comprehension and stamp fields the tool omits with `set`:
+
+```cue
+populate: {
+	schema: "pudl/gcp.#Firewall"     // optional; routes records like import --schema
+	runs: [for p in ["prod-a", "prod-b"] {
+		argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+		set: project: p
+	}]
+}
+```
+
+The environment is inherited (cloud CLI credentials work). Any failing run
+fails the populate phase and nothing is ingested; the error quotes the end of
+its stderr. argv and `set` are recorded with the model: keep secrets out.
+`pudl run --populate 'command:<cmdline>'` runs one ad hoc.
+
+**Checks-only models.** A model without `populate` evaluates its checks over
+the catalog as it is — e.g. data brought in with `pudl import` — after syncing
+projected facts ([projection](projection.md)). It cannot declare
+`desired` or `converge`.
 
 ## pudl run reject
 

@@ -21,10 +21,11 @@ func (t *ModelTemplate) Summary() (TemplateSummary, error) {
 	var summary TemplateSummary
 	populate := t.value.LookupPath(cue.ParsePath("populate"))
 	if !populate.Exists() {
-		return summary, fmt.Errorf("template %q has no populate arm", t.Name)
-	}
-	if ewe := populate.LookupPath(cue.ParsePath("eweSource")); ewe.Exists() {
+		summary.PopulateKind = KindNone
+	} else if ewe := populate.LookupPath(cue.ParsePath("eweSource")); ewe.Exists() {
 		summary.PopulateKind = KindEweTarget
+	} else if runs := populate.LookupPath(cue.ParsePath("runs")); runs.Exists() {
+		summary.PopulateKind = KindCommand
 	} else {
 		summary.PopulateKind = KindPluginObserve
 		if plugin := populate.LookupPath(cue.ParsePath("plugin")); plugin.Exists() {

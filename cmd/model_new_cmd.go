@@ -14,12 +14,16 @@ var modelNewCmd = &cobra.Command{
 global schema outside a workspace). Always edit the returned file to add desired
 state, checks, or a converge arm.
 
-Example:
-    pudl model new pods --populate plugin:k8s --input namespace=default`,
+--populate takes plugin:<name> (a cached mu plugin) or command:<cmdline>, a
+command printing JSON records, run directly by pudl (no shell, no mu).
+
+Examples:
+    pudl model new pods --populate plugin:k8s --input namespace=default
+    pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'`,
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		plugin, err := parsePluginSpec(modelNewPopulate)
+		spec, err := parsePopulateSpec(modelNewPopulate)
 		if err != nil {
 			return err
 		}
@@ -27,12 +31,18 @@ Example:
 		if err != nil {
 			return err
 		}
-		path, err := writeModelScaffold(args[0], plugin, input, false, modelNewForce)
+		path, err := writeModelScaffold(args[0], spec, input, false, modelNewForce)
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			b, _ := json.Marshal(map[string]any{"path": path, "name": args[0], "plugin": plugin})
+			out := map[string]any{"path": path, "name": args[0]}
+			if spec.argv != nil {
+				out["command"] = spec.argv
+			} else {
+				out["plugin"] = spec.plugin
+			}
+			b, _ := json.Marshal(out)
 			fmt.Fprintln(outw(), string(b))
 			return nil
 		}
@@ -43,7 +53,7 @@ Example:
 }
 
 func init() {
-	modelNewCmd.Flags().StringVar(&modelNewPopulate, "populate", "", "Populate arm, in the form plugin:<name>")
+	modelNewCmd.Flags().StringVar(&modelNewPopulate, "populate", "", "Populate arm: plugin:<name> or command:<cmdline>")
 	modelNewCmd.Flags().StringArrayVar(&modelNewInputs, "input", nil, "Populate input key=value (repeatable; JSON values are decoded)")
 	modelNewCmd.Flags().BoolVar(&modelNewForce, "force", false, "Replace an existing scaffold file")
 }

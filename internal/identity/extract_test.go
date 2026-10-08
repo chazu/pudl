@@ -163,3 +163,27 @@ func TestExtractFieldValues_DeeplyNested(t *testing.T) {
 		t.Errorf("expected a.b.c=deep-value, got %v", result["a.b.c"])
 	}
 }
+
+func TestExtractFieldValuesQuotedDottedKey(t *testing.T) {
+	data := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"name":   "svc",
+			"labels": map[string]interface{}{"cloud.googleapis.com/location": "us-east1"},
+		},
+	}
+	field := `metadata.labels."cloud.googleapis.com/location"`
+	got, err := ExtractFieldValues(data, []string{"metadata.name", field})
+	if err != nil {
+		t.Fatalf("ExtractFieldValues: %v", err)
+	}
+	if got[field] != "us-east1" || got["metadata.name"] != "svc" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestExtractFieldValuesRejectsWildcard(t *testing.T) {
+	data := map[string]interface{}{"a": []interface{}{"x"}}
+	if _, err := ExtractFieldValues(data, []string{"a[*]"}); err == nil {
+		t.Fatal("wildcard identity field must be an error")
+	}
+}

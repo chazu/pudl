@@ -64,5 +64,6 @@ func importFromStdin(cmd *cobra.Command) error {
 	if !jsonOutput {
 		displayImportResults(result)
 	}
+	session.finish()
 	return nil
 }

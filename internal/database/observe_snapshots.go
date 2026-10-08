@@ -45,6 +45,9 @@ const (
 	SnapshotSourceMuObserve     = "mu-observe"
 	SnapshotSourceEwe           = "ewe"
 	SnapshotSourceIngestObserve = "ingest-observe"
+	// SnapshotSourceCommand is a #CommandObserve populate: plain commands
+	// printing JSON records, run by pudl itself.
+	SnapshotSourceCommand = "command"
 	// SnapshotSourceModelInstance is the model's own registration row, which
 	// reuses the observe ingester as an implementation convenience. It is not an
 	// observation of the live system, so it must never answer "what does this
@@ -60,6 +63,7 @@ var observationSources = []string{
 	SnapshotSourceMuObserve,
 	SnapshotSourceEwe,
 	SnapshotSourceIngestObserve,
+	SnapshotSourceCommand,
 }
 
 // ensureObserveSnapshotsTable creates the snapshot contract table. Idempotent,

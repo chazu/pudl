@@ -93,6 +93,9 @@ func (t *CatalogTx) QueryFacts(filter FactFilter) ([]Fact, error) {
 }
 
 func (t *CatalogTx) AddFact(fact Fact) (Fact, error) {
+	if err := checkWriterSource(fact); err != nil {
+		return Fact{}, err
+	}
 	return addFactIn(t.q, fact)
 }
 

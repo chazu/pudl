@@ -2,6 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
@@ -128,6 +132,8 @@ func validateModel(m *systemmodel.SystemModel) []string {
 		if len(m.Populate.Outputs) == 0 {
 			problems = append(problems, "populate: ewe arm declares no outputs")
 		}
+	case systemmodel.KindCommand:
+		problems = append(problems, validateCommandRuns(m.Populate)...)
 	}
 
 	if m.Convergent() && len(m.Desired) == 0 {
@@ -153,4 +159,29 @@ func validateModel(m *systemmodel.SystemModel) []string {
 
 func init() {
 	modelCmd.AddCommand(modelValidateCmd)
+}
+
+// validateCommandRuns checks a command arm's runs: each argv names a program
+// that can be found, and the timeout parses.
+func validateCommandRuns(p systemmodel.Populate) []string {
+	var problems []string
+	for i, run := range p.Runs {
+		if len(run.Argv) == 0 || run.Argv[0] == "" {
+			problems = append(problems, fmt.Sprintf("populate.runs[%d]: argv is empty", i))
+			continue
+		}
+		// A path is resolved against the run's dir when the run starts; a bare
+		// name must be on PATH.
+		if !strings.ContainsRune(run.Argv[0], filepath.Separator) {
+			if _, err := exec.LookPath(run.Argv[0]); err != nil {
+				problems = append(problems, fmt.Sprintf("populate.runs[%d]: %q not found on PATH", i, run.Argv[0]))
+			}
+		}
+	}
+	if p.Timeout != "" {
+		if _, err := time.ParseDuration(p.Timeout); err != nil {
+			problems = append(problems, fmt.Sprintf("populate.timeout: %v", err))
+		}
+	}
+	return problems
 }

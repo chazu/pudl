@@ -14,6 +14,7 @@ const (
 	importStatusImported = "imported"
 	importStatusSkipped  = "skipped"
 	importStatusFailed   = "failed"
+	importStatusDryRun   = "dry-run"
 )
 
 // importOutcome is one file's entry in `pudl import --json`: the import result
@@ -33,6 +34,8 @@ func newImportOutcome(sourcePath string, result *importer.ImportResult, err erro
 			Error:        err.Error(),
 			ImportResult: &importer.ImportResult{SourcePath: sourcePath},
 		}
+	case result.DryRun:
+		return importOutcome{Status: importStatusDryRun, ImportResult: result}
 	case result.Skipped:
 		return importOutcome{Status: importStatusSkipped, ImportResult: result}
 	default:

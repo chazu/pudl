@@ -13,6 +13,8 @@ import (
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -30,6 +32,8 @@ type EnhancedImporter struct {
 	catalogDB   *database.CatalogDB
 	inferrer    *inference.SchemaInferrer
 	chain       *validator.ChainValidator // built on first manual-schema import
+	redactor    *redact.Registry          // sensitive-field paths per schema
+	projector   *projection.Registry      // schema-declared fact projections
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -105,6 +109,34 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		origin = e.detectOrigin(opts.originPath(), format)
 	}
 
+	// Rewrite the source first when records must change (--set, redaction).
+	var transformed *transformResult
+	if e.needsTransform(opts) {
+		shape := sourceShape{format: format, origin: origin}
+		shape.collection, _ = streamableCollectionFormat(opts.SourcePath, format)
+		transformed, err = e.transformSource(opts, opts.SourcePath, shape)
+		if err != nil {
+			return nil, err
+		}
+		defer transformed.cleanup()
+		if transformed.path != "" {
+			opts.OriginPath = opts.originPath()
+			opts.SourcePath = transformed.path
+			plainOwnedBytes += transformed.size
+			// --set may grow records; the rewritten file, not the original,
+			// is what the main pass decodes.
+			opts.Limits.DecodedBytes = max(opts.Limits.DecodedBytes, transformed.size)
+		}
+		if transformed.assignments != "" {
+			reader, err := openAssignments(transformed.assignments)
+			if err != nil {
+				return nil, err
+			}
+			defer reader.close()
+			opts.assignments = reader
+		}
+	}
+
 	// Generate timestamp for metadata
 	timestamp := time.Now()
 
@@ -143,7 +175,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	if collectionFormat, ok := streamableCollectionFormat(staged.Path(storedPath), format); ok {
 		opts.collectionFormat = format
 		opts.Limits.StagingBytes -= staged.Size
-		stream = &collectionStream{importer: e, opts: opts, collectionID: mainID, timestamp: timestamp, rawDir: rawDir, metadataDir: metadataDir}
+		stream = &collectionStream{importer: e, opts: opts, collectionID: mainID, timestamp: timestamp, rawDir: rawDir, metadataDir: metadataDir, tally: projection.NewTally()}
 		if err := stream.prepare(staged.Path(storedPath), collectionFormat); err != nil {
 			return nil, err
 		}
@@ -167,7 +199,16 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 			if opts.Explain {
 				result.Explanation = loadOriginalExplanation(existing.MetadataPath)
 			}
-			return nil
+			// Already cataloged, but this is still an observation: an explicit
+			// schema may now apply, and the records are again their resources'
+			// latest state.
+			if stream != nil {
+				result.Reassigned, err = stream.reobserveAll()
+				applyTally(result, stream.tally)
+			} else if opts.ManualSchema != "" || e.projector.For(existing.Schema) != nil {
+				result.Reassigned, err = e.reobserveDocument(opts, existing, staged.Path(storedPath), format, origin)
+			}
+			return err
 		}
 		journal, err := artifacts.NewJournalContext(opts.Context, tempDir)
 		if err != nil {
@@ -193,6 +234,9 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		result.SourcePath = opts.originPath()
 		return nil
 	})
+	if result != nil && transformed != nil {
+		result.Redacted = transformed.redacted
+	}
 	return result, err
 }
 

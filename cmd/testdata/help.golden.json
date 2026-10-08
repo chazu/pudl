@@ -328,7 +328,7 @@
     {
       "use": "facts",
       "short": "Query the bitemporal fact store",
-      "long": "Query facts stored in the bitemporal fact store.\n\nFacts are typed assertions — observations, dependencies, derived facts — with\nfull valid-time and transaction-time tracking.\n\nAvailable subcommands:\n- list:       Query facts by relation with temporal filtering\n- show:       Inspect a single fact by ID\n- retract:    Mark a fact as retracted (we were wrong)\n- invalidate: Mark a fact as no longer valid (reality changed)\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts show abc123...\n    pudl facts retract abc123...\n    pudl facts invalidate abc123...",
+      "long": "Query facts stored in the bitemporal fact store.\n\nFacts are typed assertions — observations, dependencies, derived facts — with\nfull valid-time and transaction-time tracking.\n\nAvailable subcommands:\n- list:       Query facts by relation with temporal filtering\n- show:       Inspect a single fact by ID\n- retract:    Mark a fact as retracted (we were wrong)\n- invalidate: Mark a fact as no longer valid (reality changed)\n- reproject:  Recompute facts projected from imported records (_pudl.facts)\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts show abc123...\n    pudl facts retract abc123...\n    pudl facts invalidate abc123...",
       "args": "custom",
       "flags": [
         {
@@ -437,6 +437,27 @@
           ]
         },
         {
+          "use": "reproject",
+          "short": "Bring schema-projected facts in line with the catalog",
+          "long": "Recompute the facts schemas project from imported records (_pudl.facts).\n\nImports and runs project facts as records arrive and sync afterwards, so this\nis rarely needed by hand. It repairs, as corrections (retractions):\n\n- resources whose facts describe an entry that was deleted, pruned,\n  re-identified or reassigned to another schema;\n- resources projected with an older facts block (the block changed);\n- resources never projected (a facts block added after the data arrived).\n\nA schema whose facts block is invalid is reported and its existing facts are\nleft unchanged. pudl query warns when a reprojection is pending.\n\nExamples:\n    pudl facts reproject\n    pudl facts reproject --dry-run",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "dry-run",
+              "usage": "Report what would change without writing",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        },
+        {
           "use": "retract \u003cid\u003e",
           "short": "Retract a fact (mark as no longer asserted)",
           "long": "Mark a fact as retracted by setting its transaction end time.\n\nUse this when a fact was recorded in error — the assertion was wrong.\nThe fact remains in the store for audit purposes but disappears from\ncurrent queries.\n\nExamples:\n    pudl facts retract c0b4392d347aca8e...",
@@ -540,10 +561,17 @@
       ]
     },
     {
-      "use": "import [--path \u003cfile|dir|pattern\u003e]",
+      "use": "import [paths...] [--path \u003cfile|dir|pattern\u003e]",
       "short": "Import data into PUDL data lake",
-      "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nThe --path flag accepts a single file, a wildcard pattern, or a directory:\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Manual schema specification with --schema flag (chained validation)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: policy → base → generic → catchall\n- Never rejects data - always finds appropriate schema\n- Envelope wire format: a JSON file shaped like\n    {\"schema\": {\"module\": \"mu/aws\", \"version\": \"v1\"},\n     \"definitions\": [...],   // optional inline CUE\n     \"data\": \u003cpayload\u003e}\n  is auto-detected on import. The declared CUE schema ref is recorded\n  in the item_schemas table; inline definitions are written to pudl's\n  schema cache for future imports. Raw JSON without the envelope shape\n  is imported untouched.\n- Multiple schemas per item: items can satisfy more than one schema\n  (declared, inferred, unresolved) — see 'pudl reclassify --help'.\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.compliant-ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n    # CUE schema reference (e.g. emitted by a mu plugin)\n    pudl import --path out.json --schema mu/aws@v1#EC2Instance\n\n    # Wildcard batch import\n    pudl import --path *.json\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # From stdin\n    cat data.json | pudl import",
+      "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nPaths may be given as arguments, with --path, or both. Each accepts a single\nfile, a wildcard pattern, or a directory (an unquoted pattern the shell has\nalready expanded arrives as several arguments and is imported in full):\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Manual schema specification with --schema flag (chained validation)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: policy → base → generic → catchall\n- Never rejects data - always finds appropriate schema\n- Envelope wire format: a JSON file shaped like\n    {\"schema\": {\"module\": \"mu/aws\", \"version\": \"v1\"},\n     \"definitions\": [...],   // optional inline CUE\n     \"data\": \u003cpayload\u003e}\n  is auto-detected on import. The declared CUE schema ref is recorded\n  in the item_schemas table; inline definitions are written to pudl's\n  schema cache for future imports. Raw JSON without the envelope shape\n  is imported untouched.\n- Multiple schemas per item: items can satisfy more than one schema\n  (declared, inferred, unresolved) — see 'pudl reclassify --help'.\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.compliant-ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n    # CUE schema reference (e.g. emitted by a mu plugin)\n    pudl import --path out.json --schema mu/aws@v1#EC2Instance\n\n    # Several files, or a shell-expanded glob\n    pudl import fw-prod-a.json fw-prod-b.json\n    pudl import exports/*.json\n\n    # Wildcard batch import\n    pudl import --path '*.json'\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # Check classification, identity and redaction first; nothing is written\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --dry-run\n\n    # Add a field gcloud omits, on every record\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --set project=prod-a\n\n    # From stdin\n    cat data.json | pudl import",
+      "args": "custom",
       "flags": [
+        {
+          "name": "dry-run",
+          "usage": "Show how records would be classified, identified, redacted and projected; write nothing",
+          "type": "bool",
+          "default": "false"
+        },
         {
           "name": "explain",
           "usage": "Explain original schema candidates, fallback, and search-path shadowing",
@@ -601,6 +629,12 @@
           "name": "schema",
           "usage": "Specify schema for validation (e.g., aws.compliant-ec2)",
           "type": "string"
+        },
+        {
+          "name": "set",
+          "usage": "Set a field on every record: path=value (repeatable; overwrites; JSON values keep their type, '\"…\"' forces a string)",
+          "type": "stringArray",
+          "default": "[]"
         },
         {
           "name": "streaming-chunk-size",
@@ -736,7 +770,7 @@
         },
         {
           "name": "schema",
-          "usage": "Filter by CUE schema (e.g., aws.#EC2Instance)",
+          "usage": "Filter by CUE schema: a value with # matches whole definition names (aws.#EC2Instance, #Route); otherwise a substring",
           "type": "string"
         },
         {
@@ -849,7 +883,7 @@
         {
           "use": "new \u003cname\u003e",
           "short": "Scaffold a #SystemModel observer",
-          "long": "Create a registered #SystemModel scaffold in the project schema (or the\nglobal schema outside a workspace). Always edit the returned file to add desired\nstate, checks, or a converge arm.\n\nExample:\n    pudl model new pods --populate plugin:k8s --input namespace=default",
+          "long": "Create a registered #SystemModel scaffold in the project schema (or the\nglobal schema outside a workspace). Always edit the returned file to add desired\nstate, checks, or a converge arm.\n\n--populate takes plugin:\u003cname\u003e (a cached mu plugin) or command:\u003ccmdline\u003e, a\ncommand printing JSON records, run directly by pudl (no shell, no mu).\n\nExamples:\n    pudl model new pods --populate plugin:k8s --input namespace=default\n    pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'",
           "args": "custom",
           "flags": [
             {
@@ -873,7 +907,7 @@
             },
             {
               "name": "populate",
-              "usage": "Populate arm, in the form plugin:\u003cname\u003e",
+              "usage": "Populate arm: plugin:\u003cname\u003e or command:\u003ccmdline\u003e",
               "type": "string"
             }
           ]
@@ -1294,7 +1328,7 @@
     {
       "use": "run [\u003cmodel\u003e]",
       "short": "Run a #SystemModel instance (observe-only, or --converge)",
-      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema first, then the global ~/.pudl/schema. Register one with\n\"pudl schema add\". Default is OBSERVE-ONLY: populate -\u003e drift -\u003e checks -\u003e\nreport, no mutation. Pass --converge to close drift; see the V1 build spec.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift, pending changes (--dry-run) or a failing fail-severity check,\n1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run k8sPolicy --converge\n    pudl run k8sConverge --converge --only web,api\n    pudl run k8sConverge --converge --dry-run",
+      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema first, then the global ~/.pudl/schema. Register one with\n\"pudl schema add\". Default is OBSERVE-ONLY: populate -\u003e drift -\u003e checks -\u003e\nreport, no mutation. Pass --converge to close drift; see the V1 build spec.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift, pending changes (--dry-run) or a failing fail-severity check,\n1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run k8sPolicy --converge\n    pudl run k8sConverge --converge --only web,api\n    pudl run k8sConverge --converge --dry-run\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
       "args": "custom",
       "flags": [
         {
@@ -1383,7 +1417,7 @@
         },
         {
           "name": "populate",
-          "usage": "Run an unregistered observer as plugin:\u003cname\u003e",
+          "usage": "Run an unregistered observer: plugin:\u003cname\u003e, or command:\u003ccmdline\u003e (a command printing JSON records)",
           "type": "string"
         },
         {

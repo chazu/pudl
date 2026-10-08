@@ -22,6 +22,7 @@ type importSession struct {
 	imp       *importer.EnhancedImporter
 	schema    string                    // resolved --schema, or ""
 	validator *validator.ChainValidator // set when schema is set
+	set       []importer.FieldAssignment
 }
 
 // newImportSession loads configuration, opens the importer, and resolves the
@@ -45,7 +46,12 @@ func newImportSession() (*importSession, error) {
 		imp.Close()
 		return nil, err
 	}
-	return &importSession{imp: imp, schema: schema, validator: chain}, nil
+	set, err := parseCLIAssignments("set", importSet)
+	if err != nil {
+		imp.Close()
+		return nil, errors.NewInputError(err.Error())
+	}
+	return &importSession{imp: imp, schema: schema, validator: chain, set: set}, nil
 }
 
 // Close releases the importer.
@@ -63,6 +69,8 @@ func (s *importSession) options(path, origin string) importer.ImportOptions {
 		Origin:         origin, // auto-detected from the path when empty
 		ManualSchema:   s.schema,
 		ChainValidator: s.validator,
+		Set:            s.set,
+		DryRun:         importDryRun,
 	}
 }
 
@@ -99,4 +107,15 @@ func workspaceImportOrigin() string {
 		return wsPolicy.EffectiveOrigin
 	}
 	return importOrigin
+}
+
+// finish runs after a session's imports. New and re-observed records were
+// projected as they were committed; this catches up everything else — a facts
+// block added since the data was imported, entries reassigned — so facts
+// match the catalog when the command returns. A dry run writes nothing.
+func (s *importSession) finish() {
+	if importDryRun {
+		return
+	}
+	syncProjectionsQuietly(s.ctx, s.imp.CatalogDB())
 }

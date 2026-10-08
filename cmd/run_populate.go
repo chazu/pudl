@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/mubridge"
 	"github.com/chazu/pudl/internal/systemmodel"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // populateTargetName is the mu target a model's populate phase observes.
@@ -123,9 +124,15 @@ func findMuRoot(startDir string) (string, error) {
 // muRoot is the mu project to run within (B: project-embedded). modelDir is the
 // model file's directory, the base for resolving relative plugin scripts.
 func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoot, modelDir, pudlRoot, runID, snapshotID0 string) (*PopulateReport, error) {
-	if m.Populate.Kind() == systemmodel.KindEweTarget {
+	switch m.Populate.Kind() {
+	case systemmodel.KindEweTarget:
 		// Self-staged; no external mu root needed (works for project + global).
 		return runEwePopulate(cat, mu, m, modelDir, pudlRoot, runID, snapshotID0)
+	case systemmodel.KindCommand:
+		// Plain commands run by pudl itself: no mu, no plugin protocol.
+		return runCommandPopulate(cat, runOperationContext(mu), m, modelDir, runID, snapshotID0)
+	case systemmodel.KindNone:
+		return nil, fmt.Errorf("model %q has no populate arm (checks-only)", m.Name)
 	}
 	pluginSource := resolveObservePluginSource(m, modelDir, muRoot)
 	if err := ensureObservePluginAvailable(pluginSource); err != nil {
@@ -418,6 +425,15 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	if err != nil {
 		return 0, "", err
 	}
+	var chain *validator.ChainValidator
+	if in.manualSchema != "" {
+		if chain, err = validator.NewChainValidator(effectiveSchemaPaths(cfg)...); err != nil {
+			return 0, "", fmt.Errorf("load schemas for %s: %w", in.manualSchema, err)
+		}
+		if !chain.HasSchema(in.manualSchema) {
+			return 0, "", fmt.Errorf("populate schema %q is not loaded (see: pudl schema list)", in.manualSchema)
+		}
+	}
 	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
 		Reader:         bytes.NewReader(observeJSON),
 		Context:        in.ctx,
@@ -431,7 +447,12 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 		Workspace:      effectiveWorkspaceName(),
 		Origin:         "pudl-run",
 		Source:         in.source,
+		ManualSchema:   in.manualSchema,
+		Chain:          chain,
 	})
+	for _, w := range result.FactWarnings {
+		fmt.Fprintf(errw(), "⚠️  %s\n", w)
+	}
 	return result.Records, result.SnapshotID, err
 }
 
@@ -443,4 +464,6 @@ type populateIngest struct {
 	model      string
 	source     string
 	plugin     observePluginRef
+	// manualSchema routes every record like `import --schema` (command arm).
+	manualSchema string
 }
