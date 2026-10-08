@@ -173,6 +173,9 @@ func (si *SchemaInferrer) infer(data interface{}, hints InferenceHints, explain 
 			}
 		}
 		if unifyErr == nil {
+			if trace != nil {
+				trace.Alternatives = si.tiedAlternatives(candidates, i, jsonBytes, dataByCtx)
+			}
 			confidence := calculateConfidence(candidate.Score, i, len(candidates))
 			return finish(&InferenceResult{
 				Schema:      candidate.Schema,
@@ -387,6 +390,10 @@ type InferenceTrace struct {
 	AttemptsTruncated bool               `json:"attempts_truncated,omitempty"`
 	LoadFailures      []string           `json:"load_failure_paths,omitempty"`
 	Historical        bool               `json:"historical,omitempty"`
+	// Alternatives are other schemas, outside the selected one's family, that
+	// tied with it on score and also accepted the data: the classification was
+	// decided by candidate order alone. Computed only when tracing.
+	Alternatives []string `json:"alternatives,omitempty"`
 }
 
 func (si *SchemaInferrer) traceLocked() *InferenceTrace {

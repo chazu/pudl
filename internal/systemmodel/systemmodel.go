@@ -74,6 +74,19 @@ type Populate struct {
 	Network      bool                   `json:"network,omitempty"`
 	Impure       bool                   `json:"impure,omitempty"`
 	SealedInputs map[string]SealedInput `json:"-"`
+	// #CommandObserve
+	Runs    []CommandRun `json:"runs,omitempty"`
+	Schema  string       `json:"schema,omitempty"`
+	Timeout string       `json:"timeout,omitempty"`
+	// Absent: the model declares no populate arm (checks-only).
+	Absent bool `json:"-"`
+}
+
+// CommandRun is one #CommandRun: a command whose stdout is JSON records.
+type CommandRun struct {
+	Argv []string       `json:"argv"`
+	Set  map[string]any `json:"set,omitempty"`
+	Dir  string         `json:"dir,omitempty"`
 }
 
 // PopulateKind enumerates the populate union arms.
@@ -82,12 +95,20 @@ type PopulateKind string
 const (
 	KindPluginObserve PopulateKind = "observe"
 	KindEweTarget     PopulateKind = "ewe"
+	KindCommand       PopulateKind = "command"
+	KindNone          PopulateKind = "none" // no populate arm: checks-only
 )
 
-// Kind reports which populate arm this is. eweSource present → ewe; else observe.
+// Kind reports which populate arm this is: none when the model declares no
+// populate, ewe when eweSource is set, command when runs are, else observe.
 func (p Populate) Kind() PopulateKind {
-	if p.EweSource != "" {
+	switch {
+	case p.Absent:
+		return KindNone
+	case p.EweSource != "":
 		return KindEweTarget
+	case len(p.Runs) > 0:
+		return KindCommand
 	}
 	return KindPluginObserve
 }
@@ -99,7 +120,7 @@ func (p Populate) Kind() PopulateKind {
 // `differential` field (default true). Observe-only models (no desired) never reach
 // a drift path, so the value is moot there.
 func (m *SystemModel) DifferentialDrift() bool {
-	if m.Populate.Kind() == KindEweTarget {
+	if m.Populate.Kind() != KindPluginObserve {
 		return false
 	}
 	return m.Populate.Differential
@@ -159,6 +180,12 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 	}
 	if err := decodeSealedDeclarations(inst, &m); err != nil {
 		return nil, err
+	}
+	if !inst.LookupPath(cue.ParsePath("populate")).Exists() {
+		m.Populate.Absent = true
+		if len(m.Desired) > 0 || m.Converge != nil {
+			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired or converge", m.Name)
+		}
 	}
 	return &m, nil
 }

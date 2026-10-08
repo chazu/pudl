@@ -99,3 +99,28 @@ model row is left `unknown` instead, and the run row records the real verdict
 plus a note naming the scope. `drifted` and `failed` *are* written: a defect
 found in a subset is a defect in the model. Re-run without `--only` to establish
 a whole-model `clean`.
+
+**Command populate.** A `#CommandObserve` arm runs plain commands that print
+JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
+`aws … --format=json` — directly, with no shell, no mu and no plugin protocol.
+Fan out with a CUE comprehension and stamp fields the tool omits with `set`:
+
+```cue
+populate: {
+	schema: "pudl/gcp.#Firewall"     // optional; routes records like import --schema
+	runs: [for p in ["prod-a", "prod-b"] {
+		argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+		set: project: p
+	}]
+}
+```
+
+The environment is inherited (cloud CLI credentials work). Any failing run
+fails the populate phase and nothing is ingested; the error quotes the end of
+its stderr. argv and `set` are recorded with the model: keep secrets out.
+`pudl run --populate 'command:<cmdline>'` runs one ad hoc.
+
+**Checks-only models.** A model without `populate` evaluates its checks over
+the catalog as it is — e.g. data brought in with `pudl import` — after syncing
+projected facts ([projection](projection.md)). It cannot declare
+`desired` or `converge`.

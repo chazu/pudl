@@ -109,6 +109,8 @@ func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Facts projected from the deleted entries describe nothing now.
+	syncProjectionsAfterWrite(cmd.Context())
 
 	// Output result
 	if output.Format == ui.OutputFormatJSON {

@@ -25,6 +25,7 @@ Available subcommands:
 - show:       Inspect a single fact by ID
 - retract:    Mark a fact as retracted (we were wrong)
 - invalidate: Mark a fact as no longer valid (reality changed)
+- reproject:  Recompute facts projected from imported records (_pudl.facts)
 
 Examples:
     pudl facts list --relation observation

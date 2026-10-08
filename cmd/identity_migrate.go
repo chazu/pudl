@@ -40,7 +40,14 @@ Examples:
     pudl migrate identity --recompute      # Recompute all resource_ids + versions
     pudl migrate identity --recompute --dry-run  # Preview the recompute`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runIdentityMigrate()
+		if err := runIdentityMigrate(); err != nil {
+			return err
+		}
+		if !identityMigrateDryRun {
+			// Re-identified entries leave their old projection sources behind.
+			syncProjectionsAfterWrite(cmd.Context())
+		}
+		return nil
 	},
 }
 

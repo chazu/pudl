@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,13 +18,16 @@ var (
 	importOrigin      string
 	importFormat      string
 	importRecursive   bool
+	importSet         []string
+	importDryRun      bool
 	streamingMemoryMB int
 	streamingChunkMB  float64
 )
 
 // importCmd represents the import command
 var importCmd = &cobra.Command{
-	Use:   "import [--path <file|dir|pattern>]",
+	Use:   "import [paths...] [--path <file|dir|pattern>]",
+	Args:  cobra.ArbitraryArgs,
 	Short: "Import data into PUDL data lake",
 	Long: `Import data from files into the PUDL data lake with automatic format detection
 and schema assignment.
@@ -32,7 +36,9 @@ This command imports data from various formats (JSON, YAML, CSV, NDJSON) and sto
 in the PUDL data lake with full metadata tracking. Raw and metadata files use
 content-addressed names.
 
-The --path flag accepts a single file, a wildcard pattern, or a directory:
+Paths may be given as arguments, with --path, or both. Each accepts a single
+file, a wildcard pattern, or a directory (an unquoted pattern the shell has
+already expanded arrives as several arguments and is imported in full):
 - Single file: --path data.json
 - Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json
 - Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv
@@ -81,10 +87,20 @@ Example usage:
     # CUE schema reference (e.g. emitted by a mu plugin)
     pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
+    # Several files, or a shell-expanded glob
+    pudl import fw-prod-a.json fw-prod-b.json
+    pudl import exports/*.json
+
     # Wildcard batch import
-    pudl import --path *.json
+    pudl import --path '*.json'
     pudl import --path data/*.yaml
     pudl import --path logs/2024-01-*.json
+
+    # Check classification, identity and redaction first; nothing is written
+    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --dry-run
+
+    # Add a field gcloud omits, on every record
+    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --set project=prod-a
 
     # From stdin
     cat data.json | pudl import`,
@@ -100,23 +116,38 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	}
 	inference.WarnLoadErrors(errw(), effectiveSchemaPaths(nil)...)
 
-	// Check if reading from stdin
-	if filePath == "-" || (filePath == "" && importer.IsStdinAvailable()) {
-		return importFromStdin(cmd)
+	// Named paths — positional args plus --path — win over stdin: an agent
+	// with stdin attached still imports the files it named.
+	var patterns []string
+	for _, arg := range args {
+		if arg != "" {
+			patterns = append(patterns, arg)
+		}
+	}
+	if filePath != "" && filePath != "-" {
+		patterns = append(patterns, filePath)
 	}
 
-	if filePath == "" {
+	// Check if reading from stdin
+	if len(patterns) == 0 && (filePath == "-" || importer.IsStdinAvailable()) {
+		return importFromStdin(cmd)
+	}
+	if filePath == "-" {
+		return errors.NewInputError("--path - (stdin) cannot be combined with file arguments")
+	}
+
+	if len(patterns) == 0 {
 		return errors.NewMissingRequiredError("path")
 	}
 
-	// Resolve file paths (handles both single files and wildcard patterns)
-	filePaths, err := resolveFilePaths(filePath, importRecursive)
+	// Resolve file paths (handles single files, wildcard patterns and directories)
+	filePaths, err := resolveAllFilePaths(patterns, importRecursive)
 	if err != nil {
 		return err
 	}
 
 	if len(filePaths) == 0 {
-		return errors.NewFileNotFoundError(filePath + " (no importable files matched)")
+		return errors.NewFileNotFoundError(strings.Join(patterns, ", ") + " (no importable files matched)")
 	}
 
 	// If multiple files, perform batch import
@@ -155,6 +186,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	if !jsonOutput {
 		displayImportResults(result)
 	}
+	session.finish()
 	return nil
 }
 
@@ -168,6 +200,8 @@ func init() {
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 	importCmd.Flags().BoolVar(&importRecursive, "recursive", false, "When --path is a directory, also import supported files in its subdirectories")
 
+	importCmd.Flags().StringArrayVar(&importSet, "set", nil, "Set a field on every record: path=value (repeatable; overwrites; JSON values keep their type, '\"…\"' forces a string)")
+	importCmd.Flags().BoolVar(&importDryRun, "dry-run", false, "Show how records would be classified, identified, redacted and projected; write nothing")
 	importCmd.Flags().BoolVar(&importExplain, "explain", false, "Explain original schema candidates, fallback, and search-path shadowing")
 
 	// Retired streaming-parser tuning. Accepted so existing scripts keep
@@ -187,12 +221,17 @@ func displayImportResults(result *importer.ImportResult) {
 	if importExplain {
 		displayImportExplanation(result)
 	}
+	if result.DryRun {
+		displayImportPreview(result)
+		return
+	}
 	// Check if import was skipped due to duplicate
 	if result.Skipped {
 		fmt.Fprintf(outw(), "⏭️  Skipped: %s\n", result.SourcePath)
 		fmt.Fprintf(outw(), "   Reason: %s\n", result.SkipReason)
 		fmt.Fprintf(outw(), "   Existing ID: %s\n", result.ID)
 		fmt.Fprintf(outw(), "   Stored at: %s\n", result.StoredPath)
+		printImportNotes(result)
 		return
 	}
 
@@ -234,4 +273,5 @@ func displayImportResults(result *importer.ImportResult) {
 
 	fmt.Fprintf(outw(), "   Records: %d\n", result.RecordCount)
 	fmt.Fprintf(outw(), "   Size: %d bytes\n", result.SizeBytes)
+	printImportNotes(result)
 }

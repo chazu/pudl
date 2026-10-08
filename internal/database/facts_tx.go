@@ -50,6 +50,9 @@ type FactTx struct {
 // CatalogDB.AddFact: content-addressed ID, idempotent re-add, current_facts
 // kept in sync.
 func (t *FactTx) AddFact(f Fact) (Fact, error) {
+	if err := checkWriterSource(f); err != nil {
+		return Fact{}, err
+	}
 	return addFactIn(t.q, f)
 }
 

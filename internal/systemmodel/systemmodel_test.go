@@ -157,8 +157,25 @@ func TestLoadModel_MissingInstance(t *testing.T) {
 }
 
 func TestLoadModel_RejectsInvalid(t *testing.T) {
-	// populate is required; a model without it must not load.
-	const bad = `bad: #SystemModel & {name: "x"}`
+	// Without populate a model is checks-only, so it may not declare desired
+	// state (there is nothing to observe it against).
+	const bad = `bad: #SystemModel & {name: "x", desired: [{"_schema": "a.#B", name: "n"}]}`
 	_, err := loadModel([]byte(bad), "bad")
 	require.Error(t, err)
+}
+
+func TestLoadModel_ChecksOnlyAndCommandArms(t *testing.T) {
+	m, err := loadModel([]byte(`m: #SystemModel & {name: "posture", checks: [{name: "c", query: "q", expect: "empty", severity: "fail", message: "m"}]}`), "m")
+	require.NoError(t, err)
+	require.Equal(t, KindNone, m.Populate.Kind())
+
+	m, err = loadModel([]byte(`m: #SystemModel & {name: "fw", populate: {schema: "pudl/gcp.#Firewall", runs: [{argv: ["gcloud", "list"], set: project: "p"}]}}`), "m")
+	require.NoError(t, err)
+	require.Equal(t, KindCommand, m.Populate.Kind())
+	require.False(t, m.DifferentialDrift())
+	require.Equal(t, []string{"gcloud", "list"}, m.Populate.Runs[0].Argv)
+	require.Equal(t, "p", m.Populate.Runs[0].Set["project"])
+
+	_, err = loadModel([]byte(`m: #SystemModel & {name: "fw", populate: {runs: []}}`), "m")
+	require.Error(t, err, "a command arm needs at least one run")
 }

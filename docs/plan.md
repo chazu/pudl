@@ -4,6 +4,22 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Cataloging workflow simplified from the GCP findings (2026-10-08)
+
+Implemented the verified proposals from `docs/gcp-cataloging-workflow-findings.md`
+after two adversarial reviews: imported fields now reach Datalog and checks
+through schema-declared fact projection (`_pudl.facts`, kept current per most
+recent observation, synced after every catalog-changing command, with silent-miss
+warnings and a rule lint); `_pudl.sensitive_fields` redaction that fails closed;
+`pudl import` positional paths, `--set`, `--dry-run` and `--schema` reassignment
+of already-cataloged records; quoted identity paths with unresolved-identity
+reporting; anchored `--schema` filters; a `#CommandObserve` populate arm that
+runs plain JSON-printing commands without mu; checks-only models; and model
+scaffolds that run unedited.
+
+See [implementation log](../implog/2026_10_08_gcp_cataloging_ux.md),
+[design](design/2026-10-08-gcp-cataloging-ux.md) and [user guide](projection.md).
+
 ### Agent memory application removed (2026-09-30)
 
 Completed `pudl-epk`: removed memory recall/reflection, harness hooks, scoped

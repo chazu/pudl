@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -41,6 +42,16 @@ type SchemaMetadata struct {
 	IdentityFields []string `json:"identity_fields"` // Fields that identify the resource
 	TrackedFields  []string `json:"tracked_fields"`  // Fields to monitor for changes
 	IsListType     bool     `json:"is_list_type"`    // True if schema is structurally a list/array type
+
+	// Strictly decoded parts of `_pudl`, read separately from the best-effort
+	// decode above because a mistake in them must not be silently dropped:
+	// SensitiveFields controls redaction (a lost entry stores a secret) and
+	// FactsSpec controls projection (a lost entry silently empties a check).
+	// The *Error fields carry the decode failure, if any.
+	SensitiveFields []string        `json:"-"`
+	SensitiveError  string          `json:"-"`
+	FactsSpec       json.RawMessage `json:"-"`
+	FactsError      string          `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result

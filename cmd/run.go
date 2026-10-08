@@ -46,6 +46,11 @@ resolved by name (its name field or short definition name) from the project
 "pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
 report, no mutation. Pass --converge to close drift; see the V1 build spec.
 
+A model without a populate arm is checks-only: it syncs projected facts and
+evaluates its checks over what the catalog already holds (e.g. data brought in
+with pudl import). A #CommandObserve populate runs plain commands that print
+JSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.
+
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift, pending changes (--dry-run) or a failing fail-severity check,
 1 error.
@@ -55,7 +60,8 @@ Examples:
     pudl run github-chazu --detailed-exitcode
     pudl run k8sPolicy --converge
     pudl run k8sConverge --converge --only web,api
-    pudl run k8sConverge --converge --dry-run`,
+    pudl run k8sConverge --converge --dry-run
+    pudl run --populate 'command:gcloud compute networks list --format=json'`,
 	Args: func(cmd *cobra.Command, args []string) error {
 		if runPopulateSpec != "" {
 			if len(args) != 0 {
@@ -77,7 +83,7 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().StringVar(&runPopulateSpec, "populate", "", "Run an unregistered observer as plugin:<name>")
+	runCmd.Flags().StringVar(&runPopulateSpec, "populate", "", "Run an unregistered observer: plugin:<name>, or command:<cmdline> (a command printing JSON records)")
 	runCmd.Flags().StringArrayVar(&runPopulateInput, "input", nil, "Ad-hoc populate input key=value (repeatable)")
 	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
 	runCmd.Flags().BoolVar(&runConverge, "converge", false, "opt into the convergence loop (mutates the target)")

@@ -139,7 +139,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	muRoot := opts.muRoot
 	if muRoot == "" && !flags.fromCatalog {
 		muRoot, _ = findMuRoot(modelDir)
-		if muRoot == "" && opts.populateSpec != "" {
+		if muRoot == "" && opts.populateSpec != "" && model.Populate.Kind() == systemmodel.KindPluginObserve {
 			var removeAdHocMuRoot func()
 			muRoot, removeAdHocMuRoot, err = createAdHocMuRoot()
 			if err != nil {
@@ -431,6 +431,9 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 			return nil, err
 		}
 		report.Drift = &res
+	case model.Populate.Kind() == systemmodel.KindNone:
+		// Checks-only: evaluate checks over what the catalog already holds.
+		report.Mode = "checks-only"
 	default:
 		pr, err := runPopulate(in.cat, in.mu, model, in.muRoot, in.modelDir, in.pudlRoot, in.session.RunID, in.session.SnapshotID)
 		if err != nil {

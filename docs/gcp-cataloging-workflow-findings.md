@@ -5,7 +5,11 @@ Storage, Cloud Run, DNS, Pub/Sub, KMS) with user schemas in
 `~/.pudl/schema/pudl/gcp/`. Workflow: inspect shape with `gcloud` -> write user
 CUE schema -> `pudl import --schema`. The user is a GCP shop and does not use mu.
 
-Status: observations from one session. Items marked **unverified** were inferred
+Status: addressed — verified against the source and implemented; see
+`docs/design/2026-10-08-gcp-cataloging-ux.md` (decisions, review log,
+corrections to the items below) and `docs/projection.md`. Original text follows.
+
+Status (original): observations from one session. Items marked **unverified** were inferred
 and need a check against the source before acting on them.
 
 ## What worked

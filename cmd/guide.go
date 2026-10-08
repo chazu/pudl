@@ -111,7 +111,7 @@ THE MENTAL MODEL
 
 THE DAY-TO-DAY VERBS
 
-  pudl import --path <file>   Import data (auto-detects format + schema).
+  pudl import <file>...       Import data (auto-detects format + schema).
   pudl list                   Browse catalog entries.
   pudl show <id>              Inspect an entry's content and metadata.
   pudl facts list --relation depends   Query assertions in the fact store.
@@ -147,7 +147,7 @@ func printGuideImport() {
 
 USAGE
 
-  pudl import --path <file> [flags]
+  pudl import <file|dir|glob>... [flags]     (or --path <file|dir|glob>)
 
 FORMATS
 
@@ -162,9 +162,20 @@ FORMATS
 
 BASIC EXAMPLES
 
-  pudl import --path inventory.json
-  pudl import --path config.yaml --schema myapp.#Config
-  pudl import --path "data/*.json"               # wildcard batch
+  pudl import inventory.json
+  pudl import config.yaml --schema myapp.#Config
+  pudl import exports/*.json                     # every file the shell expands
+
+CHECK FIRST, THEN IMPORT
+
+  pudl import fw.json --schema 'pudl/gcp.#Firewall' --dry-run
+  pudl import fw.json --schema 'pudl/gcp.#Firewall' --set project=prod-a
+
+  --dry-run writes nothing. It reports per-schema counts, validation
+  failures, records already cataloged, unresolved identity fields,
+  redactions, and the facts that would be projected. --set path=value
+  (repeatable, overwrites) adds a field the source omits to every
+  JSON/NDJSON record.
 
 STDIN SUPPORT
 
@@ -184,13 +195,18 @@ SCHEMA INFERENCE
   3. Matches against existing schemas (exact or structural)
   4. Assigns the best-matching schema or the catchall
 
-  Use --schema to force a specific schema assignment.
+  Use --schema to force a specific schema assignment. Re-importing data
+  already in the catalog with a --schema it satisfies moves those records
+  to that schema.
 
 CONTENT-ADDRESSED IDS
 
   Every imported entry gets a SHA256 content-addressed ID displayed
   in proquint format (e.g. "babam-babam"). Re-importing identical
   data produces the same ID (idempotent).
+
+  Records whose schema identity_fields cannot be extracted are reported:
+  they fall back to content-hash identity and form no version chain.
 
 ENVELOPES
 
@@ -205,17 +221,25 @@ WILDCARDS
 
   Glob patterns expand against the filesystem:
 
-    pudl import --path "logs/**/*.json"
-    pudl import --path "*.yaml"
+    pudl import --path "logs/*.json"      # quoted: pudl expands it
+    pudl import logs/*.json               # unquoted: the shell expands it
+    pudl import exports/ --recursive      # a directory
 
   Each matching file is imported as a separate entry.
 
 FLAGS
 
-  --path <path>       File path or glob pattern; '-' reads stdin
+  --path <path>       File, directory or glob; '-' reads stdin
   --format <fmt>      Force format (json, yaml, csv, ndjson)
   --schema <name>     Force schema assignment
+  --set <path=value>  Set a field on every record (repeatable)
+  --dry-run           Preview classification, identity and facts; write nothing
+  --explain           Show why each schema was chosen
   --json              Output results as JSON
+
+SEE ALSO
+
+  pudl guide schemas       facts and sensitive_fields declared in _pudl
 `)
 }
 
@@ -237,6 +261,22 @@ SCHEMA NAMING
     pudl/core.#Item        (the catchall)
 
   Normalized form: "pkg.#Name" — use this everywhere.
+
+THE _pudl BLOCK
+
+    _pudl: {
+        schema_type:      "base"
+        resource_type:    "gcp.firewall"
+        identity_fields:  ["project", "name"]       // dotted paths nest; quote
+                                                    // keys containing dots
+        facts: gcp_firewall_source: args: {range: "sourceRanges[*]"}
+        sensitive_fields: ["env[*].value"]          // redacted before storage
+    }
+
+  facts makes imported fields queryable by rules, 'pudl query' and model
+  checks (see 'pudl guide datalog'). sensitive_fields values are stored as
+  "[REDACTED]"; route such data with --schema. Full reference:
+  docs/projection.md.
 
 SCHEMA LOCATIONS
 
@@ -262,6 +302,10 @@ SCHEMA INFERENCE
 
   The inference result is stored on the catalog entry. Re-inference
   can be triggered with 'pudl schema reinfer' after schema changes.
+
+  Filters such as 'pudl list --schema' match whole definition names when
+  the value contains '#' ('#Route' does not match '#Router'); otherwise
+  they match a substring.
 
 VERSION CONTROL
 
@@ -314,6 +358,14 @@ LIFECYCLE AND HISTORY
   tx_start / tx_end describe when PUDL held that belief.
   Historical assertions remain retained; current_facts and its full-text index
   track currently valid, non-retracted facts transactionally.
+
+PROJECTED FACTS
+
+  Schemas that declare _pudl.facts project imported records into facts
+  (source "projection:<resource_id>", reserved). They track each
+  resource's most recently observed record, and are kept in sync by
+  import, run, reinfer and delete. Run 'pudl facts reproject' to sync
+  explicitly; 'pudl query' warns when a sync is pending.
 
 SEE ALSO
 
@@ -391,6 +443,25 @@ SQL COMPILATION
 
   Shared variables across atoms produce equi-joins.
 
+QUERYING IMPORTED FIELDS
+
+  Relations declared in a schema's _pudl.facts hold imported fields. Each
+  of their facts carries entry_id and resource_id; join on entry_id to
+  combine relations of one record:
+
+    open_ssh: {
+        head: { rel: "open_ssh", args: { project: "$P", name: "$N" } }
+        body: [
+            { rel: "gcp_firewall",        args: { entry_id: "$E", project: "$P", name: "$N", disabled: false } },
+            { rel: "gcp_firewall_source", args: { entry_id: "$E", range: "0.0.0.0/0" } },
+        ]
+    }
+
+  CLI constraints are typed: disabled=false is a boolean, port=22 a
+  number, name='"22"' a string. 'pudl query' and model checks warn on
+  stderr when a rule references a relation or arg nothing produces,
+  because such a rule silently matches nothing.
+
 CATALOG AS A RELATION
 
   The catalog is exposed as the built-in 'catalog_entry' relation, so
@@ -450,14 +521,30 @@ WHAT A MODEL DECLARES
         // optional: desired: [...], converge: { plugin: "k8s" }, checks: [...]
     }
 
+  Populate arms: plugin (a mu observer), eweSource (an ewe fetch), or
+  runs — plain commands that print JSON records, run by pudl itself:
+
+    populate: {
+        schema: "pudl/gcp.#Firewall"            // optional, like import --schema
+        runs: [for p in ["prod-a", "prod-b"] {
+            argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+            set: project: p
+        }]
+    }
+
+  A model with no populate is checks-only. It runs its checks over the
+  catalog as it stands, for example over data from 'pudl import'.
+
   Register with 'pudl schema add'; resolve and run it by name (its 'name'
   field or short definition name).
 
 SCAFFOLD FIRST
 
   pudl model new pods --populate plugin:k8s --input namespace=default
+  pudl model new fw --populate 'command:gcloud compute firewall-rules list --format=json'
   pudl model show pods --json
   pudl run --populate plugin:k8s --input inventory='{"kinds":["pods"]}'
+  pudl run --populate 'command:gcloud compute networks list --format=json'
 
   The ad-hoc form writes no model definition and is observe-only. For a durable
   model, edit the path printed by 'model new' rather than authoring registration
@@ -502,7 +589,8 @@ THE ACUTE LOOP (driven by 'pudl run')
   observed == desired (or an iteration cap):
 
   1. populate: pudl runs 'mu observe' (or an ewe fetch) and ingests the
-               records into the catalog.
+               records into the catalog. A command populate arm
+               ('runs:') needs no mu: pudl runs the commands itself.
   2. drift:    pudl compares the model's desired state against the latest
                observation.
   3. converge: (--converge) pudl renders desired → sources and runs
@@ -584,15 +672,17 @@ INTERPRET THE RESULT
 
 DATA AND RULES
 
-  pudl import --path <file>
-  pudl list --json
-  pudl show <id> --raw
+  pudl import <files> --schema <name> --dry-run   then without --dry-run
+  pudl list --json                                 count with .total_matched
+  pudl export --id <proquint> --format json        exact payload, pipeable
   pudl query <relation> key=value --json
   pudl facts add --relation <name> --args '<json-object>' --source <origin>
 
   Schema inference is automatic. Generic fact writes should name their source;
   use explicit --schema validation when an assertion has an authored contract.
   facts list --as-of-valid/--as-of-tx supports historical evidence queries.
+  To query imported fields, declare _pudl.facts in the schema instead of
+  post-processing payloads (pudl guide datalog).
 
 DISCOVERY
 
@@ -632,6 +722,15 @@ COMMON CASES
     inspect the plugin's _schema field, then use `+"`pudl mu ingest-observe`"+`
     with the current schema repository. PUDL only persists references present
     in the loaded schema namespace; unresolved declarations fall back safely.
+
+  A query or check over imported data finds nothing:
+    read the warnings 'pudl query' prints on stderr, then
+    pudl facts reproject --dry-run
+    pudl import <file> --schema <name> --dry-run   # identity? facts per relation?
+
+  'pudl list --schema' finds nothing:
+    a value with '#' must name a whole definition ('gcp.#Route');
+    drop the '#' for a substring match.
 
   Convergence stopped after mutation:
     inspect `+"`pudl run report <run-id> --json`"+`. A needs_verification/unknown

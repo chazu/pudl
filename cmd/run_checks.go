@@ -104,6 +104,18 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 		return nil, fmt.Errorf("load rules: %w", err)
 	}
 
+	// Checks read projected facts: bring them in line with the catalog and
+	// the current facts specs first, and say when a check's rules cannot
+	// match anything.
+	syncProjectionsQuietly(evalCtx, db)
+	if reg, err := projectionRegistry(); err == nil {
+		roots := make([]string, 0, len(m.Checks))
+		for _, c := range m.Checks {
+			roots = append(roots, c.Query)
+		}
+		lintRules(db, reg, rules, roots)
+	}
+
 	var results []CheckResult
 	for _, c := range m.Checks {
 		scope := checkScopeGlobal

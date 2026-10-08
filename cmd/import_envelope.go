@@ -83,6 +83,13 @@ func importOneWithEnvelope(imp *importer.EnhancedImporter, opts importer.ImportO
 		opts.SourcePath = envelope.dataPath
 	}
 
+	if opts.DryRun {
+		result, err := imp.Preview(opts)
+		if result != nil {
+			result.SourcePath = originalPath
+		}
+		return result, err
+	}
 	result, err := imp.ImportFileWithFriendlyIDs(opts)
 	if err != nil {
 		return nil, err

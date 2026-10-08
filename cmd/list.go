@@ -136,6 +136,7 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 			})
 		}
 		fmt.Fprintln(outw(), "No data found matching the specified criteria.")
+		printAnchoredSchemaHint(l, filters)
 		return nil
 	}
 
@@ -229,7 +230,7 @@ func init() {
 	rootCmd.AddCommand(listCmd)
 
 	// Add flags
-	listCmd.Flags().StringVar(&listSchema, "schema", "", "Filter by CUE schema (e.g., aws.#EC2Instance)")
+	listCmd.Flags().StringVar(&listSchema, "schema", "", "Filter by CUE schema: a value with # matches whole definition names (aws.#EC2Instance, #Route); otherwise a substring")
 	listCmd.Flags().StringVar(&listOrigin, "origin", "", "Filter by data origin (e.g., aws-ec2)")
 	listCmd.Flags().StringVar(&listFormat, "format", "", "Filter by file format (json, yaml, csv, ndjson)")
 	listCmd.Flags().BoolVarP(&listVerbose, "verbose", "v", false, "Show detailed information")
@@ -422,4 +423,21 @@ func outputListAsJSON(output *ui.OutputWriter, results *lister.ListResults) erro
 	}
 
 	return output.WriteJSON(listOutput)
+}
+
+// printAnchoredSchemaHint explains an empty result from a --schema value that
+// names a definition: such values match whole definition names, so a partial
+// name (e.g. "#Rout") finds nothing although a fragment search would.
+func printAnchoredSchemaHint(l *lister.Lister, filters lister.FilterOptions) {
+	i := strings.LastIndex(filters.Schema, "#")
+	if i < 0 || i == len(filters.Schema)-1 {
+		return
+	}
+	fragment := filters.Schema[i+1:]
+	filters.Schema = fragment
+	results, err := l.ListData(filters, lister.DisplayOptions{Page: 1, PerPage: 1})
+	if err != nil || results.TotalMatched == 0 {
+		return
+	}
+	fmt.Fprintf(outw(), "Hint: --schema values containing '#' match whole definition names; %d entries match the fragment %q (try --schema %s).\n", results.TotalMatched, fragment, fragment)
 }

@@ -46,12 +46,26 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 		if importExplain && !jsonOutput {
 			displayImportExplanation(result)
 		}
+		if result.DryRun {
+			if !jsonOutput {
+				displayImportPreview(result)
+			}
+			successCount++
+			continue
+		}
 
 		successCount++
 		totalRecords += result.RecordCount
 		totalSize += result.SizeBytes
 
 		progress.Progressf("   ✅ Success: %s (ID: %s, Records: %d)", result.DetectedFormat, result.ID, result.RecordCount)
+		for _, note := range importNotes(result) {
+			progress.Progressf("   %s", note)
+		}
+	}
+
+	if successCount > 0 {
+		session.finish()
 	}
 
 	if jsonOutput {

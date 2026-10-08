@@ -71,6 +71,16 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		if len(m.Populate.Outputs) > 0 {
 			fmt.Fprintf(outw(), "    outputs: %s\n", strings.Join(m.Populate.Outputs, ", "))
 		}
+	case systemmodel.KindCommand:
+		fmt.Fprintf(outw(), "  Populate:  command (%d runs)\n", len(m.Populate.Runs))
+		for _, run := range m.Populate.Runs {
+			fmt.Fprintf(outw(), "    run: %s\n", strings.Join(run.Argv, " "))
+		}
+		if m.Populate.Schema != "" {
+			fmt.Fprintf(outw(), "    schema: %s\n", m.Populate.Schema)
+		}
+	case systemmodel.KindNone:
+		fmt.Fprintln(outw(), "  Populate:  none (checks-only)")
 	default:
 		fmt.Fprintf(outw(), "  Populate:  observe (plugin %q)\n", m.Populate.Plugin)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
@@ -33,10 +34,17 @@ type collectionStream struct {
 	stagedBytes         int64
 	explanations        []ItemExplanation
 	truncated           bool
+	identity            identityTally
+	reassigned          int
+	tally               *projection.Tally
 }
 type preparedItem struct {
 	Entry    database.CatalogEntry
 	Metadata ImportMetadata
+	// Validated: the record satisfied the explicit --schema itself.
+	Validated bool
+	// Projection holds the record's facts, if its schema declares any.
+	Projection *projection.Prepared `json:",omitempty"`
 }
 
 func (c *collectionStream) close() {
@@ -117,6 +125,9 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 				if err := tx.AddCollectionMembership(c.collectionID, existing.ID, *entry.ItemIndex); err != nil {
 					return err
 				}
+				if err := c.reobserve(tx, existing, item); err != nil {
+					return err
+				}
 				continue
 			}
 			latest, err := tx.GetLatestVersion(*entry.ResourceID)
@@ -139,6 +150,9 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 			if err := tx.AddEntry(entry); err != nil {
 				return err
 			}
+			if err := projection.Observe(tx, item.Projection); err != nil {
+				return err
+			}
 		}
 		var err error
 		result, err = c.importer.createCollectionEntryIn(tx, c.opts, c.timestamp, origin, c.collectionID, storedPath, c.metadataDir, sizeBytes, c.recordCount)
@@ -147,6 +161,9 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 	if result != nil {
 		result.ItemExplanations = c.explanations
 		result.ExplanationsTruncated = c.truncated
+		result.Reassigned = c.reassigned
+		c.identity.apply(result)
+		applyTally(result, c.tally)
 	}
 	return result, err
 }
@@ -190,12 +207,26 @@ func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
 		return fmt.Errorf("write item %d: %w", index, err)
 	}
 
-	assigned := e.assignItemSchemaDetailed(itemData, c.opts)
+	assigned := e.assignItemSchemaDetailed
+	if c.opts.assignments != nil {
+		cached, err := c.opts.assignments.read(index)
+		if err != nil {
+			return err
+		}
+		assigned = func(any, ImportOptions) schemaAssignment { return cached }
+	}
+	return c.prepareAssigned(index, itemData, itemPath, stored, itemContentHash, itemFilename, assigned(itemData, c.opts))
+}
+
+// prepareAssigned spools one record once its schema is known.
+func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath string, stored []byte, itemContentHash, itemFilename string, assigned schemaAssignment) error {
+	e := c.importer
 	schema, confidence := assigned.Schema, assigned.Confidence
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
 	if extractErr != nil {
 		identityValues = nil
+		c.identity.record(schema, extractErr)
 	}
 	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, itemContentHash)
 
@@ -265,7 +296,9 @@ func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
 		IdentityJSON:    identityJSONPtr,
 		Version:         &version,
 	}
-	prepared := preparedItem{Entry: entry, Metadata: itemMetadata}
+	projected, projectedRes := projection.Prepare(e.projector, schema, itemID, resourceID, len(identityValues) > 0, itemData)
+	c.tally.Note(e.projector, schema, projectedRes)
+	prepared := preparedItem{Entry: entry, Metadata: itemMetadata, Validated: assigned.Validated, Projection: projected}
 	descriptor, err := json.Marshal(prepared)
 	if err != nil {
 		return err
@@ -282,7 +315,7 @@ func (c *collectionStream) appendExplanation(index int, trace *inference.Inferen
 	if !c.opts.Explain {
 		return
 	}
-	if len(c.explanations) < 32 {
+	if len(c.explanations) < maxItemExplanations {
 		c.explanations = append(c.explanations, ItemExplanation{Index: index, Trace: trace})
 	} else {
 		c.truncated = true

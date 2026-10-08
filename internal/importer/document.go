@@ -8,6 +8,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/projection"
 )
 
 // documentImport is the already-staged state of a single-document import.
@@ -32,10 +33,15 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		return nil, fmt.Errorf("failed to analyze data: %w", err)
 	}
 
-	assigned, err := e.assignSchema(data, opts, inference.InferenceHints{
-		Origin: doc.origin,
-		Format: doc.format,
-	})
+	var assigned schemaAssignment
+	if opts.assignments != nil {
+		assigned, err = opts.assignments.read(0)
+	} else {
+		assigned, err = e.assignSchema(data, opts, inference.InferenceHints{
+			Origin: doc.origin,
+			Format: doc.format,
+		})
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +51,10 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 	// extracted from is identified by content hash (catchall identity).
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(data, schemaIdentityFields)
+	var idTally identityTally
 	if extractErr != nil {
 		identityValues = nil
+		idTally.record(schema, extractErr)
 	}
 	// Namespaced by the family root, not the assigned leaf.
 	resourceID := identity.ComputeResourceID(e.identityNamespace(schema), identityValues, doc.contentHash)
@@ -111,6 +119,10 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		Version:         &version,
 	}
 
+	tally := projection.NewTally()
+	projected, projectedRes := projection.Prepare(e.projector, schema, doc.id, resourceID, len(identityValues) > 0, data)
+	tally.Note(e.projector, schema, projectedRes)
+
 	var existing *database.CatalogEntry
 	err = e.catalogDB.WithCatalogTxContext(opts.Context, func(tx *database.CatalogTx) error {
 		var err error
@@ -130,7 +142,10 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		if err := e.publishMetadata(metadata, metadataPath, opts); err != nil {
 			return fmt.Errorf("save metadata: %w", err)
 		}
-		return tx.AddEntry(entry)
+		if err := tx.AddEntry(entry); err != nil {
+			return err
+		}
+		return projection.Observe(tx, projected)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("commit document: %w", err)
@@ -146,7 +161,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		return result, nil
 	}
 
-	return &ImportResult{
+	result := &ImportResult{
 		ID:               doc.id,
 		SourcePath:       opts.originPath(),
 		StoredPath:       doc.storedPath,
@@ -164,7 +179,10 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		ContentHash:      doc.contentHash,
 		Version:          version,
 		IsNewVersion:     latestVersion > 0,
-	}, nil
+	}
+	idTally.apply(result)
+	applyTally(result, tally)
+	return result, nil
 }
 
 // validationStatus describes how a schema assignment was reached, for the

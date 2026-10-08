@@ -68,6 +68,7 @@ var migrations = []migration{
 	{20, "catalog_meta", (*CatalogDB).ensureCatalogMetaTable},
 	{21, "snapshot_pin_owners", (*CatalogDB).ensureSnapshotPins},
 	{22, "restored_snapshot_eligibility", (*CatalogDB).ensureSnapshotReuseBlocks},
+	{23, "projection_state", (*CatalogDB).ensureProjectionState},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step

@@ -97,6 +97,9 @@ func (c *CatalogDB) ensureFactsTable() error {
 // TxStart is set to now if zero.
 // Also inserts into current_facts if the fact is currently valid (no valid_end or tx_end).
 func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
+	if err := checkWriterSource(f); err != nil {
+		return Fact{}, err
+	}
 	tx, err := c.db.Begin()
 	if err != nil {
 		return Fact{}, errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin transaction", err)
@@ -113,6 +116,16 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	}
 
 	return f, nil
+}
+
+// checkWriterSource keeps general fact writers out of the projection source
+// namespace: the next projection reconcile would close their facts.
+func checkWriterSource(f Fact) error {
+	if IsProjectionSource(f.Source) {
+		return errors.WrapError(errors.ErrCodeInvalidInput,
+			fmt.Sprintf("fact source %q is reserved for schema projection (prefix %q)", f.Source, ProjectionSourcePrefix), nil)
+	}
+	return nil
 }
 
 // addFactIn validates a fact, fills defaults, and inserts it (plus its

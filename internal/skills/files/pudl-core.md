@@ -24,11 +24,13 @@ Use the binary as the source of truth for the current command surface:
 Scaffold first, then edit the returned path:
 
 - `pudl model new <name> --populate plugin:<name>`
+- `pudl model new <name> --populate 'command:<cmdline>'` — a command printing JSON records, run by pudl (no mu)
 - `pudl rule new <name>`
 - `pudl model populator new <model>`
 
-For a one-off observer, use `pudl run --populate plugin:<name> --input key=value`;
-it writes no model definition and is observe-only. Retrieve completed or pending
+For a one-off observer, use `pudl run --populate plugin:<name> --input key=value`
+or `pudl run --populate 'command:<cmdline>'`; it writes no model definition and
+is observe-only. Retrieve completed or pending
 diagnostics with `pudl run report [<run-id>] --json`. Convergence that crosses a
 trust boundary can use `--require-approval`, then `pudl run resume` or `reject`.
 
@@ -55,10 +57,13 @@ global catalogs are independent; mutable state never falls back across them.
 ## Common Commands
 
 ### Data pipeline
-- `pudl import --path <file>` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` takes globs and `-` for stdin)
+- `pudl import <file|dir|glob>...` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; typed envelopes preserve schema metadata; `--path` also works, `-` for stdin)
+  - `--dry-run` first: per-schema counts, validation failures, unresolved identity, facts that would be projected; writes nothing
+  - `--set path=value` (repeatable, overwrites) adds a field the source omits, e.g. `--set project=prod-a` for gcloud output
+  - re-importing cataloged data with a `--schema` it satisfies moves it to that schema
 - `pudl list` — list entries in the active catalog
-  (`--origin` filters explicitly; `--artifacts` = run outputs)
-- `pudl show <id>` / `pudl export --id <id>` / `pudl delete <id>`
+  (`--origin` filters explicitly; `--artifacts` = run outputs; `--schema` with `#` matches whole definition names; `--json` is paginated, count with `total_matched`)
+- `pudl show <id>` / `pudl export --id <proquint> --format json` (exact payload, pipeable) / `pudl delete <id>`
 - `pudl doctor` — workspace health, assigned-schema validation, and inference stability
 
 ### Schema
@@ -73,6 +78,33 @@ global catalogs are independent; mutable state never falls back across them.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
+- `pudl facts reproject` — sync facts projected from imported records (runs automatically after import/run/reinfer/delete)
+
+### Querying imported data
+
+Imported payloads are not visible to Datalog until a schema projects them.
+Declare relations in `_pudl.facts`, then write rules and checks over them —
+don't post-process payloads with jq:
+
+```cue
+_pudl: {
+	identity_fields: ["project", "name"]          // required for facts; quote dotted keys: "a.\"b.c\""
+	facts: {
+		gcp_firewall: args: {project: "project", name: "name", disabled: {path: "disabled", default: false}}
+		gcp_firewall_allow: {each: "allowed[*]", args: {proto: "IPProtocol", port: {path: "ports[*]", default: "*"}}}
+	}
+	sensitive_fields: ["env[*].value"]           // stored as "[REDACTED]"; fails closed
+}
+```
+
+- Every projected fact carries `entry_id` and `resource_id`; join relations of one record on `entry_id`.
+- Facts follow each resource's most recently observed record.
+- `{exists: path}` and `default` stand in for negation (the Datalog has none).
+- CLI constraints are typed: `disabled=false`, `port=22`; `name='"22"'` forces a string.
+- `pudl query` and run checks warn on stderr about stale projection and about rules referencing relations/args nothing produces — read those warnings when a check passes unexpectedly.
+- Route sensitive data with `--schema` (or a model's `populate.schema`).
+
+See `docs/projection.md`.
 
 ### #SystemModel loop
 - `pudl model list` — list registered `#SystemModel` definitions + last-run status
@@ -107,9 +139,13 @@ ACUTE cycle:
 4. report
 ```
 
-- **Populate arm**: either a plugin (live observe inside an existing mu project,
-  discovered via `mu.cue` from the model dir, override with `--mu-root`) or an
-  `#EweTarget` whose populator self-stages its own temp mu project.
+- **Populate arm**: a plugin (live observe inside an existing mu project,
+  discovered via `mu.cue` from the model dir, override with `--mu-root`), an
+  `#EweTarget` whose populator self-stages its own temp mu project, or a
+  `#CommandObserve` — `runs: [{argv: [...], set?: {...}}]` plus optional
+  `schema:` — whose commands pudl runs itself (no mu; fan out with a CUE
+  comprehension). A model without `populate` is checks-only: it evaluates its
+  checks over the catalog as it stands (e.g. imported data).
 - **Default is observe-only** — no mutation. `--converge` opts into the loop:
   `drift==∅ -> clean | iteration cap -> failed | else converge -> execute -> re-observe`; the
   PUDL coordinator owns this lifecycle while mu executes each operation.

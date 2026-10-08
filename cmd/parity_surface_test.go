@@ -40,12 +40,13 @@ func TestScaffoldInputAndModelText(t *testing.T) {
 	assert.Equal(t, []any{"pods", "services"}, input["kinds"])
 	assert.Equal(t, true, input["all_namespaces"])
 
-	source, err := renderModelScaffold("cluster pods", "k8s", input)
+	source, err := renderModelScaffold("cluster pods", systemmodel.PluginDef{Name: "k8s", Digest: "sha256:abc"}, input)
 	require.NoError(t, err)
 	assert.Contains(t, source, "package models")
 	assert.Contains(t, source, `import sm "pudl.schemas/pudl/systemmodel@v0"`)
 	assert.Contains(t, source, `name: "cluster pods"`)
 	assert.Contains(t, source, `plugin: "k8s"`)
+	assert.Contains(t, source, `plugins: [{"name":"k8s","digest":"sha256:abc"}]`)
 }
 
 func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {

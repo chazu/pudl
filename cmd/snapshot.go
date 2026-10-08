@@ -256,6 +256,9 @@ before the snapshot contract existed, are never removed.`,
 		if err != nil {
 			return err
 		}
+		if !snapshotDryRun && result.Records > 0 {
+			syncProjectionsQuietly(cmd.Context(), db)
+		}
 		if jsonOutput {
 			return printJSON(result)
 		}
