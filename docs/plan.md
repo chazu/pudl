@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Scope reduction and improvement sequence documented (2026-10-10)
+
+Recorded the project assessment as a proposal covering six removal candidates,
+retained capabilities, reproduced CLI findings, and eight ordered improvement
+steps with migration guidance and acceptance criteria. Documentation is complete;
+the proposed removals and behavioral changes remain unimplemented.
+
+See [proposal](design/2026-10-10-scope-reduction-and-improvement-order.md) and
+[documentation log](../implog/2026_10_10_scope_reduction_proposal.md).
+
 ### Cataloging workflow simplified from the GCP findings (2026-10-08)
 
 Implemented the verified proposals from `docs/gcp-cataloging-workflow-findings.md`

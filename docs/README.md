@@ -16,6 +16,7 @@ Start with the [root README](../README.md) for a project overview.
 | [architecture.md](architecture.md) | Streaming pipeline, catalog internals, storage layout, package structure |
 | [architecture-improvement-report.md](architecture-improvement-report.md) | Highest-leverage architecture improvements and design questions |
 | [UX simplification design report](design/2026-09-30-ux-simplification-report.md) | Project evolution, proposed scope reduction, and simpler workflows for humans and agents |
+| [Scope reduction and improvement order](design/2026-10-10-scope-reduction-and-improvement-order.md) | Proposed removals, compatibility tradeoffs, and eight ordered steps with acceptance criteria |
 | [TESTING.md](TESTING.md) | Test architecture, coverage, and benchmarks |
 | [facts.md](facts.md) | Bitemporal fact store: schema, temporal queries, CLI commands |
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |
