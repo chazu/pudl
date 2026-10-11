@@ -154,7 +154,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	}
 
 	report := &RunReport{
-		ReportVersion: 1, RunSetID: deps.set.id(), RunID: session.RunID,
+		ReportVersion: 2, RunSetID: deps.set.id(), RunID: session.RunID,
 		Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
 		ApprovalStatus: approvalStatus, Bindings: resolved.bindingEvidence, SealedBindings: resolved.sealedEvidence,
 	}

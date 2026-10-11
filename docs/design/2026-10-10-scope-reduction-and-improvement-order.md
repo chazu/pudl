@@ -268,3 +268,7 @@ between an observation and an answer that a human or agent can justify.
 - Step 1 implemented: removed shell-profile management and heuristic dependency
   derivation, with migration 24 preserving history and unrelated sources. Focused
   migration and run-set tests passed. `list --fancy` remains supported.
+- Step 2 implemented: empty command observations are retained, and required
+  evidence failures produce unknown/error check outcomes with durable structured
+  diagnostics. Full cmd/projection/acute tests and focused health regressions
+  passed. New standalone reports are version 2; old reports remain readable.

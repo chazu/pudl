@@ -130,3 +130,14 @@ does not claim live verification or execute an operation.
 
 These checks detect damage and incomplete backups. They do not authenticate who
 created a bundle; a bundle's checksums are supplied by its own manifest.
+
+## Check evidence diagnostics
+
+New standalone reports use `report_version: 2`. Checks add an `outcome` field
+(`pass`, `fail`, `unknown`, `error`) and structured `diagnostics`. The existing
+`passed` field is true only for a pass. Unknown/error means the check could not
+establish its claim, independent of severity; detailed exit status is 1. A
+fail-severity assertion violation still uses detailed status 2. Historical
+version-1 reports remain readable without being reinterpreted as fresh evidence.
+
+Empty JSON arrays from command observers create valid zero-record snapshots.

@@ -23,7 +23,6 @@ var jsonContractExempt = map[string]string{
 	"pudl snapshot":              "command group",
 	"pudl guide":                 "prints reference documentation",
 	"pudl prime":                 "prints reference documentation",
-	"pudl setup":                 "edits shell configuration; text only",
 	"pudl schema edit":           "opens an interactive editor",
 	"pudl schema status":         "text-only Git wrapper",
 	"pudl schema commit":         "text-only Git wrapper",
