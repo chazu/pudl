@@ -99,6 +99,9 @@ var snapshotShowCmd = &cobra.Command{
 		}
 		defer db.Close()
 
+		if snapshotCompare != "" {
+			return compareSnapshots(cmd.Context(), db, snapshotCompare, args[0])
+		}
 		snapshot, err := db.GetObserveSnapshot(args[0])
 		if err != nil {
 			return err
@@ -301,4 +304,8 @@ func init() {
 	snapshotPruneCmd.Flags().IntVar(&snapshotKeep, "keep", 10, "always keep this many newest per model")
 	snapshotPruneCmd.Flags().DurationVar(&snapshotOlderThan, "older-than", 0, "only remove snapshots older than this (e.g. 720h)")
 	snapshotPruneCmd.Flags().BoolVar(&snapshotDryRun, "dry-run", false, "report what would be removed, remove nothing")
+}
+
+func init() {
+	snapshotShowCmd.Flags().StringVar(&snapshotCompare, "compare", "", "Compare this snapshot with an older snapshot; incomplete absence stays unproven")
 }

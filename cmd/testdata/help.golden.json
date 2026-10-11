@@ -343,7 +343,7 @@
         {
           "use": "install \u003cname\u003e",
           "short": "Install a runnable example and its fixture data",
-          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main,\nbaseline and changed observations, and an optional live observer. The import\nand catalog replay tutorial needs only PUDL; live observation also needs mu\nand Python 3.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main,\nbaseline and changed observations, and an optional live observer. The import\nand catalog replay tutorial needs only PUDL; live observation also needs mu\nand Python 3.\n\nThe gcp-network-hygiene example includes a fixture observer, saved checks,\na corrected fixture, and a separate gcloud-based live model.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
             {
@@ -887,6 +887,12 @@
       "long": "List and query imported data in the PUDL data lake with filtering and sorting options.\n\nThis command displays imported data from the active catalog, including metadata\nsuch as schema assignments, timestamps, sizes, and record counts. In a repository\nworkspace all records in its local catalog are visible unless --origin is supplied.\n\nFiltering Options:\n- --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)\n- --origin: Filter by data origin (e.g., aws-ec2, k8s-pods)\n- --format: Filter by file format (json, yaml, csv, ndjson)\n- --collection-id: Filter by collection ID (show items from specific collection)\n- --collections-only: Show only collection entries (not individual items)\n- --items-only: Show only individual items (not collections)\n- --item-id: Filter by specific item ID\n\nDisplay Options:\n- --verbose: Show detailed information including file paths\n- --limit: Cap the total number of results across all pages (default: no cap)\n- --sort-by: Sort by field (timestamp, size, records, schema, origin)\n- --reverse: Reverse sort order\n- --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)\n\nExamples:\n    pudl list                                    # List the active catalog\n    pudl list --schema aws.#EC2Instance          # List only EC2 instances\n    pudl list --origin k8s-pods                  # List Kubernetes pod data\n    pudl list --format ndjson --verbose         # List NDJSON collections with details\n    pudl list --collections-only                # Show only collections\n    pudl list --items-only                      # Show only individual items\n    pudl list --collection-id my-collection     # Show items from specific collection\n    pudl list --sort-by size --reverse          # List by size, largest first\n    pudl list --limit 10                        # Show only first 10 entries\n    pudl list --fancy                           # Interactive list with filtering and detailed view",
       "flags": [
         {
+          "name": "all",
+          "usage": "Return all matching entries in one result (still respects --limit)",
+          "type": "bool",
+          "default": "false"
+        },
+        {
           "name": "artifacts",
           "usage": "Show only run outputs (manifest, manifest-action)",
           "type": "bool",
@@ -974,6 +980,12 @@
           "type": "string"
         },
         {
+          "name": "select",
+          "usage": "Include this payload field in results (repeatable)",
+          "type": "stringArray",
+          "default": "[]"
+        },
+        {
           "name": "sort-by",
           "usage": "Sort by field (timestamp, size, records, schema, origin)",
           "type": "string",
@@ -985,6 +997,12 @@
           "usage": "Show detailed information",
           "type": "bool",
           "default": "false"
+        },
+        {
+          "name": "where",
+          "usage": "Filter payloads by path=value; repeat for AND, wildcards match any element",
+          "type": "stringArray",
+          "default": "[]"
         }
       ]
     },
@@ -1116,6 +1134,23 @@
           "args": "custom",
           "flags": [
             {
+              "name": "check",
+              "usage": "Save an existing query relation as a checks-only model",
+              "type": "string"
+            },
+            {
+              "name": "evidence",
+              "usage": "Saved check evidence selector (snapshot ID, model:name or scope:name; repeatable)",
+              "type": "stringArray",
+              "default": "[]"
+            },
+            {
+              "name": "expect",
+              "usage": "Saved check expectation: empty or nonempty",
+              "type": "string",
+              "default": "empty"
+            },
+            {
               "name": "force",
               "usage": "Replace an existing scaffold file",
               "type": "bool",
@@ -1140,6 +1175,11 @@
               "type": "bool",
               "default": "false",
               "persistent": true
+            },
+            {
+              "name": "max-age",
+              "usage": "Maximum age for the saved check's selected observations",
+              "type": "string"
             },
             {
               "name": "populate",
@@ -1443,6 +1483,18 @@
           "long": "Read mu observe --json output and store observed state in the catalog.\nThe observed state becomes the \"live\" side for subsequent drift checks.\n\nInput format: JSON array of ObserveResult objects from mu observe --json.\nEach target's current.records are stored as individual observe entries,\nrouted to the correct schema via the _schema field.\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    pudl mu ingest-observe --path observe-results.json\n    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json",
           "flags": [
             {
+              "name": "complete",
+              "usage": "Assert the saved observation covers its entire declared scope",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "coverage-schema",
+              "usage": "Schema covered by this population, including when empty (repeatable)",
+              "type": "stringArray",
+              "default": "[]"
+            },
+            {
               "name": "global",
               "usage": "Use the personal ~/.pudl workspace explicitly",
               "type": "bool",
@@ -1488,6 +1540,11 @@
             {
               "name": "plugin-dir",
               "usage": "Local mu plugin directory containing mu.cue and optional pudl.cue",
+              "type": "string"
+            },
+            {
+              "name": "scope",
+              "usage": "Name the population covered by this observation",
               "type": "string"
             }
           ]
@@ -2331,11 +2388,22 @@
       "args": "custom",
       "flags": [
         {
+          "name": "field",
+          "usage": "Print one payload field as JSON (nested paths and wildcards supported)",
+          "type": "string"
+        },
+        {
           "name": "global",
           "usage": "Use the personal ~/.pudl workspace explicitly",
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "history",
+          "usage": "Show this resource's stored versions and snapshot observations",
+          "type": "bool",
+          "default": "false"
         },
         {
           "name": "json",
@@ -2510,6 +2578,11 @@
           "short": "Show one snapshot's provenance and contents",
           "args": "custom",
           "flags": [
+            {
+              "name": "compare",
+              "usage": "Compare this snapshot with an older snapshot; incomplete absence stays unproven",
+              "type": "string"
+            },
             {
               "name": "global",
               "usage": "Use the personal ~/.pudl workspace explicitly",

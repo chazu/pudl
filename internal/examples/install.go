@@ -10,16 +10,23 @@ import (
 	"sort"
 	"strings"
 
+	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
 )
 
 // Install supplies the model, fixture inventories, and optional live observer.
 // Existing identical files are left alone; any conflict fails before writing.
 func Install(root, name string) ([]string, error) {
-	if name != "git-inventory" {
-		return nil, fmt.Errorf("unknown example %q (available: git-inventory)", name)
+	var files map[string][]byte
+	var err error
+	switch name {
+	case "git-inventory":
+		files, err = gitInventoryFiles(root)
+	case "gcp-network-hygiene":
+		files, err = gcpNetworkFiles()
+	default:
+		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene)", name)
 	}
-	files, err := gitInventoryFiles(root)
 	if err != nil {
 		return nil, err
 	}
@@ -118,4 +125,17 @@ func checkParents(root, relative string) error {
 		relative = filepath.Dir(relative)
 	}
 	return nil
+}
+
+func gcpNetworkFiles() (map[string][]byte, error) {
+	files := map[string][]byte{}
+	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "rules.cue": "schema/pudl/rules/gcp_hygiene.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
+		data, err := gcpnetwork.Files.ReadFile(source)
+		if err != nil {
+			return nil, err
+		}
+		files[destination] = data
+	}
+	files["populators/gcp-network-hygiene/current.json"] = files["populators/gcp-network-hygiene/baseline.json"]
+	return files, nil
 }

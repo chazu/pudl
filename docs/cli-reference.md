@@ -441,6 +441,9 @@ baseline and changed observations, and an optional live observer. The import
 and catalog replay tutorial needs only PUDL; live observation also needs mu
 and Python 3.
 
+The gcp-network-hygiene example includes a fixture observer, saved checks,
+a corrected fixture, and a separate gcloud-based live model.
+
 Example:
     pudl init
     pudl example install git-inventory
@@ -1033,6 +1036,7 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--all` | bool |  | Return all matching entries in one result (still respects --limit) |
 | `--artifacts` | bool |  | Show only run outputs (manifest, manifest-action) |
 | `--collection-id` | string |  | Filter by collection ID |
 | `--collections-only` | bool |  | Show only collections |
@@ -1046,8 +1050,10 @@ Flags:
 | `--per-page` | int | `20` | Results per page |
 | `--reverse` | bool |  | Reverse sort order |
 | `--schema` | string |  | Filter by CUE schema: a value with # matches whole definition names (aws.#EC2Instance, #Route); otherwise a substring |
+| `--select` | stringArray |  | Include this payload field in results (repeatable) |
 | `--sort-by` | string | `timestamp` | Sort by field (timestamp, size, records, schema, origin) |
 | `-v`, `--verbose` | bool |  | Show detailed information |
+| `--where` | stringArray |  | Filter payloads by path=value; repeat for AND, wildcards match any element |
 
 `--schema` with a `#` matches whole definition names: `pudl/gcp.#Route`,
 `gcp.#Route` and `#Route` all find routes but not `#Router`. A value without
@@ -1073,6 +1079,15 @@ defaults to 20):
 Count matches with `total_matched` (not `entries | length`). `summary` sizes
 and record totals cover the current page; its `unique_*` counts cover the whole
 catalog; it is omitted when nothing matches.
+
+`--all` returns every match in one result and still respects `--limit`. It cannot
+be combined with `--page`. `--where path=value` filters decoded payloads using
+typed equality; wildcards match any element, and repeated conditions are ANDed.
+`--select path` includes chosen fields (repeatable). These operations inspect
+individual records, skipping collection containers. Filtering precedes pagination.
+Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
+256 MiB total scan budget; narrow schema or collection scope for larger data.
+`--fancy` remains available and can display the filtered record set.
 
 ## pudl migrate
 
@@ -1220,8 +1235,12 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--check` | string |  | Save an existing query relation as a checks-only model |
+| `--evidence` | stringArray |  | Saved check evidence selector (snapshot ID, model:name or scope:name; repeatable) |
+| `--expect` | string | `empty` | Saved check expectation: empty or nonempty |
 | `--force` | bool |  | Replace an existing scaffold file |
 | `--input` | stringArray |  | Populate input key=value (repeatable; JSON values are decoded) |
+| `--max-age` | string |  | Maximum age for the saved check's selected observations |
 | `--populate` | string |  | Populate arm: plugin:&lt;name&gt; or command:&lt;cmdline&gt; |
 
 ## pudl model populator
@@ -1495,12 +1514,15 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--complete` | bool |  | Assert the saved observation covers its entire declared scope |
+| `--coverage-schema` | stringArray |  | Schema covered by this population, including when empty (repeatable) |
 | `--max-decoded-bytes` | int64 | `1073741824` | Maximum observation input bytes |
 | `--max-record-bytes` | int64 | `67108864` | Maximum decoded observation target envelope size |
 | `--max-staging-bytes` | int64 | `2147483648` | Maximum prepared observation bytes |
 | `--origin` | string | `mu-observe` | Override origin |
 | `--path` | string |  | Read from file instead of stdin |
 | `--plugin-dir` | string |  | Local mu plugin directory containing mu.cue and optional pudl.cue |
+| `--scope` | string |  | Name the population covered by this observation |
 
 ## pudl prime
 
@@ -2394,6 +2416,8 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--field` | string |  | Print one payload field as JSON (nested paths and wildcards supported) |
+| `--history` | bool |  | Show this resource's stored versions and snapshot observations |
 | `--metadata` | bool |  | Show metadata file content |
 | `--raw` | bool |  | Show raw data content |
 
@@ -2512,8 +2536,14 @@ Flags:
 Show one snapshot's provenance and contents
 
 ```text
-pudl snapshot show <snapshot-id>
+pudl snapshot show <snapshot-id> [flags]
 ```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--compare` | string |  | Compare this snapshot with an older snapshot; incomplete absence stays unproven |
 
 ## pudl status
 

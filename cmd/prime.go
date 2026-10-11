@@ -61,6 +61,25 @@ separate dimensions. Successful execution can still find drift. Stored replay
 does not establish fresh live verification. An uncertain mutation needs
 verification; a scoped clean result does not prove the whole model is clean.
 
+## Investigate and retain evidence
+
+pudl example install gcp-network-hygiene
+pudl list --where name=example --select name --all --json
+pudl show <id> --field metadata.name
+pudl show <id> --history --json
+pudl snapshot show <new> --compare <old> --json
+pudl model new <name> --check <relation> --evidence scope:<population> --max-age 15m
+
+Checks carry pass/fail/unknown/error outcomes and structured diagnostics.
+Missing or incomplete evidence is not a pass. Use explicit snapshot evidence
+and completeness declarations for inventory checks. Summaries separate execution,
+conformity, checks and verification. age_at_check is historical, not a fresh age.
+The GCP example defaults to local fixture data; its live model is separately named.
+
+Project definitions are local or explicitly vendored through workspace.cue.
+pudl config --paths --json shows effective paths; --global selects personal state.
+Doctor's repairs list gives reviewable preview/apply arguments; it applies nothing.
+
 ## Imported evidence and schemas
 
 pudl import --path <file>

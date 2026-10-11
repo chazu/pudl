@@ -8,6 +8,7 @@ Start with the [root README](../README.md) for a project overview.
 |----------|-------------|
 | [observation-scope.md](observation-scope.md) | Complete and partial observations, snapshot-scoped checks, freshness, and resource identity |
 | [evidence.md](evidence.md) | Exact evidence, report baselines and witnesses, retention, exports, classification traces, and portable backups |
+| [gcp-network-hygiene.md](gcp-network-hygiene.md) | Bundled fixture and live collection, direct inspection, saved checks, comparison, and history |
 | [getting-started.md](getting-started.md) | Install PUDL, create a repository, and find Git inventory drift using PUDL commands |
 | [concepts.md](concepts.md) | Core concepts: identity, schemas, inference, collections, and value wiring |
 | [cli-reference.md](cli-reference.md) | All commands, flags, and examples |

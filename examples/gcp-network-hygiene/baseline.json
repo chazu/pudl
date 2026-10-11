@@ -1,0 +1,5 @@
+[
+  {"kind":"compute#firewall","name":"public-ssh","direction":"INGRESS","sourceRanges":["0.0.0.0/0"],"allowed":[{"IPProtocol":"tcp","ports":["22"]}]},
+  {"kind":"compute#firewall","name":"deny-world","direction":"INGRESS","sourceRanges":["0.0.0.0/0"],"denied":[{"IPProtocol":"all"}]},
+  {"kind":"compute#firewall","name":"private-web","direction":"INGRESS","sourceRanges":["10.0.0.0/8"],"allowed":[{"IPProtocol":"tcp","ports":["443"]}]}
+]

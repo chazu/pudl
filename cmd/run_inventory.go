@@ -105,6 +105,7 @@ func observeScopeFilter(scope string, lookupErr error) (collectionID, origin str
 // observedSet is the inventory observation a drift verdict compares against:
 // its records, and the snapshot that holds them when the scope named one.
 type observedSet struct {
+	complete   bool
 	records    []acute.ObservedRecord
 	snapshotID string
 	observedAt *time.Time
@@ -136,6 +137,7 @@ func loadObservedRecordsContext(ctx context.Context, db *database.CatalogDB, sco
 				return set, err
 			}
 			if snapshot != nil && !snapshot.CreatedAt.IsZero() {
+				set.complete = snapshot.Complete
 				at := snapshot.CreatedAt
 				set.observedAt = &at
 			}
@@ -232,7 +234,18 @@ func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope
 		}
 	}
 	drifted := acute.InventorySetDiffWithPrevious(desired, observed.records, identity, history)
+	uncertain := false
+	if !observed.complete {
+		for i := range drifted {
+			if drifted[i].Reason == acute.DriftMissing {
+				drifted[i].Reason = "not-observed"
+				drifted[i].Diff = "not observed in a partial inventory; absence is not established"
+				uncertain = true
+			}
+		}
+	}
 	return ModelDriftResult{
+		Uncertain:  uncertain,
 		Clean:      len(drifted) == 0,
 		Drifted:    drifted,
 		SnapshotID: observed.snapshotID,

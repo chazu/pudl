@@ -34,6 +34,7 @@ type healthDiagnostic struct {
 }
 
 type doctorReport struct {
+	Repairs []repairAction      `json:"repairs"`
 	OK      bool                `json:"ok"`
 	Health  []healthDiagnostic  `json:"health"`
 	Catalog []catalogDiagnostic `json:"catalog"`
@@ -71,6 +72,11 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	repairs, repairErr := suggestedRepairs(report.Catalog)
+	report.Repairs = repairs
+	if repairErr != nil {
+		report.Health = append(report.Health, healthDiagnostic{Name: "Repair assessment", Status: "warning", Message: repairErr.Error()})
+	}
 	if jsonOutput {
 		if err := GetOutputWriter().WriteJSON(report); err != nil {
 			return err
@@ -91,6 +97,9 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		}
 		if report.Error != "" {
 			fmt.Fprintln(outw(), report.Error)
+		}
+		for _, repair := range report.Repairs {
+			fmt.Fprintf(outw(), "Repair: %s\n  preview: %v\n  apply after review: %v\n", repair.Reason, repair.Preview, repair.Apply)
 		}
 		fmt.Fprintf(outw(), "Catalog: %d entries checked\n", len(report.Catalog))
 		if report.OK {

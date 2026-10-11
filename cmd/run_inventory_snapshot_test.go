@@ -62,7 +62,8 @@ func TestInventoryDrift_StaleSnapshotCannotSatisfyANewerRun(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, fresh.Clean, "restic is gone, and the stale snapshot must not say otherwise")
 	require.Len(t, fresh.Drifted, 1)
-	assert.Equal(t, "missing", fresh.Drifted[0].Reason)
+	assert.Equal(t, "not-observed", fresh.Drifted[0].Reason)
+	assert.True(t, fresh.Uncertain)
 
 	// The old snapshot still describes the old world — replaying it is a
 	// legitimate, explicitly requested operation, and it is `Verified: false`

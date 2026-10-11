@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Daily evidence investigation workflow (2026-10-10)
+
+Completed scope-reduction step 7: bundled GCP fixture/live models, payload
+inspection, saved checks, snapshot comparison, resource history and doctor repair
+suggestions. See [walkthrough](gcp-network-hygiene.md) and
+[delivery log](../implog/2026_10_10_investigation_workflow.md).
+
 ### Coherent reports and check service (2026-10-10)
 
 Completed scope-reduction step 6: standalone and set summaries, structured early

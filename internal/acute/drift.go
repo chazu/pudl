@@ -71,8 +71,9 @@ type ResourceDrift struct {
 // ModelDriftResult is the instance-level drift verdict over an observation:
 // clean iff every desired resource exists and matches.
 type ModelDriftResult struct {
-	Clean   bool            `json:"clean"`
-	Drifted []ResourceDrift `json:"drifted,omitempty"`
+	Uncertain bool            `json:"uncertain,omitempty"`
+	Clean     bool            `json:"clean"`
+	Drifted   []ResourceDrift `json:"drifted,omitempty"`
 
 	// Verified reports whether this verdict came from a fresh observation of the
 	// live system. A catalog replay leaves it false: the records it compares
