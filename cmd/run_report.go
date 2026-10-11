@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/chazu/pudl/internal/acute"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
@@ -14,6 +15,8 @@ import (
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
+	Summary          *acute.VerdictSummary          `json:"summary,omitempty"`
+	ResourceScope    []string                       `json:"resource_scope,omitempty"`
 	ReportVersion    int                            `json:"report_version"`
 	RunSetID         string                         `json:"run_set_id,omitempty"`
 	RunID            string                         `json:"run_id"`
@@ -75,8 +78,9 @@ type PopulateReport struct {
 
 // ConvergeReport summarizes a convergence loop.
 type ConvergeReport struct {
-	Outcome    string `json:"outcome"` // clean | failed (cap_exhausted) | failed (execute_error) | dry-run …
-	Iterations int    `json:"iterations"`
+	Observation *ModelDriftResult `json:"observation,omitempty"`
+	Outcome     string            `json:"outcome"` // clean | failed (cap_exhausted) | failed (execute_error) | dry-run …
+	Iterations  int               `json:"iterations"`
 
 	// NeedsVerification is orthogonal to Outcome: the run mutated the system but
 	// cannot prove the result, whichever way the loop ended. It dominates the
@@ -96,6 +100,9 @@ func (r *RunReport) render(asJSON bool) (string, error) {
 	if r.ReportVersion == 0 {
 		r.ReportVersion = 2
 	}
+	if r.ReportVersion >= 2 && r.Summary == nil {
+		r.Summary = summarizeRun(r, nil)
+	}
 	if asJSON {
 		b, err := json.MarshalIndent(r, "", "  ")
 		if err != nil {
@@ -109,6 +116,10 @@ func (r *RunReport) render(asJSON bool) (string, error) {
 // markdown renders the human report.
 func (r *RunReport) markdown() string {
 	var b strings.Builder
+	if r.Summary != nil {
+		s := r.Summary
+		fmt.Fprintf(&b, "Execution: %s | conformity: %s | checks: %s | verification: %s | scope: %s\n\n", s.Execution, s.Conformity, s.Checks, s.Verification, s.Scope)
+	}
 	fmt.Fprintf(&b, "# run: %s\n\n", r.Model)
 	fmt.Fprintf(&b, "- run_id: %s\n", r.RunID)
 	fmt.Fprintf(&b, "- mode: %s\n", r.Mode)

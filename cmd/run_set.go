@@ -465,6 +465,10 @@ func resolutionBindingIssues(template *systemmodel.ModelTemplate, err error) []w
 }
 
 func saveRunSetReport(db *database.CatalogDB, report *acute.RunSetReport) error {
+	report.ReportVersion = 2
+	if err := enrichSetSummary(db, report); err != nil {
+		return err
+	}
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return err
@@ -478,17 +482,28 @@ func printRunSetReport(report *acute.RunSetReport) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintln(outw(), string(payload))
-		return nil
+		_, err = fmt.Fprintln(outw(), string(payload))
+		return err
 	}
 	fmt.Fprintf(outw(), "\nrun-set %s: %s\n", report.RunSetID, report.Status)
+	if s := report.Summary; s != nil {
+		fmt.Fprintf(outw(), "conformity: %s | checks: %s | verification: %s\n", s.Conformity, s.Checks, s.Verification)
+	}
 	fmt.Fprintf(outw(), "plan: %s\n", report.PlanDigest)
 	for _, member := range report.Members {
 		line := fmt.Sprintf("  %s: %s (%s)", member.Model, member.Result, member.RunID)
+		if s := member.Summary; s != nil {
+			line += fmt.Sprintf(" | conformity: %s | checks: %s | verification: %s | scope: %s", s.Conformity, s.Checks, s.Verification, s.Scope)
+		}
 		if member.Error != "" {
 			line += ": " + member.Error
 		}
 		fmt.Fprintln(outw(), strings.TrimSpace(line))
+		if member.Summary != nil {
+			for _, e := range member.Summary.Evidence {
+				fmt.Fprintf(outw(), "    evidence: %s%s | age at check: %s | complete: %t\n", e.SnapshotID, e.ObservationID, e.Age, e.Complete)
+			}
+		}
 	}
 	return nil
 }

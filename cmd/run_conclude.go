@@ -36,7 +36,9 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 		fmt.Fprint(outw(), "\n")
 	}
 	if deps.set.emitOutput() {
-		fmt.Fprint(outw(), out)
+		if _, err := fmt.Fprint(outw(), out); err != nil {
+			return persisted, err
+		}
 	}
 	if in.live {
 		for _, notice := range fin.notices {
@@ -112,6 +114,11 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 			if report.Drift != nil && report.Drift.SnapshotID != "" {
 				currentSnapshot = report.Drift.SnapshotID
 			}
+		}
+		// Differential convergence observations are not inventory snapshots.
+		// Never reuse a set's preflight inventory as evidence after applying.
+		if report.Converge != nil {
+			currentSnapshot = ""
 		}
 		results, err := runChecksContext(evalCtx, cat, in.effective, in.modelDir, checkContext{
 			currentSnapshot: currentSnapshot,

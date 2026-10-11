@@ -289,3 +289,8 @@ between an observation and an answer that a human or agent can justify.
   --legacy-dependencies, migration guidance, and vendored bundle coverage.
   Workspace, public-library, bundle and command tests passed, including clean
   versus conflicting home directories and CLI/library resolution parity.
+- Step 6 implemented: standalone/set/member summaries expose outcome axes and
+  evidence; early JSON errors are structured; phase progress uses stderr. Check
+  orchestration now lives in internal/checks with explicit dependencies and no
+  Cobra globals. Command and coordinator tests passed, including replay,
+  uncertain mutation, aggregate evidence, early errors, and progress separation.

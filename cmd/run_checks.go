@@ -3,9 +3,9 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/evidence"
 	"github.com/chazu/pudl/internal/projection"
@@ -16,7 +16,7 @@ import (
 // this run's ID bound as a constraint; "global" means it saw the whole catalog.
 const (
 	checkScopeRun    = "run"
-	checkScopeGlobal = "global"
+	checkScopeGlobal = "latest-known"
 )
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated
@@ -58,16 +58,7 @@ type checkContext struct {
 
 // checkPasses is the pure expect-vs-count verdict: "empty" passes on no tuples,
 // "nonempty" passes on at least one.
-func checkPasses(expect string, count int) bool {
-	switch expect {
-	case "empty":
-		return count == 0
-	case "nonempty":
-		return count > 0
-	default:
-		return false
-	}
-}
+func checkPasses(expect string, count int) bool { return checks.Passes(expect, count) }
 
 // headExposesRunID reports whether any rule producing this relation declares
 // `run_id` as a variable head argument.
@@ -79,15 +70,7 @@ func checkPasses(expect string, count int) bool {
 // surfaces `$R` in its head; every other rule evaluates catalog-wide exactly as
 // before.
 func headExposesRunID(rules []datalog.Rule, relation string) bool {
-	for _, rule := range rules {
-		if rule.Head.Rel != relation {
-			continue
-		}
-		if term, ok := rule.Head.Args["run_id"]; ok && term.IsVariable() {
-			return true
-		}
-	}
-	return false
+	return checks.HeadExposesRunID(rules, relation)
 }
 
 // runChecks evaluates each of the model's checks (a Datalog relation over the
@@ -105,124 +88,24 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 	if err != nil {
 		return nil, err
 	}
-
-	rules, err := datalog.LoadRulesFromPaths(rulePathsForModel(modelDir)...)
+	reg, err := projectionRegistry()
 	if err != nil {
-		return nil, fmt.Errorf("load rules: %w", err)
+		return nil, err
 	}
-
-	// Checks read projected facts: bring them in line with the catalog and
-	// the current facts specs first, and say when a check's rules cannot
-	// match anything.
-	syncReport, syncErr := syncProjections(evalCtx, db, false)
-	reg, registryErr := projectionRegistry()
-
-	var results []CheckResult
-	for _, c := range m.Checks {
-		scope := checkScopeGlobal
-		var constraints map[string]interface{}
-		if !ctx.fromCatalog && ctx.runID != "" && headExposesRunID(rules, c.Query) {
-			scope = checkScopeRun
-			constraints = map[string]interface{}{"run_id": ctx.runID}
-		}
-
-		result := CheckResult{Name: c.Name, Query: c.Query, Expect: c.Expect, Severity: c.Severity, Scope: scope, Message: redactSealedText(c.Message, m)}
-		queryDB := db
-		var view *evidence.View
-		if registryErr != nil {
-			result.Diagnostics = []projection.Diagnostic{{Code: "schema_unavailable", Message: registryErr.Error()}}
-		} else if len(c.Evidence) > 0 {
-			result.Scope = "snapshots"
-			constraints = nil // snapshot membership scopes catalog joins as well
-			maxAge, err := parseEvidenceAge(c.MaxAge)
-			if err == nil {
-				view, err = evidence.Open(evalCtx, db, reg, evidence.Request{Selectors: c.Evidence, Current: ctx.currentSnapshot, MaxAge: maxAge})
-			}
-			if err != nil {
-				result.Diagnostics = []projection.Diagnostic{{Code: "evidence_unavailable", Message: err.Error()}}
-			} else {
-				defer view.Close()
-				result.Evidence = view.References
-				result.Diagnostics = view.Diagnostics
-				if view.DB != nil {
-					queryDB = view.DB
-					result.Diagnostics = append(result.Diagnostics, projection.CheckDiagnostics(queryDB, reg.Subset(view.Schemas), rules, c.Query, projection.SyncReport{}, nil)...)
-				}
-			}
-		} else if c.MaxAge != "" {
-			result.Diagnostics = []projection.Diagnostic{{Code: "evidence_scope_required", Message: "max_age requires explicit evidence selectors"}}
-		} else {
-			result.Diagnostics = projection.CheckDiagnostics(db, reg, rules, c.Query, syncReport, syncErr)
-		}
-		for i := range result.Diagnostics {
-			result.Diagnostics[i].Message = redactSealedText(result.Diagnostics[i].Message, m)
-		}
-		if len(result.Diagnostics) > 0 {
-			result.Outcome = "unknown"
-			results = append(results, result)
-			continue
-		}
-		tuples, err := datalog.EvaluateContext(evalCtx, queryDB, rules, c.Query, constraints, datalog.TemporalScope{}, datalog.EvalOptions{})
-		if view != nil {
-			view.Close()
-			view = nil
-		}
-		if err != nil {
-			result.Outcome = "error"
-			result.Diagnostics = []projection.Diagnostic{{Code: "evaluation_error", Message: err.Error()}}
-			results = append(results, result)
-			continue
-		}
-
-		gating, advisory := partitionCheckTuples(tuples, c.Expect, ctx.scope)
-		witnesses, truncated := checkWitnesses(tuples, c.Expect, ctx.scope, m)
-		result.Passed = checkPasses(c.Expect, gating)
-		result.Outcome = checkOutcome(result.Passed)
-		result.Count, result.AdvisoryCount = gating, advisory
-		result.Witnesses, result.WitnessesTruncated = witnesses, truncated
-		results = append(results, result)
+	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: rulePathsForModel(modelDir), Load: loadEntryPayload, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, Scope: ctx.scope, Redact: func(value string) string { return redactSealedText(value, m) }, OnProgress: emitCheckProgress})
+	if err != nil {
+		return nil, err
+	}
+	results := make([]CheckResult, 0, len(evaluated))
+	for _, e := range evaluated {
+		witnesses, truncated := checkWitnesses(e.Tuples, e.Expect, ctx.scope, m)
+		results = append(results, CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, AdvisoryCount: e.AdvisoryCount, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated})
 	}
 	return results, nil
 }
 
-func parseEvidenceAge(value string) (time.Duration, error) {
-	if value == "" {
-		return 0, nil
-	}
-	age, err := time.ParseDuration(value)
-	if err != nil || age <= 0 {
-		return 0, fmt.Errorf("max_age must be a positive duration")
-	}
-	return age, nil
-}
-
-func checkOutcome(passed bool) string {
-	if passed {
-		return "pass"
-	}
-	return "fail"
-}
-
-// partitionCheckTuples splits a check's result rows into the ones its verdict is
-// about and the ones `--only` excused.
-//
-// Only `expect: empty` checks partition. Such a check counts violations, so
-// excusing violations on resources the run excluded is the point. An
-// `expect: nonempty` check counts *evidence*, and dropping evidence could only
-// manufacture a failure that nothing in scope can fix — so it gates on the full
-// result set, as it did before scoping existed.
-func partitionCheckTuples(tuples []datalog.Tuple, expect string, scope *acute.TupleScope) (gating, advisory int) {
-	if expect != "empty" || !scope.Restricted() {
-		return len(tuples), 0
-	}
-	for _, t := range tuples {
-		if scope.Advisory(acute.ArgValues(t.Args)) {
-			advisory++
-			continue
-		}
-		gating++
-	}
-	return gating, advisory
+func partitionCheckTuples(tuples []datalog.Tuple, expect string, scope *acute.TupleScope) (int, int) {
+	return checks.Partition(tuples, expect, scope)
 }
 
 // printChecks renders the check results and reports whether any check with

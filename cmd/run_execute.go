@@ -35,6 +35,14 @@ type resolvedRun struct {
 // through its ordinary exit path — with needs-verification if an apply may have
 // been in flight. There is no resume: an interrupted run is simply re-run.
 func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport *RunReport, runError error) {
+	emitRunProgress("prepare", opts.model, "started")
+	defer func() {
+		state := "completed"
+		if runError != nil {
+			state = "failed"
+		}
+		emitRunProgress("run", opts.model, state)
+	}()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -154,6 +162,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	}
 
 	report := &RunReport{
+		ResourceScope: append([]string(nil), flags.only...),
 		ReportVersion: 2, RunSetID: deps.set.id(), RunID: session.RunID,
 		Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
 		ApprovalStatus: approvalStatus, Bindings: resolved.bindingEvidence, SealedBindings: resolved.sealedEvidence,
@@ -354,6 +363,7 @@ type runPhaseInput struct {
 // executeRunPhases runs the converge loop or the observe-only arm. runErr is a
 // run outcome recorded on the report (a converge failure); err aborts the run.
 func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err error) {
+	emitRunProgress("observe", in.model.Name, "started")
 	if in.ctx == nil {
 		in.ctx = runOperationContext(in.mu)
 	}

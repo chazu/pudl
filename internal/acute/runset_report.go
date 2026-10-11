@@ -8,14 +8,16 @@ import (
 )
 
 type RunSetMemberReport struct {
-	Model            string `json:"model"`
-	RunID            string `json:"run_id"`
-	Result           string `json:"result"`
-	MutationRequired bool   `json:"mutation_required,omitempty"`
-	Error            string `json:"error,omitempty"`
+	Summary          *VerdictSummary `json:"summary,omitempty"`
+	Model            string          `json:"model"`
+	RunID            string          `json:"run_id"`
+	Result           string          `json:"result"`
+	MutationRequired bool            `json:"mutation_required,omitempty"`
+	Error            string          `json:"error,omitempty"`
 }
 
 type RunSetReport struct {
+	Summary        *VerdictSummary      `json:"summary,omitempty"`
 	ReportVersion  int                  `json:"report_version"`
 	RunSetID       string               `json:"run_set_id"`
 	Mode           string               `json:"mode"`

@@ -74,6 +74,15 @@ Examples:
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		report, err := executeRun(cmd.Context(), runOptionsFromFlags(cmd, args), defaultRunDeps(cmd.Context(), runMuTimeout))
+		if counter, ok := outw().(*resultCounter); ok && !counter.attempted && jsonOutput && err != nil && report != nil {
+			out, renderErr := report.render(true)
+			if renderErr != nil {
+				return renderErr
+			}
+			if _, writeErr := fmt.Fprint(outw(), out); writeErr != nil {
+				return writeErr
+			}
+		}
 		if !runDetailedExitCode {
 			return err
 		}

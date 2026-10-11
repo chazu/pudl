@@ -141,3 +141,29 @@ fail-severity assertion violation still uses detailed status 2. Historical
 version-1 reports remain readable without being reinterpreted as fresh evidence.
 
 Empty JSON arrays from command observers create valid zero-record snapshots.
+
+## Report summaries and machine errors
+
+New standalone and set reports include a `summary` with separate `execution`,
+`conformity`, `checks`, `verification`, and `scope` fields, finding counts,
+evidence references, and `next_actions`. Each run-set member carries its own
+summary. `age_at_check` is frozen at evaluation time; reading an old report does
+not refresh its evidence. Stored version-1 reports remain readable.
+
+A completed command may report drift. Inspect conformity and checks instead of
+using `ok` as a synonym for a matching system. `needs-verification` means a
+mutation may have occurred without adequate confirmation. Snapshot checks using
+`current` cannot reuse a run-set's pre-apply inventory after convergence;
+differential convergence observations are a different evidence shape. Run the
+inventory observer again to establish a new complete snapshot for those checks.
+
+With `--json`, early command failures emit one error document when no result was
+already written, including `code`, `message`, `exit_code`, and suggestions.
+Failures after run creation retain the operation report when available. Output
+failures are not retried by appending another document.
+
+`pudl run ... --progress-json` emits JSON progress events on stderr, alongside
+ordinary diagnostics. Events have `type: "progress"`, `event_version`, phase,
+subject, state, and time. Stdout remains the final JSON result. Queries return
+all matching tuples; catalog lists are paginated, and `total_matched` identifies
+whether additional pages exist. See the list reference for page controls.

@@ -128,6 +128,7 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 	live := !jsonOutput // suppress progress chatter when emitting machine JSON
 	lastIteration := 0
 	var receipts []MutationReceipt
+	var finalObservation *ModelDriftResult
 	result, runErr := acute.Converge(acute.ConvergeRequest{
 		Executor:      &muConvergeExecutor{workspace: w},
 		MaxIterations: maxIters,
@@ -151,6 +152,10 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 			return nil
 		},
 		OnObserve: func(observation acute.Observation) {
+			if drift, ok := observation.Details.(ModelDriftResult); ok {
+				finalObservation = &drift
+			}
+			emitRunProgress("observe", m.Name, "completed")
 			if !live {
 				return
 			}
@@ -164,6 +169,7 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 			}
 		},
 		OnApply: func(iteration int) {
+			emitRunProgress("apply", m.Name, "started")
 			if live {
 				fmt.Fprintf(outw(), "iteration %d: applying converge…\n", iteration)
 			}
@@ -194,6 +200,7 @@ func runConvergeLoopExact(cat *runCatalog, mu muRunner, m *systemmodel.SystemMod
 	}
 
 	rep := &ConvergeReport{
+		Observation:       finalObservation,
 		Outcome:           string(result.Outcome),
 		Iterations:        result.Iterations,
 		NeedsVerification: result.NeedsVerification,

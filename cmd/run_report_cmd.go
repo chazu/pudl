@@ -190,7 +190,7 @@ func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 		return false
 	}
 	if report.ReportVersion == 0 {
-		report.ReportVersion = 1
+		report.ReportVersion = 2
 	}
 	db, err := cat.optional()
 	if err != nil {
@@ -199,6 +199,7 @@ func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 		}
 		return false
 	}
+	report.Summary = summarizeRun(report, db)
 	b, err := json.Marshal(report)
 	if err != nil {
 		if live {
