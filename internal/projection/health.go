@@ -109,6 +109,9 @@ func CheckDiagnostics(db *database.CatalogDB, reg *Registry, rules []datalog.Rul
 		out = append(out, Diagnostic{Code: "evidence_unavailable", Message: err.Error()})
 	}
 	for _, state := range states {
+		if needed[state.Schema] && state.Status == database.ProjectionIncomplete {
+			out = append(out, Diagnostic{Code: "projection_incomplete", Schema: state.Schema, EntryID: state.EntryID, Message: "projected values were omitted because they are outside the query domain; inspect the source record and projection"})
+		}
 		if needed[state.Schema] && state.Status == database.ProjectionSkipped {
 			out = append(out, Diagnostic{Code: "identity_unresolved", Schema: state.Schema, EntryID: state.EntryID, Message: "record has no resolved resource identity"})
 		}

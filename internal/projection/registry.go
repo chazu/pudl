@@ -152,10 +152,11 @@ func fingerprint(spec *SchemaSpec) string {
 		Args       map[string]argPrint
 	}
 	print := struct {
+		Contract  int
 		Relations []relPrint
 		Sensitive []string
 		Err       string
-	}{}
+	}{Contract: 2}
 	for _, rel := range spec.Relations {
 		rp := relPrint{Name: rel.Name, Args: map[string]argPrint{}}
 		if rel.Each != nil {

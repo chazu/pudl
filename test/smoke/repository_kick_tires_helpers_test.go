@@ -155,3 +155,21 @@ func (w *kickTiresWorkspace) pudlWithEnv(overrides map[string]string, args ...st
 	err := cmd.Run()
 	return stdout.String(), stderr.String(), err
 }
+
+func decodeKickError(t *testing.T, stdout string) string {
+	t.Helper()
+	var response struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Message  string `json:"message"`
+			ExitCode int    `json:"exit_code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("decode structured error: %v\n%s", err, stdout)
+	}
+	if response.OK || response.Error.Message == "" || response.Error.ExitCode != 1 {
+		t.Fatalf("unexpected error contract: %s", stdout)
+	}
+	return response.Error.Message
+}

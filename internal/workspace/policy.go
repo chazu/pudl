@@ -39,7 +39,7 @@ type Policy struct {
 	// origin imports and runs are recorded under.
 	EffectiveOrigin string
 
-	// SchemaSearchPaths is searched front-to-back: repo first, then global.
+	// SchemaSearchPaths is searched front-to-back: project then vendored dependencies.
 	SchemaSearchPaths []string
 
 	// DefinitionSearchPaths is searched front-to-back: repo first, then global.
@@ -55,8 +55,7 @@ type Policy struct {
 	// loader is what tolerates a path that is missing or is not a directory.
 	RuleSearchPaths []string
 
-	// ModelSearchPaths is where #SystemModel definitions are resolved from:
-	// repo first, then global.
+	// ModelSearchPaths resolves project models then explicit vendored models.
 	ModelSearchPaths []string
 }
 

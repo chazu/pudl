@@ -187,3 +187,8 @@ Limits:
   not rewritten. Projection still redacts them in memory.
 - **Drift.** Redacted values never equal plaintext `desired` values, so do not
   declare desired state on sensitive paths.
+
+Projection records an incomplete status when values fall outside the query
+numeric domain. Dependent latest-known checks become unknown, just as selected
+snapshot checks do. Projection contract version 2 refreshes older projection
+state on the next synchronization; source payloads and fact history are retained.

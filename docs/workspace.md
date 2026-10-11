@@ -26,7 +26,9 @@ Commit the vendored files and the declaration together; the Git revision pins
 their contents. CUE module dependencies inside those files retain their native
 version declarations. Package paths are relative and must remain under
 `.pudl/vendor`; missing packages, duplicates, and symlinks are rejected. Portable
-workspace bundles include vendored packages. Nothing is downloaded implicitly.
+workspace bundles include vendored packages. PUDL does not fetch these package
+directories. Their CUE imports retain native module-resolution behavior; prepare
+those module dependencies separately when offline operation is required.
 
 To migrate a workspace that relied on global definitions:
 

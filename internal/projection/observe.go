@@ -7,6 +7,7 @@ import (
 // Prepared is one record's projection, computed before the catalog commit so
 // no decode or projection work happens under the write lock.
 type Prepared struct {
+	Incomplete  bool            `json:"incomplete,omitempty"`
 	Schema      string          `json:"schema"`
 	Fingerprint string          `json:"fingerprint"`
 	ResourceID  string          `json:"resource_id"`
@@ -29,6 +30,7 @@ func Prepare(reg *Registry, schema, entryID, resourceID string, identityResolved
 	}
 	res := Compute(spec, entryID, resourceID, data)
 	p.Facts = res.Facts
+	p.Incomplete = len(res.Omitted) > 0
 	return p, res
 }
 
@@ -48,6 +50,9 @@ func apply(tx *database.CatalogTx, p *Prepared, mode database.ProjectionMode) er
 		return nil
 	}
 	status := database.ProjectionProjected
+	if p.Incomplete {
+		status = database.ProjectionIncomplete
+	}
 	if !p.Resolved {
 		// Content-hash identity: every state of the resource would be its own
 		// source and facts from all of them would stay current. Record the

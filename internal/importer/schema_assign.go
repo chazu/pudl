@@ -28,14 +28,9 @@ type schemaAssignment struct {
 
 // assignSchema chooses the schema for one decoded record.
 //
-// Without a manual schema the record is inferred. With one, the record is
-// validated against it through the chain (intended → base → catchall), so a
-// user-supplied schema is honored when the data satisfies it and the record
-// still lands somewhere when it does not — data is never rejected.
-//
-// A manual schema the validator has not loaded (e.g. a module-versioned CUE
-// ref resolved later by `pudl reclassify`) cannot be checked; it is recorded as
-// given, at reduced confidence, rather than silently replaced by a catchall.
+// Without a manual schema the record is inferred. An explicit schema must be
+// available and validate the original record. AllowSchemaFallback opts into
+// chain fallback and permits unavailable module references to remain unverified.
 func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hints inference.InferenceHints) (schemaAssignment, error) {
 	if opts.ManualSchema == "" {
 		var result *inference.InferenceResult

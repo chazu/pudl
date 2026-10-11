@@ -39,8 +39,7 @@ func newObserveRoute(in ObserveIngest) (observeRoute, error) {
 }
 
 // resolve returns the record's schema: the manual schema validated through
-// its chain (falling back to base or catchall exactly as `import --schema`
-// does), or the _schema-based routing.
+// its chain (fallback requires explicit opt-in), or _schema-based routing.
 func (r observeRoute) resolve(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer, mappings map[string]string) (string, error) {
 	if r.manual == "" {
 		return resolveObserveSchemaWithMappings(record, graph, inferrer, mappings), nil

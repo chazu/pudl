@@ -197,8 +197,10 @@ func main() {
     ws, _ := factstore.DiscoverWorkspace(cwd)
     rules, _ := eval.LoadRulesFromPaths(ws.RulePaths...)
 
-    // Open the global store and run a Datalog query.
-    st, _ := factstore.Open(factstore.GlobalDir())
+    // Open the active store and use the same rule paths as the CLI.
+    storeDir := ws.RepoDir
+    if storeDir == "" { storeDir = ws.GlobalDir }
+    st, _ := factstore.Open(storeDir)
     defer st.Close()
 
     out, _ := st.Query(factstore.QueryOptions{Relation: "at_risk", Rules: rules})

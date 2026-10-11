@@ -79,9 +79,8 @@ func (s *importSession) options(path, origin string) importer.ImportOptions {
 // returns the validator that will check records against it.
 //
 // A name the validator cannot resolve is an error, with one exception: a
-// module-versioned CUE reference (e.g. "mu/aws@v1#EC2Instance") names a schema
-// that may only be resolvable later via `pudl reclassify`, so it is kept as
-// given and recorded unverified.
+// module-versioned CUE reference can be retained unverified only when the
+// caller explicitly selected --allow-schema-fallback.
 func resolveImportSchema(cfg *config.Config, input string) (string, *validator.ChainValidator, error) {
 	if input == "" {
 		return "", nil, nil

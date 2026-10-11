@@ -91,7 +91,8 @@ configuration, schemas, rules, models, definitions, and populators. Exact byte
 checksums protect every archive member. Authored files changing during capture
 fail the operation. Generated execution workspaces and private temporary files are
 excluded. References outside the state root and symlinks are rejected; external
-executables, Mu projects, providers, and global fallback schemas are not bundled.
+executables, Mu projects, providers, and personal global schemas are not bundled.
+Explicit vendored definition packages are included.
 Use a self-contained workspace when those dependencies need to travel together.
 
 The source payload audit checks available SHA256 claims, including canonical JSON

@@ -396,7 +396,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		// (EweTarget, or #PluginObserve differential:false); --from-catalog
 		// forces it for any model.
 		report.Mode = "observe-only (inventory)"
-		identity, err := schemaIdentityResolver()
+		identity, namespace, err := inventoryIdentityPolicy()
 		if err != nil {
 			return nil, err
 		}
@@ -426,7 +426,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		if err != nil {
 			return nil, err
 		}
-		res, err := runInventoryDriftContext(in.ctx, db, scope, model.Desired, identity)
+		res, err := runInventoryDriftContext(in.ctx, db, scope, model.Desired, identity, namespace)
 		if err != nil {
 			return nil, err
 		}

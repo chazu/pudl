@@ -25,7 +25,7 @@ type ModelInfo struct {
 	Summary    systemmodel.TemplateSummary
 }
 
-// modelSearchDirs returns the schema dirs to search, project first (shadows global).
+// modelSearchDirs returns the schema dirs to search, project first, then explicit dependencies.
 func modelSearchDirs() []string {
 	// From the run's one workspace policy. This used to call workspace.Discover(".")
 	// itself — a second answer to a question already resolved at startup, which
@@ -38,7 +38,7 @@ func modelSearchDirs() []string {
 }
 
 // listModels discovers all registered #SystemModel definitions across the schema
-// dirs (project shadows global by model name). Returns models sorted by name and
+// dirs (project shadows explicit dependencies by model name). Returns models sorted by name and
 // the dirs actually searched.
 func listModels() ([]ModelInfo, []string, error) {
 	var out []ModelInfo
