@@ -4,11 +4,19 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Go and dependency vulnerabilities remediated (2026-10-10)
+
+Updated Go to 1.26.9, x/net to v0.60.0, and x/text to v0.42.0, with the
+required x/sys and x/sync updates. Local/CI pins, active documentation, and the
+generated GitLab pipeline example use the patched toolchain. Govulncheck now
+reports no vulnerabilities. Public API and CLI behavior are unchanged.
+See [remediation log](../implog/2026_10_10_vulnerability_remediation.md).
+
 ### Scope reduction and evidence workflow qualified (2026-10-10)
 
 All eight steps are implemented, with `list --fancy` retained. The full race
 suite, lint, docs/skills synchronization, build, Git walkthrough, and real-Mu
-matrix passed. Existing Go/dependency advisories are tracked in `pudl-ew9`;
+matrix passed. Go/dependency advisories were subsequently remediated in `pudl-ew9`;
 live GCP and human usability qualification remain separate.
 See [completion audit](../implog/2026_10_10_scope_reduction_completion.md) and
 [delivered plan](design/2026-10-10-scope-reduction-and-improvement-order.md).
@@ -540,7 +548,7 @@ thirteen branches merged into main. Each has an implementation log in
 | Cancellation | Context-bound mu/cue subprocesses, `--mu-timeout`, workspace registry, cancelled conclusions, doctor mu version check | `mu_context` |
 | Output contract | All command output through injectable streams; diagnostics on stderr; `--json` on the walkthrough commands; in-process JSON contract test | `output_contract` |
 | Tests | Test helpers out of the release binary; HOME isolation; dead and always-skipped tests removed; timing flakes removed; seven fuzz targets (three bugs fixed) | `test_infra`, `fuzz_tests` |
-| CI and docs | Go 1.26.6; golangci-lint and govulncheck jobs; generated `docs/cli-reference.md` with `-check`; `help --json` golden | `ci_hardening`, `cli_docs` |
+| CI and docs | Go 1.26.9; golangci-lint and govulncheck jobs; generated `docs/cli-reference.md` with `-check`; `help --json` golden | `ci_hardening`, `cli_docs` |
 | Hygiene | Stray files removed; implog directories merged; FEATURES/VISION corrected; `make clean-local` | `repo_hygiene` |
 
 Previous-observation values, failed-check witnesses, and current report evidence

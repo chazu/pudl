@@ -55,6 +55,11 @@ network-dependency findings. `pudl-ew9` tracks upgrading the Go and dependency
 pins and re-running the scanner. The toolchain/dependency upgrade is separate
 from this scope-reduction implementation; no clean security scan is claimed.
 
+Subsequent remediation: `pudl-ew9` upgrades the toolchain and dependencies, and
+the fresh scanner reports no vulnerabilities. See the
+[remediation log](2026_10_10_vulnerability_remediation.md) for versions and
+acceptance evidence; the failed scan above records the original qualification.
+
 The GCP collector was qualified through local fixtures, not a credentialed live
 project. An actual human usability trial was not performed. The walkthrough is
 runnable and covered by agent-driven CLI tests; the trial timing excludes human

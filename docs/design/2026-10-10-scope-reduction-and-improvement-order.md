@@ -4,8 +4,9 @@
 
 **Status:** Implemented and locally qualified on 2026-10-10, with
 `list --fancy` explicitly retained. All eight implementation steps are delivered.
-Live GCP access and an actual human usability trial were not performed; the
-existing toolchain/dependency vulnerability findings are tracked as `pudl-ew9`.
+Live GCP access and an actual human usability trial were not performed.
+The toolchain/dependency vulnerability findings were remediated separately in
+`pudl-ew9`; see the [remediation log](../../implog/2026_10_10_vulnerability_remediation.md).
 See the [completion audit](../../implog/2026_10_10_scope_reduction_completion.md).
 
 **Review baseline:** `f9be415`.
