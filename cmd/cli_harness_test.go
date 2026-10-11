@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,7 +39,7 @@ func runCLI(t *testing.T, args ...string) cliResult {
 		rootCmd.SetArgs(nil)
 		resetCommandFlags(rootCmd)
 	}()
-	err := rootCmd.Execute()
+	err := executeCommand(context.Background(), args)
 	return cliResult{Stdout: out.String(), Stderr: errOut.String(), Err: err}
 }
 

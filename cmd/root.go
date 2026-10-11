@@ -112,7 +112,7 @@ func ExecuteContext(ctx context.Context) {
 		}
 	}
 
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
+	if err := executeCommand(ctx, os.Args[1:]); err != nil {
 		os.Exit(exitCodeFor(err))
 	}
 }

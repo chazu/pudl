@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Coherent reports and check service (2026-10-10)
+
+Completed scope-reduction step 6: standalone and set summaries, structured early
+errors, progress events, and a CLI-independent check-evaluation service.
+See [delivery log](../implog/2026_10_10_report_contracts.md).
+
 ### Reproducible project definitions (2026-10-10)
 
 Completed scope-reduction step 5: explicit vendored packages replace ambient

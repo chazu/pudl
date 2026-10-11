@@ -1735,6 +1735,7 @@ Flags:
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
 | `--only` | stringSlice |  | converge only these resource selectors (requires --converge) |
 | `--populate` | string |  | Run an unregistered observer: plugin:&lt;name&gt;, or command:&lt;cmdline&gt; (a command printing JSON records) |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 | `--require-approval` | bool |  | persist the converge request and wait for `pudl run resume <run-id>` |
 
 Subcommands:
@@ -1884,6 +1885,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 ## pudl run report
 
@@ -1898,6 +1900,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 Standalone runs and exact sets share `report`, `resume` and `reject`. With no
 ID, `report` selects the newest persisted standalone or aggregate set report.
@@ -1921,6 +1924,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 ## pudl run set
 
@@ -1968,6 +1972,7 @@ Flags:
 | `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
 | `--mu-root` | string |  | mu project root for member runs (default: discover per model) |
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 | `--require-approval` | bool |  | persist the exact run-set plan and wait for approval before mutation |
 
 Observe-only sets continue independent branches after a member failure while

@@ -5,6 +5,7 @@ package evidence
 import (
 	"context"
 	"fmt"
+	"github.com/chazu/pudl/internal/acute"
 	"io"
 	"os"
 	"strings"
@@ -17,14 +18,7 @@ import (
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
-type Reference struct {
-	SnapshotID string    `json:"snapshot_id"`
-	Scope      string    `json:"scope"`
-	Source     string    `json:"source"`
-	ObservedAt time.Time `json:"observed_at"`
-	Age        string    `json:"age"`
-	Complete   bool      `json:"complete"`
-}
+type Reference = acute.ObservationEvidence
 
 type Request struct {
 	Selectors []string

@@ -1783,6 +1783,13 @@
           "type": "string"
         },
         {
+          "name": "progress-json",
+          "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "require-approval",
           "usage": "persist the converge request and wait for `pudl run resume \u003crun-id\u003e`",
           "type": "bool",
@@ -1815,6 +1822,13 @@
               "type": "duration",
               "default": "0s",
               "persistent": true
+            },
+            {
+              "name": "progress-json",
+              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             }
           ]
         },
@@ -1843,6 +1857,13 @@
               "type": "duration",
               "default": "0s",
               "persistent": true
+            },
+            {
+              "name": "progress-json",
+              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             }
           ]
         },
@@ -1870,6 +1891,13 @@
               "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
               "type": "duration",
               "default": "0s",
+              "persistent": true
+            },
+            {
+              "name": "progress-json",
+              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+              "type": "bool",
+              "default": "false",
               "persistent": true
             }
           ]
@@ -1934,6 +1962,13 @@
               "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
               "type": "duration",
               "default": "0s",
+              "persistent": true
+            },
+            {
+              "name": "progress-json",
+              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+              "type": "bool",
+              "default": "false",
               "persistent": true
             },
             {
