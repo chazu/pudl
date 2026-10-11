@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Scope reduction and evidence workflow qualified (2026-10-10)
+
+All eight steps are implemented, with `list --fancy` retained. The full race
+suite, lint, docs/skills synchronization, build, Git walkthrough, and real-Mu
+matrix passed. Existing Go/dependency advisories are tracked in `pudl-ew9`;
+live GCP and human usability qualification remain separate.
+See [completion audit](../implog/2026_10_10_scope_reduction_completion.md) and
+[delivered plan](design/2026-10-10-scope-reduction-and-improvement-order.md).
+
 ### Native tool wrappers retired and fancy retained (2026-10-10)
 
 Completed scope-reduction step 8: removed Git/editor/CUE command wrappers and
