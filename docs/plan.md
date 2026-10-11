@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Explicit observation scope and completeness (2026-10-10)
+
+Completed scope-reduction step 3: shared nested identity matching, recorded
+population completeness, selected-snapshot checks, and freshness diagnostics.
+See [guide](observation-scope.md) and
+[delivery log](../implog/2026_10_10_observation_scope.md).
+
 ### Evidence verdicts and empty observations (2026-10-10)
 
 Completed scope-reduction step 2: structured unknown/error checks, dependency-

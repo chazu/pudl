@@ -6,6 +6,7 @@ Start with the [root README](../README.md) for a project overview.
 
 | Document | Description |
 |----------|-------------|
+| [observation-scope.md](observation-scope.md) | Complete and partial observations, snapshot-scoped checks, freshness, and resource identity |
 | [evidence.md](evidence.md) | Exact evidence, report baselines and witnesses, retention, exports, classification traces, and portable backups |
 | [getting-started.md](getting-started.md) | Install PUDL, create a repository, and find Git inventory drift using PUDL commands |
 | [concepts.md](concepts.md) | Core concepts: identity, schemas, inference, collections, and value wiring |

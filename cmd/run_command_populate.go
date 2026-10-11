@@ -68,7 +68,7 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{
+	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
 		ctx:          ctx,
 		snapshotID:   snapshotID,
 		runID:        runID,

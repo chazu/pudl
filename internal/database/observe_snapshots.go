@@ -17,6 +17,9 @@ import (
 // "the current snapshot for this model" was not a question the catalog could
 // answer, and nothing could be retained or pruned by any policy.
 type ObserveSnapshot struct {
+	Scope    string   `json:"scope,omitempty"`
+	Complete bool     `json:"complete"`
+	Schemas  []string `json:"schemas,omitempty"`
 	// SnapshotID is both this row's key and the id of the catalog collection
 	// entry holding the observed records. One identifier, allocated by the run
 	// before it observes, so a failed ingest can still be named.
@@ -94,7 +97,7 @@ func (c *CatalogDB) ensureObserveSnapshotsTable() error {
 }
 
 const observeSnapshotColumns = `snapshot_id, run_id, model, workspace, origin, source,
-	targets, record_count, created_at, retained`
+	targets, record_count, created_at, retained, scope, complete, schemas`
 
 // RecordObserveSnapshot writes the snapshot contract row.
 func (c *CatalogDB) RecordObserveSnapshot(snapshot ObserveSnapshot) error {
@@ -119,10 +122,10 @@ func recordObserveSnapshotIn(q dbtx, snapshot ObserveSnapshot) error {
 	}
 	_, err = q.Exec(
 		`INSERT INTO observe_snapshots (`+observeSnapshotColumns+`)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snapshot.SnapshotID, snapshot.RunID, snapshot.Model, snapshot.Workspace,
 		snapshot.Origin, snapshot.Source, string(targets), snapshot.RecordCount,
-		formatCatalogTime(createdAt), boolToInt(snapshot.Retained),
+		formatCatalogTime(createdAt), boolToInt(snapshot.Retained), snapshot.Scope, boolToInt(snapshot.Complete), snapshotSchemasJSON(snapshot.Schemas),
 	)
 	if err != nil {
 		return fmt.Errorf("record observe snapshot %q: %w", snapshot.SnapshotID, err)
@@ -273,6 +276,11 @@ func prefixedObserveSnapshotColumns(alias string) string {
 // opening them must not imply a migration merely to inspect existing evidence.
 func (c *CatalogDB) snapshotSelectColumns(alias string) string {
 	columns := prefixedObserveSnapshotColumns(alias)
+	if exists, _ := c.columnExists("observe_snapshots", "scope"); !exists {
+		columns = strings.Replace(columns, alias+".scope", "''", 1)
+		columns = strings.Replace(columns, alias+".complete", "0", 1)
+		columns = strings.Replace(columns, alias+".schemas", "'[]'", 1)
+	}
 	if !c.hasSnapshotPins() {
 		return columns
 	}
@@ -321,11 +329,13 @@ func scanObserveSnapshot(row rowScanner) (ObserveSnapshot, error) {
 		snapshot ObserveSnapshot
 		targets  string
 		retained int
+		complete int
+		schemas  string
 	)
 	err := row.Scan(
 		&snapshot.SnapshotID, &snapshot.RunID, &snapshot.Model, &snapshot.Workspace,
 		&snapshot.Origin, &snapshot.Source, &targets, &snapshot.RecordCount,
-		&snapshot.CreatedAt, &retained,
+		&snapshot.CreatedAt, &retained, &snapshot.Scope, &complete, &schemas,
 	)
 	if err != nil {
 		return ObserveSnapshot{}, err
@@ -336,6 +346,12 @@ func scanObserveSnapshot(row rowScanner) (ObserveSnapshot, error) {
 		}
 	}
 	snapshot.Retained = retained != 0
+	snapshot.Complete = complete != 0
+	if schemas != "" {
+		if err := json.Unmarshal([]byte(schemas), &snapshot.Schemas); err != nil {
+			return ObserveSnapshot{}, err
+		}
+	}
 	return snapshot, nil
 }
 

@@ -47,11 +47,14 @@ type ObserveResult struct {
 // It replaces the positional IngestObserveResults* family, which had reached six
 // parameters and would have taken ten.
 type ObserveIngest struct {
-	Context context.Context
-	Limits  ingestprep.Limits
-	Reader  io.Reader
-	DataDir string
-	Graph   *inference.InheritanceGraph
+	Scope    string
+	Complete bool
+	Schemas  []string
+	Context  context.Context
+	Limits   ingestprep.Limits
+	Reader   io.Reader
+	DataDir  string
+	Graph    *inference.InheritanceGraph
 	// SchemaMappings maps plugin-declared _schema resource types to validated
 	// PUDL semantic schemas. It takes precedence over the legacy naming
 	// convention when present.

@@ -30,6 +30,7 @@ type SchemaSpec struct {
 
 // Registry resolves effective projection specs per schema.
 type Registry struct {
+	allowed  map[string]bool
 	src      redact.Source
 	redactor *redact.Registry
 	mu       sync.Mutex
@@ -52,12 +53,22 @@ func (r *Registry) Schemas() []string {
 	}
 	var out []string
 	for _, name := range r.src.GetAvailableSchemas() {
+		if r.allowed != nil && !r.allowed[schemaname.Normalize(name)] {
+			continue
+		}
 		if spec := r.For(name); spec != nil {
 			out = append(out, schemaname.Normalize(name))
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Subset limits relation ownership to schemas in the selected evidence. Parent
+// metadata remains available to resolve inheritance, but unrelated producers
+// cannot establish coverage or invalidate a scoped check.
+func (r *Registry) Subset(schemas map[string]bool) *Registry {
+	return &Registry{src: r.src, redactor: r.redactor, cache: map[string]*SchemaSpec{}, allowed: schemas}
 }
 
 // For returns schema's effective spec, or nil when its chain declares no facts.

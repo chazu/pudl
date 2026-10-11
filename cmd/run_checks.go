@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/evidence"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -26,6 +28,7 @@ const (
 // `expect: nonempty` checks, which count evidence rather than violations —
 // AdvisoryCount is zero and Count is the full result size.
 type CheckResult struct {
+	Evidence           []evidence.Reference    `json:"evidence,omitempty"`
 	Outcome            string                  `json:"outcome,omitempty"`
 	Diagnostics        []projection.Diagnostic `json:"diagnostics,omitempty"`
 	Expect             string                  `json:"expect,omitempty"`
@@ -44,7 +47,8 @@ type CheckResult struct {
 // checkContext is what a run knows that scopes its checks: the run's own ID,
 // whether it observed anything under that ID, and its `--only` selection.
 type checkContext struct {
-	runID string
+	currentSnapshot string
+	runID           string
 	// fromCatalog marks a replay. A replay observes nothing, so no catalog row
 	// carries its run ID; binding the constraint would make every `expect: empty`
 	// check pass trivially.
@@ -123,17 +127,46 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 		}
 
 		result := CheckResult{Name: c.Name, Query: c.Query, Expect: c.Expect, Severity: c.Severity, Scope: scope, Message: redactSealedText(c.Message, m)}
+		queryDB := db
+		var view *evidence.View
 		if registryErr != nil {
 			result.Diagnostics = []projection.Diagnostic{{Code: "schema_unavailable", Message: registryErr.Error()}}
+		} else if len(c.Evidence) > 0 {
+			result.Scope = "snapshots"
+			constraints = nil // snapshot membership scopes catalog joins as well
+			maxAge, err := parseEvidenceAge(c.MaxAge)
+			if err == nil {
+				view, err = evidence.Open(evalCtx, db, reg, evidence.Request{Selectors: c.Evidence, Current: ctx.currentSnapshot, MaxAge: maxAge})
+			}
+			if err != nil {
+				result.Diagnostics = []projection.Diagnostic{{Code: "evidence_unavailable", Message: err.Error()}}
+			} else {
+				defer view.Close()
+				result.Evidence = view.References
+				result.Diagnostics = view.Diagnostics
+				if view.DB != nil {
+					queryDB = view.DB
+					result.Diagnostics = append(result.Diagnostics, projection.CheckDiagnostics(queryDB, reg.Subset(view.Schemas), rules, c.Query, projection.SyncReport{}, nil)...)
+				}
+			}
+		} else if c.MaxAge != "" {
+			result.Diagnostics = []projection.Diagnostic{{Code: "evidence_scope_required", Message: "max_age requires explicit evidence selectors"}}
 		} else {
 			result.Diagnostics = projection.CheckDiagnostics(db, reg, rules, c.Query, syncReport, syncErr)
+		}
+		for i := range result.Diagnostics {
+			result.Diagnostics[i].Message = redactSealedText(result.Diagnostics[i].Message, m)
 		}
 		if len(result.Diagnostics) > 0 {
 			result.Outcome = "unknown"
 			results = append(results, result)
 			continue
 		}
-		tuples, err := datalog.EvaluateContext(evalCtx, db, rules, c.Query, constraints, datalog.TemporalScope{}, datalog.EvalOptions{})
+		tuples, err := datalog.EvaluateContext(evalCtx, queryDB, rules, c.Query, constraints, datalog.TemporalScope{}, datalog.EvalOptions{})
+		if view != nil {
+			view.Close()
+			view = nil
+		}
 		if err != nil {
 			result.Outcome = "error"
 			result.Diagnostics = []projection.Diagnostic{{Code: "evaluation_error", Message: err.Error()}}
@@ -143,20 +176,24 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 
 		gating, advisory := partitionCheckTuples(tuples, c.Expect, ctx.scope)
 		witnesses, truncated := checkWitnesses(tuples, c.Expect, ctx.scope, m)
-		results = append(results, CheckResult{
-			Outcome: checkOutcome(checkPasses(c.Expect, gating)),
-			Expect:  c.Expect, Witnesses: witnesses, WitnessesTruncated: truncated,
-			Name:          c.Name,
-			Query:         c.Query,
-			Severity:      c.Severity,
-			Count:         gating,
-			AdvisoryCount: advisory,
-			Scope:         scope,
-			Passed:        checkPasses(c.Expect, gating),
-			Message:       redactSealedText(c.Message, m),
-		})
+		result.Passed = checkPasses(c.Expect, gating)
+		result.Outcome = checkOutcome(result.Passed)
+		result.Count, result.AdvisoryCount = gating, advisory
+		result.Witnesses, result.WitnessesTruncated = witnesses, truncated
+		results = append(results, result)
 	}
 	return results, nil
+}
+
+func parseEvidenceAge(value string) (time.Duration, error) {
+	if value == "" {
+		return 0, nil
+	}
+	age, err := time.ParseDuration(value)
+	if err != nil || age <= 0 {
+		return 0, fmt.Errorf("max_age must be a positive duration")
+	}
+	return age, nil
 }
 
 func checkOutcome(passed bool) string {

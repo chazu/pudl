@@ -272,3 +272,10 @@ between an observation and an answer that a human or agent can justify.
   evidence failures produce unknown/error check outcomes with durable structured
   diagnostics. Full cmd/projection/acute tests and focused health regressions
   passed. New standalone reports are version 2; old reports remain readable.
+- Step 3 implemented: nested identity extraction is shared; migration 25 records
+  explicit scope, completeness, and schema coverage. Checks can select snapshots
+  with an age policy, evaluated in an isolated disk-backed view. Latest-known
+  facts remain historical knowledge; selected complete inventories establish
+  scoped absence without deleting them. Cmd, database, acute, systemmodel,
+  bridge, and bundle tests passed, including disappearance/reappearance,
+  partial/empty/failed collection, freshness, and owner-ambiguity regressions.

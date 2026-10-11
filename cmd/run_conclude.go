@@ -104,10 +104,20 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 		if evalCtx == nil {
 			evalCtx = context.Background()
 		}
+		currentSnapshot := flags.catalogScope
+		if !flags.fromCatalog {
+			if report.Populate != nil {
+				currentSnapshot = report.Populate.SnapshotID
+			}
+			if report.Drift != nil && report.Drift.SnapshotID != "" {
+				currentSnapshot = report.Drift.SnapshotID
+			}
+		}
 		results, err := runChecksContext(evalCtx, cat, in.effective, in.modelDir, checkContext{
-			runID:       in.runID,
-			fromCatalog: flags.fromCatalog,
-			scope:       acute.NewTupleScope(in.model, in.effective),
+			currentSnapshot: currentSnapshot,
+			runID:           in.runID,
+			fromCatalog:     flags.fromCatalog,
+			scope:           acute.NewTupleScope(in.model, in.effective),
 		})
 		if err != nil {
 			return runFinalization{runErr: runErr}, err

@@ -12,6 +12,7 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/inference"
 )
 
@@ -41,7 +42,7 @@ func modelResourceDefs(desired []map[string]any, identity identityResolver) []st
 		matched := false
 		if identity != nil {
 			for _, f := range identity(schema) {
-				if v, ok := d[f]; ok {
+				if v, ok := resolvedIdentityValue(d, f); ok {
 					add(v)
 					matched = true
 				}
@@ -237,4 +238,9 @@ func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope
 		SnapshotID: observed.snapshotID,
 		ObservedAt: observed.observedAt,
 	}, nil
+}
+
+func resolvedIdentityValue(record map[string]any, field string) (any, bool) {
+	values, err := identity.ExtractFieldValues(record, []string{field})
+	return values[field], err == nil
 }
