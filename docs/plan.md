@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Scope reduction step 1 (2026-10-10)
+
+Removed shell-profile management and guessed dependency derivation. Migration 24
+preserves dependency history and other sources. `list --fancy` stays supported.
+See [delivery log](../implog/2026_10_10_scope_reduction_step1.md).
+
 ### Scope reduction and improvement sequence documented (2026-10-10)
 
 Recorded the project assessment as a proposal covering six removal candidates,

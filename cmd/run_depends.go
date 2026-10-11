@@ -20,7 +20,6 @@ const modelDependsRelation = "model_depends_on"
 // declared reconcile and the Phase-2 derived reconcile never clobber each
 // other: each only manages edges carrying its own source.
 func declaredSource(model string) string { return "model:" + model }
-func derivedSource(model string) string  { return "derived:" + model }
 func bindingSource(model string) string  { return "binding:" + model }
 
 // declaredDepsOf canonicalizes a model's declared depends_on into a set of
