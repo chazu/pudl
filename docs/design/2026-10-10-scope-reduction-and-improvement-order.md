@@ -300,3 +300,7 @@ between an observation and an answer that a human or agent can justify.
   journey passed, including preservation of the original report. Inventory drift
   now treats unobserved records in partial inventories as uncertain. Live GCP
   access and an actual human usability trial remain separate qualification.
+- Step 8 implemented: Git/editor/CUE wrappers and their unused implementation
+  were removed, with native replacements and source-path discovery documented.
+  Retired-command tests and the native CLI smoke passed. `list --fancy` and its
+  dependencies remain available as explicitly requested.

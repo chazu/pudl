@@ -289,7 +289,7 @@ COMMANDS
   pudl schema show <name>            Display schema CUE source
   pudl schema new --from <id> --path <package>/#<Definition>
   pudl schema add <name> <file>      Add a schema file
-  pudl schema edit <name>            Edit schema in $EDITOR
+  Open the source path from pudl schema show NAME --json in your editor.
   pudl schema reinfer                Re-run inference on all entries
 
 SCHEMA INFERENCE
@@ -309,22 +309,22 @@ SCHEMA INFERENCE
 
 VERSION CONTROL
 
-  The schema repository is git-tracked:
+  Use Git from the owning repository and stage only your intended files:
 
-  pudl schema status       Show uncommitted schema changes
-  pudl schema commit       Commit schema changes
-  pudl schema log          Show schema change history
+  git status       Show uncommitted schema changes
+  git commit       Commit schema changes
+  git log          Show schema change history
 
   This gives you a full audit trail of schema evolution.
 
 MODULES
 
-  pudl supports CUE module dependencies:
+  Run native CUE commands from the schema path in pudl config --paths --json:
 
-  pudl module list         List current dependencies
-  pudl module add <mod>    Add a third-party module
-  pudl module tidy         Fetch and update dependencies
-  pudl module info         Show module information
+  cue mod edit --json         List current dependencies
+  cue mod get <mod>    Add a third-party module
+  cue mod tidy         Fetch and update dependencies
+  cue mod edit --json         Show module information
 
 SEE ALSO
 
@@ -625,8 +625,8 @@ DISTRIBUTION
     mu plugin info <name> --json
 
   PUDL schemas and model contracts remain CUE modules:
-    pudl module add <module@version>
-    pudl module tidy
+    cue mod get <module@version>
+    cue mod tidy
 
   Compose the two by declaring the resolved mu plugin in a model's plugins:
   block and keeping the PUDL schema/model in the CUE module. Do not create a

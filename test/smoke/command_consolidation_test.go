@@ -70,16 +70,9 @@ func TestSmoke_ConsolidatedCommandSurface(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(cli("--json", "doctor"), &doctor))
 	require.True(t, doctor.OK)
-	for _, args := range [][]string{
-		{"schema", "status", "--help"}, {"schema", "commit", "--help"},
-		{"schema", "log", "--help"}, {"schema", "edit", "--help"},
-		{"module", "add", "--help"}, {"module", "tidy", "--help"},
-		{"module", "list", "--help"}, {"module", "info", "--help"},
-	} {
-		cli(args...)
-	}
 	// Old commands are removed, not retained as another discoverable surface.
 	for _, args := range [][]string{
+		{"setup"}, {"module", "list"}, {"schema", "status"}, {"schema", "commit"}, {"schema", "log"}, {"schema", "edit", "x"},
 		{"catalog"}, {"repo", "init"}, {"verify"}, {"validate", "--all"},
 		{"model", "describe", "git-inventory"}, {"run-set", "git-inventory"},
 	} {

@@ -70,7 +70,7 @@ global catalogs are independent; mutable state never falls back across them.
 - `pudl schema list|show <name>` — browse schemas
 - `pudl schema new --from <id> --path <package>/#<Definition>` — generate a schema from data
 - `pudl schema add` — register a definition (e.g. a `#SystemModel`)
-- `pudl module add <module@version>` — add CUE module deps
+- `cue mod get <module@version>` — add CUE module deps
 
 ### Facts
 - `pudl facts` — query the bitemporal fact store

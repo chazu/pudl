@@ -199,8 +199,8 @@ func runSchemaNewCommand() error {
 	fmt.Fprintln(outw())
 	fmt.Fprintln(outw(), "💡 Next steps:")
 	fmt.Fprintf(outw(), "   - Inspect the schema: pudl schema show %s\n", schemaname.Format(packagePath, result.DefinitionName))
-	fmt.Fprintf(outw(), "   - Edit the schema: pudl schema edit %s\n", schemaname.Format(packagePath, result.DefinitionName))
-	fmt.Fprintf(outw(), "   - Commit changes: pudl schema commit -m \"Add %s schema\"\n", schemaname.Format(packagePath, result.DefinitionName))
+	fmt.Fprintf(outw(), "   - Open in your editor: %s\n", result.FilePath)
+	fmt.Fprintf(outw(), "   - Stage the intended files and use git commit -m \"Add %s schema\"\n", schemaname.Format(packagePath, result.DefinitionName))
 
 	return nil
 }
@@ -332,11 +332,11 @@ func runSmartCollectionGeneration(catalogDB *database.CatalogDB, generator *sche
 	fmt.Fprintln(outw())
 	fmt.Fprintln(outw(), "💡 Next steps:")
 	fmt.Fprintf(outw(), "   - Inspect the collection schema: pudl schema show %s\n", schemaname.Format(packagePath, definitionName))
-	fmt.Fprintf(outw(), "   - Edit the collection schema: pudl schema edit %s\n", schemaname.Format(packagePath, definitionName))
+	fmt.Fprintf(outw(), "   - Find the source file with: pudl schema show %s --json\n", schemaname.Format(packagePath, definitionName))
 	if len(result.NewItemSchemas) > 0 {
 		fmt.Fprintf(outw(), "   - Edit item schemas as needed\n")
 	}
-	fmt.Fprintf(outw(), "   - Commit changes: pudl schema commit -m \"Add %s collection schema\"\n", schemaname.Format(packagePath, definitionName))
+	fmt.Fprintf(outw(), "   - Stage the intended files and use git commit -m \"Add %s collection schema\"\n", schemaname.Format(packagePath, definitionName))
 
 	return nil
 }

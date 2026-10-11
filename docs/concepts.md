@@ -246,4 +246,5 @@ The `pudl doctor` command runs health checks on your workspace, including:
 │   └── definitions/               # Named definition instances
 ```
 
-The schema directory is a git repository -- `pudl schema status`, `pudl schema commit`, and `pudl schema log` manage its history.
+Schema files use ordinary Git history. Use native Git commands from their owning
+repository; `pudl config --paths --json` shows the active paths.

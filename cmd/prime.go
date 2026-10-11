@@ -93,7 +93,7 @@ pudl doctor --json
 Formats and schemas are inferred on import. --origin is an explicit list filter.
 Saved Mu observations are ingested with pudl mu ingest-observe; replay requires
 run --from-catalog --catalog-scope <snapshot-or-origin> and remains unverified.
-Schema/Git and module/CUE helpers are available through their command groups.
+Use Git, your editor, and cue on the paths from pudl config --paths --json.
 
 ## Generic facts and rules
 
