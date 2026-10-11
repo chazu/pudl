@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Native tool wrappers retired and fancy retained (2026-10-10)
+
+Completed scope-reduction step 8: removed Git/editor/CUE command wrappers and
+documented native equivalents. The interactive list and its dependencies remain.
+See [delivery log](../implog/2026_10_10_native_tool_wrappers.md).
+
 ### Daily evidence investigation workflow (2026-10-10)
 
 Completed scope-reduction step 7: bundled GCP fixture/live models, payload

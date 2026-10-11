@@ -66,11 +66,6 @@ These flags apply to every command.
     - [pudl model populator new](#pudl-model-populator-new) — Scaffold an #EweTarget populator
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
-- [pudl module](#pudl-module) — Manage CUE module dependencies
-  - [pudl module add](#pudl-module-add) — Add a third-party module dependency
-  - [pudl module info](#pudl-module-info) — Show module information
-  - [pudl module list](#pudl-module-list) — List current module dependencies
-  - [pudl module tidy](#pudl-module-tidy) — Fetch and update module dependencies
 - [pudl mu](#pudl-mu) — Bridge commands between pudl and the mu execution layer
   - [pudl mu ingest-manifest](#pudl-mu-ingest-manifest) — Ingest mu build manifest into the catalog
   - [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
@@ -87,15 +82,11 @@ These flags apply to every command.
   - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
 - [pudl schema](#pudl-schema) — Manage CUE schemas for data validation
   - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
-  - [pudl schema commit](#pudl-schema-commit) — Commit schema changes to version control
-  - [pudl schema edit](#pudl-schema-edit) — Open a schema file in your editor
   - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
-  - [pudl schema log](#pudl-schema-log) — Show commit history of schema changes
   - [pudl schema migrate](#pudl-schema-migrate) — Migrate catalog schema names to canonical format
   - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
   - [pudl schema reinfer](#pudl-schema-reinfer) — Re-run schema inference on existing catalog entries
   - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
-  - [pudl schema status](#pudl-schema-status) — Show uncommitted changes in the schema repository
 - [pudl show](#pudl-show) — Show detailed information about a specific data entry
 - [pudl snapshot](#pudl-snapshot) — Inspect and retain observation snapshots
   - [pudl snapshot current](#pudl-snapshot-current) — Show the newest observation snapshot for a model
@@ -1333,102 +1324,6 @@ their final concrete values are validated again when pudl runs them.
 Models with plain bindings are valid before their catalog values exist; the
 resolved scalars and final concrete model are validated again at run time.
 
-## pudl module
-
-Manage CUE module dependencies
-
-```text
-Manage CUE module dependencies for PUDL schemas.
-
-This command provides utilities for managing third-party CUE modules
-that provide schemas for common data formats like Kubernetes, AWS, etc.
-
-Examples:
-    pudl module tidy     # Fetch and update module dependencies
-    pudl module list     # List current module dependencies
-    pudl module info     # Show module information
-```
-
-Subcommands:
-
-- [pudl module add](#pudl-module-add) — Add a third-party module dependency
-- [pudl module info](#pudl-module-info) — Show module information
-- [pudl module list](#pudl-module-list) — List current module dependencies
-- [pudl module tidy](#pudl-module-tidy) — Fetch and update module dependencies
-
-## pudl module add
-
-Add a third-party module dependency
-
-```text
-pudl module add <module@version>
-```
-
-```text
-Add a third-party CUE module dependency to the current module.
-
-This command modifies the cue.mod/module.cue file to include the specified
-dependency and then runs 'cue mod tidy' to fetch it.
-
-Examples:
-    pudl module add cue.dev/x/k8s.io@v0
-    pudl module add github.com/example/schemas@v1
-```
-
-## pudl module info
-
-Show module information
-
-```text
-pudl module info
-```
-
-```text
-Show information about the current CUE module.
-
-This command displays:
-- Module path and version
-- CUE language version
-- Source information
-- Dependencies count
-```
-
-## pudl module list
-
-List current module dependencies
-
-```text
-pudl module list
-```
-
-```text
-List the current CUE module dependencies defined in cue.mod/module.cue.
-
-This command shows:
-- Module path and version
-- Dependency versions
-- Module description
-```
-
-## pudl module tidy
-
-Fetch and update module dependencies
-
-```text
-pudl module tidy
-```
-
-```text
-Fetch and update CUE module dependencies.
-
-This command runs 'cue mod tidy' in the schema directory to:
-- Download missing dependencies
-- Update the module.cue file with resolved versions
-- Clean up unused dependencies
-
-This is equivalent to running 'cue mod tidy' manually in the schema directory.
-```
-
 ## pudl mu
 
 Bridge commands between pudl and the mu execution layer
@@ -2038,46 +1933,23 @@ pudl schema
 ```
 
 ```text
-Manage CUE schemas used for data validation and organization in PUDL.
+Manage CUE schemas for import validation and resource identity.
 
-Schemas are organized by packages (aws, k8s, unknown, etc.) and stored in the
-active schema repository: .pudl/schema/ inside an initialized repository, or
-~/.pudl/schema/ in global mode. Each CUE file defines structure and validation
-rules for imported data.
-
-Available subcommands:
-- list:    Show available schemas organized by package
-- add:     Add a new schema file to the repository
-- new:     Generate a new schema from imported data
-- show:    Display the contents of a schema
-- edit:    Open a schema file in your editor
-- status:  Show uncommitted changes in the schema repository
-- commit:  Commit schema changes to version control
-- log:     Show commit history of schema changes
-- reinfer: Re-run schema inference on existing entries
-- migrate: Migrate schema names to canonical format
-
-Examples:
-    pudl schema list                           # List all schemas
-    pudl schema list --package aws             # List schemas in aws package
-    pudl schema add aws.rds-instance my.cue    # Add new schema to aws package
-    pudl schema status                         # Show uncommitted changes
-    pudl schema commit -m "Add RDS schema"     # Commit changes
-    pudl schema log                            # Show recent commits
+Schemas come from the project and its explicit vendored dependencies, or the
+personal workspace selected by --global. Use list/show for discovery, add/new
+for authoring, and reinfer/migrate for reviewed maintenance. Inspect physical
+paths with pudl config --paths --json. Git, your editor, and cue manage the files
+directly; see docs/retired-commands.md for replacements.
 ```
 
 Subcommands:
 
 - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
-- [pudl schema commit](#pudl-schema-commit) — Commit schema changes to version control
-- [pudl schema edit](#pudl-schema-edit) — Open a schema file in your editor
 - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
-- [pudl schema log](#pudl-schema-log) — Show commit history of schema changes
 - [pudl schema migrate](#pudl-schema-migrate) — Migrate catalog schema names to canonical format
 - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
 - [pudl schema reinfer](#pudl-schema-reinfer) — Re-run schema inference on existing catalog entries
 - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
-- [pudl schema status](#pudl-schema-status) — Show uncommitted changes in the schema repository
 
 ## pudl schema add
 
@@ -2108,56 +1980,6 @@ Examples:
     pudl schema add custom.api-response api.cue
 ```
 
-## pudl schema commit
-
-Commit schema changes to version control
-
-```text
-pudl schema commit [flags]
-```
-
-```text
-Commit all pending schema changes to the git repository.
-
-This command will:
-1. Stage all modified, added, and deleted schema files
-2. Create a commit with the provided message
-3. Update the schema repository history
-
-A commit message is required and should describe the changes being made.
-
-Examples:
-    pudl schema commit -m "Add RDS instance schema"
-    pudl schema commit -m "Update EC2 schema with new fields"
-    pudl schema commit -m "Remove deprecated K8s schemas"
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-m`, `--message` | string |  | Commit message (required) |
-| `-v`, `--verbose` | bool |  | Show detailed commit information |
-
-## pudl schema edit
-
-Open a schema file in your editor
-
-```text
-pudl schema edit <path>
-```
-
-```text
-Open a schema file in your configured editor.
-
-The path can optionally include a definition name to position the cursor at that
-definition (supported for vim/nvim editors).
-
-Examples:
-    pudl schema edit aws/ec2:#Instance    # Opens the file and positions at #Instance if possible
-    pudl schema edit aws/ec2              # Opens the aws/ec2.cue file
-```
-
 ## pudl schema list
 
 List schema definitions and resource metadata
@@ -2183,38 +2005,6 @@ Full `package.#Definition` names can be passed directly to `schema show`.
 Workspace definitions shadow global definitions. JSON includes source paths,
 built-in status, and available `_pudl` metadata; verbose text includes identity
 fields, tracked fields, and list type information.
-
-## pudl schema log
-
-Show commit history of schema changes
-
-```text
-pudl schema log [flags]
-```
-
-```text
-Show the commit history of the schema repository.
-
-This command displays recent commits with information about:
-- Commit hash (short and full)
-- Author name
-- Commit date and time
-- Commit message
-
-Use --limit to control how many commits to show.
-
-Examples:
-    pudl schema log                     # Show recent commits (default: 10)
-    pudl schema log --limit 20          # Show last 20 commits
-    pudl schema log --verbose           # Show detailed commit information
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--limit` | int | `10` | Number of commits to show |
-| `-v`, `--verbose` | bool |  | Show detailed commit information |
 
 ## pudl schema migrate
 
@@ -2355,34 +2145,6 @@ Examples:
     pudl schema show pudl/core.#Item
     pudl s show aws/ec2:#Instance
 ```
-
-## pudl schema status
-
-Show uncommitted changes in the schema repository
-
-```text
-pudl schema status [flags]
-```
-
-```text
-Show the current status of the schema repository, including:
-- Modified files
-- Added files
-- Deleted files
-- Untracked files
-
-This command helps you see what schema changes are pending before committing them.
-
-Examples:
-    pudl schema status                  # Show all uncommitted changes
-    pudl schema status --verbose        # Show detailed file status
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-v`, `--verbose` | bool |  | Show detailed file status |
 
 ## pudl show
 

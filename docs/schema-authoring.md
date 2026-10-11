@@ -295,9 +295,9 @@ The global schema directory is its own Git repository. Repository-local schemas
 are versioned by the enclosing project repository. Use PUDL's built-in commands:
 
 ```bash
-pudl schema status                     # Show uncommitted changes
-pudl schema commit -m "Add EC2 schema" # Commit
-pudl schema log                        # View history
+git status                     # Show uncommitted changes
+git commit -m "Add EC2 schema" # Commit
+git log                        # View history
 ```
 
 ## After Adding or Changing Schemas
@@ -362,7 +362,7 @@ After adding this file:
 
 ```bash
 pudl schema add myapi.users users.cue
-pudl schema commit -m "Add user schemas"
+git commit -m "Add user schemas"
 pudl schema reinfer  # Re-classify existing imports
 ```
 

@@ -163,8 +163,8 @@ The overlapping command paths have been consolidated. Update existing scripts:
 | `pudl run-set report/resume/reject ID` | `pudl run report/resume/reject ID` |
 | `pudl list --all-workspaces` | `pudl list` (active catalog, explicit `--origin` filter) |
 
-Former paths are removed rather than retained as aliases. Schema/Git and
-module/CUE helper commands remain available. Standalone runs and exact sets
+Former paths are removed rather than retained as aliases. Git/editor/CUE wrappers
+are also retired; see [native replacements](docs/retired-commands.md). Standalone runs and exact sets
 retain their existing evidence-selection and approval semantics; shared report
 and approval commands route by the stored operation ID.
 

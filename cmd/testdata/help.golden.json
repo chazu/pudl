@@ -1312,114 +1312,6 @@
       ]
     },
     {
-      "use": "module",
-      "short": "Manage CUE module dependencies",
-      "long": "Manage CUE module dependencies for PUDL schemas.\n\nThis command provides utilities for managing third-party CUE modules\nthat provide schemas for common data formats like Kubernetes, AWS, etc.\n\nExamples:\n    pudl module tidy     # Fetch and update module dependencies\n    pudl module list     # List current module dependencies\n    pudl module info     # Show module information",
-      "flags": [
-        {
-          "name": "global",
-          "usage": "Use the personal ~/.pudl workspace explicitly",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "json",
-          "usage": "Output results as JSON for scripting",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        }
-      ],
-      "subcommands": [
-        {
-          "use": "add \u003cmodule@version\u003e",
-          "short": "Add a third-party module dependency",
-          "long": "Add a third-party CUE module dependency to the current module.\n\nThis command modifies the cue.mod/module.cue file to include the specified\ndependency and then runs 'cue mod tidy' to fetch it.\n\nExamples:\n    pudl module add cue.dev/x/k8s.io@v0\n    pudl module add github.com/example/schemas@v1",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "info",
-          "short": "Show module information",
-          "long": "Show information about the current CUE module.\n\nThis command displays:\n- Module path and version\n- CUE language version\n- Source information\n- Dependencies count",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "list",
-          "short": "List current module dependencies",
-          "long": "List the current CUE module dependencies defined in cue.mod/module.cue.\n\nThis command shows:\n- Module path and version\n- Dependency versions\n- Module description",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "tidy",
-          "short": "Fetch and update module dependencies",
-          "long": "Fetch and update CUE module dependencies.\n\nThis command runs 'cue mod tidy' in the schema directory to:\n- Download missing dependencies\n- Update the module.cue file with resolved versions\n- Clean up unused dependencies\n\nThis is equivalent to running 'cue mod tidy' manually in the schema directory.",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        }
-      ]
-    },
-    {
       "use": "mu",
       "short": "Bridge commands between pudl and the mu execution layer",
       "long": "Commands that move data across the pudl/mu boundary.\n\npudl knows; mu acts. These subcommands ingest mu's execution results back into\nthe catalog.\n\nAvailable subcommands:\n- ingest-observe:  Store mu observe results as live catalog state\n- ingest-manifest: Record a mu build manifest in the catalog\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    mu build --emit-manifest | pudl mu ingest-manifest",
@@ -2041,7 +1933,8 @@
     {
       "use": "schema",
       "short": "Manage CUE schemas for data validation",
-      "long": "Manage CUE schemas used for data validation and organization in PUDL.\n\nSchemas are organized by packages (aws, k8s, unknown, etc.) and stored in the\nactive schema repository: .pudl/schema/ inside an initialized repository, or\n~/.pudl/schema/ in global mode. Each CUE file defines structure and validation\nrules for imported data.\n\nAvailable subcommands:\n- list:    Show available schemas organized by package\n- add:     Add a new schema file to the repository\n- new:     Generate a new schema from imported data\n- show:    Display the contents of a schema\n- edit:    Open a schema file in your editor\n- status:  Show uncommitted changes in the schema repository\n- commit:  Commit schema changes to version control\n- log:     Show commit history of schema changes\n- reinfer: Re-run schema inference on existing entries\n- migrate: Migrate schema names to canonical format\n\nExamples:\n    pudl schema list                           # List all schemas\n    pudl schema list --package aws             # List schemas in aws package\n    pudl schema add aws.rds-instance my.cue    # Add new schema to aws package\n    pudl schema status                         # Show uncommitted changes\n    pudl schema commit -m \"Add RDS schema\"     # Commit changes\n    pudl schema log                            # Show recent commits",
+      "long": "Manage CUE schemas for import validation and resource identity.\n\nSchemas come from the project and its explicit vendored dependencies, or the\npersonal workspace selected by --global. Use list/show for discovery, add/new\nfor authoring, and reinfer/migrate for reviewed maintenance. Inspect physical\npaths with pudl config --paths --json. Git, your editor, and cue manage the files\ndirectly; see docs/retired-commands.md for replacements.",
+      "args": "custom",
       "flags": [
         {
           "name": "global",
@@ -2063,62 +1956,6 @@
           "use": "add \u003cpackage\u003e.\u003cname\u003e \u003ccue-file\u003e",
           "short": "Add a new schema to the repository",
           "long": "Add a new CUE schema file to the schema repository.\n\nThe schema name should be in the format 'package.name' where:\n- package: The schema package (aws, k8s, custom, etc.)\n- name: The schema name within the package\n\nThe CUE file will be validated before adding to ensure:\n- Valid CUE syntax\n- Proper package declaration\n- Required metadata fields (_identity, _tracked, _version)\n\nThe schema file will be copied to the appropriate package directory and\nadded to the git working directory (not automatically committed).\n\nExamples:\n    pudl schema add aws.rds-instance rds-schema.cue\n    pudl schema add k8s.deployment my-deployment.cue\n    pudl schema add custom.api-response api.cue",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "commit",
-          "short": "Commit schema changes to version control",
-          "long": "Commit all pending schema changes to the git repository.\n\nThis command will:\n1. Stage all modified, added, and deleted schema files\n2. Create a commit with the provided message\n3. Update the schema repository history\n\nA commit message is required and should describe the changes being made.\n\nExamples:\n    pudl schema commit -m \"Add RDS instance schema\"\n    pudl schema commit -m \"Update EC2 schema with new fields\"\n    pudl schema commit -m \"Remove deprecated K8s schemas\"",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "message",
-              "shorthand": "m",
-              "usage": "Commit message (required)",
-              "type": "string"
-            },
-            {
-              "name": "verbose",
-              "shorthand": "v",
-              "usage": "Show detailed commit information",
-              "type": "bool",
-              "default": "false"
-            }
-          ]
-        },
-        {
-          "use": "edit \u003cpath\u003e",
-          "short": "Open a schema file in your editor",
-          "long": "Open a schema file in your configured editor.\n\nThe path can optionally include a definition name to position the cursor at that\ndefinition (supported for vim/nvim editors).\n\nExamples:\n    pudl schema edit aws/ec2:#Instance    # Opens the file and positions at #Instance if possible\n    pudl schema edit aws/ec2              # Opens the aws/ec2.cue file",
           "args": "custom",
           "flags": [
             {
@@ -2166,40 +2003,6 @@
               "name": "verbose",
               "shorthand": "v",
               "usage": "Show paths and schema metadata",
-              "type": "bool",
-              "default": "false"
-            }
-          ]
-        },
-        {
-          "use": "log",
-          "short": "Show commit history of schema changes",
-          "long": "Show the commit history of the schema repository.\n\nThis command displays recent commits with information about:\n- Commit hash (short and full)\n- Author name\n- Commit date and time\n- Commit message\n\nUse --limit to control how many commits to show.\n\nExamples:\n    pudl schema log                     # Show recent commits (default: 10)\n    pudl schema log --limit 20          # Show last 20 commits\n    pudl schema log --verbose           # Show detailed commit information",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "limit",
-              "usage": "Number of commits to show",
-              "type": "int",
-              "default": "10"
-            },
-            {
-              "name": "verbose",
-              "shorthand": "v",
-              "usage": "Show detailed commit information",
               "type": "bool",
               "default": "false"
             }
@@ -2348,34 +2151,6 @@
               "type": "bool",
               "default": "false",
               "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "status",
-          "short": "Show uncommitted changes in the schema repository",
-          "long": "Show the current status of the schema repository, including:\n- Modified files\n- Added files\n- Deleted files\n- Untracked files\n\nThis command helps you see what schema changes are pending before committing them.\n\nExamples:\n    pudl schema status                  # Show all uncommitted changes\n    pudl schema status --verbose        # Show detailed file status",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "verbose",
-              "shorthand": "v",
-              "usage": "Show detailed file status",
-              "type": "bool",
-              "default": "false"
             }
           ]
         }

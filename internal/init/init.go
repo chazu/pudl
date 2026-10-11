@@ -173,17 +173,17 @@ This directory contains CUE schema definitions for your PUDL data lake, organize
 This repository includes access to curated third-party schemas:
 
 - **cue.dev/x/k8s.io** - Complete Kubernetes API schemas for all resource types (included by default)
-- Additional modules can be added using ` + "`pudl module add <module>`" + ` or ` + "`cue mod get <module>`" + `
+- Additional modules can be added using ` + "`cue mod get <module>`" + ` from the schema directory
 
 ## Usage
 
 ### Schema Management
 - Add new schemas: ` + "`pudl schema add <name> <cue-file>`" + `
 - List schemas: ` + "`pudl schema list`" + `
-- Commit changes: ` + "`pudl schema commit -m \"message\"`" + `
+- Commit changes: ` + "`git commit -m \"message\"`" + `
 
 ### Module Management
-- Add dependencies: ` + "`cue mod tidy`" + ` (or ` + "`pudl module add <module>`" + ` when available)
+- Add dependencies: ` + "`cue mod tidy`" + ` (or ` + "`cue mod get <module>`" + ` when available)
 - Update dependencies: ` + "`cue mod tidy`" + `
 
 ## Getting Started
@@ -311,7 +311,7 @@ description: "PUDL Schema Repository - CUE schemas for data lake validation and 
 	k8sExampleContent := `package examples
 
 // Import official Kubernetes schemas from cue.dev/x/k8s.io
-// These are fetched automatically by 'cue mod tidy' or 'pudl module tidy'
+// These are fetched automatically by 'cue mod tidy'
 import (
 	apps "cue.dev/x/k8s.io/api/apps/v1"
 	core "cue.dev/x/k8s.io/api/core/v1"
@@ -416,7 +416,7 @@ exampleDeployment: #BasicKubernetesDeployment & {
 	gitlabExampleContent := `package examples
 
 // Import GitLab CI/CD schemas from cue.dev/x/gitlab
-// These are fetched automatically by 'cue mod tidy' or 'pudl module tidy'
+// These are fetched automatically by 'cue mod tidy'
 import "cue.dev/x/gitlab/gitlabci"
 
 // Example: GitLab CI/CD Pipeline with PUDL metadata

@@ -41,7 +41,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - **Schema Inference**: Automatic CUE-based schema detection using heuristics and CUE unification
 - **Schema Generation**: `pudl schema new` generates CUE schemas from imported data
 - **Schema Name Normalization**: Canonical `<package>.#<Definition>` format
-- **Git Integration**: `pudl schema status/commit/log` for version-controlled schemas
+- **Version control**: use Git directly on project schema files
 - **Bootstrap Schemas**: Embedded CUE files (`pudl/core.#Item`, `pudl/core.#Collection`)
 
 ### Data Management
@@ -91,7 +91,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl delete` -- Remove catalog entries
 - `pudl doctor` -- Workspace health, schema validation, and inference stability
 - `pudl schema list` -- Browse registered schema types
-- `pudl schema *` -- Full schema lifecycle (list, add, new, show, edit, reinfer, migrate, status, commit, log)
+- `pudl schema *` -- Full schema lifecycle (list, add, new, show, reinfer, migrate)
 - `pudl model list/show/validate` -- Inspect and validate registered system models
 - `pudl model new` / `pudl model populator add|new` -- Scaffold models and populators
 - `pudl model deps` -- Refresh and show the cross-model dependency graph
@@ -102,7 +102,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl status` -- Read recorded model/resource convergence status
 - `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
 - `pudl mu ingest-manifest` -- Ingest mu build manifests
-- `pudl module` -- Manage CUE module dependencies
+- CUE module dependencies are managed with the native `cue mod` commands
 - `pudl migrate` -- Run database migrations
 - `pudl facts add` -- Record generic assertions under an explicit relation
 - `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
@@ -118,7 +118,7 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 ### Datalog Evaluator
 - **`pudl query`**: Semi-naive bottom-up evaluation over facts and catalog entries as EDB
 - **CUE-defined rules**: `#Rule` values with head/body structure, `$`-prefixed variables, stored in workspace-scoped rule directories
-- **`pudl rule add`**: Validates and installs rule files with workspace scoping (repo-scoped shadows global)
+- **`pudl rule add`**: Validates and installs rule files with workspace scoping (project rules precede explicitly vendored dependencies)
 - **Evaluation**: SQL joins for non-recursive queries and semi-naive SQLite evaluation for recursive rules
 
 ### Technology Stack

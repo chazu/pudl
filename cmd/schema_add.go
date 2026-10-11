@@ -137,7 +137,7 @@ func runSchemaAddCommand(args []string) error {
 	if len(references) == 1 {
 		fmt.Fprintln(outw(), "   - Import data using this schema: pudl import --path <file> --schema "+references[0])
 	}
-	fmt.Fprintln(outw(), "   - Commit schema changes: pudl schema commit -m \"Add schema file "+filepath.Join(packageName, schemaName+".cue")+"\"")
+	fmt.Fprintln(outw(), "   - Stage the intended schema files and use git commit -m \"Add schema file "+filepath.Join(packageName, schemaName+".cue")+"\"")
 
 	return nil
 }
