@@ -432,8 +432,11 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		}
 		// A replay is not an observation of the live system, so its verdict
 		// cannot promote resources or write a clean status.
-		res.Verified = !flags.fromCatalog
+		res.Verified = !flags.fromCatalog && !res.Uncertain
 		report.Drift = &res
+		if res.Uncertain {
+			return fmt.Errorf("incomplete inventory cannot establish absence; collect and select an explicitly complete snapshot"), nil
+		}
 	case len(model.Desired) > 0:
 		// Differential: live observe with desired-as-sources (k8s-style).
 		res, err := runDrift(in.cat, in.mu, model, in.muRoot, in.modelDir, in.session.RunID)

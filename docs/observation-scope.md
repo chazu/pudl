@@ -73,3 +73,15 @@ Inventory identity now uses the same nested and quoted field-path extraction as
 import. Missing declared identity fields make a record unidentifiable; the
 name/path/id fallback applies only when no fields are declared. Composite match
 keys preserve component boundaries. Persisted resource IDs are unchanged.
+
+`snapshot show NEW --compare OLD` compares populations with the same scope and
+owner. A disappearance is labeled `removed` only when the new snapshot is
+complete; otherwise it is `not-observed`. Inventory drift likewise reports
+unobserved desired resources as uncertain for partial inventories, exits with an
+error, and cannot promote them to verified status. Existing matching resources
+can still satisfy ensure-present expectations in a partial inventory.
+
+For saved observation envelopes, `pudl mu ingest-observe --scope NAME --complete`
+records an explicit completeness assertion. `--coverage-schema` declares a
+covered schema even for an empty population. Stored replay remains distinct
+from a new live observation.

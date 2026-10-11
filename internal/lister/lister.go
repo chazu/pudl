@@ -20,17 +20,20 @@ type Lister struct {
 
 // FilterOptions contains filtering criteria for listing data
 type FilterOptions struct {
-	Schema         string   // Filter by CUE schema
-	Origin         string   // Filter by data origin
-	Format         string   // Filter by file format
-	CollectionID   string   // Filter by collection ID
-	CollectionType string   // Filter by collection type ('collection', 'item')
-	ItemID         string   // Filter by item ID
-	EntryTypes     []string // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
+	Match          func(database.CatalogEntry) (bool, error) // optional payload predicate
+	Schema         string                                    // Filter by CUE schema
+	Origin         string                                    // Filter by data origin
+	Format         string                                    // Filter by file format
+	CollectionID   string                                    // Filter by collection ID
+	CollectionType string                                    // Filter by collection type ('collection', 'item')
+	ItemID         string                                    // Filter by item ID
+	EntryTypes     []string                                  // Filter by entry type (e.g. "observe", "manifest", "manifest-action"); empty = no filter
 }
 
 // DisplayOptions contains display preferences for listing data
 type DisplayOptions struct {
+	All     bool
+	Context context.Context
 	Verbose bool   // Show detailed information
 	Limit   int    // Maximum number of results
 	SortBy  string // Field to sort by
@@ -41,18 +44,20 @@ type DisplayOptions struct {
 
 // ListEntry represents a single entry in the list results
 type ListEntry struct {
-	ID              string    `json:"id"`
-	Proquint        string    `json:"proquint"` // Human-friendly ID derived from content hash
-	StoredPath      string    `json:"stored_path"`
-	MetadataPath    string    `json:"metadata_path"`
-	ImportTimestamp string    `json:"import_timestamp"`
-	ParsedTimestamp time.Time `json:"-"` // For sorting
-	Format          string    `json:"format"`
-	Origin          string    `json:"origin"`
-	Schema          string    `json:"schema"`
-	Confidence      float64   `json:"confidence"`
-	RecordCount     int       `json:"record_count"`
-	SizeBytes       int64     `json:"size_bytes"`
+	Fields          map[string]any `json:"fields,omitempty"`
+	MissingFields   []string       `json:"missing_fields,omitempty"`
+	ID              string         `json:"id"`
+	Proquint        string         `json:"proquint"` // Human-friendly ID derived from content hash
+	StoredPath      string         `json:"stored_path"`
+	MetadataPath    string         `json:"metadata_path"`
+	ImportTimestamp string         `json:"import_timestamp"`
+	ParsedTimestamp time.Time      `json:"-"` // For sorting
+	Format          string         `json:"format"`
+	Origin          string         `json:"origin"`
+	Schema          string         `json:"schema"`
+	Confidence      float64        `json:"confidence"`
+	RecordCount     int            `json:"record_count"`
+	SizeBytes       int64          `json:"size_bytes"`
 	// Collection fields
 	CollectionID   *string `json:"collection_id,omitempty"`
 	ItemIndex      *int    `json:"item_index,omitempty"`
@@ -174,6 +179,10 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 		SortBy:  displayOpts.SortBy,
 		Reverse: displayOpts.Reverse,
 	}
+	if displayOpts.All || filters.Match != nil {
+		queryOpts.Limit = 0
+		queryOpts.Offset = 0
+	}
 
 	// Convert filters to database filters
 	dbFilters := database.FilterOptions{
@@ -187,13 +196,49 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	}
 
 	// Query database
-	queryResult, err := l.catalogDB.QueryEntries(dbFilters, queryOpts)
+	ctx := displayOpts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	queryResult, err := l.catalogDB.QueryEntriesContext(ctx, dbFilters, queryOpts)
 	if err != nil {
 		return nil, err // Already a PUDLError from database
 	}
 
 	// Convert database entries to list entries, stopping at the limit
 	entries := queryResult.Entries
+	if filters.Match != nil {
+		matched := make([]database.CatalogEntry, 0)
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			ok, err := filters.Match(entry)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				matched = append(matched, entry)
+			}
+		}
+		entries = matched
+		queryResult.FilteredCount = len(entries)
+	}
+	if displayOpts.All {
+		page = 1
+		offset = 0
+		perPage = len(entries)
+		if perPage == 0 {
+			perPage = 1
+		}
+		pageSize = limitedPageSize(displayOpts.Limit, 0, perPage)
+	} else if filters.Match != nil {
+		if offset >= len(entries) {
+			entries = nil
+		} else {
+			entries = entries[offset:]
+		}
+	}
 	if len(entries) > pageSize {
 		entries = entries[:pageSize]
 	}

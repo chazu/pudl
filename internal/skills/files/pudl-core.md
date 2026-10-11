@@ -224,3 +224,20 @@ before mutation or provider traffic. A run-set that can write a sealed output
 always pauses for exact-plan approval, and resume rebuilds and revalidates that
 plan. Each apply passes mu the raw same-workspace plan digest; mu compares it
 before provider access and executes the same in-memory graph.
+
+## Evidence workflow
+
+Use `pudl example install gcp-network-hygiene` for a credential-free fixture.
+Its live gcloud model is separately named. The tutorial is
+`docs/gcp-network-hygiene.md`. `list --where path=value --select path --all`
+inspects payloads before pagination. `show --field` reads one field; `show
+--history` lists resource versions and sightings; `snapshot show NEW --compare
+OLD` compares matching populations. `list --fancy` is retained.
+
+Save a query as a check with `model new NAME --check RELATION --evidence
+scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/unknown/error.
+Missing, broken, incomplete or stale required evidence cannot pass. Reports
+include separate execution/conformity/checks/verification summaries and retained
+evidence; age_at_check is frozen. Use `doctor --json` for reviewable repair
+arguments, not automatic mutation. Explicit --schema is strict; exploratory
+fallback requires --allow-schema-fallback.

@@ -31,7 +31,7 @@ func (c *CatalogDB) FindByResourceID(resourceID string) ([]CatalogEntry, error) 
 	SELECT ` + entrySelect("catalog_entries") + `
 	FROM catalog_entries
 	WHERE resource_id = ?
-	ORDER BY version DESC`
+	ORDER BY version DESC, julianday(import_timestamp) DESC, id`
 
 	rows, err := c.db.Query(selectSQL, resourceID)
 	if err != nil {

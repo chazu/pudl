@@ -23,6 +23,12 @@ Examples:
 	Args:         cobra.ExactArgs(1),
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if modelNewCheck != "" {
+			return newCheckModel(cmd, args[0])
+		}
+		if len(modelNewEvidence) > 0 || modelNewMaxAge != "" || cmd.Flags().Changed("expect") {
+			return fmt.Errorf("--evidence, --max-age and --expect require --check")
+		}
 		spec, err := parsePopulateSpec(modelNewPopulate)
 		if err != nil {
 			return err

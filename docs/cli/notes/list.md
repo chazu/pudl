@@ -22,3 +22,12 @@ defaults to 20):
 Count matches with `total_matched` (not `entries | length`). `summary` sizes
 and record totals cover the current page; its `unique_*` counts cover the whole
 catalog; it is omitted when nothing matches.
+
+`--all` returns every match in one result and still respects `--limit`. It cannot
+be combined with `--page`. `--where path=value` filters decoded payloads using
+typed equality; wildcards match any element, and repeated conditions are ANDed.
+`--select path` includes chosen fields (repeatable). These operations inspect
+individual records, skipping collection containers. Filtering precedes pagination.
+Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
+256 MiB total scan budget; narrow schema or collection scope for larger data.
+`--fancy` remains available and can display the filtered record set.

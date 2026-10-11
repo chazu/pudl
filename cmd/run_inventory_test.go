@@ -193,7 +193,8 @@ func TestRunInventoryDriftDoesNotMatchAcrossScopes(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, res.Clean)
 	require.Len(t, res.Drifted, 1)
-	assert.Equal(t, "missing", res.Drifted[0].Reason)
+	assert.Equal(t, "not-observed", res.Drifted[0].Reason)
+	assert.True(t, res.Uncertain)
 
 	// Scoped to the origin that does hold the record, it is satisfied.
 	res, err = runInventoryDrift(db, "other-model", desired, nil)

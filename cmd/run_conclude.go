@@ -213,6 +213,9 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 // is observe-only or was just converged, since the convergence loop ends in the
 // same re-observed ∅ state. It is only ever written off an actual ∅ observation.
 func runVerdict(r *RunReport, f runFlags) string {
+	if !f.dryRun && r.Drift != nil && r.Drift.Uncertain {
+		return "unknown"
+	}
 	if !f.dryRun && anyCheckUncertain(r.Checks) {
 		return "unknown"
 	}

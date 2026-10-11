@@ -294,3 +294,9 @@ between an observation and an answer that a human or agent can justify.
   orchestration now lives in internal/checks with explicit dependencies and no
   Cobra globals. Command and coordinator tests passed, including replay,
   uncertain mutation, aggregate evidence, early errors, and progress separation.
+- Step 7 implemented: bundled fixture/live GCP hygiene models; payload filters,
+  field selection, full enumeration, saved check scaffolds, snapshot comparison,
+  resource history, and reviewable doctor repair actions. The complete fixture
+  journey passed, including preservation of the original report. Inventory drift
+  now treats unobserved records in partial inventories as uncertain. Live GCP
+  access and an actual human usability trial remain separate qualification.

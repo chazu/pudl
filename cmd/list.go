@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -13,21 +14,23 @@ import (
 )
 
 var (
-	listSchema          string
-	listOrigin          string
-	listFormat          string
-	listVerbose         bool
-	listLimit           int
-	listSortBy          string
-	listReverse         bool
-	listCollectionID    string
-	listItemID          string
-	listCollectionsOnly bool
-	listItemsOnly       bool
-	listFancy           bool
-	listPage            int
-	listPerPage         int
-	listArtifacts       bool
+	listAll               bool
+	listWhere, listSelect []string
+	listSchema            string
+	listOrigin            string
+	listFormat            string
+	listVerbose           bool
+	listLimit             int
+	listSortBy            string
+	listReverse           bool
+	listCollectionID      string
+	listItemID            string
+	listCollectionsOnly   bool
+	listItemsOnly         bool
+	listFancy             bool
+	listPage              int
+	listPerPage           int
+	listArtifacts         bool
 )
 
 // listCmd represents the list command
@@ -73,6 +76,9 @@ Examples:
 
 // runListCommand contains the actual list logic with structured error handling
 func runListCommand(cmd *cobra.Command, args []string) error {
+	if listPage < 1 || listPerPage < 1 || listLimit < 0 {
+		return fmt.Errorf("page and per-page must be positive; limit must not be negative")
+	}
 	// Load configuration to get data directory
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
@@ -108,6 +114,7 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 
 	// Set up display options
 	displayOpts := lister.DisplayOptions{
+		All: listAll, Context: cmd.Context(),
 		Verbose: listVerbose,
 		Limit:   listLimit,
 		SortBy:  listSortBy,
@@ -115,11 +122,23 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		Page:    listPage,
 		PerPage: listPerPage,
 	}
+	var selected map[string]payloadFields
+	if len(listWhere) > 0 || len(listSelect) > 0 {
+		filters.Match, selected, err = makePayloadMatcher(cmd.Context(), listWhere, listSelect)
+		if err != nil {
+			return err
+		}
+	}
 
 	// List data
 	results, err := l.ListData(filters, displayOpts)
 	if err != nil {
 		return err // Already a PUDLError from lister
+	}
+	for i := range results.Entries {
+		f := selected[results.Entries[i].ID]
+		results.Entries[i].Fields = f.Values
+		results.Entries[i].MissingFields = f.Missing
 	}
 
 	// Display results
@@ -149,6 +168,18 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	// Use fancy bubbletea UI if requested
 	if listFancy {
 		return ui.RunInteractiveList(results.Entries, listVerbose)
+	}
+	if len(listSelect) > 0 {
+		for _, entry := range results.Entries {
+			b, err := json.Marshal(entry.Fields)
+			if err != nil {
+				return err
+			}
+			if _, err := fmt.Fprintf(outw(), "%s %s (missing: %v)\n", entry.Proquint, b, entry.MissingFields); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	// Traditional text output
@@ -228,6 +259,9 @@ func determineCollectionType() string {
 
 func init() {
 	rootCmd.AddCommand(listCmd)
+	listCmd.Flags().BoolVar(&listAll, "all", false, "Return all matching entries in one result (still respects --limit)")
+	listCmd.Flags().StringArrayVar(&listWhere, "where", nil, "Filter payloads by path=value; repeat for AND, wildcards match any element")
+	listCmd.Flags().StringArrayVar(&listSelect, "select", nil, "Include this payload field in results (repeatable)")
 
 	// Add flags
 	listCmd.Flags().StringVar(&listSchema, "schema", "", "Filter by CUE schema: a value with # matches whole definition names (aws.#EC2Instance, #Route); otherwise a substring")
@@ -254,6 +288,7 @@ func init() {
 
 	// Make collections-only and items-only mutually exclusive
 	listCmd.MarkFlagsMutuallyExclusive("collections-only", "items-only")
+	listCmd.MarkFlagsMutuallyExclusive("all", "page")
 
 	// Register completion functions
 	listCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
@@ -389,6 +424,7 @@ func outputListAsJSON(output *ui.OutputWriter, results *lister.ListResults) erro
 	entries := make([]ui.EntryOutput, len(results.Entries))
 	for i, e := range results.Entries {
 		entries[i] = ui.EntryOutput{
+			Fields: e.Fields, MissingFields: e.MissingFields,
 			ID:              e.ID,
 			Proquint:        e.Proquint,
 			Schema:          e.Schema,

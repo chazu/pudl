@@ -73,6 +73,12 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 			"Check that the entry ID is correct")
 	}
 
+	if showField != "" {
+		return showEntryField(entry, showField)
+	}
+	if showHistory {
+		return showEntryHistory(cmd.Context(), entry)
+	}
 	if jsonOutput {
 		return writeEntryJSON(*entry, showMetadata, showRaw)
 	}
@@ -88,6 +94,14 @@ func init() {
 	// Add flags
 	showCmd.Flags().BoolVar(&showMetadata, "metadata", false, "Show metadata file content")
 	showCmd.Flags().BoolVar(&showRaw, "raw", false, "Show raw data content")
+
+	showCmd.Flags().StringVar(&showField, "field", "", "Print one payload field as JSON (nested paths and wildcards supported)")
+	showCmd.Flags().BoolVar(&showHistory, "history", false, "Show this resource's stored versions and snapshot observations")
+	showCmd.MarkFlagsMutuallyExclusive("field", "history")
+	showCmd.MarkFlagsMutuallyExclusive("field", "raw")
+	showCmd.MarkFlagsMutuallyExclusive("field", "metadata")
+	showCmd.MarkFlagsMutuallyExclusive("history", "raw")
+	showCmd.MarkFlagsMutuallyExclusive("history", "metadata")
 
 	// Register completion for positional argument (proquint ID)
 	showCmd.ValidArgsFunction = completeEntryIDs

@@ -23,6 +23,9 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		if !r.Drift.Clean {
 			s.Conformity = "drifted"
 		}
+		if r.Drift.Uncertain {
+			s.Conformity = "unknown"
+		}
 		s.DriftCount = len(r.Drift.Drifted)
 		s.Verification = "recorded"
 		if r.Drift.Verified {

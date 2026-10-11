@@ -92,21 +92,23 @@ type ListSummary struct {
 
 // EntryOutput represents a single entry in JSON output
 type EntryOutput struct {
-	ID              string  `json:"id"`
-	Proquint        string  `json:"proquint"`
-	Schema          string  `json:"schema"`
-	Origin          string  `json:"origin"`
-	Format          string  `json:"format"`
-	SizeBytes       int64   `json:"size_bytes"`
-	RecordCount     int     `json:"record_count"`
-	ImportTimestamp string  `json:"import_timestamp"`
-	StoredPath      string  `json:"stored_path"`
-	MetadataPath    string  `json:"metadata_path"`
-	Confidence      float64 `json:"confidence"`
-	CollectionType  *string `json:"collection_type,omitempty"`
-	CollectionID    *string `json:"collection_id,omitempty"`
-	ItemID          *string `json:"item_id,omitempty"`
-	ItemIndex       *int    `json:"item_index,omitempty"`
+	Fields          map[string]any `json:"fields,omitempty"`
+	MissingFields   []string       `json:"missing_fields,omitempty"`
+	ID              string         `json:"id"`
+	Proquint        string         `json:"proquint"`
+	Schema          string         `json:"schema"`
+	Origin          string         `json:"origin"`
+	Format          string         `json:"format"`
+	SizeBytes       int64          `json:"size_bytes"`
+	RecordCount     int            `json:"record_count"`
+	ImportTimestamp string         `json:"import_timestamp"`
+	StoredPath      string         `json:"stored_path"`
+	MetadataPath    string         `json:"metadata_path"`
+	Confidence      float64        `json:"confidence"`
+	CollectionType  *string        `json:"collection_type,omitempty"`
+	CollectionID    *string        `json:"collection_id,omitempty"`
+	ItemID          *string        `json:"item_id,omitempty"`
+	ItemIndex       *int           `json:"item_index,omitempty"`
 }
 
 // ImportOutput represents structured output for import command
