@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/validator"
 	"github.com/stretchr/testify/assert"
@@ -54,8 +55,7 @@ func loadJSON(entry database.CatalogEntry) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var v any
-	return v, json.Unmarshal(b, &v)
+	return idgen.DecodeJSONExact(b)
 }
 
 func hostFacts(t *testing.T, db *database.CatalogDB) []string {

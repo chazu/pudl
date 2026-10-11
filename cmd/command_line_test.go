@@ -11,7 +11,7 @@ func TestSplitCommandLine(t *testing.T) {
 	cases := map[string][]string{
 		`gcloud compute firewall-rules list --format=json`: {"gcloud", "compute", "firewall-rules", "list", "--format=json"},
 		`a 'b c' "d \"e\" $HOME" f\ g`:                     {"a", "b c", `d "e" $HOME`, "f g"},
-		`  x   ''  `:                                        {"x", ""},
+		`  x   ''  `:                                       {"x", ""},
 	}
 	for line, want := range cases {
 		got, err := splitCommandLine(line)

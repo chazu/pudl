@@ -13,7 +13,6 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/identity"
-	"github.com/chazu/pudl/internal/inference"
 )
 
 // identityResolver returns the declared identity_fields for a schema, or nil when
@@ -64,20 +63,8 @@ func modelResourceDefs(desired []map[string]any, identity identityResolver) []st
 // each schema's declared identity_fields from the inference graph. Records whose
 // schema is unknown or declares none fall back to the name|path|id heuristic.
 func schemaIdentityResolver() (identityResolver, error) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
-	}
-	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
-	if err != nil {
-		return nil, fmt.Errorf("init schema inferrer: %w", err)
-	}
-	return func(schema string) []string {
-		if meta, ok := inferrer.GetSchemaMetadata(schema); ok {
-			return meta.IdentityFields
-		}
-		return nil
-	}, nil
+	fields, _, err := inventoryIdentityPolicy()
+	return fields, err
 }
 
 // observeScopeFilter turns a scope string and the result of looking it up as a
@@ -166,6 +153,9 @@ func loadObservedRecordsContext(ctx context.Context, db *database.CatalogDB, sco
 		if err := dec.Decode(&rec); err != nil {
 			return set, fmt.Errorf("parse observed record %s: %w", e.StoredPath, err)
 		}
+		if tag, _ := rec["_schema"].(string); tag == "" && e.IdentityJSON != nil {
+			rec["_schema"] = e.Schema
+		}
 		observed := acute.ObservedRecord{Data: rec, ObservedAt: set.observedAt}
 		if e.IdentityJSON != nil && *e.IdentityJSON != "" {
 			var fields map[string]json.RawMessage
@@ -203,7 +193,7 @@ func runInventoryDrift(db *database.CatalogDB, scope string, desired []map[strin
 	return runInventoryDriftContext(context.Background(), db, scope, desired, identity)
 }
 
-func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope string, desired []map[string]any, identity identityResolver) (ModelDriftResult, error) {
+func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope string, desired []map[string]any, identity identityResolver, namespaces ...inventoryNamespace) (ModelDriftResult, error) {
 	if strings.TrimSpace(scope) == "" {
 		return ModelDriftResult{}, fmt.Errorf("inventory drift requires a catalog scope (snapshot ID or origin); refusing to compare against every observation in the catalog")
 	}
@@ -233,7 +223,40 @@ func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope
 			}
 		}
 	}
+	originalLabels := map[string]string{}
+	if len(namespaces) > 0 {
+		normalized := make([]map[string]any, len(desired))
+		for i, record := range desired {
+			normalized[i], err = normalizeInventoryRecord(record, namespaces[0])
+			if err == nil {
+				_, canonicalLabel, _ := acute.RecordIdentity(normalized[i], identity)
+				_, displayLabel, _ := acute.RecordIdentity(record, identity)
+				originalLabels[canonicalLabel] = displayLabel
+			}
+			if err != nil {
+				return ModelDriftResult{}, err
+			}
+		}
+		desired = normalized
+		for i := range observed.records {
+			observed.records[i].Data, err = normalizeInventoryRecord(observed.records[i].Data, namespaces[0])
+			if err != nil {
+				return ModelDriftResult{}, err
+			}
+		}
+		for i := range history.Records {
+			history.Records[i].Data, err = normalizeInventoryRecord(history.Records[i].Data, namespaces[0])
+			if err != nil {
+				return ModelDriftResult{}, err
+			}
+		}
+	}
 	drifted := acute.InventorySetDiffWithPrevious(desired, observed.records, identity, history)
+	for i := range drifted {
+		if label, ok := originalLabels[drifted[i].Resource]; ok {
+			drifted[i].Resource = label
+		}
+	}
 	uncertain := false
 	if !observed.complete {
 		for i := range drifted {

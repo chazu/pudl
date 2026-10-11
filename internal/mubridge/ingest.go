@@ -79,8 +79,8 @@ type ObserveIngest struct {
 	// Source is how the observation was produced; defaults to "ingest-observe".
 	Source string
 
-	// ManualSchema routes every record to this schema, validated through Chain
-	// with the usual base/catchall fallback (the command arm's `schema:`). Empty
+	// ManualSchema requires every record to satisfy this schema. The command
+	// arm may explicitly enable AllowSchemaFallback for exploratory use. Empty
 	// keeps the _schema-based routing.
 	AllowSchemaFallback bool
 	ManualSchema        string

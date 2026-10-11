@@ -156,9 +156,15 @@ func (e *EnhancedImporter) transformSource(opts ImportOptions, sourcePath string
 			return nil, err
 		}
 		result.assignments = spoolFile.Name()
-		defer spoolFile.Close()
 		spoolWriter := bufio.NewWriter(spoolFile)
-		defer spoolWriter.Flush()
+		defer func() {
+			if err := spoolWriter.Flush(); resultErr == nil && err != nil {
+				resultErr = fmt.Errorf("flush schema assignments: %w", err)
+			}
+			if err := spoolFile.Close(); resultErr == nil && err != nil {
+				resultErr = fmt.Errorf("close schema assignments: %w", err)
+			}
+		}()
 		spool = json.NewEncoder(spoolWriter)
 	}
 

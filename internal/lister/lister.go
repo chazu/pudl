@@ -226,7 +226,6 @@ func (l *Lister) ListData(filters FilterOptions, displayOpts DisplayOptions) (*L
 	}
 	if displayOpts.All {
 		page = 1
-		offset = 0
 		perPage = len(entries)
 		if perPage == 0 {
 			perPage = 1

@@ -42,19 +42,19 @@ func splitCommandLine(line string) ([]string, error) {
 				word.WriteRune(r)
 			}
 		default:
-			switch {
-			case r == ' ' || r == '\t' || r == '\n':
+			switch r {
+			case ' ', '\t', '\n':
 				if inWord {
 					argv = append(argv, word.String())
 					word.Reset()
 					inWord = false
 				}
 				continue
-			case r == '\'':
+			case '\'':
 				state = single
-			case r == '"':
+			case '"':
 				state = double
-			case r == '\\':
+			case '\\':
 				if i+1 == len(runes) {
 					return nil, fmt.Errorf("command line ends with a backslash")
 				}

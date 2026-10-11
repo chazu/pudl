@@ -21,8 +21,9 @@ const ProjectionSourcePrefix = "projection:"
 
 // Projection state statuses.
 const (
-	ProjectionProjected = "projected"
-	ProjectionSkipped   = "skipped" // identity unresolved: no stable source to own facts
+	ProjectionProjected  = "projected"
+	ProjectionSkipped    = "skipped"    // identity unresolved: no stable source to own facts
+	ProjectionIncomplete = "incomplete" // values outside the query domain were omitted
 )
 
 // ProjectionMode says why a reconcile closes facts.
@@ -167,11 +168,11 @@ func (t *CatalogTx) ReconcileProjection(source string, want []Fact, mode Project
 	if err != nil {
 		return 0, 0, errors.WrapError(errors.ErrCodeDatabaseError, "read projected facts", err)
 	}
+	defer rows.Close()
 	current := map[string]string{}
 	for rows.Next() {
 		var id, relation, args string
 		if err := rows.Scan(&id, &relation, &args); err != nil {
-			rows.Close()
 			return 0, 0, err
 		}
 		current[relation+"\x00"+canonicalizeJSON(args)] = id

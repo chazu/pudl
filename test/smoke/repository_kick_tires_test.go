@@ -74,12 +74,12 @@ func TestSmoke_RepositoryKickTiresFailFast(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w := newKickTiresWorkspace(t)
-			stdout, stderr, err := w.pudl(test.args...)
+			stdout, _, err := w.pudl(test.args...)
 			if err == nil {
 				t.Fatalf("command unexpectedly succeeded:\n%s", stdout)
 			}
-			if !strings.Contains(stderr, test.want) {
-				t.Fatalf("stderr does not contain %q:\n%s", test.want, stderr)
+			if !strings.Contains(decodeKickError(t, stdout), test.want) {
+				t.Fatalf("structured error does not contain %q:\n%s", test.want, stdout)
 			}
 			if _, statErr := os.Stat(w.sentinel); !os.IsNotExist(statErr) {
 				t.Fatalf("preflight failure invoked plugin; stat error = %v", statErr)
@@ -175,7 +175,7 @@ func TestSmoke_RepositoryKickTiresApprovals(t *testing.T) {
 		report := decodeKickRunSetReport(t, stdout)
 		stdout, stderr, err = w.pudlWithEnv(map[string]string{"PUDL_KICK_PLAN_VARIANT": "B"},
 			"run", "resume", report.RunSetID)
-		if err == nil || !strings.Contains(stderr, "approval is stale") {
+		if err == nil || !strings.Contains(decodeKickError(t, stdout), "approval is stale") {
 			t.Fatalf("changed plan was not rejected as stale: err=%v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
 		}
 		if _, statErr := os.Stat(state); !os.IsNotExist(statErr) {
@@ -344,7 +344,7 @@ func TestSmoke_RepositoryKickTiresSealedRouting(t *testing.T) {
 			args := append([]string{"run", "set"}, test.models...)
 			args = append(args, "--converge", "--mu-root", w.muRoot)
 			stdout, stderr, err := w.pudlWithEnv(test.env, args...)
-			if err == nil || !strings.Contains(stdout+stderr, test.wantErr) {
+			if err == nil || !strings.Contains(decodeKickError(t, stdout), test.wantErr) {
 				t.Fatalf("strict routing did not reject %s: err=%v\nstdout:\n%s\nstderr:\n%s", test.name, err, stdout, stderr)
 			}
 			for _, path := range []string{

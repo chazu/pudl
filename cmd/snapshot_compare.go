@@ -33,7 +33,7 @@ func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after
 	if old.Scope != current.Scope || old.Model != current.Model || old.Source != current.Source || old.Origin != current.Origin {
 		return fmt.Errorf("snapshots describe different observation scopes or owners")
 	}
-	identity, err := schemaIdentityResolver()
+	identity, namespace, err := inventoryIdentityPolicy()
 	if err != nil {
 		return err
 	}
@@ -45,6 +45,10 @@ func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after
 		byKey := map[string]acute.ObservedRecord{}
 		labels := map[string]string{}
 		for _, record := range set.records {
+			record.Data, err = normalizeInventoryRecord(record.Data, namespace)
+			if err != nil {
+				return nil, nil, err
+			}
 			key, label, ok := acute.RecordIdentity(record.Data, identity)
 			if !ok {
 				return nil, nil, fmt.Errorf("snapshot %s has unidentifiable records", id)

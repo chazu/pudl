@@ -28,7 +28,7 @@ type spooledAssignment struct {
 }
 
 func (s spooledAssignment) assignment() schemaAssignment {
-	return schemaAssignment{Schema: s.Schema, Confidence: s.Confidence, Reason: s.Reason, SourcePath: s.SourcePath, Trace: s.Trace, Validation: s.Validation, Validated: s.Validated}
+	return schemaAssignment(s)
 }
 
 // assignmentReader replays spooled assignments in record order. Records are
