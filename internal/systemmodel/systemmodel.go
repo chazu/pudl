@@ -26,13 +26,14 @@ func SchemaCUE() string { return schemaCUE }
 // SystemModel is the decoded run unit. Orchestration-relevant fields only;
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {
-	Name      string           `json:"name"`
-	Plugins   []PluginDef      `json:"plugins,omitempty"`
-	Populate  Populate         `json:"populate"`
-	Checks    []Check          `json:"checks,omitempty"`
-	Desired   []map[string]any `json:"desired,omitempty"`
-	Converge  *PluginPlan      `json:"converge,omitempty"`
-	Freshness *Freshness       `json:"freshness,omitempty"`
+	Observation *Observation     `json:"observation,omitempty"`
+	Name        string           `json:"name"`
+	Plugins     []PluginDef      `json:"plugins,omitempty"`
+	Populate    Populate         `json:"populate"`
+	Checks      []Check          `json:"checks,omitempty"`
+	Desired     []map[string]any `json:"desired,omitempty"`
+	Converge    *PluginPlan      `json:"converge,omitempty"`
+	Freshness   *Freshness       `json:"freshness,omitempty"`
 	// DependsOn names other #SystemModel instances this model depends on (by
 	// their `name:`). Drives the model_depends_on facts + cross-model reasoning;
 	// see docs/cross-model-dependencies.md.
@@ -136,11 +137,13 @@ type PluginPlan struct {
 
 // Check is an observe-only flag over a Datalog relation.
 type Check struct {
-	Name     string `json:"name"`
-	Query    string `json:"query"`
-	Expect   string `json:"expect"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
+	Evidence []string `json:"evidence,omitempty"`
+	MaxAge   string   `json:"max_age,omitempty"`
+	Name     string   `json:"name"`
+	Query    string   `json:"query"`
+	Expect   string   `json:"expect"`
+	Severity string   `json:"severity"`
+	Message  string   `json:"message"`
 }
 
 // Freshness is the loop cadence.
@@ -227,4 +230,11 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 		out = append(out, rec)
 	}
 	return out, nil
+}
+
+// Observation declares the population a successful collection covers.
+type Observation struct {
+	Scope    string   `json:"scope,omitempty"`
+	Complete bool     `json:"complete,omitempty"`
+	Schemas  []string `json:"schemas,omitempty"`
 }

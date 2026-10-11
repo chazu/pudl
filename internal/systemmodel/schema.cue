@@ -21,6 +21,7 @@ package systemmodel
 	}
 
 	name: string
+ observation?: {scope: string & !="", complete: bool | *false, schemas?: [...string]}
 	// Quoted because this is the JSON-visible routing tag emitted when the
 	// model itself is persisted as a typed catalog resource.
 	"_schema"?: string
@@ -253,6 +254,8 @@ package systemmodel
 // #Check — an observe-only flag: evaluate a Datalog relation, assert empty /
 // nonempty, attach a severity.
 #Check: {
+ evidence?: [...string] // snapshot IDs, "current", "model:<name>", or "scope:<name>"
+ max_age?: string // maximum selected observation age, Go duration
 	name:     string
 	query:    string
 	expect:   "empty" | "nonempty"

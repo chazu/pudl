@@ -168,7 +168,7 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 		return nil, err
 	}
 
-	count, snapshotID, err := ingestPopulateOutput(cat, stdout, populateIngest{
+	count, snapshotID, err := ingestPopulateOutput(cat, stdout, populateIngest{observation: m.Observation,
 		ctx:        runOperationContext(mu),
 		snapshotID: snapshotID0,
 		runID:      runID,
@@ -386,7 +386,7 @@ func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, mo
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{
+	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
 		ctx:        runOperationContext(mu),
 		snapshotID: snapshotID0,
 		runID:      runID,
@@ -434,7 +434,12 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 			return 0, "", fmt.Errorf("populate schema %q is not loaded (see: pudl schema list)", in.manualSchema)
 		}
 	}
+	observation := systemmodel.Observation{}
+	if in.observation != nil {
+		observation = *in.observation
+	}
 	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
+		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas,
 		Reader:         bytes.NewReader(observeJSON),
 		Context:        in.ctx,
 		DataDir:        cfg.DataPath,
@@ -458,12 +463,13 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 
 // populateIngest is the provenance a populate phase attaches to its snapshot.
 type populateIngest struct {
-	ctx        context.Context
-	snapshotID string
-	runID      string
-	model      string
-	source     string
-	plugin     observePluginRef
+	observation *systemmodel.Observation
+	ctx         context.Context
+	snapshotID  string
+	runID       string
+	model       string
+	source      string
+	plugin      observePluginRef
 	// manualSchema routes every record like `import --schema` (command arm).
 	manualSchema string
 }

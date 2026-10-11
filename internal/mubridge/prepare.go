@@ -86,7 +86,13 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 	}
 	now := time.Now()
 	p.rawDir = filepath.Join(in.DataDir, "raw", now.Format("2006/01/02"))
-	p.snapshot = database.ObserveSnapshot{SnapshotID: in.SnapshotID, RunID: in.RunID, Model: in.Model, Workspace: in.Workspace, Origin: in.Origin, Source: in.Source, CreatedAt: now}
+	p.snapshot = database.ObserveSnapshot{Scope: in.Scope, Complete: in.Complete, Schemas: append([]string(nil), in.Schemas...), SnapshotID: in.SnapshotID, RunID: in.RunID, Model: in.Model, Workspace: in.Workspace, Origin: in.Origin, Source: in.Source, CreatedAt: now}
+	if in.ManualSchema != "" {
+		p.snapshot.Schemas = append(p.snapshot.Schemas, in.ManualSchema)
+	}
+	if in.Complete && in.Scope == "" {
+		return nil, fmt.Errorf("complete observation requires an explicit scope")
+	}
 	reader := bufio.NewReader(&ingestprep.Reader{Context: in.Context, Source: in.Reader, Remaining: limits.DecodedBytes})
 	// Historical empty-input behavior is retained, without buffering input.
 	for {
@@ -183,6 +189,9 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 	})
 	if err != nil {
 		return nil, fmt.Errorf("prepare observe results: %w", err)
+	}
+	if len(failures) > 0 {
+		p.snapshot.Complete = false
 	}
 	p.entry, err = prepareObserveSnapshot(observeSnapshotEntry{snapshotID: in.SnapshotID, now: now, origin: in.Origin, targets: p.snapshot.Targets, recordCount: p.snapshot.RecordCount, schemaCounts: counts, errors: failures, rawDir: dir, maxBytes: limits.StagingBytes - staged, runID: in.RunID})
 	if err != nil {

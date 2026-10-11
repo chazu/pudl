@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	resourceidentity "github.com/chazu/pudl/internal/identity"
 )
 
 // IdentityResolver returns the declared identity_fields for a schema, or nil
@@ -20,7 +22,7 @@ type ObservedRecord struct {
 
 // RecordIdentity derives a stable match key for a record: its _schema plus the
 // values of the schema's declared identity_fields. When the schema declares no
-// identity_fields — or a declared field is absent from the record — it falls
+// identity_fields it falls
 // back to the first present of name | path | id, which covers the linux/fs/k8s
 // desired shapes.
 func RecordIdentity(rec map[string]any, identity IdentityResolver) (key string, label string, ok bool) {
@@ -28,20 +30,19 @@ func RecordIdentity(rec map[string]any, identity IdentityResolver) (key string, 
 
 	if identity != nil {
 		if fields := identity(schema); len(fields) > 0 {
+			values, err := resourceidentity.ExtractFieldValues(rec, fields)
+			if err != nil {
+				return "", "", false
+			}
+			encoded, err := resourceidentity.CanonicalIdentityJSON(values)
+			if err != nil {
+				return "", "", false
+			}
 			vals := make([]string, 0, len(fields))
-			complete := true
 			for _, f := range fields {
-				v, present := rec[f]
-				if !present {
-					complete = false
-					break
-				}
-				vals = append(vals, fmt.Sprintf("%v", v))
+				vals = append(vals, fmt.Sprint(values[f]))
 			}
-			if complete {
-				joined := strings.Join(vals, "/")
-				return fmt.Sprintf("%s|%s", schema, joined), fmt.Sprintf("%s/%s", schemaLabel(schema), joined), true
-			}
+			return schema + "|" + encoded, schemaLabel(schema) + "/" + strings.Join(vals, "/"), true
 		}
 	}
 
