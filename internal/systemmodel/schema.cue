@@ -133,9 +133,10 @@ package systemmodel
 // set are recorded with the model instance: keep secrets out of them.
 #CommandObserve: {
 	runs: [#CommandRun, ...#CommandRun]
-	// schema routes every record like `pudl import --schema` (validated, with
-	// base/catchall fallback). Without it records are classified by inference.
+	// schema routes every record like strict `pudl import --schema`.
+	// allow_schema_fallback explicitly permits exploratory base/catchall fallback.
 	schema?: string
+ allow_schema_fallback?: bool | *false
 	// timeout applies to each run (Go duration).
 	timeout?: string
 }

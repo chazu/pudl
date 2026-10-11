@@ -64,22 +64,32 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 	}
 
 	target := populateTargetName(m.Name)
+	summary := &PopulateReport{Target: target, RequestedSchema: p.Schema}
+	if p.Schema != "" {
+		summary.SchemaPolicy = "strict"
+		if p.AllowSchemaFallback {
+			summary.SchemaPolicy = "permissive"
+		}
+	}
 	wrapped, err := json.Marshal([]mubridge.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
 	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
-		ctx:          ctx,
-		snapshotID:   snapshotID,
-		runID:        runID,
-		model:        m.Name,
-		source:       database.SnapshotSourceCommand,
-		manualSchema: p.Schema,
+		summary:             summary,
+		ctx:                 ctx,
+		snapshotID:          snapshotID,
+		runID:               runID,
+		model:               m.Name,
+		source:              database.SnapshotSourceCommand,
+		manualSchema:        p.Schema,
+		allowSchemaFallback: p.AllowSchemaFallback,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &PopulateReport{Target: target, Records: count, SnapshotID: snapshotID}, nil
+	summary.Records, summary.SnapshotID = count, snapshotID
+	return summary, nil
 }
 
 // executeCommandRun runs one command with stdout spooled to out and stderr

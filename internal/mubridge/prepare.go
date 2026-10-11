@@ -190,7 +190,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 	if err != nil {
 		return nil, fmt.Errorf("prepare observe results: %w", err)
 	}
-	if len(failures) > 0 {
+	if len(failures) > 0 || (p.route.mismatches != nil && *p.route.mismatches > 0) {
 		p.snapshot.Complete = false
 	}
 	p.entry, err = prepareObserveSnapshot(observeSnapshotEntry{snapshotID: in.SnapshotID, now: now, origin: in.Origin, targets: p.snapshot.Targets, recordCount: p.snapshot.RecordCount, schemaCounts: counts, errors: failures, rawDir: dir, maxBytes: limits.StagingBytes - staged, runID: in.RunID})
@@ -278,6 +278,9 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 		return ObserveIngestResult{}, err
 	}
 	result := ObserveIngestResult{Records: ingested, SnapshotID: p.in.SnapshotID}
+	if p.route.mismatches != nil {
+		result.SchemaMismatches = *p.route.mismatches
+	}
 	if p.route.redacted != nil {
 		result.Redacted = *p.route.redacted
 	}

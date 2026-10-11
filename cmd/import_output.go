@@ -32,7 +32,7 @@ func newImportOutcome(sourcePath string, result *importer.ImportResult, err erro
 		return importOutcome{
 			Status:       importStatusFailed,
 			Error:        err.Error(),
-			ImportResult: &importer.ImportResult{SourcePath: sourcePath},
+			ImportResult: &importer.ImportResult{SourcePath: sourcePath, RequestedSchema: importSchema},
 		}
 	case result.DryRun:
 		return importOutcome{Status: importStatusDryRun, ImportResult: result}

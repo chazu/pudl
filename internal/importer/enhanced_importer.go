@@ -12,9 +12,9 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
-	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
+	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -50,7 +50,20 @@ func NewEnhancedImporterWithSchemaPaths(dataPath, configDir string, schemaPaths 
 }
 
 // ImportFileWithFriendlyIDs imports a file using content-based ID generation
-func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*ImportResult, error) {
+func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result *ImportResult, resultErr error) {
+	defer func() {
+		if result != nil && opts.ManualSchema != "" {
+			result.RequestedSchema = opts.ManualSchema
+			result.SchemaPolicy = "strict"
+			if opts.AllowSchemaFallback {
+				result.SchemaPolicy = "permissive"
+			}
+			if result.ValidationResult != nil && !result.ValidationResult.Valid {
+				result.SchemaMismatches++
+			}
+		}
+	}()
+
 	if opts.Context == nil {
 		opts.Context = context.Background()
 	}
@@ -67,6 +80,9 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		return nil, fmt.Errorf("failed to ensure basic schemas: %w", err)
 	}
 
+	if err := e.validateExplicitSchema(opts); err != nil {
+		return nil, err
+	}
 	fileInfo, err := os.Stat(opts.SourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info: %w", err)
@@ -188,7 +204,6 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 	if err != nil {
 		return nil, err
 	}
-	var result *ImportResult
 	err = artifacts.WithLock(opts.Context, e.catalogDB.Root(), func() error {
 		existing, err := e.catalogDB.FindByContentHash(contentHash)
 		if err != nil {
@@ -234,6 +249,9 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (*Impor
 		result.SourcePath = opts.originPath()
 		return nil
 	})
+	if result != nil && stream != nil {
+		result.SchemaMismatches = stream.schemaMismatches
+	}
 	if result != nil && transformed != nil {
 		result.Redacted = transformed.redacted
 	}

@@ -440,36 +440,42 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	}
 	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
 		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas,
-		Reader:         bytes.NewReader(observeJSON),
-		Context:        in.ctx,
-		DataDir:        cfg.DataPath,
-		Graph:          inferrer.GetInheritanceGraph(),
-		Inferrer:       inferrer,
-		SchemaMappings: mappings,
-		SnapshotID:     in.snapshotID,
-		RunID:          in.runID,
-		Model:          in.model,
-		Workspace:      effectiveWorkspaceName(),
-		Origin:         "pudl-run",
-		Source:         in.source,
-		ManualSchema:   in.manualSchema,
-		Chain:          chain,
+		Reader:              bytes.NewReader(observeJSON),
+		Context:             in.ctx,
+		DataDir:             cfg.DataPath,
+		Graph:               inferrer.GetInheritanceGraph(),
+		Inferrer:            inferrer,
+		SchemaMappings:      mappings,
+		SnapshotID:          in.snapshotID,
+		RunID:               in.runID,
+		Model:               in.model,
+		Workspace:           effectiveWorkspaceName(),
+		Origin:              "pudl-run",
+		Source:              in.source,
+		ManualSchema:        in.manualSchema,
+		AllowSchemaFallback: in.allowSchemaFallback,
+		Chain:               chain,
 	})
 	for _, w := range result.FactWarnings {
 		fmt.Fprintf(errw(), "⚠️  %s\n", w)
+	}
+	if in.summary != nil {
+		in.summary.SchemaMismatches = result.SchemaMismatches
 	}
 	return result.Records, result.SnapshotID, err
 }
 
 // populateIngest is the provenance a populate phase attaches to its snapshot.
 type populateIngest struct {
-	observation *systemmodel.Observation
-	ctx         context.Context
-	snapshotID  string
-	runID       string
-	model       string
-	source      string
-	plugin      observePluginRef
+	summary             *PopulateReport
+	allowSchemaFallback bool
+	observation         *systemmodel.Observation
+	ctx                 context.Context
+	snapshotID          string
+	runID               string
+	model               string
+	source              string
+	plugin              observePluginRef
 	// manualSchema routes every record like `import --schema` (command arm).
 	manualSchema string
 }

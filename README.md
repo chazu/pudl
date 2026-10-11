@@ -38,7 +38,9 @@ pudl import --path data.json
     +-- Catalog in SQLite with full provenance metadata
 ```
 
-Data is never rejected -- if no specific schema matches, it falls back to the universal `pudl/core.#Item` catchall.
+Untyped imports fall back to `pudl/core.#Item` when no specific schema matches.
+An explicit `--schema` must validate every record; use `--allow-schema-fallback`
+only when you deliberately want permissive classification.
 
 ## Key Concepts
 

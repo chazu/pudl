@@ -76,9 +76,10 @@ type Populate struct {
 	Impure       bool                   `json:"impure,omitempty"`
 	SealedInputs map[string]SealedInput `json:"-"`
 	// #CommandObserve
-	Runs    []CommandRun `json:"runs,omitempty"`
-	Schema  string       `json:"schema,omitempty"`
-	Timeout string       `json:"timeout,omitempty"`
+	AllowSchemaFallback bool         `json:"allow_schema_fallback,omitempty"`
+	Runs                []CommandRun `json:"runs,omitempty"`
+	Schema              string       `json:"schema,omitempty"`
+	Timeout             string       `json:"timeout,omitempty"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }

@@ -10,9 +10,9 @@ func TestSchemaExplanationDoesNotChangeAssignment(t *testing.T) {
 	imp, _, _ := collectionFixture(t, "widget.json", `{"name":"w"}`)
 	for _, manual := range []string{"", "pudl/core.#Item", "pudl/k8s.#Resource", "mu/missing@v1#Resource"} {
 		t.Run(manual, func(t *testing.T) {
-			plain, err := imp.assignSchema(map[string]any{"name": "w"}, ImportOptions{ManualSchema: manual}, inference.InferenceHints{Format: "json"})
+			plain, err := imp.assignSchema(map[string]any{"name": "w"}, ImportOptions{AllowSchemaFallback: true, ManualSchema: manual}, inference.InferenceHints{Format: "json"})
 			require.NoError(t, err)
-			traced, err := imp.assignSchema(map[string]any{"name": "w"}, ImportOptions{ManualSchema: manual, Explain: true}, inference.InferenceHints{Format: "json"})
+			traced, err := imp.assignSchema(map[string]any{"name": "w"}, ImportOptions{AllowSchemaFallback: true, ManualSchema: manual, Explain: true}, inference.InferenceHints{Format: "json"})
 			require.NoError(t, err)
 			require.Equal(t, plain.Schema, traced.Schema)
 			require.Equal(t, plain.Confidence, traced.Confidence)

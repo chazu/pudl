@@ -82,8 +82,9 @@ type ObserveIngest struct {
 	// ManualSchema routes every record to this schema, validated through Chain
 	// with the usual base/catchall fallback (the command arm's `schema:`). Empty
 	// keeps the _schema-based routing.
-	ManualSchema string
-	Chain        *validator.ChainValidator
+	AllowSchemaFallback bool
+	ManualSchema        string
+	Chain               *validator.ChainValidator
 	// Redactor supplies sensitive-field paths; nil builds one from Inferrer.
 	Redactor *redact.Registry
 	// Projection computes schema-declared facts; nil builds one from Inferrer.
@@ -92,8 +93,9 @@ type ObserveIngest struct {
 
 // ObserveIngestResult is what an ingest recorded.
 type ObserveIngestResult struct {
-	Records    int
-	SnapshotID string
+	SchemaMismatches int
+	Records          int
+	SnapshotID       string
 	// Redacted counts sensitive values replaced before storage.
 	Redacted int
 	// Facts counts projected facts per relation; FactWarnings explains gaps.

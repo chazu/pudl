@@ -62,15 +62,16 @@ func (s *importSession) Close() {
 // options builds the import options for one source file.
 func (s *importSession) options(path, origin string) importer.ImportOptions {
 	return importer.ImportOptions{
-		SourcePath:     path,
-		Context:        s.ctx,
-		Limits:         s.limits,
-		Explain:        importExplain,
-		Origin:         origin, // auto-detected from the path when empty
-		ManualSchema:   s.schema,
-		ChainValidator: s.validator,
-		Set:            s.set,
-		DryRun:         importDryRun,
+		SourcePath:          path,
+		Context:             s.ctx,
+		Limits:              s.limits,
+		Explain:             importExplain,
+		Origin:              origin, // auto-detected from the path when empty
+		ManualSchema:        s.schema,
+		AllowSchemaFallback: importAllowSchemaFallback,
+		ChainValidator:      s.validator,
+		Set:                 s.set,
+		DryRun:              importDryRun,
 	}
 }
 
@@ -91,7 +92,7 @@ func resolveImportSchema(cfg *config.Config, input string) (string, *validator.C
 	}
 	resolved, err := chain.ResolveSchemaName(input)
 	if err != nil {
-		if strings.Contains(input, "@") {
+		if strings.Contains(input, "@") && importAllowSchemaFallback {
 			return input, chain, nil
 		}
 		return "", nil, errors.NewSchemaNotFoundError(input, nil)

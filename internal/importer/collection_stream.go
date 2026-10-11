@@ -23,6 +23,7 @@ import (
 // descriptor spool. Only authoritative dedup/version allocation and publication
 // run inside the atomic catalog commit.
 type collectionStream struct {
+	schemaMismatches    int
 	importer            *EnhancedImporter
 	opts                ImportOptions
 	collectionID        string
@@ -213,15 +214,22 @@ func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
 		if err != nil {
 			return err
 		}
-		assigned = func(any, ImportOptions) schemaAssignment { return cached }
+		assigned = func(any, ImportOptions) (schemaAssignment, error) { return cached, nil }
 	}
-	return c.prepareAssigned(index, itemData, itemPath, stored, itemContentHash, itemFilename, assigned(itemData, c.opts))
+	assignment, err := assigned(itemData, c.opts)
+	if err != nil {
+		return fmt.Errorf("record %d: %w", index, err)
+	}
+	return c.prepareAssigned(index, itemData, itemPath, stored, itemContentHash, itemFilename, assignment)
 }
 
 // prepareAssigned spools one record once its schema is known.
 func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath string, stored []byte, itemContentHash, itemFilename string, assigned schemaAssignment) error {
 	e := c.importer
 	schema, confidence := assigned.Schema, assigned.Confidence
+	if c.opts.ManualSchema != "" && !assigned.Validated {
+		c.schemaMismatches++
+	}
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
 	if extractErr != nil {

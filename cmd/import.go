@@ -13,15 +13,16 @@ import (
 )
 
 var (
-	importExplain     bool
-	importSchema      string
-	importOrigin      string
-	importFormat      string
-	importRecursive   bool
-	importSet         []string
-	importDryRun      bool
-	streamingMemoryMB int
-	streamingChunkMB  float64
+	importAllowSchemaFallback bool
+	importExplain             bool
+	importSchema              string
+	importOrigin              string
+	importFormat              string
+	importRecursive           bool
+	importSet                 []string
+	importDryRun              bool
+	streamingMemoryMB         int
+	streamingChunkMB          float64
 )
 
 // importCmd represents the import command
@@ -55,10 +56,10 @@ Data Storage:
 - The repository and global catalogs are separate; imports never cross them
 
 Schema Assignment:
-- Manual schema specification with --schema flag (chained validation)
+- Explicit schema validation with --schema (strict unless --allow-schema-fallback)
 - Automatic schema inference from CUE schemas in the schema repository
 - Chained validation: policy → base → generic → catchall
-- Never rejects data - always finds appropriate schema
+- Untyped imports use best-effort inference; explicit schemas must validate
 - Envelope wire format: a JSON file shaped like
     {"schema": {"module": "mu/aws", "version": "v1"},
      "definitions": [...],   // optional inline CUE
@@ -196,6 +197,7 @@ func init() {
 	// Add flags
 	importCmd.Flags().StringP("path", "p", "", "Path to file or wildcard pattern to import (use '-' for stdin)")
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
+	importCmd.Flags().BoolVar(&importAllowSchemaFallback, "allow-schema-fallback", false, "Explicitly allow records that do not satisfy --schema (reports fallback)")
 	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 	importCmd.Flags().BoolVar(&importRecursive, "recursive", false, "When --path is a directory, also import supported files in its subdirectories")

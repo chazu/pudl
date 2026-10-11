@@ -11,15 +11,17 @@ import (
 
 // observeRoute decides each observed record's schema and redacts it.
 type observeRoute struct {
-	manual   string
-	chain    *validator.ChainValidator
-	redactor *redact.Registry
+	mismatches    *int
+	allowFallback bool
+	manual        string
+	chain         *validator.ChainValidator
+	redactor      *redact.Registry
 	// Redacted counts sensitive values replaced across the observation.
 	redacted *int
 }
 
 func newObserveRoute(in ObserveIngest) (observeRoute, error) {
-	route := observeRoute{redactor: in.Redactor, redacted: new(int)}
+	route := observeRoute{allowFallback: in.AllowSchemaFallback, redactor: in.Redactor, redacted: new(int), mismatches: new(int)}
 	if route.redactor == nil && in.Inferrer != nil {
 		route.redactor = redact.NewRegistry(in.Inferrer)
 	}
@@ -29,6 +31,9 @@ func newObserveRoute(in ObserveIngest) (observeRoute, error) {
 		}
 		route.manual = schemaname.Normalize(in.ManualSchema)
 		route.chain = in.Chain
+		if !route.chain.HasSchema(route.manual) {
+			return observeRoute{}, fmt.Errorf("schema %s is not loaded", route.manual)
+		}
 	}
 	return route, nil
 }
@@ -46,6 +51,12 @@ func (r observeRoute) resolve(record map[string]any, graph *inference.Inheritanc
 	result, err := r.chain.ValidateChain(record, r.manual)
 	if err != nil {
 		return "", fmt.Errorf("validate against %s: %w", r.manual, err)
+	}
+	if !result.Valid && !r.allowFallback {
+		return "", fmt.Errorf("observed record does not satisfy requested schema %s", r.manual)
+	}
+	if !result.Valid {
+		*r.mismatches++
 	}
 	return schemaname.Normalize(result.AssignedSchema), nil
 }
