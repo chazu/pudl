@@ -34,6 +34,12 @@ Example usage:
 
 // runConfigCommand contains the actual config logic with structured error handling
 func runConfigCommand(cmd *cobra.Command, args []string) error {
+	if inspect, _ := cmd.Flags().GetBool("paths"); inspect {
+		return inspectDefinitionPaths(false)
+	}
+	if legacy, _ := cmd.Flags().GetBool("legacy-dependencies"); legacy {
+		return inspectDefinitionPaths(true)
+	}
 	showPath, _ := cmd.Flags().GetBool("path")
 
 	if showPath {
@@ -184,7 +190,11 @@ func init() {
 	configCmd.AddCommand(configResetCmd)
 
 	// Add flags
+	configCmd.Flags().Bool("paths", false, "Show all effective definition and storage paths")
+	configCmd.Flags().Bool("legacy-dependencies", false, "Inventory ignored global schemas and rules for explicit migration")
 	configCmd.Flags().BoolP("path", "p", false, "Show configuration file path only")
+
+	configCmd.MarkFlagsMutuallyExclusive("paths", "legacy-dependencies", "path")
 
 	// Add help for valid keys
 	configSetCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

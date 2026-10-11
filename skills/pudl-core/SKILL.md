@@ -128,7 +128,7 @@ See `docs/projection.md`.
 ## How pudl drives mu (the #SystemModel loop)
 
 `pudl run <model>` resolves a `#SystemModel` definition (project `.pudl/schema`
-wins over global `~/.pudl/schema`; register with `pudl schema add`) and runs the
+precedes explicitly vendored dependencies; register with `pudl schema add`) and runs the
 ACUTE cycle:
 
 ```
@@ -178,12 +178,11 @@ outputs), vs ingested/observed data.
 
 ### Workspace schema precedence
 
-Inside a repository workspace, PUDL searches `<repo>/.pudl/schema/` before the
-global `~/.pudl/schema/`. The first matching definition wins, while unrelated
-global schemas remain available. All mutable state stays in the repository's
-`.pudl/data/`; global fallback applies only to schema reads. `pudl config`
-reports the active local paths and effective search order. See
-`docs/workspace.md`.
+Repository definition resolution uses local schemas and explicitly declared
+packages under `.pudl/vendor/`. `workspace.cue` lists their relative roots in
+`dependencies`. Ambient global definitions are excluded. Use `pudl --global`
+for personal state, `pudl config --paths --json` for effective paths, and
+`pudl config --legacy-dependencies --json` to inventory migration candidates.
 
 ## Cross-model dependencies
 

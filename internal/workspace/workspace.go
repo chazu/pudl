@@ -11,6 +11,7 @@ import (
 
 // Workspace represents a discovered per-repo workspace.
 type Workspace struct {
+	DependencyRoots   []string            // explicit vendored definition packages, in priority order
 	Root              string              // absolute path to repo root (parent of .pudl/)
 	PudlDir           string              // absolute path to .pudl/ directory
 	Name              string              // workspace name from workspace.cue
@@ -73,6 +74,16 @@ func load(root string) (*Workspace, error) {
 		PudlDir:         pudlDir,
 		SchemaPath:      filepath.Join(pudlDir, "schema"),
 		DefinitionsPath: filepath.Join(pudlDir, "definitions"),
+	}
+	if dependencies := val.LookupPath(cue.ParsePath("dependencies")); dependencies.Exists() {
+		var paths []string
+		if err := dependencies.Decode(&paths); err != nil {
+			return nil, fmt.Errorf("workspace dependencies must be relative package paths: %w", err)
+		}
+		ws.DependencyRoots, err = dependencyRoots(pudlDir, paths)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Extract name (optional, defaults to directory name)

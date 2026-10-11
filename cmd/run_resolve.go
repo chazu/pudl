@@ -90,7 +90,7 @@ func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot s
 	if len(searched) == 0 {
 		return nil, "", "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
 	}
-	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
+	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it locally or vendor its definition package in .pudl/workspace.cue (inspect: pudl config --legacy-dependencies)", name, strings.Join(searched, ", "))
 }
 
 // resolveModelTemplate is the binding-aware discovery path. Unlike
@@ -115,7 +115,7 @@ func resolveModelTemplate(name string) (template *systemmodel.ModelTemplate, mod
 	if len(searched) == 0 {
 		return nil, "", "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
 	}
-	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it as a #SystemModel-derived definition", name, strings.Join(searched, ", "))
+	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it locally or vendor its definition package in .pudl/workspace.cue (inspect: pudl config --legacy-dependencies)", name, strings.Join(searched, ", "))
 }
 
 func resolveModelTemplateIn(dir, name string) (*systemmodel.ModelTemplate, error) {

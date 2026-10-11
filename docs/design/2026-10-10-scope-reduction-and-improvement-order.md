@@ -284,3 +284,8 @@ between an observation and an answer that a human or agent can justify.
   arm's `allow_schema_fallback` are explicit opt-ins with structured policy and
   mismatch reporting. Importer, bridge, and command tests passed; strict failures
   publish no records and permissive sensitive data remains redacted.
+- Step 5 implemented: projects exclude ambient global definitions and use
+  explicit vendored packages. Added --global, config --paths and
+  --legacy-dependencies, migration guidance, and vendored bundle coverage.
+  Workspace, public-library, bundle and command tests passed, including clean
+  versus conflicting home directories and CLI/library resolution parity.

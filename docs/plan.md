@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Reproducible project definitions (2026-10-10)
+
+Completed scope-reduction step 5: explicit vendored packages replace ambient
+global fallback, with effective-path inspection and migration inventory.
+See [delivery log](../implog/2026_10_10_workspace_dependencies.md).
+
 ### Strict explicit schemas (2026-10-10)
 
 Completed scope-reduction step 4: explicit schemas validate every record before
