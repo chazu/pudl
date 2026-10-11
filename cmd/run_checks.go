@@ -6,6 +6,7 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -25,17 +26,19 @@ const (
 // `expect: nonempty` checks, which count evidence rather than violations —
 // AdvisoryCount is zero and Count is the full result size.
 type CheckResult struct {
-	Expect             string         `json:"expect,omitempty"`
-	Witnesses          []CheckWitness `json:"witnesses,omitempty"`
-	WitnessesTruncated bool           `json:"witnesses_truncated,omitempty"`
-	Name               string         `json:"name"`
-	Query              string         `json:"query"`
-	Severity           string         `json:"severity"`
-	Count              int            `json:"count"`
-	AdvisoryCount      int            `json:"advisory_count,omitempty"`
-	Scope              string         `json:"scope"`
-	Passed             bool           `json:"passed"`
-	Message            string         `json:"message,omitempty"`
+	Outcome            string                  `json:"outcome,omitempty"`
+	Diagnostics        []projection.Diagnostic `json:"diagnostics,omitempty"`
+	Expect             string                  `json:"expect,omitempty"`
+	Witnesses          []CheckWitness          `json:"witnesses,omitempty"`
+	WitnessesTruncated bool                    `json:"witnesses_truncated,omitempty"`
+	Name               string                  `json:"name"`
+	Query              string                  `json:"query"`
+	Severity           string                  `json:"severity"`
+	Count              int                     `json:"count"`
+	AdvisoryCount      int                     `json:"advisory_count,omitempty"`
+	Scope              string                  `json:"scope"`
+	Passed             bool                    `json:"passed"`
+	Message            string                  `json:"message,omitempty"`
 }
 
 // checkContext is what a run knows that scopes its checks: the run's own ID,
@@ -107,14 +110,8 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 	// Checks read projected facts: bring them in line with the catalog and
 	// the current facts specs first, and say when a check's rules cannot
 	// match anything.
-	syncProjectionsQuietly(evalCtx, db)
-	if reg, err := projectionRegistry(); err == nil {
-		roots := make([]string, 0, len(m.Checks))
-		for _, c := range m.Checks {
-			roots = append(roots, c.Query)
-		}
-		lintRules(db, reg, rules, roots)
-	}
+	syncReport, syncErr := syncProjections(evalCtx, db, false)
+	reg, registryErr := projectionRegistry()
 
 	var results []CheckResult
 	for _, c := range m.Checks {
@@ -125,15 +122,30 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 			constraints = map[string]interface{}{"run_id": ctx.runID}
 		}
 
+		result := CheckResult{Name: c.Name, Query: c.Query, Expect: c.Expect, Severity: c.Severity, Scope: scope, Message: redactSealedText(c.Message, m)}
+		if registryErr != nil {
+			result.Diagnostics = []projection.Diagnostic{{Code: "schema_unavailable", Message: registryErr.Error()}}
+		} else {
+			result.Diagnostics = projection.CheckDiagnostics(db, reg, rules, c.Query, syncReport, syncErr)
+		}
+		if len(result.Diagnostics) > 0 {
+			result.Outcome = "unknown"
+			results = append(results, result)
+			continue
+		}
 		tuples, err := datalog.EvaluateContext(evalCtx, db, rules, c.Query, constraints, datalog.TemporalScope{}, datalog.EvalOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("check %q (relation %q): %w", c.Name, c.Query, err)
+			result.Outcome = "error"
+			result.Diagnostics = []projection.Diagnostic{{Code: "evaluation_error", Message: err.Error()}}
+			results = append(results, result)
+			continue
 		}
 
 		gating, advisory := partitionCheckTuples(tuples, c.Expect, ctx.scope)
 		witnesses, truncated := checkWitnesses(tuples, c.Expect, ctx.scope, m)
 		results = append(results, CheckResult{
-			Expect: c.Expect, Witnesses: witnesses, WitnessesTruncated: truncated,
+			Outcome: checkOutcome(checkPasses(c.Expect, gating)),
+			Expect:  c.Expect, Witnesses: witnesses, WitnessesTruncated: truncated,
 			Name:          c.Name,
 			Query:         c.Query,
 			Severity:      c.Severity,
@@ -145,6 +157,13 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 		})
 	}
 	return results, nil
+}
+
+func checkOutcome(passed bool) string {
+	if passed {
+		return "pass"
+	}
+	return "fail"
 }
 
 // partitionCheckTuples splits a check's result rows into the ones its verdict is
@@ -178,6 +197,12 @@ func partitionCheckTuples(tuples []datalog.Tuple, expect string, scope *acute.Tu
 func printChecks(results []CheckResult) (failedFail bool) {
 	for _, r := range results {
 		switch {
+		case r.Outcome == "unknown" || r.Outcome == "error":
+			fmt.Fprintf(outw(), "  ? %s [%s]: %s\n", r.Name, r.Severity, r.Outcome)
+			for _, d := range r.Diagnostics {
+				fmt.Fprintf(outw(), "    %s: %s\n", d.Code, d.Message)
+			}
+			failedFail = true
 		case r.Passed && r.AdvisoryCount > 0:
 			fmt.Fprintf(outw(), "  ⚠ %s [%s] advisory — %d match(es) outside --only scope: %s\n",
 				r.Name, r.Severity, r.AdvisoryCount, r.Message)

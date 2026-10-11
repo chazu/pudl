@@ -113,8 +113,13 @@ blocks include:
 
 ### Silent misses are reported
 
-Checks with `expect: "empty"` pass when their rule matches nothing. Because of
-that, pudl reports each way a projection or rule can match nothing by accident:
+Checks carry `outcome: pass|fail|unknown|error`. A missing relation, invalid
+required projection, or failed required synchronization produces `unknown`,
+never a pass. Evaluation failures produce `error`. Both are persisted with
+structured diagnostics and exit 1 under `--detailed-exitcode`. A declared empty
+relation remains valid; unrelated broken schemas do not disable a check.
+
+PUDL also reports potential projection and rule misses during exploration:
 
 - **Import and run summaries** list the facts projected per relation. They warn
   when a declared relation produced none (usually a path typo) and when values

@@ -74,6 +74,7 @@ type runFinalization struct {
 // errFailSeverityChecks is the run outcome when every phase succeeded but a
 // fail-severity check did not pass.
 var errFailSeverityChecks = fmt.Errorf("one or more fail-severity checks did not pass")
+var errCheckEvidence = fmt.Errorf("one or more checks could not establish a verdict; inspect check diagnostics")
 
 // finalizeRun evaluates the model's checks, decides the run's verdict, and
 // records it on the model instance row and the model's resources. It is the one
@@ -112,7 +113,12 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 			return runFinalization{runErr: runErr}, err
 		}
 		report.Checks = results
-		if anyFailSeverityFailed(results) {
+		if anyCheckUncertain(results) {
+			report.OK = false
+			if runErr == nil {
+				runErr = errCheckEvidence
+			}
+		} else if anyFailSeverityFailed(results) {
 			report.OK = false
 			// First error wins: a converge failure is what the operator needs to
 			// see, and a check failure must not displace it.
@@ -177,7 +183,7 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 	verifiedClean := !flags.dryRun &&
 		((report.Drift != nil && report.Drift.Clean && report.Drift.Verified) ||
 			(report.Converge != nil && report.Converge.Outcome == string(outcomeClean)))
-	if verifiedClean {
+	if verifiedClean && !anyCheckUncertain(report.Checks) && !anyFailSeverityFailed(report.Checks) {
 		promoteConvergingResources(cat, in.effective, restricted)
 	}
 	return fin, nil
@@ -190,6 +196,9 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 // is observe-only or was just converged, since the convergence loop ends in the
 // same re-observed ∅ state. It is only ever written off an actual ∅ observation.
 func runVerdict(r *RunReport, f runFlags) string {
+	if !f.dryRun && anyCheckUncertain(r.Checks) {
+		return "unknown"
+	}
 	verdict := phaseVerdict(r, f)
 	// A fail-severity check that did not pass says the model is not in the state
 	// it declares, so a `clean` written over it would claim verification the run
@@ -206,6 +215,15 @@ func runVerdict(r *RunReport, f runFlags) string {
 		return "drifted"
 	}
 	return verdict
+}
+
+func anyCheckUncertain(results []CheckResult) bool {
+	for _, c := range results {
+		if c.Outcome == "unknown" || c.Outcome == "error" {
+			return true
+		}
+	}
+	return false
 }
 
 // phaseVerdict is the verdict the run's phases alone support, before checks are

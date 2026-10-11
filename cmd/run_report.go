@@ -57,7 +57,7 @@ func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, flags runFl
 		model = template.Name
 	}
 	return &RunReport{
-		ReportVersion: 1, Model: model, Mode: mode,
+		ReportVersion: 2, Model: model, Mode: mode,
 		CompletionStatus: database.RunStatusFailed, OK: false, Error: errorString(err),
 		BindingIssues: resolutionBindingIssues(template, err),
 	}
@@ -91,7 +91,7 @@ type MutationReceipt struct {
 // render emits the report as JSON when machine output is requested, else markdown.
 func (r *RunReport) render(asJSON bool) (string, error) {
 	if r.ReportVersion == 0 {
-		r.ReportVersion = 1
+		r.ReportVersion = 2
 	}
 	if asJSON {
 		b, err := json.MarshalIndent(r, "", "  ")
@@ -166,6 +166,13 @@ func (r *RunReport) markdown() string {
 	if len(r.Checks) > 0 {
 		fmt.Fprintf(&b, "\n### checks\n")
 		for _, c := range r.Checks {
+			if c.Outcome == "unknown" || c.Outcome == "error" {
+				fmt.Fprintf(&b, "  - ? %s [%s]: %s\n", c.Name, c.Severity, c.Outcome)
+				for _, d := range c.Diagnostics {
+					fmt.Fprintf(&b, "    - %s: %s\n", d.Code, d.Message)
+				}
+				continue
+			}
 			// Advisory matches are rendered even on a pass: a check that only
 			// matched outside the run's --only scope did not gate, and saying so is
 			// what keeps a silent exit-code drop from looking like a clean check.

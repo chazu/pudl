@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Evidence verdicts and empty observations (2026-10-10)
+
+Completed scope-reduction step 2: structured unknown/error checks, dependency-
+scoped evidence diagnostics, and valid zero-record command snapshots.
+See [delivery log](../implog/2026_10_10_evidence_verdicts.md).
+
 ### Scope reduction step 1 (2026-10-10)
 
 Removed shell-profile management and guessed dependency derivation. Migration 24

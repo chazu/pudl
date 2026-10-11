@@ -49,7 +49,7 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 	}
 	defer workspaces.track(dir)()
 
-	var records []any
+	records := make([]any, 0)
 	budget := &byteBudget{remaining: limits.StagingBytes}
 	for i, run := range p.Runs {
 		out := filepath.Join(dir, fmt.Sprintf("run-%d.json", i))

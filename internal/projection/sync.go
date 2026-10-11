@@ -14,11 +14,12 @@ type LoadFunc func(entry database.CatalogEntry) (any, error)
 
 // SyncReport is what a sync changed.
 type SyncReport struct {
-	Orphaned     int               `json:"orphaned"`     // sources closed: entry gone, re-identified or schema lost its facts
-	Reprojected  int               `json:"reprojected"`  // resources recomputed after a spec change
-	Bootstrapped int               `json:"bootstrapped"` // resources projected for the first time
-	Broken       map[string]string `json:"broken,omitempty"`
-	Errors       []string          `json:"errors,omitempty"` // per-entry failures (payload unreadable); facts left as they were
+	Failures     map[string][]string `json:"failures,omitempty"`
+	Orphaned     int                 `json:"orphaned"`     // sources closed: entry gone, re-identified or schema lost its facts
+	Reprojected  int                 `json:"reprojected"`  // resources recomputed after a spec change
+	Bootstrapped int                 `json:"bootstrapped"` // resources projected for the first time
+	Broken       map[string]string   `json:"broken,omitempty"`
+	Errors       []string            `json:"errors,omitempty"` // per-entry failures (payload unreadable); facts left as they were
 }
 
 // Changed reports whether the sync wrote anything.
@@ -133,7 +134,7 @@ func project(tx *database.CatalogTx, reg *Registry, load LoadFunc, entry databas
 	}
 	data, err := load(entry)
 	if err != nil {
-		report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", entry.ID, err))
+		report.recordFailure(entry, err)
 		return false
 	}
 	// Payloads stored before a field became sensitive are redacted here, so
@@ -144,10 +145,19 @@ func project(tx *database.CatalogTx, reg *Registry, load LoadFunc, entry databas
 		return true
 	}
 	if err := apply(tx, prepared, database.ProjectionCorrection); err != nil {
-		report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", entry.ID, err))
+		report.recordFailure(entry, err)
 		return false
 	}
 	return true
+}
+
+func (r *SyncReport) recordFailure(entry database.CatalogEntry, err error) {
+	message := fmt.Sprintf("%s: %v", entry.ID, err)
+	r.Errors = append(r.Errors, message)
+	if r.Failures == nil {
+		r.Failures = map[string][]string{}
+	}
+	r.Failures[entry.Schema] = append(r.Failures[entry.Schema], message)
 }
 
 // Stale reports, without writing, why a Sync would change anything: reasons
