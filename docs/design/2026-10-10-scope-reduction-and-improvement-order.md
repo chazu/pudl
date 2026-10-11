@@ -2,8 +2,9 @@
 
 **Date:** 2026-10-10
 
-**Status:** Proposed. This records recommendations and their delivery order;
-the removals and improvements below are not implemented by this document.
+**Status:** Implementation in progress. The user approved this sequence on
+2026-10-10 with `list --fancy` explicitly retained. Delivery evidence is recorded
+below as each step completes.
 
 **Review baseline:** `f9be415`.
 
@@ -20,19 +21,16 @@ It prioritizes demonstrated correctness gaps before broader interface work.
 
 ## Recommended removals
 
-| Removal | Reason and retained capability | Cost or condition | Delivery step |
-| --- | --- | --- | --- |
-| `pudl setup` and shell-profile management | Shell detection, startup-file editing, backup, aliases, and uninstall behavior add ownership unrelated to evidence. Keep `pudl completion` and document its installation. | Publish manual cleanup instructions for previously installed snippets; do not edit users' profiles during an upgrade. | 1 |
-| `pudl model deps --derive` and value-equality dependency guessing | Coincidental strings can become dependency edges. Keep declared dependencies and dependencies established by value bindings. | Authors must declare relationships. Retire only facts owned by this heuristic; preserve declared, binding, and user-authored facts and historical evidence. | 1 |
-| Implicit global schemas, rules, models, and definitions inside project workspaces | A repository's meaning should be reproducible without its operator's home directory. Keep explicitly selected global mode and explicitly declared shared dependencies. | Existing workspaces need a dependency inventory and migration path. Preserve bundled standard schemas and inspect the effective dependency set before changing resolution. | 5 |
-| Silent schema fallback after an explicit schema request | An explicit type request should either validate or fail. Keep best-effort inference for exploratory, untyped imports. | Some imports currently accepted through fallback will fail. Offer an explicit, visibly reported permissive choice where needed. | 4 |
-| `schema status/commit/log`, `schema edit`, and `module add/tidy/list/info` | These largely wrap Git, an editor, and CUE. Keep schema generation, validation, inference, and dependency resolution that have PUDL-specific meaning. | Provide exact paths and equivalent native commands first. This revisits the September decision to retain these helpers. | 8 |
-| `list --fancy` and its dedicated interactive list implementation | Prefer one strong reporting and inspection experience over a separate catalog browser. Keep readable text and structured output. | Conditional, lower-confidence removal: retain it if it serves a regular workflow the remaining interface cannot adequately support. Remove dependencies only when no retained code uses them. | 8 |
+| Removal                                                                           | Reason and retained capability                                                                                                                                            | Cost or condition                                                                                                                                                                             | Delivery step |
+|-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
+| `pudl setup` and shell-profile management                                         | Shell detection, startup-file editing, backup, aliases, and uninstall behavior add ownership unrelated to evidence. Keep `pudl completion` and document its installation. | Publish manual cleanup instructions for previously installed snippets; do not edit users' profiles during an upgrade.                                                                         | 1             |
+| `pudl model deps --derive` and value-equality dependency guessing                 | Coincidental strings can become dependency edges. Keep declared dependencies and dependencies established by value bindings.                                              | Authors must declare relationships. Retire only facts owned by this heuristic; preserve declared, binding, and user-authored facts and historical evidence.                                   | 1             |
+| Implicit global schemas, rules, models, and definitions inside project workspaces | A repository's meaning should be reproducible without its operator's home directory. Keep explicitly selected global mode and explicitly declared shared dependencies.    | Existing workspaces need a dependency inventory and migration path. Preserve bundled standard schemas and inspect the effective dependency set before changing resolution.                    | 5             |
+| Silent schema fallback after an explicit schema request                           | An explicit type request should either validate or fail. Keep best-effort inference for exploratory, untyped imports.                                                     | Some imports currently accepted through fallback will fail. Offer an explicit, visibly reported permissive choice where needed.                                                               | 4             |
+| `schema status/commit/log`, `schema edit`, and `module add/tidy/list/info`        | These largely wrap Git, an editor, and CUE. Keep schema generation, validation, inference, and dependency resolution that have PUDL-specific meaning.                     | Provide exact paths and equivalent native commands first. This revisits the September decision to retain these helpers.                                                                       | 8             |
 
-The [heuristic dependency code](../../cmd/model_derive.go) explicitly describes
-its matching as approximate. The [workspace policy](../../internal/workspace/policy.go)
-currently includes global search paths even for local workspaces. The
-[shell integration](../../cmd/setup.go) installs navigation helpers centered on
+The retired heuristic dependency implementation used approximate value matching. The [workspace policy](../../internal/workspace/policy.go)
+currently includes global search paths even for local workspaces. The retired shell integration installed navigation helpers centered on
 the global schema directory. These are concrete simplification opportunities.
 
 Two further reductions concern the normal workflow rather than capability
@@ -43,6 +41,9 @@ observations, expectations, findings, and evidence, introducing ACUTE, EDB,
 Ewe, and sealed routing only when the task requires them.
 
 ## Capabilities to preserve
+
+**Decision 2026-10-10:** Keep `list --fancy`, its interactive interface, and its
+required dependencies. Its removal is outside this implementation scope.
 
 Keep the single binary, SQLite catalog, local workspace storage, content and
 resource identities, temporal fact store, Datalog, provenance, retained
@@ -229,22 +230,20 @@ save a check, and verify a correction. Record commands, custom glue, mistakes,
 and time to a justified answer against the current workflow. Fixtures test the
 journey hermetically; live GCP acceptance is recorded separately.
 
-### Step 8 Retire wrappers and decide the interactive list
+### Step 8 Retire wrappers and retain the interactive list
 
 Once effective paths and the ordinary inspection workflow are clear, retire the
 Git/editor/CUE wrappers with exact native-command replacements. Preserve schema
 version control and CUE dependency support. Treat the command removal as an
 announced compatibility change, not an incidental cleanup.
 
-Assess the actual role of `list --fancy`. Remove it if normal inspection covers
-its useful tasks; otherwise retain it and stop expanding it until a concrete
-workflow warrants more work. This conditional decision does not block the rest
-of the sequence.
+Keep `list --fancy` and its existing behavior. Wrapper retirement must preserve
+the interactive list and its dependencies.
 
 **Acceptance:** authoring, dependency maintenance, and schema history remain
 straightforward using documented paths and native tools. Examples and agent
 instructions contain no retired commands. Dependency cleanup reflects actual
-remaining imports.
+remaining imports; the interactive list remains available.
 
 ## Validation and scope control
 
@@ -263,3 +262,9 @@ Keep dashboards, background services, new agent transports, additional format
 parsers, and broad command-hierarchy redesign outside this sequence. The success
 criterion is fewer concepts and fewer opportunities for an incorrect conclusion
 between an observation and an answer that a human or agent can justify.
+
+## Delivery record
+
+- Step 1 implemented: removed shell-profile management and heuristic dependency
+  derivation, with migration 24 preserving history and unrelated sources. Focused
+  migration and run-set tests passed. `list --fancy` remains supported.

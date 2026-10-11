@@ -118,7 +118,6 @@ See `docs/projection.md`.
 - `pudl run set <models...> --converge` — whole-set read-only preflight and exact planning before mutation; sealed-output sets pause for mandatory approval, while other sets may opt in with `--require-approval`
 - `pudl run report|resume|reject` — inspect or decide standalone/set operations
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
-- `pudl model deps --derive` — also derive edges from desired↔produced identity matching
 - `pudl model populator add ...` — manage populator programs for `#EweTarget`
 - `pudl status [target]` — recorded convergence status by catalog target (a run records its verdict)
 
@@ -205,12 +204,9 @@ them (query with positional `key=value`):
 - `pudl query --topo model_depends_on` — a topological run order (deps first)
 
 `pudl model deps` records edges for **every** registered model without running
-them (closes the gap where impact was blind to never-run models). `--derive`
-adds Phase-2 derived edges: when a value in B's `desired` references an identity
-A produces (e.g. B's Deployment names a Namespace A declares), B→A is derived
-without a manual `depends_on` (heuristic, opt-in, separately sourced). pudl only
-makes deps queryable — it does not re-run downstream models (that is mu's / a
-scheduler's job). See `docs/cross-model-dependencies.md`.
+them. Dependencies come from explicit `depends_on` declarations and value
+bindings. PUDL does not guess edges from coincidental values or re-run downstream
+models automatically. See `docs/cross-model-dependencies.md`.
 
 ### Value bindings
 

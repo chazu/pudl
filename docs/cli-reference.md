@@ -95,7 +95,6 @@ These flags apply to every command.
   - [pudl schema reinfer](#pudl-schema-reinfer) — Re-run schema inference on existing catalog entries
   - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
   - [pudl schema status](#pudl-schema-status) — Show uncommitted changes in the schema repository
-- [pudl setup](#pudl-setup) — Set up shell integration for PUDL
 - [pudl show](#pudl-show) — Show detailed information about a specific data entry
 - [pudl snapshot](#pudl-snapshot) — Inspect and retain observation snapshots
   - [pudl snapshot current](#pudl-snapshot-current) — Show the newest observation snapshot for a model
@@ -1154,7 +1153,7 @@ standalone command.
 Refresh and show the cross-model dependency graph
 
 ```text
-pudl model deps [flags]
+pudl model deps
 ```
 
 ```text
@@ -1165,23 +1164,10 @@ This closes the run-time-only coverage gap: querying impact (impacted_by) is
 otherwise blind to models that have never been run. 'pudl model deps' records
 every declared edge from the schema directly.
 
-With --derive, also compute Phase-2 DERIVED edges: B depends on A when a value
-in B's desired references an identity A produces (e.g. B's Deployment names a
-Namespace A declares), without a manual depends_on. Derived edges are emitted as
-the same model_depends_on relation under a separate provenance, are heuristic
-(value-based matching can over-match), and never override a declared edge.
-
 Examples:
     pudl model deps
-    pudl model deps --derive
-    pudl model deps --derive --json
+    pudl model deps --json
 ```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--derive` | bool |  | also compute Phase-2 derived edges (desired↔produced identity matching) |
 
 ## pudl model list
 
@@ -2376,49 +2362,6 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `-v`, `--verbose` | bool |  | Show detailed file status |
-
-## pudl setup
-
-Set up shell integration for PUDL
-
-```text
-pudl setup [flags]
-```
-
-```text
-Set up shell integration for PUDL by adding helpful aliases and functions
-to your shell configuration files.
-
-This command adds the following integrations:
-- 'pcd' alias: Quick navigation to PUDL schema repository
-- 'pudl-cd' function: Enhanced directory navigation with status
-- Shell completion setup (if supported)
-
-Supported shells:
-- bash (.bashrc)
-- zsh (.zshrc)
-- fish (config.fish)
-
-The setup will:
-1. Detect your current shell automatically
-2. Add PUDL integration snippets to the appropriate config file
-3. Backup existing config before making changes
-4. Provide instructions for activating the changes
-
-Examples:
-    pudl setup                     # Auto-detect shell and install
-    pudl setup --shell bash        # Force bash setup
-    pudl setup --dry-run           # Show what would be added
-    pudl setup --uninstall         # Remove PUDL integration
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--dry-run` | bool |  | Show what would be added without making changes |
-| `--shell` | string |  | Target shell (bash, zsh, fish) - auto-detected if not specified |
-| `--uninstall` | bool |  | Remove PUDL shell integration |
 
 ## pudl show
 

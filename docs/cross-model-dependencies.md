@@ -1,19 +1,10 @@
 # Design: cross-model data dependencies
 
-**Status:** **Phase 1 + Phase 2 BUILT (2026-06-30).** Phase 1:
-`#SystemModel.depends_on` → reconciled `model_depends_on` facts → built-in
-recursive rules (`depends_transitive` / `impacted_by` / `cyclic`) → `pudl query`,
-plus `pudl query --list` / `--topo` and the opt-in `pudl run --check-upstream`.
-Phase 2: `pudl model deps --derive` derives edges from desired↔produced identity
-matching. The two Phase-1 leftovers are also closed: `pudl model deps` is the
-no-run discovery pass (coverage gap), and query completion now lists derived
-rule-head + EDB relations (discoverability). Validated end-to-end on a local k3d
-cluster (real k8s convergence + derivation) and against a Docker container as a
-fake remote host (inventory class). See
-`implog/2026_06_30_cross_model_dependencies.md` and
-`implog/2026_06_30_cross_model_deps_phase2.md`. Origin: mu
-`docs/design/system-models/V1-BUILD-SPEC.md` §12, and the pudl-side convergence
-work (`docs/system-models-build-status.md`).
+**Status:** Declared and binding dependencies are supported. Heuristic
+value-equality dependency derivation was retired on 2026-10-10; see
+[retired commands](retired-commands.md). `pudl model deps` refreshes authoritative
+edges without running models. Historical implementation details below describe
+the original delivery.
 
 > **Supersession note (2026-08-05):** The dependency fact substrate in this
 > document remains authoritative. The claims below that cross-model value flow
@@ -276,40 +267,16 @@ shipped rules.
 model never run contributed no edge — an empty `impacted_by` meant "no recorded
 dependents," not "provably none." **`pudl model deps`** closes this: it
 reconciles every registered model's declared `depends_on` into facts **without
-running them** (and `--derive` adds the Phase-2 edges). After a `pudl model deps`
+running them**. After a `pudl model deps`
 the graph reflects the whole declared schema. The advisory phrasing on
 `--check-upstream` is retained (it is still an advisory, but the graph is now
 complete once the discovery pass has run).
 
-### Phase 2 — derived dependencies (BUILT — `pudl model deps --derive`)
+### Retired heuristic dependencies
 
-A model's dependency is often **latent** in its `desired`: model B's desired
-resource references an identity that model A produces (e.g. B's Deployment names
-a Namespace A declares). `pudl model deps --derive` derives
-`model_depends_on(from:B, to:A)` without a manual declaration.
-
-**Implementation note — why Go-side, not a Datalog join.** An early draft
-assumed a Datalog join over a new EDB projection of desired identities. The
-substrate makes that impractical: `desired` is **not** SQL-queryable (it lives in
-the in-memory model / the stored record file, not a catalog column), and
-`tags.model` is set only by the converge path. So derivation runs in Go over
-resolved models and emits the **same** `model_depends_on` relation (under a
-separate `derived:` fact source) — the Phase-1 rules are therefore unchanged, as
-the original design required.
-
-The match is **value-based**: `producedIdentities(A)` = A's desired resource
-identities (top-level identity_fields / name|path|id, plus the k8s
-`metadata.name` — scoped to metadata, so container/port names are not treated as
-identities); `referencedValues(B)` = the string leaves of B's desired (skipping
-structural type tags `kind`/`apiVersion`/`_schema`) minus B's own identities; an
-edge is derived when they intersect, A ≠ B, and B does not already **declare** A
-(declared wins; no duplicate). Because it is
-value-based it is **heuristic** (a coincidental string equality can over-match),
-so it is **opt-in** (`--derive`), **separately sourced** (auditable; never
-corrupts the declared graph), and reconciled independently (`reconcileEdges`
-scopes by fact `Source`). Validated on k3d: a `workloads` model with **no**
-`depends_on` correctly derives an edge to `network` from its Deployment's
-`metadata.namespace` referencing `network`'s Namespace.
+Value-equality guesses could confuse unrelated strings with resource references.
+Use declared dependencies or explicit value bindings. Migration 24 retracts only
+assertions owned by the retired heuristic and preserves their history.
 
 ## What the system does with the relation
 
@@ -341,7 +308,7 @@ still plans and executes each member's internal target/action graph.
 | ✅ Phase 1: `depends_on` field + reconciled `model_depends_on` facts + the 3 rules + topo helper + `pudl query` | DONE 2026-06-30 |
 | ✅ Stale-upstream warning (`pudl run --check-upstream`) | DONE 2026-06-30 |
 | ✅ Coverage: `pudl model deps` no-run discovery pass | DONE 2026-06-30 |
-| ✅ Phase 2: derived dependencies (`pudl model deps --derive`, Go-side value match) | DONE 2026-06-30 |
+| Heuristic dependency derivation | Retired 2026-10-10 |
 | Deletion-safety warning | future — `pudl delete` is generic catalog-entry deletion; a model-aware warn is a separate, small follow-up |
 | Value threading (`${vpc.id}`) | **NOT here** — the ewe-converge item (§7), its own trigger |
 | Cross-model run re-triggering / scheduling | **NOT pudl** — mu DAG or an external scheduler consuming the relation |

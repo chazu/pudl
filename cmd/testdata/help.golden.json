@@ -848,14 +848,8 @@
         {
           "use": "deps",
           "short": "Refresh and show the cross-model dependency graph",
-          "long": "Reconcile every registered model's declared and binding-derived dependencies into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nWith --derive, also compute Phase-2 DERIVED edges: B depends on A when a value\nin B's desired references an identity A produces (e.g. B's Deployment names a\nNamespace A declares), without a manual depends_on. Derived edges are emitted as\nthe same model_depends_on relation under a separate provenance, are heuristic\n(value-based matching can over-match), and never override a declared edge.\n\nExamples:\n    pudl model deps\n    pudl model deps --derive\n    pudl model deps --derive --json",
+          "long": "Reconcile every registered model's declared and binding-derived dependencies into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nExamples:\n    pudl model deps\n    pudl model deps --json",
           "flags": [
-            {
-              "name": "derive",
-              "usage": "also compute Phase-2 derived edges (desired↔produced identity matching)",
-              "type": "bool",
-              "default": "false"
-            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1819,37 +1813,6 @@
               "default": "false"
             }
           ]
-        }
-      ]
-    },
-    {
-      "use": "setup",
-      "short": "Set up shell integration for PUDL",
-      "long": "Set up shell integration for PUDL by adding helpful aliases and functions\nto your shell configuration files.\n\nThis command adds the following integrations:\n- 'pcd' alias: Quick navigation to PUDL schema repository\n- 'pudl-cd' function: Enhanced directory navigation with status\n- Shell completion setup (if supported)\n\nSupported shells:\n- bash (.bashrc)\n- zsh (.zshrc)\n- fish (config.fish)\n\nThe setup will:\n1. Detect your current shell automatically\n2. Add PUDL integration snippets to the appropriate config file\n3. Backup existing config before making changes\n4. Provide instructions for activating the changes\n\nExamples:\n    pudl setup                     # Auto-detect shell and install\n    pudl setup --shell bash        # Force bash setup\n    pudl setup --dry-run           # Show what would be added\n    pudl setup --uninstall         # Remove PUDL integration",
-      "flags": [
-        {
-          "name": "dry-run",
-          "usage": "Show what would be added without making changes",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "json",
-          "usage": "Output results as JSON for scripting",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "shell",
-          "usage": "Target shell (bash, zsh, fish) - auto-detected if not specified",
-          "type": "string"
-        },
-        {
-          "name": "uninstall",
-          "usage": "Remove PUDL shell integration",
-          "type": "bool",
-          "default": "false"
         }
       ]
     },

@@ -83,7 +83,6 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 
 ### CLI Commands
 - `pudl init` -- Initialize local state; `--global` selects the global data lake
-- `pudl setup` -- Set up shell integration
 - `pudl config` -- View and manage configuration
 - `pudl import` -- Import data files
 - `pudl list` -- Query and filter catalog entries
