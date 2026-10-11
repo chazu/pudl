@@ -2,9 +2,11 @@
 
 **Date:** 2026-10-10
 
-**Status:** Implementation in progress. The user approved this sequence on
-2026-10-10 with `list --fancy` explicitly retained. Delivery evidence is recorded
-below as each step completes.
+**Status:** Implemented and locally qualified on 2026-10-10, with
+`list --fancy` explicitly retained. All eight implementation steps are delivered.
+Live GCP access and an actual human usability trial were not performed; the
+existing toolchain/dependency vulnerability findings are tracked as `pudl-ew9`.
+See the [completion audit](../../implog/2026_10_10_scope_reduction_completion.md).
 
 **Review baseline:** `f9be415`.
 
@@ -19,7 +21,7 @@ This proposal follows the [September UX assessment](2026-09-30-ux-simplification
 and the [October GCP workflow changes](2026-10-08-gcp-cataloging-ux.md).
 It prioritizes demonstrated correctness gaps before broader interface work.
 
-## Recommended removals
+## Scope decisions
 
 | Removal                                                                           | Reason and retained capability                                                                                                                                            | Cost or condition                                                                                                                                                                             | Delivery step |
 |-----------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
@@ -57,10 +59,11 @@ actions and sealed provider handling. Plain-command observation remains useful
 without Mu. Preserve exact-set membership, approved-plan validation, mutation
 receipts, apply budgets, and uncertain-outcome handling throughout the work.
 
-## Findings that determine priority
+## Review findings that determined priority
 
 The review built the baseline source and exercised temporary local workspaces.
-These are CLI observations, not live-cloud or full-suite qualification:
+These describe the review baseline before implementation; the delivery record
+below identifies the fixes. They are CLI observations, not live-cloud qualification:
 
 - A fail-severity `expect: "empty"` check whose rule referenced a nonexistent
   relation returned `passed: true`, `ok: true`, and exit 0, including with
@@ -304,3 +307,11 @@ between an observation and an answer that a human or agent can justify.
   were removed, with native replacements and source-path discovery documented.
   Retired-command tests and the native CLI smoke passed. `list --fancy` and its
   dependencies remain available as explicitly requested.
+
+Final qualification of implementation source `cd1583e` passed the full race
+suite, lint, generated docs/skills checks, build, Git walkthrough, and real-Mu
+smoke matrix. The native consolidated-command smoke passed, and the retained
+interactive list was exercised in a terminal. The final audit additionally
+closed runtime routing-tag/composite-identity matching and persisted incomplete
+projection status for omitted query values. See the completion audit for exact
+commands and the vulnerability-scan limitation.
