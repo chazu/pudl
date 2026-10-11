@@ -102,24 +102,28 @@ func build(ws *Workspace, globalDir string) *Policy {
 		EffectiveOrigin: string(ModeGlobal),
 	}
 
-	if ws != nil {
-		policy.Mode = ModeWorkspace
-		policy.EffectiveOrigin = ws.Name
-		policy.SchemaSearchPaths = append(policy.SchemaSearchPaths, ws.SchemaPath)
-		policy.DefinitionSearchPaths = append(policy.DefinitionSearchPaths, ws.DefinitionsPath)
-		policy.ModelSearchPaths = append(policy.ModelSearchPaths, ws.SchemaPath)
+	if ws == nil {
+		policy.SchemaSearchPaths = []string{globalSchema}
+		policy.ModelSearchPaths = []string{globalSchema}
+		policy.DefinitionSearchPaths = []string{filepath.Join(globalSchema, "definitions")}
+		policy.RuleSearchPaths = []string{globalRules}
+		return policy
 	}
-
-	policy.SchemaSearchPaths = append(policy.SchemaSearchPaths, globalSchema)
-	policy.DefinitionSearchPaths = append(policy.DefinitionSearchPaths,
-		filepath.Join(globalSchema, "definitions"))
-	policy.ModelSearchPaths = append(policy.ModelSearchPaths, globalSchema)
-
-	rulePaths := []string{globalRules}
-	if ws != nil {
-		rulePaths = append(rulePaths, filepath.Join(ws.PudlDir, "schema", "pudl", "rules"))
+	policy.Mode = ModeWorkspace
+	policy.EffectiveOrigin = ws.Name
+	policy.SchemaSearchPaths = []string{ws.SchemaPath}
+	policy.ModelSearchPaths = []string{ws.SchemaPath}
+	policy.DefinitionSearchPaths = []string{ws.DefinitionsPath}
+	for _, root := range ws.DependencyRoots {
+		policy.SchemaSearchPaths = append(policy.SchemaSearchPaths, filepath.Join(root, "schema"))
+		policy.ModelSearchPaths = append(policy.ModelSearchPaths, filepath.Join(root, "schema"))
+		policy.DefinitionSearchPaths = append(policy.DefinitionSearchPaths, filepath.Join(root, "definitions"))
 	}
-	policy.RuleSearchPaths = rulePaths
+	// Rule loaders prefer later paths; preserve the same priority as schemas.
+	for i := len(ws.DependencyRoots) - 1; i >= 0; i-- {
+		policy.RuleSearchPaths = append(policy.RuleSearchPaths, filepath.Join(ws.DependencyRoots[i], "schema", "pudl", "rules"))
+	}
+	policy.RuleSearchPaths = append(policy.RuleSearchPaths, filepath.Join(ws.PudlDir, "schema", "pudl", "rules"))
 
 	return policy
 }
@@ -197,7 +201,7 @@ func (p *Policy) PopulatorPathsFor(ownerRoot, modelDir string) []string {
 // rules directory. Outside a workspace there is no repo-scoped place for it.
 func (p *Policy) RuleWritePath() (string, error) {
 	if !p.InWorkspace() {
-		return "", fmt.Errorf("no repo workspace found (run `pudl workspace init`)")
+		return "", fmt.Errorf("no repo workspace found (run `pudl init`)")
 	}
 	return filepath.Join(p.Workspace.PudlDir, "schema", "pudl", "rules"), nil
 }
@@ -208,3 +212,6 @@ func (p *Policy) repoRulePath() string {
 	}
 	return filepath.Join(p.Workspace.PudlDir, "schema", "pudl", "rules")
 }
+
+// Global selects personal state explicitly, even from inside a project.
+func Global(dir string) *Policy { return build(nil, dir) }

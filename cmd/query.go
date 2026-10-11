@@ -31,11 +31,8 @@ var queryCmd = &cobra.Command{
 	SilenceUsage: true,
 	Long: `Evaluate Datalog rules over the fact store and catalog, then query results.
 
-Rules are loaded from CUE files in:
-  1. .pudl/schema/pudl/rules/    (repo-scoped, highest priority)
-  2. ~/.pudl/schema/pudl/rules/  (global)
-
-Repo-scoped rules shadow global rules with the same name.
+Rules come from the project and its explicitly vendored dependencies.
+Project rules have highest priority. Use --global for personal workspace rules.
 
 Ad-hoc rules can be loaded from a file with -f.
 

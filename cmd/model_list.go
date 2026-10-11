@@ -149,7 +149,7 @@ var modelListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List registered #SystemModel definitions",
 	Long: `List every #SystemModel-derived definition registered in the schema
-repository (project .pudl/schema shadows global ~/.pudl/schema), with its
+repository (project definitions precede explicitly vendored packages), with its
 populate kind, converge arm, and desired/check counts.
 
 This is the static registry of runnable models — what 'pudl run <name>' can

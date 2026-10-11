@@ -50,7 +50,7 @@ func TestPolicy_GlobalOnly(t *testing.T) {
 	assert.Error(t, err, "there is no repo-scoped place to write a rule outside a workspace")
 }
 
-func TestPolicy_LocalWorkspacePrecedesGlobal(t *testing.T) {
+func TestPolicy_LocalWorkspaceExcludesGlobal(t *testing.T) {
 	global := globalDir(t)
 	root := repoWorkspace(t, t.TempDir(), "myrepo")
 
@@ -65,15 +65,12 @@ func TestPolicy_LocalWorkspacePrecedesGlobal(t *testing.T) {
 	pudlDir := filepath.Join(root, ".pudl")
 	assert.Equal(t, []string{
 		filepath.Join(pudlDir, "schema"),
-		filepath.Join(global, "schema"),
 	}, policy.SchemaSearchPaths, "repo first: these lists are searched front-to-back")
 	assert.Equal(t, []string{
 		filepath.Join(pudlDir, "definitions"),
-		filepath.Join(global, "schema", "definitions"),
 	}, policy.DefinitionSearchPaths)
 	assert.Equal(t, []string{
 		filepath.Join(pudlDir, "schema"),
-		filepath.Join(global, "schema"),
 	}, policy.ModelSearchPaths)
 	// Populators are owner-relative, not repo-then-global: a model registered
 	// globally must not pick up a repo's populator of the same name.
@@ -88,7 +85,6 @@ func TestPolicy_LocalWorkspacePrecedesGlobal(t *testing.T) {
 	// and keeps the first name it sees, so *later* wins. Repo still shadows
 	// global; only the spelling differs.
 	assert.Equal(t, []string{
-		filepath.Join(global, "schema", "pudl", "rules"),
 		filepath.Join(pudlDir, "schema", "pudl", "rules"),
 	}, policy.RuleSearchPaths)
 
@@ -167,7 +163,6 @@ func TestPolicy_RulePathsForModel(t *testing.T) {
 	// [global, modelDir, repo] — a repo workspace's rules shadow the model's own.
 	// Arguably backwards, preserved verbatim; see the design note.
 	assert.Equal(t, []string{
-		filepath.Join(global, "schema", "pudl", "rules"),
 		filepath.Join(modelDir, "rules"),
 		filepath.Join(root, ".pudl", "schema", "pudl", "rules"),
 	}, policy.RulePathsForModel(modelDir))
@@ -203,7 +198,7 @@ func TestPolicy_SearchOrderIsNotFilteredToWhatExists(t *testing.T) {
 
 	policy, err := Resolve(root, global)
 	require.NoError(t, err)
-	assert.Len(t, policy.RuleSearchPaths, 2)
+	assert.Len(t, policy.RuleSearchPaths, 1)
 }
 
 // loadRulesForTest loads rules through the real loader and returns each rule's

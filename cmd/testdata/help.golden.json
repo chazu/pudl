@@ -4,6 +4,13 @@
   "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only and converging #SystemModel runs through mu\n- Exact producer/consumer run-sets with strict sealed action routing and approval",
   "flags": [
     {
+      "name": "global",
+      "usage": "Use the personal ~/.pudl workspace explicitly",
+      "type": "bool",
+      "default": "false",
+      "persistent": true
+    },
+    {
       "name": "json",
       "usage": "Output results as JSON for scripting",
       "type": "bool",
@@ -26,6 +33,13 @@
       "args": "custom",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -40,6 +54,13 @@
           "long": "Generate the autocompletion script for the bash shell.\n\nThis script depends on the 'bash-completion' package.\nIf it is not installed already, you can install it via your OS's package manager.\n\nTo load completions in your current shell session:\n\n\tsource \u003c(pudl completion bash)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\tpudl completion bash \u003e /etc/bash_completion.d/pudl\n\n#### macOS:\n\n\tpudl completion bash \u003e $(brew --prefix)/etc/bash_completion.d/pudl\n\nYou will need to start a new shell for this setup to take effect.",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -62,6 +83,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -83,6 +111,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -103,6 +138,13 @@
           "long": "Generate the autocompletion script for the zsh shell.\n\nIf shell completion is not already enabled in your environment you will need\nto enable it.  You can execute the following once:\n\n\techo \"autoload -U compinit; compinit\" \u003e\u003e ~/.zshrc\n\nTo load completions in your current shell session:\n\n\tsource \u003c(pudl completion zsh)\n\nTo load completions for every new session, execute once:\n\n#### Linux:\n\n\tpudl completion zsh \u003e \"${fpath[1]}/_pudl\"\n\n#### macOS:\n\n\tpudl completion zsh \u003e $(brew --prefix)/share/zsh/site-functions/_pudl\n\nYou will need to start a new shell for this setup to take effect.",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -126,6 +168,13 @@
       "long": "View and manage PUDL configuration settings.\n\nThis command allows you to view the current configuration and see where\nyour PUDL workspace is located.\n\nThe configuration includes:\n- Schema repository path (where CUE schemas are stored)\n- Data directory path (where imported data is stored)\n- Configuration file location\n\nExample usage:\n    pudl config                  # Show current configuration\n    pudl config --path           # Show configuration file path\n    pudl config set \u003ckey\u003e \u003cvalue\u003e # Set a configuration value\n    pudl config reset            # Reset to default configuration",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -133,9 +182,21 @@
           "persistent": true
         },
         {
+          "name": "legacy-dependencies",
+          "usage": "Inventory ignored global schemas and rules for explicit migration",
+          "type": "bool",
+          "default": "false"
+        },
+        {
           "name": "path",
           "shorthand": "p",
           "usage": "Show configuration file path only",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "paths",
+          "usage": "Show all effective definition and storage paths",
           "type": "bool",
           "default": "false"
         }
@@ -146,6 +207,13 @@
           "short": "Reset configuration to defaults",
           "long": "Reset the PUDL configuration to default values.\n\nThis will restore:\n- Schema path beneath the active .pudl workspace\n- Data path beneath the active .pudl workspace\n- Version to 1.0\n\nExample usage:\n    pudl config reset",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -161,6 +229,13 @@
           "long": "Set a configuration value and save it to the configuration file.\n\nValid configuration keys:\n- schema_path: Path to the schema repository directory\n- data_path: Path to the data storage directory\n- version: Configuration version\n\nInside a repository workspace, schema_path and data_path are fixed beneath\n.pudl/ and cannot be redirected outside the repository-local state boundary.\n\nExample usage:\n    pudl config set schema_path ~/my-schemas\n    pudl config set data_path /tmp/pudl-data\n    pudl config set version 2.0",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -191,6 +266,13 @@
           "default": "false"
         },
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -209,6 +291,13 @@
           "name": "entry",
           "usage": "Check one catalog entry by proquint or full ID",
           "type": "string"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
         },
         {
           "name": "health-only",
@@ -236,6 +325,13 @@
       "short": "Install bundled examples into this workspace",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -250,6 +346,13 @@
           "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main,\nbaseline and changed observations, and an optional live observer. The import\nand catalog replay tutorial needs only PUDL; live observation also needs mu\nand Python 3.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -282,6 +385,13 @@
           "usage": "Output format: json, yaml, csv, ndjson",
           "type": "string",
           "default": "json"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
         },
         {
           "name": "id",
@@ -332,6 +442,13 @@
       "args": "custom",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -349,6 +466,13 @@
               "name": "args",
               "usage": "Fact body as a JSON object (required)",
               "type": "string"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "json",
@@ -381,6 +505,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -409,6 +540,13 @@
               "name": "as-of-valid",
               "usage": "Query valid time (RFC3339 or Unix timestamp)",
               "type": "string"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "json",
@@ -449,6 +587,13 @@
               "default": "false"
             },
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -464,6 +609,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -478,6 +630,13 @@
           "long": "Keyword search over the indexed text of currently-valid facts, best matches\nfirst. The index covers the values of each fact's args (not the JSON keys).\n\nThe query uses SQLite FTS5 syntax: bare terms are ANDed, \"quoted phrases\" match\nin order, a trailing * is a prefix match, and AND/OR/NOT combine terms.\n\nExamples:\n    pudl facts search \"rate limiting\"\n    pudl facts search \"circular dependency\" --relation observation\n    pudl facts search \"auth*\" --limit 10",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -511,6 +670,13 @@
               "default": "false"
             },
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -524,6 +690,13 @@
           "short": "Aggregate statistics over the fact store",
           "long": "Show counts grouped by relation, kind, scope, source, or any arg field.\n\nWithout --group-by, shows count per relation, including when --relation filters\nthe data. Explicit --group-by selects source or an arbitrary args field.\n\nSupports comma-separated field names for cross-tabulation.\n\nExamples:\n    pudl facts stats\n    pudl facts stats --relation observation\n    pudl facts stats --relation observation --group-by kind\n    pudl facts stats --group-by scope\n    pudl facts stats --group-by kind,scope\n    pudl facts stats --relation observation --group-by source",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "group-by",
               "usage": "Comma-separated fields to group by (e.g. kind,scope)",
@@ -551,6 +724,13 @@
       "long": "Print usage guides for pudl features and concepts.\n\nRun 'pudl guide' with no arguments to see all available topics.\nRun 'pudl guide \u003ctopic\u003e' to read a specific guide.",
       "args": "custom",
       "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
         {
           "name": "json",
           "usage": "Output results as JSON for scripting",
@@ -588,6 +768,13 @@
           "name": "format",
           "usage": "Specify format for stdin data (json, yaml, csv, ndjson)",
           "type": "string"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
         },
         {
           "name": "json",
@@ -728,6 +915,13 @@
           "type": "string"
         },
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "item-id",
           "usage": "Filter by item ID",
           "type": "string"
@@ -800,6 +994,13 @@
       "long": "Run data migrations to upgrade the PUDL catalog.\n\nAvailable migrations:\n  identity    Backfill resource identity tracking for existing entries",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -818,6 +1019,13 @@
               "usage": "Preview changes without applying",
               "type": "bool",
               "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "json",
@@ -843,6 +1051,13 @@
       "args": "custom",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -857,6 +1072,13 @@
           "long": "Reconcile every registered model's declared and binding-derived dependencies into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nExamples:\n    pudl model deps\n    pudl model deps --json",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -868,9 +1090,16 @@
         {
           "use": "list",
           "short": "List registered #SystemModel definitions",
-          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project .pudl/schema shadows global ~/.pudl/schema), with its\npopulate kind, converge arm, and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl run \u003cname\u003e' can\nresolve — independent of whether a model has been run yet.",
+          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project definitions precede explicitly vendored packages), with its\npopulate kind, converge arm, and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl run \u003cname\u003e' can\nresolve — independent of whether a model has been run yet.",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -891,6 +1120,13 @@
               "usage": "Replace an existing scaffold file",
               "type": "bool",
               "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "input",
@@ -916,6 +1152,13 @@
           "use": "populator",
           "short": "Manage populator programs for #EweTarget models",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -959,6 +1202,13 @@
                   "default": "false"
                 },
                 {
+                  "name": "global",
+                  "usage": "Use the personal ~/.pudl workspace explicitly",
+                  "type": "bool",
+                  "default": "false",
+                  "persistent": true
+                },
+                {
                   "name": "json",
                   "usage": "Output results as JSON for scripting",
                   "type": "bool",
@@ -982,6 +1232,13 @@
               "default": "false"
             },
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -996,6 +1253,13 @@
           "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem. Bound models remain valid templates before their catalog values exist;\ntheir final concrete values are validated again when pudl runs them.",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1013,6 +1277,13 @@
       "long": "Manage CUE module dependencies for PUDL schemas.\n\nThis command provides utilities for managing third-party CUE modules\nthat provide schemas for common data formats like Kubernetes, AWS, etc.\n\nExamples:\n    pudl module tidy     # Fetch and update module dependencies\n    pudl module list     # List current module dependencies\n    pudl module info     # Show module information",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1028,6 +1299,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1041,6 +1319,13 @@
           "short": "Show module information",
           "long": "Show information about the current CUE module.\n\nThis command displays:\n- Module path and version\n- CUE language version\n- Source information\n- Dependencies count",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1056,6 +1341,13 @@
           "long": "List the current CUE module dependencies defined in cue.mod/module.cue.\n\nThis command shows:\n- Module path and version\n- Dependency versions\n- Module description",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1069,6 +1361,13 @@
           "short": "Fetch and update module dependencies",
           "long": "Fetch and update CUE module dependencies.\n\nThis command runs 'cue mod tidy' in the schema directory to:\n- Download missing dependencies\n- Update the module.cue file with resolved versions\n- Clean up unused dependencies\n\nThis is equivalent to running 'cue mod tidy' manually in the schema directory.",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1086,6 +1385,13 @@
       "long": "Commands that move data across the pudl/mu boundary.\n\npudl knows; mu acts. These subcommands ingest mu's execution results back into\nthe catalog.\n\nAvailable subcommands:\n- ingest-observe:  Store mu observe results as live catalog state\n- ingest-manifest: Record a mu build manifest in the catalog\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    mu build --emit-manifest | pudl mu ingest-manifest",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1099,6 +1405,13 @@
           "short": "Ingest mu build manifest into the catalog",
           "long": "Read a mu build manifest (JSON) and store action results in the catalog.\nThis records what mu did during convergence, enabling status tracking.\n\nExamples:\n    mu build --emit-manifest | pudl mu ingest-manifest\n    pudl mu ingest-manifest --path manifest.json",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1129,6 +1442,13 @@
           "short": "Ingest mu observe results into the catalog",
           "long": "Read mu observe --json output and store observed state in the catalog.\nThe observed state becomes the \"live\" side for subsequent drift checks.\n\nInput format: JSON array of ObserveResult objects from mu observe --json.\nEach target's current.records are stored as individual observe entries,\nrouted to the correct schema via the _schema field.\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    pudl mu ingest-observe --path observe-results.json\n    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1180,6 +1500,13 @@
       "long": "Print a structured prompt that teaches AI agents how to use pudl.\n\nInclude a line like this in your CLAUDE.md or similar agent config:\n\n    Run 'pudl prime' to learn how to use the pudl data lake CLI.\n\nThe agent will then know to execute the command and read the output\nto understand pudl's capabilities and conventions.",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1191,7 +1518,7 @@
     {
       "use": "query \u003crelation\u003e [--field=value ...]",
       "short": "Query derived facts using Datalog rules",
-      "long": "Evaluate Datalog rules over the fact store and catalog, then query results.\n\nRules are loaded from CUE files in:\n  1. .pudl/schema/pudl/rules/    (repo-scoped, highest priority)\n  2. ~/.pudl/schema/pudl/rules/  (global)\n\nRepo-scoped rules shadow global rules with the same name.\n\nAd-hoc rules can be loaded from a file with -f.\n\nPositional constraints filter results (field=value pairs). JSON numeric values\nare parsed without rounding; other unquoted values are strings. To match a\nnumeric-looking string, retain JSON quotes, e.g. 'id=\"123\"'.\n\nTemporal modes (determined by which flags are set):\n  (none)           Evaluate over current facts\n  --as-of-valid    Evaluate over facts true at a point in time\n  --as-of-tx       Evaluate over facts known at a point in time\n  (both)           Evaluate over what was believed at --as-of-tx about --as-of-valid\n\nUse --list to see the relations (rule heads + EDB facts) you can query and the\narg keys each expects. Use --topo to read a relation's from/to edges as a\ntopological run order (dependencies first); it errors on a cycle.\n\nExamples:\n    pudl query --list\n    pudl query depends_transitive\n    pudl query depends_transitive from=api\n    pudl query impacted_by changed=network\n    pudl query --topo model_depends_on\n    pudl query -f my-analysis.cue corroborated_obstacle\n    pudl query observation --as-of-valid 2026-04-01T14:30:00Z\n    pudl query depends_transitive --json",
+      "long": "Evaluate Datalog rules over the fact store and catalog, then query results.\n\nRules come from the project and its explicitly vendored dependencies.\nProject rules have highest priority. Use --global for personal workspace rules.\n\nAd-hoc rules can be loaded from a file with -f.\n\nPositional constraints filter results (field=value pairs). JSON numeric values\nare parsed without rounding; other unquoted values are strings. To match a\nnumeric-looking string, retain JSON quotes, e.g. 'id=\"123\"'.\n\nTemporal modes (determined by which flags are set):\n  (none)           Evaluate over current facts\n  --as-of-valid    Evaluate over facts true at a point in time\n  --as-of-tx       Evaluate over facts known at a point in time\n  (both)           Evaluate over what was believed at --as-of-tx about --as-of-valid\n\nUse --list to see the relations (rule heads + EDB facts) you can query and the\narg keys each expects. Use --topo to read a relation's from/to edges as a\ntopological run order (dependencies first); it errors on a cycle.\n\nExamples:\n    pudl query --list\n    pudl query depends_transitive\n    pudl query depends_transitive from=api\n    pudl query impacted_by changed=network\n    pudl query --topo model_depends_on\n    pudl query -f my-analysis.cue corroborated_obstacle\n    pudl query observation --as-of-valid 2026-04-01T14:30:00Z\n    pudl query depends_transitive --json",
       "args": "custom",
       "flags": [
         {
@@ -1209,6 +1536,13 @@
           "name": "as-of-valid",
           "usage": "Evaluate over facts true at this time (RFC3339 or Unix)",
           "type": "string"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
         },
         {
           "name": "json",
@@ -1255,6 +1589,13 @@
       "long": "Find items in the catalog tagged with an unresolved CUE schema reference\n(schema ref declared at import time but not yet known to pudl) and\nattempt to upgrade their classification.\n\nWhen run without --ref, every unresolved row is considered. With --ref,\nonly rows tagged with that exact \"\u003cmodule\u003e@\u003cversion\u003e\" reference are\nprocessed.\n\nThis command is part of the mu plugin output schema flow — see\ndocs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W5).",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1273,6 +1614,13 @@
       "short": "Manage Datalog rules",
       "long": "Manage Datalog rules used by pudl query.\n\nRules are CUE files stored in:\n  .pudl/schema/pudl/rules/     (repo-scoped)\n  ~/.pudl/schema/pudl/rules/   (global)\n\nAvailable subcommands:\n- add: Install a rule file into the workspace\n\nExamples:\n    pudl rule add my-rules.cue\n    pudl rule add my-rules.cue --global",
       "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
         {
           "name": "json",
           "usage": "Output results as JSON for scripting",
@@ -1315,6 +1663,13 @@
               "default": "false"
             },
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1328,7 +1683,7 @@
     {
       "use": "run [\u003cmodel\u003e]",
       "short": "Run a #SystemModel instance (observe-only, or --converge)",
-      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema first, then the global ~/.pudl/schema. Register one with\n\"pudl schema add\". Default is OBSERVE-ONLY: populate -\u003e drift -\u003e checks -\u003e\nreport, no mutation. Pass --converge to close drift; see the V1 build spec.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift, pending changes (--dry-run) or a failing fail-severity check,\n1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run k8sPolicy --converge\n    pudl run k8sConverge --converge --only web,api\n    pudl run k8sConverge --converge --dry-run\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
+      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema and explicitly vendored packages. Register one with\n\"pudl schema add\". Default is OBSERVE-ONLY: populate -\u003e drift -\u003e checks -\u003e\nreport, no mutation. Pass --converge to close drift; see the V1 build spec.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift, pending changes (--dry-run) or a failing fail-severity check,\n1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run k8sPolicy --converge\n    pudl run k8sConverge --converge --only web,api\n    pudl run k8sConverge --converge --dry-run\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
       "args": "custom",
       "flags": [
         {
@@ -1365,6 +1720,13 @@
           "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
           "type": "bool",
           "default": "false"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
         },
         {
           "name": "input",
@@ -1434,6 +1796,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1455,6 +1824,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1475,6 +1851,13 @@
           "short": "Approve and continue a pending run or exact set plan",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1508,6 +1891,13 @@
               "usage": "exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error",
               "type": "bool",
               "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "json",
@@ -1562,6 +1952,13 @@
       "long": "Manage CUE schemas used for data validation and organization in PUDL.\n\nSchemas are organized by packages (aws, k8s, unknown, etc.) and stored in the\nactive schema repository: .pudl/schema/ inside an initialized repository, or\n~/.pudl/schema/ in global mode. Each CUE file defines structure and validation\nrules for imported data.\n\nAvailable subcommands:\n- list:    Show available schemas organized by package\n- add:     Add a new schema file to the repository\n- new:     Generate a new schema from imported data\n- show:    Display the contents of a schema\n- edit:    Open a schema file in your editor\n- status:  Show uncommitted changes in the schema repository\n- commit:  Commit schema changes to version control\n- log:     Show commit history of schema changes\n- reinfer: Re-run schema inference on existing entries\n- migrate: Migrate schema names to canonical format\n\nExamples:\n    pudl schema list                           # List all schemas\n    pudl schema list --package aws             # List schemas in aws package\n    pudl schema add aws.rds-instance my.cue    # Add new schema to aws package\n    pudl schema status                         # Show uncommitted changes\n    pudl schema commit -m \"Add RDS schema\"     # Commit changes\n    pudl schema log                            # Show recent commits",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1577,6 +1974,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1590,6 +1994,13 @@
           "short": "Commit schema changes to version control",
           "long": "Commit all pending schema changes to the git repository.\n\nThis command will:\n1. Stage all modified, added, and deleted schema files\n2. Create a commit with the provided message\n3. Update the schema repository history\n\nA commit message is required and should describe the changes being made.\n\nExamples:\n    pudl schema commit -m \"Add RDS instance schema\"\n    pudl schema commit -m \"Update EC2 schema with new fields\"\n    pudl schema commit -m \"Remove deprecated K8s schemas\"",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1619,6 +2030,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1633,6 +2051,13 @@
           "long": "List schemas using full package.#Definition names accepted by 'pudl schema show'.\nThe listing includes resource types. Use --verbose for source paths, identity fields,\ntracked fields, and collection metadata, or --json for the complete representation.",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1660,6 +2085,13 @@
           "long": "Show the commit history of the schema repository.\n\nThis command displays recent commits with information about:\n- Commit hash (short and full)\n- Author name\n- Commit date and time\n- Commit message\n\nUse --limit to control how many commits to show.\n\nExamples:\n    pudl schema log                     # Show recent commits (default: 10)\n    pudl schema log --limit 20          # Show last 20 commits\n    pudl schema log --verbose           # Show detailed commit information",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1686,6 +2118,13 @@
           "short": "Migrate catalog schema names to canonical format",
           "long": "Migrate all schema names in the catalog database to canonical format.\n\nThis command normalizes schema names from various formats to the canonical format:\n  \u003cpackage\u003e.\u003c#Definition\u003e  (e.g., aws/ec2.#Instance, pudl/core.#Item)\n\nInput formats that are normalized:\n  - pudl.schemas/aws/ec2@v0:#Instance  -\u003e aws/ec2.#Instance\n  - pudl.schemas/aws/ec2:#Instance     -\u003e aws/ec2.#Instance\n  - aws/ec2:#Instance                  -\u003e aws/ec2.#Instance\n  - core.#Item                         -\u003e pudl/core.#Item\n\nThis migration is idempotent - running it multiple times is safe.\n\nExamples:\n    # Migrate all schema names\n    pudl schema migrate",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1716,6 +2155,13 @@
               "name": "from",
               "usage": "Proquint ID of the imported data to generate schema from (required)",
               "type": "string"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "infer",
@@ -1766,6 +2212,13 @@
               "default": "false"
             },
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1791,6 +2244,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1804,6 +2264,13 @@
           "short": "Show uncommitted changes in the schema repository",
           "long": "Show the current status of the schema repository, including:\n- Modified files\n- Added files\n- Deleted files\n- Untracked files\n\nThis command helps you see what schema changes are pending before committing them.\n\nExamples:\n    pudl schema status                  # Show all uncommitted changes\n    pudl schema status --verbose        # Show detailed file status",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1828,6 +2295,13 @@
       "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
       "args": "custom",
       "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
         {
           "name": "json",
           "usage": "Output results as JSON for scripting",
@@ -1855,6 +2329,13 @@
       "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl run --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1869,6 +2350,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1882,6 +2370,13 @@
           "short": "List observation snapshots, newest first",
           "args": "custom",
           "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
@@ -1913,6 +2408,13 @@
               "usage": "report what would be removed, remove nothing",
               "type": "bool",
               "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             },
             {
               "name": "json",
@@ -1947,6 +2449,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1967,6 +2476,13 @@
           "args": "custom",
           "flags": [
             {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1984,6 +2500,13 @@
       "args": "custom",
       "flags": [
         {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1997,6 +2520,13 @@
       "short": "Show version information",
       "long": "Display version, commit hash, and build date information for PUDL.",
       "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
         {
           "name": "json",
           "usage": "Output results as JSON for scripting",

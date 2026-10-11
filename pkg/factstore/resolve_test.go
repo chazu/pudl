@@ -63,11 +63,11 @@ func TestDiscoverWorkspaceRepo(t *testing.T) {
 	if ws.RepoDir != pudlDir {
 		t.Errorf("expected RepoDir %q, got %q", pudlDir, ws.RepoDir)
 	}
-	if len(ws.RulePaths) != 2 {
-		t.Fatalf("expected 2 rule paths (global, repo), got %d", len(ws.RulePaths))
+	if len(ws.RulePaths) != 1 {
+		t.Fatalf("expected 1 project rule path, got %d", len(ws.RulePaths))
 	}
 	// Repo rules must be last so they shadow global rules.
-	if !strings.HasPrefix(ws.RulePaths[1], pudlDir) {
+	if !strings.HasPrefix(ws.RulePaths[0], pudlDir) {
 		t.Errorf("repo rule path should come last, got %v", ws.RulePaths)
 	}
 }

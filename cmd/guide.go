@@ -281,7 +281,7 @@ THE _pudl BLOCK
 SCHEMA LOCATIONS
 
   ~/.pudl/schema/           Global schema repository
-  .pudl/schema/             Repo-local schemas (shadows global)
+  .pudl/schema/             Project schemas (precedes explicit vendored dependencies)
 
 COMMANDS
 
@@ -396,7 +396,7 @@ RULES
   Rules are CUE files stored in:
 
     ~/.pudl/schema/pudl/rules/       Global rules
-    .pudl/schema/pudl/rules/         Repo-local (shadows global)
+    .pudl/schema/pudl/rules/         Project rules (precedes explicit vendored dependencies)
 
   Install a rule:
     pudl rule add myrule.cue              Install to repo
@@ -513,7 +513,7 @@ COMMANDS
 WHAT A MODEL DECLARES
 
   A model is a CUE definition inheriting #SystemModel, registered in the
-  schema repo (project .pudl/schema shadows global ~/.pudl/schema):
+  schema repo (project .pudl/schema and explicitly vendored dependencies):
 
     githubChazu: #SystemModel & {
         name: "github-chazu"

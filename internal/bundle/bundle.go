@@ -119,7 +119,7 @@ func Export(ctx context.Context, root, destination string, maxBytes int64) error
 				paths[rel] = true
 			}
 		}
-		for _, name := range []string{"config.yaml", "workspace.cue", "schema", "definitions", "models", "populators", "rules", "cue.mod"} {
+		for _, name := range []string{"config.yaml", "workspace.cue", "schema", "definitions", "models", "populators", "rules", "cue.mod", "vendor"} {
 			path := filepath.Join(root, name)
 			if _, err := os.Lstat(path); os.IsNotExist(err) {
 				continue

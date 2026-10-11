@@ -155,7 +155,7 @@ func DiscoverWorkspace(cwd string) (*Workspace, error)
 type Workspace struct {
     RepoDir   string   // repo-scoped .pudl dir, or "" outside a workspace
     GlobalDir string   // ~/.pudl
-    RulePaths []string // rule dirs, global first then repo (repo shadows global)
+    RulePaths []string // rule dirs, explicit dependencies then repo (repo wins)
 }
 ```
 

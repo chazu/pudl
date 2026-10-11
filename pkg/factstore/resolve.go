@@ -20,8 +20,8 @@ type Workspace struct {
 	GlobalDir string
 
 	// RulePaths is the ordered list of Datalog rule directories to pass to
-	// eval.LoadRulesFromPaths, global first then repo, matching `pudl query`.
-	// The loader gives later paths priority, so repo rules shadow global rules
+	// eval.LoadRulesFromPaths, dependencies then repo, matching `pudl query`.
+	// The loader gives later paths priority, so repo rules shadow dependency rules
 	// with the same name. Directories that do not exist are omitted.
 	RulePaths []string
 }

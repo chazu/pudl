@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/config"
 	pudlInit "github.com/chazu/pudl/internal/init"
 	"github.com/chazu/pudl/internal/ui"
 	"github.com/chazu/pudl/internal/workspace"
@@ -59,7 +60,12 @@ Key features:
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error
-		wsPolicy, err = workspace.ResolveForCWD()
+		global, _ := cmd.Flags().GetBool("global")
+		if global {
+			wsPolicy = workspace.Global(config.GetPudlDir())
+		} else {
+			wsPolicy, err = workspace.ResolveForCWD()
+		}
 		if err != nil {
 			return fmt.Errorf("workspace discovery: %w", err)
 		}
@@ -126,6 +132,7 @@ func init() {
 	// will be global for your application.
 
 	// Global --json flag for machine-readable output
+	rootCmd.PersistentFlags().Bool("global", false, "Use the personal ~/.pudl workspace explicitly")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output results as JSON for scripting")
 
 	// Cobra also supports local flags, which will only run

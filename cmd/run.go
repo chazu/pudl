@@ -42,7 +42,7 @@ var runCmd = &cobra.Command{
 
 <model> is a registered #SystemModel — a definition inheriting #SystemModel,
 resolved by name (its name field or short definition name) from the project
-.pudl/schema first, then the global ~/.pudl/schema. Register one with
+.pudl/schema and explicitly vendored packages. Register one with
 "pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
 report, no mutation. Pass --converge to close drift; see the V1 build spec.
 

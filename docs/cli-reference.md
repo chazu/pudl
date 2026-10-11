@@ -24,6 +24,7 @@ These flags apply to every command.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--global` | bool |  | Use the personal ~/.pudl workspace explicitly |
 | `--json` | bool |  | Output results as JSON for scripting |
 
 ## Commands
@@ -280,7 +281,9 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--legacy-dependencies` | bool |  | Inventory ignored global schemas and rules for explicit migration |
 | `-p`, `--path` | bool |  | Show configuration file path only |
+| `--paths` | bool |  | Show all effective definition and storage paths |
 
 Subcommands:
 
@@ -971,7 +974,6 @@ Flags:
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace authored workspace configuration |
 | `--from-bundle` | string |  | Restore verified history into a new local workspace; approvals require replanning |
-| `--global` | bool |  | Initialize ~/.pudl instead of a local .pudl |
 | `--max-bundle-bytes` | int64 | `17179869184` | Maximum uncompressed restored bundle bytes |
 
 Initialization installs configuration, a local CUE module and built-in schemas,
@@ -1186,7 +1188,7 @@ pudl model list
 
 ```text
 List every #SystemModel-derived definition registered in the schema
-repository (project .pudl/schema shadows global ~/.pudl/schema), with its
+repository (project definitions precede explicitly vendored packages), with its
 populate kind, converge arm, and desired/check counts.
 
 This is the static registry of runnable models — what 'pudl run <name>' can
@@ -1247,12 +1249,6 @@ walking up from the cwd, else the global ~/.pudl; use --global to force global.
 
 After installing, set the model's eweSource to the printed value.
 ```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | bool |  | install into the global ~/.pudl repo (default: project repo if found) |
 
 ## pudl model populator new
 
@@ -1536,11 +1532,8 @@ pudl query <relation> [--field=value ...] [flags]
 ```text
 Evaluate Datalog rules over the fact store and catalog, then query results.
 
-Rules are loaded from CUE files in:
-  1. .pudl/schema/pudl/rules/    (repo-scoped, highest priority)
-  2. ~/.pudl/schema/pudl/rules/  (global)
-
-Repo-scoped rules shadow global rules with the same name.
+Rules come from the project and its explicitly vendored dependencies.
+Project rules have highest priority. Use --global for personal workspace rules.
 
 Ad-hoc rules can be loaded from a file with -f.
 
@@ -1672,12 +1665,6 @@ Examples:
     pudl rule add company-standards.cue --global
 ```
 
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | bool |  | Install as a global rule (~/.pudl/schema/pudl/rules/) |
-
 The file must contain valid CUE with at least one rule-shaped value (`head` and
 `body` fields). A file containing a malformed rule is rejected.
 
@@ -1708,7 +1695,7 @@ Run a #SystemModel instance through the ACUTE cycle.
 
 <model> is a registered #SystemModel — a definition inheriting #SystemModel,
 resolved by name (its name field or short definition name) from the project
-.pudl/schema first, then the global ~/.pudl/schema. Register one with
+.pudl/schema and explicitly vendored packages. Register one with
 "pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
 report, no mutation. Pass --converge to close drift; see the V1 build spec.
 
