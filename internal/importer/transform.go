@@ -110,7 +110,7 @@ func (t *transformResult) cleanup() {
 
 // needsTransform reports whether the pre-pass must run.
 func (e *EnhancedImporter) needsTransform(opts ImportOptions) bool {
-	return len(opts.Set) > 0 || e.redactor.Any()
+	return len(opts.Set) > 0 || e.redactor.Any() || (opts.ManualSchema != "" && !opts.AllowSchemaFallback)
 }
 
 // intendedSchema is the schema the caller routed records to, if any.
@@ -149,7 +149,7 @@ func (e *EnhancedImporter) transformSource(opts ImportOptions, sourcePath string
 
 	var spool *json.Encoder
 	var spoolFile *os.File
-	redacting := e.redactor.Any()
+	redacting := e.redactor.Any() || (opts.ManualSchema != "" && !opts.AllowSchemaFallback)
 	if redacting {
 		spoolFile, err = os.CreateTemp(tmp, "assignments-*.ndjson")
 		if err != nil {
@@ -261,7 +261,11 @@ func (e *EnhancedImporter) assignForTransform(record any, opts ImportOptions, sh
 	if shape.collection != "" {
 		itemOpts := opts
 		itemOpts.Explain = opts.Explain && index < maxItemExplanations
-		assigned = e.assignItemSchemaDetailed(record, itemOpts)
+		var err error
+		assigned, err = e.assignItemSchemaDetailed(record, itemOpts)
+		if err != nil {
+			return spooledAssignment{}, fmt.Errorf("record %d: %w", index, err)
+		}
 	} else {
 		var err error
 		assigned, err = e.assignSchema(record, opts, documentHints(shape))

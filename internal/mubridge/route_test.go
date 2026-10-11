@@ -34,6 +34,7 @@ func sensitiveSchemaDir(t *testing.T) string {
 	env?: [...{name: string, value?: string}]
 	...
 }
+
 `), 0o644))
 	return dir
 }
@@ -109,4 +110,38 @@ func TestIngestObserveProjectsRedactedFactsAndReobservesUnchanged(t *testing.T) 
 	ingest(a) // reverts: deduplicates to the first entry, whose facts return
 	require.Len(t, values(), 1)
 	assert.Contains(t, values()[0], `"var":"TOKEN"`)
+}
+
+func TestStrictObservationRejectsWholeBatchAndPermissiveRedacts(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+	dir := sensitiveSchemaDir(t)
+	inferrer, err := inference.NewSchemaInferrer(dir)
+	require.NoError(t, err)
+	chain, err := validator.NewChainValidator(dir)
+	require.NoError(t, err)
+	input := `[{"target":"//svc","current":{"records":[{"name":"valid"},{"name":42,"env":[{"name":"TOKEN","value":"s3cr3t"}]}]}}]`
+	in := ObserveIngest{DataDir: dataDir, Inferrer: inferrer, Graph: inferrer.GetInheritanceGraph(), Chain: chain, ManualSchema: "schemas.#Service", Scope: "services", Complete: true}
+	in.Reader = strings.NewReader(input)
+	_, err = IngestObserve(db, in)
+	require.ErrorContains(t, err, "does not satisfy requested schema")
+	require.NotContains(t, err.Error(), "s3cr3t")
+	rows, err := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
+	require.NoError(t, err)
+	require.Empty(t, rows.Entries)
+	in.AllowSchemaFallback = true
+	in.Reader = strings.NewReader(input)
+	result, err := IngestObserve(db, in)
+	require.NoError(t, err)
+	require.Equal(t, 1, result.SchemaMismatches)
+	snapshot, err := db.GetObserveSnapshot(result.SnapshotID)
+	require.NoError(t, err)
+	require.False(t, snapshot.Complete)
+	entries, err := db.SnapshotRecordEntries(result.SnapshotID)
+	require.NoError(t, err)
+	for _, entry := range entries {
+		data, err := os.ReadFile(entry.StoredPath)
+		require.NoError(t, err)
+		require.NotContains(t, string(data), "s3cr3t")
+	}
 }

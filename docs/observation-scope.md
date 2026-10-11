@@ -32,6 +32,10 @@ finish every required page and fan-out member before asserting it. A successful
 exit or a JSON array alone does not imply completeness. Command failure publishes
 no replacement observation; reported plugin errors prevent complete status.
 Omitted completeness defaults to false, including for older stored snapshots.
+An explicitly permitted schema mismatch also makes the observation incomplete.
+Command observers can opt into exploratory fallback with
+`populate.allow_schema_fallback: true`; their report records the policy and
+mismatch count.
 
 `populate.schema` identifies the population's schema even when it has zero
 records. For other observers, `observation.schemas: ["package.#Definition"]`

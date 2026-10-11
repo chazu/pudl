@@ -40,6 +40,9 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 	if opts.Limits, err = opts.Limits.Resolve(); err != nil {
 		return nil, err
 	}
+	if err := e.validateExplicitSchema(opts); err != nil {
+		return nil, err
+	}
 	info, err := os.Stat(opts.SourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get file info: %w", err)
@@ -75,9 +78,15 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 	}
 
 	report := &PreviewReport{Schemas: map[string]int{}}
-	result := &ImportResult{SourcePath: opts.originPath(), DetectedFormat: format, DetectedOrigin: origin, DryRun: true, Preview: report}
+	result := &ImportResult{SourcePath: opts.originPath(), DetectedFormat: format, DetectedOrigin: origin, DryRun: true, Preview: report, RequestedSchema: opts.ManualSchema}
 	if shape.collection != "" {
 		result.DetectedFormat = shape.collection
+	}
+	if opts.ManualSchema != "" {
+		result.SchemaPolicy = "strict"
+		if opts.AllowSchemaFallback {
+			result.SchemaPolicy = "permissive"
+		}
 	}
 	var tally identityTally
 	facts := projection.NewTally()
@@ -91,7 +100,11 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 		}
 		var assigned schemaAssignment
 		if shape.collection != "" {
-			assigned = e.assignItemSchemaDetailed(record, traced)
+			var err error
+			assigned, err = e.assignItemSchemaDetailed(record, traced)
+			if err != nil {
+				return fmt.Errorf("record %d: %w", index, err)
+			}
 		} else {
 			var err error
 			if assigned, err = e.assignSchema(record, traced, documentHints(shape)); err != nil {
@@ -116,6 +129,7 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 
 		if intended != "" && !assigned.Validated {
 			report.ValidationFailures++
+			result.SchemaMismatches++
 			if vr := assigned.Validation; vr != nil {
 				for _, issue := range vr.GetErrorsForSchema(vr.IntendedSchema) {
 					if len(report.ValidationIssues) == maxPreviewIssues {

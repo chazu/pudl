@@ -164,9 +164,8 @@ func TestReimportWithSchemaReassignsExistingItems(t *testing.T) {
 	assert.Equal(t, 1, *moved.Version)
 
 	// A schema the record does not satisfy moves nothing.
-	third, err := imp.ImportFileWithFriendlyIDs(ImportOptions{SourcePath: source, ManualSchema: "pudl/gcp.#RunService"})
-	require.NoError(t, err)
-	assert.Equal(t, 0, third.Reassigned)
+	_, err = imp.ImportFileWithFriendlyIDs(ImportOptions{SourcePath: source, ManualSchema: "pudl/gcp.#RunService"})
+	require.ErrorContains(t, err, "does not satisfy requested schema")
 }
 
 func TestPreviewWritesNothingAndReportsFindings(t *testing.T) {
@@ -175,7 +174,7 @@ func TestPreviewWritesNothingAndReportsFindings(t *testing.T) {
 {"kind":"run#service","env":[]}
 `
 	imp, source := gcpFixture(t, firewallSchema, "run.ndjson", records)
-	result, err := imp.Preview(ImportOptions{SourcePath: source, ManualSchema: "pudl/gcp.#RunService"})
+	result, err := imp.Preview(ImportOptions{SourcePath: source, ManualSchema: "pudl/gcp.#RunService", AllowSchemaFallback: true})
 	require.NoError(t, err)
 	require.True(t, result.DryRun)
 	assert.Equal(t, 3, result.RecordCount)

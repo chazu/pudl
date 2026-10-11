@@ -279,3 +279,8 @@ between an observation and an answer that a human or agent can justify.
   scoped absence without deleting them. Cmd, database, acute, systemmodel,
   bridge, and bundle tests passed, including disappearance/reappearance,
   partial/empty/failed collection, freshness, and owner-ambiguity regressions.
+- Step 4 implemented: explicit schemas are strict, including preview, dedup,
+  collections, and command batches. `--allow-schema-fallback` and the command
+  arm's `allow_schema_fallback` are explicit opt-ins with structured policy and
+  mismatch reporting. Importer, bridge, and command tests passed; strict failures
+  publish no records and permissive sensitive data remains redacted.

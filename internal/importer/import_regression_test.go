@@ -72,12 +72,12 @@ func TestImport_ManualSchemaIsHonoredAndValidated(t *testing.T) {
 	assert.True(t, result.ValidationResult.Valid)
 }
 
-func TestImport_ManualSchemaFallsBackWhenDataViolatesIt(t *testing.T) {
+func TestImport_ManualSchemaFallbackRequiresOptIn(t *testing.T) {
 	imp, source, _ := collectionFixture(t, "widget.json", `{"name":"w1","color":"red"}`)
 
 	result, err := imp.ImportFileWithFriendlyIDs(ImportOptions{
 		SourcePath:   source,
-		ManualSchema: "pudl/k8s.#Resource",
+		ManualSchema: "pudl/k8s.#Resource", AllowSchemaFallback: true,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result.ValidationResult)
@@ -91,7 +91,7 @@ func TestImport_ManualSchemaValidatesCollectionItems(t *testing.T) {
 
 	result, err := imp.ImportFileWithFriendlyIDs(ImportOptions{
 		SourcePath:   source,
-		ManualSchema: "pudl/k8s.#Resource",
+		ManualSchema: "pudl/k8s.#Resource", AllowSchemaFallback: true,
 	})
 	require.NoError(t, err)
 

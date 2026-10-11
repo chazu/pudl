@@ -833,10 +833,10 @@ Data Storage:
 - The repository and global catalogs are separate; imports never cross them
 
 Schema Assignment:
-- Manual schema specification with --schema flag (chained validation)
+- Explicit schema validation with --schema (strict unless --allow-schema-fallback)
 - Automatic schema inference from CUE schemas in the schema repository
 - Chained validation: policy → base → generic → catchall
-- Never rejects data - always finds appropriate schema
+- Untyped imports use best-effort inference; explicit schemas must validate
 - Envelope wire format: a JSON file shaped like
     {"schema": {"module": "mu/aws", "version": "v1"},
      "definitions": [...],   // optional inline CUE
@@ -888,6 +888,7 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--allow-schema-fallback` | bool |  | Explicitly allow records that do not satisfy --schema (reports fallback) |
 | `--dry-run` | bool |  | Show how records would be classified, identified, redacted and projected; write nothing |
 | `--explain` | bool |  | Explain original schema candidates, fallback, and search-path shadowing |
 | `--format` | string |  | Specify format for stdin data (json, yaml, csv, ndjson) |
@@ -914,8 +915,14 @@ Behavior:
 - Typed envelope JSON (`schema`, optional `definitions`, and `data`) is
   unwrapped; its schema metadata is recorded and the inner payload follows
   normal import.
-- `--schema` validates the data against that schema and falls back down its
-  `base_schema` chain when the data does not satisfy it; data is never rejected.
+- `--schema` requires every record to satisfy that schema. Unavailable schemas
+  and mismatches fail, including on dedup re-import and `--dry-run`.
+- `--allow-schema-fallback` explicitly permits base/catchall fallback. JSON
+  reports `requested_schema`, `schema_policy`, and `schema_mismatches`.
+- The atomic unit is one input file (all collection records together). In a
+  multi-file import, successful files remain committed and failures are reported
+  per file with a nonzero command exit. A command observation is one atomic batch
+  across all its runs; invalid records prevent publication of that batch.
 - Format is detected from extension and content; origin from the filename.
 
 Set `PUDL_DEBUG=1` for detailed error output.

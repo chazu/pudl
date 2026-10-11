@@ -16,6 +16,9 @@ func TestImportExplainPersistedAndExplicitFallback(t *testing.T) {
 	beforeExplain := importExplain
 	t.Cleanup(func() { importExplain = beforeExplain })
 	importExplain = true
+	previousFallback := importAllowSchemaFallback
+	importAllowSchemaFallback = true
+	t.Cleanup(func() { importAllowSchemaFallback = previousFallback })
 	for _, tc := range []struct {
 		name, schema string
 		fallback     bool

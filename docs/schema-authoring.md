@@ -157,7 +157,7 @@ If no candidate passes unification, PUDL walks the `base_schema` chain -- trying
 This means:
 - **No priority numbers** -- ordering comes from the inheritance graph and heuristic scores
 - **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
-- **Data is never rejected** -- the catchall always accepts
+- **Exploratory imports use the catchall**; explicit schema requests are strict unless `--allow-schema-fallback` is supplied.
 
 ## Resource Identity and Schema Families
 

@@ -58,6 +58,9 @@ func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hi
 	}
 	intended := schemaname.Normalize(opts.ManualSchema)
 	if !chain.HasSchema(intended) {
+		if !opts.AllowSchemaFallback {
+			return schemaAssignment{}, fmt.Errorf("requested schema %s is unavailable; load it before importing or explicitly allow schema fallback", intended)
+		}
 		assigned := schemaAssignment{Schema: intended, Confidence: 0.5, Reason: "explicit schema unavailable; assignment retained without validation"}
 		if opts.Explain {
 			assigned.Trace = &inference.InferenceTrace{Selected: intended, Reason: assigned.Reason, ScoreKind: "heuristic score, not a calibrated probability", Attempts: []inference.CandidateAttempt{{Schema: intended, Reason: "schema unavailable"}}}
@@ -68,6 +71,9 @@ func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hi
 	result, err := chain.ValidateChain(data, opts.ManualSchema)
 	if err != nil {
 		return schemaAssignment{}, fmt.Errorf("failed to validate against %s: %w", opts.ManualSchema, err)
+	}
+	if !result.Valid && !opts.AllowSchemaFallback {
+		return schemaAssignment{}, fmt.Errorf("record does not satisfy requested schema %s; inspect with --dry-run --allow-schema-fallback --explain", intended)
 	}
 	confidence := 1.0
 	if !result.Valid {
@@ -122,17 +128,20 @@ func (e *EnhancedImporter) chainValidator(opts ImportOptions) (*validator.ChainV
 }
 
 // assignItemSchemaDetailed retains diagnostics for prepared collection records.
-func (e *EnhancedImporter) assignItemSchemaDetailed(data any, opts ImportOptions) schemaAssignment {
+func (e *EnhancedImporter) assignItemSchemaDetailed(data any, opts ImportOptions) (schemaAssignment, error) {
 	assigned, err := e.assignSchema(data, opts, inference.InferenceHints{Format: "json", CollectionType: "item"})
 	if err == nil {
-		return assigned
+		return assigned, nil
+	}
+	if opts.ManualSchema != "" && !opts.AllowSchemaFallback {
+		return schemaAssignment{}, err
 	}
 	// Inference failure retains the existing collection catchall behavior.
 	assigned = schemaAssignment{Schema: fallbackItemSchema, Confidence: 0.5, Reason: "classification failed; collection item assigned to catchall"}
 	if opts.Explain {
 		assigned.Trace = &inference.InferenceTrace{Selected: assigned.Schema, Reason: assigned.Reason, Fallback: true, ScoreKind: "heuristic score, not a calibrated probability", Attempts: []inference.CandidateAttempt{}}
 	}
-	return assigned
+	return assigned, nil
 }
 
 // enrichAssignment persists the original reason, and an opt-in diagnostic trace.
@@ -145,4 +154,18 @@ func enrichAssignment(info *SchemaInfo, result *ImportResult, assigned schemaAss
 	if result != nil {
 		result.Explanation = assigned.Trace
 	}
+}
+
+func (e *EnhancedImporter) validateExplicitSchema(opts ImportOptions) error {
+	if opts.ManualSchema == "" || opts.AllowSchemaFallback {
+		return nil
+	}
+	chain, err := e.chainValidator(opts)
+	if err != nil {
+		return err
+	}
+	if !chain.HasSchema(schemaname.Normalize(opts.ManualSchema)) {
+		return fmt.Errorf("requested schema %s is unavailable", opts.ManualSchema)
+	}
+	return nil
 }

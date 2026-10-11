@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Strict explicit schemas (2026-10-10)
+
+Completed scope-reduction step 4: explicit schemas validate every record before
+publication, with matching preview/dedup behavior and explicit permissive mode.
+See [delivery log](../implog/2026_10_10_strict_schemas.md).
+
 ### Explicit observation scope and completeness (2026-10-10)
 
 Completed scope-reduction step 3: shared nested identity matching, recorded

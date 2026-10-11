@@ -65,9 +65,12 @@ func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, flags runFl
 
 // PopulateReport summarizes an inventory populate.
 type PopulateReport struct {
-	Target     string `json:"target"`
-	Records    int    `json:"records"`
-	SnapshotID string `json:"snapshot_id,omitempty"`
+	RequestedSchema  string `json:"requested_schema,omitempty"`
+	SchemaPolicy     string `json:"schema_policy,omitempty"`
+	SchemaMismatches int    `json:"schema_mismatches,omitempty"`
+	Target           string `json:"target"`
+	Records          int    `json:"records"`
+	SnapshotID       string `json:"snapshot_id,omitempty"`
 }
 
 // ConvergeReport summarizes a convergence loop.

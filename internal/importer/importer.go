@@ -16,13 +16,14 @@ import (
 
 // ImportOptions contains options for importing data
 type ImportOptions struct {
-	Context        context.Context
-	Limits         ingestprep.Limits
-	Explain        bool // Include classification diagnostics in the result.
-	SourcePath     string
-	Origin         string                    // Optional origin override
-	ManualSchema   string                    // Manual schema specification
-	ChainValidator *validator.ChainValidator // Validator for manual schema; built on demand when nil
+	Context             context.Context
+	Limits              ingestprep.Limits
+	Explain             bool // Include classification diagnostics in the result.
+	SourcePath          string
+	Origin              string                    // Optional origin override
+	AllowSchemaFallback bool                      // Explicit opt-in to accepting an assignment other than ManualSchema.
+	ManualSchema        string                    // Manual schema specification
+	ChainValidator      *validator.ChainValidator // Validator for manual schema; built on demand when nil
 
 	// OriginPath is the path origin and stored-file naming are derived from when
 	// SourcePath is an intermediate (an envelope payload or a decompressed copy).
@@ -52,6 +53,9 @@ func (o ImportOptions) originPath() string {
 
 // ImportResult contains the results of an import operation
 type ImportResult struct {
+	RequestedSchema       string                      `json:"requested_schema,omitempty"`
+	SchemaPolicy          string                      `json:"schema_policy,omitempty"`
+	SchemaMismatches      int                         `json:"schema_mismatches,omitempty"`
 	Explanation           *inference.InferenceTrace   `json:"explanation,omitempty"`
 	ItemExplanations      []ItemExplanation           `json:"item_explanations,omitempty"`
 	ExplanationsTruncated bool                        `json:"explanations_truncated,omitempty"`
