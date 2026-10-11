@@ -4,7 +4,7 @@ PUDL is a CLI tool for building a local, schema-validated data lake. Import JSON
 
 ## Quick Start
 
-Install the current development version with Go 1.26.6 or newer and put Go's
+Install the current development version with Go 1.26.9 or newer and put Go's
 binary directory (normally `~/go/bin`) on your `PATH`:
 
 ```bash
@@ -244,6 +244,6 @@ See [docs/VISION.md](docs/VISION.md) for the roadmap.
 
 ## Requirements
 
-- Go 1.26.6+
+- Go 1.26.9+
 - Git (for schema version control)
 - CUE ([cuelang.org](https://cuelang.org)) for schema definitions

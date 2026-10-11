@@ -22,7 +22,7 @@ Overview of the testing strategy for PUDL.
 
 ## Running Tests
 
-The repository targets Go 1.26.6, pinned in `mise.toml` and CI. Run
+The repository targets Go 1.26.9, pinned in `mise.toml` and CI. Run
 `mise install` once, then use `mise exec --` before the Go and Make commands
 below to select the project toolchain. With mise activated in your shell,
 the toolchain is selected automatically inside this checkout.
