@@ -579,6 +579,27 @@ and the second-round implementation log for acceptance results and limitations.
 
 ## What's Next
 
+### Remove convergence and mu integration (decided 2026-11-01)
+
+PUDL narrows to discovering, cataloging and governing infrastructure. The
+convergence workflow and all mu integration are being removed. Observation is
+`#CommandObserve` only. See
+[the removal design](design/2026-11-01-remove-convergence-and-mu.md). Not yet
+implemented. Beads work:
+
+- `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5`.
+- `pudl-4fx`: simplify the everyday command surface (`pudl check`,
+  `doctor --fix`, demoting fact-store writes, moving orchestration out of `cmd/`).
+- `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
+  multi-project fan-out, waivers, finding changes over time, ownership,
+  relationship rules).
+- `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
+  schemas, evaluated per resource with named violations, through `pudl policy
+  list`, `show` and `evaluate`. "Validated" becomes a review blessing on type
+  schemas. See [the compliance policy design](design/2026-11-01-compliance-policies.md).
+
+The convergence and value-wiring sections below are historical.
+
 ### Thirty-candidate follow-up review (2026-10-05)
 
 Five demonstrated gaps retained after evaluating thirty candidates. See
