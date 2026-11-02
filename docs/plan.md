@@ -679,6 +679,14 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.4` check waivers: a `waivers` list on `#SystemModel`
+    (check + witness selector, or policy + rule + resource; owner, reason,
+    created and expires required, validated at load). Fully waived checks
+    report outcome `waived`, stay visible with their waivers and do not fail
+    `pudl check` or `--detailed-exitcode`; expired waivers stop applying and
+    are flagged; unmatched waivers are reported stale. Marking waivers in
+    `pudl policy show`/`pudl show` is deferred. See
+    `implog/2026_11_02_check_waivers.md`.
   - Done: `pudl-opz` policy annotations survive comprehensions the bare
     policy cannot decide (an annotation that still cannot be read fails the
     load), and evaluation ignores closedness at every depth; `pudl-pob` the
@@ -1206,6 +1214,7 @@ under the hood.
 | `populate` | `internal/populate/` | `#CommandObserve` execution: run commands, spool and decode their JSON records |
 | `modeldeps` | `internal/modeldeps/` | `model_depends_on` graph: declared edges, reconcile, upstream-freshness advisory |
 | `checks` | `internal/checks/` | Model check evaluation over the catalog or selected evidence |
+| `waiver` | `internal/waiver/` | Check waivers: validation, matching findings and policy violations, active/expired/stale outcomes |
 | `observe` | `internal/observe/` | Observation ingest into catalog entries and snapshots |
 | `proc` | `internal/proc/` | Context-bound subprocesses (mu, cue) with graceful cancellation |
 | `clidocs` | `internal/clidocs/` | Generated CLI reference |
