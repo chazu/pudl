@@ -115,6 +115,9 @@ func loadPolicy(src Source, sensitive *redact.Registry, name string, meta valida
 			return nil, err
 		}
 	}
+	if err := checkAnnotations(p, b.root, b.rules); err != nil {
+		return nil, err
+	}
 	p.tree = b.root
 	for _, r := range b.rules {
 		p.Rules = append(p.Rules, *r)
