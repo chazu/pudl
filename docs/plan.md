@@ -705,6 +705,9 @@ Beads work:
   - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
     kind, in the run's stderr and the populate report's `secret_warnings`.
     See `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-zxq` re-importing an already-cataloged document still scans
+    it and reports `secret_warnings` (dedup used to skip before decoding).
+    See `implog/2026_11_02_reimport_secret_scan.md`.
 - `pudl-m10` (done): `pudl doctor` diagnoses plaintext stored before a schema
   declared the path in `_pudl.sensitive_fields`, and the opt-in repair
   `pudl doctor --fix --only sensitive-scrub` redacts payloads, collection

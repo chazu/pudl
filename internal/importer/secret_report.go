@@ -1,6 +1,10 @@
 package importer
 
-import "github.com/chazu/pudl/internal/secretscan"
+import (
+	"fmt"
+
+	"github.com/chazu/pudl/internal/secretscan"
+)
 
 // maxSecretWarnings caps the likely-secret findings an import result lists;
 // SecretWarningsTotal still counts every one.
@@ -31,4 +35,19 @@ func (e *EnhancedImporter) scanSecrets(tally *secretTally, record any, index int
 		return
 	}
 	tally.Note(index, assigned, e.secretScan.Scan(record, intended, assigned))
+}
+
+// scanCatalogedDocument scans a document whose content is already cataloged.
+// The dedup skip happens before decoding, so without this extra decode of the
+// staged bytes a re-import would never warn. Collections need no such step:
+// their items are decoded and scanned while staging, before the dedup check.
+func (e *EnhancedImporter) scanCatalogedDocument(result *ImportResult, path, format, intended string) error {
+	data, _, err := e.analyzeData(path, format)
+	if err != nil {
+		return fmt.Errorf("failed to analyze data: %w", err)
+	}
+	var tally secretTally
+	e.scanSecrets(&tally, data, 0, intended, result.AssignedSchema)
+	tally.apply(result)
+	return nil
 }

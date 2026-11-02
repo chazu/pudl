@@ -208,6 +208,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	if err != nil {
 		return nil, err
 	}
+	catalogedDocument := false
 	err = artifacts.WithLock(opts.Context, e.catalogDB.Root(), func() error {
 		existing, err := e.catalogDB.FindByContentHash(contentHash)
 		if err != nil {
@@ -215,6 +216,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 		}
 		if existing != nil {
 			result = existingImportResult(existing, opts.originPath())
+			catalogedDocument = stream == nil
 			if opts.Explain {
 				result.Explanation = loadOriginalExplanation(existing.MetadataPath)
 			}
@@ -256,6 +258,9 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	if result != nil && stream != nil {
 		result.SchemaMismatches = stream.schemaMismatches
 		stream.secrets.apply(result)
+	}
+	if err == nil && catalogedDocument {
+		err = e.scanCatalogedDocument(result, staged.Path(storedPath), format, intendedSchema(opts))
 	}
 	if result != nil && transformed != nil {
 		result.Redacted = transformed.redacted
