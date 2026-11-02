@@ -78,7 +78,7 @@ func Export(ctx context.Context, root, destination string, maxBytes int64) error
 		}
 		defer db.Close()
 		dbCopy := filepath.Join(stage, filepath.FromSlash(catalogPath))
-		if err := os.MkdirAll(filepath.Dir(dbCopy), 0o700); err != nil {
+		if err := artifacts.MkdirPrivate(filepath.Dir(dbCopy)); err != nil {
 			return err
 		}
 		// Online backup captures committed WAL state and preserves tie ordering.
@@ -405,10 +405,10 @@ func extract(ctx context.Context, source, stage string, maxBytes int64) (Manifes
 			return m, fmt.Errorf("unexpected bundle member %q", header.Name)
 		}
 		path := filepath.Join(stage, filepath.FromSlash(item.Path))
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		if err := artifacts.MkdirPrivate(filepath.Dir(path)); err != nil {
 			return m, err
 		}
-		out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, artifacts.PrivateFileMode)
 		if err != nil {
 			return m, err
 		}
@@ -566,7 +566,7 @@ func rebaseAndVerify(ctx context.Context, stage, root string, m Manifest) error 
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, body, 0o600); err != nil {
+		if err := artifacts.WriteFilePrivate(path, body); err != nil {
 			return err
 		}
 	}
@@ -588,7 +588,7 @@ func safePath(path string) bool {
 	return path != "" && path != "." && !strings.Contains(path, "\\") && !strings.HasPrefix(path, "/") && filepath.ToSlash(filepath.Clean(path)) == path && path != ".." && !strings.HasPrefix(path, "../") && path != "manifest.json"
 }
 func copyFile(ctx context.Context, source, destination string, size int64) error {
-	if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
+	if err := artifacts.MkdirPrivate(filepath.Dir(destination)); err != nil {
 		return err
 	}
 	in, err := os.Open(source)
@@ -596,7 +596,7 @@ func copyFile(ctx context.Context, source, destination string, size int64) error
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	out, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, artifacts.PrivateFileMode)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/skills"
@@ -103,7 +104,7 @@ func Init(opts InitOptions) error {
 		filepath.Join(pudlDir, "data", "sqlite"),
 	}
 	for _, dataDir := range dataDirs {
-		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		if err := artifacts.MkdirPrivate(dataDir); err != nil {
 			return fmt.Errorf("creating local data directory %s: %w", dataDir, err)
 		}
 	}

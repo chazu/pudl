@@ -658,6 +658,11 @@ Beads work:
     facts, reported as warnings in text and the `secrets` section of the
     version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
   - Not yet: observe-ingest warnings (wiring described in the first implog).
+- Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
+  observe snapshots, staging files and the SQLite catalog are written 0600
+  under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
+  --only data-permissions` tightens older data. Schemas, rules, models and
+  config keep their modes. See `implog/2026_11_01_owner_only_data.md`.
 
 The convergence and value-wiring sections below are historical.
 

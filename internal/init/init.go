@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/skills"
@@ -58,7 +59,7 @@ func Initialize(opts InitOptions) error {
 	}
 
 	// Create data directory
-	if err := os.MkdirAll(cfg.DataPath, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(cfg.DataPath); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
