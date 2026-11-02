@@ -30,11 +30,15 @@ projects at run time (`gcloud projects list`), runs one `gcloud ... list
 --format=json` per project, injects `project` into every record and routes the
 records to one schema. Each declares a complete observation of scope
 `gcp/<type>` (`fixture/gcp/<type>` for fixtures). If a project's run fails
-(a missing permission, a disabled API), the other projects are ingested, the
+(a missing permission, say), the other projects are ingested, the
 observation is incomplete, and the collector fails with the project listed
 under `populate.failed_inputs` in its report. A family checked with it is
 blocked; checked later on its own, its checks over that observation are
-unknown, not passing.
+unknown, not passing. A project whose API for the type is disabled is
+different: gcloud reports `SERVICE_DISABLED`, which the live collectors
+declare in `populate.empty_when`, so the project counts as having none of
+the type. It is listed under `populate.empty_inputs`, and the observation
+stays complete.
 
 | Collector | gcloud | Schema | Identity | Permission (role) |
 | --- | --- | --- | --- | --- |

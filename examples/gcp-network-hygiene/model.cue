@@ -24,12 +24,15 @@ _checks: [{
 
 #GCPNetworkHygieneLive: sm.#SystemModel & {
 	// Every project your gcloud credentials can list, discovered at run time.
+	// A project with the Compute Engine API disabled has no firewall rules:
+	// it is an empty input, not a failed one.
 	name: "gcp-network-hygiene-live"
 	observation: {scope: "gcp/firewalls", complete: true}
 	populate: {
 		schema: "pudl/gcphygiene.#Firewall"
 		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
 		runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+		empty_when: ["SERVICE_DISABLED"]
 	}
 	checks: _checks
 }

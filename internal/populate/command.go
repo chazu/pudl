@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,6 +50,9 @@ type Result struct {
 	Runs int
 	// Failed lists the runs that failed, in run order.
 	Failed []FailedInput
+	// Empty lists the runs whose failure matched empty_when, in run order:
+	// observed with no records, not failed.
+	Empty []EmptyInput
 	// Inputs are the enumerated inputs, in order; nil without `each`.
 	Inputs []string
 }
@@ -59,10 +63,16 @@ type Result struct {
 //
 // A run that fails (exits non-zero, times out, or prints something other than
 // JSON objects) is a failed input in the Result, and the other runs go on.
-// With FailFast it fails the populate instead. Run returns an error, and no
-// Result, when the populate cannot proceed: a bad timeout, a failed
-// enumeration, the staging byte limit, or the context ending.
+// With FailFast it fails the populate instead. A run that exits non-zero with
+// stderr matching an EmptyWhen pattern is an empty input: no records, not a
+// failure. Run returns an error, and no Result, when the populate cannot
+// proceed: a bad timeout or empty_when pattern, a failed enumeration, the
+// staging byte limit, or the context ending.
 func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, error) {
+	emptyWhen, err := p.EmptyPatterns()
+	if err != nil {
+		return Result{}, err
+	}
 	timeout := DefaultTimeout
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
@@ -113,6 +123,10 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 			if items != nil {
 				failure.Item = items[i/len(p.Runs)]
 			}
+			if empty, ok := matchEmpty(emptyWhen, failure); ok {
+				res.Empty = append(res.Empty, empty)
+				continue
+			}
 			if p.FailFast {
 				return Result{}, failure.Err()
 			}
@@ -155,7 +169,9 @@ func (x *executor) attempt(run systemmodel.CommandRun, out string) (*FailedInput
 	if x.budget.exceeded {
 		return nil, errStagingLimit
 	}
-	return &FailedInput{ExitStatus: exitStatus(err), Error: err.Error(), Stderr: tail}, nil
+	status := exitStatus(err)
+	exited := status > 0 && !errors.Is(err, context.DeadlineExceeded)
+	return &FailedInput{ExitStatus: status, Error: err.Error(), Stderr: tail, exited: exited}, nil
 }
 
 // execute runs one command with stdout spooled to out and stderr passed
@@ -187,7 +203,7 @@ func (x *executor) execute(run systemmodel.CommandRun, out string) (string, erro
 	command.Stderr = io.MultiWriter(x.stderr, tail)
 	if err := command.Run(); err != nil {
 		if stopped := proc.Stopped(x.ctx, runCtx); stopped != nil {
-			err = fmt.Errorf("%w (%v)", err, stopped)
+			err = fmt.Errorf("%w (%w)", err, stopped)
 		}
 		return strings.TrimSpace(tail.String()), err
 	}

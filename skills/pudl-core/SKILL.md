@@ -90,6 +90,10 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 - A failed run is a failed input: other runs are ingested, the snapshot is
   incomplete (`populate.failed_inputs` in the report), checks over it are
   unknown, and the model fails. `fail_fast: true` restores all-or-nothing.
+- `empty_when: ["SERVICE_DISABLED"]` (regexes over a failed run's stderr)
+  declares errors that mean "no resources here": a match is an empty input
+  (`populate.empty_inputs`), observed with 0 records; the snapshot stays
+  complete and dependents run. Timeouts and unmatched errors stay failed.
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).

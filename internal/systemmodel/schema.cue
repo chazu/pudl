@@ -77,7 +77,8 @@ package systemmodel
 // Each run's stdout is a JSON array of records, or a stream of JSON objects.
 // A run that fails is a failed input: the other runs' records are ingested,
 // the observation is incomplete, and the report lists the failed run (argv,
-// exit status, stderr tail). If every run fails, nothing is ingested.
+// exit status, stderr tail). If every run fails, nothing is ingested. A
+// failure whose stderr matches empty_when is an empty input instead (below).
 // fail_fast: true restores all-or-nothing: the first failure fails the
 // populate phase and nothing is ingested. argv and set are recorded with the
 // model instance: keep secrets out of them.
@@ -108,6 +109,15 @@ package systemmodel
 	timeout?:   string
 	each?:      #Enumeration
 	fail_fast?: bool | *false
+	// empty_when lists regular expressions (Go RE2) matched against the
+	// stderr of a run that exited non-zero. A match is a definite "no
+	// resources here" (an API that is disabled in the project, say): the run
+	// is an empty input, observed with zero records, and does not make the
+	// observation incomplete. The report lists it under empty_inputs. A
+	// timeout, or a failure no pattern matches, is still a failed input.
+	//
+	//	empty_when: ["SERVICE_DISABLED"]
+	empty_when?: [...string & !=""]
 }
 
 // #Enumeration — a command whose JSON output lists the fan-out inputs.

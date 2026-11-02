@@ -63,6 +63,10 @@ type Populate struct {
 	// Their resources are unknown: the observation is incomplete.
 	Runs         int                    `json:"runs,omitempty"`
 	FailedInputs []populate.FailedInput `json:"failed_inputs,omitempty"`
+	// EmptyInputs are runs whose failure matched populate.empty_when: they
+	// were observed with no records and do not make the observation
+	// incomplete. Listed so a declared-empty input stays visible.
+	EmptyInputs []populate.EmptyInput `json:"empty_inputs,omitempty"`
 }
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated

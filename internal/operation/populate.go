@@ -25,8 +25,10 @@ func populateTargetName(modelName string) string {
 // runPopulate executes the populate phase: the model's #CommandObserve runs,
 // ingested as one observation snapshot. The records of the runs that
 // succeeded are ingested and the failed runs recorded as failed inputs, which
-// leaves the snapshot incomplete. When every run failed nothing is ingested,
-// and the summary listing them comes back with the error.
+// leaves the snapshot incomplete. Runs whose failure matched empty_when are
+// empty inputs: observed with no records, so they neither fail nor leave the
+// snapshot incomplete. When every run failed nothing is ingested, and the
+// summary listing them comes back with the error.
 func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	m := r.model
 	if m.Populate.Kind() == systemmodel.KindNone {
@@ -41,7 +43,7 @@ func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	}
 
 	target := populateTargetName(m.Name)
-	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema, Inputs: res.Inputs, Runs: res.Runs, FailedInputs: res.Failed}
+	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema, Inputs: res.Inputs, Runs: res.Runs, FailedInputs: res.Failed, EmptyInputs: res.Empty}
 	if len(res.Failed) > 0 && len(res.Failed) == res.Runs {
 		return summary, allInputsFailed(res.Failed)
 	}

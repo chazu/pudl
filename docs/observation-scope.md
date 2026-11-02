@@ -31,6 +31,7 @@ snapshots they trust, and pudl tells "absent" apart from "not observed".
 | `allow_schema_fallback` | Permit exploratory fallback to a base or catchall schema; the observation is then incomplete |
 | `timeout` | Per-run limit as a Go duration (default `10m`) |
 | `fail_fast` | Fail the whole populate, ingesting nothing, on the first failed run |
+| `empty_when` | Regular expressions (Go RE2) matched against a failed run's stderr; a match makes the run an empty input (below) |
 
 The environment is inherited, so cloud CLI credentials work. `argv` and `set`
 are recorded with the model: keep secrets out of them. A record can route
@@ -73,6 +74,30 @@ snapshot is incomplete, and the report lists each failure under
 The model fails, and its checks over that observation are `unknown`. If every
 run fails, nothing is ingested. See
 [governance](governance.md#trust-incomplete-evidence-correctly).
+
+### Empty inputs
+
+Some failures are a definite answer that an input has no resources. gcloud,
+for example, exits 1 with `reason: SERVICE_DISABLED` on stderr when the
+project's API is disabled, so the project has none of that type. List such
+errors in `empty_when`:
+
+```cue
+populate: {
+	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+	runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+	empty_when: ["SERVICE_DISABLED"]
+}
+```
+
+A run that exits nonzero with stderr matching one of the patterns is an
+**empty input**: observed with zero records. It does not make the snapshot
+incomplete or fail the model, so a model that depends on the collector is not
+blocked. The report lists it under `populate.empty_inputs` (run, `each` item,
+argv, exit status, the matched `pattern`, and `reason`, the stderr line it
+matched), so it stays visible. A timeout, undecodable output, or a failure no
+pattern matches (`PERMISSION_DENIED`, say) is still a failed input. A pattern
+that is not a valid regular expression fails the model's load.
 
 ## Declare scope and completeness
 

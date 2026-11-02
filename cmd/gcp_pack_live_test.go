@@ -11,6 +11,8 @@ import (
 
 // fakeGcloud answers the gcloud commands the GCP pack's live collectors run,
 // for two projects, and logs every invocation's arguments to $GCLOUD_LOG.
+// $GCLOUD_PROJECTS replaces the project list; in proj-nocompute the Compute
+// Engine API is disabled, so compute commands fail as gcloud's do.
 const fakeGcloud = `#!/bin/sh
 echo "$*" >> "$GCLOUD_LOG"
 for a in "$@"; do
@@ -21,10 +23,22 @@ for a in "$@"; do
 	--format=*) f=${a#--format=} ;;
 	esac
 done
+if [ "$1" = compute ] && [ "$p" = proj-nocompute ]; then
+	echo "ERROR: (gcloud.$1.$2.list) Compute Engine API has not been used in project $p before or it is disabled." >&2
+	echo "- '@type': type.googleapis.com/google.rpc.ErrorInfo" >&2
+	echo "  reason: SERVICE_DISABLED" >&2
+	exit 1
+fi
 case "$1 $2" in
-"projects list") echo '[{"projectId":"proj-a"},{"projectId":"proj-b"}]' ;;
+"projects list")
+	if [ -n "$GCLOUD_PROJECTS" ]; then
+		echo "$GCLOUD_PROJECTS"
+	else
+		echo '[{"projectId":"proj-a"},{"projectId":"proj-b"}]'
+	fi ;;
 "compute firewall-rules")
 	printf '[{"kind":"compute#firewall","id":"1","creationTimestamp":"2024-02-01T10:00:00.000-08:00","name":"allow-ssh","network":"https://www.googleapis.com/compute/v1/projects/%s/global/networks/default","priority":1000,"sourceRanges":["10.0.0.0/8"],"allowed":[{"IPProtocol":"tcp","ports":["22"]}],"direction":"INGRESS","disabled":false,"selfLink":"https://www.googleapis.com/compute/v1/projects/%s/global/firewalls/allow-ssh"}]' "$p" "$p" ;;
+"compute addresses"|"compute routers") echo '[]' ;;
 "kms keyrings")
 	if [ "$f" = json ]; then
 		printf '[{"name":"projects/%s/locations/%s/keyRings/app","createTime":"2024-01-20T10:00:00Z"}]' "$p" "$l"
@@ -99,4 +113,53 @@ func TestGCPPackLiveCollectorsEnumerateProjects(t *testing.T) {
 	r = runCLI(t, "check", "gcp-firewalls", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Contains(t, readLog(t, log), "projects list --format=json --filter=labels.env=staging")
+}
+
+// A project with the Compute Engine API disabled has no compute resources:
+// the live collectors list it as an empty input, the snapshot stays complete,
+// and a family that depends on them is not blocked.
+func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
+	cliWorkspace(t)
+	fakeGcloudOnPath(t)
+	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-nocompute"}]`)
+	r := runCLI(t, "example", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr := checkedModel(t, r.Stdout).Populate
+	require.NotNil(t, pr)
+	require.Equal(t, []string{"proj-a", "proj-nocompute"}, pr.Inputs)
+	require.Empty(t, pr.FailedInputs)
+	require.Equal(t, 1, pr.Records, "proj-a's rule")
+	require.Len(t, pr.EmptyInputs, 1)
+	empty := pr.EmptyInputs[0]
+	require.Equal(t, "proj-nocompute", empty.Item)
+	require.Equal(t, 1, empty.ExitStatus)
+	require.Equal(t, "SERVICE_DISABLED", empty.Pattern)
+	require.Equal(t, "reason: SERVICE_DISABLED", empty.Reason)
+
+	var shown struct {
+		Snapshot struct {
+			Complete bool `json:"complete"`
+		} `json:"snapshot"`
+	}
+	r = runCLI(t, "snapshot", "show", pr.SnapshotID, "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &shown))
+	require.True(t, shown.Snapshot.Complete, "a disabled API is a definite answer, not missing evidence")
+
+	r = runCLI(t, "check", "gcp-firewalls", "gcp-addresses", "gcp-routers", "gcp-network-hygiene-checks", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	var check struct {
+		Members []struct {
+			Model  string `json:"model"`
+			Result string `json:"result"`
+		} `json:"members"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &check))
+	require.Len(t, check.Members, 4)
+	for _, m := range check.Members {
+		require.Equal(t, "succeeded", m.Result, m.Model)
+	}
 }

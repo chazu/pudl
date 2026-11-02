@@ -894,6 +894,13 @@ Beads work:
   `populate.new_records` counts those stored as new catalog entries. A re-run
   over unchanged resources no longer reports `records: 0`. See
   `implog/2026_11_02_populate_new_records.md`.
+- `pudl-c2r` (done): `populate.empty_when` lists regexes matched against the
+  stderr of a run that exited non-zero. A match is an empty input (observed
+  with 0 records, listed under `populate.empty_inputs`), not a failed input,
+  so the snapshot stays complete, the model succeeds and dependents run. The
+  GCP pack's live collectors and the live network-hygiene model set
+  `empty_when: ["SERVICE_DISABLED"]`. See
+  `implog/2026_11_02_populate_empty_when.md`.
 - `pudl-167` (done): the `name|path|id` inventory identity fallback is one
   function (`acute.IdentityFields`), and inventory drift and snapshot
   comparison report each schema that used it (`identity_fallbacks`). Not fail

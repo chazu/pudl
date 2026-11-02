@@ -54,6 +54,10 @@ type Populate struct {
 	// FailFast fails the populate phase at the first failing run, so nothing
 	// is ingested; otherwise a failing run is a failed input.
 	FailFast bool `json:"fail_fast,omitempty"`
+	// EmptyWhen are regular expressions matched against the stderr of a run
+	// that exited non-zero. A match means the input has no resources (an API
+	// that is disabled, say): the run is an empty input, not a failed one.
+	EmptyWhen []string `json:"empty_when,omitempty"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }
@@ -85,7 +89,7 @@ func (p Populate) Kind() PopulateKind {
 // omits the field (omitzero). An emitted `populate: {}` would not satisfy
 // #CommandObserve, which requires runs.
 func (p Populate) IsZero() bool {
-	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast)
+	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast && len(p.EmptyWhen) == 0)
 }
 
 // Check is an observe-only flag over a Datalog relation.
@@ -148,6 +152,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		}
 	}
 	if err := m.Populate.validateItemPlaceholders(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
+	if _, err := m.Populate.EmptyPatterns(); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	return &m, nil

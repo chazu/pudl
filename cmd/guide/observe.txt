@@ -46,6 +46,13 @@ FAN-OUT
   resources are never reported as absent. populate.fail_fast: true makes any
   failure fail the whole populate. populate.timeout bounds each run.
 
+  Some failures are a definite "nothing here", such as an API that is
+  disabled in a project. populate.empty_when: ["SERVICE_DISABLED"] lists
+  regular expressions matched against the stderr of a run that exited
+  non-zero: a match is an empty input, observed with no records. It does not
+  make the snapshot incomplete or fail the model, and the report lists it
+  under populate.empty_inputs. Timeouts and unmatched failures stay failed.
+
 SCOPE AND COMPLETENESS
 
   observation.complete: true asserts the collector covered its whole scope.

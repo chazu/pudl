@@ -101,6 +101,10 @@ _gcpRuns: {
 
 // A collector observes one type completely. A run that fails is a failed
 // input: the other runs are ingested and the observation is incomplete.
+// A live run whose API is disabled in the project (gcloud exits 1 with
+// SERVICE_DISABLED) is an empty input instead: the project has none of the
+// type, so the observation stays complete and the report lists the project
+// under empty_inputs. Any other failure is still a failed input.
 _#GCPCollector: {
 	_type:   string
 	_prefix: string
@@ -117,7 +121,10 @@ _#GCPLive: _#GCPCollector & {
 	_prefix: "gcp-"
 	_scope:  "gcp"
 	_runs:   _gcpRuns[_type]
-	populate: each: _gcpProjectList
+	populate: {
+		each: _gcpProjectList
+		empty_when: ["SERVICE_DISABLED"]
+	}
 }
 
 _#GCPFixture: _#GCPCollector & {

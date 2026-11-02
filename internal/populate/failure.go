@@ -22,6 +22,9 @@ type FailedInput struct {
 	Error      string `json:"error"`
 	// Stderr is the end of the command's stderr.
 	Stderr string `json:"stderr_tail,omitempty"`
+	// exited: the command exited non-zero on its own, so its stderr may
+	// declare the input empty (see EmptyInput).
+	exited bool
 }
 
 // Err is the failure as one error: the run, its argv, what went wrong, and

@@ -233,8 +233,11 @@ A check over a collector that failed is therefore never a pass, and its
 earlier findings become `unknown`, not `resolved`. A family named with a
 failed collector is recorded `blocked`. If every run fails, nothing is
 ingested. `populate.fail_fast: true` makes any failure fail the whole
-populate. See [observation scope](observation-scope.md) for scope,
-completeness and evidence selection.
+populate. A failure whose stderr matches `populate.empty_when` (an API
+disabled in the project, say) is not a failed input: it is an empty input,
+observed with no records, listed under `populate.empty_inputs`, and leaves
+the snapshot complete. See [observation scope](observation-scope.md) for
+scope, completeness, empty inputs and evidence selection.
 
 ## Run in CI
 
