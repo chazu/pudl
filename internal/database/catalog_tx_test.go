@@ -117,12 +117,11 @@ func TestCatalogTx_ContentHashLookupsSeeUncommittedWrites(t *testing.T) {
 		require.NotNil(t, found, "FindByContentHash must see this transaction's insert")
 		assert.Equal(t, "a", found.ID)
 
-		observed, err := tx.GetLatestObserveByContentHash("web", hash)
+		byID, err := tx.GetEntry("a")
 		if err != nil {
 			return err
 		}
-		require.NotNil(t, observed, "observe dedup must see this transaction's insert")
-		assert.Equal(t, "a", observed.ID)
+		assert.Equal(t, hash, *byID.ContentHash, "observe dedup (by entry ID) must see this transaction's insert")
 		return nil
 	}))
 }

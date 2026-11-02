@@ -25,20 +25,11 @@ func NewValidator() *Validator {
 
 // ValidationResult represents the result of schema validation
 type ValidationResult struct {
-	Valid        bool         `json:"valid"`
-	Errors       []string     `json:"errors,omitempty"`
-	Warnings     []string     `json:"warnings,omitempty"`
-	PackageName  string       `json:"package_name,omitempty"`
-	Definitions  []string     `json:"definitions,omitempty"`
-	HasMetadata  bool         `json:"has_metadata"`
-	MetadataInfo MetadataInfo `json:"metadata_info,omitempty"`
-}
-
-// MetadataInfo represents required metadata fields in a schema
-type MetadataInfo struct {
-	HasIdentity bool `json:"has_identity"`
-	HasTracked  bool `json:"has_tracked"`
-	HasVersion  bool `json:"has_version"`
+	Valid       bool     `json:"valid"`
+	Errors      []string `json:"errors,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
+	PackageName string   `json:"package_name,omitempty"`
+	Definitions []string `json:"definitions,omitempty"`
 }
 
 // ValidateSchema performs comprehensive validation of a CUE schema file
@@ -93,22 +84,6 @@ func (v *Validator) ValidateSchema(filePath string) (*ValidationResult, error) {
 		result.Warnings = append(result.Warnings, "No schema definitions found (no #Definition patterns)")
 	}
 
-	// Validate metadata for each definition
-	metadataInfo := v.validateMetadata(string(content), definitions)
-	result.MetadataInfo = metadataInfo
-	result.HasMetadata = metadataInfo.HasIdentity && metadataInfo.HasTracked && metadataInfo.HasVersion
-
-	// Add warnings for missing metadata
-	if !metadataInfo.HasIdentity {
-		result.Warnings = append(result.Warnings, "Missing _identity field in schema definitions")
-	}
-	if !metadataInfo.HasTracked {
-		result.Warnings = append(result.Warnings, "Missing _tracked field in schema definitions")
-	}
-	if !metadataInfo.HasVersion {
-		result.Warnings = append(result.Warnings, "Missing _version field in schema definitions")
-	}
-
 	return result, nil
 }
 
@@ -152,11 +127,6 @@ func (v *Validator) ValidateSchemaContent(content string) (*ValidationResult, er
 	definitions := v.extractDefinitions(content)
 	result.Definitions = definitions
 
-	// Validate metadata
-	metadataInfo := v.validateMetadata(content, definitions)
-	result.MetadataInfo = metadataInfo
-	result.HasMetadata = metadataInfo.HasIdentity && metadataInfo.HasTracked && metadataInfo.HasVersion
-
 	return result, nil
 }
 
@@ -190,18 +160,6 @@ func (v *Validator) extractDefinitions(content string) []string {
 	}
 
 	return definitions
-}
-
-// validateMetadata checks for required metadata fields in schema definitions
-func (v *Validator) validateMetadata(content string, definitions []string) MetadataInfo {
-	info := MetadataInfo{}
-
-	// Check for metadata fields
-	info.HasIdentity = strings.Contains(content, "_identity:")
-	info.HasTracked = strings.Contains(content, "_tracked:")
-	info.HasVersion = strings.Contains(content, "_version:")
-
-	return info
 }
 
 // ValidatePackageConsistency validates that a schema file's package matches its intended package

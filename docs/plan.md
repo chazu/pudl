@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Bugs from the docs rewrite fixed (2026-11-02)
+
+Five bugs found while running the rewritten docs' examples are fixed. A JSON
+array import no longer makes `pudl doctor` fail (`pudl-f7z`). Two collectors
+reporting the same record share one entry (`pudl-dx4`). `facts search` accepts
+punctuated terms such as `prod-nat` (`pudl-jfs`). GCP pack records imported
+by hand with `--set project=` classify as their pack type (`pudl-8wr`).
+`schema add` and `schema new` drop legacy metadata (`pudl-ltq`). See the
+[delivery log](../implog/2026_11_02_bugfix_round.md).
+
 ### Guide and reference documentation rewritten (2026-11-02)
 
 The schema-authoring, observation, evidence, projection, facts, Datalog,

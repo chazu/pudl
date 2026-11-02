@@ -266,7 +266,6 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString("\t_pudl: {\n")
 	fmt.Fprintf(&b, "\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts))
 	fmt.Fprintf(&b, "\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName))
-	b.WriteString("\t\tcascade_fallback: [\"pudl/core.#Item\"] // Schemas to try if this doesn't match\n")
 	fmt.Fprintf(&b, "\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields))
 	fmt.Fprintf(&b, "\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis))
 	b.WriteString("\t\treview: status: \"draft\" // Set to \"validated\" (with by/at) once reviewed as complete\n")

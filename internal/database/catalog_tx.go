@@ -25,7 +25,6 @@ type CatalogWriter interface {
 	UpdateStatus(targetName, status string) error
 	GetEntry(id string) (*CatalogEntry, error)
 	FindByContentHash(contentHash string) (*CatalogEntry, error)
-	GetLatestObserveByContentHash(targetName, contentHash string) (*CatalogEntry, error)
 	UpdateEntryIdentity(id, resourceID, identityJSON string) error
 	GetTargetStatuses() ([]TargetStatus, error)
 }
@@ -74,10 +73,6 @@ func (t *CatalogTx) GetEntry(id string) (*CatalogEntry, error) {
 
 func (t *CatalogTx) FindByContentHash(contentHash string) (*CatalogEntry, error) {
 	return findByContentHashIn(t.q, contentHash)
-}
-
-func (t *CatalogTx) GetLatestObserveByContentHash(targetName, contentHash string) (*CatalogEntry, error) {
-	return getLatestObserveByContentHashIn(t.q, targetName, contentHash)
 }
 
 func (t *CatalogTx) UpdateEntryIdentity(id, resourceID, identityJSON string) error {

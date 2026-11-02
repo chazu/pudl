@@ -104,6 +104,8 @@ func checkCatalogEntry(entry database.CatalogEntry, validation *validator.Valida
 	}
 	if loadErr != nil {
 		diagnostic.Status, diagnostic.Error = "error", loadErr.Error()
+	} else if isCollectionContainer(entry) {
+		// Nothing to validate: see isCollectionContainer.
 	} else if result := validateCatalogData(validation, data, entry.Schema); !result.Valid {
 		diagnostic.Status, diagnostic.Error = "invalid", result.ErrorMessage
 		if diagnostic.Error == "" {
@@ -141,6 +143,18 @@ func validateCatalogData(validation *validator.ValidationService, data interface
 	}
 	return result
 }
+
+// isCollectionContainer reports a collection entry assigned the built-in
+// pudl/core.#Collection. That schema describes collection metadata, not the
+// stored payload (the original array or NDJSON stream), and the collection's
+// items are entries validated on their own. A collection assigned a list-type
+// schema is still validated.
+func isCollectionContainer(entry database.CatalogEntry) bool {
+	return entry.CollectionType != nil && *entry.CollectionType == "collection" &&
+		schemaname.IsEquivalent(entry.Schema, collectionSchema)
+}
+
+const collectionSchema = "pudl/core.#Collection"
 
 // Explicit assignments are validated, never heuristically reclassified.
 func shouldVerifyInference(data interface{}, entry database.CatalogEntry) bool {

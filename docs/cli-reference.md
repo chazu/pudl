@@ -776,7 +776,8 @@ Keyword search over the indexed text of currently-valid facts, best matches
 first. The index covers the values of each fact's args (not the JSON keys).
 
 The query uses SQLite FTS5 syntax: bare terms are ANDed, "quoted phrases" match
-in order, a trailing * is a prefix match, and AND/OR/NOT combine terms.
+in order, a trailing * is a prefix match, and AND/OR/NOT combine terms. A term
+with punctuation, such as prod-nat or 10.0.0.1, is matched as a phrase.
 
 Examples:
     pudl facts search "rate limiting"
@@ -792,8 +793,8 @@ Flags:
 | `--relation` | string |  | Limit search to a relation |
 
 Search uses SQLite FTS5 query syntax over the values of currently valid facts,
-best matches first. Punctuation such as `.` is FTS5 syntax: quote a phrase
-that contains it.
+best matches first. A term with punctuation, such as `prod-nat` or
+`10.0.0.1`, is matched as a phrase.
 
 ## pudl facts show
 
