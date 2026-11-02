@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/ingestprep"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 )
 
@@ -31,12 +32,15 @@ type PreparedObservation struct {
 	// projector computes schema-declared facts; tally reports them.
 	projector *projection.Registry
 	tally     *projection.Tally
+	// policies evaluates compliance policies per record.
+	policies *policyfacts.Evaluator
 }
 
 // observeDescriptor is one spooled record: its catalog entry and its facts.
 type observeDescriptor struct {
 	database.CatalogEntry
-	Projection *projection.Prepared `json:"projection,omitempty"`
+	Projection *projection.Prepared  `json:"projection,omitempty"`
+	Policies   *policyfacts.Prepared `json:"policies,omitempty"`
 }
 
 func (p *PreparedObservation) Close() {
@@ -119,6 +123,9 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 		p.projector = projection.NewRegistry(in.Inferrer, route.redactor)
 	}
 	p.tally = projection.NewTally()
+	if in.Inferrer != nil {
+		p.policies = policyfacts.New(in.Inferrer)
+	}
 	counts := map[string]int{}
 	var failures []map[string]string
 	staged := int64(0)
@@ -153,7 +160,8 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 			// record is redacted in place by now; facts come from that.
 			projected, projectedRes := projection.Prepare(p.projector, entry.Schema, entry.ID, *entry.ResourceID, entry.IdentityJSON != nil, record)
 			p.tally.Note(p.projector, entry.Schema, projectedRes)
-			descriptor, err := json.Marshal(observeDescriptor{CatalogEntry: entry, Projection: projected})
+			results := p.policies.Prepare(entry.Schema, entry.ID, *entry.ResourceID, entry.IdentityJSON != nil, record)
+			descriptor, err := json.Marshal(observeDescriptor{CatalogEntry: entry, Projection: projected, Policies: results})
 			if err != nil {
 				return err
 			}
@@ -205,6 +213,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 
 func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResult, error) {
 	ingested := 0
+	var policyChange policyfacts.Change
 	err := artifacts.WithLock(p.in.Context, db.Root(), func() error {
 		journal, err := artifacts.NewJournalContext(p.in.Context, p.dir)
 		if err != nil {
@@ -247,10 +256,8 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 						return err
 					}
 					// Re-observed unchanged: it is the resource's latest state again.
-					if existing.Schema == entry.Schema && descriptor.Projection != nil {
-						reobserved := *descriptor.Projection
-						reobserved.EntryID = existing.ID
-						if err := projection.Observe(tx, &reobserved); err != nil {
+					if existing.Schema == entry.Schema {
+						if err := observeFacts(tx, descriptor, existing.ID, &policyChange); err != nil {
 							return err
 						}
 					}
@@ -262,12 +269,17 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 				if err := tx.AddEntry(entry); err != nil {
 					return err
 				}
-				if err := projection.Observe(tx, descriptor.Projection); err != nil {
+				if err := observeFacts(tx, descriptor, entry.ID, &policyChange); err != nil {
 					return err
 				}
 				ingested++
 			}
-			return nil
+			if !p.snapshot.Complete {
+				return nil
+			}
+			closed, err := policyfacts.CloseScopeLeavers(tx, p.snapshot.Scope, p.snapshot.SnapshotID)
+			policyChange.Closed += closed
+			return err
 		})
 		if err != nil {
 			journal.Rollback()
@@ -288,7 +300,33 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 		result.Facts = p.tally.Facts
 		result.FactWarnings = p.tally.Warnings()
 	}
+	if p.route.secrets != nil {
+		result.SecretWarnings, result.SecretWarningsTotal = p.route.secrets.Warnings, p.route.secrets.Total
+	}
+	result.PolicyChange = policyChange
 	return result, nil
+}
+
+// observeFacts makes a stored record (entryID: the new entry, or the existing
+// one it deduplicated to) its resource's latest state: its projected facts and
+// policy results become current.
+func observeFacts(tx *database.CatalogTx, d observeDescriptor, entryID string, change *policyfacts.Change) error {
+	if d.Projection != nil {
+		projected := *d.Projection
+		projected.EntryID = entryID
+		if err := projection.Observe(tx, &projected); err != nil {
+			return err
+		}
+	}
+	if d.Policies == nil {
+		return nil
+	}
+	results := *d.Policies
+	results.EntryID = entryID
+	c, err := policyfacts.Observe(tx, &results, database.ProjectionObservation)
+	change.Closed += c.Closed
+	change.Updated += c.Updated
+	return err
 }
 
 func publishObserveEntry(journal *artifacts.Journal, entry *database.CatalogEntry, dir string) error {

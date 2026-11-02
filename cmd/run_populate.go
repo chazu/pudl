@@ -80,8 +80,12 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	for _, w := range result.FactWarnings {
 		fmt.Fprintf(errw(), "⚠️  %s\n", w)
 	}
+	for _, note := range secretNotes(result.SecretWarnings, result.SecretWarningsTotal) {
+		fmt.Fprintf(errw(), "%s\n", note)
+	}
 	if in.summary != nil {
 		in.summary.SchemaMismatches = result.SchemaMismatches
+		in.summary.SecretWarnings, in.summary.SecretWarningsTotal = result.SecretWarnings, result.SecretWarningsTotal
 	}
 	return result.Records, result.SnapshotID, err
 }

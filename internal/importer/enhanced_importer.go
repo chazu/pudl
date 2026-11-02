@@ -12,6 +12,7 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
@@ -36,6 +37,7 @@ type EnhancedImporter struct {
 	redactor    *redact.Registry          // sensitive-field paths per schema
 	projector   *projection.Registry      // schema-declared fact projections
 	secretScan  *secretscan.Scanner       // likely-secret warnings outside sensitive coverage
+	policies    *policyfacts.Evaluator    // compliance policies evaluated per resource
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -222,7 +224,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 			if stream != nil {
 				result.Reassigned, err = stream.reobserveAll()
 				applyTally(result, stream.tally)
-			} else if opts.ManualSchema != "" || e.projector.For(existing.Schema) != nil {
+			} else if opts.ManualSchema != "" || e.projector.For(existing.Schema) != nil || len(e.policies.Applicable(existing.Schema)) > 0 {
 				result.Reassigned, err = e.reobserveDocument(opts, existing, staged.Path(storedPath), format, origin)
 			}
 			return err

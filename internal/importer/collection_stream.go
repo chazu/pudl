@@ -15,6 +15,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/schemaname"
 )
@@ -47,6 +48,8 @@ type preparedItem struct {
 	Validated bool
 	// Projection holds the record's facts, if its schema declares any.
 	Projection *projection.Prepared `json:",omitempty"`
+	// Policies holds the record's compliance policy results.
+	Policies *policyfacts.Prepared `json:",omitempty"`
 }
 
 func (c *collectionStream) close() {
@@ -152,7 +155,7 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 			if err := tx.AddEntry(entry); err != nil {
 				return err
 			}
-			if err := projection.Observe(tx, item.Projection); err != nil {
+			if err := observeFacts(tx, item.Projection, item.Policies); err != nil {
 				return err
 			}
 		}
@@ -308,7 +311,8 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 	}
 	projected, projectedRes := projection.Prepare(e.projector, schema, itemID, resourceID, len(identityValues) > 0, itemData)
 	c.tally.Note(e.projector, schema, projectedRes)
-	prepared := preparedItem{Entry: entry, Metadata: itemMetadata, Validated: assigned.Validated, Projection: projected}
+	prepared := preparedItem{Entry: entry, Metadata: itemMetadata, Validated: assigned.Validated, Projection: projected,
+		Policies: e.policies.Prepare(schema, itemID, resourceID, len(identityValues) > 0, itemData)}
 	descriptor, err := json.Marshal(prepared)
 	if err != nil {
 		return err

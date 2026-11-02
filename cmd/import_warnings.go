@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/secretscan"
 )
 
 // importNotes are the lines an import summary adds after its counts: anything
@@ -28,20 +29,20 @@ func importNotes(result *importer.ImportResult) []string {
 	if result.Redacted > 0 {
 		notes = append(notes, fmt.Sprintf("🔒 %d sensitive values redacted before storage", result.Redacted))
 	}
-	return append(notes, secretNotes(result)...)
+	return append(notes, secretNotes(result.SecretWarnings, result.SecretWarningsTotal)...)
 }
 
 // secretNotes names each likely secret outside sensitive-field coverage by
 // record, path and kind (never the value), then says how to resolve them.
-func secretNotes(result *importer.ImportResult) []string {
-	if result.SecretWarningsTotal == 0 {
+func secretNotes(warnings []secretscan.Warning, total int) []string {
+	if total == 0 {
 		return nil
 	}
-	notes := []string{fmt.Sprintf("🔑 %d likely secrets outside the schema's sensitive fields:", result.SecretWarningsTotal)}
-	for _, w := range result.SecretWarnings {
+	notes := []string{fmt.Sprintf("🔑 %d likely secrets outside the schema's sensitive fields:", total)}
+	for _, w := range warnings {
 		notes = append(notes, fmt.Sprintf("   record %d (%s): %s", w.Record, w.Schema, w.Finding))
 	}
-	if more := result.SecretWarningsTotal - len(result.SecretWarnings); more > 0 {
+	if more := total - len(warnings); more > 0 {
 		notes = append(notes, fmt.Sprintf("   … and %d more", more))
 	}
 	return append(notes,

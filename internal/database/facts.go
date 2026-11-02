@@ -118,12 +118,16 @@ func (c *CatalogDB) AddFact(f Fact) (Fact, error) {
 	return f, nil
 }
 
-// checkWriterSource keeps general fact writers out of the projection source
-// namespace: the next projection reconcile would close their facts.
+// checkWriterSource keeps general fact writers out of the projection and
+// policy source namespaces: the next reconcile would close their facts.
 func checkWriterSource(f Fact) error {
 	if IsProjectionSource(f.Source) {
 		return errors.WrapError(errors.ErrCodeInvalidInput,
 			fmt.Sprintf("fact source %q is reserved for schema projection (prefix %q)", f.Source, ProjectionSourcePrefix), nil)
+	}
+	if IsPolicySource(f.Source) {
+		return errors.WrapError(errors.ErrCodeInvalidInput,
+			fmt.Sprintf("fact source %q is reserved for policy evaluation (prefix %q)", f.Source, PolicySourcePrefix), nil)
 	}
 	return nil
 }
@@ -134,9 +138,8 @@ func addFactIn(q dbtx, f Fact) (Fact, error) {
 	if f.Relation == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact relation is required", nil)
 	}
-	if IsReservedRelation(f.Relation) {
-		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput,
-			fmt.Sprintf("relation %q is reserved for the built-in catalog EDB and cannot be used for facts", f.Relation), nil)
+	if err := checkReservedRelation(f); err != nil {
+		return Fact{}, err
 	}
 	if f.Args == "" {
 		return Fact{}, errors.WrapError(errors.ErrCodeInvalidInput, "fact args is required", nil)
