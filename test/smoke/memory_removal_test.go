@@ -31,7 +31,7 @@ func TestSmoke_AgentMemoryRemovedGenericFactsRetained(t *testing.T) {
 		out, err := command.CombinedOutput()
 		require.Error(t, err, "retired command should fail: %v: %s", args, out)
 	}
-	for _, args := range [][]string{{"prime"}, {"guide"}, {"guide", "agents"}, {"guide", "facts"}, {"help", "--json"}} {
+	for _, args := range [][]string{{"prime"}, {"guide"}, {"guide", "agents"}, {"guide", "query"}, {"help", "--json"}} {
 		out := string(cli(args...))
 		for _, obsolete := range []string{"pudl memory", "pudl hooks", "pudl facts observe", "pudl facts promote", "pudl facts curate", "pudl pull"} {
 			require.NotContains(t, out, obsolete)

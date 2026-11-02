@@ -42,10 +42,12 @@ the resource.
 2. Observe:      pudl example install gcp      (or aws; or write a collector:
                  pudl model new NAME --populate 'command:<cmd printing JSON>')
 3. Check:        pudl check COLLECTOR... CHECK-FAMILY --json
-4. Read:         pudl report --json            (findings, owners, new/persisting)
+4. Read:         pudl report --json; pudl policy list; pudl policy show POLICY;
+                 pudl show ENTRY-ID (type, compliance) [--history]
 5. Fix or waive: fix the resource with its owning tool, or add a waiver
                  (owner, reason, created, expires) to the model
-6. Re-check:     the same pudl check; resolved findings show as resolved
+6. Re-check:     the same pudl check, with --fail-on new --detailed-exitcode
+                 in CI; findings show as new, persisting or resolved
 
 Offline first run, with the GCP pack's fixtures:
 
@@ -53,6 +55,7 @@ Offline first run, with the GCP pack's fixtures:
   pudl example install gcp
   pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
     gcp-fixture-network-hygiene-checks --json --detailed-exitcode
+  pudl policy show gcp.#FirewallBestPractice
 
 ## Rules that matter
 
@@ -100,5 +103,6 @@ schema reinfer/migrate, reclassify, migrate identity, facts reproject
   pudl guide              topics: observe, schemas, policies, checks, query,
                           doctor, packs, agents
   pudl help CMD --json    one command's flags
+  docs/getting-started.md (Git walkthrough, GCP governance tour),
   docs/cli-reference.md, docs/schema-authoring.md
 `

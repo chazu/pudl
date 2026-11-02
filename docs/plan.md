@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### In-CLI guidance rewritten (2026-11-02)
+
+`pudl guide` topics are now overview, observe, schemas, policies, checks,
+query, doctor, packs and agents, one embedded text file each. `pudl prime` is
+a short agent briefing whose loop matches the README tour, and the
+`pudl-core` skill matches both. Every command, flag and offline example was
+checked against `pudl help --json` and run in a temporary workspace. See the
+[delivery log](../implog/2026_11_02_cli_guidance_rewrite.md), which also
+lists four product issues the examples exposed.
+
 ### Front-door documentation rewritten (2026-11-02)
 
 The README, getting-started, concepts, workspace, vision and docs index now

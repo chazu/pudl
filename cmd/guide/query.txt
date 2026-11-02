@@ -55,7 +55,7 @@ BUILT-IN RELATIONS
 FACT STORE
 
   pudl facts list --relation gcp_address --json
-  pudl facts search "prod-nat" --json
+  pudl facts search RESERVED --json
   pudl facts show <fact-id>
 
   Facts are bitemporal: --as-of-valid (true at a time) and --as-of-tx
