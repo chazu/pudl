@@ -95,22 +95,24 @@ Saved Mu observations are ingested with pudl mu ingest-observe; replay requires
 run --from-catalog --catalog-scope <snapshot-or-origin> and remains unverified.
 Use Git, your editor, and cue on the paths from pudl config --paths --json.
 
-## Generic facts and rules
+## Facts and rules
 
-pudl facts add --relation <name> --args '<json-object>' --source <origin>
+pudl query <relation> key=value --json
 pudl facts list --relation <name> --json
 pudl facts search "<text>" --json
 pudl facts show <id> --json
-pudl facts retract <id>
-pudl facts invalidate <id>
-pudl query <relation> key=value --json
 pudl rule add <file.cue>
 
-Facts are arbitrary JSON assertions with valid-time and transaction-time
-history. --schema on facts add explicitly validates against an authored CUE
-schema. Retraction withdraws an assertion; invalidation records that reality
-changed. --as-of-valid and --as-of-tx select historical facts. Datalog supports
-joins and recursion, including model dependency and impact queries.
+Read the fact store through pudl query; facts list/search/show inspect stored
+facts directly. Facts are arbitrary JSON assertions with valid-time and
+transaction-time history; --as-of-valid and --as-of-tx select historical facts.
+Datalog supports joins and recursion, including model dependency and impact
+queries.
+
+Fact writes are advanced commands, hidden from everyday help: facts add
+--relation <name> --args '<json-object>' --source <origin> records an assertion
+(--schema validates it against an authored CUE schema), facts retract withdraws
+one, and facts invalidate records that reality changed. See pudl guide facts.
 
 Use --json for supported structured views. Attribute fact writes with --source.
 Use retained IDs to inspect evidence; content hashes and provenance remain

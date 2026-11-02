@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Fact-store writes demoted from everyday help (2026-11-01)
+
+`pudl facts add/retract/invalidate` are now advanced commands (`pudl-4fx.3`).
+They are hidden from `--help` and completion but still run. `help --json` flags
+them as `"advanced": true`, and `docs/cli-reference.md` documents them under
+"Advanced commands". The `facts list/show/search/stats` inspection commands stay
+visible. `pudl prime` remains the agent entrypoint. `pkg/factstore` is unchanged.
+See [delivery log](../implog/2026_11_01_demote_fact_writes.md).
+
 ### Go and dependency vulnerabilities remediated (2026-10-10)
 
 Updated Go to 1.26.9, x/net to v0.60.0, and x/text to v0.42.0, with the

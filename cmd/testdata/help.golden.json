@@ -438,7 +438,7 @@
     {
       "use": "facts",
       "short": "Query the bitemporal fact store",
-      "long": "Query facts stored in the bitemporal fact store.\n\nFacts are typed assertions — observations, dependencies, derived facts — with\nfull valid-time and transaction-time tracking.\n\nAvailable subcommands:\n- list:       Query facts by relation with temporal filtering\n- show:       Inspect a single fact by ID\n- retract:    Mark a fact as retracted (we were wrong)\n- invalidate: Mark a fact as no longer valid (reality changed)\n- reproject:  Recompute facts projected from imported records (_pudl.facts)\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts show abc123...\n    pudl facts retract abc123...\n    pudl facts invalidate abc123...",
+      "long": "Inspect facts stored in the bitemporal fact store. Everyday queries go\nthrough 'pudl query'; these subcommands look at stored facts directly.\n\nAvailable subcommands:\n- list:       Query facts by relation with temporal filtering\n- show:       Inspect a single fact by ID\n- search:     Full-text search over currently-valid facts\n- stats:      Aggregate statistics over the fact store\n- reproject:  Recompute facts projected from imported records (_pudl.facts)\n\nWriting facts and changing their lifecycle (add, retract, invalidate) are\nadvanced commands, left out of this list; see 'pudl guide facts'.\n\nExamples:\n    pudl facts list --relation observation\n    pudl facts show abc123...\n    pudl facts search \"timeout\" --relation config",
       "args": "custom",
       "flags": [
         {
@@ -461,6 +461,7 @@
           "use": "add",
           "short": "Add a fact to the bitemporal store (the canonical write)",
           "long": "Add a fact under any relation using a JSON object. Facts are general-purpose.\nUse --schema to validate the args against an authored CUE schema before storing them.\n\nExamples:\n    pudl facts add --relation depends --args '{\"from\":\"api\",\"to\":\"database\"}'\n    pudl facts add --relation config --args '{\"key\":\"timeout\",\"value\":30}' --source operator",
+          "advanced": true,
           "flags": [
             {
               "name": "args",
@@ -503,6 +504,7 @@
           "short": "Invalidate a fact (mark as no longer true)",
           "long": "Record that a fact stopped being true now.\n\nUse this when reality changed — the fact was correct when recorded but\nis no longer true. The fact remains visible in historical queries\n(--as-of-valid) but disappears from current queries.\n\nHistory is not rewritten: the recorded version is closed and a new version\nwith a valid end time supersedes it, so --as-of-tx queries for earlier\nmoments still show what was believed then. The new version's ID is printed.\n\nExamples:\n    pudl facts invalidate c0b4392d347aca8e...",
           "args": "custom",
+          "advanced": true,
           "flags": [
             {
               "name": "global",
@@ -607,6 +609,7 @@
           "short": "Retract a fact (mark as no longer asserted)",
           "long": "Mark a fact as retracted by setting its transaction end time.\n\nUse this when a fact was recorded in error — the assertion was wrong.\nThe fact remains in the store for audit purposes but disappears from\ncurrent queries.\n\nExamples:\n    pudl facts retract c0b4392d347aca8e...",
           "args": "custom",
+          "advanced": true,
           "flags": [
             {
               "name": "global",

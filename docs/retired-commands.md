@@ -21,6 +21,12 @@ heuristic; custom assertions should use their own source.
 
 `pudl list --fancy` remains supported.
 
+`pudl facts add`, `pudl facts retract` and `pudl facts invalidate` are not
+retired. They are advanced commands: `pudl facts --help` and shell completion
+no longer list them, but they run unchanged and are documented under "Advanced
+commands" in [cli-reference.md](cli-reference.md#advanced-commands). Read the
+fact store with `pudl query`; Go programs write facts through `pkg/factstore`.
+
 ## Native Git and CUE replacements
 
 Use `pudl config --paths --json` to locate the active schema tree. Project files

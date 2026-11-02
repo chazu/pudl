@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/cliadvanced"
 	"github.com/chazu/pudl/internal/database"
 )
 
@@ -15,23 +16,23 @@ var factsCmd = &cobra.Command{
 	Use:   "facts",
 	Short: "Query the bitemporal fact store",
 	Args:  cobra.NoArgs,
-	Long: `Query facts stored in the bitemporal fact store.
-
-Facts are typed assertions — observations, dependencies, derived facts — with
-full valid-time and transaction-time tracking.
+	Long: `Inspect facts stored in the bitemporal fact store. Everyday queries go
+through 'pudl query'; these subcommands look at stored facts directly.
 
 Available subcommands:
 - list:       Query facts by relation with temporal filtering
 - show:       Inspect a single fact by ID
-- retract:    Mark a fact as retracted (we were wrong)
-- invalidate: Mark a fact as no longer valid (reality changed)
+- search:     Full-text search over currently-valid facts
+- stats:      Aggregate statistics over the fact store
 - reproject:  Recompute facts projected from imported records (_pudl.facts)
+
+Writing facts and changing their lifecycle (add, retract, invalidate) are
+advanced commands, left out of this list; see 'pudl guide facts'.
 
 Examples:
     pudl facts list --relation observation
     pudl facts show abc123...
-    pudl facts retract abc123...
-    pudl facts invalidate abc123...`,
+    pudl facts search "timeout" --relation config`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
@@ -576,4 +577,8 @@ func init() {
 	factsStatsCmd.Flags().StringVar(&statsGroupBy, "group-by", "", "Comma-separated fields to group by (e.g. kind,scope)")
 
 	factsStatsCmd.RegisterFlagCompletionFunc("relation", completeRelations)
+
+	// Fact lifecycle writes stay usable but out of everyday help.
+	cliadvanced.Mark(factsRetractCmd)
+	cliadvanced.Mark(factsInvalidateCmd)
 }

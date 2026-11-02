@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/cliadvanced"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/validator"
 )
@@ -162,4 +163,5 @@ func init() {
 	factsAddCmd.MarkFlagRequired("relation")
 	factsAddCmd.MarkFlagRequired("args")
 	factsAddCmd.RegisterFlagCompletionFunc("relation", completeRelations)
+	cliadvanced.Mark(factsAddCmd)
 }

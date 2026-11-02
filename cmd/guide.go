@@ -116,7 +116,6 @@ THE DAY-TO-DAY VERBS
   pudl show <id>              Inspect an entry's content and metadata.
   pudl facts list --relation depends   Query assertions in the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
-  pudl facts add --relation <name> --args '<json-object>'   Record an assertion.
   pudl run <model>            Run a #SystemModel (observe-only, or --converge).
   pudl status                 Show recorded convergence status.
   pudl doctor                 Health check the workspace.
@@ -346,6 +345,8 @@ WRITE AND QUERY
 
   Args are arbitrary JSON objects. Use --schema to validate against an authored
   CUE definition; no relation has a built-in maturity or scoring policy.
+  facts add, retract and invalidate are advanced commands: hidden from --help,
+  documented under "Advanced commands" in docs/cli-reference.md.
 
 LIFECYCLE AND HISTORY
 
@@ -676,10 +677,10 @@ DATA AND RULES
   pudl list --json                                 count with .total_matched
   pudl export --id <proquint> --format json        exact payload, pipeable
   pudl query <relation> key=value --json
-  pudl facts add --relation <name> --args '<json-object>' --source <origin>
 
-  Schema inference is automatic. Generic fact writes should name their source;
-  use explicit --schema validation when an assertion has an authored contract.
+  Schema inference is automatic. Fact writes (facts add, an advanced command)
+  should name their --source and use --schema when an assertion has an
+  authored contract.
   facts list --as-of-valid/--as-of-tx supports historical evidence queries.
   To query imported fields, declare _pudl.facts in the schema instead of
   post-processing payloads (pudl guide datalog).

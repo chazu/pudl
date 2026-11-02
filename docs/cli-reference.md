@@ -43,11 +43,8 @@ These flags apply to every command.
   - [pudl example install](#pudl-example-install) — Install a runnable example and its fixture data
 - [pudl export](#pudl-export) — Export data lake entries to various formats
 - [pudl facts](#pudl-facts) — Query the bitemporal fact store
-  - [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
-  - [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
   - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
   - [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
-  - [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
   - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
   - [pudl facts show](#pudl-facts-show) — Show details of a single fact
   - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
@@ -505,84 +502,38 @@ pudl facts
 ```
 
 ```text
-Query facts stored in the bitemporal fact store.
-
-Facts are typed assertions — observations, dependencies, derived facts — with
-full valid-time and transaction-time tracking.
+Inspect facts stored in the bitemporal fact store. Everyday queries go
+through 'pudl query'; these subcommands look at stored facts directly.
 
 Available subcommands:
 - list:       Query facts by relation with temporal filtering
 - show:       Inspect a single fact by ID
-- retract:    Mark a fact as retracted (we were wrong)
-- invalidate: Mark a fact as no longer valid (reality changed)
+- search:     Full-text search over currently-valid facts
+- stats:      Aggregate statistics over the fact store
 - reproject:  Recompute facts projected from imported records (_pudl.facts)
+
+Writing facts and changing their lifecycle (add, retract, invalidate) are
+advanced commands, left out of this list; see 'pudl guide facts'.
 
 Examples:
     pudl facts list --relation observation
     pudl facts show abc123...
-    pudl facts retract abc123...
-    pudl facts invalidate abc123...
+    pudl facts search "timeout" --relation config
 ```
 
 Subcommands:
 
-- [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
-- [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
 - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
 - [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
-- [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
 - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
 - [pudl facts show](#pudl-facts-show) — Show details of a single fact
 - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
 
-## pudl facts add
+Advanced subcommands:
 
-Add a fact to the bitemporal store (the canonical write)
-
-```text
-pudl facts add [flags]
-```
-
-```text
-Add a fact under any relation using a JSON object. Facts are general-purpose.
-Use --schema to validate the args against an authored CUE schema before storing them.
-
-Examples:
-    pudl facts add --relation depends --args '{"from":"api","to":"database"}'
-    pudl facts add --relation config --args '{"key":"timeout","value":30}' --source operator
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--args` | string |  | Fact body as a JSON object (required) |
-| `--relation` | string |  | Relation to write (required) |
-| `--schema` | string |  | Validate args against a named on-disk CUE schema (e.g. user/config.#Setting) |
-| `--source` | string |  | Source of the fact (agent name or username; defaults to the current OS user) |
-
-## pudl facts invalidate
-
-Invalidate a fact (mark as no longer true)
-
-```text
-pudl facts invalidate <id>
-```
-
-```text
-Record that a fact stopped being true now.
-
-Use this when reality changed — the fact was correct when recorded but
-is no longer true. The fact remains visible in historical queries
-(--as-of-valid) but disappears from current queries.
-
-History is not rewritten: the recorded version is closed and a new version
-with a valid end time supersedes it, so --as-of-tx queries for earlier
-moments still show what was believed then. The new version's ID is printed.
-
-Examples:
-    pudl facts invalidate c0b4392d347aca8e...
-```
+- [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
+- [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
+- [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
 
 ## pudl facts list
 
@@ -663,25 +614,6 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--dry-run` | bool |  | Report what would change without writing |
-
-## pudl facts retract
-
-Retract a fact (mark as no longer asserted)
-
-```text
-pudl facts retract <id>
-```
-
-```text
-Mark a fact as retracted by setting its transaction end time.
-
-Use this when a fact was recorded in error — the assertion was wrong.
-The fact remains in the store for audit purposes but disappears from
-current queries.
-
-Examples:
-    pudl facts retract c0b4392d347aca8e...
-```
 
 ## pudl facts search
 
@@ -2354,4 +2286,82 @@ pudl version
 
 ```text
 Display version, commit hash, and build date information for PUDL.
+```
+
+## Advanced commands
+
+These commands are supported but left out of everyday help: `--help`
+listings and shell completion omit them, and `pudl help --json` marks them
+`"advanced": true`. Run them by their full path.
+
+- [pudl facts add](#pudl-facts-add) — Add a fact to the bitemporal store (the canonical write)
+- [pudl facts invalidate](#pudl-facts-invalidate) — Invalidate a fact (mark as no longer true)
+- [pudl facts retract](#pudl-facts-retract) — Retract a fact (mark as no longer asserted)
+
+## pudl facts add
+
+Add a fact to the bitemporal store (the canonical write)
+
+```text
+pudl facts add [flags]
+```
+
+```text
+Add a fact under any relation using a JSON object. Facts are general-purpose.
+Use --schema to validate the args against an authored CUE schema before storing them.
+
+Examples:
+    pudl facts add --relation depends --args '{"from":"api","to":"database"}'
+    pudl facts add --relation config --args '{"key":"timeout","value":30}' --source operator
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--args` | string |  | Fact body as a JSON object (required) |
+| `--relation` | string |  | Relation to write (required) |
+| `--schema` | string |  | Validate args against a named on-disk CUE schema (e.g. user/config.#Setting) |
+| `--source` | string |  | Source of the fact (agent name or username; defaults to the current OS user) |
+
+## pudl facts invalidate
+
+Invalidate a fact (mark as no longer true)
+
+```text
+pudl facts invalidate <id>
+```
+
+```text
+Record that a fact stopped being true now.
+
+Use this when reality changed — the fact was correct when recorded but
+is no longer true. The fact remains visible in historical queries
+(--as-of-valid) but disappears from current queries.
+
+History is not rewritten: the recorded version is closed and a new version
+with a valid end time supersedes it, so --as-of-tx queries for earlier
+moments still show what was believed then. The new version's ID is printed.
+
+Examples:
+    pudl facts invalidate c0b4392d347aca8e...
+```
+
+## pudl facts retract
+
+Retract a fact (mark as no longer asserted)
+
+```text
+pudl facts retract <id>
+```
+
+```text
+Mark a fact as retracted by setting its transaction end time.
+
+Use this when a fact was recorded in error — the assertion was wrong.
+The fact remains in the store for audit purposes but disappears from
+current queries.
+
+Examples:
+    pudl facts retract c0b4392d347aca8e...
 ```
