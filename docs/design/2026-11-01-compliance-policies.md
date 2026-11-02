@@ -2,8 +2,9 @@
 
 **Date:** 2026-11-01
 
-**Status:** Accepted, not yet implemented. Tracked by beads epic `pudl-xf5.8`
-(steps `pudl-xf5.8.1`, `.2`, `.3`, `.4`, `.7` and `.9`).
+**Status:** Implemented (2026-11-02). Tracked by beads epic `pudl-xf5.8`
+(steps `pudl-xf5.8.1`, `.2`, `.3`, `.4`, `.7` and `.9`). The authoring guide
+is [Compliance Policies](../schema-authoring.md#compliance-policies).
 
 ## Decision
 
