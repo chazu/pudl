@@ -38,15 +38,19 @@ type Repair struct {
 	// Apply makes the changes, or with dryRun reports them without writing.
 	// It needs a writable catalog.
 	Apply func(ctx context.Context, env *Env, dryRun bool) (Result, error)
+	// OptIn repairs are diagnosed like any other, but `--fix` applies them
+	// only when `--only` names them: naming one is the confirmation.
+	OptIn bool
 }
 
 // Registry lists every repair in the order `pudl doctor --fix` applies them:
 // names are canonical before classification, classification settles before
 // identity is computed from it, and projected facts follow the final entries.
 // Policy leaves move to their types before inference re-checks classification.
-// Data permissions depend on no other repair.
+// Data permissions depend on no other repair. The opt-in sensitive scrub runs
+// last, against the final classification, and re-projects what it rewrites.
 func Registry() []Repair {
-	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, dataPermissions}
+	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, dataPermissions, sensitiveScrub}
 }
 
 // Names returns the registered repair names in order.

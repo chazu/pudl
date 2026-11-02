@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
@@ -73,6 +74,11 @@ func runDoctorRepairs(ctx context.Context, selected []repair.Repair, healthOK bo
 	}
 	changed, projected := false, false
 	for _, r := range selected {
+		if doctorFix && r.OptIn && !slices.Contains(doctorOnly, r.Name) {
+			out = append(out, doctorRepair{Result: repair.Result{Name: r.Name, Condition: r.Condition, Status: repair.StatusSkipped,
+				Message: "opt-in: name it with --only " + r.Name}})
+			continue
+		}
 		result := repair.Run(ctx, r, env, doctorFix, doctorDryRun)
 		changed = changed || result.Changed > 0
 		projected = projected || r.Name == "projections"

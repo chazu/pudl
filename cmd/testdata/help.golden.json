@@ -284,7 +284,7 @@
     {
       "use": "doctor",
       "short": "Check workspace health and catalog data, and repair the catalog",
-      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  data-permissions  data files or directories group or other users can access\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  data-permissions  data files or directories group or other users can access\n  sensitive-scrub   plaintext stored before a schema declared the field in\n                _pudl.sensitive_fields (opt-in: applied only when --only names it)\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them. The sensitive scrub\nre-derives the IDs of the entries it rewrites (old IDs still resolve) and\ncompacts the catalog; fact history and exported bundles keep the plaintext, so\nrotate every credential it redacts.",
       "args": "custom",
       "flags": [
         {
@@ -332,7 +332,7 @@
         },
         {
           "name": "only",
-          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, data-permissions",
+          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, data-permissions, sensitive-scrub",
           "type": "stringSlice",
           "default": "[]"
         },

@@ -283,8 +283,8 @@ CREATE TABLE IF NOT EXISTS sensitive_scrubs (
 CREATE TABLE IF NOT EXISTS sensitive_redactions (
   scrub_id     TEXT NOT NULL,
   subject_kind TEXT NOT NULL,        -- entry | metadata | run_report | run_set_report | run_approval | run_set_approval
-  subject_id   TEXT NOT NULL,        -- the entry's new ID, or the report key
-  old_id       TEXT,                 -- the entry's ID before the scrub
+  subject_id   TEXT NOT NULL,        -- the entry's ID before the scrub, or the report key
+  new_id       TEXT,                 -- the re-derived ID, when it changed
   merged       INTEGER NOT NULL DEFAULT 0,
   paths        TEXT NOT NULL,        -- JSON: field paths, or "value-match"
   old_files    TEXT,                 -- JSON: superseded stored and metadata paths
