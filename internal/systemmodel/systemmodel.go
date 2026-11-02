@@ -10,6 +10,8 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+
+	"github.com/chazu/pudl/internal/waiver"
 )
 
 // schemaCUE is the canonical #SystemModel schema, compiled into every load so a
@@ -26,12 +28,14 @@ func SchemaCUE() string { return schemaCUE }
 // SystemModel is the decoded run unit. Orchestration-relevant fields only;
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {
-	Observation *Observation     `json:"observation,omitempty"`
-	Name        string           `json:"name"`
-	Populate    Populate         `json:"populate"`
-	Checks      []Check          `json:"checks,omitempty"`
-	Desired     []map[string]any `json:"desired,omitempty"`
-	Freshness   *Freshness       `json:"freshness,omitempty"`
+	Observation *Observation `json:"observation,omitempty"`
+	Name        string       `json:"name"`
+	Populate    Populate     `json:"populate"`
+	Checks      []Check      `json:"checks,omitempty"`
+	// Waivers are accepted, time-boxed exceptions to the checks' findings.
+	Waivers   []waiver.Waiver  `json:"waivers,omitempty"`
+	Desired   []map[string]any `json:"desired,omitempty"`
+	Freshness *Freshness       `json:"freshness,omitempty"`
 	// DependsOn names other #SystemModel instances this model depends on (by
 	// their `name:`). Drives the model_depends_on facts + cross-model reasoning;
 	// see docs/cross-model-dependencies.md.
@@ -100,12 +104,22 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 	if err := inst.Validate(cue.Concrete(false)); err != nil {
 		return nil, fmt.Errorf("validate: %w", err)
 	}
+	// Waivers must be complete: a missing owner or date fails here, naming
+	// the field, rather than as an opaque decode error.
+	if w := inst.LookupPath(cue.ParsePath("waivers")); w.Exists() {
+		if err := w.Validate(cue.Concrete(true)); err != nil {
+			return nil, fmt.Errorf("waivers: %w", err)
+		}
+	}
 	var m SystemModel
 	if err := inst.Decode(&m); err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
 	if m.Name == "" {
 		return nil, fmt.Errorf("model has no name")
+	}
+	if err := validateWaivers(&m); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	desired, err := decodeDesired(inst)
 	if err != nil {
@@ -121,6 +135,23 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		}
 	}
 	return &m, nil
+}
+
+// validateWaivers rejects a model whose waivers are incomplete, carry a bad
+// date, or target a check the model does not have. Waivers only apply to
+// checks, so a model without checks cannot declare any.
+func validateWaivers(m *SystemModel) error {
+	if len(m.Waivers) == 0 {
+		return nil
+	}
+	if len(m.Checks) == 0 {
+		return fmt.Errorf("waivers: the model declares no checks to waive")
+	}
+	expects := make(map[string]string, len(m.Checks))
+	for _, c := range m.Checks {
+		expects[c.Name] = c.Expect
+	}
+	return waiver.Validate(m.Waivers, expects)
 }
 
 // decodeDesired extracts the `desired` list with hidden fields (e.g. `_schema`)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
@@ -70,15 +71,18 @@ func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishSta
 				currentSnapshot = report.Drift.SnapshotID
 			}
 		}
+		waivers := newWaiverMatcher(r.cat, r.model, time.Now())
 		results, err := runChecks(r.ctx, r.cat, r.ws, r.out, r.model, r.modelDir, checkContext{
 			currentSnapshot: currentSnapshot,
 			runID:           r.session.RunID,
 			fromCatalog:     r.opts.FromCatalog,
+			waivers:         waivers,
 		})
 		if err != nil {
 			return runFinalization{runErr: runErr}, err
 		}
 		report.Checks = results
+		report.Waivers = waivers.Outcomes()
 		if anyCheckUncertain(results) {
 			report.OK = false
 			if runErr == nil {
@@ -201,10 +205,11 @@ func anyFailSeverityFailed(results []checkreport.CheckResult) bool {
 }
 
 // failedFailSeverityNames lists the fail-severity checks that did not pass.
+// A check failing only on waived findings is not among them.
 func failedFailSeverityNames(results []checkreport.CheckResult) []string {
 	var names []string
 	for _, c := range results {
-		if !c.Passed && c.Severity == "fail" {
+		if c.Failing() && c.Severity == "fail" {
 			names = append(names, c.Name)
 		}
 	}
