@@ -36,6 +36,22 @@ catalog). The identity repair backfills missing `resource_id`s and recomputes th
 still equal the leaf-schema-namespaced id, re-sequencing the versions of the
 resources they join.
 
+The `sensitive-scrub` repair finds plaintext stored before a schema declared
+the path in `_pudl.sensitive_fields`: payloads, collection files, `.meta`
+files, and (by searching for the collected values of 8 bytes or more) legacy
+mu files, observe snapshot files and stored reports. It is opt-in: plain
+`--fix` reports it `skipped`, and only `--fix --only sensitive-scrub` applies
+it (`--dry-run` previews). Apply rewrites each artifact to what a fresh import
+would store, re-derives the ID of each entry whose content changes and
+rewrites every reference to it (an ID that already exists is merged into),
+re-projects current facts, unlinks the superseded files and compacts SQLite
+(`VACUUM`). Old IDs and proquints still resolve in `pudl show` and other entry
+lookups. Its `details` list `subjects` (kind, `id`, `new_id`, `paths`,
+`merged`), `unsupported` payloads (non-JSON or compressed: delete and
+re-import as JSON), `superseded_files`, `compaction_pending` and
+`short_values_skipped`; values never appear. Fact history and exported bundles
+keep the plaintext: rotate every credential the scrub redacts.
+
 Health checks include schema loading (each schema package that fails to load,
 and any `base_schema` cycle) and Datalog rules (each rule that cannot be
 loaded, with its file position).

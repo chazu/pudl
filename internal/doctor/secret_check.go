@@ -107,5 +107,5 @@ func entryFix(schema, path string) string {
 	if schemaname.IsFallbackSchema(schema) {
 		fix = fmt.Sprintf("Route the record to a schema of its own (import --schema), then declare %s in that schema's _pudl.sensitive_fields", path)
 	}
-	return fix + " (a future scrub, pudl-m10, will redact the stored plaintext), or add it to _pudl.secret_scan_ignore if it is not a secret"
+	return fix + " (then pudl doctor --fix --only sensitive-scrub redacts the stored plaintext; rotate the credential), or add it to _pudl.secret_scan_ignore if it is not a secret"
 }
