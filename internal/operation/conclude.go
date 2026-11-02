@@ -78,6 +78,7 @@ func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishSta
 		if err != nil {
 			return runFinalization{runErr: runErr}, err
 		}
+		markFailedInputChecks(results, report.Populate)
 		report.Checks = results
 		if anyCheckUncertain(results) {
 			report.OK = false

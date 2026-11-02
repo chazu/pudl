@@ -44,6 +44,12 @@ type Populate struct {
 	Runs                []CommandRun `json:"runs,omitempty"`
 	Schema              string       `json:"schema,omitempty"`
 	Timeout             string       `json:"timeout,omitempty"`
+	// Each enumerates the inputs every run is repeated for; nil runs Runs as
+	// declared.
+	Each *Enumeration `json:"each,omitempty"`
+	// FailFast fails the populate phase at the first failing run, so nothing
+	// is ingested; otherwise a failing run is a failed input.
+	FailFast bool `json:"fail_fast,omitempty"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }
@@ -119,6 +125,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		if len(m.Desired) > 0 {
 			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired", m.Name)
 		}
+	}
+	if err := m.Populate.validateItemPlaceholders(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	return &m, nil
 }
