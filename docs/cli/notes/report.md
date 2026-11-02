@@ -1,22 +1,18 @@
-`report` reads every stored report: check reports, the report of one model
-within a check (by its run ID), and reports recorded by the retired `pudl run`
-and `pudl run set` commands. With no ID it selects the newest stored report.
-With an ID it reads that exact report. The JSON payload is the report as stored.
+With no ID, `report` reads the newest stored report; with an ID, that report:
+a check ID, or the run ID of one model within a check. `--json` prints the
+report as stored. Reports keep their historical values and witnesses; reading
+one adds whether its evidence snapshots are still available, without
+recomputing findings (see
+[evidence lifetime](evidence.md#reports-and-evidence-lifetime)).
 
-Check reports from `report_version` 3 embed each model's full report under
-`members[].report`, and the human rendering shows each model's findings before
-the check summary. Older run-set reports (versions 1 and 2) carry only member
-summaries; read a member's findings with `pudl report <run_id>`. Fields a stored
-report has that current reports do not, such as those from the retired
-convergence workflow, are shown as recorded under "legacy fields".
+`--since ID2` compares instead of printing: each check's findings are
+classified against the same check in ID2, models paired by name, as `new`,
+`persisting`, `resolved` or `unknown`. A check is skipped when ID2 lacks it,
+reached no verdict for it, or evaluated it differently. `--json` writes
+`report`, `since`, and per model each check's `changes` and `findings`. See
+[changes over time](governance.md#track-changes-over-time).
 
-`--since ID2` compares instead of printing the report: each check's failing
-matches in the report (or the newest) are classified against the same check
-in report ID2, models paired by name, as `new`, `persisting`, `resolved` or
-`unknown` with their first-seen times; see
-[changes over time](#pudl-check). A check is not compared when ID2 does not
-have it, reached no verdict for it, or evaluated it differently (mode, query,
-expectation or scope). `--json` writes the comparison: `report`, `since`, and
-per model its checks' `changes` and `findings`.
-
-Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
+Reports recorded by the retired `pudl run` and `pudl run set` read the same
+way. Older run-set reports (versions 1 and 2) carry only member summaries;
+read a member with `pudl report RUN_ID`. Fields current reports no longer
+have are shown under "legacy fields".

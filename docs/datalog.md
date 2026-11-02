@@ -1,375 +1,229 @@
-# Datalog Evaluator
+# Datalog rules and queries
 
-PUDL includes a Datalog evaluator that derives new facts from existing ones using inference rules. It reads base facts (EDB) from both the [bitemporal fact store](facts.md) and the catalog, evaluates rules to a fixed point, and returns derived facts (IDB).
+`pudl query` evaluates Datalog rules over the [fact store](facts.md) and the
+catalog. Model checks run the same evaluator. Rules are CUE; facts come mostly
+from schema [projection](projection.md), policy results and model
+dependencies.
 
-## How It Works
+```bash
+pudl query --list                             # relations you can query, with their argument keys
+pudl query gcp_address status=RESERVED       # facts, filtered
+pudl query policy_noncompliant severity=high  # a built-in rule
+pudl query impacted_by changed=network --json
+```
 
-Rules are compiled to **parameterized SQL** and executed directly inside SQLite. Each body atom becomes a self-join on the `current_facts` table (or `facts` for temporal queries). Argument access uses JSON text extraction and a checked numeric conversion before SQLite evaluates joins or filters. Shared variables across body atoms become equi-join conditions. Ground terms become WHERE predicates.
+## Write a rule
 
-A query is **goal-directed**: only the queried relation's dependency closure
-(the derived relations it transitively reads) is evaluated. Rules the query
-never reads are not run, however expensive or deep their recursion.
+A rule is a top-level CUE field with a `head` (the derived fact) and a `body`
+(conditions that must all hold). Arguments are named. Strings starting with
+`$` are variables.
 
-The closure is split into strongly connected components — groups of relations
-that read each other — in dependency order. A component is **cyclic** when it
-has more than one relation or a relation that reads itself.
-
-- **No cycles** (the common case): the whole query compiles to one SQL
-  statement. Each derived relation becomes a common table expression in
-  dependency order, and later relations join earlier ones. A relation derived
-  by several rules is their `UNION`, so a tuple derived twice is returned once.
-- **Cycles** (e.g., transitive closure): components are materialized into
-  SQLite temp tables in dependency order. An acyclic component is one
-  `INSERT`; a cyclic component uses semi-naive fixpoint evaluation:
-
-  1. Create temp tables `_rule_<relation>`, `_delta_<relation>`, `_new_<relation>`
-  2. Seed with the component's base rules (bodies that read no member)
-  3. Loop: join delta against data, insert new rows, rebuild delta
-  4. Stop when no new rows are produced (fixed point)
-  5. Extract results; the transaction rolls back, dropping the temp tables
-
-All iteration happens inside SQLite. Only final results cross the SQL/Go boundary.
-
-## Writing Rules
-
-Rules are CUE files containing fields with `head` and `body` structure. The head is the derived fact pattern; the body is a list of conditions. Variables use `$`-prefix convention.
-
-### Example: Transitive Dependencies
+This rule joins the firewall facts declared in the
+[projection example](projection.md#declaring-facts-_pudlfacts):
 
 ```cue
-baseDep: {
-    name: "base_dep"
-    head: { rel: "depends_transitive", args: { from: "$X", to: "$Z" } }
-    body: [{ rel: "depends", args: { from: "$X", to: "$Z" } }]
-}
+package rules
 
-recursiveDep: {
-    name: "recursive_dep"
-    head: { rel: "depends_transitive", args: { from: "$X", to: "$Z" } }
-    body: [
-        { rel: "depends",            args: { from: "$X", to: "$Y" } },
-        { rel: "depends_transitive", args: { from: "$Y", to: "$Z" } },
-    ]
+// Firewalls open to the internet on SSH.
+open_ssh: {
+	head: {rel: "open_ssh", args: {project: "$P", name: "$N"}}
+	body: [
+		{rel: "gcp_firewall", args: {entry_id: "$E", project: "$P", name: "$N", direction: "INGRESS", disabled: false}},
+		{rel: "gcp_firewall_source", args: {entry_id: "$E", range: "0.0.0.0/0"}},
+		{rel: "gcp_firewall_allow", args: {entry_id: "$E", proto: "tcp", port: "22"}},
+	]
 }
 ```
 
-Given facts `depends(api, db)` and `depends(db, cache)`, this derives `depends_transitive(api, db)`, `depends_transitive(db, cache)`, and `depends_transitive(api, cache)`.
+- **Variables** that appear in several body atoms must bind to the same
+  value; that is the join. Every head variable must appear in the body.
+- **Ground values** (`"INGRESS"`, `false`, `22`) match exactly.
+- **Constant head arguments** become part of every derived row and can be
+  filtered on: a head `{id: "$X", severity: "high"}` matches
+  `pudl query flagged severity=high`.
+- **Head keys** are a relation's columns. Every rule deriving one relation must
+  use the same keys.
+- **Several rules with one head relation** are a union; a row derived twice is
+  returned once.
+- **Recursion** is allowed, including rules with several recursive atoms.
+- **Aggregates** (`count($X)`, `sum`, `min`, `max`) are allowed in the head only,
+  and not in a rule that is part of a cycle.
+- **Argument keys** may be quoted CUE labels (`"app.kubernetes.io/name"`). A key
+  is one top-level argument, never a nested path.
+- **No negation.** To express "has no X", project `{exists: "X"}` or a
+  `default`, then match the value (see [projection](projection.md)).
 
-### Example: Flagging Obstacles
+The rule's name is its field name, or its optional `name` field.
+
+### Recursive example
 
 ```cue
-obstacleAlert: {
-    name: "obstacle_alert"
-    head: { rel: "at_risk", args: { scope: "$S" } }
-    body: [{ rel: "observation", args: { kind: "obstacle", scope: "$S" } }]
+reach_base: {
+	head: {rel: "reach", args: {from: "$A", to: "$B"}}
+	body: [{rel: "edge", args: {from: "$A", to: "$B"}}]
+}
+reach_step: {
+	head: {rel: "reach", args: {from: "$A", to: "$C"}}
+	body: [
+		{rel: "edge",  args: {from: "$A", to: "$B"}},
+		{rel: "reach", args: {from: "$B", to: "$C"}},
+	]
 }
 ```
 
-Any observation with `kind=obstacle` produces a derived `at_risk` fact for that scope.
+Given `edge(api, db)` and `edge(db, cache)`, `pudl query reach from=api`
+returns `db` and `cache`. The built-in `depends_transitive` rule is this
+pattern over `model_depends_on`.
 
-### Example: Cross-Relation Join
+### Invalid rules fail loudly
 
-```cue
-flaggedOrigin: {
-    name: "flagged_origin"
-    head: { rel: "flagged", args: { origin: "$O" } }
-    body: [
-        { rel: "observation",    args: { kind: "obstacle", scope: "$S" } },
-        { rel: "catalog_entry",  args: { origin: "$O", schema: "$S" } },
-    ]
-}
-```
-
-This joins observations against catalog entries, finding origins that have obstacles flagged for their schema.
-
-### Rule Structure
-
-```cue
-// #Rule schema (pudl/rules package)
-#Rule: {
-    name?: string           // optional, used for shadowing and display
-    head:  #Atom            // the derived fact pattern
-    body:  [...#Atom]       // conditions (at least one required)
-}
-
-#Atom: {
-    rel:  string            // relation name
-    args: {[string]: #Term} // named arguments
-}
-
-#Term: string | number | bool  // $-prefixed strings are variables
-```
-
-**Variables** (`$X`, `$Y`, `$Z`) are unified across body atoms. If `$X` appears in two body atoms, they must bind to the same value.
-
-**Ground terms** (`"obstacle"`, `42`, `true`) match only the exact value.
-
-**Constant head arguments** are part of every derived tuple and can be
-filtered on like any other key. `head: {rel: "flagged", args: {id: "$X",
-severity: "high"}}` derives `flagged(id=..., severity=high)`, and
-`pudl query flagged severity=high` matches it.
-
-**Head keys** are a relation's columns. Every rule deriving the same relation
-must use the same set of head keys; a mismatch is reported by `pudl doctor`
-and fails any query that reads the relation.
-
-**Argument keys** may be quoted CUE labels (`"app.kubernetes.io/name"`). The
-key is the unquoted label, and a key containing `.` or `/` names one top-level
-argument, not a nested path. Keys may not contain a double quote.
-
-**Aggregates** (`count($X)`, `sum`, `min`, `max`) are head-only. They may read
-any derived relation, including the result of a recursive one, as long as the
-aggregating rule is not itself part of a cycle.
-
-### Rule validity
-
-A top-level struct field with a `head` or a `body` is a rule; other fields are
-ignored. A rule that cannot be read as written — a missing `rel`, an empty body,
-a head variable not bound by the body (range restriction), an aggregate in the
-body — is **not skipped**. It is loaded as invalid, with its source position,
-and:
+A rule that cannot be read as written (a missing `rel`, an empty body, an
+unbound head variable, an aggregate in the body, mismatched head keys) is
+loaded as invalid, with its source position, never skipped:
 
 - `pudl rule add` refuses the file and lists each problem;
-- `pudl rule new` warns about invalid rules already in the rules directory;
-- `pudl doctor` reports every invalid rule under **Datalog Rules**;
-- `pudl query` and model checks fail when the queried relation depends on an
-  invalid rule. An invalid rule whose head relation cannot be read blocks every
-  query, since it might derive anything.
+- `pudl rule new` warns about invalid rules already installed;
+- `pudl doctor` lists every invalid rule under **Datalog Rules**;
+- a query or check whose relation depends on an invalid rule fails. An invalid
+  rule whose head cannot be read blocks every query.
 
-Silently dropping a broken rule would make queries that depend on it return
-nothing, which a model check would read as a pass.
+A silently dropped rule would make a check read nothing and pass.
 
-### Numeric values
+## Where rules live
 
-Queries preserve signed 64-bit integers, including values above `2^53`, across
-base, derived, recursive, and historical results. Integer spellings with a
-decimal point or exponent normalize before comparison. Non-integral decimals
-must round-trip through `float64` and Go JSON serialization without changing
-their decimal value. Unsupported numeric operands and accessed values fail
-with `unsupported query number`; raw evidence remains available through
-`pudl facts list` or `Store.QueryFacts`.
+| Workspace | Rule directories |
+|-----------|------------------|
+| Project | `.pudl/schema/pudl/rules/`, after the rules of vendored dependencies |
+| Global mode | `~/.pudl/schema/pudl/rules/` |
 
-For example, `9007199254740992` and `9007199254740993` stay distinct, while
-`9007199254740993` and `9.007199254740993e15` compare equally. See the
-[library numeric contract](library-api.md#numeric-query-contract) for the range,
-Go result types, and arithmetic limits.
-
-The compiler uses SQLite's [`->` operator](https://www.sqlite.org/json1.html#the_and_operators)
-to obtain the JSON token before `pudl_query_value` checks it. Using
-`json_extract` directly would convert the token to INTEGER/REAL before PUDL
-could detect lost precision. PUDL registers this function on its catalog
-connections. Direct SQLite clients reading PUDL query projections need that
-function.
-
-## Where Rules Live
-
-Rules follow PUDL's workspace scoping pattern:
-
-```
-~/.pudl/schema/pudl/rules/    Global rules (apply everywhere)
-.pudl/schema/pudl/rules/      Repo-scoped rules (apply to this repo only)
-```
-
-Repo-scoped rules shadow global rules with the same `name` field.
-
-## CLI Commands
-
-### `pudl query`
-
-Evaluate rules and query results:
+A rule in a later directory shadows an earlier one with the same name, so
+project rules win. A model's checks also load the `rules/` directory next to
+the model file. `pudl query -f FILE` adds rules from a file for one query;
+`--all-workspaces` also includes global rules and every workspace's data.
 
 ```bash
-# Query a derived relation
-pudl query depends_transitive
-
-# With constraints (key=value pairs)
-pudl query depends_transitive from=api
-
-# Query base facts directly (works without rules)
-pudl query observation kind=obstacle
-
-# Load ad-hoc rules from a file (in addition to stored rules)
-pudl query at_risk -f my-analysis.cue
-
-# Machine-readable output
-pudl query depends_transitive --json
+pudl rule new open-ssh              # scaffold .pudl/schema/pudl/rules/open-ssh.cue
+pudl rule add standards.cue         # validate a file and install it into the project
+pudl rule add standards.cue --global
 ```
 
-Numeric constraints are parsed without rounding. Preserve JSON quotes to match
-a numeric-looking string instead:
+## Built-in relations
 
-```bash
-pudl query numbers n=9007199254740993 --json
-pudl query numbers n=9.007199254740993e15 --json
-pudl query numbers 'n="9007199254740993"' --json
-```
+| Relation | Kind | Arguments |
+|----------|------|-----------|
+| `catalog_entry` | catalog view (join-only) | see below |
+| `policy_status` | facts | `resource`, `policy`, `type`, `status`, `policy_digest` |
+| `policy_violation` | facts | `resource`, `policy`, `rule`, `severity`, `path`, `kind`, `declared_by` |
+| `policy_noncompliant` | rule | `resource`, `policy`, `severity` |
+| `resource_owner` | facts | `entry_id`, `resource_id`, `type`, `owner`, `via` |
+| `resource_unowned` | facts | `entry_id`, `resource_id`, `type` |
+| `model_depends_on` | facts | `from`, `to` |
+| `depends_transitive`, `impacted_by`, `cyclic` | rules | see [dependencies](cross-model-dependencies.md) |
 
-Rules are compiled to SQL, executed, and results filtered by the requested relation and constraints. Temporal flags switch from `current_facts` to the full `facts` table with time-scoped filters.
-
-| Flag | Description |
-|------|-------------|
-| `-f, --rule-file` | Load additional rules from a CUE file |
-| `--as-of-valid` | Evaluate over facts true at this time (RFC3339 or Unix) |
-| `--as-of-tx` | Evaluate over facts known at this time (RFC3339 or Unix) |
-| `--all-workspaces` | Include global rules and all workspace data |
-| `--max-iterations` | Cap on fixpoint rounds per recursive cycle (default 100) |
-| `--json` | Output as JSON |
-
-### `pudl rule add`
-
-Validate and install a rule file:
-
-```bash
-# Install to repo-scoped rules
-pudl rule add transitive-deps.cue
-
-# Install to global rules
-pudl rule add company-standards.cue --global
-```
-
-The file is validated before installation -- it must parse as valid CUE, contain at least one field with `head` and `body`, and every rule in it must be valid (see [Rule validity](#rule-validity)). On success, the command reports what rules were installed and where:
-
-```
-Installed 2 rule(s) from transitive-deps.cue (repo-scoped)
-  base_dep: depends_transitive :- depends
-  recursive_dep: depends_transitive :- depends, depends_transitive
-Location: .pudl/schema/pudl/rules/transitive-deps.cue
-```
-
-| Flag | Description |
-|------|-------------|
-| `--global` | Install as a global rule |
-
-## EDB Sources
-
-The evaluator reads base facts from two sources.
-
-### Fact Store
-
-For present-time queries, the SQL compiler reads from the `current_facts` table -- a materialized view of only currently-valid, non-retracted facts. For temporal queries (`--as-of-valid`, `--as-of-tx`), it reads from the full `facts` table with appropriate temporal filters. Any relation name not reserved as a built-in (below) is read from the fact store.
+Every projected fact also carries `entry_id` and `resource_id`.
 
 ### Catalog (`catalog_entry`)
 
-The catalog is exposed to Datalog as a built-in `catalog_entry` relation, backed by the `catalog_entry_edb` SQL view over `catalog_entries`. Because the view has native columns (not a JSON `args` blob), the compiler reads its columns directly via `CompileOptions.TableOverrides` -- no `json_extract`, and no temporal filtering (the catalog is atemporal).
+The catalog is the built-in relation `catalog_entry`, read from native
+columns:
 
-Available fields (view columns):
-
-| Field | Source |
-|-------|--------|
+| Field | Value |
+|-------|-------|
 | `id` | Entry ID |
-| `schema` | CUE schema name |
-| `origin` | Data origin / workspace |
+| `schema` | Assigned schema |
+| `origin` | Import origin or workspace |
 | `format` | File format |
-| `status` | Recorded verdict (`unknown`, `clean`, `drifted`; legacy `converging` reads as `unknown`) |
-| `entry_type` | import, observe; legacy manifest, manifest-action, drift-observation |
-| `target` | run target name (e.g. `//models/<name>:populate`) |
-| `run_id` | Run identifier |
+| `status` | Model status: `unknown`, `clean`, `drifted`, `failed` |
+| `entry_type` | `import`, `observe` (older catalogs also hold legacy types) |
+| `target` | The model target that observed it, e.g. `//models/<name>:populate` |
+| `run_id` | The run that observed it |
 | `resource_id` | Stable resource identity |
-| `content_hash` | SHA256 of stored data |
-| `version` | Monotonic version per `resource_id` |
-| `collection_id` / `collection_type` / `item_id` | Collection membership |
+| `content_hash` | SHA256 of the stored data |
+| `version` | Version number within its `resource_id` |
+| `collection_id`, `collection_type`, `item_id` | Collection membership |
 
-Rules can join facts against the catalog -- e.g., matching an observation against the catalog entry it refers to:
+Join it to facts through `entry_id`:
 
 ```cue
-owned: {
-    head: { rel: "owned", args: { id: "$I", team: "$T" } }
-    body: [
-        { rel: "catalog_entry", args: { id: "$I", origin: "$O" } },
-        { rel: "team_owns",     args: { origin: "$O", team: "$T" } },
-    ]
+firewall_origin: {
+	head: {rel: "firewall_origin", args: {name: "$N", origin: "$O"}}
+	body: [
+		{rel: "gcp_firewall",  args: {entry_id: "$E", name: "$N"}},
+		{rel: "catalog_entry", args: {id: "$E", origin: "$O"}},
+	]
 }
 ```
 
-**`catalog_entry` is join-only and reserved:**
+`catalog_entry` is join-only: `pudl query catalog_entry` is an error. List
+entries with `pudl list`, or `Store.ListCatalog` in Go. The name is reserved;
+facts cannot be written under it.
 
-- It works as a rule **body atom**, not as a direct query target. `pudl query catalog_entry` (no rule producing it) returns a clear error, not a silent empty result. To list catalog entries, use `pudl list` or the library `Store.ListCatalog` (see [library-api.md](library-api.md)).
-- The name is reserved: `AddFact` rejects facts asserted under the `catalog_entry` relation, so user facts can never silently shadow the built-in.
-
-## Temporal Queries
-
-All Datalog evaluation respects bitemporal semantics. By default, rules evaluate over **current facts** (valid now, not retracted). Temporal flags shift the evaluation window.
-
-### What Was True At a Point In Time
+## Query
 
 ```bash
-# What observations were valid at deploy time?
-pudl query observation --as-of-valid 2026-04-01T14:30:00Z
+pudl query RELATION [field=value ...]
+```
 
-# What dependencies existed last month?
+- **Constraints** are `field=value`. Booleans and numbers are typed:
+  `disabled=false`, `n=9007199254740993`. Keep JSON quotes to match a string
+  that looks like a number: `'id="123"'`. Repeating a field is an error.
+- **`--list`** prints derived relations with their argument keys, stored fact
+  relations, and built-ins.
+- **`--topo`** reads a relation's `from`/`to` rows as a run order,
+  dependencies first, and errors on a cycle.
+- **`--timeout`** bounds the query; a cancelled query returns an error, never
+  a partial answer.
+- **`--max-iterations`** caps the rounds of each recursive cycle (default 100),
+  which bounds the longest chain a recursive rule can follow. Model checks
+  use the default.
+- **`--json`** prints `[{"relation": ..., "args": {...}}]`.
+
+`pudl query` writes nothing. It warns when projected facts are out of date;
+`pudl doctor --fix --only projections` syncs them.
+
+### Numbers
+
+Queries keep signed 64-bit integers exact, including values above 2^53.
+Equivalent spellings compare equal (`9007199254740993` and
+`9.007199254740993e15`). A non-integral decimal must survive a `float64`
+round trip. Any other number fails with `unsupported query number` rather
+than being rounded; the raw value is still readable with `pudl facts list`.
+See the [numeric contract](library-api.md#numeric-query-contract).
+
+## Time travel
+
+By default rules see current facts: valid now and not retracted. Two flags
+move the whole evaluation in time:
+
+```bash
+# What was true on April 15, by what we know now?
 pudl query depends_transitive --as-of-valid 2026-04-15T00:00:00Z
+
+# What did the store believe at that moment, including facts retracted since?
+pudl query depends_transitive --as-of-tx 2026-04-15T00:00:00Z
+
+# What did we believe on May 1 about April 15?
+pudl query depends_transitive --as-of-valid 2026-04-15T00:00:00Z --as-of-tx 2026-05-01T00:00:00Z
 ```
 
-When `--as-of-valid` is set, the compiler switches from `current_facts` to the full `facts` table with:
-```sql
-WHERE valid_start <= ? AND (valid_end IS NULL OR valid_end > ?)
-  AND tx_end IS NULL
-```
+Times are RFC3339 or Unix seconds. Every atom of every rule sees the same
+moment, so joins and recursion describe one consistent past state.
+`pudl facts list` takes the same flags without evaluating rules. See
+[facts](facts.md#time-travel) for the two time axes.
 
-This answers "what was true at time T, according to our **current** knowledge" -- if a fact was later retracted (we learned it was wrong), it won't appear.
+## How evaluation works
 
-### What We Believed At a Point In Time
+Rules compile to parameterized SQL that runs inside SQLite. Each body atom is
+a join over the current-facts table (or the full history table for time
+travel), arguments are read from JSON, and shared variables become join
+conditions.
 
-```bash
-# What did we know last Tuesday?
-pudl query observation --as-of-tx 1743379200
-```
+A query evaluates only the rules the queried relation depends on. Without
+recursion the whole query is one SQL statement, so a passing check (an empty
+result) is cheap. Recursive cycles run as semi-naive fixpoints in temporary
+tables until no new rows appear. Joins on fact arguments are not indexed, so
+large joins over many facts dominate cost.
 
-When `--as-of-tx` is set:
-```sql
-WHERE tx_start <= ? AND (tx_end IS NULL OR tx_end > ?)
-```
-
-This answers "what did we believe at time T" -- includes facts that were later retracted (because we hadn't retracted them yet at that point).
-
-### Combined: What We Believed About What Was True
-
-```bash
-# What did we believe on May 1st about what was true on April 15th?
-pudl query observation --as-of-valid 2026-04-15T00:00:00Z --as-of-tx 2026-05-01T00:00:00Z
-```
-
-Both filters apply simultaneously. Useful for reconstructing past decision states.
-
-### How Temporal Scope Propagates
-
-Temporal flags apply **globally** to the entire rule evaluation. Every body atom in every rule sees the same temporal window. This means:
-
-- Recursive rules (transitive closure) compute the closure as it existed at the specified time
-- Cross-relation joins work correctly -- both sides see the same temporal snapshot
-- Derived facts inherit the temporal semantics of their input facts
-
-There is no per-atom temporal override -- all atoms in a rule evaluation share one temporal scope. This keeps semantics simple and results consistent.
-
-### Relationship to `pudl facts list`
-
-`pudl facts list` queries raw facts without rule evaluation. `pudl query` evaluates rules. Both support the same temporal flags:
-
-| Command | Evaluates Rules | Temporal Flags |
-|---------|-----------------|----------------|
-| `pudl facts list --relation X` | No | `--as-of-valid`, `--as-of-tx` |
-| `pudl query X` | Yes | `--as-of-valid`, `--as-of-tx` |
-
-For details on fact lifecycle (retraction vs invalidation) and the bitemporal model, see [facts.md](facts.md).
-
-## Performance
-
-Recursive rules may contain multiple derived body atoms, including nonlinear
-self-joins such as `reach(X,Z) :- reach(X,Y), reach(Y,Z)`. Each round evaluates
-one variant per derived occurrence: that occurrence reads newly derived tuples,
-and the others read accumulated tuples. The next delta excludes tuples already
-known. This also handles derived inputs that become available in different
-rounds, and applies identically to current and historical queries. Aggregation
-inside a cycle remains unsupported.
-
-Rules compile to SQL, so SQLite's query planner handles join ordering and index selection. The `current_facts` table is indexed on `relation` for fast base-case lookups. Recursive evaluation uses temp tables with primary key dedup, avoiding redundant re-derivation.
-
-Because evaluation is goal-directed, a query that matches nothing — the common
-case for a passing model check — costs one SQL statement, even in a workspace
-with recursive rules. Joins on fact arguments are not indexed (each argument is
-read from JSON per row), so large joins over base facts dominate cost.
-
-Each cyclic component iterates at most 100 rounds by default; each round
-extends a recursive derivation by one step, so the limit bounds the longest
-chain a recursive rule can follow. Raise it with `pudl query --max-iterations`.
-Model checks and `factstore.Store.Query` use the default.
+The compiler reads arguments with SQLite's `->` operator and the
+`pudl_query_value` function, which pudl registers on its own connections.
+Other SQLite clients reading pudl's query views need that function.

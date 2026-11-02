@@ -1,59 +1,45 @@
-`--entry` and `--health-only` are mutually exclusive. JSON includes
-`report_version` (3), `mode` (`diagnose`, `dry-run` or `fix`), `ok`, `health`,
-`catalog`, `secrets`, `repairs`, and any setup `error`; invalid records, inference
-mismatches, and failed health checks produce a nonzero exit status. An empty
-catalog is valid. Version 1 reports had no `report_version` and listed repairs
-only as `reason`, `preview_argv` and `apply_argv`; version 2 had no `secrets`.
+**Diagnose, then repair.** Plain `doctor` writes nothing. It checks
+workspace health (schema packages that fail to load, `base_schema` cycles,
+invalid Datalog rules with their file positions), validates catalog records
+against their schemas, scans for likely secrets, and lists each repair that is
+needed. `--fix` applies the needed repairs in the order listed in `--help` and
+re-checks the catalog; `--fix --only NAME` limits them; `--fix --dry-run`
+previews them. `--fix` refuses to write when a health check failed. A repair
+that changes entries also resyncs projected facts.
 
-Each `repairs` item has `name`, `condition`, `status` (`ok`, `needed`,
-`applied`, `partial`, `error` or `skipped`), `message`, `pending`, `changed`,
-`failed`, `changes` (`subject`, `from`, `to`), `errors`, optional `details`
-(the projections repair's sync report), and, when needed, `preview_argv` and
-`apply_argv`. Plain `doctor` writes nothing. `--fix` applies the repairs in
-registry order and re-checks the catalog afterwards; `--fix --dry-run` previews
-them. `--fix` refuses to write when a health check failed, and an `error` or
-`partial` repair fails the command. A repair that changes entries also resyncs
-projected facts unless `projections` ran.
+**Scope.** `--entry` checks one record and cannot be combined with
+`--health-only`. `--schema` and `--origin` scope the catalog scan and the
+inference repair. The inference repair reclassifies only inferred entries the
+scan found drifted; `--include-explicit` re-infers every entry in scope,
+explicit assignments included. The identity repair backfills missing
+`resource_id`s and recomputes those an older release namespaced by the leaf
+schema.
 
-The catalog scan also looks for likely secrets (known token formats and a
-conservative entropy heuristic) in each stored payload outside its schema's
-`_pudl.sensitive_fields` and `_pudl.secret_scan_ignore`, and in the args of
-current facts. Projection-owned facts are skipped: they copy values from
-payloads already scanned. `secrets` has `entries` and `facts` (counts scanned),
-`facts_scanned` (false when `--entry`, `--schema` or `--origin` limit the scan
-to catalog entries), `total`, and up to 500 `findings` with `subject` (`entry`
-or `fact`), `id`, `proquint` and `schema` (entries), `relation` (facts),
-`path`, `kind` and `fix`. Findings never carry the value. They are warnings:
-detection is heuristic, so they do not change `ok` or the exit status. Text
-output lists the first 20 with the total. `secrets` is absent when the catalog
-scan did not run (`--health-only`, or a failed health check).
+**Likely secrets.** The scan reports likely secrets (known token formats and
+a conservative entropy check) in stored payloads outside `sensitive_fields`
+and `secret_scan_ignore`, and in the args of current facts, skipping facts
+projection copied from payloads. Findings name the entry or fact, path and
+kind, never the value. They are warnings and do not change `ok` or the exit
+status.
 
-`--schema` and `--origin` scope the catalog scan and therefore the inference
-repair. That repair re-infers only entries the scan found drifted; explicit
-producer assignments are never reclassified unless `--include-explicit` asks
-for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
-catalog). The identity repair backfills missing `resource_id`s and recomputes those that
-still equal the leaf-schema-namespaced id, re-sequencing the versions of the
-resources they join.
+**`sensitive-scrub`** removes plaintext stored before a schema declared the
+path in `_pudl.sensitive_fields`, from payloads, collection and metadata
+files, snapshot files, stored reports and legacy files. It runs only when
+named: `--fix --only sensitive-scrub` (with `--dry-run` to preview). It
+rewrites each artifact as a fresh import would store it, re-derives the ID of
+each changed entry (old IDs and proquints still resolve), re-projects facts,
+and compacts SQLite. Non-JSON or compressed payloads are listed as
+unsupported: delete and re-import them. Fact history and exported bundles keep
+the plaintext, so rotate every credential the scrub redacts.
 
-The `sensitive-scrub` repair finds plaintext stored before a schema declared
-the path in `_pudl.sensitive_fields`: payloads, collection files, `.meta`
-files, and (by searching for the collected values of 8 bytes or more) legacy
-mu files, observe snapshot files and stored reports. It is opt-in: plain
-`--fix` reports it `skipped`, and only `--fix --only sensitive-scrub` applies
-it (`--dry-run` previews). Apply rewrites each artifact to what a fresh import
-would store, re-derives the ID of each entry whose content changes and
-rewrites every reference to it (an ID that already exists is merged into),
-re-projects current facts, unlinks the superseded files and compacts SQLite
-(`VACUUM`). Old IDs and proquints still resolve in `pudl show` and other entry
-lookups. Its `details` list `subjects` (kind, `id`, `new_id`, `paths`,
-`merged`), `unsupported` payloads (non-JSON or compressed: delete and
-re-import as JSON), `superseded_files`, `compaction_pending` and
-`short_values_skipped`; values never appear. Fact history and exported bundles
-keep the plaintext: rotate every credential the scrub redacts.
+**JSON.** `report_version` 3 with `mode` (`diagnose`, `dry-run` or `fix`),
+`ok`, `health`, `catalog`, `secrets` (absent when the catalog was not
+scanned), `repairs` and any setup `error`. Each repair has `name`,
+`condition`, `status` (`ok`, `needed`, `applied`, `partial`, `error` or
+`skipped`), `message`, `pending`, `changed`, `failed`, `changes`, `errors`,
+optional `details`, and, when needed, `preview_argv` and `apply_argv`.
+Invalid records, inference mismatches, failed health checks, and an `error`
+or `partial` repair exit nonzero. An empty catalog is valid.
 
-Health checks include schema loading (each schema package that fails to load,
-and any `base_schema` cycle) and Datalog rules (each rule that cannot be
-loaded, with its file position).
-
-`--verify-payloads` checks referenced files and available SHA256 content claims, including canonical JSON items. This optional full scan never repairs or rewrites evidence.
+`--verify-payloads` checks referenced files and their SHA256 content claims.
+It never repairs evidence.

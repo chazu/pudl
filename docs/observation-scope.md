@@ -1,107 +1,142 @@
-# Observation scope and completeness
+# Observation: collectors, scope and completeness
 
-Checks normally read latest-known facts across the active catalog. That view
-combines observations from different times; a resource missing from one later
-partial import remains known. It does not establish a complete current inventory.
+A model's `populate` runs commands that print JSON and ingests their output as
+one **snapshot**. The snapshot records its **scope** (what population it
+covers) and whether it is **complete**. Checks can then select exactly the
+snapshots they trust, and pudl tells "absent" apart from "not observed".
 
-For inventory checks, declare what a collector covers and select its snapshots:
+## Write a collector
 
 ```cue
-observation: {
-    scope: "gcp/prod/firewalls"
-    complete: true
+#ProdFirewalls: sm.#SystemModel & {
+	name: "prod-firewalls"
+	observation: {scope: "gcp/firewalls", complete: true}
+	populate: {
+		schema: "gcp.#Firewall"          // optional; routes records like import --schema
+		runs: [for p in ["prod-a", "prod-b"] {
+			argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+			set: project: p              // stamp a field the tool leaves out
+		}]
+	}
 }
+```
+
+| Field | Meaning |
+|-------|---------|
+| `runs[].argv` | One command, run directly with no shell. It prints a JSON array of records or a stream of JSON objects |
+| `runs[].set` | Fields written into every record that run prints, overwriting them |
+| `runs[].dir` | Working directory, relative to the model file |
+| `each` | A command whose JSON list supplies the fan-out inputs at run time (below) |
+| `schema` | Route every record to this type; mismatches fail the populate |
+| `allow_schema_fallback` | Permit exploratory fallback to a base or catchall schema; the observation is then incomplete |
+| `timeout` | Per-run limit as a Go duration (default `10m`) |
+| `fail_fast` | Fail the whole populate, ingesting nothing, on the first failed run |
+
+The environment is inherited, so cloud CLI credentials work. `argv` and `set`
+are recorded with the model: keep secrets out of them. A record can route
+itself with a quoted `"_schema"` field. `pudl check --populate
+'command:<cmdline>'` tries one command without a model.
+
+### Enumerate inputs at run time
+
+CUE comprehensions fix the fan-out when the file is written. To fan out over
+whatever a command lists, give `each` a command that prints a JSON list of
+strings, or of objects with `select` naming the field. Every run is repeated
+per input with `{{item}}` replaced in its `argv` and `set`:
+
+```cue
 populate: {
-    schema: "pudl/gcp.#Firewall"
-    runs: [{argv: ["gcloud", "compute", "firewall-rules", "list",
-        "--project=prod", "--format=json"], set: project: "prod"}]
+	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+	runs: [{
+		argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"]
+		set: project: "{{item}}"
+	}]
 }
+```
+
+With `each`, every run must use `{{item}}`; without it, none may. The report
+records the inputs under `populate.inputs`. A failing `each` command fails the
+populate with nothing ingested.
+
+### Failed inputs
+
+A run that exits nonzero, times out or prints something other than JSON
+objects is a **failed input**. The other runs' records are ingested, the
+snapshot is incomplete, and the report lists each failure under
+`populate.failed_inputs` (argv, exit status, stderr tail, and the `each` item).
+The model fails, and its checks over that observation are `unknown`. If every
+run fails, nothing is ingested. See
+[governance](governance.md#trust-incomplete-evidence-correctly).
+
+## Declare scope and completeness
+
+`observation.scope` names the population, for example `gcp/firewalls`.
+`complete: true` asserts that the collector retrieved all of it: every page
+and every fan-out member. A successful exit or a JSON array alone does not
+imply completeness. Omitted, `complete` is false.
+
+A snapshot is recorded incomplete, whatever the declaration, when:
+
+- an input failed;
+- `allow_schema_fallback` let a record fall back to another schema.
+
+`populate.schema` identifies the population's type even when it has no
+records; an empty JSON array is a valid zero-record snapshot. Other observers
+can declare coverage with `observation.schemas: ["package.#Definition"]`.
+
+**Absence needs completeness.** After a complete snapshot of A and B, a
+complete snapshot holding only B shows that A is gone. A partial snapshot
+cannot: A is `not-observed`, never `removed`, and its policy results stay
+open. `pudl snapshot show NEW --compare OLD` uses the same rule for snapshots
+of one scope and owner.
+
+## Select evidence
+
+Without `evidence`, a check reads **latest-known** facts across the catalog.
+That view mixes observations from different times; a resource missing from a
+later partial import stays known. It is not a current inventory.
+
+A check with `evidence` reads only the snapshots its selectors name:
+
+| Selector | Selects |
+|----------|---------|
+| `current` | This model's own observation from this check |
+| `model:<name>` | That model's latest recorded observation |
+| `scope:<name>` | The latest observation of that scope (an error if two sources own it) |
+| a snapshot ID | Exactly that snapshot |
+
+```cue
 checks: [{
-    name: "no-open-ingress"
-    query: "open_ingress"
-    expect: "empty"
-    severity: "fail"
-    message: "Review internet-accessible firewalls"
-    evidence: ["current"]
-    max_age: "15m"
+	name: "no-open-ingress", query: "open_ingress", expect: "empty", severity: "fail"
+	message: "Review internet-accessible firewalls"
+	evidence: ["current"]
+	max_age:  "15m"
 }]
 ```
 
-`complete` is an explicit collector assertion. The collector must successfully
-finish every required page and fan-out member before asserting it. A successful
-exit or a JSON array alone does not imply completeness. Reported target errors
-prevent complete status.
+- Several selectors combine sources, each keeping its own observation time.
+  Two different versions of one resource across them are ambiguous, not
+  resolved by order.
+- `max_age` needs explicit selectors. Without it, there is no freshness
+  requirement.
+- The selected snapshots are rebuilt into a temporary catalog with the active
+  schemas and rules, then discarded. Latest-known facts are not modified.
+  Materialization is capped at 256 MiB; past it the check is `unknown`.
+- A partial, missing, stale, ambiguous or unreadable selection makes the check
+  `unknown`, with diagnostics.
 
-A failing `#CommandRun` is a failed input. The records of the runs that
-succeeded are ingested, and each failed run is recorded as a target error, so
-the snapshot is incomplete. Its scope is not closed: resources the failed input
-covered are `not-observed`, never `removed`, and their policy results stay
-open. Checks that select the snapshot are unknown (`incomplete_observation`);
-the model's own checks that read the catalog directly are unknown too
-(`failed_inputs`), and the model fails. The report lists each failed input
-under `populate.failed_inputs` (argv, exit status, stderr tail, and the
-enumerated item when `each` produced it). If every run fails, no replacement
-observation is published. `populate.fail_fast: true` makes any failure fail
-the populate with nothing ingested.
+Reports record each snapshot's ID, scope, source, observation time, age at
+check and completeness. A report pins the snapshots it references against
+pruning (see [evidence lifetime](evidence.md#reports-and-evidence-lifetime)).
 
-Verdicts are per check, not per input, so the failed input's slice is not
-partitioned out of the check: the whole check is unknown. A run therefore
-needs no label of the input it covers. The failure is named by its
-enumerated item, or by its argv for a static run.
-Omitted completeness defaults to false, including for older stored snapshots.
-An explicitly permitted schema mismatch also makes the observation incomplete.
-Command observers can opt into exploratory fallback with
-`populate.allow_schema_fallback: true`; their report records the policy and
-mismatch count.
+## Desired state and replays
 
-`populate.schema` identifies the population's schema even when it has zero
-records. For other observers, `observation.schemas: ["package.#Definition"]`
-can declare coverage explicitly. Declaring coverage does not fix invalid schema
-definitions or incomplete collection.
+A model with `desired` compares it with its own snapshot and reports drift;
+nothing is changed. In a partial snapshot, desired resources that were not
+observed are uncertain, and the model cannot be recorded clean. Resources that
+were observed can still satisfy their expectations.
 
-Evidence selectors are exact snapshot IDs, `current` (this run's observation or
-selected replay snapshot), `model:<name>` (the latest recorded observation), or
-`scope:<name>` (the latest observation of an explicitly named population).
-Scope selection rejects multiple source owners; choose exact snapshot IDs to
-resolve that ambiguity. Multiple selectors enable cross-source checks and retain
-each source's time independently. Differing versions of one resource are
-ambiguous rather than silently resolved by selector order.
-
-Selected checks rebuild projected facts from only those snapshots in a private,
-temporary SQLite catalog. They use the active schemas and rules; stored reports
-retain their original findings. They do not modify the source's latest-known
-facts or mix unrelated generic assertions into the selected inventory. Payload
-materialization is bounded to 256 MiB; exceeding the bound yields an unknown
-check rather than a partial answer. The temporary catalog is discarded afterward.
-
-A partial, missing, stale, ambiguous, or unreadable selection produces an unknown
-check with structured diagnostics. `max_age` requires a positive duration and
-explicit evidence selectors. No age bound means no freshness requirement, not
-an assertion that the selected records are live. Reports retain snapshot IDs,
-scope, source, observation time, age, and completeness; their existing retention
-policy pins referenced snapshots.
-
-After a complete observation of A and B, a complete observation containing only
-B establishes A's absence within that second snapshot. Checks selecting the
-second snapshot see B alone. The first snapshot and A's historical facts remain
-available. A partial observation cannot establish that absence.
-
-Check findings follow the same rule over time: a failing match recorded by an
-earlier report is `resolved` only when the current evaluation reached a verdict
-over a complete observation of the same scope; otherwise it is `unknown`. See
-[changes over time](cli-reference.md#pudl-check).
-
-Inventory identity now uses the same nested and quoted field-path extraction as
-import. Missing declared identity fields make a record unidentifiable; the
-name/path/id fallback applies only when no fields are declared. Composite match
-keys preserve component boundaries. Persisted resource IDs are unchanged.
-
-`snapshot show NEW --compare OLD` compares populations with the same scope and
-owner. A disappearance is labeled `removed` only when the new snapshot is
-complete; otherwise it is `not-observed`. Inventory drift likewise reports
-unobserved desired resources as uncertain for partial inventories, exits with an
-error, and cannot promote them to verified status. Existing matching resources
-can still satisfy ensure-present expectations in a partial inventory.
-
-Stored replay (`pudl check <model> --from-catalog`) remains distinct from a new live
-observation.
+`pudl check MODEL --from-catalog --catalog-scope SNAPSHOT_OR_ORIGIN` compares
+`desired` with records already in the catalog instead of observing. A replay
+describes what was recorded, not what is live, so it never updates the model's
+status.

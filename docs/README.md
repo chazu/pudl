@@ -13,11 +13,12 @@
 
 | Document | What it covers |
 | --- | --- |
-| [Schema authoring](schema-authoring.md) | Type and policy schemas with `_pudl` metadata |
-| [Observation scope](observation-scope.md) | Scope, completeness, failed inputs and evidence selectors |
-| [Projection](projection.md) | Turning record fields into facts; sensitive fields |
-| [Evidence and recovery](evidence.md) | Report baselines, retention, exports and portable bundles |
-| [Cross-model dependencies](cross-model-dependencies.md) | `depends_on`, ordering and impact queries |
+| [Governance](governance.md) | Checks, findings, policies in checks, waivers, changes over time, owners and CI |
+| [Schema authoring](schema-authoring.md) | Type and policy schemas: every `_pudl` key, and compliance policies |
+| [Observation](observation-scope.md) | Collectors and fan-out, scope, completeness, failed inputs and evidence selectors |
+| [Projection](projection.md) | Turning record fields into facts; sensitive fields and secret warnings |
+| [Evidence](evidence.md) | Classification explanations, exact imports and exports, retention, backup and restore |
+| [Dependencies and impact](cross-model-dependencies.md) | `depends_on`, check ordering and impact queries over models and resources |
 | [Workspaces](workspace.md) | Workspace layout, vendored definition packages and global mode |
 | [GCP network hygiene](gcp-network-hygiene.md) | A worked firewall example, from fixture to live collection |
 

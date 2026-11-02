@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Guide and reference documentation rewritten (2026-11-02)
+
+The schema-authoring, observation, evidence, projection, facts, Datalog,
+dependencies, library API and GCP walkthrough docs and the CLI notes now
+describe only current commands. A new [governance guide](governance.md)
+gathers checks, findings, policies in checks, waivers, finding changes,
+owners, failed inputs and CI exit codes. Schema authoring documents every
+`_pudl` key. `cross-model-dependencies.md` shrank to dependencies and impact
+queries. New CLI notes cover `policy`, `snapshot` and `model deps`. These files
+went from 3,599 to 2,976 lines. See the
+[delivery log](../implog/2026_11_02_guide_reference_docs.md).
+
 ### Front-door documentation rewritten (2026-11-02)
 
 The README, getting-started, concepts, workspace, vision and docs index now

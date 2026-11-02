@@ -1,8 +1,9 @@
 # GCP network hygiene walkthrough
 
-Find an enabled ingress ALLOW rule with source `0.0.0.0/0`, inspect its retained
-evidence, and verify a correction. The fixture journey requires PUDL and standard
-`cat`/`cp` utilities; it makes no cloud requests.
+Find an enabled ingress ALLOW rule with source `0.0.0.0/0`, inspect its
+retained evidence, and verify a correction. The fixture walkthrough needs only
+pudl and `cp`; it makes no cloud requests. For the full GCP inventory, see the
+[GCP content pack](../examples/gcp/README.md).
 
 ## Install and check the fixture
 
@@ -24,9 +25,9 @@ The fixture also contains a DENY rule with a public source and a
 private-source ALLOW rule; both are compliant. See
 [Compliance Policies](schema-authoring.md#compliance-policies).
 
-The model's own report is `members[0].report`. Retain the check's
-`run_set_id` and the model report's `populate.snapshot_id`. Below, substitute
-them for `BASELINE_CHECK` and `BASELINE_SNAPSHOT`.
+The model's own report is `members[0].report`. Note the check ID
+(`run_set_id`) and the model report's `populate.snapshot_id`; below they are
+`BASELINE_CHECK` and `BASELINE_SNAPSHOT`.
 
 ## Inspect data without writing a rule
 
@@ -40,12 +41,9 @@ pudl show RECORD_ID --field 'sourceRanges[*]'
 entry's `id` for `RECORD_ID`; plain `pudl show RECORD_ID` also prints its
 compliance section, with the violation at `sourceRanges[*]`.
 
-`--where` supports typed equality, nested paths, and wildcard membership. Repeat
-it for AND conditions. `--select` adds chosen fields to each returned entry.
-Missing fields are distinguished from explicit null values. Filtering happens
-before pagination; `--all` enumerates every match, subject to an explicit limit.
-Payload scans fail visibly if a file is unreadable or the inspection budget is
-exceeded; they never silently return a partial answer.
+`--where` matches typed values, nested paths and wildcard membership; repeat
+it to AND conditions. `--select` adds fields to each returned entry. See
+[`pudl list`](cli-reference.md#pudl-list).
 
 ## Save a check and verify the correction
 
@@ -58,12 +56,11 @@ pudl check gcp-network-hygiene --detailed-exitcode --json
 pudl check firewall-audit --detailed-exitcode --json
 ```
 
-Both checks now pass. The first observes the corrected fixture; the second checks
-the selected retained snapshot and labels its evidence as recorded. Neither
-claims to have inspected a real GCP project. This is a data-quality check of an
-explicit fixture source.
+Both checks now pass. The first observes the corrected fixture, and its
+finding is reported `resolved`. The second evaluates the latest retained
+snapshot of the scope and labels its evidence as recorded.
 
-Retain the new `members[0].report.populate.snapshot_id` as `FIXED_SNAPSHOT`:
+Note the new `members[0].report.populate.snapshot_id` as `FIXED_SNAPSHOT`:
 
 ```bash
 pudl snapshot show FIXED_SNAPSHOT --compare BASELINE_SNAPSHOT --json
@@ -71,16 +68,9 @@ pudl show RECORD_ID --history --json
 pudl report BASELINE_CHECK --json
 ```
 
-The comparison shows the source-range change. History lists distinct stored
-versions and their observation snapshots, including re-observations of identical
-content. The original report retains the original failing finding.
-
-`pudl doctor --json` includes a `repairs` list diagnosing schema names,
-unresolved schema references, inference drift, identities, projected facts and
-policy results.
-Each repair that is needed gives preview and apply arguments. Plain `doctor`
-writes nothing; `pudl doctor --fix [--only NAME]` applies the repairs and
-`--fix --dry-run` previews them.
+The comparison shows the source-range change. History lists the resource's
+stored versions and the snapshots that observed them. The original report
+still holds the original failing finding.
 
 ## Collect a real project
 
@@ -94,9 +84,9 @@ pudl check gcp-network-hygiene-live --detailed-exitcode --json
 ```
 
 This model uses `gcloud compute firewall-rules list` with an explicit project
-and injects that project into each record. Its completeness declaration assumes
-the collector retrieves the entire list; do not add a limit or partial-location
-filter while retaining that declaration. Failed commands publish no snapshot.
+and injects that project into each record. It declares a complete
+observation, so do not add a limit or a partial filter to the command. If the
+command fails, no snapshot is published.
 
 The policy identifies broad IPv4 ALLOW declarations. Effective reachability also
 depends on priorities, DENY rules, targets and other policy layers; this example
@@ -104,6 +94,3 @@ does not calculate packet reachability or cover IPv6 and hierarchical policies.
 Adapt the policy to the rule you intend to check; `pudl policy evaluate
 --what-if FILE` tries an edited copy without storing results. The `gcp`
 content pack ships a fuller firewall policy.
-
-The fixture workflow is covered by `TestGCPNetworkHygieneWorkflow` in `cmd`.
-Live GCP access and a human usability trial are separate acceptance activities.

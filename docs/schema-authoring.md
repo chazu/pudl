@@ -1,355 +1,412 @@
-# Schema Authoring Guide
+# Schema authoring
 
-PUDL schemas are [CUE](https://cuelang.org/) files that define both the **shape** of your data and the **metadata** that drives schema inference, identity tracking, and validation.
+pudl schemas are [CUE](https://cuelang.org/) definitions. There are two kinds:
 
-## Anatomy of a Schema
+- A **type** says what a resource *is*: its shape, identity, owner, the facts
+  it projects and the fields that must never be stored. Classification assigns
+  exactly one type to every record.
+- A **policy** says what a *good* instance of a type looks like. It is never
+  assigned. pudl evaluates every applicable policy against every resource and
+  stores the results. See [Compliance Policies](#compliance-policies).
+
+## A type schema
 
 ```cue
-package ec2
+package aws
 
 #Instance: {
-    // PUDL metadata -- drives inference, identity, and validation
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "aws.ec2.instance"
-        identity_fields: ["InstanceId"]
-        tracked_fields:  ["State", "InstanceType", "Tags"]
-    }
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "aws.ec2.instance"
+		identity_fields: ["InstanceId"]
+		tracked_fields:  ["State", "InstanceType"]
+		review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
+		owner: {paths: ["OwnerTag"], fallback: "platform"}
+		sensitive_fields: ["UserData"]
+		facts: aws_instance: args: {id: "InstanceId", state: "State.Name"}
+	}
 
-    // Data shape -- standard CUE constraints
-    InstanceId:   string
-    InstanceType: string
-    State: {
-        Name: "pending" | "running" | "stopping" | "stopped" | "terminated"
-        ...
-    }
-    Tags?: [...{Key: string, Value: string}]
-
-    // Accept additional fields not listed above
-    ...
+	InstanceId:   string
+	InstanceType: string
+	State: {Name: "pending" | "running" | "stopping" | "stopped" | "terminated", ...}
+	Tags?: [...{Key: string, Value: string}]
+	...  // accept fields not listed
 }
 ```
 
-Every PUDL schema has two parts:
-1. A `_pudl` metadata block that tells the inference engine how to use this schema
-2. CUE field constraints that define what valid data looks like
+The `_pudl` block drives pudl; the rest is ordinary CUE that a record must
+unify with.
 
-## The `_pudl` Metadata Block
+## The `_pudl` block
 
-The valid metadata fields are described below. There are no priority numbers or fallback lists -- validation order is determined by native CUE unification and the schema inheritance graph.
+| Key | Purpose |
+|-----|---------|
+| `schema_type` | The schema's role: `base`, `custom`, `policy`, `catchall` or `collection` |
+| `resource_type` | Dotted resource kind, such as `gcp.compute.firewall`; helps inference |
+| `identity_fields` | Fields that identify one resource across observations |
+| `tracked_fields` | Fields that mark the type during inference |
+| `base_schema` | The parent schema: a more general type, or a policy's type |
+| `review` | Whether someone has validated the type as complete |
+| `owner` | How to derive a resource's owning team |
+| `facts` | Relations the records project into the fact store |
+| `sensitive_fields` | Paths redacted before anything is stored |
+| `secret_scan_ignore` | Paths the likely-secret scan does not report |
+| `description` | A free-text note; pudl does not read it |
+
+`review`, `owner`, `facts`, `sensitive_fields` and `secret_scan_ignore` are
+read strictly: a mistake is a schema load error that `pudl doctor` reports, and
+the feature fails closed (redaction refuses to store, projection is disabled)
+rather than being silently ignored.
 
 ### `schema_type`
 
-Declares the role of this schema in the validation hierarchy.
-
-| Value | Purpose |
-|-------|---------|
-| `"base"` | Type recognition -- matches any valid instance of this resource type |
-| `"policy"` | Compliance rules for a type -- evaluated against resources, never inferred or assigned as a record's schema |
-| `"custom"` | User-defined schemas outside the type/policy hierarchy |
-| `"catchall"` | Universal fallback that accepts anything |
-| `"collection"` | Schema for collection entries (not individual items) |
+| Value | Use |
+|-------|-----|
+| `"base"` | A resource type. Most schemas |
+| `"custom"` | A type outside the built-in hierarchy |
+| `"policy"` | A compliance policy; never assigned |
+| `"catchall"` | The universal fallback, `pudl/core.#Item` |
+| `"collection"` | A collection container, such as `pudl/core.#Collection` |
 
 ### `resource_type`
 
-A dotted identifier describing what kind of resource this schema represents. Used for origin-matching during inference.
-
-Examples: `"aws.ec2.instance"`, `"k8s.pod"`, `"gitlab.pipeline"`, `"generic.collection"`
-
-When PUDL imports a file named `aws-ec2-instances.json`, the origin `aws-ec2-instances` is matched against `resource_type` values. Two or more keyword matches (e.g., "aws" and "ec2") boost the schema's candidate score by +0.15.
+A dotted name for the kind of resource, such as `aws.ec2.instance` or
+`k8s.pod`. When two or more of its keywords match an import's origin (the
+file name `aws-ec2-instances.json` gives `aws`, `ec2`), the schema's inference
+score rises.
 
 ### `identity_fields`
 
-A list of field names that **uniquely identify a logical resource**. These serve two purposes:
-
-1. **Inference**: If all identity fields are present in the data, the schema gets a strong +0.5 score boost
-2. **Resource identity**: The values of these fields (combined with the schema name) produce the `resource_id` hash, which tracks the same logical resource across re-imports
+The fields whose values identify one logical resource. pudl derives the
+**resource ID** from them, so the same resource is tracked across observations
+and its versions form a history. They also weigh most in inference.
 
 ```cue
-identity_fields: ["InstanceId"]                                  // EC2 instance
-identity_fields: ["metadata.name", "metadata.namespace"]         // K8s resource
-identity_fields: ["BucketName"]                                  // S3 bucket
+identity_fields: ["InstanceId"]                           // EC2 instance
+identity_fields: ["metadata.namespace", "metadata.name"]  // Kubernetes object
+identity_fields: ["project", "name"]                      // composite
 ```
 
-If `identity_fields` is empty (as in the catchall), the content hash is used as the identity component.
-
-Paths nest with dots; quote a key that itself contains dots:
-`metadata.labels."cloud.googleapis.com/location"`. An identity field that does
-not resolve on a record is reported by `pudl import` (and `--dry-run`): such
-records fall back to content-hash identity and form no version chain.
+Paths nest with dots; quote a key that contains dots:
+`metadata.labels."cloud.googleapis.com/location"`. Wildcards are not allowed.
+A record whose identity fields do not resolve falls back to content-hash
+identity: it forms no version history and projects no facts. `pudl import`
+and `--dry-run` report such records. Choose globally unique fields where you
+can: selfLinks, ARNs, UUIDs. See [Resource identity](#resource-identity).
 
 ### `tracked_fields`
 
-A list of fields to **monitor for changes** between versions of the same resource. These provide a weaker inference signal (+0.1 x ratio of present fields) and are used for diff/change-tracking features.
+Fields characteristic of the type. Their presence raises the inference score
+a little.
+
+### `base_schema`
+
+The parent schema, by name (`"pudl/aws.#SecurityGroup"`). A type that names a
+more general type specializes it: inference tries the more specific schema
+first, and the child inherits the parent's `owner`, `facts`,
+`sensitive_fields` and `secret_scan_ignore`, as well as policies on the
+parent. A policy names its type, or a policy it extends, here. A
+`base_schema` cycle is a load error.
+
+### `review`
 
 ```cue
-tracked_fields: ["State", "InstanceType", "Tags"]
+review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
 ```
 
-### `facts` and `sensitive_fields` (optional)
+`status` is `draft` or `validated`. Absent means `draft`. `validated` promises
+that the type's required fields are always collected, so a policy treats a
+missing required field as a violation instead of `unknown`. Results against a
+draft type are marked provisional. `pudl schema new` writes `status: "draft"`;
+`pudl schema list`, `schema show` and `policy list` display it.
 
-`facts` declares the relations a schema's records project into the fact store,
-so rules, `pudl query` and model checks can use imported fields.
-`sensitive_fields` lists paths redacted before anything is stored. Both are
-covered in [projection.md](projection.md).
+### `owner`
 
-### `owner` (optional)
+How pudl names a resource's owning team. pudl tries, in order:
 
-Declares how a resource's owner is derived, so check findings and policy
-results name a team. PUDL tries, in order:
-
-1. `paths`: field paths such as labels or tags; the first that holds a
+1. `paths`: field paths, such as labels or tags; the first that holds a
    non-empty string is the owner.
-2. `map`: a table from one field's value to an owner, such as a project ID to
-   its team.
-3. `fallback`: an owner for everything else.
+2. `map`: a table from one field's value to an owner, such as project to team.
+3. `fallback`: the owner of everything else.
 
-A resource that none of them names is **unowned**.
+A resource none of them names is **unowned**.
 
 ```cue
 _projectOwners: {"shop-prod": "payments", "data-prod": "data"} // once per package
 
 #Bucket: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "gcp.storage.bucket"
-        identity_fields: ["name"]
-        owner: {
-            paths: ["labels.team", "labels.owner"]
-            map: {path: "project", owners: _projectOwners}
-            fallback: "platform"                  // omit to report unowned resources
-        }
-    }
-    ...
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "gcp.storage.bucket"
+		identity_fields: ["name"]
+		owner: {
+			paths: ["labels.team", "labels.owner"]
+			map: {path: "project", owners: _projectOwners}
+			fallback: "platform"  // omit to report unowned resources
+		}
+	}
+	...
 }
 ```
 
-- **One table, many types.** Declare the mapping once as a hidden package
-  value and reference it from each type, as above. The table lives in the
-  schema tree, so ownership is known when a record is ingested, whichever
-  model observed it, and a changed table re-derives every owner on the next
-  import, check or `pudl doctor --fix --only projections`.
-- **Inheritance.** The declaration is inherited along `base_schema`; the
-  nearest schema that declares `owner` wins, whole. A specialized type
-  therefore shares its parent's owner unless it declares its own.
-- **Strict.** Unknown keys, paths containing `[*]`, empty owners and a block
-  with none of `paths`, `map` or `fallback` are schema load errors (`pudl
-  doctor` lists them). Projection is disabled for the schema until it is
-  fixed; existing facts are left unchanged.
-- `owner` needs `identity_fields`, as `facts` does.
+- Declare a mapping once as a hidden package value and reference it from each
+  type, as above. Changing it re-derives every owner on the next import,
+  check or `pudl doctor --fix --only projections`.
+- The nearest schema in the `base_schema` chain that declares `owner` wins,
+  whole.
+- `owner` needs `identity_fields`. Unknown keys, paths with `[*]`, empty owners
+  and a block with none of the three keys are load errors.
+- A path names one value. To own AWS resources by tag, have the collector
+  print the tag as a field first (see the
+  [AWS pack](../examples/aws/README.md#ownership)).
 
-Every resource of such a type projects one built-in fact
-(see [projection.md](projection.md#resource-ownership)):
+Owners are projected as `resource_owner` and `resource_unowned` facts
+([projection](projection.md#resource-ownership)) and attributed to check
+findings ([governance](governance.md#attribute-findings-to-owners)).
 
-| Relation | Args |
-|---|---|
-| `resource_owner` | `entry_id`, `resource_id`, `type`, `owner`, `via` (`path:<path>`, `map:<path>` or `fallback`) |
-| `resource_unowned` | `entry_id`, `resource_id`, `type` |
+### `facts`
 
-A model check over `resource_unowned` with `expect: "empty"` reports every
-unowned resource. `pudl check --owner TEAM` and `pudl policy show POLICY
---owner TEAM` show one owner's findings. This owner is the resource's owner;
-it is unrelated to who owns a policy or a waiver.
+Relations a type's records project into the fact store, so rules, queries and
+checks can use their fields:
 
-### `base_schema` (optional)
+```cue
+facts: {
+	gcp_firewall: args: {
+		project: "project", name: "name"
+		disabled: {path: "disabled", default: false}
+	}
+	gcp_firewall_allow: {
+		each: "allowed[*]"  // one fact per element
+		args: {proto: "IPProtocol", port: {path: "ports[*]", default: "*"}}
+	}
+}
+```
 
-Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).
-A policy schema also names its type through `base_schema`, but policies are never
-tried during classification: only types are assigned. See
-[Compliance Policies](#compliance-policies).
+`facts` needs `identity_fields`. Argument forms, wildcards and how facts stay
+current are in [projection](projection.md).
 
-### `review` (optional)
+### `sensitive_fields`
 
-`review: {status: "draft" | "validated", by?: string, at?: string}` records
-whether a person or agent has reviewed a type schema as a complete
-representation of its resource. An absent or invalid block means `draft`; an
-invalid one is also a schema load error. `pudl schema list` and `pudl schema
-show` display it, and `pudl schema new` writes `status: "draft"`. Policies use
-it (see [Absent fields](#absent-fields-and-status)).
+```cue
+sensitive_fields: ["spec.template.spec.containers[*].env[*].value"]
+```
 
-## How Validation Works
+Values at these paths are replaced with `"[REDACTED]"` before a record is
+hashed, identified, stored or projected. Redaction fails closed: an invalid
+list, an overlap with an identity field, or a YAML or CSV record routed to
+such a schema is not stored. Payloads stored before a path was declared are
+rewritten only by `pudl doctor --fix --only sensitive-scrub`. See
+[projection](projection.md#sensitive-fields-_pudlsensitive_fields).
 
-When data is imported, PUDL determines which schema to assign using a two-phase process:
+### `secret_scan_ignore`
 
-### Phase 1: Candidate Selection (Heuristic Scoring)
+```cue
+secret_scan_ignore: ["spec.nonce", "status.conditions[*].token"]
+```
 
-Candidate schemas are scored based on the following (policy schemas are never candidates):
-- **Identity field presence**: +0.5 if all `identity_fields` exist in the data
-- **Tracked field presence**: +0.1 x (ratio of `tracked_fields` found)
-- **Origin keyword matching**: +0.15 if two or more `resource_type` keywords match the origin
-- **Schema specificity**: Candidates are sorted most-specific-first using the `base_schema` inheritance graph
+pudl warns about likely secrets (cloud keys, tokens, private keys, URLs with
+credentials, long random strings) outside `sensitive_fields`, by path and
+kind, never by value. List a path here when its value is not a secret; it
+covers everything below it. To redact a real secret, add it to
+`sensitive_fields` instead. See
+[projection](projection.md#likely-secret-warnings-_pudlsecret_scan_ignore).
 
-### Phase 2: CUE Unification
+## How classification works
 
-Starting with the most specific candidate, PUDL attempts CUE unification (`tryUnify`) against the data. The first schema that successfully unifies is assigned.
+Without `--schema`, pudl infers each record's type in two steps:
 
-If no candidate passes unification, PUDL walks the `base_schema` chain -- trying progressively less specific schemas, skipping policies. If the entire chain fails, the catchall schema (`pudl/core.#Item`) is assigned.
+1. **Score candidates.** Every type is a candidate; policies never are. A
+   schema scores when all its `identity_fields` are present (+0.5), when its
+   `tracked_fields` are present (up to +0.1), and when its `resource_type`
+   matches the origin (+0.15). Candidates are ordered most specific first
+   along `base_schema`.
+2. **Unify.** pudl tries CUE unification against each candidate, most specific
+   first. The first that unifies is assigned. If none does, it walks up the
+   `base_schema` chain, and finally assigns the catchall `pudl/core.#Item`.
 
-This means:
-- **No priority numbers** -- ordering comes from the inheritance graph and heuristic scores
-- **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
-- **Exploratory imports use the catchall**; explicit schema requests are strict unless `--allow-schema-fallback` is supplied.
-- **Explicit schemas must be types**: `--schema` or a model's `populate.schema` naming a policy is an error that names the policy's type.
+An explicit schema (`pudl import --schema`, or a model's `populate.schema`) is
+strict: a record that does not unify fails, unless `--allow-schema-fallback`
+(or `allow_schema_fallback: true`) permits the fallback. Naming a policy is an
+error that names its type.
+
+`pudl import --explain` shows the candidates, scores and rejections.
+
+## Resource identity
+
+A resource ID is namespaced by the **root of the schema's `base_schema`
+family**, not by the assigned schema:
+
+```
+resource_id = SHA256(family_root + "\x00" + identity values)
+```
+
+So a resource keeps its ID when it is reclassified to a more specific schema
+in the same family. For that to hold, **`identity_fields` must be the same
+across a family**: declare them at the root and inherit them unchanged.
+Descendants may tighten the constraints on those fields, never change them.
+`#Child: #Base & {...}` enforces this in CUE; for families joined only by
+`base_schema`, `pudl doctor` warns when a schema's identity fields differ from
+its base's.
+
+`pudl doctor --fix --only identity` backfills missing resource IDs and
+recomputes IDs that older releases namespaced by the leaf schema.
 
 ## Compliance Policies
 
-A **type** schema says what a resource is; classification assigns exactly one
-type to each record. A **policy** schema (`schema_type: "policy"`) says what a
-good instance of a type looks like. Policies are never assigned. After every
-import and `#CommandObserve` ingest, PUDL evaluates every policy that applies to
-each record's type, and stores one result per resource and policy:
-`compliant`, `noncompliant`, or `unknown`, with named violations. A policy
-applies when its `base_schema` chain reaches the record's type or one of that
-type's ancestors, so several policies can apply to one resource.
+A policy (`schema_type: "policy"`) says what a good instance of a type looks
+like. After every import and observation, pudl evaluates every policy that
+applies to each record's type and stores one result per resource and policy:
+`compliant`, `noncompliant` or `unknown`, with named violations. A policy
+applies when its `base_schema` chain reaches the record's type or one of its
+ancestors, so several policies can apply to one resource.
 
-Policies cover rules about one resource. Use Datalog rules and checks for
-rules that span resources.
+Policies judge one resource at a time. For rules that span resources, write
+Datalog rules and checks ([governance](governance.md)).
 
 ### Writing a policy
 
-A policy is a standalone definition that names its type in `base_schema`. Do
-not write `#S3BucketBestPractice: #S3Bucket & {...}`: it does not load, because
-`_pudl.schema_type` conflicts (`"base"` against `"policy"`) and the closed
-definition rejects fields the policy adds. PUDL assembles the chain from
-`base_schema` itself.
+A policy is a standalone definition that names its type in `base_schema`:
 
 ```cue
 package aws
 
 #S3Bucket: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "aws.s3.bucket"
-        identity_fields: ["Name"]
-        review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
-    }
-    Name:   string
-    Region: string
-    PublicAccessBlock?:    {...}
-    ServerSideEncryption?: {...}
-    ...
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "aws.s3.bucket"
+		identity_fields: ["Name"]
+		review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
+	}
+	Name:   string
+	Region: string
+	PublicAccessBlock?:    {...}
+	ServerSideEncryption?: {...}
+	...
 }
 
 #S3BucketBestPractice: {
-    _pudl: {
-        schema_type: "policy"
-        base_schema: "aws.#S3Bucket"
-        description: "Baseline S3 hardening"
-    }
-    PublicAccessBlock: {
-        BlockPublicAcls:       true @pudl(rule="s3-block-public-acls", severity="high")
-        RestrictPublicBuckets: true @pudl(rule="s3-restrict-public", severity="high", doc="Public policies are ignored")
-    } @pudl(absent="violation")
-    ServerSideEncryption: {
-        Algorithm: "aws:kms" | "AES256" @pudl(rule="s3-encryption")
-    }
+	_pudl: {
+		schema_type: "policy"
+		base_schema: "aws.#S3Bucket"
+		description: "Baseline S3 hardening"
+	}
+	PublicAccessBlock: {
+		BlockPublicAcls:       true @pudl(rule="s3-block-public-acls", severity="high")
+		RestrictPublicBuckets: true @pudl(rule="s3-restrict-public", severity="high", doc="Public policies are ignored")
+	} @pudl(absent="violation")
+	ServerSideEncryption: {
+		Algorithm: "aws:kms" | "AES256" @pudl(rule="s3-encryption")
+	}
 }
 
 // Extends the best practice. The chain must end at a type.
 #S3BucketPCI: {
-    _pudl: {schema_type: "policy", base_schema: "aws.#S3BucketBestPractice"}
-    Versioning: Status: "Enabled" @pudl(rule="s3-versioning", severity="medium")
+	_pudl: {schema_type: "policy", base_schema: "aws.#S3BucketBestPractice"}
+	Versioning: Status: "Enabled" @pudl(rule="s3-versioning", severity="medium")
 }
 ```
 
-A policy constrains only the fields it names. Evaluation ignores closedness at
-every depth, so extra record fields never cause a violation and nested policy
-structs need no `...`. Policies need no `identity_fields`.
+Do not write `#S3BucketBestPractice: #S3Bucket & {...}`. It does not load:
+`schema_type` conflicts, and the closed type rejects fields the policy adds.
+pudl assembles the chain from `base_schema` itself.
+
+A policy constrains only the fields it names. Evaluation ignores closedness
+at every depth, so extra record fields never cause a violation and nested
+policy structs need no `...`. Policies need no `identity_fields`.
 
 ### Rule attributes
 
-`@pudl(...)` on a field names the constraint on it. The keys are:
+`@pudl(...)` on a field names the constraint on it:
 
 | Key | Meaning |
 |-----|---------|
 | `rule` | The rule name reported for a violation at or below this field |
 | `severity` | `low`, `medium` (default), `high` or `critical`; requires `rule` |
 | `doc` | One-line explanation shown by `pudl policy show`; requires `rule` |
-| `absent` | Only `"violation"`; see below. Applies to the field and everything beneath it |
+| `absent` | Only `"violation"` (below); applies to the field and everything beneath it |
 
 A violation reports the nearest rule at or above the failing path. A failing
-constraint with no rule above it reports its path as the rule name, with
-severity `medium`. A policy fails to load on an unknown key, an invalid
-severity, `severity` or `doc` without `rule`, a rule declared again with a
-different severity or doc, or a field with two different rules. Attributes are
-checked along the whole chain, so a leftover `@pudl(...)` key on a type field
+constraint with no rule above it reports its path as the rule, with severity
+`medium`. A policy fails to load on an unknown key, an invalid severity,
+`severity` or `doc` without `rule`, one rule declared with two different
+severities or docs, or a field with two different rules. Attributes are
+checked along the whole chain, so a stray `@pudl(...)` key on a type field
 also breaks that type's policies.
 
 ### Absent fields and status
 
-A field the policy requires (not `field?:`) that the record lacks is
-**absent**. By default an absence makes the result `unknown`, because the
-collector may not have gathered the field. An absence is a **violation** when:
+A field the policy requires (`field:`, not `field?:`) that the record lacks
+is **absent**. By default an absence makes the result `unknown`, because the
+collector may not have gathered the field. An absence is a **violation**
+when:
 
 - `@pudl(absent="violation")` is on the field or an ancestor. Use it where the
-  source omits a field to mean "off". A missing `PublicAccessBlock` above
-  reports `s3-block-public-acls` and `s3-restrict-public`, one per rule
-  beneath it.
-- The field is required in a type schema of the record's type chain whose
-  `review.status` is `validated`. A validated type is a promise that its
-  required fields are always collected.
+  source omits a field to mean "off". Above, a bucket without
+  `PublicAccessBlock` violates `s3-block-public-acls` and
+  `s3-restrict-public`, one per rule beneath it.
+- The field is required by a type in the record's type chain whose `review`
+  status is `validated`.
 
 The result is `noncompliant` with any violation, `unknown` with only
-absences, and `compliant` otherwise. Each violation has a rule, severity, path
-and kind (`conflict` or `absent`); record values are never stored. A result
-against a draft type is marked `provisional`.
+absences, and `compliant` otherwise. Each violation records its rule,
+severity, path and kind (`conflict` or `absent`), never the record's value.
+A result against a draft type is marked `provisional`.
 
 ### Extending policies
 
 A policy whose `base_schema` names another policy extends it. Its result
-reports every rule, including inherited ones, so each result stands alone.
-Each violation names the policy that declared its rule (`declared_by`). In the
-example, a bucket without `PublicAccessBlock` is noncompliant for both
-`#S3BucketBestPractice` and `#S3BucketPCI`, and both name
+reports every rule, inherited ones included, so each result stands alone, and
+each violation names the policy that declared its rule (`declared_by`). Above,
+a bucket without `PublicAccessBlock` is noncompliant for both
+`#S3BucketBestPractice` and `#S3BucketPCI`, both naming
 `#S3BucketBestPractice` as the declarer.
 
 ### Sensitive paths
 
-Values at `sensitive_fields` paths are redacted before storage, so a policy
-cannot evaluate them. A policy that constrains a path the chain declares
-sensitive, or a path beneath one, fails to load. A sibling field is fine.
+Sensitive values are redacted before storage, so a policy cannot judge them.
+A policy that constrains a path the chain declares sensitive, or a path
+beneath one, fails to load. A sibling path is fine.
 
 ### CUE gotchas
 
 **`&&` and `||` do not short-circuit over absent fields.** `if x == _|_ || x
 == false {...}` is undecided when the record lacks `x`, and an undecided
-condition applies nothing: the policy silently passes. To treat an absent field
-as a value, test the list of present values with `list.Contains`:
+condition applies nothing: the policy silently passes. To treat an absent
+field as a value, test the list of present values with `list.Contains`:
 
 ```cue
 import "list"
 
 #S3NoPublicAcl: {
-    _pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
-    Archived?: _
-    Acl?:      _ @pudl(rule="s3-no-public-acl", severity="high")
-    // Unless Archived is true; an absent Archived counts as false.
-    if !list.Contains([if Archived != _|_ {Archived}], true) {
-        Acl?: !="public-read"
-    }
+	_pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
+	Archived?: _
+	Acl?:      _ @pudl(rule="s3-no-public-acl", severity="high")
+	// Unless Archived is true; an absent Archived counts as false.
+	if !list.Contains([if Archived != _|_ {Archived}], true) {
+		Acl?: !="public-read"
+	}
 }
 ```
 
-**Annotate outside comprehensions.** Rules are read from the bare policy, where
-a condition that reads record data is undecided. A field annotated only inside
-such a comprehension fails to load ("cannot be applied: the field is declared
-only inside a comprehension..."). Declare the field with its annotation
-outside (`Acl?: _ @pudl(...)` above) and constrain it inside. Fields used in
-conditions must be declared too (`Archived?: _`).
+**Annotate outside comprehensions.** Rules are read from the bare policy,
+where a condition on record data is undecided. A field annotated only inside
+such a comprehension fails to load. Declare the field with its annotation
+outside (`Acl?: _ @pudl(...)` above) and constrain it inside. Declare fields
+used in conditions too (`Archived?: _`).
 
 **Conditional absence cannot be expressed.** Absences are found from the bare
-policy, so a field required only inside a comprehension is never reported as
+policy, so a field required only inside a comprehension is never reported
 absent: with `if Website != _|_ {Logging: _}`, a website bucket without
 `Logging` is compliant. Instead, put a conflict on a field that is present
-whenever the rule matters (an anchor) and name the rule there:
+whenever the rule matters, and name the rule there:
 
 ```cue
 #S3WebsiteLogging: {
-    _pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
-    Logging?: _
-    // Reported at Website: a website bucket must log access.
-    Website?: _ @pudl(rule="s3-website-logging", severity="medium")
-    if Logging == _|_ {Website?: "a website bucket needs access logging"}
+	_pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
+	Logging?: _
+	// Reported at Website: a website bucket must log access.
+	Website?: _ @pudl(rule="s3-website-logging", severity="medium")
+	if Logging == _|_ {Website?: "a website bucket needs access logging"}
 }
 ```
 
@@ -359,258 +416,107 @@ whenever the rule matters (an anchor) and name the rule there:
 
 - Pattern constraints (`[string]: T`) are checked for conflicts but not for
   absences; a violation under one takes the nearest named rule above it.
-- A constraint that refers to another field the record lacks
-  (`size: <=max` without `max`) is neither a conflict nor an absence.
-- Conflicts between chain members themselves are not reported at load.
+- A constraint that refers to a field the record lacks (`size: <=max` without
+  `max`) is neither a conflict nor an absence.
+- Conflicts between members of a chain are not reported at load.
 
 ### Policy workflow
 
 ```bash
-pudl policy list [--type T]              # policies, rule counts, review, result counts, stale
-pudl policy show POLICY [--limit N]      # rules, chain, failing resources
-pudl policy evaluate [POLICY...]         # re-evaluate stored resources from retained payloads
-pudl policy evaluate --dry-run           # report what would change, write nothing
-pudl policy evaluate --what-if draft.cue # evaluate an uninstalled draft, write nothing
-pudl show ID                             # Compliance: each applicable policy, status, violations
+pudl policy list [--type T]               # policies, rule counts, review, result counts, stale results
+pudl policy show POLICY [--owner TEAM]    # rules, chain, failing resources and their owners
+pudl policy evaluate --what-if draft.cue  # try an uninstalled draft; writes nothing
+pudl policy evaluate [POLICY...]          # re-evaluate stored resources from retained payloads
+pudl policy evaluate --dry-run            # what would change; writes nothing
+pudl show ID                              # one entry's policy results and violations
 ```
 
 A `--what-if` draft must be standalone CUE (no imports of other workspace
-packages) and shadows an installed policy of the same name. A policy that
+packages); it shadows an installed policy of the same name. A policy that
 fails to load is reported by these commands and keeps its existing results.
 
-Results are bitemporal facts, `policy_status(resource, policy, type, status,
+Results are facts: `policy_status(resource, policy, type, status,
 policy_digest)` and `policy_violation(resource, policy, rule, severity, path,
-kind, declared_by)`. Both names are reserved. Checks use the built-in rule
-`policy_noncompliant(resource, policy, severity)`: a `#Check` with `query:
-"policy_noncompliant"` and `expect: "empty"` fails on any violation, within the
-check's evidence selection. A model's `waivers` can accept one violation
-until a date by `policy`, `rule` and `resource` (see `pudl help check`).
-`pudl query policy_noncompliant severity=high`
-limits it to one severity; for a threshold, write a rule over it. Each result records a digest of the
-policy's effective CUE; comments and `_pudl.description` do not change it.
-After a policy or its type changes, `pudl policy list` and `pudl doctor`
-report stale results. Two doctor repairs cover policies:
+kind, declared_by)`. Checks use the built-in rule
+`policy_noncompliant(resource, policy, severity)`; see
+[governance](governance.md#use-policies-in-checks) for checks, thresholds and
+waivers.
+
+Each result records a digest of the policy's effective CUE; comments and
+`description` do not change it. After a policy or its type changes,
+`pudl policy list` and `pudl doctor` report stale results, and
+`pudl doctor --fix --only policy-results` re-evaluates them.
+
+## Create a schema from data
 
 ```bash
-pudl doctor --fix --only policy-results  # re-evaluate stale, orphaned or missing results
-pudl doctor --fix --only policy-leaves   # move entries classified to a policy (before
-                                         # policies left classification) to its type
+pudl import --path users.json
+pudl schema new --from <proquint> --path user:#User
+pudl schema new --from <proquint> --path user:#User --infer status=enum
 ```
 
-## Resource Identity and Schema Families
+`--path` is `<package path>:#<Definition>`; the example writes
+`.pudl/schema/user/user.cue` and defines `user.#User`. For a collection entry,
+`schema new` describes its items; add `--collection` to describe the
+collection itself. `--infer field=enum` turns the values seen into a
+disjunction.
 
-A schema's role is *classification*; it is distinct from a resource's *identity*.
-The same logical resource (a repo, an instance) may be classified under several
-schemas in an inheritance family and may be reclassified over time, but it should
-keep one stable `resource_id` so data from different sources can be linked and
-deduplicated.
+The generated schema is a draft. Then:
 
-To make that true, `resource_id` is namespaced by the **root of the schema's
-inheritance family**, not the assigned (leaf) schema:
+1. check the `_pudl` block, especially `identity_fields`;
+2. tighten constraints and mark optional fields with `?`;
+3. add `...` if records may carry fields you did not list;
+4. set `review: status: "validated"` once it is complete.
+
+## Where schemas live
+
+Schemas live in the workspace's `schema/` directory: `.pudl/schema/` in a
+project, `~/.pudl/schema/` in global mode. A schema's name is its package
+path and definition: `.pudl/schema/gcp/network.cue` with `package gcp`
+defines `gcp.#Firewall`.
 
 ```
-resource_id = SHA256( normalize(family_root) + "\x00" + identity_component )
+.pudl/schema/
+├── cue.mod/module.cue
+├── pudl/            # built-in schemas, rules and #SystemModel; owned by pudl
+│   ├── core/        # pudl/core.#Item, pudl/core.#Collection
+│   ├── aws/         # pudl/aws.#VPC, ...
+│   ├── k8s/
+│   └── rules/       # Datalog rules
+├── models/          # your #SystemModel instances
+└── user/            # your schemas, under any package path you like
 ```
 
-where `identity_component` is the canonical JSON of the identity field values
-(or, for catchall schemas with no identity fields, the content hash). Because the
-family root is invariant under reinference and specialization refinement
-(those move the assigned leaf, never the root), a resource's identity stays
-stable even as its classification changes.
+- Put your schemas under any package path except `pudl/`, which is reserved
+  for built-ins: `user/`, a team (`acme/`) or a provider (`gcp/`, as the packs
+  do). `pudl doctor` warns about schemas under `pudl/`.
+- The `package` declaration must match the directory's last element.
+- `pudl schema add user.my-resource my-schema.cue` validates a file and copies
+  it into place. Schemas in a project are versioned with your repository's Git;
+  pudl does not commit them.
 
-### The family identity invariant
-
-For dedup to be correct, every schema a single resource can be classified under
-must extract the **same identity values from the same fields**. Therefore:
-
-> `identity_fields` must be identical across an inheritance family. Declare them
-> at the family root and inherit them unchanged. Descendants may *tighten
-> constraints* on those fields (e.g. narrow `id: string` to a pattern) but must
-> not change the field set or the values extracted.
-
-When you build a family with CUE unification (`#Child: #Base & {...}`), CUE
-enforces this automatically — divergent `identity_fields` lists fail to unify.
-`pudl doctor` includes an **Identity Fields** check that backstops `base_schema`
-references which bypass CUE inheritance, warning when a schema's
-`identity_fields` differ from its base's.
-
-Choose identity fields that are globally unique where possible (URLs, ARNs,
-UUIDs, fully-qualified paths). The family-root namespace prevents cross-family
-collisions even when identity fields are weak, but good identity fields make
-identity robust regardless.
-
-### After upgrading to family-root namespacing
-
-Family-root namespacing changes the `resource_id` of entries assigned to a
-non-root schema. `pudl doctor` detects entries still carrying a leaf-namespaced
-`resource_id`; the identity repair recomputes them and re-sequences the versions
-of the resources they join:
+## After changing schemas
 
 ```bash
-pudl doctor --fix --dry-run --only identity   # preview
-pudl doctor --fix --only identity             # apply (idempotent)
+pudl doctor                                # what the change affects
+pudl doctor --fix --dry-run                # preview every repair
+pudl doctor --fix --only inference         # reclassify entries inference now assigns elsewhere
+pudl doctor --fix --only projections       # resync projected facts
+pudl doctor --fix --only policy-results    # re-evaluate stale policy results
 ```
 
-## Creating a Schema from Data
-
-The fastest way to start is generating a schema from an existing import:
-
-```bash
-# Import some data first
-pudl import --path my-data.json
-
-# Generate a schema from it (under the recommended `user` namespace)
-pudl schema new --from mivof-duhij --path user/#MyResource
-```
-
-This creates a CUE file with fields inferred from the data. You will want to edit it to:
-1. Add the `_pudl` metadata block
-2. Tighten constraints (replace `_` with specific types)
-3. Mark optional fields with `?`
-4. Add `...` if extra fields should be allowed
-
-### Enum Inference
-
-If a field has a small set of known values, you can infer it as an enum:
-
-```bash
-pudl schema new --from mivof-duhij --path user/#MyResource --infer status=enum
-```
-
-This generates a CUE disjunction like `status: "active" | "pending" | "inactive"` based on the values seen in the data.
-
-### Collection Schemas
-
-When generating a schema from a collection entry, use `--collection` to generate a schema for the item type rather than the collection entry:
-
-```bash
-pudl schema new --from govim-nupab --collection --path user/#MyItem
-```
-
-## Schema File Location
-
-Schemas live in the active workspace's `schema/` directory: `.pudl/schema/`
-inside an initialized repository, or `~/.pudl/schema/` in global mode. They are
-organized by package, and the schema name format is
-`<package-path>.#<Definition>`:
-
-```
-<active-pudl-root>/schema/
-+-- cue.mod/module.cue
-+-- pudl/                          # reserved for built-in schemas (see below)
-|   +-- core/core.cue             # pudl/core.#Item, pudl/core.#Collection
-|   +-- aws/
-|   |   +-- ec2.cue               # pudl/aws/ec2.#Instance
-|   |   +-- s3.cue                # pudl/aws/s3.#Bucket
-|   +-- k8s/
-|       +-- resources.cue         # pudl/k8s.#Pod, pudl/k8s.#Service, etc.
-+-- user/                         # recommended namespace for your schemas
-    +-- git.cue                   # user/git.#Repository
-    +-- k8s.cue                   # user/k8s.#CustomResource
-```
-
-### Namespace Convention
-
-PUDL does not enforce any particular package path for your own schemas -- the package path is simply the directory you place a `.cue` file under. To keep things organized and avoid collisions, follow this convention:
-
-- **Use `user` as your top-level package by default.** Put bespoke schemas under `<active-pudl-root>/schema/user/`, producing names like `user/git.#Repository` or `user/k8s.#CustomResource`. This namespaces all of your schemas together and keeps them clearly separated from PUDL's built-ins.
-- **Any name of your choice is valid.** If `user` does not fit, pick something meaningful -- an org or team name (`acme/`, `platform/`), a domain (`finance/`), or a product (`myapi/`). PUDL applies no restrictions to the package path beyond it being a valid CUE package.
-- **Use multiple top-level names freely.** You are not limited to one. Mix `user/`, `acme/`, and `experimental/` side by side; each is an independent package path.
-- **Avoid the `pudl/` namespace.** It is reserved for built-in schemas, and the legacy short form `core.#Item` auto-normalizes to `pudl/core.#Item`. Placing your schemas under `pudl/` risks shadowing built-ins (first-found-wins), so keep your packages outside it.
-
-Whatever names you choose, the CUE `package` declaration inside each file must match its package directory.
-
-When adding a schema manually:
-
-```bash
-pudl schema add user.my-resource my-schema.cue
-```
-
-The CUE `package` declaration in the file must match the target package directory.
-
-## Version Control
-
-The global schema directory is its own Git repository. Repository-local schemas
-are versioned by the enclosing project repository. Use PUDL's built-in commands:
-
-```bash
-git status                     # Show uncommitted changes
-git commit -m "Add EC2 schema" # Commit
-git log                        # View history
-```
-
-## After Adding or Changing Schemas
-
-Run `pudl doctor` to find existing catalog entries whose inference now selects a
-different schema, and the inference repair to re-classify them:
-
-```bash
-pudl doctor --fix --only inference
-```
-
-This updates the schema assignments of inferred entries. Add
+The inference repair reclassifies only inferred entries; add
 `--include-explicit` (optionally with `--schema` or `--origin`) to re-infer
-explicit assignments too. Entries that previously fell through to the catchall may now match your new, more specific schema.
-
-You can also verify that inference is stable after changes:
-
-```bash
-pudl doctor
-```
-
-This confirms that re-running inference on every entry produces the same schema assignment it already has.
-
-## Example: Full Custom Schema
-
-Here is a complete example for a custom API resource:
-
-```cue
-package myapi
-
-// User represents a user account from the internal API
-#User: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "myapi.user"
-        identity_fields: ["id"]
-        tracked_fields:  ["email", "role", "last_login"]
-    }
-
-    id:         string & =~"^usr_[a-zA-Z0-9]+$"
-    email:      string
-    role:       "admin" | "editor" | "viewer"
-    last_login: string
-    created_at: string
-
-    // Allow extra fields
-    ...
-}
-
-// A policy evaluated against every User; never assigned as a record's schema
-#UserBestPractice: {
-    _pudl: {
-        schema_type: "policy"
-        base_schema: "myapi.#User"
-        description: "Every user has MFA"
-    }
-
-    mfa_enabled: true @pudl(rule="user-mfa", severity="high", absent="violation")
-}
-```
-
-After adding this file:
-
-```bash
-pudl schema add myapi.users users.cue
-git commit -m "Add user schemas"
-pudl doctor --fix --only inference  # Re-classify existing imports
-```
+explicit assignments too. Imports and checks resync projected facts on their
+own, so the last two are needed only when you want them current at once.
 
 ## Tips
 
-- **Start permissive, tighten later**: Use `...` to accept extra fields, then constrain as you learn your data shape
-- **Identity fields matter most**: Good identity fields enable version tracking and strong inference. Choose fields that uniquely identify a resource instance.
-- **Run `pudl doctor --fix --only inference`** after any schema change to re-classify existing data
-- **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match -- consider adding more identity fields or refining the schema structure.
-- **Use `base_schema` for inheritance**: Policy schemas reference their type via `base_schema`; the chain must end at a type. Classification and validation fallback skip policies.
-- **Try a policy before installing it**: `pudl policy evaluate --what-if draft.cue` evaluates it against stored resources and writes nothing.
+- **Start permissive.** Accept extra fields with `...` and tighten as you
+  learn the data.
+- **Identity matters most.** Good identity fields give version history,
+  ownership and facts.
+- **Validate types you rely on.** A validated type turns missing required
+  fields into policy violations.
+- **Try policies first.** `pudl policy evaluate --what-if draft.cue` shows what
+  a draft would report without storing anything.
