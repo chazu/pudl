@@ -1,32 +1,36 @@
 # Sensitive-data scrub: redact plaintext stored before a field became sensitive
 
-**Date:** 2026-11-01
+**Date:** 2026-11-01 (body revised to the decisions on 2026-11-01)
 
 **Status:** Accepted with changes on 2026-11-01; see
 [Decisions](#decisions-2026-11-01). Tracked by beads `pudl-m10`. Follows
 [GCP cataloging UX](2026-10-08-gcp-cataloging-ux.md) §6.2 ("Retroactive").
-The user overrode two recommendations: IDs are **re-derived**, and fact history
-is **left unchanged**. Where the body below says otherwise, the decisions
-section governs.
+The first draft recommended keeping entry IDs and rewriting fact history under
+an exception to append-only transaction time. The user overrode both: IDs are
+**re-derived**, and fact history is **left unchanged**. The body below has been
+revised to match; the decisions section still governs.
 
 ## Decision
 
 Add one opt-in `pudl doctor` repair, `sensitive-scrub`.
 
 - **Diagnosis** runs with every `pudl doctor`. It reports stored plaintext at
-  paths that a schema now declares in `_pudl.sensitive_fields`. It names entry
-  IDs, fact relations, report IDs and field paths, and never prints values.
+  paths that a schema now declares in `_pudl.sensitive_fields`, and the
+  unstructured artifacts that quote it. It names entry IDs, report IDs, file
+  paths and field paths, and never prints values.
 - **Apply** runs only when named:
   `pudl doctor --fix --only sensitive-scrub`. Add `--dry-run` to preview. It
   rewrites each affected artifact so that it holds what a fresh import would
   store today: `"[REDACTED]"` at each sensitive path. It then compacts SQLite
-  so that the old values do not survive in the WAL or in free pages.
-- **Entry and fact IDs are kept.** The scrub updates `content_hash`,
-  `stored_path` and `size_bytes`, and records an audit row for each change.
-  References from facts, snapshots, reports and memberships keep resolving.
-- **Fact history is rewritten in place**, under one audited exception to
-  append-only transaction time. The exception covers only values at sensitive
-  args.
+  so that old values do not survive in the WAL or in free pages.
+- **Entry IDs are re-derived** from the redacted bytes. Every column that
+  stores the old ID is rewritten in the same transaction; an ID that already
+  exists is merged into. Old-to-new mappings are recorded, and entry lookups
+  follow them, so reports and fact history that cite old IDs still resolve.
+- **Fact history is not touched.** The append-only invariant stands. Current
+  projected facts are corrected by re-projection. Doctor says that history
+  and exported bundles keep the plaintext, and that the remedy is to rotate
+  the credential.
 
 ## Problem
 
@@ -61,153 +65,170 @@ Detection uses one of two exact methods, depending on the artifact.
   as an error and is never reported as clean.
 - **Value-based**, for unstructured artifacts. The scrub collects the
   plaintext strings from the path-based findings in this run, holds them in
-  memory only, and searches the remaining artifacts for them as substrings.
-  Only values of at least 8 bytes are searched, because shorter ones (`true`,
-  `admin`) would redact unrelated text. The scrub counts the shorter values
-  it skipped and reports that count.
+  memory only, and searches the remaining artifacts for them as substrings of
+  decoded JSON strings. Only values of at least 8 bytes are searched, because
+  shorter ones (`true`, `admin`) would redact unrelated text. The scrub counts
+  the shorter values it skipped and reports that count.
 
 | Artifact | How plaintext got there | Detect | Scrub |
 |---|---|---|---|
-| Document payload (JSON) | Imported before the declaration | Path, under the entry's schemas | Re-encode the redacted record exactly as the import transform does |
-| Collection item / observe record | Same | Path, under the item's schemas | Write `json.Indent(json.Marshal(redacted))`, as the collection stream does |
-| Collection parent file | Holds every item record | Flagged when any member item is flagged | Re-encode each record (NDJSON or array framing, as in the transform), redacted under its member item's schemas, using `collection_memberships.item_index` |
-| Non-JSON payload (YAML, CSV) | Imported before the declaration; import now fails closed for these | Path, after `DecodeStoredFile` | **Not scrubbed.** Reported with the fix "delete the entry and re-import as JSON". Import refuses to store these formats unredacted, so the scrub does not convert them either. |
-| `.meta` file | `validation_errors` and trace reasons quote CUE values | Flagged with its entry, plus a value search | Replace each `validation_errors` message with import's withheld message (`stripValidationValues`), update `content_hash`, then run the value search over the rest |
-| Projected facts, current **and history** | Projected before the declaration; correction closed but kept the rows | Path: a projected arg is sensitive when the relation's `each` path joined with the arg's path overlaps a sensitive path of the schema named in the row's `provenance` (`{"entry_id","schema"}`). Checked in SQL over `facts` and `current_facts` | Set the arg to `"[REDACTED]"` in place (§3) |
-| `current_facts_fts` | FTS5 segments keep tokens after rows are deleted | Implied by any fact change | `INSERT INTO current_facts_fts(current_facts_fts) VALUES('rebuild')` |
+| Document payload (JSON) | Imported before the declaration | Path, under the entry's schemas | Re-encode the redacted record exactly as the import transform does (`importer.EncodeRecord`) |
+| Collection item / observe record | Same | Path, under the item's schemas | Import items: `json.Indent(json.Marshal(redacted))`, as the collection stream stores them. Observe records: `json.Marshal(redacted)`, as observe stores them |
+| Collection parent file | Holds every item record | Flagged when any member item is flagged | Re-encode each record with the import framing (NDJSON or array), redacted under the schemas of the member item at that `collection_memberships.item_index` |
+| Non-JSON or compressed payload | Imported before the declaration; import now fails closed for these | Path, after `DecodeStoredFile` | **Not scrubbed.** Reported with the fix "delete the entry and re-import as JSON". Import refuses to store these formats unredacted, so the scrub does not convert them either. |
+| `.meta` file | `validation_errors` and trace reasons quote CUE values | Rewritten with its entry, plus a value search of every `.meta` | Replace each `validation_errors` message with import's withheld message, update `id`, `content_hash`, `resource_id` and `size_bytes`, then run the value search |
+| Current projected facts | Projected before the declaration, or citing the old entry ID | The entry is flagged and is its resource's projected entry (`projection_state.entry_id`) | Re-project from the redacted record under the new ID, as a correction (§3) |
+| Fact history | Projected before the declaration | Not scanned | **Left unchanged** (§3). Doctor states this |
+| `current_facts_fts` | FTS5 segments keep tokens after rows are deleted | Implied by any re-projection | `INSERT INTO current_facts_fts(current_facts_fts) VALUES('rebuild')` |
 | `run_reports`, `run_set_reports` JSON | Check witnesses (fact args), and drift `expected`, `observed` and `previous.value` | Value search | Rewrite matching strings with an `UPDATE` (not `SaveRunReport`, which resets pins) |
 | Legacy `run_approvals` and `run_set_approvals` `request_json` | Convergence-era plans and diffs | Value search | Same as reports |
-| Legacy `pudl/mu.#DriftObservation`, `#Manifest`, `#ManifestAction` and `#PlanOutput` entries | `pudl-bq5` and `pudl-8b7` stored them verbatim | Value search (manifest outputs have no schema, so the path method cannot apply) | Rewrite the file like a payload |
-| Observe snapshot files | Summary and per-record `errors` strings | Value search | Rewrite the file like a payload |
-| SQLite WAL and free pages | Old page images, plus deleted `current_facts` and FTS rows | Not scanned. A scrub records whether compaction finished (§5), and doctor reports a scrub whose compaction is pending | §4 |
-| Superseded files from an interrupted scrub | Crash after commit, before unlink | The audit table lists the old paths; any that still exist are findings | Unlink them |
-| `data/tmp` and `.staging-*` leftovers | A SIGKILLed import (§6.2) | Count and age only | **Report only.** A concurrent import's temp files live there before it takes the lock, so the scrub must not delete them. |
+| Legacy `pudl/mu.#DriftObservation`, `#Manifest`, `#ManifestAction` and `#PlanOutput` entries | `pudl-bq5` and `pudl-8b7` stored them verbatim | Value search (manifest outputs have no schema, so the path method cannot apply) | Rewrite the file like a payload; re-derive the ID |
+| Observe snapshot files (`pudl/mu.#ObserveSnapshot`) | Summary and per-record `errors` strings | Value search | Rewrite the file like a payload; the snapshot ID is kept (§2) |
+| SQLite WAL and free pages | Old page images, plus deleted `current_facts`, FTS and report rows | Not scanned. A scrub records whether compaction finished (§4), and doctor reports a scrub whose compaction is pending | §4 |
+| Superseded files from an interrupted scrub | Crash after commit, before unlink | The audit table lists the old paths; any that still exist and no entry references are findings | Unlink them |
+| `data/tmp` and `.staging-*` leftovers | A SIGKILLed import (§6.2) | Not reported by this repair | **Not touched.** A concurrent import's temp files live there before it takes the lock |
 | Exported bundles and backups | Outside the workspace | Cannot detect | Out of scope (§6) |
 
 **Identity is unaffected, and the scrub verifies it.** `redact` already makes
 a sensitive path that overlaps the schema's own identity fields a load error.
-For extra safety, the scrub also recomputes each entry's identity values from
-the redacted record and refuses that entry if `identity_json` would change.
-So `resource_id`, versions and projection sources stay as they are.
+The scrub also extracts each entry's identity values from the original and
+from the redacted record, and refuses the entry if they differ. Resources with
+identity values therefore keep their `resource_id`, versions and projection
+source. Identity-less resources are covered in §2.
 
 **Values are never printed.** Findings carry the subject kind and ID, the
-schema or relation, and the path or arg name. Collected values live only in
-process memory. Dry-run, JSON output, error messages and the audit tables
-never contain them.
+schema, and the path. Collected values live only in process memory. Dry-run,
+JSON output, error messages and the audit tables never contain them.
 
-**Placement.** The per-entry path check runs inside the existing catalog scan
-(`cmd/doctor_catalog.go`), which already decodes each payload for the secret
-scan (`pudl-udi`). It passes the flagged entry IDs to the repair through
-`repair.Options`, in the same way as `DriftEntryIDs`. The repair's `Diagnose`
-runs the facts SQL and, only when some entry is flagged, reloads the flagged
-payloads to collect values and searches reports, `.meta` files and legacy
-files. A clean catalog pays only for the per-entry path check and one
-indexed facts query.
+**Placement.** The repair's `Diagnose` streams the catalog itself
+(`EachEntryContext`, honoring `--entry`, `--schema` and `--origin`), like the
+doctor secret scan. It is gated on `redact.Registry.Any()`: when no loaded
+schema declares a sensitive field, it reads nothing. Otherwise it reads the
+`.meta` and payload of each entry whose schemas declare sensitive paths.
+Diagnosis and `--dry-run` build the same plan as apply and write nothing, so
+the preview is exact.
 
 ## 2. Content addressing
 
-The entry ID is the SHA-256 of the stored bytes at first catalog time.
-`content_hash` drives dedup (`FindByContentHash`), `VerifyPayloads` and bundle
-export. A scrub changes the bytes. There are two options.
+A content-derived entry ID is the SHA-256 that import computes. A scrub
+changes the content, so it **re-derives the ID** with the same rule:
 
-**A. Re-derive IDs.** The new ID is the hash of the redacted bytes, and every
-reference is rewritten.
+| Entry kind | New ID |
+|---|---|
+| Document, collection parent, legacy mu entry | SHA-256 of the new stored bytes |
+| Import collection item, observe record | SHA-256 of `json.Marshal` of the redacted record (canonical JSON) |
+| Observe snapshot (`id != content_hash`: keyed on its pre-allocated `snapshot_id`) | **Kept.** Only `content_hash`, paths and size change |
 
-**B. Keep IDs (recommended).** The scrub sets `content_hash`, `size_bytes`
-and `stored_path`/`metadata_path` from the redacted bytes, and records a
-`sensitive_redactions` row. For scrubbed entries, the ID stops being the hash
-of the current bytes. It is still the hash of the bytes first cataloged.
+An entry is content-derived when its `id` equals its `content_hash`. The
+scrub refuses to re-key an entry that has an `observe_snapshots` row.
 
-| Concern | A: re-derive | B: keep |
-|---|---|---|
-| Dedup of a re-import of the same source | The import transform redacts, so its hash equals the new ID: works. But if that source was re-imported *after* the declaration, an entry with this ID already exists, causing a primary-key collision and a forced merge | `content_hash` equals the transform's hash, so `FindByContentHash` matches: works. Two entries may then share a `content_hash` (the index is not unique, and that is allowed). Nothing is merged |
-| Entries whose content becomes identical (they differed only in the secret) | Primary-key collision; merge required | Both kept; same `content_hash` |
-| `resource_id` | Unchanged for identity schemas; for identity-less schemas, it is derived from the hash and must be recomputed | Unchanged. The `identity` repair does not recompute it (`migrateIdentities` acts only on leaf-namespaced IDs) |
-| Version history | IDs change within the chain | Unchanged. A version whose only change was the secret becomes byte-identical to its predecessor, and both are kept |
-| Snapshot membership and `collection_memberships` | Rewrite `item_id` and `collection_id` | Unchanged |
-| `projection_state.entry_id`, projected `entry_id` args, provenance, `item_schemas`, `resource_observations` | Rewrite them all, including fact history | Unchanged |
-| Reports (`evidence_ids`, `snapshot_id`), `report_snapshot_refs`, pins | Dangling unless rewritten inside report JSON | Unchanged. Snapshot IDs are pre-allocated, not content-derived, in both options |
-| Proquints users have noted down | Break | Resolve |
-| Bundle export and verification | Works (manifest hashes are file byte hashes) | Works: `VerifyPayloads` checks the new `content_hash` |
-| Old bundles | Hold old IDs and plaintext; self-consistent | Same |
-| Local hash oracle | Removed from the catalog (except in old bundles) | **Kept.** The entry ID, and a fact ID (`ComputeFactID` hashes the args), is SHA-256 over content in which only the secret is now unknown. A low-entropy secret, such as a PIN or a dictionary password, can be brute-forced from these IDs |
+**`resource_id`.** For resources with identity values it is unchanged (§1).
+For identity-less resources, import sets it to
+`H(identity namespace, content hash)`, which is itself an oracle. When it still
+equals that value, the scrub recomputes it from the new ID, as a fresh import
+would. Any other value (for example, set by an older pudl) is kept. This
+refines decision 1's "`resource_id` is unchanged": its reason, that identity
+fields cannot be sensitive, covers only resources with identity values.
+Identity-less resources are never projected (`projection_state` records them
+as skipped), so no current fact changes source.
 
-**Recommendation: B.** A breaks provenance broadly, and it needs merge logic
-for a case that will happen: a source re-imported after the declaration.
-B's cost is the hash oracle, which matters only for low-entropy secrets. Those
-secrets must be rotated anyway, because the plaintext was at rest and may sit
-in bundles and backups (§6). The scrub's output says so every time it
-redacts anything.
+**References.** These are every table and column that stores an entry ID, and
+how the scrub treats each one in the rewrite transaction:
 
-Two small changes make B airtight:
+| Table.column | Treatment |
+|---|---|
+| `catalog_entries.id` | Rewritten to the new ID, or the row is merged into an existing entry |
+| `catalog_entries.content_hash`, `stored_path`, `metadata_path`, `size_bytes` | Set from the redacted files |
+| `catalog_entries.item_id` | Rewritten where it equals the old ID (import items) |
+| `catalog_entries.origin` | Import items carry `<collection id>_item_<n>`; rewritten when their collection is re-keyed |
+| `catalog_entries.resource_id` | Recomputed for identity-less resources (above); otherwise unchanged |
+| `catalog_entries.version` | Unchanged. A merge removes one row of a version chain, which can leave a gap; versions are ordered, not dense |
+| `collection_memberships.collection_id`, `item_id` | Rewritten; on a merge, a membership the surviving entry already has is kept and the duplicate dropped |
+| `item_schemas.item_id` (legacy) | Rewritten, with the same merge rule |
+| `projection_state.entry_id` (and `resource_id` for identity-less resources) | Re-projected under the new ID (§3); repointed when the schema no longer projects |
+| `current_facts` args `entry_id` and `provenance.entry_id` | Re-projected (§3) |
+| `policy_state.entry_id` (policy results, `pudl-xf5.8.3`) | Repointed. Policy facts carry no record value and no entry ID in their args, so they are not re-evaluated; their `provenance.entry_id` keeps the old ID, which redirects |
+| `facts` (history) args and `provenance` | **Unchanged** (§3) |
+| `observe_snapshots.snapshot_id`, `snapshot_pins.snapshot_id`, `report_snapshot_refs.snapshot_id`, `observe_snapshot_tombstones`, `snapshot_reuse_blocks` | Snapshot IDs are pre-allocated, never content-derived, so they never change |
+| `run_reports`, `run_set_reports`, `run_approvals`, `run_set_approvals` JSON (`evidence_ids`, `entry_id`) | Not rewritten for IDs. They are records of what a run saw; the redirects resolve them |
+| `runs` | Holds run IDs only |
+| `.meta` `id`, `resource_tracking.content_hash`, `resource_id` | Rewritten with the entry |
+| Exported bundles | Outside the catalog; keep old IDs and plaintext (§6) |
 
-- **Dedup also matches by ID.** `findByContentHashIn` adds `OR id = ?`.
-  Without this, a source whose bytes still hash to a scrubbed entry's ID (for
-  example, after the field is un-declared) would fail on the primary key
-  instead of deduplicating.
-- **The encoder is shared.** The import transform's per-record encoding and
-  collection framing move into one function that both the transform and the
-  scrub call. Then "what a fresh import would store" holds by construction,
-  and dedup matches byte for byte.
+**Collisions merge.** The new ID can already exist: the source was re-imported
+after the declaration, or two scrubbed entries differed only in the secret.
+The existing entry has the same redacted content, so it survives. The scrubbed
+row is deleted after its references move to the survivor
+(`UPDATE OR IGNORE`, then `DELETE` of what is left), its projection is
+re-pointed to the survivor, and its files become unreferenced and are unlinked
+after commit. The audit row records the merge.
 
-## 3. Append-only facts
+**Redirects.** `sensitive_id_redirects(old_id, new_id, scrub_id)` records each
+re-keyed or merged entry. `lister.FindEntry` (behind `pudl show`, `pudl
+delete` and other entry lookups by ID or proquint) falls back to it when an ID
+is not found, following chains across scrubs. So `pudl show <old proquint>`,
+report evidence IDs and the `entry_id` of historical facts still resolve. A
+current entry with that ID always wins over a redirect.
 
-History rows in `facts` hold plaintext args. There are three options:
+**What re-derivation does not hide.** The old IDs remain in the redirect
+table, in fact history (`entry_id` args and provenance), in stored report JSON,
+and in the file names and origins of unchanged collection items. Each old ID is
+a hash of content that included the secret, so a low-entropy secret (a PIN,
+a dictionary password) can still be brute-forced from it. The live catalog
+columns no longer carry it. Rotating the credential is the remedy, and the
+scrub's output says so every time it redacts anything.
 
-1. **An audited in-place rewrite (recommended).** Rewrite the args of every
-   row (`facts` and `current_facts`), replacing each sensitive arg with
-   `"[REDACTED]"`. Record a `sensitive_redactions` row (`subject_kind=fact`)
-   in the same transaction. IDs, relation, valid and transaction times,
-   `tx_seq`, `supersedes`, source and provenance never change.
-2. **Tombstoning.** Delete the rows and insert markers. As-of queries then
-   lose facts, `supersedes` chains break, and fact versions have gaps. It
-   changes *which* facts history returns, which is worse than changing a value.
-3. **Leave history and document it.** `pudl facts list --as-of-tx` would keep
-   serving the secret. This fails the ticket's goal.
+**Dedup needs no change.** The first draft added `OR id = ?` to
+`findByContentHashIn`, because keeping IDs broke `id = content_hash`. Under
+re-derivation every content-derived entry keeps `id = content_hash`. If the
+field is later un-declared and the plaintext re-imported, its hash equals the
+old ID, which no longer names a row, so import creates a new entry without a
+primary-key collision. Re-importing the source while the field is sensitive
+hashes to the new ID and deduplicates.
 
-**The invariant changes as follows.** `docs/facts.md` ("Transaction time is
-append-only") and `docs/library-api.md` currently say that no operation
-rewrites what the store believed at an earlier moment. The new rule:
+**The encoder is shared.** The import transform's per-record encoding and
+collection framing are one function, `importer.EncodeRecord`, which the scrub
+also calls. "What a fresh import would store" holds by construction, and a
+re-import deduplicates byte for byte.
 
-> No operation rewrites what the store believed at an earlier moment, with one
-> exception: the sensitive scrub replaces values at sensitive projected args
-> with `"[REDACTED]"` in every version. An as-of query then returns the
-> placeholder for those args. It returns the same facts, intervals, IDs and
-> sequence numbers as before. Each rewritten row has an audit row. For
-> rewritten rows, the fact ID no longer equals `ComputeFactID` of the stored
-> args.
+## 3. Fact history
 
-There are two consequences:
+History rows in `facts` keep their plaintext args and old entry IDs. The
+append-only invariant in `docs/facts.md` and `docs/library-api.md` is
+unchanged: no operation rewrites what the store believed at an earlier moment,
+and `pudl facts list --as-of-tx` keeps returning what was projected.
 
-- `ReconcileProjection` compares facts by content, not by ID, so a scrubbed
-  current row does not churn.
-- If someone re-adds a scrubbed fact's plaintext with the same `valid_start`,
-  AddFact rejects it, because the store rejects reusing an ID for different
-  content. Projection never re-adds plaintext, so this cannot happen through
-  normal use.
+**Current facts are corrected by re-projection.** In the rewrite transaction,
+for each scrubbed entry that is its resource's projected entry, the scrub
+computes the projection from the redacted record under the new ID and applies
+it as a correction (`projection.Correct`, the mode the `projections` repair
+uses). The current rows that cite the old ID, or hold plaintext because the
+`projections` repair has not run since the declaration, are closed; rows with
+the new ID and `"[REDACTED]"` are added; `projection_state` points at the new
+ID. Old current rows leave `current_facts` and the FTS index, and §4 removes
+their bytes from free pages. They stay in `facts` as history.
 
 Facts from `pudl facts add` have no schema and are out of scope. The secret
 scan covers them.
 
 ## 4. SQLite
 
-After the rewrite transaction commits, the scrub runs these steps on one
-pinned connection (`db.Conn`), still holding the artifact lock:
+The rewrite transaction runs on one pinned connection with
+`PRAGMA secure_delete=ON`, so the bytes freed by its own updates are zeroed.
+It also rebuilds the FTS index
+(`INSERT INTO current_facts_fts(current_facts_fts) VALUES('rebuild')`), so
+tokens of deleted rows leave the index in the same commit. After the commit,
+still holding the artifact lock, the scrub compacts:
 
-1. Before the transaction, `PRAGMA secure_delete=ON` on that connection. This
-   zeroes the bytes freed by the scrub's own updates. It covers the window
-   before `VACUUM`, and the case where `VACUUM` cannot run. Its cost is extra
-   writes, during a rare operation.
-2. The FTS `rebuild` (§1).
-3. `PRAGMA wal_checkpoint(TRUNCATE)`, which copies the new pages over the old
+1. `PRAGMA wal_checkpoint(TRUNCATE)`, which copies the new pages over the old
    ones and truncates the WAL.
-4. `VACUUM`. This is the only step that removes plaintext left in free pages
+2. `VACUUM`. This is the only step that removes plaintext left in free pages
    by *earlier* deletes, such as the `current_facts` and FTS rows deleted when
    the projections repair re-projected. `VACUUM` makes a logical copy. The
-   scrub has already committed by then, so the temporary copy holds no
-   plaintext.
-5. `PRAGMA wal_checkpoint(TRUNCATE)` again, because in WAL mode `VACUUM` writes
-   through the WAL. Then set `compacted_at`.
+   scrub has already committed by then, so the copy holds no scrubbed value
+   outside fact history.
+3. `PRAGMA wal_checkpoint(TRUNCATE)` again, because in WAL mode `VACUUM`
+   writes through the WAL. Then set `compacted_at`.
 
 **Cost.**
 
@@ -222,11 +243,10 @@ pinned connection (`db.Conn`), still holding the artifact lock:
   and bundle export.
 - A read-only `pudl` process holding a WAL snapshot can make the checkpoint
   report busy, or make `VACUUM` fail with `SQLITE_BUSY` after the connection's
-  busy timeout. In that case the scrub returns `partial` with the message
-  "compaction pending". Doctor keeps reporting it until a rerun completes it.
+  busy timeout. The scrub then returns `partial` with "compaction pending".
+  Doctor keeps reporting it until a rerun completes it.
 
-Compaction runs only when the scrub rewrote rows in the database (facts or
-reports). A scrub that changed only files skips it.
+Compaction runs whenever a scrub commits; every scrub rewrites catalog rows.
 
 ## 5. Workflow and safety
 
@@ -235,66 +255,75 @@ reports). A scrub that changed only files skips it.
 - `pudl doctor` diagnoses: status `needed`, with the subject list and the
   preview and apply commands from `repairArgv`.
 - `pudl doctor --fix` skips the scrub. Its status is `skipped`, with the
-  message "opt-in: name it with --only".
-- `pudl doctor --fix --dry-run --only sensitive-scrub` previews: counts per
-  artifact kind, subjects and paths, files to unlink, and whether it will
-  compact.
+  message "opt-in: name it with --only sensitive-scrub".
+- `pudl doctor --fix --dry-run --only sensitive-scrub` previews: each subject,
+  old and new ID, paths, files to unlink, and whether it will compact.
 - `pudl doctor --fix --only sensitive-scrub` applies.
 
 The scope flags `--entry`, `--schema` and `--origin` select payloads. Values
 collected from the selected payloads are still searched for everywhere.
 
 **Confirmation.** Naming the repair is the confirmation. There is no
-interactive prompt, so agents and scripts work the same way as people.
-Implementation: the repair gets an `OptIn bool` field. `Select` still returns
-the repair for diagnosis, and `runDoctorRepairs` applies it only when it was
-named in `--only`.
+interactive prompt, so agents and scripts work the same way as people. The
+repair has `OptIn: true`. `Select` still returns it for diagnosis, and
+`runDoctorRepairs` applies it only when it was named in `--only`.
 
 Findings do not fail `pudl doctor`, which matches the other repairs' `needed`
 status. A failed apply returns `partial` or `error`, which fails `--fix`, as
 it does today.
 
-**Audit record.** A migration adds two tables. They hold no values.
+**Audit record.** A migration adds three tables. They hold no values.
 
 ```sql
 CREATE TABLE IF NOT EXISTS sensitive_scrubs (
   scrub_id     TEXT PRIMARY KEY,     -- random proquint
   scrubbed_at  TIMESTAMP NOT NULL,   -- written in the rewrite transaction
-  compacted_at TIMESTAMP,            -- set after step 5 of section 4
+  compacted_at TIMESTAMP,            -- set after §4
   summary      TEXT NOT NULL         -- JSON counts per subject kind, plus short values skipped
 );
 CREATE TABLE IF NOT EXISTS sensitive_redactions (
   scrub_id     TEXT NOT NULL,
-  subject_kind TEXT NOT NULL,        -- entry | fact | run_report | run_set_report | approval
-  subject_id   TEXT NOT NULL,
-  paths        TEXT NOT NULL,        -- JSON: field paths, arg names, or "value-match"
+  subject_kind TEXT NOT NULL,        -- entry | metadata | run_report | run_set_report | run_approval | run_set_approval
+  subject_id   TEXT NOT NULL,        -- the entry's ID before the scrub, or the report key
+  new_id       TEXT,                 -- the re-derived ID, when it changed
+  merged       INTEGER NOT NULL DEFAULT 0,
+  paths        TEXT NOT NULL,        -- JSON: field paths, or "value-match"
   old_files    TEXT,                 -- JSON: superseded stored and metadata paths
   PRIMARY KEY (scrub_id, subject_kind, subject_id)
 );
+CREATE TABLE IF NOT EXISTS sensitive_id_redirects (
+  old_id   TEXT PRIMARY KEY,
+  new_id   TEXT NOT NULL,
+  scrub_id TEXT NOT NULL
+);
 ```
 
-`pudl show <entry>` gains one line, "redacted after import on <date>
-(<paths>)", read from these tables. `CatalogEntry` gets no new column, so the
-SELECT and Scan lists do not change.
+`CatalogEntry` gets no new column, so the SELECT and Scan lists do not change.
 
 **Crash safety.** This reuses the import and delete patterns.
 
 1. Take `artifacts.WithLock`. Finish any earlier scrub first: unlink its
-   `old_files` that still exist, then compact if `compacted_at` is null.
-2. Plan the changes, and write each rewritten file into `data/tmp`.
-3. Install the new files at **new** paths through `artifacts.Journal.Publish`.
-   `Publish` never overwrites, so the old bytes stay in place until commit.
-   The new names add `.r<hash8>` before the extension, because stored paths
-   are opaque columns.
-4. In one catalog transaction, update the entry columns, the fact args, the
-   report JSON and the `.meta` paths, and insert the audit rows. If anything
-   fails, roll back and call `journal.Rollback()`. The old files are
-   untouched, so nothing is lost.
-5. After commit, unlink the old files, following `DeletePlan`'s rule: only
-   after commit, under the lock, and only when no other entry references the
-   path. If the process crashes here, the old files stay listed in
-   `old_files`, and the next run reports and unlinks them.
-6. Run the steps in §4.
+   `old_files` that still exist and no entry references, then compact if
+   `compacted_at` is null.
+2. Plan the changes in memory: redacted bytes, new IDs, new paths.
+3. Write each new file into `data/tmp`, and install it at a **new** path
+   through `artifacts.Journal.Publish`. `Publish` never overwrites, so the old
+   bytes stay in place until commit. A new name replaces the old ID (or its
+   16-hex prefix) with the new one; a name with no ID token gets `.r<hash8>`
+   before its extension, from the new bytes. Names are a function of the new
+   content, so a rerun after a crash publishes to the same paths and reuses
+   identical bytes.
+4. In one catalog transaction, re-key or update the entries and every
+   reference (§2), re-project (§3), rewrite report JSON, rebuild FTS, and
+   insert the audit and redirect rows. If anything fails, roll back and call
+   `journal.Rollback()`. The old files are untouched, so nothing is lost. A
+   process killed here leaves only unreferenced new files, which the next run
+   reuses.
+5. After commit, unlink the old files with `RemoveCommittedOrphan`: only
+   after commit, under the lock, and only when no entry references the path.
+   If the process dies here, the old files stay listed in `old_files`, and the
+   next diagnosis reports them and the next apply unlinks them.
+6. Compact (§4).
 
 **Idempotence.** A second run finds no plaintext at sensitive paths, no
 superseded files and no pending compaction, so it reports `ok` and writes
@@ -304,30 +333,33 @@ those payloads are unlinked.
 
 **Registry order.** The repair runs last, after `projections`. With a plain
 diagnosis it reports the final classification's sensitive set. With
-`--only sensitive-scrub`, it rewrites `current_facts` itself, so it does not
-need the projections repair to run first.
+`--only sensitive-scrub`, it re-projects the affected current facts itself, so
+it does not need the projections repair to run first.
 
 ## 6. Scope boundaries
 
 The scrub does **not**:
 
+- **Touch fact history.** Versions projected before the declaration keep the
+  plaintext and the old entry ID, and as-of queries return them.
 - **Touch exported bundles.** Bundles are not tracked. A bundle exported
-  before the scrub still holds plaintext, and restoring it brings the
-  plaintext back; doctor will flag it again. Bundles exported after the scrub
-  has compacted are clean. The online backup copies every page, free pages
-  included, so a bundle exported while compaction is still pending can carry
-  old values.
+  before the scrub still holds plaintext and old IDs, and restoring it brings
+  them back; doctor will flag them again. The online backup copies every page,
+  free pages included, so a bundle exported while compaction is still pending
+  can carry old values.
 - **Rewrite git history, backups, Time Machine or APFS snapshots.**
 - **Shred deleted files.** Unlinking frees blocks, and on SSDs and copy-on-write
   filesystems, overwriting files proves nothing.
-- **Delete import temp leftovers.** It reports them only (§1).
-- **Scrub non-JSON payloads.** It reports them with a delete-and-reimport fix.
+- **Delete import temp leftovers.**
+- **Scrub non-JSON or compressed payloads.** It reports them with a
+  delete-and-reimport fix.
 - **Search for values shorter than 8 bytes** in unstructured artifacts.
-- **Search for values whose payload is already gone.** Projected facts are
-  still covered, because they are checked by path.
+- **Search for values whose payload is already gone.**
 - **Redact facts added with `facts add`.**
-- **Merge entries whose content becomes identical.**
-- **Hide the hash oracle in entry and fact IDs** (§2).
+- **Rename unchanged collection items** whose file names and origins embed a
+  re-keyed collection's old ID.
+- **Remove the hash oracle from old IDs** kept in redirects, history and
+  reports (§2).
 
 The scrub's output and `docs/cli/notes/doctor.md` state the remedy plainly:
 **rotate every credential the scrub redacted**. The scrub limits further
@@ -335,47 +367,48 @@ exposure; it cannot undo exposure that already happened.
 
 ## 7. Delivery
 
-There are three tickets. Each leaves the build and tests green, and each
-includes its own doc updates.
+One ticket (`pudl-m10`), delivered in one branch with the build and tests
+green at each commit:
 
-1. **Detection (`pudl-m10.1`).** New package `internal/scrub`: path checks for
-   payloads and collections, the facts SQL, and value search detection. The
-   catalog-scan hook, `repair.Options.SensitiveEntries`, `Repair.OptIn`, and
-   the `sensitive-scrub` diagnosis. About 260 production and 180 test lines.
-2. **Apply (`pudl-m10.2`).** The shared record encoder; the file rewrites
-   through the journal; one transaction for entries, facts, reports and
-   `.meta`; the audit migration; unlinking after commit; dedup by ID; the
-   `pudl show` line; and the invariant text in `docs/facts.md` and
-   `docs/library-api.md`. About 320 production and 240 test lines.
-3. **Compaction (`pudl-m10.3`).** `secure_delete`, the FTS rebuild, checkpoint
-   and `VACUUM`, `compacted_at`, and the diagnosis of a pending scrub. Update
-   §6.2 of the GCP design, the doctor notes, the CLI reference and the help
-   golden. About 70 production and 60 test lines.
+1. This revised design.
+2. The shared record encoder (`importer.EncodeRecord`) and
+   `projection.Correct`.
+3. The audit migration, re-keying with merge, redirect lookup, report
+   rewrites and compaction in `internal/database`.
+4. `internal/scrub`: detection, value collection and search, the plan, file
+   publication, the rewrite transaction, unlinking and compaction.
+5. The `sensitive-scrub` repair, `Repair.OptIn`, doctor messaging, the
+   redirect fallback in `lister.FindEntry`, docs and the help golden.
 
-**Estimate:** about **650 production lines (±150)** and about 480 test lines.
-Most of the production code is in the apply step, because each artifact kind
-needs its own rewrite. Every implementation log reports the measured net
-production-line delta.
+**Estimate:** the first draft estimated about 650 production lines (±150).
+Re-derivation adds re-keying, merging, redirects and resolution, and drops the
+in-place history rewrite and the dedup change. Expect about 900 production
+lines and 500 test lines. The implementation log reports the measured net
+delta.
 
 ## Acceptance
 
 These are the ticket's criteria, made concrete:
 
 - A payload imported before its schema gained a sensitive field is flagged,
-  along with its collection parent, its `.meta`, its projected fact history,
+  along with its collection parent, its `.meta`, its current projected facts,
   and a run report that quotes the value. The JSON and text output never
   contain the value.
 - `--fix --dry-run --only sensitive-scrub` writes nothing. Apply redacts every
   flagged artifact.
 - After apply, all of these succeed: the diagnosis returns `ok`;
-  `--verify-payloads` passes; `pudl show <old proquint>`, `pudl query`,
-  `pudl facts list --as-of-tx` (at a time before the scrub) and
-  `pudl run report` resolve;
-  re-importing the original source deduplicates; `identity_json` and
-  `resource_id` are unchanged; and a byte search of `catalog.db` and
-  `catalog.db-wal` for the value finds nothing.
-- A process killed after commit and before unlink, or after commit and before
-  compaction, is reported by the next diagnosis and finished by the next apply.
+  `--verify-payloads` passes; each scrubbed entry's ID is the hash import
+  would compute, and no catalog column holds the old ID; `pudl show <old
+  proquint>` resolves to the new entry; `pudl query` returns current facts with
+  the new `entry_id` and no plaintext; `pudl facts list --as-of-tx` (at a time
+  before the scrub) returns history unchanged; re-importing the original source
+  deduplicates; `identity_json` is unchanged; and a byte search of
+  `catalog.db` and `catalog.db-wal` for the value finds it only in fact
+  history, if it was projected before the declaration.
+- A process killed after file publication and before commit leaves the
+  catalog unchanged, and the next apply completes. A process killed after
+  commit and before unlink, or before compaction, is reported by the next
+  diagnosis and finished by the next apply.
 
 ## Decisions (2026-11-01)
 

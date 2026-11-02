@@ -430,8 +430,11 @@ Fields are the union along `base_schema`.
   while an import runs. They are removed on completion, but a SIGKILL can leave
   them behind.
 - **Retroactive.** Payloads stored before a field was declared sensitive stay
-  unredacted. Projection still redacts in memory (§5.5). A `pudl doctor` scrub
-  is follow-up work.
+  unredacted until `pudl doctor --fix --only sensitive-scrub` redacts them
+  (since 2026-11-01, `pudl-m10`; see
+  [the scrub design](2026-11-01-sensitive-data-scrub.md)). Projection still
+  redacts in memory (§5.5). Fact history and exported bundles keep the
+  plaintext, so rotate the credential.
 - **Drift.** Redacted observed values never equal plaintext `desired` values,
   so do not declare desired state on sensitive paths. Since 2026-11-01
   (`pudl-o5i`) `pudl run` and `pudl model validate` reject such a model at load.

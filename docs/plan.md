@@ -705,6 +705,15 @@ Beads work:
   - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
     kind, in the run's stderr and the populate report's `secret_warnings`.
     See `implog/2026_11_02_policy_results_as_facts.md`.
+- `pudl-m10` (done): `pudl doctor` diagnoses plaintext stored before a schema
+  declared the path in `_pudl.sensitive_fields`, and the opt-in repair
+  `pudl doctor --fix --only sensitive-scrub` redacts payloads, collection
+  files, `.meta`, legacy and snapshot files and stored reports, re-derives the
+  IDs of rewritten entries (every reference rewritten, collisions merged, old
+  IDs redirect), re-projects current facts and compacts SQLite. Fact history
+  and exported bundles keep the plaintext. See
+  [the design](design/2026-11-01-sensitive-data-scrub.md) and
+  `implog/2026_11_02_sensitive_scrub.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix

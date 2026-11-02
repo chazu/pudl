@@ -126,7 +126,11 @@ func (c *CatalogDB) WithCatalogTxContext(ctx context.Context, fn func(*CatalogTx
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to acquire connection", err)
 	}
 	defer conn.Close()
+	return runCatalogTx(ctx, conn, fn)
+}
 
+// runCatalogTx runs fn in one immediate transaction on conn.
+func runCatalogTx(ctx context.Context, conn *sql.Conn, fn func(*CatalogTx) error) error {
 	if err := beginImmediateContext(ctx, conn); err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "failed to begin immediate transaction", err)
 	}
