@@ -27,8 +27,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			path: {path: "selfLink", trim_prefix: _gcpComputeAPI}
 		}
 	}
-	kind:                   "compute#network"
-	project:                string
+	kind:                   "compute#network" @pudl(match)
+	project:                _gcpProjectID
 	name:                   string
 	selfLink:               string
 	autoCreateSubnetworks?: bool
@@ -52,8 +52,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			private_google_access: {path: "privateIpGoogleAccess", default: false}
 		}
 	}
-	kind:                   "compute#subnetwork"
-	project:                string
+	kind:                   "compute#subnetwork" @pudl(match)
+	project:                _gcpProjectID
 	name:                   string
 	selfLink:               string
 	network:                string
@@ -75,8 +75,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
 		}
 	}
-	kind:      "compute#firewall"
-	project:   string
+	kind:      "compute#firewall" @pudl(match)
+	project:   _gcpProjectID
 	name:      string
 	selfLink:  string
 	network:   string
@@ -100,8 +100,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
 		}
 	}
-	kind:      "compute#route"
-	project:   string
+	kind:      "compute#route" @pudl(match)
+	project:   _gcpProjectID
 	name:      string
 	selfLink:  string
 	network:   string
@@ -128,8 +128,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			gcp_router_nat_ip: {each: "nats[*]", args: {nat: "name", address: "natIps[*]"}}
 		}
 	}
-	kind:     "compute#router"
-	project:  string
+	kind:     "compute#router" @pudl(match)
+	project:  _gcpProjectID
 	name:     string
 	selfLink: string
 	network:  string
@@ -152,8 +152,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			status:    "status"
 		}
 	}
-	kind:         "compute#address"
-	project:      string
+	kind:         "compute#address" @pudl(match)
+	project:      _gcpProjectID
 	name:         string
 	selfLink:     string
 	address:      string

@@ -325,7 +325,6 @@ import (
 		schema_type:      "kubernetes"
 		resource_type:    "deployment"
 		identity_fields: ["metadata.name", "metadata.namespace"]
-		tracked_fields:  ["spec.replicas", "spec.template.spec.containers"]
 	}
 
 	// Basic Kubernetes Deployment structure
@@ -385,7 +384,6 @@ exampleDeployment: #BasicKubernetesDeployment & {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.apps.deployment"
 		identity_fields: ["metadata.name", "metadata.namespace"]
-		tracked_fields: ["spec.replicas", "status.readyReplicas"]
 	}
 }
 
@@ -394,7 +392,6 @@ exampleDeployment: #BasicKubernetesDeployment & {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.core.pod"
 		identity_fields: ["metadata.name", "metadata.namespace"]
-		tracked_fields: ["status.phase", "spec.containers"]
 	}
 }
 
@@ -403,7 +400,6 @@ exampleDeployment: #BasicKubernetesDeployment & {
 		schema_type:      "kubernetes"
 		resource_type:    "k8s.core.service"
 		identity_fields: ["metadata.name", "metadata.namespace"]
-		tracked_fields: ["spec.type", "spec.ports", "spec.selector"]
 	}
 }
 `
@@ -426,7 +422,6 @@ import "cue.dev/x/gitlab/gitlabci"
 		schema_type:      "cicd"
 		resource_type:    "gitlab.pipeline"
 		identity_fields: ["stages"]
-		tracked_fields: ["default", "workflow", "variables"]
 	}
 }
 

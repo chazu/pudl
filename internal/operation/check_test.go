@@ -69,7 +69,6 @@ func writeCheckFixtureSchemas(t *testing.T, schemaRoot string) {
 		schema_type: "base"
 		resource_type: "resources.thing"
 		identity_fields: ["name"]
-		tracked_fields: ["value"]
 	}
 	name: string
 	value: string

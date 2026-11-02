@@ -36,7 +36,6 @@ package git
 		schema_type:   "base"
 		resource_type: string | *"git.repository"
 		identity_fields: ["name"]
-		tracked_fields: ["default_branch", "root_commit"]
 		// Declared (optional) so platform specializations built with
 		// `#Child: #GitRepository & {...}` may set it; `_pudl` is closed
 		// inside a definition, so an undeclared field would be rejected.

@@ -42,12 +42,12 @@ type SchemaMetadata struct {
 	ResourceType   string   `json:"resource_type"`   // "aws.ec2.instance", "k8s.pod"
 	BaseSchema     string   `json:"base_schema"`     // Parent schema reference
 	IdentityFields []string `json:"identity_fields"` // Fields that identify the resource
-	TrackedFields  []string `json:"tracked_fields"`  // Fields to monitor for changes
 	IsListType     bool     `json:"is_list_type"`    // True if schema is structurally a list/array type
 
-	// Discriminators are the required top-level fields the schema pins to a
-	// single string (e.g. kind: "compute#firewall"), read from the CUE value.
-	Discriminators map[string]string `json:"-"`
+	// Match holds the fields marked `@pudl(match)`, whose values claim a
+	// record for the schema (see Claims). MatchError carries a decode failure.
+	Match      []MatchRule `json:"-"`
+	MatchError string      `json:"-"`
 
 	// Strictly decoded parts of `_pudl`, read separately from the best-effort
 	// decode above because a mistake in them must not be silently dropped:

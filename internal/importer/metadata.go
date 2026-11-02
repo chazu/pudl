@@ -48,7 +48,6 @@ type SchemaInfo struct {
 // ResourceTracking contains information for tracking resource changes
 type ResourceTracking struct {
 	IdentityFields []string               `json:"identity_fields"`
-	TrackedFields  []string               `json:"tracked_fields"`
 	ResourceID     string                 `json:"resource_id,omitempty"`
 	ContentHash    string                 `json:"content_hash,omitempty"`
 	IdentityValues map[string]interface{} `json:"identity_values,omitempty"`
@@ -91,7 +90,6 @@ type SchemaRegistryEntry struct {
 	FilePath       string   `json:"file_path"`
 	Version        string   `json:"version"`
 	IdentityFields []string `json:"identity_fields"`
-	TrackedFields  []string `json:"tracked_fields"`
 	LastModified   string   `json:"last_modified"`
 }
 

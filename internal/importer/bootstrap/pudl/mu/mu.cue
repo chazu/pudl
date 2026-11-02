@@ -18,7 +18,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.manifest"
 		identity_fields: ["timestamp"]
-		tracked_fields: ["summary", "actions", "targets"]
 	}
 
 	version:    int & >=1
@@ -50,7 +49,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.manifest_action"
 		identity_fields: ["id"]
-		tracked_fields: ["target", "cached", "exit_code", "outputs"]
 	}
 
 	id:        string
@@ -71,7 +69,6 @@ package mu
 		// target *definition* — which has no `current` — does not tie with this
 		// fallback observe-record schema during inference. See pudl/mu.#Target.
 		identity_fields: ["target", "current"]
-		tracked_fields: []
 	}
 
 	target?: string
@@ -88,7 +85,6 @@ package mu
 		schema_type:   "collection"
 		resource_type: "mu.observe_snapshot"
 		identity_fields: ["snapshot_id"]
-		tracked_fields: ["targets", "record_count", "schema_summary"]
 	}
 
 	snapshot_id: string // timestamp-based ID
@@ -115,7 +111,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.drift_observation"
 		identity_fields: ["observation_id"]
-		tracked_fields: ["target", "clean", "drifted_count", "drifted"]
 	}
 
 	observation_id: string
@@ -135,7 +130,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.plan"
 		identity_fields: ["targets"]
-		tracked_fields: ["plugins", "actions"]
 	}
 
 	version:     2
@@ -204,7 +198,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.target"
 		identity_fields: ["target"]
-		tracked_fields: ["toolchain", "sources", "deps", "config", "sealed_inputs", "sealed_input_modes", "sealed_outputs", "sealed_output_modes", "sealed_routing"]
 	}
 
 	// Fully-qualified target label, e.g. "//cmd/mu". Globally unique handle.

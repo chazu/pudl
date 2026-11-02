@@ -1598,7 +1598,7 @@
         {
           "use": "list",
           "short": "List schema definitions and resource metadata",
-          "long": "List schemas using full package.#Definition names accepted by 'pudl schema show'.\nThe listing includes resource types. Use --verbose for source paths, identity fields,\ntracked fields, and collection metadata, or --json for the complete representation.",
+          "long": "List schemas using full package.#Definition names accepted by 'pudl schema show'.\nThe listing includes resource types. Use --verbose for source paths, identity fields\nand collection metadata, or --json for the complete representation.",
           "args": "custom",
           "flags": [
             {

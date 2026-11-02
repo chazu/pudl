@@ -15,7 +15,6 @@ package component
 		schema_type:    "base"
 		resource_type:  "component"
 		identity_fields: ["path"]
-		tracked_fields: ["kind"]
 	}
 
 	path:         string

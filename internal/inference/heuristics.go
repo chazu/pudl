@@ -19,6 +19,9 @@ type CandidateScore struct {
 	Schema string
 	Score  float64
 	Reason string
+	// Claimed: the record matches a `@pudl(match)` field of this schema or an
+	// ancestor, so it must be assigned a claimed schema or rejected.
+	Claimed bool
 }
 
 // SelectCandidates returns schemas that are likely to match the given data,
@@ -41,15 +44,17 @@ func SelectCandidates(
 
 	for schemaName, meta := range metadata {
 		score, reason := scoreCandidate(schemaName, meta, dataFields, hints)
-		if score > 0 && matchesDiscriminator(meta.Discriminators, data) {
-			score += discriminatorBonus
-			reason += ", discriminator field matches"
+		claimed := !meta.IsPolicy() && claims(schemaName, metadata, graph, data)
+		if claimed {
+			score += claimBonus
+			reason += ", record matches @pudl(match) fields"
 		}
 		if score > 0 {
 			candidates = append(candidates, CandidateScore{
-				Schema: schemaName,
-				Score:  score,
-				Reason: reason,
+				Schema:  schemaName,
+				Score:   score,
+				Reason:  reason,
+				Claimed: claimed,
 			})
 		}
 	}
@@ -127,22 +132,6 @@ func scoreCandidate(
 			// Partial match - some indicator
 			score += 0.2 * float64(matchedIdentity) / float64(len(meta.IdentityFields))
 			reasons = append(reasons, "some identity fields present")
-		}
-	}
-
-	// Check tracked fields - weaker indicators but still useful
-	if len(meta.TrackedFields) > 0 {
-		matchedTracked := 0
-		for _, field := range meta.TrackedFields {
-			topLevel := strings.Split(field, ".")[0]
-			if dataFields[topLevel] {
-				matchedTracked++
-			}
-		}
-
-		if matchedTracked > 0 {
-			score += 0.1 * float64(matchedTracked) / float64(len(meta.TrackedFields))
-			reasons = append(reasons, "tracked fields present")
 		}
 	}
 

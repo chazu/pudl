@@ -198,7 +198,6 @@ func (s *SchemaFixtures) BasicSchema() string {
 		schema_type:      "unknown"
 		resource_type:    "basic_item"
 		identity_fields:  ["name"]
-		tracked_fields:   ["count", "active"]
 	}
 }`
 }
@@ -232,7 +231,6 @@ func (s *SchemaFixtures) KubernetesSchema() string {
 		schema_type:      "kubernetes"
 		resource_type:    "pod"
 		identity_fields:  ["metadata.name", "metadata.namespace"]
-		tracked_fields:   ["spec.containers"]
 	}
 }`
 }

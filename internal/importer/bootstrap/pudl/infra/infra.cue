@@ -6,7 +6,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.organization"
 		identity_fields: ["name"]
-		tracked_fields: ["region"]
 	}
 
 	name:        string
@@ -21,7 +20,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.account"
 		identity_fields: ["org", "name"]
-		tracked_fields: ["id", "email"]
 	}
 
 	org:    string
@@ -38,7 +36,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.platform"
 		identity_fields: ["name"]
-		tracked_fields: ["kind"]
 	}
 
 	name:        string
@@ -60,7 +57,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.environment"
 		identity_fields: ["name"]
-		tracked_fields: ["cluster", "server"]
 	}
 
 	name:        string
@@ -79,7 +75,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.service"
 		identity_fields: ["name"]
-		tracked_fields: ["kind"]
 	}
 
 	name:        string

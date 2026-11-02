@@ -52,7 +52,6 @@ func TestComponentSchemaBoundary(t *testing.T) {
 		schema_type:     "base"
 		resource_type:   "git.repository"
 		identity_fields: ["name"]
-		tracked_fields:  ["default_branch"]
 	}
 	name:           string
 	default_branch: string

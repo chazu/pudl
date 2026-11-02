@@ -21,10 +21,11 @@ var gcpPackSchemas = map[string]string{
 	"kms-keyrings": "gcp.#KMSKeyRing", "kms-keys": "gcp.#KMSKey",
 }
 
-// TestGCPPackFixturesInferTheirType imports each fixture without --schema,
-// with the project injected as the collectors do, and requires inference to
-// pick the pack type rather than a generic schema that shares field names
-// (pudl/infra.#Service matches any record with `name` and `kind`).
+// TestGCPPackFixturesInferTheirType imports each fixture without --schema.
+// Without a valid project ID every fixture is rejected; with the project
+// injected as the collectors do, inference must pick the pack type rather than
+// a generic schema that shares field names (pudl/infra.#Service matches any
+// record with `name` and `kind`).
 func TestGCPPackFixturesInferTheirType(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	r := runCLI(t, "example", "install", "gcp", "--json")
@@ -39,6 +40,19 @@ func TestGCPPackFixturesInferTheirType(t *testing.T) {
 		require.NoError(t, err)
 		var records []map[string]any
 		require.NoError(t, json.Unmarshal(raw, &records))
+
+		// Without a project ID the record claims its type and fails it, so the
+		// import is rejected rather than stored under a generic schema. gcloud
+		// prints the project for SQL instances, so only a bad --set fails there.
+		invalid := [][]string{{"--set", "project="}, {"--set", "project=123456789012"}, {"--set", "project=My Project"}}
+		if _, hasProject := records[0]["project"]; !hasProject {
+			invalid = append(invalid, nil)
+		}
+		for _, set := range invalid {
+			r := runCLI(t, append([]string{"import", "--path", path}, set...)...)
+			require.Error(t, r.Err, "%s %v should be rejected", typ, set)
+			require.Contains(t, r.Stderr, "@pudl(match)", "%s %v", typ, set)
+		}
 
 		r := runCLI(t, "import", "--path", path, "--set", "project=example-project")
 		require.NoError(t, r.Err, r.Stdout+r.Stderr)

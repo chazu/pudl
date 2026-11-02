@@ -24,13 +24,13 @@ package gcp
 			"metadata.annotations.\"serving.knative.dev/lastModifier\"",
 		]
 	}
-	apiVersion: "serving.knative.dev/v1"
-	kind:       "Service"
-	project:    string
+	apiVersion: "serving.knative.dev/v1" @pudl(match)
+	kind:       "Service" @pudl(match)
+	project:    _gcpProjectID
 	metadata: {
 		name:      string
 		namespace: string
-		labels: "cloud.googleapis.com/location": string
+		labels: "cloud.googleapis.com/location": string @pudl(match)
 		...
 	}
 	...
@@ -54,8 +54,8 @@ package gcp
 			}
 		}
 	}
-	kind:        "dns#managedZone"
-	project:     string
+	kind:        "dns#managedZone" @pudl(match)
+	project:     _gcpProjectID
 	name:        string
 	dnsName:     string
 	visibility?: "public" | "private"
@@ -72,8 +72,8 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 	}
-	project: string
-	name:    =~"^projects/[^/]+/topics/[^/]+$"
+	project: _gcpProjectID
+	name:    =~"^projects/[^/]+/topics/[^/]+$" @pudl(match)
 	...
 }
 
@@ -88,8 +88,8 @@ package gcp
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
-	project: string
-	name:    =~"^projects/[^/]+/subscriptions/[^/]+$"
+	project: _gcpProjectID
+	name:    =~"^projects/[^/]+/subscriptions/[^/]+$" @pudl(match)
 	topic:   string
 	...
 }

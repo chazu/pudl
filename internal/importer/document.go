@@ -90,7 +90,6 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: schemaIdentityFields,
-			TrackedFields:  []string{},
 			ResourceID:     resourceID,
 			ContentHash:    doc.contentHash,
 			IdentityValues: identityValues,

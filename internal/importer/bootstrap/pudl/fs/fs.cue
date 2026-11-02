@@ -6,7 +6,6 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.file"
 		identity_fields: ["path"]
-		tracked_fields: ["mode", "size"]
 	}
 
 	path:    string
@@ -23,7 +22,6 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.dir"
 		identity_fields: ["path"]
-		tracked_fields: []
 	}
 
 	path: string
@@ -38,7 +36,6 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.layout"
 		identity_fields: ["name"]
-		tracked_fields: []
 	}
 
 	name:         string

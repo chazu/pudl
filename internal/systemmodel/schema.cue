@@ -16,7 +16,6 @@ package systemmodel
 		schema_type:   "base"
 		resource_type: "system_model"
 		identity_fields: ["name"]
-		tracked_fields: ["populate", "desired", "checks", "depends_on"]
 	}
 
 	name: string

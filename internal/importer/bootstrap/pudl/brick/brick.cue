@@ -19,7 +19,6 @@ package brick
 		schema_type:     "base"
 		resource_type:   "brick.target"
 		identity_fields: ["name"]
-		tracked_fields:  ["kind", "toolchain", "config"]
 	}
 
 	name:      string       // e.g. "//k8s/api-deployment"
@@ -58,7 +57,6 @@ package brick
 		schema_type:     "base"
 		resource_type:   "brick.interface"
 		identity_fields: ["name"]
-		tracked_fields:  ["contract"]
 	}
 
 	name:     string
@@ -75,7 +73,6 @@ package brick
 		schema_type:     "base"
 		resource_type:   "brick.kit"
 		identity_fields: ["name"]
-		tracked_fields:  ["composes"]
 	}
 
 	name:     string

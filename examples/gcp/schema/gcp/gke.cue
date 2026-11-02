@@ -34,9 +34,9 @@ package gcp
 			}
 		}
 	}
-	project:   string
+	project:   _gcpProjectID
 	name:      string
-	selfLink:  string
+	selfLink:  =~#"^https://container\.googleapis\.com/v1/projects/[^/]+/(locations|zones)/[^/]+/clusters/[^/]+$"# @pudl(match)
 	location:  string
 	endpoint?: string
 	networkConfig?: {network?: string, subnetwork?: string, ...}

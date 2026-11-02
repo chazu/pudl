@@ -16,8 +16,8 @@ package gcp
 			network:   "settings.ipConfiguration.privateNetwork"
 		}
 	}
-	kind:            "sql#instance"
-	project:         string
+	kind:            "sql#instance" @pudl(match)
+	project:         _gcpProjectID
 	name:            string
 	selfLink:        string
 	databaseVersion: string
@@ -44,9 +44,9 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 	}
-	project:                      string
+	project:                      _gcpProjectID
 	name:                         string
-	storage_url:                  =~"^gs://"
+	storage_url:                  =~"^gs://" @pudl(match)
 	location?:                    string
 	public_access_prevention?:    string
 	uniform_bucket_level_access?: bool
@@ -63,8 +63,8 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner
 	}
-	project: string
-	name:    =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+$"
+	project: _gcpProjectID
+	name:    =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+$" @pudl(match)
 	...
 }
 
@@ -84,8 +84,8 @@ package gcp
 			primary_state: "primary.state"
 		}
 	}
-	project:         string
-	name:            =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$"
+	project:         _gcpProjectID
+	name:            =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$" @pudl(match)
 	purpose:         string
 	rotationPeriod?: string
 	primary?: {state?: string, ...}
