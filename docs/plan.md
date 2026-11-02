@@ -673,6 +673,12 @@ Beads work:
     [--what-if FILE]`, the built-in `policy_noncompliant` rule, and stale
     detection as the `policy-results` doctor repair. See
     `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-xf5.8.4` `pudl policy list [--type T]` (type, extends, rule
+    count, type review, last evaluated, compliant/noncompliant/unknown/stale
+    counts), `pudl policy show POLICY [--limit N]` (chain, rules with severity,
+    doc and declaring policy, failing counts per rule, resources failing most)
+    and the compliance section of `pudl show ID`, all with `--json`, read from
+    stored results. See `implog/2026_11_02_policy_list_show.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See

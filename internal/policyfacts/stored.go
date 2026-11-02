@@ -76,22 +76,27 @@ func (e *Evaluator) IsStale(s database.PolicyState) bool {
 	return loaded && p.Digest != s.Digest
 }
 
-// Summary is what the stored results say about one loaded policy.
+// Summary describes one loaded policy and counts its stored results.
 type Summary struct {
 	PolicySummary
+	Extends string `json:"extends,omitempty"`
+	Rules   int    `json:"rules"`
+	// Review is the review status of the policy's type: draft or validated.
+	Review string `json:"review"`
 	// Stale counts results evaluated with an older version of the policy.
 	Stale int `json:"stale"`
 	// LastEvaluated is the latest evaluation (Unix seconds), 0 when never.
 	LastEvaluated int64 `json:"last_evaluated,omitempty"`
 }
 
-// Summarize counts the stored results of each policy. A policy never
-// evaluated has zero counts.
+// Summarize describes each policy with the counts of its stored results. A
+// policy never evaluated has zero counts.
 func (e *Evaluator) Summarize(states []database.PolicyState, policies []*policy.Policy) []Summary {
 	out := make([]Summary, len(policies))
 	byName := map[string]*Summary{}
 	for i, p := range policies {
-		out[i].PolicySummary = PolicySummary{Policy: p.Name, Type: p.Type, Digest: p.Digest}
+		out[i] = Summary{PolicySummary: PolicySummary{Policy: p.Name, Type: p.Type, Digest: p.Digest},
+			Extends: p.Extends, Rules: len(p.Rules), Review: e.Review(p.Type).Status}
 		byName[p.Name] = &out[i]
 	}
 	for _, s := range states {

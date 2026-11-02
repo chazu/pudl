@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/policy"
 	"github.com/chazu/pudl/internal/policyfacts"
 )
 
@@ -33,19 +32,10 @@ evaluated with an older version of the policy; pudl policy evaluate refreshes it
 // policyReportVersion versions the --json output of policy list and show.
 const policyReportVersion = 1
 
-// policyRow is one policy and what its stored results say.
-type policyRow struct {
-	policyfacts.Summary
-	Extends string `json:"extends,omitempty"`
-	Rules   int    `json:"rules"`
-	// Review is the review status of the policy's type: draft or validated.
-	Review string `json:"review"`
-}
-
 type policyListOutput struct {
-	ReportVersion int         `json:"report_version"`
-	Policies      []policyRow `json:"policies"`
-	LoadErrors    []string    `json:"load_errors,omitempty"`
+	ReportVersion int                   `json:"report_version"`
+	Policies      []policyfacts.Summary `json:"policies"`
+	LoadErrors    []string              `json:"load_errors,omitempty"`
 }
 
 func runPolicyList(cmd *cobra.Command, args []string) error {
@@ -62,7 +52,7 @@ func runPolicyList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	out := policyListOutput{ReportVersion: policyReportVersion, Policies: policyRows(policies, states, selected)}
+	out := policyListOutput{ReportVersion: policyReportVersion, Policies: policies.Summarize(states, selected)}
 	for _, le := range policies.LoadErrors() {
 		out.LoadErrors = append(out.LoadErrors, le.Error())
 	}
@@ -82,7 +72,9 @@ func runPolicyList(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	printPolicyLoadErrors(out.LoadErrors)
+	for _, e := range out.LoadErrors {
+		fmt.Fprintf(errw(), "⚠️  %s\n", e)
+	}
 	return nil
 }
 
@@ -96,27 +88,11 @@ func openPolicies() (*policyfacts.Evaluator, *database.CatalogDB, error) {
 	return policies, db, err
 }
 
-// policyRows describes each policy with the counts of its stored results.
-func policyRows(e *policyfacts.Evaluator, states []database.PolicyState, policies []*policy.Policy) []policyRow {
-	rows := []policyRow{}
-	for i, sum := range e.Summarize(states, policies) {
-		p := policies[i]
-		rows = append(rows, policyRow{Summary: sum, Extends: p.Extends, Rules: len(p.Rules), Review: e.Review(p.Type).Status})
-	}
-	return rows
-}
-
 func evaluatedAt(unix int64) string {
 	if unix == 0 {
 		return "never"
 	}
 	return time.Unix(unix, 0).UTC().Format(time.RFC3339)
-}
-
-func printPolicyLoadErrors(errs []string) {
-	for _, e := range errs {
-		fmt.Fprintf(errw(), "⚠️  %s\n", e)
-	}
 }
 
 func init() {

@@ -30,10 +30,10 @@ the resources failing most (most severe first, then most violations).
 }
 
 type policyShowOutput struct {
-	ReportVersion int       `json:"report_version"`
-	Summary       policyRow `json:"summary"`
-	Chain         []string  `json:"chain"`
-	Rules         []ruleRow `json:"rules"`
+	ReportVersion int                 `json:"report_version"`
+	Summary       policyfacts.Summary `json:"summary"`
+	Chain         []string            `json:"chain"`
+	Rules         []ruleRow           `json:"rules"`
 	// Failing are the resources failing most, capped by --limit;
 	// FailingTotal counts them all.
 	Failing      []policyfacts.Stored `json:"failing"`
@@ -67,7 +67,7 @@ func runPolicyShow(cmd *cobra.Command, args []string) error {
 	}
 	out := policyShowOutput{
 		ReportVersion: policyReportVersion,
-		Summary:       policyRows(policies, states, selected)[0],
+		Summary:       policies.Summarize(states, selected)[0],
 		Chain:         p.Chain,
 		Rules:         ruleRows(p, stored),
 		Failing:       failingMost(stored),

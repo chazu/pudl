@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/policyfacts"
 )
 
 // policyListTypes: a validated bucket type and a draft queue type.
@@ -64,7 +66,7 @@ func policyJSON[T any](t *testing.T, args ...string) T {
 	return out
 }
 
-func policyByName(t *testing.T, rows []policyRow, name string) policyRow {
+func policyByName(t *testing.T, rows []policyfacts.Summary, name string) policyfacts.Summary {
 	t.Helper()
 	for _, r := range rows {
 		if r.Policy == name {
@@ -72,7 +74,7 @@ func policyByName(t *testing.T, rows []policyRow, name string) policyRow {
 		}
 	}
 	require.Failf(t, "policy not listed", "%s in %+v", name, rows)
-	return policyRow{}
+	return policyfacts.Summary{}
 }
 
 func TestPolicyListShowAndCompliance(t *testing.T) {
