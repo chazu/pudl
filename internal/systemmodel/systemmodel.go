@@ -28,7 +28,6 @@ func SchemaCUE() string { return schemaCUE }
 type SystemModel struct {
 	Observation *Observation     `json:"observation,omitempty"`
 	Name        string           `json:"name"`
-	Plugins     []PluginDef      `json:"plugins,omitempty"`
 	Populate    Populate         `json:"populate"`
 	Checks      []Check          `json:"checks,omitempty"`
 	Desired     []map[string]any `json:"desired,omitempty"`
@@ -39,41 +38,8 @@ type SystemModel struct {
 	DependsOn []string `json:"depends_on,omitempty"`
 }
 
-// PluginDef is a plugin source declared in the model, mirroring mu's #PluginDef
-// (one of script / digest / url+sha256). pudl emits these into the generated
-// mu.cue so mu's resolver can find the plugin an arm references by name.
-type PluginDef struct {
-	Name    string   `json:"name"`
-	Command []string `json:"command,omitempty"`
-	Script  string   `json:"script,omitempty"`
-	Digest  string   `json:"digest,omitempty"`
-	URL     string   `json:"url,omitempty"`
-	SHA256  string   `json:"sha256,omitempty"`
-}
-
-// PluginByName returns the declared plugin source for an arm's `plugin:` name.
-func (m *SystemModel) PluginByName(name string) (PluginDef, bool) {
-	for _, p := range m.Plugins {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return PluginDef{}, false
-}
-
-// Populate carries both populate kinds (the #PluginObserve | #EweTarget union);
-// Kind() reports which one this instance is, by which fields are set.
+// Populate is the #CommandObserve arm. Absent marks a checks-only model.
 type Populate struct {
-	// #PluginObserve
-	Plugin       string         `json:"plugin,omitempty"`
-	Input        map[string]any `json:"input,omitempty"`
-	Differential bool           `json:"differential,omitempty"` // observer reports per-resource exists/matches (k8s); false → inventory set-diff
-	// #EweTarget
-	EweSource string   `json:"eweSource,omitempty"`
-	Outputs   []string `json:"outputs,omitempty"`
-	Network   bool     `json:"network,omitempty"`
-	Impure    bool     `json:"impure,omitempty"`
-	// #CommandObserve
 	AllowSchemaFallback bool         `json:"allow_schema_fallback,omitempty"`
 	Runs                []CommandRun `json:"runs,omitempty"`
 	Schema              string       `json:"schema,omitempty"`
@@ -89,28 +55,20 @@ type CommandRun struct {
 	Dir  string         `json:"dir,omitempty"`
 }
 
-// PopulateKind enumerates the populate union arms.
+// PopulateKind names the populate arm a model declares.
 type PopulateKind string
 
 const (
-	KindPluginObserve PopulateKind = "observe"
-	KindEweTarget     PopulateKind = "ewe"
-	KindCommand       PopulateKind = "command"
-	KindNone          PopulateKind = "none" // no populate arm: checks-only
+	KindCommand PopulateKind = "command"
+	KindNone    PopulateKind = "none" // no populate arm: checks-only
 )
 
-// Kind reports which populate arm this is: none when the model declares no
-// populate, ewe when eweSource is set, command when runs are, else observe.
+// Kind reports the populate arm: none for a checks-only model, else command.
 func (p Populate) Kind() PopulateKind {
-	switch {
-	case p.Absent:
+	if p.Absent {
 		return KindNone
-	case p.EweSource != "":
-		return KindEweTarget
-	case len(p.Runs) > 0:
-		return KindCommand
 	}
-	return KindPluginObserve
+	return KindCommand
 }
 
 // Check is an observe-only flag over a Datalog relation.

@@ -17,7 +17,6 @@ import (
 type resolvedRun struct {
 	model           *systemmodel.SystemModel
 	modelDir        string
-	pudlRoot        string
 	bindingEvidence []wiring.BindingEvidence
 }
 
@@ -58,7 +57,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	if err != nil {
 		return nil, err
 	}
-	model, modelDir, pudlRoot := resolved.model, resolved.modelDir, resolved.pudlRoot
+	model, modelDir := resolved.model, resolved.modelDir
 	session := acute.NewRunSession()
 	if reserved := deps.set.memberRunID(); reserved != "" {
 		session.RunID = reserved
@@ -85,23 +84,6 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 
 	recordRunContext(cat, model, session.RunID, opts, live)
 
-	// muRoot is only needed by paths that run mu within an existing project
-	// (plugin-observe live observe; differential drift). The ewe populate
-	// path self-stages its own mu project, and --from-catalog runs no mu.
-	// Best-effort: phases that genuinely need it validate when they run.
-	muRoot := opts.muRoot
-	if muRoot == "" && !flags.fromCatalog {
-		muRoot, _ = findMuRoot(modelDir)
-		if muRoot == "" && opts.populateSpec != "" && model.Populate.Kind() == systemmodel.KindPluginObserve {
-			var removeAdHocMuRoot func()
-			muRoot, removeAdHocMuRoot, err = createAdHocMuRoot()
-			if err != nil {
-				return nil, err
-			}
-			defer removeAdHocMuRoot()
-		}
-	}
-
 	if flags.fromCatalog && len(model.Desired) == 0 {
 		return nil, fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
 	}
@@ -122,8 +104,8 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 
 	phases := runPhaseInput{
 		ctx: ctx,
-		cat: cat, mu: deps.mu, model: model, flags: flags,
-		muRoot: muRoot, modelDir: modelDir, pudlRoot: pudlRoot, session: session, live: live,
+		cat: cat, model: model, flags: flags,
+		modelDir: modelDir, session: session, live: live,
 	}
 	// An interrupt that arrived while the run was being prepared stops it before
 	// any phase starts; the deferred finalizers record it as cancelled.
@@ -144,7 +126,7 @@ func resolveRunModel(ctx context.Context, cat *runCatalog, opts runOptions, deps
 	resolved := &resolvedRun{}
 	var err error
 	if opts.populateSpec != "" {
-		resolved.model, resolved.modelDir, resolved.pudlRoot, err = adHocModel(ctx, opts.populateSpec, opts.populateInput)
+		resolved.model, resolved.modelDir, err = adHocModel(opts.populateSpec)
 	} else {
 		resolved.model, err = elaborateRunTemplate(cat, opts, deps, resolved)
 	}
@@ -156,13 +138,13 @@ func resolveRunModel(ctx context.Context, cat *runCatalog, opts runOptions, deps
 
 // elaborateRunTemplate resolves a registered model template (project
 // .pudl/schema wins over global ~/.pudl/schema) and elaborates its bindings.
-// The template's directory is the base for eweSource and relative plugin paths.
+// The template's directory is the base for relative command paths.
 func elaborateRunTemplate(cat *runCatalog, opts runOptions, deps runDeps, resolved *resolvedRun) (*systemmodel.SystemModel, error) {
-	template, templateDir, templateRoot, err := resolveModelTemplate(opts.model)
+	template, templateDir, _, err := resolveModelTemplate(opts.model)
 	if err != nil {
 		return nil, err
 	}
-	resolved.modelDir, resolved.pudlRoot = templateDir, templateRoot
+	resolved.modelDir = templateDir
 	db, err := cat.required()
 	if err != nil {
 		return nil, err
@@ -237,12 +219,9 @@ func recordRunContext(cat *runCatalog, model *systemmodel.SystemModel, runID str
 type runPhaseInput struct {
 	ctx      context.Context
 	cat      *runCatalog
-	mu       muRunner
 	model    *systemmodel.SystemModel
 	flags    runFlags
-	muRoot   string
 	modelDir string
-	pudlRoot string
 	session  *acute.RunSession
 	live     bool
 }
@@ -252,7 +231,7 @@ type runPhaseInput struct {
 func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err error) {
 	emitRunProgress("observe", in.model.Name, "started")
 	if in.ctx == nil {
-		in.ctx = runOperationContext(in.mu)
+		in.ctx = context.Background()
 	}
 	model, flags := in.model, in.flags
 	report.Mode = "observe-only"
@@ -274,7 +253,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		if flags.fromCatalog {
 			scope = strings.TrimSpace(flags.catalogScope)
 		} else {
-			pr, err := runPopulate(in.cat, in.mu, model, in.muRoot, in.modelDir, in.pudlRoot, in.session.RunID, in.session.SnapshotID)
+			pr, err := runPopulate(in.ctx, in.cat, model, in.modelDir, in.session.RunID, in.session.SnapshotID)
 			if err != nil {
 				return nil, err
 			}
@@ -307,7 +286,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		// Checks-only: evaluate checks over what the catalog already holds.
 		report.Mode = "checks-only"
 	default:
-		pr, err := runPopulate(in.cat, in.mu, model, in.muRoot, in.modelDir, in.pudlRoot, in.session.RunID, in.session.SnapshotID)
+		pr, err := runPopulate(in.ctx, in.cat, model, in.modelDir, in.session.RunID, in.session.SnapshotID)
 		if err != nil {
 			return nil, err
 		}

@@ -17,7 +17,7 @@ var modelShowCmd = &cobra.Command{
 	Short: "Show a registered #SystemModel definition",
 	Long: `Show the details of a registered #SystemModel by name (the instance's
 'name:' field or its short definition name): populate arm, desired state,
-checks, and declared plugins.`,
+and checks.`,
 	Args:              cobra.ExactArgs(1),
 	SilenceUsage:      true,
 	ValidArgsFunction: completeModelNames,
@@ -27,11 +27,7 @@ checks, and declared plugins.`,
 			return err
 		}
 		if jsonOutput {
-			view := modelInspection{SystemModel: m}
-			if modelDiscover {
-				view.PluginDiscovery = discoverModelPlugins(m, muPluginInfoFrom(cmd.Context()))
-			}
-			b, err := json.MarshalIndent(view, "", "  ")
+			b, err := json.MarshalIndent(m, "", "  ")
 			if err != nil {
 				return err
 			}
@@ -47,15 +43,6 @@ checks, and declared plugins.`,
 			return fmt.Errorf("load schemas: %w", err)
 		}
 		printModel(m, schemas)
-		if modelDiscover {
-			for _, plugin := range discoverModelPlugins(m, muPluginInfoFrom(cmd.Context())) {
-				fmt.Fprintf(outw(), "  Discovery: %s", plugin.Name)
-				if plugin.Error != "" {
-					fmt.Fprintf(outw(), " (%s)", plugin.Error)
-				}
-				fmt.Fprintln(outw())
-			}
-		}
 		return nil
 	},
 }
@@ -66,11 +53,6 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 
 	// Populate arm.
 	switch m.Populate.Kind() {
-	case systemmodel.KindEweTarget:
-		fmt.Fprintf(outw(), "  Populate:  ewe (%s)\n", m.Populate.EweSource)
-		if len(m.Populate.Outputs) > 0 {
-			fmt.Fprintf(outw(), "    outputs: %s\n", strings.Join(m.Populate.Outputs, ", "))
-		}
 	case systemmodel.KindCommand:
 		fmt.Fprintf(outw(), "  Populate:  command (%d runs)\n", len(m.Populate.Runs))
 		for _, run := range m.Populate.Runs {
@@ -81,8 +63,6 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		}
 	case systemmodel.KindNone:
 		fmt.Fprintln(outw(), "  Populate:  none (checks-only)")
-	default:
-		fmt.Fprintf(outw(), "  Populate:  observe (plugin %q)\n", m.Populate.Plugin)
 	}
 
 	// Desired state.
@@ -106,15 +86,6 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 	}
 	if m.Freshness != nil {
 		fmt.Fprintf(outw(), "  Freshness: every=%s drift=%t\n", m.Freshness.Every, m.Freshness.Drift)
-	}
-
-	// Plugins.
-	if len(m.Plugins) > 0 {
-		names := make([]string, 0, len(m.Plugins))
-		for _, p := range m.Plugins {
-			names = append(names, p.Name)
-		}
-		fmt.Fprintf(outw(), "  Plugins:   %s\n", strings.Join(names, ", "))
 	}
 }
 
@@ -156,5 +127,4 @@ func completeModelNames(cmd *cobra.Command, args []string, toComplete string) ([
 
 func init() {
 	modelCmd.AddCommand(modelShowCmd)
-	modelShowCmd.Flags().BoolVar(&modelDiscover, "discover", false, "Include live Mu plugin capability discovery")
 }

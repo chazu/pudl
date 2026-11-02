@@ -88,16 +88,15 @@ func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 // runSetHarness drives run sets with explicit options.
 type runSetHarness struct {
 	opts        runSetOptions
-	deps        runDeps
 	consumerOut string
 }
 
 func (h *runSetHarness) run(models ...string) error {
-	return runSetForTest(models, h.opts, h.deps)
+	return runSetForTest(models, h.opts)
 }
 
-func runSetForTest(models []string, opts runSetOptions, deps runDeps) error {
-	_, err := executeRunSet(context.Background(), models, opts, deps)
+func runSetForTest(models []string, opts runSetOptions) error {
+	_, err := executeRunSet(context.Background(), models, opts)
 	return err
 }
 
@@ -123,8 +122,7 @@ func setupRunSetFixture(t *testing.T) (*runSetHarness, string) {
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	deps := runDeps{mu: newExecMu(context.Background(), 0)}
-	return &runSetHarness{deps: deps, consumerOut: consumerOut}, pudlDir
+	return &runSetHarness{consumerOut: consumerOut}, pudlDir
 }
 
 func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {

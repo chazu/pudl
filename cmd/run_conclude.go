@@ -16,7 +16,7 @@ import (
 func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error, deps runDeps) (persisted bool, err error) {
 	ctx := in.ctx
 	if ctx == nil {
-		ctx = runOperationContext(in.mu)
+		ctx = context.Background()
 	}
 	fin, err := finalizeRun(runFinalizeInput{
 		cat: in.cat, model: in.model, modelDir: in.modelDir,

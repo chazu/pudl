@@ -32,8 +32,6 @@ var jsonContractExempt = map[string]string{
 	"pudl schema add":            "schema authoring; text report",
 	"pudl schema new":            "schema authoring; covered by schema_new tests",
 	"pudl model new":             "scaffold authoring; needs a plugin",
-	"pudl model populator add":   "scaffold authoring; needs a populator",
-	"pudl model populator new":   "scaffold authoring",
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
 	"pudl run set":               "observes live through mu",

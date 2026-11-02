@@ -1067,8 +1067,8 @@
     },
     {
       "use": "model",
-      "short": "Manage #SystemModel definitions and their assets",
-      "long": "Manage registered #SystemModel definitions and the assets they reference.\n\nA #SystemModel is registered as a CUE definition inheriting #SystemModel in the\nschema repository (project .pudl/schema or global ~/.pudl/schema). An\n#EweTarget populate arm references a populator program (eweSource), stored under\nthe repo's populators/ directory — kept out of the schema CUE module so it is\nnot (mis)loaded as a schema.",
+      "short": "Manage #SystemModel definitions",
+      "long": "Manage registered #SystemModel definitions.\n\nA #SystemModel is registered as a CUE definition inheriting #SystemModel in the\nschema repository (project .pudl/schema or global ~/.pudl/schema).",
       "args": "custom",
       "flags": [
         {
@@ -1133,7 +1133,7 @@
         {
           "use": "new \u003cname\u003e",
           "short": "Scaffold a #SystemModel observer",
-          "long": "Create a registered #SystemModel scaffold in the project schema (or the\nglobal schema outside a workspace). Always edit the returned file to add desired\nstate or checks.\n\n--populate takes plugin:\u003cname\u003e (a cached mu plugin) or command:\u003ccmdline\u003e, a\ncommand printing JSON records, run directly by pudl (no shell, no mu).\n\nExamples:\n    pudl model new pods --populate plugin:k8s --input namespace=default\n    pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'",
+          "long": "Create a registered #SystemModel scaffold in the project schema (or the\nglobal schema outside a workspace). The scaffold observes with #CommandObserve:\ncommands that print JSON records, run directly by pudl (no shell). Always edit\nthe returned file to add desired state or checks.\n\n--populate command:\u003ccmdline\u003e sets the command. Without it the scaffold runs a\nplaceholder command that prints no records; replace it before relying on it.\n\nExamples:\n    pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'\n    pudl model new inventory",
           "args": "custom",
           "flags": [
             {
@@ -1167,12 +1167,6 @@
               "persistent": true
             },
             {
-              "name": "input",
-              "usage": "Populate input key=value (repeatable; JSON values are decoded)",
-              "type": "stringArray",
-              "default": "[]"
-            },
-            {
               "name": "json",
               "usage": "Output results as JSON for scripting",
               "type": "bool",
@@ -1186,94 +1180,17 @@
             },
             {
               "name": "populate",
-              "usage": "Populate arm: plugin:\u003cname\u003e or command:\u003ccmdline\u003e",
+              "usage": "Populate command: command:\u003ccmdline\u003e (default: a placeholder printing no records)",
               "type": "string"
-            }
-          ]
-        },
-        {
-          "use": "populator",
-          "short": "Manage populator programs for #EweTarget models",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ],
-          "subcommands": [
-            {
-              "use": "add \u003cmodel\u003e \u003cpopulator.cue\u003e",
-              "short": "Install a populator program into the repo for a model",
-              "long": "Copy a populator (.cue) program into the pudl repo's populators/\u003cmodel\u003e/\ndirectory so a registered #SystemModel can reference it as a repo-relative\neweSource. By default it goes in the project repo (.pudl) when one is found by\nwalking up from the cwd, else the global ~/.pudl; use --global to force global.\n\nAfter installing, set the model's eweSource to the printed value.",
-              "args": "custom",
-              "flags": [
-                {
-                  "name": "global",
-                  "usage": "install into the global ~/.pudl repo (default: project repo if found)",
-                  "type": "bool",
-                  "default": "false"
-                },
-                {
-                  "name": "json",
-                  "usage": "Output results as JSON for scripting",
-                  "type": "bool",
-                  "default": "false",
-                  "persistent": true
-                }
-              ]
-            },
-            {
-              "use": "new \u003cmodel\u003e",
-              "short": "Scaffold an #EweTarget populator",
-              "long": "Create a minimal ewe populator under populators/\u003cmodel\u003e/.\nThe generated program writes a records array and already uses a quoted\n\"_schema\" field, so its output can be ingested by pudl without the hidden-CUE\nfield trap. Edit the TODO before running the model.",
-              "args": "custom",
-              "flags": [
-                {
-                  "name": "force",
-                  "usage": "Replace an existing populator scaffold",
-                  "type": "bool",
-                  "default": "false"
-                },
-                {
-                  "name": "global",
-                  "usage": "Use the personal ~/.pudl workspace explicitly",
-                  "type": "bool",
-                  "default": "false",
-                  "persistent": true
-                },
-                {
-                  "name": "json",
-                  "usage": "Output results as JSON for scripting",
-                  "type": "bool",
-                  "default": "false",
-                  "persistent": true
-                }
-              ]
             }
           ]
         },
         {
           "use": "show \u003cname\u003e",
           "short": "Show a registered #SystemModel definition",
-          "long": "Show the details of a registered #SystemModel by name (the instance's\n'name:' field or its short definition name): populate arm, desired state,\nchecks, and declared plugins.",
+          "long": "Show the details of a registered #SystemModel by name (the instance's\n'name:' field or its short definition name): populate arm, desired state,\nand checks.",
           "args": "custom",
           "flags": [
-            {
-              "name": "discover",
-              "usage": "Include live Mu plugin capability discovery",
-              "type": "bool",
-              "default": "false"
-            },
             {
               "name": "global",
               "usage": "Use the personal ~/.pudl workspace explicitly",
@@ -1430,11 +1347,6 @@
             {
               "name": "path",
               "usage": "Read from file instead of stdin",
-              "type": "string"
-            },
-            {
-              "name": "plugin-dir",
-              "usage": "Local mu plugin directory containing mu.cue and optional pudl.cue",
               "type": "string"
             },
             {
@@ -1635,7 +1547,7 @@
     {
       "use": "run [\u003cmodel\u003e]",
       "short": "Run a #SystemModel instance: observe, compare and check",
-      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema and explicitly vendored packages. Register one with\n\"pudl schema add\". A run is observe-only: populate -\u003e drift -\u003e checks -\u003e\nreport. It reports differences and changes nothing.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
+      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema and explicitly vendored packages. Register one with\n\"pudl schema add\". A run is observe-only: populate -\u003e drift -\u003e checks -\u003e\nreport. It reports differences and changes nothing.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json).\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
       "args": "custom",
       "flags": [
         {
@@ -1669,12 +1581,6 @@
           "persistent": true
         },
         {
-          "name": "input",
-          "usage": "Ad-hoc populate input key=value (repeatable)",
-          "type": "stringArray",
-          "default": "[]"
-        },
-        {
           "name": "json",
           "usage": "Output results as JSON for scripting",
           "type": "bool",
@@ -1688,20 +1594,8 @@
           "default": "0s"
         },
         {
-          "name": "mu-root",
-          "usage": "mu project root to run within (default: discover mu.cue from the model dir)",
-          "type": "string"
-        },
-        {
-          "name": "mu-timeout",
-          "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
-          "type": "duration",
-          "default": "0s",
-          "persistent": true
-        },
-        {
           "name": "populate",
-          "usage": "Run an unregistered observer: plugin:\u003cname\u003e, or command:\u003ccmdline\u003e (a command printing JSON records)",
+          "usage": "Run an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
           "type": "string"
         },
         {
@@ -1730,13 +1624,6 @@
               "usage": "Output results as JSON for scripting",
               "type": "bool",
               "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "mu-timeout",
-              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
-              "type": "duration",
-              "default": "0s",
               "persistent": true
             },
             {
@@ -1779,18 +1666,6 @@
               "usage": "reject a bound producer snapshot older than this duration",
               "type": "duration",
               "default": "0s"
-            },
-            {
-              "name": "mu-root",
-              "usage": "mu project root for member runs (default: discover per model)",
-              "type": "string"
-            },
-            {
-              "name": "mu-timeout",
-              "usage": "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit",
-              "type": "duration",
-              "default": "0s",
-              "persistent": true
             },
             {
               "name": "progress-json",

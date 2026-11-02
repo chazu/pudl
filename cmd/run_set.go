@@ -25,7 +25,6 @@ type runSetExecutionContext struct {
 	// starts: the rest of the set is recorded cancelled.
 	ctx              context.Context
 	runSetID         string
-	mu               muRunner
 	successfulRuns   map[string]wiring.ProducerRun
 	successfulModels map[string]*systemmodel.SystemModel
 	snapshotIDs      map[string]string
@@ -100,21 +99,18 @@ func (c *runSetExecutionContext) emitOutput() bool {
 
 var (
 	runSetMaxObservationAge time.Duration
-	runSetMuRoot            string
 	runSetDetailedExitCode  bool
 )
 
 // runSetOptions is the complete input of one `pudl run set`, read once from
 // its flags.
 type runSetOptions struct {
-	muRoot               string
 	maxObservationAge    time.Duration
 	maxObservationAgeSet bool
 }
 
 func runSetOptionsFromFlags(cmd *cobra.Command) runSetOptions {
 	return runSetOptions{
-		muRoot:               runSetMuRoot,
 		maxObservationAge:    runSetMaxObservationAge,
 		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
 	}
@@ -137,7 +133,7 @@ Examples:
   pudl run report`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd), defaultRunDeps(cmd.Context(), runMuTimeout))
+		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd))
 		if !runSetDetailedExitCode {
 			return err
 		}
@@ -156,16 +152,16 @@ type runSetResult struct {
 // executeRunSet runs exactly the named models in dependency order. Each member
 // is an observe-only executeRun with its own options. The result is nil when
 // the set failed before it had a report.
-func executeRunSet(ctx context.Context, args []string, opts runSetOptions, deps runDeps) (*runSetResult, error) {
+func executeRunSet(ctx context.Context, args []string, opts runSetOptions) (*runSetResult, error) {
 	result := &runSetResult{}
-	err := runSetMembers(ctx, args, opts, deps, result)
+	err := runSetMembers(ctx, args, opts, result)
 	if result.report == nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps runDeps, result *runSetResult) error {
+func runSetMembers(ctx context.Context, args []string, opts runSetOptions, result *runSetResult) error {
 	selected := make([]acute.RunSetModel, 0, len(args))
 	for _, requested := range args {
 		template, _, _, err := resolveModelTemplate(requested)
@@ -210,13 +206,13 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 
 	context := &runSetExecutionContext{
 		ctx:      ctx,
-		runSetID: report.RunSetID, mu: deps.mu, successfulRuns: map[string]wiring.ProducerRun{},
+		runSetID: report.RunSetID, successfulRuns: map[string]wiring.ProducerRun{},
 		successfulModels: map[string]*systemmodel.SystemModel{},
 		snapshotIDs:      map[string]string{}, modelDirs: map[string]string{},
 		bindingEvidence: map[string][]wiring.BindingEvidence{},
 		suppressOutput:  jsonOutput,
 	}
-	memberDeps := runDeps{mu: deps.mu, set: context}
+	memberDeps := runDeps{set: context}
 
 	results := map[string]string{}
 	for _, model := range plan.Ordered {
@@ -426,7 +422,6 @@ func printRunSetReport(report *acute.RunSetReport) error {
 func init() {
 	runCmd.AddCommand(runSetCmd)
 	runSetCmd.Flags().DurationVar(&runSetMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
-	runSetCmd.Flags().StringVar(&runSetMuRoot, "mu-root", "", "mu project root for member runs (default: discover per model)")
 
 	runSetCmd.Flags().BoolVar(&runSetDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
 }

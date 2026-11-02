@@ -10,16 +10,12 @@ import (
 // Flag variables for `pudl run`. They are read exactly once, by
 // runOptionsFromFlags; nothing else reads or writes them.
 var (
-	runMuRoot            string
 	runFromCatalog       bool
 	runCatalogScope      string
 	runCheckUpstream     bool
 	runPopulateSpec      string
-	runPopulateInput     []string
 	runMaxObservationAge time.Duration
 	runDetailedExitCode  bool
-	// runMuTimeout bounds each mu invocation of run and run set.
-	runMuTimeout time.Duration
 )
 
 var runCmd = &cobra.Command{
@@ -36,7 +32,7 @@ report. It reports differences and changes nothing.
 A model without a populate arm is checks-only: it syncs projected facts and
 evaluates its checks over what the catalog already holds (e.g. data brought in
 with pudl import). A #CommandObserve populate runs plain commands that print
-JSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.
+JSON records (gcloud, kubectl, aws ... --format=json).
 
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift or a failing fail-severity check, 1 error.
@@ -56,7 +52,7 @@ Examples:
 	},
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report, err := executeRun(cmd.Context(), runOptionsFromFlags(cmd, args), defaultRunDeps(cmd.Context(), runMuTimeout))
+		report, err := executeRun(cmd.Context(), runOptionsFromFlags(cmd, args), runDeps{})
 		if counter, ok := outw().(*resultCounter); ok && !counter.attempted && jsonOutput && err != nil && report != nil {
 			out, renderErr := report.render(true)
 			if renderErr != nil {
@@ -75,13 +71,11 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(runCmd)
-	runCmd.Flags().StringVar(&runPopulateSpec, "populate", "", "Run an unregistered observer: plugin:<name>, or command:<cmdline> (a command printing JSON records)")
-	runCmd.Flags().StringArrayVar(&runPopulateInput, "input", nil, "Ad-hoc populate input key=value (repeatable)")
-	runCmd.Flags().StringVar(&runMuRoot, "mu-root", "", "mu project root to run within (default: discover mu.cue from the model dir)")
+	runCmd.Flags().StringVar(&runPopulateSpec, "populate", "", "Run an unregistered observer: command:<cmdline> (a command printing JSON records)")
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
 	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 	runCmd.Flags().DurationVar(&runMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runCmd.Flags().BoolVar(&runDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
-	runCmd.PersistentFlags().DurationVar(&runMuTimeout, "mu-timeout", 0, "stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit")
+
 }

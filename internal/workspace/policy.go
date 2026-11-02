@@ -168,24 +168,6 @@ func (p *Policy) RulePathsForModel(modelDir string) []string {
 	return paths
 }
 
-// PopulatorPathsFor is where an #EweTarget's eweSource is looked for, in order.
-//
-// Deliberately *not* a flat repo-then-global list like the others: a populator
-// is resolved relative to the pudl root that owns the model, so a model
-// registered globally cannot silently pick up a repo's populator of the same
-// name, and vice versa. ownerRoot is that root; modelDir is the co-located
-// fallback.
-func (p *Policy) PopulatorPathsFor(ownerRoot, modelDir string) []string {
-	var paths []string
-	if ownerRoot != "" {
-		paths = append(paths, filepath.Join(ownerRoot, "populators"), ownerRoot)
-	}
-	if modelDir != "" {
-		paths = append(paths, modelDir)
-	}
-	return paths
-}
-
 // RuleWritePath is where `pudl rule add` puts a new rule: the repo workspace's
 // rules directory. Outside a workspace there is no repo-scoped place for it.
 func (p *Policy) RuleWritePath() (string, error) {

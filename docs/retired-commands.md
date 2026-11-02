@@ -62,6 +62,11 @@ and run-set reports, approval rows and run history remain readable.
 | `pudl run --converge` and `--only`, `--dry-run`, `--max-iters`, `--max-applies`, `--require-approval` | `pudl run <model>` reports drift between `desired` and what was observed; apply changes with the tool that owns them, then run again to verify |
 | `pudl run resume`, `pudl run reject` | None. Nothing waits for approval any more |
 | `pudl run set --converge` and its `--require-approval`, `--max-iters`, `--max-applies` | `pudl run set <model>...` (observe-only) |
+| `pudl run --populate plugin:<name>` and `--input` | `pudl run --populate 'command:<cmdline>'` running the same program |
+| `pudl model new --populate plugin:<name>` and `--input` | `pudl model new <name> --populate 'command:<cmdline>'`; without `--populate` the scaffold is a `#CommandObserve` placeholder |
+| `pudl model populator add`, `pudl model populator new` | Keep helper programs and fixtures anywhere in the repository and reference them from a `#CommandObserve` run (`dir:` is relative to the model file) |
+| `pudl model show --discover` | None. Models no longer reference mu plugins |
+| `pudl run --mu-root`, `pudl run set --mu-root`, `--mu-timeout`, `pudl mu ingest-observe --plugin-dir` | None. Bound a command with `populate.timeout` |
 
 ### Retired model fields
 
@@ -72,5 +77,8 @@ field and points here. Remove the field to load the model again.
 | --- | --- |
 | `converge:` (`#PluginPlan`) | Remove it. `desired` still drives drift reports |
 | `sealed_inputs`, `sealed_outputs` | Remove them. Give a populate command its credentials through its own environment or configuration (for example a `gcloud` or `kubectl` profile) |
+| `populate: #PluginObserve` (`plugin`, `input`, `differential`) | `populate: runs: [{argv: [...]}]` running a program that prints the same records as JSON. Differential drift is gone; drift always compares `desired` with the observed records |
+| `populate: #EweTarget` (`eweSource`, `outputs`) | `populate: runs: [{argv: [...]}]` running a program that prints the records |
+| `plugins:` (`#PluginDef`) | Remove it; a `#CommandObserve` run names its program directly in `argv` |
 
 The `secrets: writable_refs` setting in `workspace.cue` is ignored.

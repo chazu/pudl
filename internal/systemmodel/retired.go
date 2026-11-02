@@ -24,6 +24,9 @@ var retiredFields = []retiredField{
 	{"converge", "convergence was removed; PUDL no longer changes infrastructure"},
 	{"populate.sealed_inputs", "sealed values were removed"},
 	{"converge.sealed_outputs", "sealed values were removed"},
+	{"plugins", "mu plugins were removed"},
+	{"populate.plugin", "#PluginObserve was removed; use #CommandObserve runs"},
+	{"populate.eweSource", "#EweTarget was removed; use #CommandObserve runs"},
 }
 
 // rejectRetiredFields fails when the model uses any retired field. It runs

@@ -31,7 +31,7 @@ func TestResolveModelTemplateInRetainsIncompleteBindingModel(t *testing.T) {
 		source: {model: "producer", schema: "resources.#Thing", identity: {name: "one"}}
 		path: "/value"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [{"_schema": "example.consumer", value: inputs.value}]
 }
 `
@@ -92,7 +92,7 @@ func TestResolveModelTemplateInReportsRequestedInvalidTemplate(t *testing.T) {
 		source: {model: "producer", schema: "resources.#Thing", identity: {name: "one"}}
 		path: "value"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }
 `
 	require.NoError(t, os.WriteFile(filepath.Join(modelsDir, "models.cue"), []byte(source), 0o644))

@@ -82,11 +82,11 @@ func TestDetailedRunSetExit(t *testing.T) {
 func TestRunSetDetailedExitThroughRealSets(t *testing.T) {
 	h, _ := setupRunSetFixture(t)
 
-	result, err := executeRunSet(context.Background(), []string{"producer"}, h.opts, h.deps)
+	result, err := executeRunSet(context.Background(), []string{"producer"}, h.opts)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "a populate-only member finds nothing")
 
-	result, err = executeRunSet(context.Background(), []string{"drifter"}, h.opts, h.deps)
+	result, err = executeRunSet(context.Background(), []string{"drifter"}, h.opts)
 	assert.NoError(t, err, "observe-only drift is a result, not an error")
 	assert.True(t, result.findings)
 	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(result, err)))

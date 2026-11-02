@@ -12,12 +12,11 @@ import (
 )
 
 var (
-	ingestObserveComplete  bool
-	ingestObserveScope     string
-	ingestObserveSchemas   []string
-	ingestObservePath      string
-	ingestObserveOrigin    string
-	ingestObservePluginDir string
+	ingestObserveComplete bool
+	ingestObserveScope    string
+	ingestObserveSchemas  []string
+	ingestObservePath     string
+	ingestObserveOrigin   string
 )
 
 var ingestObserveCmd = &cobra.Command{
@@ -68,26 +67,22 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("failed to initialize schema inferrer: %w", err)
 		}
-		mappings, err := loadObservePluginMetadata(ingestObservePluginDir, inferrer.GetInheritanceGraph())
-		if err != nil {
-			return err
-		}
 
 		// Ingest observe results. No model: a standalone ingest is not taken on
 		// behalf of one, and inventing a model here would let a hand-fed snapshot
 		// be picked up as some model's current observation.
 		result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
 			Scope: ingestObserveScope, Complete: ingestObserveComplete, Schemas: ingestObserveSchemas,
-			Reader:         reader,
-			Context:        cmd.Context(),
-			Limits:         observeIngestLimits(),
-			DataDir:        cfg.DataPath,
-			Graph:          inferrer.GetInheritanceGraph(),
-			Inferrer:       inferrer,
-			SchemaMappings: mappings,
-			Origin:         ingestObserveOrigin,
-			Source:         database.SnapshotSourceIngestObserve,
-			Workspace:      effectiveWorkspaceName(),
+			Reader:   reader,
+			Context:  cmd.Context(),
+			Limits:   observeIngestLimits(),
+			DataDir:  cfg.DataPath,
+			Graph:    inferrer.GetInheritanceGraph(),
+			Inferrer: inferrer,
+
+			Origin:    ingestObserveOrigin,
+			Source:    database.SnapshotSourceIngestObserve,
+			Workspace: effectiveWorkspaceName(),
 		})
 		if err != nil {
 			return fmt.Errorf("ingest failed: %w", err)
@@ -110,7 +105,6 @@ func init() {
 	ingestObserveCmd.Flags().StringArrayVar(&ingestObserveSchemas, "coverage-schema", nil, "Schema covered by this population, including when empty (repeatable)")
 	ingestObserveCmd.Flags().StringVar(&ingestObservePath, "path", "", "Read from file instead of stdin")
 	ingestObserveCmd.Flags().StringVar(&ingestObserveOrigin, "origin", "mu-observe", "Override origin")
-	ingestObserveCmd.Flags().StringVar(&ingestObservePluginDir, "plugin-dir", "", "Local mu plugin directory containing mu.cue and optional pudl.cue")
 
 	ingestObserveCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
 }

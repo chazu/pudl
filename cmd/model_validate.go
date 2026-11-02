@@ -67,25 +67,7 @@ func validateModelTemplate(template *systemmodel.ModelTemplate) ([]string, error
 		return validateModel(model), nil
 	}
 
-	summary, err := template.Summary()
-	if err != nil {
-		return nil, err
-	}
 	var problems []string
-	switch summary.PopulateKind {
-	case systemmodel.KindPluginObserve:
-		if summary.PopulatePlugin == "" {
-			problems = append(problems, "populate: observe arm has no concrete plugin name")
-		}
-	case systemmodel.KindEweTarget:
-		populate := template.Value().LookupPath(cue.ParsePath("populate"))
-		if source, _ := populate.LookupPath(cue.ParsePath("eweSource")).String(); source == "" {
-			problems = append(problems, "populate: ewe arm has no eweSource")
-		}
-		if outputs, listErr := populate.LookupPath(cue.ParsePath("outputs")).List(); listErr != nil || !outputs.Next() {
-			problems = append(problems, "populate: ewe arm declares no outputs")
-		}
-	}
 	desired := template.Value().LookupPath(cue.ParsePath("desired"))
 	if list, listErr := desired.List(); listErr == nil {
 		for index := 0; list.Next(); index++ {
@@ -104,19 +86,7 @@ func validateModelTemplate(template *systemmodel.ModelTemplate) ([]string, error
 func validateModel(m *systemmodel.SystemModel) []string {
 	var problems []string
 
-	switch m.Populate.Kind() {
-	case systemmodel.KindPluginObserve:
-		if m.Populate.Plugin == "" {
-			problems = append(problems, "populate: observe arm has no plugin name")
-		}
-	case systemmodel.KindEweTarget:
-		if m.Populate.EweSource == "" {
-			problems = append(problems, "populate: ewe arm has no eweSource")
-		}
-		if len(m.Populate.Outputs) == 0 {
-			problems = append(problems, "populate: ewe arm declares no outputs")
-		}
-	case systemmodel.KindCommand:
+	if m.Populate.Kind() == systemmodel.KindCommand {
 		problems = append(problems, validateCommandRuns(m.Populate)...)
 	}
 

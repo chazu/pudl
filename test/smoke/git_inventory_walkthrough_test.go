@@ -15,7 +15,7 @@ import (
 )
 
 func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
-	root, sandbox, env := exampleWorkspace(t, "git")
+	root, sandbox, env := exampleWorkspace(t, "git", "cat")
 	repo, err := repoRoot()
 	require.NoError(t, err)
 	doc, err := os.ReadFile(filepath.Join(repo, "docs/getting-started.md"))

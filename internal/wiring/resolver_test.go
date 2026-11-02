@@ -39,7 +39,7 @@ consumer: #SystemModel & {
 		}
 		path: "/details/id"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [{"_schema": "example.application", subnet_id: inputs.subnet_id}]
 }`
 	root := ctx.CompileString(source, cue.Filename("consumer.cue"))

@@ -10,7 +10,7 @@ func TestDecodeValuePreservesDesiredFieldNames(t *testing.T) {
 	model, err := loadModel([]byte(`
 inventory: #SystemModel & {
 	name: "git-inventory"
-	populate: {plugin: "git-inventory", differential: false, input: {}}
+	populate: runs: [{argv: ["git-inventory"]}]
 	desired: [{
 		"_schema": "git.repository"
 		name: "local/demo"

@@ -35,6 +35,22 @@ app: #SystemModel & {
 		sealed_inputs: TOKEN: {ref: "env:TOKEN", delivery_mode: "env"}
 	}
 }`},
+		"plugin observe": {field: "populate.plugin", source: `
+app: #SystemModel & {
+	name: "app"
+	populate: #PluginObserve & {plugin: "k8s", input: {namespace: "default"}}
+}`},
+		"ewe target": {field: "populate.eweSource", source: `
+app: #SystemModel & {
+	name: "app"
+	populate: #EweTarget & {eweSource: "p.cue", outputs: ["r.json"]}
+}`},
+		"plugins block": {field: "plugins", source: `
+app: #SystemModel & {
+	name: "app"
+	plugins: [{name: "k8s", script: "./plugin.bb"}]
+	populate: {runs: [{argv: ["true"]}]}
+}`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

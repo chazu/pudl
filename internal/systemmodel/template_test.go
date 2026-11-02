@@ -31,7 +31,7 @@ app: #SystemModel & {
 		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
 		path: "/SubnetId"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [{"_schema": "example.application", name: "api", subnet_id: inputs.subnet_id}]
 }`, slot)
 }
@@ -112,7 +112,7 @@ app: #SystemModel & {
 		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
 		path: "/SubnetId"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }`
 	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
 	require.NoError(t, err)
@@ -129,38 +129,10 @@ app: #SystemModel & {
 		source: {model: "producer", schema: "example.#Thing", identity: {name: "one"}}
 		path: "/name"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }`
 	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
 	require.ErrorContains(t, err, "conflicting")
-}
-
-func TestSystemModelSchemaRejectsPopulateSealedOutputs(t *testing.T) {
-	tests := map[string]string{
-		"plugin observe": `
-app: #SystemModel & {
-	name: "app"
-	populate: #PluginObserve & {
-		plugin: "host"
-		sealed_outputs: TOKEN: {ref: "env:A", store_mode: "create"} @pudl(binding=sealed)
-	}
-}`,
-		"ewe": `
-app: #SystemModel & {
-	name: "app"
-	populate: #EweTarget & {
-		eweSource: "populate.cue"
-		outputs: ["records.json"]
-		sealed_outputs: TOKEN: {ref: "env:A", store_mode: "create"} @pudl(binding=sealed)
-	}
-}`,
-	}
-	for name, source := range tests {
-		t.Run(name, func(t *testing.T) {
-			root := cuecontext.New().CompileString(schemaCUE+"\n"+source, cue.Filename("template.cue"))
-			require.Error(t, root.Err(), "populate sealed outputs must be rejected structurally")
-		})
-	}
 }
 
 func TestModelTemplateCollectsBindingProducers(t *testing.T) {

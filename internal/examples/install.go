@@ -88,7 +88,7 @@ func gitInventoryFiles(root string) (map[string][]byte, error) {
 	}
 	files["schema/models/git_inventory.cue"] = model
 	const populator = "populators/git-inventory/"
-	for _, name := range []string{"observe.py", "baseline.json", "changed.json"} {
+	for _, name := range []string{"baseline.json", "changed.json"} {
 		data, err := gitinventory.Files.ReadFile(name)
 		if err != nil {
 			return nil, err

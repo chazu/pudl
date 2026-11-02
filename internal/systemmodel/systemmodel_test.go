@@ -34,14 +34,13 @@ func loadModel(src []byte, name string) (*SystemModel, error) {
 	return m, nil
 }
 
-// observe-only k8s model — the V1 demo-path populate case.
-const k8sObserveModel = `
-k8sPolicy: #SystemModel & {
-	name: "k8s-policy"
-	plugins: [{name: "k8s", script: "./plugins/k8s/plugin.bb"}]
-	populate: #PluginObserve & {
-		plugin: "k8s"
-		input: {namespace: "default", context: "prod"}
+// observe-only command model with a check.
+const commandObserveModel = `
+pods: #SystemModel & {
+	name: "pods"
+	populate: {
+		timeout: "2m"
+		runs: [{argv: ["kubectl", "get", "pods", "-o", "json"], set: cluster: "prod"}]
 	}
 	checks: [{
 		name:     "pdb_present"
@@ -54,24 +53,15 @@ k8sPolicy: #SystemModel & {
 `
 
 func TestLoadModel_ObserveOnly(t *testing.T) {
-	m, err := loadModel([]byte(k8sObserveModel), "k8sPolicy")
+	m, err := loadModel([]byte(commandObserveModel), "pods")
 	require.NoError(t, err)
 
-	assert.Equal(t, "k8s-policy", m.Name)
+	assert.Equal(t, "pods", m.Name)
+	assert.Equal(t, KindCommand, m.Populate.Kind())
+	assert.Equal(t, "2m", m.Populate.Timeout)
+	require.Len(t, m.Populate.Runs, 1)
+	assert.Equal(t, "prod", m.Populate.Runs[0].Set["cluster"])
 
-	// plugins: block decodes; the arm's plugin resolves to a declared source.
-	require.Len(t, m.Plugins, 1)
-	def, ok := m.PluginByName("k8s")
-	require.True(t, ok)
-	assert.Equal(t, "./plugins/k8s/plugin.bb", def.Script)
-
-	// populate dispatches to the observe arm.
-	assert.Equal(t, KindPluginObserve, m.Populate.Kind())
-	assert.Equal(t, "k8s", m.Populate.Plugin)
-	assert.Equal(t, "default", m.Populate.Input["namespace"])
-	assert.Equal(t, "prod", m.Populate.Input["context"])
-
-	// one check, decoded.
 	require.Len(t, m.Checks, 1)
 	assert.Equal(t, "pdb_present", m.Checks[0].Name)
 	assert.Equal(t, "missing_pdb", m.Checks[0].Query)
@@ -80,7 +70,7 @@ func TestLoadModel_ObserveOnly(t *testing.T) {
 }
 
 func TestLoadModel_MissingInstance(t *testing.T) {
-	_, err := loadModel([]byte(k8sObserveModel), "nope")
+	_, err := loadModel([]byte(commandObserveModel), "nope")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }

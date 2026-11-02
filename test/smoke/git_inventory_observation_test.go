@@ -13,7 +13,7 @@ import (
 )
 
 func TestSmoke_GitInventoryObservation(t *testing.T) {
-	root, sandbox, env := exampleWorkspace(t, "git", "mu", "python3")
+	root, sandbox, env := exampleWorkspace(t, "git", "cat")
 	cli := func(args ...string) []byte {
 		t.Helper()
 		command := exec.Command(pudlBin, args...)
@@ -31,7 +31,7 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(root, ".pudl/populators/git-inventory/current.json"), data, 0o644))
 		}
-		saved = append(saved, cli("run", "git-inventory", "--mu-root", ".pudl/data/mu", "--json"))
+		saved = append(saved, cli("run", "git-inventory", "--json"))
 	}
 	var reports []walkthroughReport
 	for index, stage := range []string{"baseline", "changed", "repeat"} {

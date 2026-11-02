@@ -23,16 +23,10 @@ func renderRunPlan(m *systemmodel.SystemModel) string {
 	return b.String()
 }
 
-// populateRef returns a short identifier for the populate arm (plugin name or
-// ewe source).
+// populateRef returns a short description of the populate arm.
 func populateRef(p systemmodel.Populate) string {
-	switch p.Kind() {
-	case systemmodel.KindEweTarget:
-		return p.EweSource
-	case systemmodel.KindCommand:
-		return fmt.Sprintf("%d runs", len(p.Runs))
-	case systemmodel.KindNone:
+	if p.Kind() == systemmodel.KindNone {
 		return "checks-only"
 	}
-	return p.Plugin
+	return fmt.Sprintf("%d runs", len(p.Runs))
 }

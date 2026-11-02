@@ -131,7 +131,7 @@ func Init(opts InitOptions) error {
 		fmt.Fprintf(opts.output(), "  schema/        (project-specific CUE schemas)\n")
 		fmt.Fprintf(opts.output(), "  schema/models/ (registered #SystemModel definitions)\n")
 		fmt.Fprintf(opts.output(), "  definitions/   (desired state definitions)\n")
-		fmt.Fprintf(opts.output(), "  populators/    (#EweTarget programs and local model plugins)\n")
+		fmt.Fprintf(opts.output(), "  populators/    (local observation fixtures and helper programs)\n")
 		fmt.Fprintf(opts.output(), "  data/          (repo-local raw data, metadata, and catalog)\n")
 	}
 

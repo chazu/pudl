@@ -72,14 +72,6 @@ func TestPolicy_LocalWorkspaceExcludesGlobal(t *testing.T) {
 	assert.Equal(t, []string{
 		filepath.Join(pudlDir, "schema"),
 	}, policy.ModelSearchPaths)
-	// Populators are owner-relative, not repo-then-global: a model registered
-	// globally must not pick up a repo's populator of the same name.
-	assert.Equal(t, []string{
-		filepath.Join(pudlDir, "populators"),
-		pudlDir,
-		"/models",
-	}, policy.PopulatorPathsFor(pudlDir, "/models"))
-	assert.Empty(t, policy.PopulatorPathsFor("", ""))
 
 	// Rules run the other way round: the loader walks its arguments in reverse
 	// and keeps the first name it sees, so *later* wins. Repo still shadows

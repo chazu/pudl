@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -25,27 +24,18 @@ type runOptions struct {
 
 	// model is the registered model to run; empty for an ad-hoc --populate run.
 	model         string
-	muRoot        string
 	populateSpec  string
-	populateInput []string
 	checkUpstream bool
 
 	maxObservationAge    time.Duration
 	maxObservationAgeSet bool
 }
 
-// runDeps are the collaborators a run reaches outside its own options: the mu
-// subprocess seam, and the run-set coordinator when the run is a set member.
+// runDeps are the collaborators a run reaches outside its own options: the
+// run-set coordinator when the run is a set member.
 type runDeps struct {
-	mu muRunner
 	// set is nil for a standalone run.
 	set *runSetExecutionContext
-}
-
-// defaultRunDeps is the production wiring: the real mu binary bound to the
-// invocation's context (and to --mu-timeout, when set), no run set.
-func defaultRunDeps(ctx context.Context, muTimeout time.Duration) runDeps {
-	return runDeps{mu: newExecMu(ctx, muTimeout)}
 }
 
 // runOptionsFromFlags reads `pudl run`'s flags once. Changed() is consulted
@@ -56,9 +46,7 @@ func runOptionsFromFlags(cmd *cobra.Command, args []string) runOptions {
 			fromCatalog:  runFromCatalog,
 			catalogScope: runCatalogScope,
 		},
-		muRoot:               runMuRoot,
 		populateSpec:         runPopulateSpec,
-		populateInput:        runPopulateInput,
 		checkUpstream:        runCheckUpstream,
 		maxObservationAge:    runMaxObservationAge,
 		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
@@ -70,11 +58,10 @@ func runOptionsFromFlags(cmd *cobra.Command, args []string) runOptions {
 }
 
 // memberRunOptions is the observe-only run a run-set member performs: the
-// set's mu root and observation-age policy.
+// set's observation-age policy.
 func memberRunOptions(model string, set runSetOptions) runOptions {
 	return runOptions{
 		model:                model,
-		muRoot:               set.muRoot,
 		maxObservationAge:    set.maxObservationAge,
 		maxObservationAgeSet: set.maxObservationAgeSet,
 	}

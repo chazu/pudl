@@ -9,27 +9,16 @@ import (
 // TemplateSummary is concrete discovery metadata that remains inspectable even
 // while desired/config fields depend on unresolved plain inputs.
 type TemplateSummary struct {
-	PopulateKind   PopulateKind
-	PopulatePlugin string
-	DesiredCount   int
-	CheckCount     int
-	PluginNames    []string
+	PopulateKind PopulateKind
+	DesiredCount int
+	CheckCount   int
 }
 
 func (t *ModelTemplate) Summary() (TemplateSummary, error) {
 	var summary TemplateSummary
-	populate := t.value.LookupPath(cue.ParsePath("populate"))
-	if !populate.Exists() {
+	summary.PopulateKind = KindCommand
+	if !t.value.LookupPath(cue.ParsePath("populate")).Exists() {
 		summary.PopulateKind = KindNone
-	} else if ewe := populate.LookupPath(cue.ParsePath("eweSource")); ewe.Exists() {
-		summary.PopulateKind = KindEweTarget
-	} else if runs := populate.LookupPath(cue.ParsePath("runs")); runs.Exists() {
-		summary.PopulateKind = KindCommand
-	} else {
-		summary.PopulateKind = KindPluginObserve
-		if plugin := populate.LookupPath(cue.ParsePath("plugin")); plugin.Exists() {
-			summary.PopulatePlugin, _ = plugin.String()
-		}
 	}
 	var err error
 	if summary.DesiredCount, err = listLength(t.value, "desired"); err != nil {
@@ -37,19 +26,6 @@ func (t *ModelTemplate) Summary() (TemplateSummary, error) {
 	}
 	if summary.CheckCount, err = listLength(t.value, "checks"); err != nil {
 		return summary, err
-	}
-	plugins := t.value.LookupPath(cue.ParsePath("plugins"))
-	if plugins.Exists() {
-		iter, iterErr := plugins.List()
-		if iterErr != nil {
-			return summary, fmt.Errorf("template %q plugins: %w", t.Name, iterErr)
-		}
-		for iter.Next() {
-			name, nameErr := iter.Value().LookupPath(cue.ParsePath("name")).String()
-			if nameErr == nil {
-				summary.PluginNames = append(summary.PluginNames, name)
-			}
-		}
 	}
 	return summary, nil
 }
