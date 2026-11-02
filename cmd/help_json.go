@@ -8,6 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/chazu/pudl/internal/cliadvanced"
 )
 
 type commandHelpJSON struct {
@@ -15,6 +17,7 @@ type commandHelpJSON struct {
 	Short       string            `json:"short,omitempty"`
 	Long        string            `json:"long,omitempty"`
 	Args        string            `json:"args,omitempty"`
+	Advanced    bool              `json:"advanced,omitempty"`
 	Flags       []flagHelpJSON    `json:"flags,omitempty"`
 	Subcommands []commandHelpJSON `json:"subcommands,omitempty"`
 }
@@ -29,7 +32,7 @@ type flagHelpJSON struct {
 }
 
 func commandTreeJSON(cmd *cobra.Command) commandHelpJSON {
-	out := commandHelpJSON{Use: cmd.Use, Short: cmd.Short, Long: strings.TrimSpace(cmd.Long)}
+	out := commandHelpJSON{Use: cmd.Use, Short: cmd.Short, Long: strings.TrimSpace(cmd.Long), Advanced: cliadvanced.Is(cmd)}
 	if cmd.Args != nil {
 		out.Args = "custom"
 	}
@@ -61,7 +64,8 @@ func commandTreeJSON(cmd *cobra.Command) commandHelpJSON {
 	children := cmd.Commands()
 	sort.Slice(children, func(i, j int) bool { return children[i].Name() < children[j].Name() })
 	for _, child := range children {
-		if child.Hidden || child.Name() == "help" {
+		// Advanced commands are hidden from --help but stay in the tree, flagged.
+		if (child.Hidden && !cliadvanced.Is(child)) || child.Name() == "help" {
 			continue
 		}
 		out.Subcommands = append(out.Subcommands, commandTreeJSON(child))

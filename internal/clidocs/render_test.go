@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/cmd"
+	"github.com/chazu/pudl/internal/cliadvanced"
 )
 
 func testTree() *cobra.Command {
@@ -67,6 +68,29 @@ func TestRenderSectionsFlagsAndNotes(t *testing.T) {
 
 	// Cells escape pipes everywhere and angle brackets only outside code spans.
 	require.Contains(t, doc, "wait for `pudl run resume <id>` \\| then &lt;go&gt;")
+}
+
+func TestRenderDocumentsAdvancedCommandsSeparately(t *testing.T) {
+	root := testTree()
+	run, _, err := root.Find([]string{"run"})
+	require.NoError(t, err)
+	purge := &cobra.Command{Use: "purge <id>", Short: "Purge a run", RunE: noop}
+	cliadvanced.Mark(purge)
+	run.AddCommand(purge)
+
+	out, err := Render(root, fstest.MapFS{"run_purge.md": {Data: []byte("Purge semantics.")}})
+	require.NoError(t, err)
+	doc := string(out)
+
+	advanced := strings.Index(doc, "## Advanced commands\n")
+	require.Positive(t, advanced)
+	index := doc[strings.Index(doc, "## Commands\n"):strings.Index(doc, "## pudl run\n")]
+	require.NotContains(t, index, "pudl run purge", "advanced commands stay out of the everyday index")
+	require.Contains(t, doc[:advanced], "Advanced subcommands:\n\n- [pudl run purge](#pudl-run-purge) — Purge a run")
+	require.Contains(t, doc[advanced:], "## pudl run purge\n")
+	require.Contains(t, doc[advanced:], "Purge semantics.")
+	// Unmarked hidden commands are still omitted.
+	require.NotContains(t, doc, "pudl internal")
 }
 
 func TestRenderRejectsStaleNotes(t *testing.T) {

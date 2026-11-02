@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/cliadvanced"
 )
 
 // jsonContractExempt lists runnable commands the JSON output contract test
@@ -144,7 +146,7 @@ func TestJSONOutputContractClassifiesEveryCommand(t *testing.T) {
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		for _, sub := range c.Commands() {
-			if sub.Hidden || sub.Name() == "help" {
+			if (sub.Hidden && !cliadvanced.Is(sub)) || sub.Name() == "help" {
 				continue
 			}
 			path := sub.CommandPath()
