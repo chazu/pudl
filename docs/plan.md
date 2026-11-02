@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Front-door documentation rewritten (2026-11-02)
+
+The README, getting-started, concepts, workspace, vision and docs index now
+describe pudl as a tool that discovers, catalogs and governs infrastructure and
+never changes it. The README has an offline five-minute tour on the GCP pack
+fixtures. The tutorial adds a second part on policies, checks, owners and
+waivers, and keeps the Git inventory walkthrough the smoke test runs.
+`FEATURES.md` is folded into the README, and `docs/collections.md` into
+concepts. The docs index separates current docs from internals and history.
+See the [delivery log](../implog/2026_11_02_front_door_docs.md).
+
 ### Go 1.26.10 for GO-2026-6809 (2026-11-02)
 
 Raised the Go toolchain pins from 1.26.9 to 1.26.10 for a `crypto/x509`
@@ -240,7 +251,7 @@ root commands and 59 leaf paths. Current guidance is updated; older memory-relat
 entries below are historical records rather than supported features.
 
 See [implementation log](../implog/2026_09_30_agent_memory_removal.md) and
-[retirement guidance](../README.md#agent-memory-removal).
+[retirement guidance](retired-commands.md#agent-memory-application).
 
 ### Overlapping CLI commands consolidated (2026-09-30)
 
