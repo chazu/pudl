@@ -1,0 +1,30 @@
+[
+ {
+  "Path": "/",
+  "InstanceProfileName": "app-ec2-role",
+  "InstanceProfileId": "AIPAEXAMPLEPROFILE0001",
+  "Arn": "arn:aws:iam::123456789012:instance-profile/app-ec2-role",
+  "CreateDate": "2025-11-02T08:55:00+00:00",
+  "Roles": [
+   {
+    "Path": "/",
+    "RoleName": "app-ec2-role",
+    "RoleId": "AROAEXAMPLEROLE000001",
+    "Arn": "arn:aws:iam::123456789012:role/app-ec2-role",
+    "CreateDate": "2025-11-02T08:55:00+00:00",
+    "AssumeRolePolicyDocument": {
+     "Version": "2012-10-17",
+     "Statement": [
+      {
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       },
+       "Action": "sts:AssumeRole"
+      }
+     ]
+    }
+   }
+  ]
+ }
+]

@@ -129,11 +129,13 @@ const TYPES: RelationshipTypeInfo[] = [
   // security
   T('protected_by', 'security', 'SG', 'Security group is associated. Association is not a connection.'),
   T('allows_ingress_from', 'security', 'allows from', 'A rule permits ingress from this source. Permission is not observed traffic.'),
+  T('allows_egress_to', 'security', 'allows to', 'A rule permits egress to this destination. Permission is not observed traffic.'),
   T('applies_to', 'security', 'applies to', 'Firewall rule targets this resource (by tag or service account).'),
   T('encrypted_by', 'security', 'encrypted by', 'Data at rest is encrypted with this key.'),
   T('exposed_to', 'security', 'exposed to', 'Configured to accept connections from this external range.'),
   // iam
-  T('has_instance_profile', 'iam', 'instance role', 'Instance profile names this role.'),
+  T('has_instance_profile', 'iam', 'instance profile', 'Instance runs with this instance profile (and the role it carries). Effective permission not evaluated.'),
+  T('profile_role', 'iam', 'profile role', 'Instance profile carries this role; instances launched with it can use the role.'),
   T('runs_as', 'iam', 'runs as', 'Workload identity is this service account.'),
   T('has_policy', 'iam', 'policy', 'Policy is attached. Effective permission not evaluated.'),
   T('grants_on', 'iam', 'grants on', 'Policy statement names this resource. Conditions, boundaries and SCPs not evaluated.'),

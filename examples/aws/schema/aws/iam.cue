@@ -73,3 +73,24 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 	MaxSessionDuration?: int
 	...
 }
+
+// `aws iam list-instance-profiles`: what EC2 instances launch with. Each
+// profile carries (at most) one role; an instance names the profile, not the
+// role, so the graph goes instance -> profile -> role. Identity is the ARN.
+#IAMInstanceProfile: {
+	_pudl: {
+		schema_type:   "base"
+		resource_type: "aws.iam.instance_profile"
+		identity_fields: ["Arn"]
+		review: status: "draft"
+		owner: _#AWSOwner
+		graph: {name: "InstanceProfileName", account: "AccountId"}
+		facts: aws_instance_profile_role: args: role_arn: "Roles[*].Arn"
+	}
+	AccountId:           string
+	InstanceProfileName: string
+	InstanceProfileId:   string
+	Arn:                 =~":instance-profile/"
+	Roles: [...{Arn: string, RoleName?: string, ...}]
+	...
+}

@@ -125,3 +125,43 @@ aws_graph_role_trust_condition: {
 	head: {rel: "graph_edge_property", args: {type: "trust_allows_assume", source: "$P", target: "$R", key: "conditional", value: "yes"}}
 	body: [{rel: "aws_role_trust", args: {resource_id: "$R", effect: "Allow", principal: "$P", conditional: true}}]
 }
+
+// ---- Instance profiles ----
+// An instance names its instance profile; the profile carries a role.
+
+aws_graph_instance_profile: {
+	head: {rel: "graph_edge", args: {type: "has_instance_profile", source: "$R", target: "$P", basis: "observed"}}
+	body: [{rel: "aws_instance", args: {resource_id: "$R", instance_profile: "$P"}}]
+}
+
+aws_graph_profile_role: {
+	head: {rel: "graph_edge", args: {type: "profile_role", source: "$R", target: "$A", basis: "observed"}}
+	body: [{rel: "aws_instance_profile_role", args: {resource_id: "$R", role_arn: "$A"}}]
+}
+
+// ---- Security groups: egress rules ----
+
+aws_graph_sg_egress_group: {
+	head: {rel: "graph_edge", args: {type: "allows_egress_to", source: "$R", target: "$G", basis: "observed"}}
+	body: [{rel: "aws_sg_egress_group", args: {resource_id: "$R", group_id: "$G"}}]
+}
+
+aws_graph_sg_egress_cidr: {
+	head: {rel: "graph_edge", args: {type: "allows_egress_to", source: "$R", target: "$C", basis: "observed"}}
+	body: [{rel: "aws_sg_egress_cidr", args: {resource_id: "$R", cidr: "$C"}}]
+}
+
+aws_graph_sg_egress_cidr6: {
+	head: {rel: "graph_edge", args: {type: "allows_egress_to", source: "$R", target: "$C", basis: "observed"}}
+	body: [{rel: "aws_sg_egress_cidr6", args: {resource_id: "$R", cidr: "$C"}}]
+}
+
+aws_graph_sg_egress_cidr_protocol: {
+	head: {rel: "graph_edge_property", args: {type: "allows_egress_to", source: "$R", target: "$C", key: "protocol", value: "$P"}}
+	body: [{rel: "aws_sg_egress_cidr", args: {resource_id: "$R", cidr: "$C", protocol: "$P"}}]
+}
+
+aws_graph_sg_egress_cidr_port: {
+	head: {rel: "graph_edge_property", args: {type: "allows_egress_to", source: "$R", target: "$C", key: "port", value: "$F"}}
+	body: [{rel: "aws_sg_egress_cidr", args: {resource_id: "$R", cidr: "$C", from_port: "$F"}}]
+}

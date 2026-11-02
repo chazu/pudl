@@ -2,7 +2,9 @@
 // record of the type is labelled in the resource graph (name, account,
 // region, zone) and which values other records use to refer to it (refs).
 //
-// Each value is a field path, or {path, trim_prefix?, last_segment?}:
+// Each value is a field path, or {path, trim_prefix?, last_segment?, prepend?}
+// (prepend is added after trimming, e.g. "serviceAccount:" to match how IAM
+// bindings name a service account):
 //
 //	graph: {
 //		name:    "name"
@@ -29,6 +31,7 @@ type Value struct {
 	Path        fieldpath.Path
 	TrimPrefix  string
 	LastSegment bool
+	Prepend     string
 }
 
 // Spec is a decoded `_pudl.graph` block. Absent fields are nil.
@@ -54,6 +57,7 @@ type rawValue struct {
 	Path        string `json:"path"`
 	TrimPrefix  string `json:"trim_prefix"`
 	LastSegment bool   `json:"last_segment"`
+	Prepend     string `json:"prepend"`
 }
 
 // Parse decodes a `_pudl.graph` block strictly: unknown keys, wildcards and
@@ -94,7 +98,7 @@ func parseValue(raw json.RawMessage) (Value, error) {
 	if err := json.Unmarshal(raw, &s); err == nil {
 		rv.Path = s
 	} else if err := decodeStrict(raw, &rv); err != nil {
-		return Value{}, fmt.Errorf("want a field path or {path, trim_prefix?, last_segment?}: %w", err)
+		return Value{}, fmt.Errorf("want a field path or {path, trim_prefix?, last_segment?, prepend?}: %w", err)
 	}
 	if rv.Path == "" {
 		return Value{}, fmt.Errorf("path is required")
@@ -106,7 +110,7 @@ func parseValue(raw json.RawMessage) (Value, error) {
 	if p.HasWildcard() {
 		return Value{}, fmt.Errorf("path %q: wildcards are not allowed", rv.Path)
 	}
-	return Value{Path: p, TrimPrefix: rv.TrimPrefix, LastSegment: rv.LastSegment}, nil
+	return Value{Path: p, TrimPrefix: rv.TrimPrefix, LastSegment: rv.LastSegment, Prepend: rv.Prepend}, nil
 }
 
 func decodeStrict(raw json.RawMessage, v any) error {
@@ -129,7 +133,10 @@ func (v Value) Eval(record any) (string, bool) {
 	if v.LastSegment {
 		s = s[strings.LastIndex(s, "/")+1:]
 	}
-	return s, s != ""
+	if s == "" {
+		return "", false
+	}
+	return v.Prepend + s, true
 }
 
 // Eval reads an optional value; a nil spec yields nothing.

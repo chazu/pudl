@@ -218,7 +218,9 @@ graph: {
 
 `pudl graph export` reads this block to label each resource and resolve
 relationships to it. Every key is optional. A value is a field path, or
-`{path, trim_prefix?, last_segment?}`. Wildcards are not allowed.
+`{path, trim_prefix?, last_segment?, prepend?}` (`prepend` adds text after
+trimming, e.g. `serviceAccount:` to match how IAM bindings name a service
+account). Wildcards are not allowed.
 
 | Key | Meaning |
 | --- | --- |

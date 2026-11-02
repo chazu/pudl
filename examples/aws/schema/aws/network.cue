@@ -106,6 +106,19 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 				each: "IpPermissions[*]"
 				args: {protocol: "IpProtocol", from_port: "FromPort", to_port: "ToPort", cidr: "Ipv6Ranges[*].CidrIpv6"}
 			}
+			// Egress rules, the same way.
+			aws_sg_egress_group: {
+				each: "IpPermissionsEgress[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", group_id: "UserIdGroupPairs[*].GroupId"}
+			}
+			aws_sg_egress_cidr: {
+				each: "IpPermissionsEgress[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", cidr: "IpRanges[*].CidrIp"}
+			}
+			aws_sg_egress_cidr6: {
+				each: "IpPermissionsEgress[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", cidr: "Ipv6Ranges[*].CidrIpv6"}
+			}
 		}
 	}
 	AccountId:         string

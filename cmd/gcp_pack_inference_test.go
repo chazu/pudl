@@ -19,7 +19,8 @@ var gcpPackSchemas = map[string]string{
 	"run-services": "gcp.#RunService", "dns-zones": "gcp.#DNSManagedZone",
 	"pubsub-topics": "gcp.#PubSubTopic", "pubsub-subscriptions": "gcp.#PubSubSubscription",
 	"kms-keyrings": "gcp.#KMSKeyRing", "kms-keys": "gcp.#KMSKey",
-	"instances": "gcp.#ComputeInstance",
+	"instances": "gcp.#ComputeInstance", "service-accounts": "gcp.#ServiceAccount",
+	"iam-policies": "gcp.#ProjectIAMPolicy",
 }
 
 // TestGCPPackFixturesInferTheirType imports each fixture without --schema.

@@ -73,6 +73,7 @@ passing.
 | `aws-s3-buckets` | `s3api list-buckets`, then per bucket `get-public-access-block`, `get-bucket-encryption`, `get-bucket-versioning` | `aws.#S3Bucket` | `Name` | `s3:ListAllMyBuckets`, `s3:GetBucketPublicAccessBlock`, `s3:GetEncryptionConfiguration`, `s3:GetBucketVersioning` |
 | `aws-iam-users` | `iam list-users`, then per user `get-user`, `get-login-profile`, `list-mfa-devices` | `aws.#IAMUser` | `User.Arn` | `iam:ListUsers`, `iam:GetUser`, `iam:GetLoginProfile`, `iam:ListMFADevices` |
 | `aws-iam-roles` | `iam list-roles` | `aws.#IAMRole` | `Arn` | `iam:ListRoles` |
+| `aws-iam-instance-profiles` | `iam list-instance-profiles` | `aws.#IAMInstanceProfile` | `Arn` | `iam:ListInstanceProfiles` |
 
 Every live collector also calls `sts:GetCallerIdentity`, and regional ones
 `ec2:DescribeRegions`. The AWS managed `SecurityAudit` (or `ReadOnlyAccess`)
