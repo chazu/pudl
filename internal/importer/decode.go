@@ -36,6 +36,21 @@ func DecodeFile(path, format string) (interface{}, int, error) {
 	return decodeDocument(file, format)
 }
 
+// DecodeStoredFile decodes a stored catalog payload with the decoder its import
+// used, so YAML, CSV and NDJSON entries yield their parsed records rather than
+// raw text. Entries stored compressed by older imports are decompressed first.
+func DecodeStoredFile(storedPath, format string) (interface{}, error) {
+	plainPath, err := DecompressFile(storedPath)
+	if err != nil {
+		return nil, err
+	}
+	if plainPath != storedPath {
+		defer os.Remove(plainPath)
+	}
+	data, _, err := DecodeFile(plainPath, format)
+	return data, err
+}
+
 // decodeDocument parses r according to format. It returns the parsed value and
 // the number of records it holds:
 //

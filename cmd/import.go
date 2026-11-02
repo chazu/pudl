@@ -69,7 +69,8 @@ Schema Assignment:
   schema cache for future imports. Raw JSON without the envelope shape
   is imported untouched.
 - Multiple schemas per item: items can satisfy more than one schema
-  (declared, inferred, unresolved) — see 'pudl reclassify --help'.
+  (declared, inferred, unresolved) — 'pudl doctor' reports unresolved references
+  that the schema-refs repair can upgrade.
 
 Compressed Input:
 - .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;

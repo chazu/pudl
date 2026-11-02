@@ -7,6 +7,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/fieldpath"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/lister"
 )
 
@@ -25,7 +26,7 @@ func showEntryField(entry *lister.ListEntry, path string) error {
 	if info.Size() > 64<<20 {
 		return fmt.Errorf("payload exceeds 64 MiB inspection budget")
 	}
-	data, err := loadReinferData(entry.StoredPath, entry.Format)
+	data, err := importer.DecodeStoredFile(entry.StoredPath, entry.Format)
 	if err != nil {
 		return err
 	}

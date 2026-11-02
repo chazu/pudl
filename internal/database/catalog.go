@@ -676,47 +676,51 @@ func (c *CatalogDB) DeleteEntry(id string) error {
 	return err
 }
 
-// MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
-// Returns the number of entries updated.
-func (c *CatalogDB) MigrateSchemaNames() (int, error) {
-	// Get all entries with their current schema names
+// SchemaNameChange is one catalog entry whose schema name is not canonical.
+type SchemaNameChange struct {
+	ID   string
+	From string
+	To   string
+}
+
+// PendingSchemaNameMigrations lists, without writing, the entries whose schema
+// names schemaname.Normalize would change.
+func (c *CatalogDB) PendingSchemaNameMigrations() ([]SchemaNameChange, error) {
 	rows, err := c.db.Query("SELECT id, schema FROM catalog_entries")
 	if err != nil {
-		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
 	}
 	defer rows.Close()
 
-	// Collect entries that need updating
-	type update struct {
-		id        string
-		newSchema string
-	}
-	var updates []update
-
+	var updates []SchemaNameChange
 	for rows.Next() {
 		var id, schema string
 		if err := rows.Scan(&id, &schema); err != nil {
-			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan row", err)
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan row", err)
 		}
-
-		normalized := schemaname.Normalize(schema)
-		if normalized != schema {
-			updates = append(updates, update{id: id, newSchema: normalized})
+		if normalized := schemaname.Normalize(schema); normalized != schema {
+			updates = append(updates, SchemaNameChange{ID: id, From: schema, To: normalized})
 		}
 	}
-
 	if err := rows.Err(); err != nil {
-		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating rows", err)
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating rows", err)
 	}
+	return updates, nil
+}
 
-	// Update entries that need normalization
+// MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
+// Returns the entries updated.
+func (c *CatalogDB) MigrateSchemaNames() ([]SchemaNameChange, error) {
+	updates, err := c.PendingSchemaNameMigrations()
+	if err != nil {
+		return nil, err
+	}
 	for _, u := range updates {
 		_, err := c.db.Exec("UPDATE catalog_entries SET schema = ?, updated_at = ? WHERE id = ?",
-			u.newSchema, time.Now(), u.id)
+			u.To, time.Now(), u.ID)
 		if err != nil {
-			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update entry schema", err)
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update entry schema", err)
 		}
 	}
-
-	return len(updates), nil
+	return updates, nil
 }

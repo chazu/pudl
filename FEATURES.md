@@ -23,7 +23,7 @@ Designations:
 - Streaming parser with backpressure and memory monitoring
 - Collection support: NDJSON files are split into individual items, with normalized many-to-many collection memberships
 - Envelope JSON: typed `{schema, definitions?, data}` imports preserve schema refs and optionally cache inline CUE definitions
-- Reclassification of items with unresolved schema refs (`pudl reclassify`)
+- Reclassification of items with unresolved schema refs (`pudl doctor --fix --only schema-refs`)
 
 See [collections.md](docs/collections.md), [concepts.md](docs/concepts.md)
 
@@ -38,7 +38,7 @@ See [collections.md](docs/collections.md), [concepts.md](docs/concepts.md)
 - Pluggable type patterns for AWS, Kubernetes, GitLab (23+ patterns with confidence scoring)
 - Schema CRUD: `list`, `show`, `add`, `edit`
 - Version control: `status`, `commit`, `log`
-- Bulk operations: `reinfer`, `migrate`
+- Bulk repairs through `pudl doctor --fix`: inference drift, schema-name normalization, identity
 - `_pudl` metadata block in CUE schemas for identity fields, tracked fields, resource type
 
 See [schema-authoring.md](docs/schema-authoring.md), [inference-algorithm.md](docs/inference-algorithm.md)
@@ -133,7 +133,7 @@ See [datalog.md](docs/datalog.md)
 
 ## Developer & Agent Tools — CORE
 
-- `pudl doctor` — workspace health checks (directory structure, database integrity, schema repo, git)
+- `pudl doctor` — workspace health checks (directory structure, database integrity, schema repo, git); `--fix` applies catalog repairs
 - `pudl prime` — output structured prompt teaching agents how to use pudl
 - `pudl repo init` installs Claude skill files into `.pudl/`
 - `pudl version` — version info

@@ -284,7 +284,7 @@ After import, data can be:
 - **Reconciled** by `pudl run <model>`: a `#SystemModel` declares desired and observed
   state, `pudl run` computes drift as one phase (and converges with `--converge`, with
   mu executing the actions); inspect status via `pudl status`
-- **Re-classified** when schemas change via `pudl schema reinfer`
+- **Re-classified** when schemas change via the `pudl doctor --fix` inference repair
 
 ## Technology Stack
 
