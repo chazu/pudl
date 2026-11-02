@@ -19,6 +19,19 @@ five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
 (`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see
 `implog/2026_11_02_policy_engine_pack_fixes.md`.
 
+### Check and report orchestration moved out of `cmd/` (2026-11-01)
+
+`cmd/` now parses flags, renders and maps exit codes (`pudl-4fx.4`). Check
+execution lives in `internal/operation` (`Check` over an injected `Workspace`
+and `Output`), the recorded report and its reading and rendering in
+`internal/checkreport`, inventory drift and snapshot comparison in
+`internal/inventory`, `#CommandObserve` execution in `internal/populate`, the
+`model_depends_on` graph in `internal/modeldeps`, doctor's catalog checks in
+`internal/doctor` and the repair pass in `internal/repair`. Their tests run
+without the CLI. No behavior change: help, `--json` output and the golden
+files are unchanged. `cmd/` production code went from 13,026 to 9,732 lines.
+See the [delivery log](../implog/2026_11_01_orchestration_out_of_cmd.md).
+
 ### `pudl check MODEL...`: one command and one report (2026-11-01)
 
 `pudl check MODEL...` replaces `pudl run` and `pudl run set` (`pudl-4fx.1`).
@@ -659,8 +672,8 @@ Beads work:
 
 - `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5` (done).
 - `pudl-4fx`: simplify the everyday command surface (`pudl check` — done in
-  `pudl-4fx.1`; `doctor --fix`, demoting fact-store writes, moving
-  orchestration out of `cmd/`).
+  `pudl-4fx.1`; `doctor --fix`, demoting fact-store writes; moving
+  orchestration out of `cmd/` — done in `pudl-4fx.4`).
 - `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
   multi-project fan-out, waivers, finding changes over time, ownership,
   relationship rules).
@@ -746,6 +759,10 @@ Beads work:
   moves. Doctor's scan and the `inference` repair both read it through
   `importer.ExplicitAssignment`. See
   `implog/2026_11_02_doctor_fix_keeps_explicit_schema.md`.
+- `pudl-qhx` (done): a checks-only model's catalog instance is recorded
+  without `populate`, so it satisfies `#SystemModel` and `pudl doctor` stays
+  ok. Doctor validates instances older versions stored with `populate: {}`
+  without that key. See `implog/2026_11_02_checks_only_instance_populate.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
@@ -1176,13 +1193,20 @@ under the hood.
 | `database` | `internal/database/` | SQLite catalog CRUD and queries |
 | `validator` | `internal/validator/` | CUE validation |
 | `policy` | `internal/policy/` | Compliance policy loading and per-resource evaluation |
-| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema and model loading |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema, model loading and resolution by name, ad-hoc `--populate` models |
 | `mubridge` | `internal/mubridge/` | Typed envelope, manifest, and observe-snapshot ingestion |
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |
 | `datalog` | `internal/datalog/` | Rule loading, SQL compilation, SCC-based evaluation |
 | `acute` | `internal/acute/` | Run plans, reports, drift comparison and findings |
+| `operation` | `internal/operation/` | `pudl check` execution: model resolution, ordering, populate and ingest, inventory drift, checks, verdicts, one check report |
+| `checkreport` | `internal/checkreport/` | A check's recorded report: model reports, summaries, rendering, reading stored reports back |
+| `inventory` | `internal/inventory/` | Inventory drift against a snapshot, snapshot comparison, identity policy |
+| `populate` | `internal/populate/` | `#CommandObserve` execution: run commands, spool and decode their JSON records |
+| `modeldeps` | `internal/modeldeps/` | `model_depends_on` graph: declared edges, reconcile, upstream-freshness advisory |
+| `checks` | `internal/checks/` | Model check evaluation over the catalog or selected evidence |
+| `observe` | `internal/observe/` | Observation ingest into catalog entries and snapshots |
 | `proc` | `internal/proc/` | Context-bound subprocesses (mu, cue) with graceful cancellation |
 | `clidocs` | `internal/clidocs/` | Generated CLI reference |
 | `testenv` | `internal/testenv/` | Test isolation helpers (HOME guard) |
@@ -1190,11 +1214,11 @@ under the hood.
 | `init` | `internal/init/` | Workspace initialization |
 | `git` | `internal/git/` | Git operations on schema repo |
 | `lister` | `internal/lister/` | List/query with filters |
-| `doctor` | `internal/doctor/` | Health checks, directory validation |
-| `repair` | `internal/repair/` | Catalog repairs diagnosed and applied by `pudl doctor --fix` |
+| `doctor` | `internal/doctor/` | Health checks, directory validation, catalog entry checks and secret scan |
+| `repair` | `internal/repair/` | Catalog repairs diagnosed and applied by `pudl doctor --fix`, and the repair pass that runs them |
 | `schema` | `internal/schema/` | Schema operations |
 | `repo` | `internal/repo/` | Repo init, skill installation |
 | `skills` | `internal/skills/` | Embedded Claude skill files |
 | `ui` | `internal/ui/` | Output formatting |
 | `errors` | `internal/errors/` | Typed error codes |
-| `cmd` | `cmd/` | CLI command definitions (Cobra) |
+| `cmd` | `cmd/` | CLI command definitions (Cobra): flags, rendering, exit codes |

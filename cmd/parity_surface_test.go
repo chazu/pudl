@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,25 +24,6 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	assert.Equal(t, "custom", describe.Args)
 }
 
-func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {
-	cat := newRunCatalog(t.TempDir())
-	defer cat.Close()
-
-	report := &RunReport{
-		RunID: "run_parity", Model: "pods", Mode: "observe-only", OK: false,
-		Error: "observer failed after startup",
-	}
-	require.True(t, persistRunReport(cat, report, false))
-
-	db, err := cat.required()
-	require.NoError(t, err)
-	stored, err := db.GetRunReport("run_parity")
-	require.NoError(t, err)
-	require.NotNil(t, stored)
-	assert.Equal(t, "pods", stored.Model)
-	assert.Contains(t, string(stored.Report), "observer failed after startup")
-}
-
 func helpChild(parent commandHelpJSON, use string) (commandHelpJSON, bool) {
 	for _, child := range parent.Subcommands {
 		if child.Use == use {
@@ -60,11 +40,6 @@ func hasHelpFlag(command commandHelpJSON, name string) bool {
 		}
 	}
 	return false
-}
-
-func TestRunReportMarkdownShowsFailureContext(t *testing.T) {
-	text := (&RunReport{Model: "pods", RunID: "run_1", Mode: "observe-only", OK: false, Error: "boom"}).markdown()
-	assert.True(t, strings.Contains(text, "status: FAILED"))
 }
 
 func TestModelScaffoldDefaultsToCommandObserve(t *testing.T) {

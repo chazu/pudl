@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/stretchr/testify/require"
 )
@@ -70,8 +71,8 @@ func TestRunSetReportAggregatesMemberEvidenceAndPreservesUnknownFields(t *testin
 	}
 	output := capture()
 	var document struct {
-		Availability []operationEvidence `json:"evidence_availability"`
-		Future       json.RawMessage     `json:"future_field"`
+		Availability []checkreport.Evidence `json:"evidence_availability"`
+		Future       json.RawMessage        `json:"future_field"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(output), &document))
 	require.Len(t, document.Availability, 1)

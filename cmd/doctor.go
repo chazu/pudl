@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -65,12 +66,12 @@ type healthDiagnostic struct {
 const doctorReportVersion = 3
 
 type doctorReport struct {
-	ReportVersion int                 `json:"report_version"`
-	Mode          string              `json:"mode"`
-	Repairs       []doctorRepair      `json:"repairs"`
-	OK            bool                `json:"ok"`
-	Health        []healthDiagnostic  `json:"health"`
-	Catalog       []catalogDiagnostic `json:"catalog"`
+	ReportVersion int                        `json:"report_version"`
+	Mode          string                     `json:"mode"`
+	Repairs       []doctorRepair             `json:"repairs"`
+	OK            bool                       `json:"ok"`
+	Health        []healthDiagnostic         `json:"health"`
+	Catalog       []doctor.CatalogDiagnostic `json:"catalog"`
 	// Secrets is present when stored data was scanned. Findings warn: they
 	// never fail doctor, because detection is heuristic.
 	Secrets *doctor.SecretReport `json:"secrets,omitempty"`
@@ -85,7 +86,7 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	report := doctorReport{ReportVersion: doctorReportVersion, Mode: doctorMode(), OK: true, Health: []healthDiagnostic{}, Catalog: []catalogDiagnostic{}}
+	report := doctorReport{ReportVersion: doctorReportVersion, Mode: doctorMode(), OK: true, Health: []healthDiagnostic{}, Catalog: []doctor.CatalogDiagnostic{}}
 	if doctorEntry == "" {
 		for _, check := range workspaceHealthChecks(effectivePudlDir()) {
 			result := check.CheckFunc()
@@ -107,8 +108,8 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		if doctorHealthOnly || !healthOK {
 			return
 		}
-		entries, secrets, err := checkCatalogEntries(cmd.Context(), doctorEntry, database.FilterOptions{Schema: doctorSchema, Origin: doctorOrigin})
-		report.OK, report.Error, report.Catalog, report.Secrets = healthOK, "", []catalogDiagnostic{}, nil
+		entries, secrets, err := checkCatalogEntries(cmd.Context())
+		report.OK, report.Error, report.Catalog, report.Secrets = healthOK, "", []doctor.CatalogDiagnostic{}, nil
 		if err != nil {
 			report.OK, report.Error = false, err.Error()
 			return
@@ -140,6 +141,19 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("PUDL diagnostics failed; inspect the reported problems")
 	}
 	return nil
+}
+
+// checkCatalogEntries validates the catalog entries --entry, --schema and
+// --origin select against the workspace's schemas.
+func checkCatalogEntries(ctx context.Context) ([]doctor.CatalogDiagnostic, *doctor.SecretReport, error) {
+	cfg, err := loadEffectiveConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	return doctor.CheckCatalogEntries(ctx, doctor.CatalogScan{
+		DataPath: cfg.DataPath, SchemaPaths: effectiveSchemaPaths(cfg), EntryID: doctorEntry,
+		Filter: database.FilterOptions{Schema: doctorSchema, Origin: doctorOrigin},
+	})
 }
 
 func printDoctorReport(report doctorReport) {

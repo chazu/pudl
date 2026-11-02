@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/policyfacts"
 )
 
@@ -67,7 +68,7 @@ func runPolicyEvaluate(cmd *cobra.Command, args []string) error {
 		}
 		var policies *policyfacts.Evaluator
 		if policies, err = loadPolicies(); err == nil {
-			out.Report, err = policies.Refresh(cmd.Context(), db, loadEntryPayload, policyfacts.Options{Policies: args, DryRun: policyEvaluateDryRun})
+			out.Report, err = policies.Refresh(cmd.Context(), db, importer.DecodeEntry, policyfacts.Options{Policies: args, DryRun: policyEvaluateDryRun})
 		}
 	}
 	if err != nil {
@@ -96,7 +97,7 @@ func whatIfPolicies(cmd *cobra.Command, db *database.CatalogDB, args []string) (
 	if err != nil {
 		return policyfacts.Report{}, err
 	}
-	report, err := draft.Evaluator.Preview(cmd.Context(), db, loadEntryPayload, selected)
+	report, err := draft.Evaluator.Preview(cmd.Context(), db, importer.DecodeEntry, selected)
 	report.LoadErrors = nil // installed policies' load errors are not the draft's
 	return report, err
 }

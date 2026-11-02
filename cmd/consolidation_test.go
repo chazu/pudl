@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
@@ -41,7 +42,7 @@ func TestConsolidatedReportsSelectBothKindsAndLatest(t *testing.T) {
 	db, err := database.NewCatalogDB(root)
 	require.NoError(t, err)
 	defer db.Close()
-	single, err := json.Marshal(RunReport{RunID: "single", Model: "demo", OK: true})
+	single, err := json.Marshal(checkreport.ModelReport{RunID: "single", Model: "demo", OK: true})
 	require.NoError(t, err)
 	set, err := json.Marshal(acute.RunSetReport{RunSetID: "arbitrary-id", Status: "succeeded"})
 	require.NoError(t, err)
