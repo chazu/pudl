@@ -165,3 +165,33 @@ func TestSnapshotsListIsNeverNull(t *testing.T) {
 	}})
 	require.Contains(t, get(t, h, "localhost", "/api/snapshots").Body.String(), `"id":"s1"`)
 }
+
+func neighbourhoodHandler() http.Handler {
+	g := &graphexport.Graph{
+		Resources: []graphexport.Resource{{ID: "vpc", Name: "vpc"}, {ID: "sub", Name: "subnet-a"}, {ID: "i1", Name: "web-1"}, {ID: "i2", Name: "web-2"}},
+		Relationships: []graphexport.Relationship{
+			{ID: "a", Type: "in_vpc", Source: "sub", Target: "vpc"},
+			{ID: "b", Type: "in_subnet", Source: "i1", Target: "sub"},
+			{ID: "c", Type: "in_subnet", Source: "i2", Target: "sub"},
+		},
+	}
+	return Handler(Options{
+		Assets: fstest.MapFS{},
+		Graph:  func(context.Context, *time.Time) (*graphexport.Graph, error) { return g, nil },
+	})
+}
+
+func TestNeighbourhoodSummaryAndSearch(t *testing.T) {
+	h := neighbourhoodHandler()
+	var g graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?focus=i1&depth=0&closure=in_subnet,in_vpc").Body.Bytes(), &g))
+	require.True(t, g.Meta.Partial)
+	require.Len(t, g.Resources, 3, "i1 plus its containment closure, not its sibling i2")
+	require.Equal(t, 3, g.Meta.Totals.Relationships)
+
+	require.JSONEq(t, `{"resources":4,"relationships":3,"version":""}`, get(t, h, "localhost", "/api/summary").Body.String())
+	var hits []graphexport.SearchHit
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/search?q=web&limit=1").Body.Bytes(), &hits))
+	require.Len(t, hits, 1)
+	require.Equal(t, http.StatusBadRequest, get(t, h, "localhost", "/api/search?q=x&as_of=bad").Code)
+}

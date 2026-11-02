@@ -163,6 +163,9 @@ export function isKnownRelationshipType(id: string): boolean {
   return REGISTRY.has(id);
 }
 
+/** Containment types: followed when loading a neighbourhood, so what is loaded can still be placed. */
+export const CONTAINMENT_TYPES = TYPES.filter((t) => t.category === 'containment').map((t) => t.id);
+
 export function allRelationshipTypes(): RelationshipTypeInfo[] {
   return TYPES.slice();
 }

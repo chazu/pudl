@@ -8,6 +8,9 @@
 //	GET /api/version  {"version": stamp}; changes whenever the graph would change
 //	GET /api/graph    the current resource graph (graphexport.Graph, meta.origin "live");
 //	                  ?as_of=<RFC3339> gives the graph as recorded at that time
+//	                  ?focus=<ids>&depth=<0-3>&closure=<types> gives a neighbourhood (graphexport.Subgraph)
+//	GET /api/summary  resource and relationship counts (?as_of too)
+//	GET /api/search   ?q=&limit= lightweight resource matches (?as_of too)
 //	GET /api/snapshots  recent observation snapshots, newest first (as-of quick picks)
 //	GET /*            the UI bundle; unknown paths fall back to index.html
 //
@@ -23,6 +26,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -93,30 +97,65 @@ func Handler(opts Options) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, list)
 	})
-	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
+	// graphFor resolves the graph a request asks about: now (cached per
+	// stamp) or ?as_of=<RFC3339> (built on demand).
+	graphFor := func(w http.ResponseWriter, r *http.Request) (*graphexport.Graph, bool) {
+		var (
+			g   *graphexport.Graph
+			err error
+		)
 		if raw := r.URL.Query().Get("as_of"); raw != "" {
-			at, err := time.Parse(time.RFC3339, raw)
-			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "as_of must be RFC 3339: " + err.Error()})
-				return
+			at, perr := time.Parse(time.RFC3339, raw)
+			if perr != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "as_of must be RFC 3339: " + perr.Error()})
+				return nil, false
 			}
-			// History does not change, but it is cheap to rebuild and rarely
-			// asked for twice; it is not cached.
-			g, err := opts.Graph(r.Context(), &at)
-			if err != nil {
-				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-				return
+			if g, err = opts.Graph(r.Context(), &at); err == nil {
+				g.Meta.Origin = "live"
 			}
-			g.Meta.Origin = "live"
-			writeJSON(w, http.StatusOK, g)
-			return
+		} else {
+			g, err = cache.get(r.Context())
 		}
-		g, err := cache.get(r.Context())
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return nil, false
+		}
+		return g, true
+	}
+	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
+		g, ok := graphFor(w, r)
+		if !ok {
 			return
 		}
+		q := r.URL.Query()
+		if focus := splitList(q.Get("focus")); len(focus) > 0 {
+			depth := 1
+			if d, err := strconv.Atoi(q.Get("depth")); err == nil && d >= 0 && d <= 3 {
+				depth = d
+			}
+			g = graphexport.Subgraph(g, focus, depth, splitList(q.Get("closure")))
+		}
 		writeJSON(w, http.StatusOK, g)
+	})
+	mux.HandleFunc("GET /api/summary", func(w http.ResponseWriter, r *http.Request) {
+		g, ok := graphFor(w, r)
+		if !ok {
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"resources": len(g.Resources), "relationships": len(g.Relationships), "version": g.Meta.Version,
+		})
+	})
+	mux.HandleFunc("GET /api/search", func(w http.ResponseWriter, r *http.Request) {
+		g, ok := graphFor(w, r)
+		if !ok {
+			return
+		}
+		limit := 50
+		if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 && l <= 500 {
+			limit = l
+		}
+		writeJSON(w, http.StatusOK, graphexport.Search(g, r.URL.Query().Get("q"), limit))
 	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such endpoint"})
@@ -242,4 +281,14 @@ func Serve(ctx context.Context, ln net.Listener, h http.Handler) error {
 		return err
 	}
 	return nil
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

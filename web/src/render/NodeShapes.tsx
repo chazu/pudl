@@ -15,9 +15,30 @@ interface NodeProps {
   depth: number;
   onSelect: (node: VisualNode) => void;
   onToggle: (node: VisualNode) => void;
+  onExpand?: (node: VisualNode) => void;
 }
 
-export function GroupShape({ node, box, selected, depth, onSelect, onToggle }: NodeProps) {
+/** "⋯N": relationships to resources not loaded yet (partial graphs). Click loads them. */
+function NotLoadedBadge({ node, x, y, onExpand }: { node: VisualNode; x: number; y: number; onExpand?: (n: VisualNode) => void }) {
+  if (node.notLoaded <= 0) return null;
+  const label = `⋯${node.notLoaded}`;
+  return (
+    <g
+      className="notloaded"
+      transform={`translate(${x},${y})`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onExpand?.(node);
+      }}
+    >
+      <rect x={-label.length * 6.2 - 6} y={-9} width={label.length * 6.2 + 8} height={13} rx={6} />
+      <text x={-3} y={1} textAnchor="end">{label}</text>
+      <title>{`${node.notLoaded} relationship(s) to resources not loaded yet. Click to load neighbours.`}</title>
+    </g>
+  );
+}
+
+export function GroupShape({ node, box, selected, depth, onSelect, onToggle, onExpand }: NodeProps) {
   const header = 26;
   return (
     <g className={`vgroup depth-${depth % 4}${node.synthetic ? ' synthetic' : ''}${selected ? ' selected' : ''}`} transform={`translate(${box.x},${box.y})`}>
@@ -33,11 +54,12 @@ export function GroupShape({ node, box, selected, depth, onSelect, onToggle }: N
         {node.sublabel && box.width > 260 ? <tspan className="gsub">{`  ${node.sublabel}`}</tspan> : null}
       </text>
       <title>{`${node.synthetic ? 'Grouping (not a resource)' : 'Resource group'}: ${node.label}. Double-click header to collapse.`}</title>
+      <NotLoadedBadge node={node} x={box.width - 4} y={16} onExpand={onExpand} />
     </g>
   );
 }
 
-export function CollapsedShape({ node, box, dimmed, selected, onSelect, onToggle }: NodeProps) {
+export function CollapsedShape({ node, box, dimmed, selected, onSelect, onToggle, onExpand }: NodeProps) {
   const internal = node.internalRelationships?.length ?? 0;
   return (
     <g className={`vcollapsed${node.synthetic ? ' synthetic' : ''}${dimmed ? ' dimmed' : ''}${selected ? ' selected' : ''}`} transform={`translate(${box.x},${box.y})`} onClick={(e) => { e.stopPropagation(); onSelect(node); }} onDoubleClick={(e) => { e.stopPropagation(); onToggle(node); }}>
@@ -51,11 +73,12 @@ export function CollapsedShape({ node, box, dimmed, selected, onSelect, onToggle
       <text className="nlabel" x={30 + node.code.length * 7 + 6} y={20}>{truncate(node.label, charsFor(box.width - 60 - node.code.length * 7, 12))}</text>
       <text className="nsub" x={10} y={42}>{`${node.memberCount ?? 0} resources${internal ? ` · ${internal} internal rel.` : ''}`}</text>
       <title>{`Collapsed: ${node.label}. Edges to its contents end at its boundary. Double-click to expand.`}</title>
+      <NotLoadedBadge node={node} x={box.width - 4} y={box.height - 8} onExpand={onExpand} />
     </g>
   );
 }
 
-export function LeafShape({ node, box, dimmed, selected, onSelect }: NodeProps) {
+export function LeafShape({ node, box, dimmed, selected, onSelect, onExpand }: NodeProps) {
   const unresolved = node.kind === 'unresolved';
   return (
     <g className={`vnode cls-${node.styleType}${unresolved ? ' unresolved' : ''}${dimmed ? ' dimmed' : ''}${selected ? ' selected' : ''}`} transform={`translate(${box.x},${box.y})`} onClick={(e) => { e.stopPropagation(); onSelect(node); }}>
@@ -70,6 +93,7 @@ export function LeafShape({ node, box, dimmed, selected, onSelect }: NodeProps) 
           <title>{`${node.undrawnCount} relationship(s) hidden by current filters`}</title>
         </g>
       )}
+      <NotLoadedBadge node={node} x={box.width - 3} y={box.height - 6} onExpand={onExpand} />
     </g>
   );
 }
