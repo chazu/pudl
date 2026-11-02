@@ -677,6 +677,12 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.5` finding changes over time: each check records its
+    failing matches as findings with stable keys, classified new, persisting,
+    resolved or unknown with first-seen times against the model's comparable
+    stored reports (only a complete observation resolves); `pudl report ID
+    --since ID2`; `pudl check --fail-on new` (composes with
+    `--detailed-exitcode`). See `implog/2026_11_02_finding_changes.md`.
 - `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type

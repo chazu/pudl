@@ -42,7 +42,8 @@ func runChecks(evalCtx context.Context, cat *runCatalog, ws Workspace, out Outpu
 	results := make([]checkreport.CheckResult, 0, len(evaluated))
 	for _, e := range evaluated {
 		witnesses, truncated := checkreport.Witnesses(e.Tuples, e.Expect)
-		results = append(results, checkreport.CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated})
+		findings, findingsTruncated := checkreport.MatchFindings(e.Tuples, e.Expect, e.Outcome, witnesses)
+		results = append(results, checkreport.CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated, Findings: findings, FindingsTruncated: findingsTruncated})
 	}
 	return results, nil
 }

@@ -19,6 +19,12 @@ const (
 	exitFindings = 2
 )
 
+// --fail-on values: which fail-severity check failures fail a check.
+const (
+	failOnAny = "any"
+	failOnNew = "new"
+)
+
 const detailedExitCodeUsage = "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error"
 
 // exitCodeError carries a specific process exit code out of a command. A nil
@@ -60,9 +66,18 @@ func exitCodeFor(err error) int {
 // fail-severity checks alone — blocked and cancelled models are consequences
 // of those failures, not new errors. Any other error is 1, whatever its own
 // code would be, so 2 always means findings.
-func detailedCheckExit(result *operation.Result, err error) error {
+//
+// With onlyNew (--fail-on new), fail-severity check failures whose matches
+// earlier reports already recorded are not findings; drift still is.
+func detailedCheckExit(result *operation.Result, err error, onlyNew bool) error {
 	if err == nil {
 		if result != nil && result.Findings {
+			return &exitCodeError{code: exitFindings}
+		}
+		return nil
+	}
+	if onlyNew && result.OnlyKnownCheckFailures() {
+		if result.Drifted {
 			return &exitCodeError{code: exitFindings}
 		}
 		return nil
@@ -71,6 +86,15 @@ func detailedCheckExit(result *operation.Result, err error) error {
 		return &exitCodeError{code: exitFindings, err: err}
 	}
 	return &exitCodeError{code: exitError, err: err}
+}
+
+// failOnExit is a check's error without --detailed-exitcode: with onlyNew,
+// a check that failed only on known fail-severity check failures succeeds.
+func failOnExit(result *operation.Result, err error, onlyNew bool) error {
+	if onlyNew && err != nil && result.OnlyKnownCheckFailures() {
+		return nil
+	}
+	return err
 }
 
 // silenceBareExit stops cobra printing "Error:" for an exit that carries no

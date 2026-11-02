@@ -45,13 +45,52 @@ can gate on it without parsing the report:
 | Exit | Meaning |
 |------|---------|
 | `0` | Clean: no drift, every fail-severity check passed |
-| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
+| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check (with `--fail-on new`, one with a new finding) — and nothing else went wrong |
 | `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
 
 Under this flag every error exits 1, so `2` always means findings. When several
 models fail, the check exits 2 only when every failed model failed on its
 fail-severity checks alone; models blocked or cancelled behind them do not
 count as separate errors.
+
+**Changes over time.** Each check's failing matches are compared with the
+model's earlier reports of the same check over the same scope (same mode,
+query, expectation, check scope and observation scope). A check result
+records `findings` — every failing match by a stable `key`, with a `state`
+and `first_seen` time — and `changes`, the counts by state and the report
+compared with (`since`):
+
+| State | Meaning |
+|-------|---------|
+| `new` | Failing now; no comparable report since the last complete one recorded it |
+| `persisting` | Failing now and recorded before; `first_seen` is the earliest record |
+| `resolved` | Recorded before, not failing now, and this observation is complete |
+| `unknown` | Recorded before and not seen now, but this observation cannot establish its absence |
+
+The key is a digest of the check relation's head arguments without evidence
+identifiers (`entry_id`, `evidence_id`, `observation_id`, `snapshot_id`,
+`run_id`), so a re-observed resource keeps its key and row order never
+matters. Project identifying fields in the head: a
+`policy_noncompliant(resource, policy, severity)` violation is one finding per
+resource and policy. Only a complete observation resolves: a partial
+snapshot, a run-scoped check over an incomplete observation, a check that
+reached no verdict (for example because an input failed), or more failing
+matches than the 1000 recorded leaves earlier findings `unknown`. Earlier
+reports without a verdict are skipped; incomplete ones still count as having
+seen what they recorded. The baseline is the stored reports, not earlier
+snapshots evaluated again: they are the findings pudl recorded under the rules
+in force then, and they survive snapshot retention, so changing a rule can
+show as resolved and new findings. The summary counts `new_findings` and
+`resolved_findings`. Compare two named reports with
+[`pudl report ID --since ID2`](#pudl-report).
+
+**Failing only on new findings.** `--fail-on new` makes fail-severity check
+failures fail the command only when one of them has a `new` finding (the
+first report of a check has nothing to compare with, so its failures are
+new). A check whose only failures are known exits 0 and says so on stderr.
+With `--detailed-exitcode` it exits 0 instead of 2; drift still exits 2, and
+errors, checks without a verdict, and blocked or cancelled models still exit
+1 or 2 as above. The report still records every failure.
 
 **Command populate.** A `#CommandObserve` arm runs plain commands that print
 JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,

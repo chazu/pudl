@@ -60,13 +60,19 @@ type CheckResult struct {
 	Expect             string                  `json:"expect,omitempty"`
 	Witnesses          []Witness               `json:"witnesses,omitempty"`
 	WitnessesTruncated bool                    `json:"witnesses_truncated,omitempty"`
-	Name               string                  `json:"name"`
-	Query              string                  `json:"query"`
-	Severity           string                  `json:"severity"`
-	Count              int                     `json:"count"`
-	Scope              string                  `json:"scope"`
-	Passed             bool                    `json:"passed"`
-	Message            string                  `json:"message,omitempty"`
+	// Findings identify every failing match (bounded by FindingLimit) and,
+	// once classified, earlier ones that no longer match; Changes counts them
+	// by state against the model's comparable earlier reports.
+	Findings          []Finding `json:"findings,omitempty"`
+	FindingsTruncated bool      `json:"findings_truncated,omitempty"`
+	Changes           *Changes  `json:"changes,omitempty"`
+	Name              string    `json:"name"`
+	Query             string    `json:"query"`
+	Severity          string    `json:"severity"`
+	Count             int       `json:"count"`
+	Scope             string    `json:"scope"`
+	Passed            bool      `json:"passed"`
+	Message           string    `json:"message,omitempty"`
 }
 
 // Uncertain reports whether the check could not establish a verdict.
@@ -135,6 +141,7 @@ func (r *ModelReport) Markdown() string {
 				for _, d := range c.Diagnostics {
 					fmt.Fprintf(&b, "    - %s: %s\n", d.Code, d.Message)
 				}
+				WriteChanges(&b, c)
 				continue
 			}
 			if c.Passed {
@@ -142,7 +149,14 @@ func (r *ModelReport) Markdown() string {
 			} else {
 				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es): %s\n", c.Name, c.Severity, c.Count, c.Message)
 			}
-			WriteFindings(&b, c)
+			if c.Changes == nil {
+				WriteFindings(&b, c)
+				continue
+			}
+			if !c.Passed && c.Expect == "nonempty" {
+				writeNoEvidence(&b, c)
+			}
+			WriteChanges(&b, c)
 		}
 	}
 	return b.String()

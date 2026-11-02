@@ -23,12 +23,12 @@ func WriteCheck(w io.Writer, report *acute.RunSetReport, members bool) error {
 	}
 	fmt.Fprintf(w, "\ncheck %s: %s\n", report.RunSetID, report.Status)
 	if s := report.Summary; s != nil {
-		fmt.Fprintf(w, "conformity: %s | checks: %s | verification: %s\n", s.Conformity, s.Checks, s.Verification)
+		fmt.Fprintf(w, "conformity: %s | checks: %s | verification: %s%s\n", s.Conformity, s.Checks, s.Verification, findingCounts(s))
 	}
 	for _, member := range report.Members {
 		line := fmt.Sprintf("  %s: %s (%s)", member.Model, member.Result, member.RunID)
 		if s := member.Summary; s != nil {
-			line += fmt.Sprintf(" | conformity: %s | checks: %s | verification: %s | scope: %s", s.Conformity, s.Checks, s.Verification, s.Scope)
+			line += fmt.Sprintf(" | conformity: %s | checks: %s | verification: %s | scope: %s%s", s.Conformity, s.Checks, s.Verification, s.Scope, findingCounts(s))
 		}
 		if member.Error != "" {
 			line += ": " + member.Error
@@ -41,6 +41,14 @@ func WriteCheck(w io.Writer, report *acute.RunSetReport, members bool) error {
 		}
 	}
 	return nil
+}
+
+// findingCounts is the summary's new and resolved findings, when it has any.
+func findingCounts(s *acute.VerdictSummary) string {
+	if s.NewFindings == 0 && s.ResolvedFindings == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" | findings: %d new, %d resolved", s.NewFindings, s.ResolvedFindings)
 }
 
 // writeMember renders one embedded member report as markdown.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
@@ -36,6 +37,19 @@ func (r *modelRun) conclude(report *checkreport.ModelReport, finishState *runFin
 		}
 	}
 	return persisted, fin.runErr
+}
+
+// recordChanges classifies the report's check findings against the model's
+// comparable earlier reports. Best-effort: without it the report still
+// records every finding, only not how they changed.
+func (r *modelRun) recordChanges(report *checkreport.ModelReport) {
+	db, err := r.cat.required()
+	if err == nil {
+		err = checkreport.RecordChanges(db, report, time.Now().UTC())
+	}
+	if err != nil {
+		r.out.warnf("warning: could not compare check findings with earlier reports: %v\n", err)
+	}
 }
 
 // runFinalization is what finalize concluded.
@@ -79,6 +93,7 @@ func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishSta
 			return runFinalization{runErr: runErr}, err
 		}
 		report.Checks = results
+		r.recordChanges(report)
 		if anyCheckUncertain(results) {
 			report.OK = false
 			if runErr == nil {
@@ -260,4 +275,18 @@ func reportHasFindings(r *checkreport.ModelReport) bool {
 		return true
 	}
 	return anyFailSeverityFailed(r.Checks)
+}
+
+// reportHasNewFailures reports whether a fail-severity check found a failing
+// match that no comparable earlier report recorded.
+func reportHasNewFailures(r *checkreport.ModelReport) bool {
+	if r == nil {
+		return false
+	}
+	for _, c := range r.Checks {
+		if c.Severity == "fail" && !c.Passed && !c.Uncertain() && (c.Changes == nil || c.Changes.New > 0) {
+			return true
+		}
+	}
+	return false
 }

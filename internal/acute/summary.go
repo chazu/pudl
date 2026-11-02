@@ -15,14 +15,18 @@ type ObservationEvidence struct {
 
 // VerdictSummary keeps execution, expectations and evidence as separate axes.
 type VerdictSummary struct {
-	Execution     string                `json:"execution"`
-	Conformity    string                `json:"conformity"`
-	Checks        string                `json:"checks"`
-	Verification  string                `json:"verification"`
-	Scope         string                `json:"scope"`
-	DriftCount    int                   `json:"drift_count"`
-	FailedChecks  int                   `json:"failed_checks"`
-	UnknownChecks int                   `json:"unknown_checks"`
-	Evidence      []ObservationEvidence `json:"evidence,omitempty"`
-	NextActions   []string              `json:"next_actions,omitempty"`
+	Execution     string `json:"execution"`
+	Conformity    string `json:"conformity"`
+	Checks        string `json:"checks"`
+	Verification  string `json:"verification"`
+	Scope         string `json:"scope"`
+	DriftCount    int    `json:"drift_count"`
+	FailedChecks  int    `json:"failed_checks"`
+	UnknownChecks int    `json:"unknown_checks"`
+	// NewFindings and ResolvedFindings count check findings against the
+	// model's comparable earlier reports.
+	NewFindings      int                   `json:"new_findings,omitempty"`
+	ResolvedFindings int                   `json:"resolved_findings,omitempty"`
+	Evidence         []ObservationEvidence `json:"evidence,omitempty"`
+	NextActions      []string              `json:"next_actions,omitempty"`
 }
