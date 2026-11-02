@@ -32,7 +32,7 @@ func seedSnapshot(t *testing.T, db *CatalogDB, snapshot ObserveSnapshot, rawDir 
 		ImportTimestamp: snapshot.CreatedAt,
 		Format:          "json",
 		Origin:          snapshot.Origin,
-		Schema:          "pudl/mu.#ObserveSnapshot",
+		Schema:          "pudl/core.#ObserveSnapshot",
 		EntryType:       &entryType,
 		CollectionType:  &collectionType,
 	}))

@@ -78,7 +78,19 @@ func normalizeOnce(name string) string {
 		}
 	}
 
+	// Step 6: Schemas that moved keep resolving under their old names.
+	if moved, ok := movedSchemas[name]; ok {
+		name = moved
+	}
+
 	return name
+}
+
+// movedSchemas maps a built-in schema's former name to its current one, so
+// stored entries keep resolving and doctor's schema-names repair rewrites them.
+var movedSchemas = map[string]string{
+	"pudl/mu.#ObserveResult":   "pudl/core.#ObserveResult",
+	"pudl/mu.#ObserveSnapshot": "pudl/core.#ObserveSnapshot",
 }
 
 // Parse extracts package path and definition from any schema name format.

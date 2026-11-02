@@ -8,7 +8,7 @@ import (
 func addTestObserve(t *testing.T, db *CatalogDB, id, def, contentHash string, at time.Time) {
 	t.Helper()
 	entryType := "observe"
-	schema := "pudl/mu.#ObserveResult"
+	schema := "pudl/core.#ObserveResult"
 	entry := CatalogEntry{
 		ID:              id,
 		StoredPath:      "/tmp/test/" + id + ".json",

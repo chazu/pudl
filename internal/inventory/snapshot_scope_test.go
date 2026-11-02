@@ -135,7 +135,7 @@ func TestInventoryDrift_LegacyContentHashScopeStillResolves(t *testing.T) {
 	legacyID := "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
 	require.NoError(t, db.AddEntry(database.CatalogEntry{
 		ID: legacyID, ImportTimestamp: time.Now(), Format: "json", Origin: "mu-observe",
-		Schema: "pudl/mu.#ObserveSnapshot", EntryType: &entryType, CollectionType: &collectionType,
+		Schema: "pudl/core.#ObserveSnapshot", EntryType: &entryType, CollectionType: &collectionType,
 	}))
 
 	// One record inside it, staged the way the old ingest did.

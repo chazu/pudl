@@ -211,7 +211,7 @@ func prepareObserveSnapshot(in observeSnapshotEntry) (database.CatalogEntry, err
 	// rather than duplicating it.
 
 	// ObserveSnapshot is a family root, so it is its own identity namespace.
-	schema := "pudl/mu.#ObserveSnapshot"
+	schema := "pudl/core.#ObserveSnapshot"
 	resourceID := identity.ComputeResourceID(schema, map[string]any{"snapshot_id": in.snapshotID}, contentHash)
 	entryType := "observe"
 	collectionType := "collection"
@@ -351,7 +351,7 @@ func prepareObserveRecord(
 	return entry, recordJSON, nil
 }
 
-const genericObserveSchema = "pudl/mu.#ObserveResult"
+const genericObserveSchema = "pudl/core.#ObserveResult"
 
 // resolveObserveSchema turns a record's declared resource type into a schema
 // reference only when that reference exists in the current schema namespace.
