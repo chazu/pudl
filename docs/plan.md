@@ -597,6 +597,9 @@ implemented. Beads work:
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type
   schemas. See [the compliance policy design](design/2026-11-01-compliance-policies.md).
+  - Done: `pudl-xf5.8.7` schema review status (`_pudl.review`, strict
+    decode, shown by `pudl schema list`/`show`, generated schemas start as
+    draft). See `implog/2026_11_01_schema_review_status.md`.
 
 The convergence and value-wiring sections below are historical.
 

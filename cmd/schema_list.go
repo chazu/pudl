@@ -70,7 +70,7 @@ func runSchemaListCommand() error {
 		}
 		fmt.Fprintf(outw(), "  %s%s", entry.FullName, builtIn)
 		if entry.Metadata != nil {
-			fmt.Fprintf(outw(), "  type=%s resource=%s", entry.Metadata.SchemaType, entry.Metadata.ResourceType)
+			fmt.Fprintf(outw(), "  type=%s resource=%s review=%s", entry.Metadata.SchemaType, entry.Metadata.ResourceType, entry.Metadata.Review.Describe())
 		}
 		fmt.Fprintln(outw())
 		if schemaVerbose {

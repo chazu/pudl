@@ -52,6 +52,12 @@ type SchemaMetadata struct {
 	SensitiveError  string          `json:"-"`
 	FactsSpec       json.RawMessage `json:"-"`
 	FactsError      string          `json:"-"`
+
+	// Review is the strictly decoded `_pudl.review` (draft when absent).
+	// ReviewError carries a decode failure; the schema is then treated as
+	// draft and CheckModuleIntegrity reports a load error.
+	Review      SchemaReview `json:"review"`
+	ReviewError string       `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result
