@@ -1,5 +1,7 @@
 # Plan: official mu plugins and PUDL integration
 
+> **Historical.** This document describes the convergence workflow and mu integration that were removed on 2026-11-01. PUDL now observes, catalogs and reports; it changes nothing. See [the removal design](../design/2026-11-01-remove-convergence-and-mu.md) and [retired commands](../retired-commands.md#convergence-and-mu-integration).
+
 **Date:** 2026-07-28
 **Scope:** mu, mu-plugins, and PUDL
 **Status:** §1 contract hardening complete; §2 AWS schema/mapping slice complete;

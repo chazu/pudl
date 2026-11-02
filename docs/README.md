@@ -24,8 +24,10 @@ Start with the [root README](../README.md) for a project overview.
 | [datalog.md](datalog.md) | Datalog evaluator: writing rules, `pudl query`, EDB sources, `catalog_entry` relation, performance |
 | [library-api.md](library-api.md) | Public Go API (`pkg/factstore`, `pkg/eval`) for external programs |
 | [VISION.md](VISION.md) | Project vision and roadmap |
-| [mu-integration.md](mu-integration.md) | pudl ↔ mu collaboration: drift convergence and data import |
-| [mu-pudl-batcave-user-experience.md](mu-pudl-batcave-user-experience.md) | Operator feedback from configuring and testing the three-board Batcave fleet |
+| [mu-integration.md](mu-integration.md) | Historical: the pudl ↔ mu collaboration removed on 2026-11-01 |
+| [mu-pudl-batcave-user-experience.md](mu-pudl-batcave-user-experience.md) | Historical: operator feedback from the mu-era Batcave fleet |
+| [Remove convergence and mu](design/2026-11-01-remove-convergence-and-mu.md) | Why PUDL stopped changing infrastructure, and what was kept |
+| [retired-commands.md](retired-commands.md) | Retired commands, flags and model fields with their replacements |
 | [cross-model-dependencies.md](cross-model-dependencies.md) | Exact model sets, dependency facts, and current value-wiring contract |
 | [inference-algorithm.md](inference-algorithm.md) | Schema inference engine: heuristics, CUE unification, scoring |
 | [plan.md](plan.md) | Living development plan: what's built, what's next |

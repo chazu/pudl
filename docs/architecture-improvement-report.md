@@ -1,5 +1,7 @@
 # Architecture Improvement Report
 
+> **Historical.** This document describes the convergence workflow and mu integration that were removed on 2026-11-01. PUDL now observes, catalogs and reports; it changes nothing. See [the removal design](design/2026-11-01-remove-convergence-and-mu.md) and [retired commands](retired-commands.md#convergence-and-mu-integration).
+
 **Date:** 2026-07-14 (design questions settled 2026-07-24; recommendations
 implemented 2026-07-27)  
 **Status:** **Complete.** All six recommendations are implemented, all fifteen

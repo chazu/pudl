@@ -2,7 +2,7 @@
 
 Find an enabled ingress ALLOW rule with source `0.0.0.0/0`, inspect its retained
 evidence, and verify a correction. The fixture journey requires PUDL and standard
-`cat`/`cp` utilities; it makes no cloud requests and needs no Mu installation.
+`cat`/`cp` utilities; it makes no cloud requests.
 
 ## Install and check the fixture
 

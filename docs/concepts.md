@@ -28,11 +28,9 @@ PUDL handles multi-record data in two ways:
 becomes an individual catalog entry linked to a parent collection entry. Observe
 ingestion uses the same membership mechanism for a timestamped snapshot collection.
 
-**Typed envelopes** use the shape `{"schema": {"module": ..., "version": ...},
-"definitions": [...], "data": ...}`. The envelope metadata is recorded in
-`item_schemas`; inline CUE definitions are cached when present, and only the inner
-`data` payload is passed to normal import and inference. Ordinary JSON objects are
-not guessed to be collection wrappers.
+Ordinary JSON objects are not guessed to be collection wrappers. (Typed-envelope
+unwrapping was retired with the mu integration; such a file now imports as an
+ordinary object.)
 
 Collection items get their own schema assignment, resource identity, and content hash.
 Memberships are stored separately, so a content-addressed item can belong to more than
@@ -173,20 +171,16 @@ Use `pudl model list` to see available models, `pudl model show <name>` to inspe
 
 ## Running a Model
 
-`pudl run <name>` drives a model through an observe-only ACUTE loop:
+`pudl run <name>` drives a model through an observe-only loop:
 
-1. **Populate** -- imports the model's declared sources into the catalog, refreshing observations.
-2. **Drift** -- compares the model's `desired` state against observed state. The mode is auto-detected from the observer: a *differential* observer (k8s) reads `desired` as sources and reports per-resource exists/matches, while an *inventory* observer (a `host`-style plugin or an `#EweTarget` fetcher) dumps records that pudl set-diffs against `desired`. A `#PluginObserve` arm defaults to differential; set `differential: false` for inventory observers. `--from-catalog` forces inventory drift from already-ingested records.
+1. **Populate** -- runs the model's `#CommandObserve` commands and ingests the JSON records they print as one observation snapshot.
+2. **Drift** -- set-diffs the model's `desired` state against the records it just observed. `--from-catalog` replays an already-ingested snapshot instead.
 3. **Checks** -- evaluates the model's invariants against current facts.
 4. **Report** -- records a verdict for the run.
 
-By default `pudl run` observes only: it computes drift but changes nothing in the world.
+`pudl run` never changes anything in the world: it reports drift, and the tools that own a system apply changes. (Convergence through mu was removed on 2026-11-01; see [retired commands](retired-commands.md#convergence-and-mu-integration).)
 
-### Convergence
-
-`pudl run <name> --converge` closes drift instead of merely reporting it. pudl renders the model's `desired` state to sources, and the mu plugin reconciles those sources against the real system. pudl declares state; mu executes. There is no separate export step.
-
-`pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅ and the apply receipt was persisted; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it. `unknown` also covers an apply whose receipt could not be persisted and therefore needs verification.
+`pudl status` reads each model's recorded verdict (`unknown | drifted | clean`). `clean` is the single in-sync state, written only when a live observation shows no drift. Rows written by the retired convergence workflow may still hold `failed`, and their `converging` value reads as `unknown`.
 
 ### Cross-model value wiring
 
@@ -200,14 +194,7 @@ provenance plus a value digest in the run report.
 `pudl run set <models...>` coordinates exactly the named set. It validates
 completeness and cycles before execution, orders producers first, and pins each
 successful producer observation for its consumers. It never starts an omitted
-producer implicitly. Without `--converge` the set is observe-only. Mutating
-run-sets complete read-only preflight and exact planning before any apply.
-Sealed values stay in mu's provider channel, and durable PUDL evidence retains
-only schemes and fingerprints. Generated targets require explicit per-action
-claims; invalid or ambiguous routing fails during planning. A set that can write
-a sealed output always pauses for approval of the exact version-2 mu plan. The
-plan commits resolved plugin identities; every apply is guarded by mu's raw
-plan SHA-256 comparison before provider access.
+producer implicitly. Every member is observe-only.
 
 ## Fixed-Point Verification
 

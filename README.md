@@ -19,9 +19,9 @@ pudl init
 pudl example install git-inventory
 ```
 
-The guide imports a clean baseline and a changed observation, finds `release`
+The guide observes a clean baseline and a changed inventory, finds `release`
 versus expected `main`, and inspects retained evidence. It needs only PUDL and
-Git, with no source checkout, scripts, external accounts, mu, or Python.
+Git, with no source checkout, scripts, external accounts, or Python.
 
 ## What Happens When You Import
 
@@ -49,19 +49,16 @@ only when you deliberately want permissive classification.
 - **Schema inference**: Heuristic scoring narrows candidates, then CUE unification validates matches -- most specific schema wins
 - **Resource identity**: Same logical resource tracked across re-imports via `resource_id` (schema + identity fields hash)
 - **Collections**: NDJSON files are split into individual items; normalized memberships allow one item to appear in multiple collections
-- **Envelopes**: Typed `{schema, definitions?, data}` JSON records preserve schema metadata while importing the inner payload
-- **System models**: A `#SystemModel` instance declares the desired state of a system as a set of desired resources; `pudl run` drives it
+- **System models**: A `#SystemModel` instance declares how to observe a system (commands that print JSON records), its desired state and its checks; `pudl run` drives it
 - **Value wiring**: required scalar `inputs` bind to explicitly authorized
-  `@pudl(binding=plain)` fields from successful producer snapshots; sealed values
-  stay inside mu's provider path
+  `@pudl(binding=plain)` fields from successful producer snapshots
 - **Exact run-sets**: `pudl run set <models...>` orders only the named models,
   pins producer observations, and never expands the set implicitly
 - **Repository isolation**: `pudl init` creates a self-contained `.pudl/`;
-  its schemas, imports, catalog, facts, reports, snapshots, and approvals do not
+  its schemas, imports, catalog, facts, reports, and snapshots do not
   mutate the global `~/.pudl/` state
-- **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff
+- **Drift detection**: A phase of `pudl run` -- compare declared desired state against observed/imported data using deep diff. PUDL reports drift and changes nothing
 - **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
-- **mu bridge**: pudl declares desired state and renders it to sources; the [mu](https://github.com/...) build tool executes and reconciles. pudl has no execution layer.
 
 See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas.
 See [evidence and recovery](docs/evidence.md) for exact observations, faithful export,
@@ -99,16 +96,12 @@ independent evidence retention, and verified portable workspace bundles.
 | `pudl model list` | List registered `#SystemModel` instances with last-run status |
 | `pudl model show <name>` | Show a model's desired entries and details |
 | `pudl model validate <name>` | Validate an authored model template; bound values are concretely revalidated at run time |
-| `pudl model new <name>` | Scaffold a `#SystemModel` observer |
-| `pudl model populator new/add` | Scaffold or install a populator program for an `#EweTarget` model |
+| `pudl model new <name>` | Scaffold a `#SystemModel` observer (`--populate 'command:<cmdline>'`) |
 | `pudl model deps` | Refresh and show the cross-model dependency graph |
-| `pudl run <name>` | Observe-only ACUTE loop: populate -> drift -> checks -> report |
-| `pudl run <name> --converge` | Close drift: pudl renders desired->sources, the mu plugin reconciles |
+| `pudl run <name>` | Observe-only loop: populate -> drift -> checks -> report |
 | `pudl run set <models...>` | Observe an exact producer/consumer set in dependency order |
-| `pudl run set <models...> --converge` | Preflight and plan the whole exact set, then mutate; sealed-output sets pause for mandatory exact-plan approval |
 | `pudl run report [id]` | Read the latest or named standalone/set report |
-| `pudl run resume/reject <id>` | Approve or reject a pending standalone/set operation |
-| `pudl status` | Read catalog convergence status recorded by the last model run |
+| `pudl status` | Read the verdict recorded by the last model run |
 
 ### Facts
 
@@ -153,18 +146,18 @@ The overlapping command paths have been consolidated. Update existing scripts:
 | `pudl repo init` | `pudl init` |
 | `pudl init` for global state | `pudl init --global` |
 | `pudl catalog` | `pudl schema list` (`--verbose` includes metadata details) |
-| `pudl model describe NAME` | `pudl model show NAME` (`--discover` adds Mu capabilities) |
+| `pudl model describe NAME` | `pudl model show NAME` |
 | `pudl validate --all` or `pudl verify` | `pudl doctor` |
 | `pudl validate --entry ID` | `pudl doctor --entry ID` |
 | `pudl run-set MODELS...` | `pudl run set MODELS...` |
-| `pudl run-set report/resume/reject ID` | `pudl run report/resume/reject ID` |
+| `pudl run-set report ID` | `pudl run report ID` |
+| `pudl run --converge`, `run resume/reject`, `pudl mu ...` | Retired with convergence and mu ([retired commands](docs/retired-commands.md#convergence-and-mu-integration)) |
 | `pudl list --all-workspaces` | `pudl list` (active catalog, explicit `--origin` filter) |
 | `pudl schema migrate`, `schema reinfer`, `migrate identity`, `reclassify`, `facts reproject` | `pudl doctor --fix` ([repairs](docs/retired-commands.md#catalog-repairs)) |
 
 Former paths are removed rather than retained as aliases. Git/editor/CUE wrappers
 are also retired; see [native replacements](docs/retired-commands.md). Standalone runs and exact sets
-retain their existing evidence-selection and approval semantics; shared report
-and approval commands route by the stored operation ID.
+share `pudl run report`, which routes by the stored operation ID.
 
 ## Agent memory removal
 
@@ -206,29 +199,32 @@ package ec2
 
 See [docs/schema-authoring.md](docs/schema-authoring.md) for the full guide.
 
-## The mu Integration
+## Observing systems
 
-PUDL knows what has drifted but does not execute changes itself. When you run a model with `--converge`, PUDL renders the desired state to sources; the mu build tool's plugin then reconciles reality to match. This separation keeps PUDL focused on data and schema correctness while mu handles execution.
+PUDL discovers, catalogs and governs infrastructure; it does not change it. A
+model observes by running plain commands that print JSON records, compares what
+it saw with its desired state, and evaluates checks. Terraform, kubectl or
+whatever tool owns a system applies the changes; the next run verifies them.
+
+```cue
+#Firewalls: sm.#SystemModel & {
+	name: "firewalls"
+	populate: {
+		schema: "pudl/gcp.#Firewall"
+		runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--format=json"]}]
+	}
+}
+```
 
 ```bash
-# Observe-only: populate, detect drift, run checks, report
-pudl run my-server
-
-# Close drift: pudl renders desired -> sources, mu reconciles
-pudl run my-server --converge
+# Populate, detect drift, run checks, report
+pudl run firewalls --detailed-exitcode
 
 # Coordinate cross-model values without implicit producer discovery
 pudl run set network my-server
 ```
 
-Plain values are persisted with source/snapshot provenance. Sealed inputs and
-outputs stay in mu's provider path, while PUDL stores only schemes and
-fingerprints. Generated targets use strict action routing: unused declarations,
-undeclared claims, and ambiguous output writers fail during whole-set planning,
-before mutation or provider traffic. A set that can write a sealed output always
-pauses for exact-plan approval; resume rebuilds and revalidates that plan, then
-mu compares the same-workspace raw digest and executes that exact in-memory
-graph before producer-first execution.
+Plain values are persisted with source/snapshot provenance.
 
 ## Documentation
 
@@ -236,7 +232,7 @@ See [docs/README.md](docs/README.md) for the full documentation index.
 
 ## Project Status
 
-PUDL's data pipeline (import, catalog, schema inference, drift detection, mu bridge) is stable. The old execution runtime (Glojure-based methods and workflows) was removed in a major refactoring to focus PUDL on what it does best: ingesting data, inferring schemas, and detecting drift. Execution is delegated to mu; PUDL declares desired/observed state and converges it through `#SystemModel` instances run with `pudl run`.
+PUDL's data pipeline (import, catalog, schema inference, observation, drift detection, checks) is stable. The old execution runtime and, later, the convergence workflow and mu integration were removed to focus PUDL on what it does best: observing systems, cataloging what it sees, and reporting drift and check results. `#SystemModel` instances run with `pudl run` declare what to observe and what to expect.
 
 See [docs/VISION.md](docs/VISION.md) for the roadmap.
 

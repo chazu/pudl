@@ -866,7 +866,7 @@
         },
         {
           "name": "from-bundle",
-          "usage": "Restore verified history into a new local workspace; approvals require replanning",
+          "usage": "Restore verified history into a new local workspace; legacy pending approvals are rejected",
           "type": "string"
         },
         {
@@ -903,7 +903,7 @@
         },
         {
           "name": "artifacts",
-          "usage": "Show only run outputs (manifest, manifest-action)",
+          "usage": "Show only legacy run artifacts (mu manifests and manifest actions)",
           "type": "bool",
           "default": "false"
         },
@@ -1793,7 +1793,7 @@
         {
           "use": "retain \u003csnapshot-id\u003e",
           "short": "Pin a snapshot against pruning (--release to unpin)",
-          "long": "Add a manual pin so no retention policy removes this snapshot.\n--release removes only the manual pin; approval and retained-report owners remain.\nReports preserve referenced snapshot evidence for 30 days after their last save.\n\nSnapshots recorded before snapshot provenance existed cannot be pinned — they\ncarry no contract row — but they are never pruned either, for the same reason.",
+          "long": "Add a manual pin so no retention policy removes this snapshot.\n--release removes only the manual pin; legacy approval and retained-report owners remain.\nReports preserve referenced snapshot evidence for 30 days after their last save.\n\nSnapshots recorded before snapshot provenance existed cannot be pinned — they\ncarry no contract row — but they are never pruned either, for the same reason.",
           "args": "custom",
           "flags": [
             {

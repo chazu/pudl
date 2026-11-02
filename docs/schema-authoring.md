@@ -109,8 +109,9 @@ resource and become another model's concrete input:
 
 The consumer must independently declare its required scalar `inputs` slot with
 the same annotation. Unannotated source fields fail closed. Do not mark tokens,
-passwords, private keys, or other secrets as plain; model those through
-`sealed_inputs`/`sealed_outputs`, which stay inside mu's provider channel.
+passwords, private keys, or other secrets as plain; mark them
+`@pudl(binding=sealed)` (never bindable) and list them in `sensitive_fields` so
+they are redacted before storage.
 
 ### `facts` and `sensitive_fields` (optional)
 

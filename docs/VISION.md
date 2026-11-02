@@ -2,6 +2,10 @@
 
 This document describes what PUDL is today and where it's headed.
 
+> **2026-11-01:** PUDL no longer changes infrastructure. Convergence and the mu
+> integration were removed; references to them below are historical. See
+> [the removal design](design/2026-11-01-remove-convergence-and-mu.md).
+
 ## Core Purpose
 
 PUDL is a **personal data lake that knows things**. It ingests structured data (JSON, YAML, CSV, NDJSON), infers schemas using CUE, validates entries, tracks drift, and maintains a catalog of everything it has seen. The long-term goal is **outlier detection and sprawl reduction** in cloud infrastructure and configuration.

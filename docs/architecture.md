@@ -23,7 +23,7 @@ The active root is `<repo>/.pudl/` inside an initialized repository and
     |   +-- core/core.cue          # Catchall and collection schemas
     |   +-- systemmodel/           # Built-in #SystemModel contract
     |   +-- rules/                 # Datalog rules (*.cue)
-    |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, mu, etc.
+    |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, legacy mu, etc.
     +-- models/                    # #SystemModel instances
 ```
 
@@ -72,11 +72,11 @@ catalog_entries (
     item_index        INTEGER,           -- Position in collection (NULL for collections)
     collection_type   TEXT,              -- 'collection', 'item', or NULL
     item_id           TEXT,              -- Unique item identifier within collection
-    entry_type        TEXT,              -- e.g. 'observe', 'manifest', 'manifest-action' (run artifacts)
-    target            TEXT,              -- mu target that produced a run artifact
+    entry_type        TEXT,              -- e.g. 'observe'; legacy 'manifest', 'manifest-action', 'drift-observation'
+    target            TEXT,              -- run target that produced an observation
     run_id            TEXT,              -- pudl run identifier (run artifacts)
     tags              TEXT,              -- JSON-encoded key-value tags
-    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed); unknown may require verification
+    status            TEXT,              -- Verdict (unknown/clean/drifted; legacy failed); legacy converging reads as unknown
     created_at        DATETIME,
     updated_at        DATETIME
 )
@@ -151,10 +151,7 @@ ImportFileWithFriendlyIDs(opts)
     |
     +-- analyzeData() -> decodeDocument (encoding/json, yaml.v3, encoding/csv)
     |
-    +-- CLI envelope detection (regular, batch, stdin share one path)
-    |       +-- import inner data
-    |       +-- record inferred + declared/inline schema metadata
-    |
+
     +-- SchemaInferrer.Infer(data, hints)
     |       +-- SelectCandidates() -> heuristic scoring
     |       +-- Sort by specificity (most-specific-first)
@@ -187,8 +184,7 @@ ImportFileWithFriendlyIDs(opts)
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
 | `lister` | `internal/lister/` | List/query with filters and display options |
-| `mubridge` | `internal/mubridge/` | mu/pudl interchange: typed envelopes and manifest ingest for `pudl run` |
-| `muschemas` | `internal/muschemas/` | Cache of mu-provided schemas |
+| `observe` | `internal/observe/` | Observation ingest for `pudl run`: snapshots, schema routing, redaction |
 | `repo` | `internal/repo/` | Repository-level init |
 | `workspace` | `internal/workspace/` | Workspace discovery and schema-path resolution |
 | `schema` | `internal/schema/` | Schema file management and discovery |
@@ -258,32 +254,20 @@ exact named run-set
   -> preflight dependencies and binding shapes
   -> observe producers and pin successful snapshots
   -> project authorized plain scalars into consumer templates
-  -> complete whole-set read-only planning
-  -> optionally execute through mu
+  -> observe each consumer with its #CommandObserve runs
   -> persist linked run-set/member reports and redacted evidence
 ```
 
-PUDL owns selection, catalog provenance, plan approval, and reports. Mu owns
-action planning/execution and secret-provider I/O. The sealed run-set contract
-treats target declarations as availability bounds, not implicit action grants.
-Mu's version-2 JSON plan projects the full executable action identity, resolved
-plugin identities, and sealed claims, so PUDL validates strict routing before
-persisting an exact approval. Each apply rechecks the normalized approved plan,
-then mu compares its raw digest before provider access and executes that same
-in-memory graph.
-Read-only observation activates a sealed-free converge target; planning and
-apply activate its full converge-owned sealed projection.
-PUDL also serializes its generated subprojects per mu root: mu recursively
-merges non-hidden project directories, so overlapping PUDL workspaces would
-otherwise expose duplicate targets or remove files from a live invocation.
+PUDL owns selection, observation, catalog provenance, and reports. It changes
+nothing it observes.
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
 - **Validated** against assigned schemas via `pudl doctor`
 - **Exported** in various formats via `pudl export`
-- **Reconciled** by `pudl run <model>`: a `#SystemModel` declares desired and observed
-  state, `pudl run` computes drift as one phase (and converges with `--converge`, with
-  mu executing the actions); inspect status via `pudl status`
+- **Compared** by `pudl run <model>`: a `#SystemModel` declares how to observe a system
+  and its desired state, `pudl run` observes and computes drift as one phase and
+  reports it; inspect status via `pudl status`
 - **Re-classified** when schemas change via the `pudl doctor --fix` inference repair
 
 ## Technology Stack

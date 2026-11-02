@@ -462,14 +462,14 @@ Example:
     pudl example install git-inventory
 ```
 
-Available example: `git-inventory`. It includes the model, saved observations,
-and optional live observer; no checkout or download is needed. Identical files
+Available examples: `git-inventory` and `gcp-network-hygiene`. Each includes
+its model and fixture data; no checkout or download is needed. Identical files
 are left alone. Conflicting edits or symlinked destinations cause an error before
 installation writes files. This command does not initialize global state.
 
 `--json` returns `example`, the workspace `root`, and relative `files` paths.
-See [getting started](getting-started.md) for the PUDL-only catalog replay
-tutorial. Live observation additionally requires mu and Python 3.
+See [getting started](getting-started.md) for the Git inventory tutorial; it
+needs only PUDL, Git, `cat` and `cp`.
 
 ## pudl export
 
@@ -876,7 +876,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace authored workspace configuration |
-| `--from-bundle` | string |  | Restore verified history into a new local workspace; approvals require replanning |
+| `--from-bundle` | string |  | Restore verified history into a new local workspace; legacy pending approvals are rejected |
 | `--max-bundle-bytes` | int64 | `17179869184` | Maximum uncompressed restored bundle bytes |
 
 Initialization installs configuration, a local CUE module and built-in schemas,
@@ -886,7 +886,7 @@ configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
 
-`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Pending approvals require replanning and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
+`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -937,7 +937,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--all` | bool |  | Return all matching entries in one result (still respects --limit) |
-| `--artifacts` | bool |  | Show only run outputs (manifest, manifest-action) |
+| `--artifacts` | bool |  | Show only legacy run artifacts (mu manifests and manifest actions) |
 | `--collection-id` | string |  | Filter by collection ID |
 | `--collections-only` | bool |  | Show only collections |
 | `--fancy` | bool |  | Use interactive bubbletea interface with filtering |
@@ -1203,7 +1203,7 @@ Rules are loaded from `.pudl/schema/pudl/rules/` (repo-scoped) and
 depends on a rule that cannot be loaded; `pudl doctor` lists such rules. See
 [datalog](datalog.md) for evaluation and rule authoring.
 
-`--timeout` bounds SQL evaluation, recursion, and writer contention independently of Mu subprocess timeouts. Cancellation returns an error and never a successful partial answer.
+`--timeout` bounds SQL evaluation, recursion, and writer contention. Cancellation returns an error and never a successful partial answer.
 Every positional constraint must be `field=value` with a nonblank field; repeated
 fields are errors. Empty values and values containing `=` remain valid.
 `--list` accepts no positional arguments and cannot be combined with `--topo`.
@@ -1741,7 +1741,7 @@ pudl snapshot retain <snapshot-id> [flags]
 
 ```text
 Add a manual pin so no retention policy removes this snapshot.
---release removes only the manual pin; approval and retained-report owners remain.
+--release removes only the manual pin; legacy approval and retained-report owners remain.
 Reports preserve referenced snapshot evidence for 30 days after their last save.
 
 Snapshots recorded before snapshot provenance existed cannot be pinned — they
