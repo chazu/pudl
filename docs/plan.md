@@ -705,6 +705,9 @@ Beads work:
   - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
     kind, in the run's stderr and the populate report's `secret_warnings`.
     See `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-zxq` re-importing an already-cataloged document still scans
+    it and reports `secret_warnings` (dedup used to skip before decoding).
+    See `implog/2026_11_02_reimport_secret_scan.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
