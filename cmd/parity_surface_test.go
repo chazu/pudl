@@ -15,7 +15,7 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	run, ok := helpChild(tree, "run [<model>]")
 	require.True(t, ok, "root help must expose the run command")
 	assert.True(t, hasHelpFlag(run, "populate"))
-	assert.True(t, hasHelpFlag(run, "require-approval"))
+	assert.True(t, hasHelpFlag(run, "detailed-exitcode"))
 	report, ok := helpChild(run, "report [operation-id]")
 	require.True(t, ok, "run help must expose durable reports")
 	assert.Equal(t, "custom", report.Args)
@@ -76,7 +76,6 @@ func TestDescribeSystemModelIncludesRuntimeContract(t *testing.T) {
 		Desired:   []map[string]any{{"name": "web"}},
 		Checks:    []systemmodel.Check{{Name: "healthy"}},
 		DependsOn: []string{"network"},
-		Converge:  &systemmodel.PluginPlan{Plugin: "k8s", Input: map[string]any{"namespace": "default"}},
 		Freshness: &systemmodel.Freshness{Every: "10m", Drift: true},
 	}
 
@@ -89,7 +88,6 @@ func TestDescribeSystemModelIncludesRuntimeContract(t *testing.T) {
 	assert.Len(t, view.Desired, 1)
 	assert.Len(t, view.Checks, 1)
 	assert.Equal(t, []string{"network"}, view.DependsOn)
-	assert.NotNil(t, view.Converge)
 	assert.NotNil(t, view.Freshness)
 	require.Len(t, view.PluginDiscovery, 1)
 	assert.NotNil(t, view.PluginDiscovery[0].Info)

@@ -67,17 +67,6 @@ func renderPopulateMuCue(m *systemmodel.SystemModel) (string, error) {
 	fmt.Fprintf(&b, "\ttarget:    %q\n", populateTargetName(m.Name))
 	fmt.Fprintf(&b, "\ttoolchain: %q\n", plugin)
 	fmt.Fprintf(&b, "\tconfig:    %s\n", cfgJSON)
-	if len(m.Populate.SealedInputs) > 0 {
-		b.WriteString("\tsealed_routing: \"strict\"\n")
-		refs, modes, err := sealedInputProjection(m.Populate.SealedInputs)
-		if err != nil {
-			return "", fmt.Errorf("plugin observe: %w", err)
-		}
-		sealedJSON, _ := json.Marshal(refs)
-		fmt.Fprintf(&b, "\tsealed_inputs: %s\n", sealedJSON)
-		modesJSON, _ := json.Marshal(modes)
-		fmt.Fprintf(&b, "\tsealed_input_modes: %s\n", modesJSON)
-	}
 	b.WriteString("}]\n")
 	return b.String(), nil
 }
@@ -186,10 +175,7 @@ func runPopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, muRoo
 // of a staged temp dir) whose single target carries an inline plan that emits
 // one `ewe`-body action. eweSourceName is the populator file's name within that
 // staged root (copied there by runEwePopulate), so it resolves regardless of
-// where the model is registered (project or global ~/.pudl). Sealed inputs are
-// declared at the target level; mu propagates them to the emitted action and
-// resolves the refs, and the ewe sink reveals them only in-sink. Populate is
-// observation-only in v1, so this renderer has no sealed-output write path.
+// where the model is registered (project or global ~/.pudl).
 func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName string) (string, error) {
 	p := m.Populate
 
@@ -205,16 +191,6 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName 
 		"network":   p.Network,
 		"impure":    p.Impure,
 	}
-	var inputRefs, inputModes map[string]string
-	if len(p.SealedInputs) > 0 {
-		var err error
-		inputRefs, inputModes, err = sealedInputProjection(p.SealedInputs)
-		if err != nil {
-			return "", fmt.Errorf("ewe populate: %w", err)
-		}
-		action["sealed_inputs"] = inputRefs
-		action["sealed_input_modes"] = inputModes
-	}
 	actionJSON, err := json.Marshal(action)
 	if err != nil {
 		return "", fmt.Errorf("marshal ewe action: %w", err)
@@ -222,8 +198,7 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName 
 
 	var b strings.Builder
 	b.WriteString("package mu\n\n")
-	// Emit the model's plugins block (paths absolutized) so secret-provider
-	// plugins are available to resolve sealed-input refs (env:/pass:/sops:).
+	// Emit the model's plugins block (paths absolutized).
 	if len(m.Plugins) > 0 {
 		pluginsJSON, err := json.Marshal(absolutizePlugins(m.Plugins, modelDir))
 		if err != nil {
@@ -233,60 +208,9 @@ func renderEwePopulateMuCue(m *systemmodel.SystemModel, modelDir, eweSourceName 
 	}
 	b.WriteString("targets: [{\n")
 	fmt.Fprintf(&b, "\ttarget: %q\n", populateTargetName(m.Name))
-	if len(inputRefs) > 0 {
-		b.WriteString("\tsealed_routing: \"strict\"\n")
-	}
-	if len(inputRefs) > 0 {
-		si, _ := json.Marshal(inputRefs)
-		fmt.Fprintf(&b, "\tsealed_inputs: %s\n", si)
-		sm, _ := json.Marshal(inputModes)
-		fmt.Fprintf(&b, "\tsealed_input_modes: %s\n", sm)
-	}
 	fmt.Fprintf(&b, "\tplan: [%s, \"action/emit\"]\n", actionJSON)
 	b.WriteString("}]\n")
 	return b.String(), nil
-}
-
-// renderWritableRefsPolicy forwards the workspace's sole sealed-write policy
-// into generated mu projects that can write. Omitted and explicit empty remain
-// distinct: omitted preserves mu's compatibility behavior, while [] denies all.
-func renderWritableRefsPolicy(builder *strings.Builder, mayWrite bool) error {
-	if !mayWrite {
-		return nil
-	}
-	refs, configured := wsPolicy.SecretsWritablePolicy()
-	if !configured {
-		return nil
-	}
-	payload, err := json.Marshal(refs)
-	if err != nil {
-		return fmt.Errorf("marshal secrets.writable_refs policy: %w", err)
-	}
-	fmt.Fprintf(builder, "secrets: {writable_refs: %s}\n\n", payload)
-	return nil
-}
-
-func sealedInputProjection(inputs map[string]systemmodel.SealedInput) (map[string]string, map[string]string, error) {
-	refs := make(map[string]string, len(inputs))
-	modes := make(map[string]string, len(inputs))
-	for name, input := range inputs {
-		if input.Ref == "" {
-			return nil, nil, fmt.Errorf("sealed input %q has an unresolved producer source", name)
-		}
-		refs[name] = input.Ref
-		modes[name] = input.DeliveryMode
-	}
-	return refs, modes, nil
-}
-
-func sealedOutputProjection(outputs map[string]systemmodel.SealedOutput) (map[string]string, map[string]string) {
-	refs := make(map[string]string, len(outputs))
-	modes := make(map[string]string, len(outputs))
-	for name, output := range outputs {
-		refs[name] = output.Ref
-		modes[name] = output.StoreMode
-	}
-	return refs, modes
 }
 
 // resolveEweSource locates a model's populator program. eweSource is, in order:
@@ -358,7 +282,7 @@ func runEwePopulate(cat *runCatalog, mu muRunner, m *systemmodel.SystemModel, mo
 
 	target := populateTargetName(m.Name)
 	if _, err := mu.Build(filepath.Join(dir, "mu.cue"), target); err != nil {
-		return nil, redactSealedError(fmt.Errorf("mu build %s: %w", target, err), m)
+		return nil, fmt.Errorf("mu build %s: %w", target, err)
 	}
 
 	// Wrap each declared output (a JSON records array) as an ObserveResult and

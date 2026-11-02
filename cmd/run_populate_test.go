@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/workspace"
 )
 
 func TestRenderPopulateMuCue_K8s(t *testing.T) {
@@ -86,9 +85,6 @@ func TestRenderEwePopulateMuCue(t *testing.T) {
 			Outputs:   []string{"repos.json"},
 			Network:   true,
 			Impure:    true,
-			SealedInputs: map[string]systemmodel.SealedInput{
-				"GITLAB_TOKEN": {Ref: "env:GITLAB_TOKEN", DeliveryMode: "env"},
-			},
 		},
 	}
 	// eweSource is staged into the temp root by its basename.
@@ -109,58 +105,9 @@ func TestRenderEwePopulateMuCue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "action/emit", emit)
 
-	// Sealed inputs declared at the target level.
-	si, err := v.LookupPath(cue.ParsePath(`targets[0].sealed_inputs.GITLAB_TOKEN`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "env:GITLAB_TOKEN", si)
-	routing, err := v.LookupPath(cue.ParsePath(`targets[0].sealed_routing`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "strict", routing)
-	actionInput, err := v.LookupPath(cue.ParsePath(`targets[0].plan[0].sealed_inputs.GITLAB_TOKEN`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "env:GITLAB_TOKEN", actionInput)
-	assert.False(t, v.LookupPath(cue.ParsePath(`targets[0].sealed_outputs`)).Exists())
-	assert.False(t, v.LookupPath(cue.ParsePath(`targets[0].plan[0].sealed_outputs`)).Exists())
-	assert.False(t, v.LookupPath(cue.ParsePath(`secrets.writable_refs`)).Exists())
-
 	net, err := v.LookupPath(cue.ParsePath("targets[0].plan[0].network")).Bool()
 	require.NoError(t, err)
 	assert.True(t, net)
-}
-
-func TestRenderReconcileMuCueUsesStrictSealedRoutingAndWritablePolicy(t *testing.T) {
-	previousPolicy := wsPolicy
-	wsPolicy = &workspace.Policy{Workspace: &workspace.Workspace{
-		SecretsWritableRefs:       []string{"pass:deploy/*"},
-		SecretsWritableConfigured: true,
-	}}
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-	m := &systemmodel.SystemModel{
-		Name:    "app",
-		Plugins: []systemmodel.PluginDef{{Name: "apply", Script: "/plugins/apply"}},
-		Converge: &systemmodel.PluginPlan{
-			Plugin: "apply",
-			SealedInputs: map[string]systemmodel.SealedInput{
-				"TOKEN": {Ref: "env:TOKEN", DeliveryMode: "file"},
-			},
-			SealedOutputs: map[string]systemmodel.SealedOutput{
-				"RESULT": {Ref: "pass:deploy/result", StoreMode: "create"},
-			},
-		},
-	}
-	src, err := renderReconcileMuCue(m, []string{"/tmp/desired.json"})
-	require.NoError(t, err)
-	v := cuecontext.New().CompileString(src, cue.Filename("mu.cue"))
-	require.NoError(t, v.Err(), "generated mu.cue must compile:\n%s", src)
-	routing, err := v.LookupPath(cue.ParsePath(`targets[0].sealed_routing`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "strict", routing)
-	outputMode, err := v.LookupPath(cue.ParsePath(`targets[0].sealed_output_modes.RESULT`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "create", outputMode)
-	policy, err := v.LookupPath(cue.ParsePath(`secrets.writable_refs[0]`)).String()
-	require.NoError(t, err)
-	assert.Equal(t, "pass:deploy/*", policy)
 }
 
 func TestRenderEwePopulateMuCue_CommandPlugin(t *testing.T) {
@@ -170,9 +117,6 @@ func TestRenderEwePopulateMuCue_CommandPlugin(t *testing.T) {
 		Populate: systemmodel.Populate{
 			EweSource: "populate.cue",
 			Outputs:   []string{"repos.json"},
-			SealedInputs: map[string]systemmodel.SealedInput{
-				"GITLAB_TOKEN": {Ref: "env:GITLAB_TOKEN", DeliveryMode: "env"},
-			},
 		},
 	}
 	src, err := renderEwePopulateMuCue(m, "/proj/models/gitlab", "populate.cue")

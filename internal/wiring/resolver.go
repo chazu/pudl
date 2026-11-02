@@ -83,13 +83,7 @@ func (r Resolver) resolve(input string, binding systemmodel.ValueBinding, reques
 	selection := "reused"
 	producerModel := binding.Source.Model
 	var snapshot *Snapshot
-	if producer := request.PinnedProducerSnapshots[binding.Source.Model]; producer.SnapshotID != "" {
-		selection = "current-run"
-		producerModel = producer.Model
-		snapshot, err = r.Catalog.ObserveSnapshotByIDForRun(
-			producer.SnapshotID, producer.Model, request.Workspace, producer.RunID,
-		)
-	} else if producer := request.CurrentProducerRuns[binding.Source.Model]; producer.RunID != "" {
+	if producer := request.CurrentProducerRuns[binding.Source.Model]; producer.RunID != "" {
 		selection = "current-run"
 		producerModel = producer.Model
 		snapshot, err = r.Catalog.SuccessfulObserveSnapshotForRun(producer.Model, request.Workspace, producer.RunID)

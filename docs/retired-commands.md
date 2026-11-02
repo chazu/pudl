@@ -48,3 +48,29 @@ In global mode, substitute the schema path printed by
 Git history, CUE dependency declarations, or editor settings. Schema generation,
 validation, listing, and inference remain PUDL operations. There are no command
 aliases for the retired wrappers.
+
+## Convergence and mu integration
+
+PUDL discovers, catalogs and governs infrastructure; it no longer changes it.
+Convergence and every mu integration were removed on 2026-11-01
+([design](design/2026-11-01-remove-convergence-and-mu.md)). Terraform, mu and
+similar tools own changes. Existing catalogs open unchanged: stored converge
+and run-set reports, approval rows and run history remain readable.
+
+| Retired command or flag | Replacement |
+| --- | --- |
+| `pudl run --converge` and `--only`, `--dry-run`, `--max-iters`, `--max-applies`, `--require-approval` | `pudl run <model>` reports drift between `desired` and what was observed; apply changes with the tool that owns them, then run again to verify |
+| `pudl run resume`, `pudl run reject` | None. Nothing waits for approval any more |
+| `pudl run set --converge` and its `--require-approval`, `--max-iters`, `--max-applies` | `pudl run set <model>...` (observe-only) |
+
+### Retired model fields
+
+A model that still uses one of these fields fails to load. The error names the
+field and points here. Remove the field to load the model again.
+
+| Field | Replacement |
+| --- | --- |
+| `converge:` (`#PluginPlan`) | Remove it. `desired` still drives drift reports |
+| `sealed_inputs`, `sealed_outputs` | Remove them. Give a populate command its credentials through its own environment or configuration (for example a `gcloud` or `kubectl` profile) |
+
+The `secrets: writable_refs` setting in `workspace.cue` is ignored.

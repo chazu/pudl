@@ -37,8 +37,6 @@ var jsonContractExempt = map[string]string{
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
 	"pudl run set":               "observes live through mu",
-	"pudl run resume":            "needs a pending approval",
-	"pudl run reject":            "needs a pending approval",
 	"pudl snapshot current":      "needs a live observation recorded for a model",
 	"pudl mu ingest-manifest":    "needs a mu build manifest",
 	"pudl completion":            "generates shell scripts",

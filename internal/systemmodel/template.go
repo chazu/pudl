@@ -35,6 +35,9 @@ type ModelTemplate struct {
 // NewTemplate validates authoring metadata without requiring bound inputs to be
 // concrete. The returned template is in-memory only.
 func NewTemplate(value cue.Value, origin TemplateOrigin) (*ModelTemplate, error) {
+	if err := rejectRetiredFields(value); err != nil {
+		return nil, err
+	}
 	if err := value.Validate(cue.Concrete(false)); err != nil {
 		return nil, fmt.Errorf("validate template: %w", err)
 	}
@@ -53,19 +56,13 @@ func NewTemplate(value cue.Value, origin TemplateOrigin) (*ModelTemplate, error)
 	if err := validateInputBindingSet(inputs, bindings); err != nil {
 		return nil, err
 	}
-	if err := validateSealedDeclarations(value); err != nil {
-		return nil, err
-	}
 	var dependsOn []string
 	if declared := value.LookupPath(cue.ParsePath("depends_on")); declared.Exists() {
 		if err := declared.Decode(&dependsOn); err != nil {
 			return nil, fmt.Errorf("decode depends_on: %w", err)
 		}
 	}
-	producers, err := bindingProducerNames(value, bindings)
-	if err != nil {
-		return nil, err
-	}
+	producers := bindingProducerNames(bindings)
 	for _, producer := range producers {
 		if producer == name {
 			return nil, fmt.Errorf("model %q cannot bind to itself", name)
@@ -83,18 +80,6 @@ func (t *ModelTemplate) Value() cue.Value { return t.value }
 
 // Context returns the CUE context that owns Value.
 func (t *ModelTemplate) Context() *cue.Context { return t.context }
-
-// HasSealedOutputs reports whether any phase declares an external secret
-// write. Observe-only run sets use this during static preflight so no member can
-// perform a sealed mutation before the exact-plan approval boundary exists.
-func (t *ModelTemplate) HasSealedOutputs() bool {
-	value := t.value.LookupPath(cue.ParsePath("converge.sealed_outputs"))
-	if !value.Exists() {
-		return false
-	}
-	iter, err := value.Fields()
-	return err == nil && iter.Next()
-}
 
 // Elaborate unifies a complete set of resolved plain scalars into a fresh model
 // value, concretely validates it, and decodes the runtime projection.
@@ -132,6 +117,21 @@ func (t *ModelTemplate) elaborate(injection cue.Value) (*SystemModel, error) {
 		return nil, fmt.Errorf("elaborate model %q: %w", t.Name, err)
 	}
 	return DecodeValue(resolved)
+}
+
+// bindingProducerNames lists, sorted and once each, the models the bindings
+// read from.
+func bindingProducerNames(bindings map[string]ValueBinding) []string {
+	set := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		set[binding.Source.Model] = struct{}{}
+	}
+	producers := make([]string, 0, len(set))
+	for producer := range set {
+		producers = append(producers, producer)
+	}
+	sort.Strings(producers)
+	return producers
 }
 
 func validateResolvedInputSet[T any](slots map[string]cue.Value, values map[string]T) error {

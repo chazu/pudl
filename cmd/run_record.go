@@ -8,69 +8,17 @@ import (
 	"github.com/chazu/pudl/internal/proc"
 )
 
-// resolveApplyBudget works out how many applies this run may make, from how many
-// the model has already spent since it was last verified clean.
-//
-// The per-run `--max-iters` cap gives a halting guarantee inside one process and
-// none at all across processes: a scheduler on `freshness.every`, or a
-// crash-loop supervisor, grants a fresh cap on every restart, so a model that
-// oscillates applies without bound. This is the durable half.
-//
-// Returns nil — no constraint, previous behaviour exactly — when the budget is
-// disabled (`--max-applies 0`), when the run does not converge, or when the
-// history cannot be read. A catalog that cannot answer must not silently refuse
-// to apply; that failure mode is worse than the one being prevented.
-func resolveApplyBudget(cat *runCatalog, model string, flags runFlags, live bool) *int {
-	if !flags.converge || flags.dryRun || flags.maxApplies <= 0 {
-		return nil
-	}
-	db, err := cat.optional()
-	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not open catalog to read this model's apply history: %v\n", err)
-			fmt.Fprintln(outw(), "         the durable apply budget is not enforced for this run")
-		}
-		return nil
-	}
-	spent, err := db.AppliesSinceLastClean(model)
-	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not read this model's apply history: %v\n", err)
-			fmt.Fprintln(outw(), "         the durable apply budget is not enforced for this run")
-		}
-		return nil
-	}
-
-	remaining := flags.maxApplies - spent
-	if remaining < 0 {
-		remaining = 0
-	}
-	if live && spent > 0 {
-		fmt.Fprintf(outw(), "apply budget: %d of %d remaining (spent since this model was last verified clean)\n",
-			remaining, flags.maxApplies)
-	}
-	return &remaining
-}
-
 // runFinishState is what a completed run concluded, handed to the deferred
 // finalizer so every exit path — including an early `return err` — records a
 // terminal run row.
 type runFinishState struct {
-	verdict           string
-	outcome           string
-	needsVerification bool
-	// note explains a verdict whose meaning is not evident from the value alone —
-	// a scoped run whose model row diverges from its run row, or a verdict a
-	// failed check demoted. More than one can apply, so they accumulate.
+	verdict string
+	// note explains a verdict whose meaning is not evident from the value alone,
+	// such as a verdict a failed check demoted.
 	note string
-	// scoped records that `--only` restricted this run. A scoped `clean` covers a
-	// subset, so it must not reset the model's durable apply budget.
-	scoped bool
 }
 
-// addNote appends an explanation, keeping any already recorded. Two notes can
-// both be true of one run (a scoped run whose check also failed), and dropping
-// either would leave a verdict half-explained.
+// addNote appends an explanation, keeping any already recorded.
 func (s *runFinishState) addNote(note string) {
 	if note == "" {
 		return
@@ -121,10 +69,8 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 }
 
 // failureStatus is the terminal completion status of a run that ended with err:
-// `cancelled` when the operator interrupted it, `failed` otherwise. A
-// --mu-timeout expiry is a failure, not a cancellation — nobody asked it to stop.
-// Cancellation says nothing about the system's state: whether an apply may have
-// been in flight is carried separately, as needs-verification.
+// `cancelled` when the operator interrupted it, `failed` otherwise. A timeout
+// expiry is a failure, not a cancellation — nobody asked it to stop.
 func failureStatus(err error) string {
 	if proc.Cancelled(err) {
 		return database.RunStatusCancelled
@@ -135,8 +81,8 @@ func failureStatus(err error) string {
 // runConclusion is the terminal run row for a run that concluded in state and
 // ended with runErr.
 func runConclusion(state runFinishState, runErr error) database.RunConclusion {
-	// Both notes matter and neither supersedes the other: the scope note explains
-	// the verdict, the error explains why the run ended.
+	// Both notes matter and neither supersedes the other: the state note
+	// explains the verdict, the error explains why the run ended.
 	note := state.note
 	if runErr != nil {
 		if note != "" {
@@ -149,11 +95,8 @@ func runConclusion(state runFinishState, runErr error) database.RunConclusion {
 		completionStatus = failureStatus(runErr)
 	}
 	return database.RunConclusion{
-		CompletionStatus:  completionStatus,
-		Verdict:           state.verdict,
-		Outcome:           state.outcome,
-		NeedsVerification: state.needsVerification,
-		Note:              note,
-		Scoped:            state.scoped,
+		CompletionStatus: completionStatus,
+		Verdict:          state.verdict,
+		Note:             note,
 	}
 }

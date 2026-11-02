@@ -31,8 +31,6 @@ func TestDetailedRunExit(t *testing.T) {
 	clean := &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}
 	drifted := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}
 	replayDrift := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: false}}
-	dryRunPending := &RunReport{Converge: &ConvergeReport{Outcome: string(outcomeDryRun)}}
-	converged := &RunReport{Converge: &ConvergeReport{Outcome: string(outcomeClean)}}
 	failedCheck := &RunReport{Checks: []CheckResult{{Name: "c", Severity: "fail", Passed: false}}}
 	warnCheck := &RunReport{Checks: []CheckResult{{Name: "c", Severity: "warn", Passed: false}}}
 
@@ -43,15 +41,12 @@ func TestDetailedRunExit(t *testing.T) {
 		code   int
 	}{
 		{"clean drift", clean, nil, 0},
-		{"converged clean", converged, nil, 0},
 		{"populate only", &RunReport{}, nil, 0},
-		{"pending approval", &RunReport{PendingApproval: true}, nil, 0},
 		{"warn-severity check", warnCheck, nil, 0},
 		{"drift", drifted, nil, 2},
 		{"replayed drift", replayDrift, nil, 2},
-		{"dry run with pending changes", dryRunPending, nil, 2},
 		{"failing check", failedCheck, errFailSeverityChecks, 2},
-		{"converge failure", &RunReport{}, fmt.Errorf("convergence ended failed (cap_exhausted)"), 1},
+		{"populate failure", &RunReport{}, fmt.Errorf("command exited 1"), 1},
 		{"preflight error", nil, pudlerrors.NewInputError("bad"), 1},
 	}
 	for _, tc := range cases {
@@ -71,7 +66,6 @@ func TestDetailedRunSetExit(t *testing.T) {
 	observe := func(findings bool, members ...acute.RunSetMemberReport) *runSetResult {
 		return &runSetResult{report: &acute.RunSetReport{Mode: "observe-only", Members: members}, findings: findings}
 	}
-	converge := &runSetResult{report: &acute.RunSetReport{Mode: "converge"}, findings: true}
 	checkFailed := acute.RunSetMemberReport{Model: "a", Result: database.RunStatusFailed, Error: errFailSeverityChecks.Error()}
 	blocked := acute.RunSetMemberReport{Model: "b", Result: database.RunStatusBlocked, Error: "blocked by unsuccessful prerequisite \"a\""}
 	broken := acute.RunSetMemberReport{Model: "c", Result: database.RunStatusFailed, Error: "mu observe: exit 1"}
@@ -79,30 +73,23 @@ func TestDetailedRunSetExit(t *testing.T) {
 
 	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(observe(false), nil)))
 	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(observe(true), nil)))
-	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(converge, nil)),
-		"a converging set that succeeded closed the drift its preflight found")
+
 	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(observe(true, checkFailed, blocked), setFailed)))
 	assert.Equal(t, 1, exitCodeFor(detailedRunSetExit(observe(true, checkFailed, broken), setFailed)))
 	assert.Equal(t, 1, exitCodeFor(detailedRunSetExit(nil, fmt.Errorf("resolve model"))))
 }
 
 func TestRunSetDetailedExitThroughRealSets(t *testing.T) {
-	h, _ := setupMutatingRunSetFixture(t, false)
+	h, _ := setupRunSetFixture(t)
 
-	h.opts.converge = false
 	result, err := executeRunSet(context.Background(), []string{"producer"}, h.opts, h.deps)
 	assert.NoError(t, err)
 	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "a populate-only member finds nothing")
 
-	result, err = executeRunSet(context.Background(), []string{"mutator-a"}, h.opts, h.deps)
+	result, err = executeRunSet(context.Background(), []string{"drifter"}, h.opts, h.deps)
 	assert.NoError(t, err, "observe-only drift is a result, not an error")
 	assert.True(t, result.findings)
 	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(result, err)))
-
-	h.opts.converge = true
-	result, err = executeRunSet(context.Background(), []string{"mutator-a"}, h.opts, h.deps)
-	assert.NoError(t, err)
-	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "converging closed the drift")
 }
 
 func TestSilenceBareExitOnlySilencesMessagelessExits(t *testing.T) {

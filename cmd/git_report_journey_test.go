@@ -117,13 +117,11 @@ git_changed_inventory: {
 	require.Equal(t, "fail", check.Severity)
 	require.False(t, check.Passed)
 	require.Equal(t, 1, check.Count)
-	require.Zero(t, check.AdvisoryCount)
 	require.Equal(t, checkScopeGlobal, check.Scope)
 	require.Len(t, check.Witnesses, 1)
 	require.False(t, check.WitnessesTruncated)
 	witness := check.Witnesses[0]
 	require.Equal(t, "git.repository/local/demo", witness.Resource)
-	require.False(t, witness.Advisory)
 	require.Equal(t, changedID, witness.Arguments["snapshot_id"])
 	entryID, ok := witness.Arguments["entry_id"].(string)
 	require.True(t, ok)

@@ -20,7 +20,7 @@ const (
 	exitFindings = 2
 )
 
-const detailedExitCodeUsage = "exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error"
+const detailedExitCodeUsage = "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error"
 
 // exitCodeError carries a specific process exit code out of a command. A nil
 // err exits with the code and prints nothing.
@@ -56,16 +56,12 @@ func exitCodeFor(err error) int {
 }
 
 // reportHasFindings reports whether a concluded run found something an
-// operator must act on: drift, changes a dry run would apply, or a failing
-// fail-severity check.
+// operator must act on: drift or a failing fail-severity check.
 func reportHasFindings(r *RunReport) bool {
 	if r == nil {
 		return false
 	}
 	if r.Drift != nil && !r.Drift.Clean {
-		return true
-	}
-	if r.Converge != nil && r.Converge.Outcome == string(outcomeDryRun) {
 		return true
 	}
 	return anyFailSeverityFailed(r.Checks)
@@ -86,14 +82,13 @@ func detailedRunExit(report *RunReport, err error) error {
 	}
 }
 
-// detailedRunSetExit maps a finished `pudl run set` to the same contract. An
-// observe-only set exits 2 when any member found drift or a failing check; a
-// converging set succeeds only once every member converged clean. A failed set
-// exits 2 only when every failed member failed on its checks alone — blocked
-// and cancelled members are consequences of those failures, not new errors.
+// detailedRunSetExit maps a finished `pudl run set` to the same contract. A set
+// exits 2 when any member found drift or a failing check. A failed set exits 2
+// only when every failed member failed on its checks alone — blocked and
+// cancelled members are consequences of those failures, not new errors.
 func detailedRunSetExit(result *runSetResult, err error) error {
 	if err == nil {
-		if result != nil && result.findings && result.report.Mode == "observe-only" {
+		if result != nil && result.findings {
 			return &exitCodeError{code: exitFindings}
 		}
 		return nil

@@ -12,60 +12,12 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
-	"github.com/chazu/pudl/internal/identity"
 )
 
 // identityResolver returns the declared identity_fields for a schema, or nil when
 // the schema is unknown or declares none. In the run path it is backed by the
-// inference graph (see schemaIdentityResolver); tests inject a stub.
+// inference graph (see inventoryIdentityPolicy); tests inject a stub.
 type identityResolver = acute.IdentityResolver
-
-// modelResourceDefs returns the candidate catalog definition names for a model's
-// desired resources — the bare resource names that `ingest-manifest` keys
-// per-resource status on (targetToDefinition(action.Target)). Each desired record
-// contributes the values of its declared identity_fields, else the first present
-// of name | path | id. The set is a superset used only to scope a converging->clean
-// promotion, so extra candidates that match nothing are harmless.
-func modelResourceDefs(desired []map[string]any, identity identityResolver) []string {
-	seen := map[string]bool{}
-	var defs []string
-	add := func(v any) {
-		s := fmt.Sprintf("%v", v)
-		if s != "" && !seen[s] {
-			seen[s] = true
-			defs = append(defs, s)
-		}
-	}
-	for _, d := range desired {
-		schema, _ := d["_schema"].(string)
-		matched := false
-		if identity != nil {
-			for _, f := range identity(schema) {
-				if v, ok := resolvedIdentityValue(d, f); ok {
-					add(v)
-					matched = true
-				}
-			}
-		}
-		if !matched {
-			for _, k := range []string{"name", "path", "id"} {
-				if v, ok := d[k]; ok {
-					add(v)
-					break
-				}
-			}
-		}
-	}
-	return defs
-}
-
-// schemaIdentityResolver builds an identityResolver backed by the schema inferrer:
-// each schema's declared identity_fields from the inference graph. Records whose
-// schema is unknown or declares none fall back to the name|path|id heuristic.
-func schemaIdentityResolver() (identityResolver, error) {
-	fields, _, err := inventoryIdentityPolicy()
-	return fields, err
-}
 
 // observeScopeFilter turns a scope string and the result of looking it up as a
 // snapshot collection into the filter the observe query should use: either a
@@ -76,8 +28,7 @@ func schemaIdentityResolver() (identityResolver, error) {
 // failure is fatal, because falling back on a genuine database error filters by
 // an origin that matches nothing, hands the set-diff an empty observed set, and
 // reports every desired resource `missing` — a transient DB fault rendered as a
-// confident "everything is drifted", which under --converge means re-applying
-// the entire model.
+// confident "everything is drifted".
 func observeScopeFilter(scope string, lookupErr error) (collectionID, origin string, err error) {
 	switch {
 	case lookupErr == nil:
@@ -274,9 +225,4 @@ func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope
 		SnapshotID: observed.snapshotID,
 		ObservedAt: observed.observedAt,
 	}, nil
-}
-
-func resolvedIdentityValue(record map[string]any, field string) (any, bool) {
-	values, err := identity.ExtractFieldValues(record, []string{field})
-	return values[field], err == nil
 }

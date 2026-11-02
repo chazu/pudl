@@ -5,9 +5,10 @@ package systemmodel
 // of it (the run unit) and orchestrates its phases. See
 // docs/design/system-models/V1-BUILD-SPEC.md.
 //
-// V1-narrowed: populate is #PluginObserve | #EweTarget | #CommandObserve;
-// converge is #PluginPlan only (ewe-converge deferred). A model without populate
-// is checks-only: it evaluates checks over what is already in the catalog.
+// V1-narrowed: populate is #PluginObserve | #EweTarget | #CommandObserve. A
+// model without populate is checks-only: it evaluates checks over what is
+// already in the catalog. PUDL observes and reports; it never changes the
+// systems it catalogs.
 #SystemModel: {
 	// Catalog classification: a #SystemModel instance is itself a catalog
 	// resource (so `pudl schema list` shows the schema and instances can be
@@ -17,7 +18,7 @@ package systemmodel
 		schema_type:   "base"
 		resource_type: "system_model"
 		identity_fields: ["name"]
-		tracked_fields: ["populate", "desired", "converge", "checks", "plugins", "depends_on"]
+		tracked_fields: ["populate", "desired", "checks", "plugins", "depends_on"]
 	}
 
 	name: string
@@ -54,7 +55,7 @@ package systemmodel
 	schema?: [...]
 
 	// POPULATE — Accumulate: fetch the external system into the catalog.
-	// Optional: without it the model is checks-only (no desired, no converge).
+	// Optional: without it the model is checks-only (no desired).
 	populate?: #PluginObserve | #EweTarget | #CommandObserve
 
 	// RELATE — derived relationships (pudl Datalog rule references).
@@ -63,11 +64,13 @@ package systemmodel
 	// CHECK — the observe-only flag queries (pudl Datalog).
 	checks?: [...#Check]
 
-	// DESIRED — declared desired state (IDEA Definition layer). Present → the
-	// model can converge; absent → observe-only.
+	// DESIRED — declared desired state (IDEA Definition layer). Present → each
+	// run reports drift between it and what was observed; nothing is changed.
 	desired?: [...#DesiredResource]
 
-	// CONVERGE — close drift (ACUTE Transform + Execute). V1: #PluginPlan only.
+	// RETIRED — accepted here only so a model that still declares it compiles;
+	// the loader rejects it with an error naming the field
+	// (docs/retired-commands.md).
 	converge?: #PluginPlan
 
 	// FRESHNESS — loop cadence.
@@ -92,8 +95,8 @@ package systemmodel
 // observe op runs and its output is ingested as the live side. `plugin` names a
 // #PluginDef declared in the model's `plugins:` block.
 #PluginObserve: {
-	#SealedInputs
-	plugin: string
+	sealed_inputs?: _ // retired; rejected by the loader
+	plugin:         string
 	input: {...}
 	// differential: this observer reads `desired` as sources and reports
 	// per-resource exists/matches (the k8s case) — drift is interpreted from its
@@ -114,8 +117,8 @@ package systemmodel
 // _schema is a hidden CUE field and json.Marshal drops it, so the routing tag
 // would never reach the records file.
 #EweTarget: {
-	#SealedInputs
-	eweSource: string
+	sealed_inputs?: _ // retired; rejected by the loader
+	eweSource:      string
 	outputs: [...string]
 	network?: bool | *false
 	impure?:  bool | *false
@@ -151,19 +154,14 @@ package systemmodel
 	dir?: string
 }
 
-// #PluginPlan — converge via a declarative-apply plugin. pudl routes `desired`
-// to the plugin as sources; the plugin reconciles. See V1-BUILD-SPEC §5.5.
-//
-// HOST CREDENTIALS: mu executes the converge actions with a *hermetic*
-// environment (no inherited `HOME`/`KUBECONFIG`), so any host credential the
-// plugin needs must be passed explicitly through `input` — pudl carries no
-// domain knowledge to inject it. For the k8s plugin this means
-// `input.kubeconfig: "/abs/path/to/kubeconfig"`; without it `kubectl` cannot
-// find `~/.kube/config` and apply fails with `context "…" does not exist`.
+// #PluginPlan — RETIRED converge arm (docs/retired-commands.md). Kept so a
+// model that still declares `converge:` compiles and the loader can reject it
+// with an error naming the field.
 #PluginPlan: {
-	#SealedExecution
-	plugin: string
-	input?: {...}
+	plugin:          string
+	input?:          {...}
+	sealed_inputs?:  _
+	sealed_outputs?: _
 }
 
 // #ValueBinding selects one scalar field from one exact typed resource.
@@ -178,79 +176,9 @@ package systemmodel
 	identity: {[string]: _}
 }
 
-// Sealed inputs belong directly to the populate or converge arm that consumes
-// them. V1 sealed outputs belong only to converge: populate must finish before
-// the complete exact-plan approval boundary and therefore cannot write.
-#SealedInputs: {
-	sealed_inputs?: {[string]: #SealedInput}
-}
-
-#SealedExecution: {
-	#SealedInputs
-	sealed_outputs?: {[string]: #SealedOutput}
-}
-
-#SealedInput: {
-	delivery_mode: "env" | "file"
-	({
-		ref:     string & !=""
-		source?: _|_
-	} | {
-		ref?: _|_
-		source: {
-			model:  string & !=""
-			output: string & !=""
-		}
-	})
-}
-
-#SealedOutput: {
-	ref:        string & !=""
-	store_mode: "create" | "overwrite" | "create_if_absent"
-}
-
 // #DesiredResource — one declared resource. Open: the fields a resource carries
 // belong to its own schema, not to #SystemModel, so anything is allowed through.
-// What is typed here is the one field PUDL itself interprets.
-#DesiredResource: {
-	// DEPENDS_ON — other resources in this same model's `desired` list that must
-	// be reconciled before this one. Consumed by `pudl run --converge --only`:
-	// naming a resource pulls in its declared dependencies transitively, so a
-	// scoped converge cannot apply something whose prerequisites it excluded.
-	//
-	// RESOLUTION RULE. Each entry is a *selector*, resolved against this model's
-	// desired list by the same rules as `--only` itself, and it must resolve to
-	// exactly one resource:
-	//
-	//   - an IDENTITY key — `name`, `id`, `path`, `target`, or `metadata.name` —
-	//     names exactly one resource. This is the form to use.
-	//   - a TYPE key — `_schema`, `schema`, `definition`, or `kind` — names every
-	//     resource of that type, so it is an ERROR as a dependency: an edge points
-	//     at one resource, not a set. (`--only` accepts type keys; a dependency
-	//     does not.)
-	//   - the short name after a schema's `#` is accepted for either.
-	//
-	// A selector matching several resources by identity, or matching one by
-	// identity and others by type, is an error rather than a silent pick — see
-	// Defect 2 in docs/architecture-improvement-report.md, where flattening the
-	// two key classes into one namespace pulled resources into converge scope
-	// that the operator never named.
-	//
-	// Note this is NOT the compound catalog identity `<schema>|<field>/<field>`
-	// that `recordIdentity` builds for inventory matching. That key is
-	// schema-relative and only exists once a record has been observed; a desired
-	// resource's dependency is declared before anything is observed, so it is
-	// stated in the model's own terms.
-	//
-	// Resource dependencies are deliberately NOT emitted as facts. `--only`
-	// resolves them at plan time from the loaded model, and deriving converge
-	// scope from catalog facts would make it depend on mutable state.
-	// Model-level `depends_on:` (which IS emitted, as `model_depends_on`) is a
-	// different relation with a different namespace regime — see D4.
-	depends_on?: [...string]
-
-	...
-}
+#DesiredResource: {...}
 
 // #Check — an observe-only flag: evaluate a Datalog relation, assert empty /
 // nonempty, attach a severity.

@@ -154,21 +154,6 @@ func TestResolverElaboratesExactAuthorizedScalar(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "network", aliased.Evidence[0].ProducerModel)
 	assert.Equal(t, "current-run", aliased.Evidence[0].Selection)
-
-	require.NoError(t, fixture.db.PrepareRunMutation("run_network"))
-	fixture.created = fixture.created.Add(time.Hour)
-	fixture.addSnapshot(t, "snap_newer", "run_network_new", database.RunStatusSucceeded,
-		map[string]any{"name": "private", "details": map[string]any{"id": "subnet-newer"}})
-	pinned, err := resolver.Elaborate(aliasTemplate, ResolveRequest{
-		Workspace: "repo", EvaluationTime: fixture.created.Add(10 * time.Minute),
-		PinnedProducerSnapshots: map[string]PinnedProducerSnapshot{
-			"network-alias": {Model: "network", RunID: "run_network", SnapshotID: "snap_ok"},
-		},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "snap_ok", pinned.Evidence[0].SnapshotID)
-	assert.Equal(t, "subnet-123", pinned.Model.Desired[0]["subnet_id"])
-	assert.Equal(t, "current-run", pinned.Evidence[0].Selection)
 }
 
 func TestResolverElaboratesAuthorizedOptionalSchemaField(t *testing.T) {

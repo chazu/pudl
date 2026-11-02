@@ -17,7 +17,7 @@ var modelShowCmd = &cobra.Command{
 	Short: "Show a registered #SystemModel definition",
 	Long: `Show the details of a registered #SystemModel by name (the instance's
 'name:' field or its short definition name): populate arm, desired state,
-converge arm, checks, and declared plugins.`,
+checks, and declared plugins.`,
 	Args:              cobra.ExactArgs(1),
 	SilenceUsage:      true,
 	ValidArgsFunction: completeModelNames,
@@ -83,13 +83,6 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		fmt.Fprintln(outw(), "  Populate:  none (checks-only)")
 	default:
 		fmt.Fprintf(outw(), "  Populate:  observe (plugin %q)\n", m.Populate.Plugin)
-	}
-
-	// Converge arm.
-	if m.Convergent() {
-		fmt.Fprintf(outw(), "  Converge:  %s\n", m.Converge.Plugin)
-	} else {
-		fmt.Fprintf(outw(), "  Converge:  (observe-only)\n")
 	}
 
 	// Desired state.

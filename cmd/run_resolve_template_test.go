@@ -55,13 +55,13 @@ func TestResolveModelTemplateInRetainsIncompleteBindingModel(t *testing.T) {
 	_, err = template.Elaborate(map[string]any{})
 	require.ErrorContains(t, err, "missing: value")
 
-	diagnostic := resolutionDiagnosticReport(template, runFlags{dryRun: true}, &wiring.ResolutionError{
+	diagnostic := resolutionDiagnosticReport(template, &wiring.ResolutionError{
 		Input: "value",
 		Code:  "source-absent",
 		Cause: errors.New("no matching resource"),
 	})
 	assert.Equal(t, "consumer", diagnostic.Model)
-	assert.Equal(t, "dry-run", diagnostic.Mode)
+	assert.Equal(t, "observe-only", diagnostic.Mode)
 	assert.Equal(t, "failed", diagnostic.CompletionStatus)
 	assert.False(t, diagnostic.OK)
 	require.Len(t, diagnostic.BindingIssues, 1)

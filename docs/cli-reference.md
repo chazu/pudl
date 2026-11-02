@@ -72,10 +72,8 @@ These flags apply to every command.
 - [pudl rule](#pudl-rule) — Manage Datalog rules
   - [pudl rule add](#pudl-rule-add) — Install a Datalog rule file into the workspace
   - [pudl rule new](#pudl-rule-new) — Scaffold a Datalog rule
-- [pudl run](#pudl-run) — Run a #SystemModel instance (observe-only, or --converge)
-  - [pudl run reject](#pudl-run-reject) — Reject a pending run or exact set plan
+- [pudl run](#pudl-run) — Run a #SystemModel instance: observe, compare and check
   - [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-  - [pudl run resume](#pudl-run-resume) — Approve and continue a pending run or exact set plan
   - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
 - [pudl schema](#pudl-schema) — Manage CUE schemas for data validation
   - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
@@ -1127,7 +1125,7 @@ pudl model list
 ```text
 List every #SystemModel-derived definition registered in the schema
 repository (project definitions precede explicitly vendored packages), with its
-populate kind, converge arm, and desired/check counts.
+populate kind and desired/check counts.
 
 This is the static registry of runnable models — what 'pudl run <name>' can
 resolve — independent of whether a model has been run yet.
@@ -1144,7 +1142,7 @@ pudl model new <name> [flags]
 ```text
 Create a registered #SystemModel scaffold in the project schema (or the
 global schema outside a workspace). Always edit the returned file to add desired
-state, checks, or a converge arm.
+state or checks.
 
 --populate takes plugin:<name> (a cached mu plugin) or command:<cmdline>, a
 command printing JSON records, run directly by pudl (no shell, no mu).
@@ -1224,7 +1222,7 @@ pudl model show <name> [flags]
 ```text
 Show the details of a registered #SystemModel by name (the instance's
 'name:' field or its short definition name): populate arm, desired state,
-converge arm, checks, and declared plugins.
+checks, and declared plugins.
 ```
 
 Flags:
@@ -1533,7 +1531,7 @@ Flags:
 
 ## pudl run
 
-Run a #SystemModel instance (observe-only, or --converge)
+Run a #SystemModel instance: observe, compare and check
 
 ```text
 pudl run [<model>] [flags]
@@ -1545,8 +1543,8 @@ Run a #SystemModel instance through the ACUTE cycle.
 <model> is a registered #SystemModel — a definition inheriting #SystemModel,
 resolved by name (its name field or short definition name) from the project
 .pudl/schema and explicitly vendored packages. Register one with
-"pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
-report, no mutation. Pass --converge to close drift; see the V1 build spec.
+"pudl schema add". A run is observe-only: populate -> drift -> checks ->
+report. It reports differences and changes nothing.
 
 A model without a populate arm is checks-only: it syncs projected facts and
 evaluates its checks over what the catalog already holds (e.g. data brought in
@@ -1554,15 +1552,11 @@ with pudl import). A #CommandObserve populate runs plain commands that print
 JSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.
 
 With --detailed-exitcode the exit status reports the result: 0 clean,
-2 drift, pending changes (--dry-run) or a failing fail-severity check,
-1 error.
+2 drift or a failing fail-severity check, 1 error.
 
 Examples:
     pudl run github-chazu
     pudl run github-chazu --detailed-exitcode
-    pudl run k8sPolicy --converge
-    pudl run k8sConverge --converge --only web,api
-    pudl run k8sConverge --converge --dry-run
     pudl run --populate 'command:gcloud compute networks list --format=json'
 ```
 
@@ -1572,26 +1566,18 @@ Flags:
 |------|------|---------|-------------|
 | `--catalog-scope` | string |  | which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under |
 | `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
-| `--converge` | bool |  | opt into the convergence loop (mutates the target) |
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error |
-| `--dry-run` | bool |  | print the plan, execute nothing (requires --converge) |
+| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
 | `--input` | stringArray |  | Ad-hoc populate input key=value (repeatable) |
-| `--max-applies` | int | `20` | durable cap on applies since this model was last verified clean; 0 disables (requires --converge) |
-| `--max-iters` | int | `5` | loop iteration cap (requires --converge) |
 | `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
 | `--mu-root` | string |  | mu project root to run within (default: discover mu.cue from the model dir) |
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--only` | stringSlice |  | converge only these resource selectors (requires --converge) |
 | `--populate` | string |  | Run an unregistered observer: plugin:&lt;name&gt;, or command:&lt;cmdline&gt; (a command printing JSON records) |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-| `--require-approval` | bool |  | persist the converge request and wait for `pudl run resume <run-id>` |
 
 Subcommands:
 
-- [pudl run reject](#pudl-run-reject) — Reject a pending run or exact set plan
 - [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-- [pudl run resume](#pudl-run-resume) — Approve and continue a pending run or exact set plan
 - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
 
 **Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
@@ -1721,21 +1707,6 @@ the catalog as it is — e.g. data brought in with `pudl import` — after synci
 projected facts ([projection](projection.md)). It cannot declare
 `desired` or `converge`.
 
-## pudl run reject
-
-Reject a pending run or exact set plan
-
-```text
-pudl run reject <operation-id>
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-
 ## pudl run report
 
 Read the latest or named standalone/set operation report
@@ -1760,21 +1731,6 @@ standalone approvals retain their request-level behavior.
 
 Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
 
-## pudl run resume
-
-Approve and continue a pending run or exact set plan
-
-```text
-pudl run resume <operation-id>
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-
 ## pudl run set
 
 Run an explicit producer/consumer model set in dependency order
@@ -1787,42 +1743,26 @@ pudl run set <model> [<model>...] [flags]
 Run exactly the named models in dependency order.
 
 The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Without
---converge, every member is observe-only and successful producer snapshots are
-pinned for downstream plain bindings.
-
-With --converge, pudl completes read-only preflight and exact mu planning for
-the whole set before the first mutation. --require-approval persists and pauses
-any exact plan. A set that can write a sealed output is always approval-gated,
-even without the flag. Generated targets use strict sealed routing, so unused
-declarations, undeclared action claims, and ambiguous output writers fail during
-planning before mutation or provider traffic. Resume rebuilds and revalidates
-the exact plan before producer-first execution.
+whose producer is not named fails preflight before any member runs. Every
+member is observe-only, and successful producer snapshots are pinned for
+downstream plain bindings.
 
 Examples:
   pudl run set network app
   pudl run set network app --max-observation-age 15m
-  pudl run set network app --converge
-  pudl run set network app --converge --require-approval
   pudl run set network app --detailed-exitcode
   pudl run report
-  pudl run resume <run-set-id>
-  pudl run reject <run-set-id>
 ```
 
 Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--converge` | bool |  | plan and execute mutations only after every member completes read-only preflight |
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error |
-| `--max-applies` | int | `20` | durable apply budget per mutating member (0 disables) |
-| `--max-iters` | int | `5` | maximum apply iterations per mutating member |
+| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
 | `--mu-root` | string |  | mu project root for member runs (default: discover per model) |
 | `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-| `--require-approval` | bool |  | persist the exact run-set plan and wait for approval before mutation |
 
 Observe-only sets continue independent branches after a member failure while
 blocking its dependents. Mutating sets complete read-only preflight for every

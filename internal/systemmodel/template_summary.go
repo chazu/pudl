@@ -11,7 +11,6 @@ import (
 type TemplateSummary struct {
 	PopulateKind   PopulateKind
 	PopulatePlugin string
-	ConvergePlugin string
 	DesiredCount   int
 	CheckCount     int
 	PluginNames    []string
@@ -31,9 +30,6 @@ func (t *ModelTemplate) Summary() (TemplateSummary, error) {
 		if plugin := populate.LookupPath(cue.ParsePath("plugin")); plugin.Exists() {
 			summary.PopulatePlugin, _ = plugin.String()
 		}
-	}
-	if converge := t.value.LookupPath(cue.ParsePath("converge.plugin")); converge.Exists() {
-		summary.ConvergePlugin, _ = converge.String()
 	}
 	var err error
 	if summary.DesiredCount, err = listLength(t.value, "desired"); err != nil {

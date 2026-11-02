@@ -12,7 +12,7 @@ var modelNewCmd = &cobra.Command{
 	Short: "Scaffold a #SystemModel observer",
 	Long: `Create a registered #SystemModel scaffold in the project schema (or the
 global schema outside a workspace). Always edit the returned file to add desired
-state, checks, or a converge arm.
+state or checks.
 
 --populate takes plugin:<name> (a cached mu plugin) or command:<cmdline>, a
 command printing JSON records, run directly by pudl (no shell, no mu).
