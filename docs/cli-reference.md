@@ -184,8 +184,8 @@ can gate on it without parsing the report:
 
 | Exit | Meaning |
 |------|---------|
-| `0` | Clean: no drift, every fail-severity check passed |
-| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check (with `--fail-on new`, one with a new finding) — and nothing else went wrong |
+| `0` | Clean: no drift, every fail-severity check passed or is waived |
+| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check (with `--fail-on new`, one with a new unwaived finding) — and nothing else went wrong |
 | `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
 
 Under this flag every error exits 1, so `2` always means findings. When several
@@ -193,6 +193,42 @@ models fail, the check exits 2 only when every failed model failed on its
 fail-severity checks alone; models blocked or cancelled behind them do not
 count as separate errors.
 
+**Waivers.** A model's `waivers` list declares accepted, time-boxed
+exceptions to its checks' findings, reviewed and versioned with the checks.
+Each names an `owner`, a `reason`, a `created` date and an `expires` date
+(`YYYY-MM-DD`, all required), and one target: a check's witnesses, or one
+compliance-policy violation.
+
+```cue
+waivers: [{
+	check:   "nat-ip-not-in-use"   // an expect: "empty" check of this model
+	witness: {address: "https://.../addresses/nat-ip-2"}  // values the witness must carry
+	owner: "network-team", reason: "held for failover"
+	created: "2026-11-01", expires: "2027-01-31"
+}, {
+	policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingress"
+	resource: "<resource ID from pudl policy show>"
+	owner: "security", reason: "public bastion until the VPN lands"
+	created: "2026-11-01", expires: "2026-12-31"
+}]
+```
+
+A policy waiver applies to any check of the model whose witnesses carry
+`resource` and `policy` arguments (such as `policy_noncompliant`): a witness is
+waived when every violation it stands for — narrowed by any `rule`, `severity`,
+`path` or `kind` argument it also carries — has a waiver. Loading fails on a
+missing field, an invalid date, `expires` before `created`, or a check the model
+does not have.
+
+A waived finding stays in the report with its waiver (`witnesses[].waiver`).
+A check whose every finding is waived has outcome `waived` (not a pass; the
+summary counts it in `waived_checks`) and does not fail the check or
+`--detailed-exitcode`. A waiver applies through its `expires` date (UTC); after
+that its findings count again and the report flags it as `expired`. A waiver
+that matches no finding is reported `stale`. The model report's `waivers` list
+gives each waiver's state and how many findings it matched. `pudl policy show`
+and `pudl show` do not mark waived violations: waivers belong to a model's
+checks.
 **Changes over time.** Each check's failing matches are compared with the
 model's earlier reports of the same check over the same scope (same mode,
 query, expectation, check scope and observation scope). A check result
@@ -220,12 +256,15 @@ reports without a verdict are skipped; incomplete ones still count as having
 seen what they recorded. The baseline is the stored reports, not earlier
 snapshots evaluated again: they are the findings pudl recorded under the rules
 in force then, and they survive snapshot retention, so changing a rule can
-show as resolved and new findings. The summary counts `new_findings` and
-`resolved_findings`. Compare two named reports with
+show as resolved and new findings. A waived finding keeps its state and is
+marked `waived` (`changes.waived` counts them); waiving never resolves a
+finding, and once its waiver expires it counts again. The summary counts
+`new_findings` and `resolved_findings`. Compare two named reports with
 [`pudl report ID --since ID2`](#pudl-report).
 
 **Failing only on new findings.** `--fail-on new` makes fail-severity check
-failures fail the command only when one of them has a `new` finding (the
+failures fail the command only when one of them has a `new` finding that no
+active waiver excuses (the
 first report of a check has nothing to compare with, so its failures are
 new). A check whose only failures are known exits 0 and says so on stderr.
 With `--detailed-exitcode` it exits 0 instead of 2; drift still exits 2, and

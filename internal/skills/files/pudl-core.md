@@ -145,6 +145,14 @@ See `docs/projection.md`.
 - **Drift** set-diffs `desired` against the records the check just observed and
   reports `missing`/`changed`/`unidentifiable`/`ambiguous` findings. Nothing is
   changed.
+- **Waivers**: `waivers: [...]` on the model accepts findings until a date.
+  Each needs `owner`, `reason`, `created`, `expires` (`YYYY-MM-DD`) and a
+  target: `check` + `witness: {arg: value}` (an `expect: "empty"` check's
+  witnesses), or `policy` + `rule` + `resource` (a policy violation behind a
+  check whose witnesses carry `resource` and `policy`). A fully waived check
+  has outcome `waived`, stays in the report, and does not fail the check or
+  `--detailed-exitcode`; expired waivers stop applying and are flagged; waivers
+  matching nothing are reported `stale`.
 - **Retired fields** — `converge`, `plugins`, `sealed_inputs`,
   `sealed_outputs`, `inputs`, `bindings`, `#PluginObserve`, `#EweTarget` — fail
   to load with an error naming the field (`docs/retired-commands.md`).
@@ -197,13 +205,15 @@ inspects payloads before pagination. `show --field` reads one field; `show
 OLD` compares matching populations. `list --fancy` is retained.
 
 Save a query as a check with `model new NAME --check RELATION --evidence
-scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/unknown/error.
+scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/waived/unknown/error.
 Missing, broken, incomplete or stale required evidence cannot pass. Reports
 include separate execution/conformity/checks/verification summaries and retained
 evidence; age_at_check is frozen. Each check result records `findings` (every
 failing match by a stable key: head arguments without evidence IDs) with a
 state — new, persisting, resolved, unknown — and `first_seen`, and `changes`
 against the model's comparable earlier reports. Only a complete observation
-resolves; a partial or failed one leaves earlier findings unknown. `doctor --json` lists repair diagnoses with
+resolves; a partial or failed one leaves earlier findings unknown. Waived
+findings keep their state, are marked `waived`, and never count for
+`--fail-on new`. `doctor --json` lists repair diagnoses with
 preview/apply arguments; only `doctor --fix` writes. Explicit --schema is strict; exploratory
 fallback requires --allow-schema-fallback.

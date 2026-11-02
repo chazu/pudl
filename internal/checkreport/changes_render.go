@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/chazu/pudl/internal/waiver"
 )
 
 const noEarlierReport = "no comparable earlier report"
@@ -32,12 +34,23 @@ func WriteChanges(w io.Writer, c CheckResult) {
 			since += " (" + ch.SinceAt.UTC().Format(time.RFC3339) + ")"
 		}
 	}
-	fmt.Fprintf(w, "    - %s: %d new, %d persisting, %d resolved, %d unknown\n", since, ch.New, ch.Persisting, ch.Resolved, ch.Unknown)
+	waived := ""
+	if ch.Waived > 0 {
+		waived = fmt.Sprintf(" (%d waived)", ch.Waived)
+	}
+	fmt.Fprintf(w, "    - %s: %d new, %d persisting, %d resolved, %d unknown%s\n", since, ch.New, ch.Persisting, ch.Resolved, ch.Unknown, waived)
 	if ch.Note != "" && ch.Note != noEarlierReport {
 		fmt.Fprintf(w, "    - note: %s\n", ch.Note)
 	}
 	if c.Expect != "empty" {
 		return // one finding per check: the counts say it all
+	}
+	// The waiver each current witness matched, active or expired.
+	waivers := map[string]*waiver.Ref{}
+	for _, w := range c.Witnesses {
+		if w.Waiver != nil {
+			waivers[w.Key] = w.Waiver
+		}
 	}
 	unlisted := 0
 	for _, f := range c.Findings {
@@ -49,6 +62,11 @@ func WriteChanges(w io.Writer, c CheckResult) {
 		first := ""
 		if f.FirstSeen != nil {
 			first = " (first seen " + f.FirstSeen.UTC().Format(time.RFC3339) + ")"
+		}
+		if ref := waivers[f.Key]; ref != nil && f.State != FindingResolved && f.State != FindingUnknown {
+			first += waiverNote(ref)
+		} else if f.Waived {
+			first += " — waived"
 		}
 		fmt.Fprintf(w, "    - %s %s%s\n", f.State, args, first)
 	}

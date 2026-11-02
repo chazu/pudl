@@ -11,7 +11,43 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/waiver"
 )
+
+// TestWaivedFindingsAreClassifiedAndMarked: a waived match keeps its key and
+// state (new or persisting) and is marked waived; an expired waiver excuses
+// nothing.
+func TestWaivedFindingsAreClassifiedAndMarked(t *testing.T) {
+	tuples := waiverTuples(3) // r00, r01, r02
+	waive := func(state waiver.State) MatchFunc {
+		return func(args map[string]any) (*waiver.Ref, error) {
+			if args["name"] == "r00" {
+				return &waiver.Ref{Owner: "o", State: state}, nil
+			}
+			return nil, nil
+		}
+	}
+	c := CheckResult{Name: "c", Expect: "empty", Scope: checks.ScopeLatestKnown, Outcome: "fail", Count: 3}
+	require.NoError(t, c.SetFindings(tuples, waive(waiver.Active)))
+	findings, changes := Classify(NewObservation("run_1", "m", time.Now(), c, false), nil)
+	assert.Equal(t, 3, changes.New)
+	assert.Equal(t, 1, changes.Waived)
+	for _, f := range findings {
+		assert.Equal(t, f.Arguments["name"] == "r00", f.Waived)
+	}
+
+	expired := CheckResult{Name: "c", Expect: "empty", Scope: checks.ScopeLatestKnown, Outcome: "fail", Count: 3}
+	require.NoError(t, expired.SetFindings(tuples, waive(waiver.Expired)))
+	for _, f := range expired.Findings {
+		assert.False(t, f.Waived, "an expired waiver makes its finding count again")
+	}
+
+	all := CheckResult{Name: "c", Expect: "empty", Scope: checks.ScopeLatestKnown, Outcome: "fail", Count: 1}
+	require.NoError(t, all.SetFindings(tuples[:1], waive(waiver.Active)))
+	require.Equal(t, OutcomeWaived, all.Outcome)
+	require.Len(t, all.Findings, 1, "a waived check still records its findings")
+	assert.True(t, all.Findings[0].Waived)
+}
 
 // evaluation is a recorded `expect: empty` check over a complete snapshot of
 // scope gcp/prod whose failing matches are the named firewalls.
@@ -29,7 +65,7 @@ func evaluation(t *testing.T, complete bool, names ...string) CheckResult {
 		c.Outcome = "fail"
 	}
 	c.Witnesses, c.WitnessesTruncated = Witnesses(tuples, c.Expect)
-	c.Findings, c.FindingsTruncated = MatchFindings(tuples, c.Expect, c.Outcome, c.Witnesses)
+	c.Findings, c.FindingsTruncated = MatchFindings(tuples, c.Expect, c.Outcome, c.Witnesses, nil)
 	return c
 }
 
@@ -169,7 +205,7 @@ func TestPolicyViolationsClassifyByResourceAndPolicy(t *testing.T) {
 		}
 		c := CheckResult{Name: "policy", Query: "policy_noncompliant", Expect: "empty", Severity: "fail", Scope: checks.ScopeLatestKnown, Outcome: "fail", Count: len(tuples)}
 		c.Witnesses, _ = Witnesses(tuples, c.Expect)
-		c.Findings, _ = MatchFindings(tuples, c.Expect, c.Outcome, c.Witnesses)
+		c.Findings, _ = MatchFindings(tuples, c.Expect, c.Outcome, c.Witnesses, nil)
 		return c
 	}
 	before := NewObservation("run_0", "checks-only", time.Now(), policyCheck([2]string{"bucket/a", "public-access"}), false)
@@ -210,13 +246,13 @@ func TestMatchFindingsBoundsAndNonempty(t *testing.T) {
 	for i := 0; i < FindingLimit+5; i++ {
 		tuples = append(tuples, datalog.Tuple{Args: map[string]interface{}{"n": i}})
 	}
-	findings, truncated := MatchFindings(tuples, "empty", "fail", nil)
+	findings, truncated := MatchFindings(tuples, "empty", "fail", nil, nil)
 	assert.Len(t, findings, FindingLimit)
 	assert.True(t, truncated)
 
-	findings, truncated = MatchFindings(nil, "nonempty", "fail", nil)
+	findings, truncated = MatchFindings(nil, "nonempty", "fail", nil, nil)
 	assert.Len(t, findings, 1)
 	assert.False(t, truncated)
-	findings, _ = MatchFindings(nil, "nonempty", "unknown", nil)
+	findings, _ = MatchFindings(nil, "nonempty", "unknown", nil, nil)
 	assert.Nil(t, findings, "a check without a verdict has no findings")
 }

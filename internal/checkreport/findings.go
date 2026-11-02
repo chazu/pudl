@@ -20,9 +20,9 @@ const FindingLimit = 1000
 // one that no longer matches is resolved, or unknown when this evaluation
 // cannot establish its absence.
 //
-// Waived findings: when waivers land, a waived match keeps its key and is
-// classified like any other (its state says whether it is new); the waiver is
-// a separate annotation, so waiving never resolves a finding.
+// A waived match keeps its key and is classified like any other (its state
+// says whether it is new); waived is a separate mark, so waiving never
+// resolves a finding.
 const (
 	FindingNew        = "new"
 	FindingPersisting = "persisting"
@@ -32,11 +32,14 @@ const (
 
 // Finding is one failing match of a check, identified stably across
 // observations. Arguments are recorded when the match is one of a report's
-// witnesses; FirstSeen is when a comparable report first recorded it.
+// witnesses; FirstSeen is when a comparable report first recorded it. Waived
+// marks a current finding an active waiver excuses: it keeps its state, but
+// is not a failure (an expired waiver excuses nothing).
 type Finding struct {
 	Key       string         `json:"key"`
 	State     string         `json:"state,omitempty"`
 	FirstSeen *time.Time     `json:"first_seen,omitempty"`
+	Waived    bool           `json:"waived,omitempty"`
 	Arguments map[string]any `json:"arguments,omitempty"`
 }
 
@@ -70,11 +73,12 @@ func FindingKey(args map[string]any) string {
 }
 
 // MatchFindings records the identity of every failing match of a check, with
-// the arguments of those that are also witnesses. A failing `expect:
-// nonempty` check is one finding with no arguments. truncated reports that
-// more matched than FindingLimit.
-func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []Witness) (findings []Finding, truncated bool) {
-	if outcome != "fail" {
+// the arguments of those that are also witnesses and whether waivedKeys says
+// an active waiver excuses it. A failing `expect: nonempty` check is one
+// finding with no arguments. truncated reports that more matched than
+// FindingLimit.
+func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []Witness, waivedKeys map[string]bool) (findings []Finding, truncated bool) {
+	if outcome != "fail" && outcome != OutcomeWaived {
 		return nil, false
 	}
 	if expect != "empty" {
@@ -91,7 +95,7 @@ func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []W
 			continue
 		}
 		seen[key] = true
-		findings = append(findings, Finding{Key: key, Arguments: known[key]})
+		findings = append(findings, Finding{Key: key, Waived: waivedKeys[key], Arguments: known[key]})
 	}
 	sort.Slice(findings, func(i, j int) bool { return findings[i].Key < findings[j].Key })
 	if len(findings) > FindingLimit {

@@ -84,15 +84,18 @@ func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishSta
 				currentSnapshot = report.Drift.SnapshotID
 			}
 		}
+		waivers := newWaiverMatcher(r.cat, r.model, time.Now())
 		results, err := runChecks(r.ctx, r.cat, r.ws, r.out, r.model, r.modelDir, checkContext{
 			currentSnapshot: currentSnapshot,
 			runID:           r.session.RunID,
 			fromCatalog:     r.opts.FromCatalog,
+			waivers:         waivers,
 		})
 		if err != nil {
 			return runFinalization{runErr: runErr}, err
 		}
 		report.Checks = results
+		report.Waivers = waivers.Outcomes()
 		r.recordChanges(report)
 		if anyCheckUncertain(results) {
 			report.OK = false
@@ -216,10 +219,11 @@ func anyFailSeverityFailed(results []checkreport.CheckResult) bool {
 }
 
 // failedFailSeverityNames lists the fail-severity checks that did not pass.
+// A check failing only on waived findings is not among them.
 func failedFailSeverityNames(results []checkreport.CheckResult) []string {
 	var names []string
 	for _, c := range results {
-		if !c.Passed && c.Severity == "fail" {
+		if c.Failing() && c.Severity == "fail" {
 			names = append(names, c.Name)
 		}
 	}
@@ -277,15 +281,23 @@ func reportHasFindings(r *checkreport.ModelReport) bool {
 	return anyFailSeverityFailed(r.Checks)
 }
 
-// reportHasNewFailures reports whether a fail-severity check found a failing
-// match that no comparable earlier report recorded.
+// reportHasNewFailures reports whether a fail-severity check found a failing,
+// unwaived match that no comparable earlier report recorded.
 func reportHasNewFailures(r *checkreport.ModelReport) bool {
 	if r == nil {
 		return false
 	}
 	for _, c := range r.Checks {
-		if c.Severity == "fail" && !c.Passed && !c.Uncertain() && (c.Changes == nil || c.Changes.New > 0) {
-			return true
+		if c.Severity != "fail" || !c.Failing() || c.Uncertain() {
+			continue
+		}
+		if c.Changes == nil {
+			return true // not classified: every failure may be new
+		}
+		for _, f := range c.Findings {
+			if f.State == checkreport.FindingNew && !f.Waived {
+				return true
+			}
 		}
 	}
 	return false

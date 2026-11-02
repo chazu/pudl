@@ -15,7 +15,9 @@ three checks-only families (network hygiene, data protection, GKE posture)
 that fail on high-severity noncompliance. See the
 [pack README](../examples/gcp/README.md) and the
 [delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
-five policy and doctor engine findings.
+five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
+(`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see
+`implog/2026_11_02_policy_engine_pack_fixes.md`.
 
 ### Check and report orchestration moved out of `cmd/` (2026-11-01)
 
@@ -677,6 +679,20 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.4` check waivers: a `waivers` list on `#SystemModel`
+    (check + witness selector, or policy + rule + resource; owner, reason,
+    created and expires required, validated at load). Fully waived checks
+    report outcome `waived`, stay visible with their waivers and do not fail
+    `pudl check` or `--detailed-exitcode`; expired waivers stop applying and
+    are flagged; unmatched waivers are reported stale. Marking waivers in
+    `pudl policy show`/`pudl show` is deferred. See
+    `implog/2026_11_02_check_waivers.md`.
+  - Done: `pudl-opz` policy annotations survive comprehensions the bare
+    policy cannot decide (an annotation that still cannot be read fails the
+    load), and evaluation ignores closedness at every depth; `pudl-pob` the
+    doctor identity_fields family check and fact projection skip policies.
+    GCP pack workarounds removed. See
+    `implog/2026_11_02_policy_engine_pack_fixes.md`.
   - Done: `pudl-xf5.5` finding changes over time: each check records its
     failing matches as findings with stable keys, classified new, persisting,
     resolved or unknown with first-seen times against the model's comparable
@@ -1204,6 +1220,7 @@ under the hood.
 | `populate` | `internal/populate/` | `#CommandObserve` execution: run commands, spool and decode their JSON records |
 | `modeldeps` | `internal/modeldeps/` | `model_depends_on` graph: declared edges, reconcile, upstream-freshness advisory |
 | `checks` | `internal/checks/` | Model check evaluation over the catalog or selected evidence |
+| `waiver` | `internal/waiver/` | Check waivers: validation, matching findings and policy violations, active/expired/stale outcomes |
 | `observe` | `internal/observe/` | Observation ingest into catalog entries and snapshots |
 | `proc` | `internal/proc/` | Context-bound subprocesses (mu, cue) with graceful cancellation |
 | `clidocs` | `internal/clidocs/` | Generated CLI reference |

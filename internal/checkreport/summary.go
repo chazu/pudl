@@ -51,6 +51,8 @@ func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 		}
 		if c.Uncertain() {
 			s.UnknownChecks++
+		} else if c.IsWaived() {
+			s.WaivedChecks++
 		} else if !c.Passed {
 			s.FailedChecks++
 		}
@@ -71,6 +73,9 @@ func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 	}
 	if allLiveChecks && r.Drift == nil {
 		s.Verification = "live"
+	}
+	if s.WaivedChecks > 0 {
+		s.Checks = "waived"
 	}
 	if s.FailedChecks > 0 {
 		s.Checks = "fail"
@@ -146,6 +151,7 @@ func SummarizeCheck(db *database.CatalogDB, report *acute.RunSetReport) error {
 		verification[m.Verification] = true
 		s.DriftCount += m.DriftCount
 		s.FailedChecks += m.FailedChecks
+		s.WaivedChecks += m.WaivedChecks
 		s.UnknownChecks += m.UnknownChecks
 		s.NewFindings += m.NewFindings
 		s.ResolvedFindings += m.ResolvedFindings
@@ -171,6 +177,8 @@ func SummarizeCheck(db *database.CatalogDB, report *acute.RunSetReport) error {
 		s.Checks = "unknown"
 	} else if checks["fail"] {
 		s.Checks = "fail"
+	} else if checks["waived"] {
+		s.Checks = "waived"
 	} else if checks["pass"] {
 		s.Checks = "pass"
 	}

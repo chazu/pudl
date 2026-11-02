@@ -18,7 +18,9 @@ type Changes struct {
 	Persisting int        `json:"persisting"`
 	Resolved   int        `json:"resolved"`
 	Unknown    int        `json:"unknown"`
-	Note       string     `json:"note,omitempty"`
+	// Waived counts the new and persisting findings an active waiver excuses.
+	Waived int    `json:"waived,omitempty"`
+	Note   string `json:"note,omitempty"`
 }
 
 // Observation is one recorded evaluation of a check, as change
@@ -159,6 +161,9 @@ func Classify(current Observation, history []Observation) ([]Finding, *Changes) 
 			f.FirstSeen = &at
 		}
 		f.State = FindingNew
+		if f.Waived {
+			changes.Waived++
+		}
 		if prior, ok := seen[f.Key]; ok {
 			f.State = FindingPersisting
 			if prior.FirstSeen.Before(*f.FirstSeen) {
@@ -178,7 +183,7 @@ func Classify(current Observation, history []Observation) ([]Finding, *Changes) 
 		if matched[key] {
 			continue
 		}
-		f.State = FindingUnknown
+		f.State, f.Waived = FindingUnknown, false
 		if current.Complete {
 			f.State = FindingResolved
 			changes.Resolved++
