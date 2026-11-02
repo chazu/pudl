@@ -10,7 +10,7 @@ import (
 // A result is stale when its policy digest differs from the loaded policy's.
 // Reasons are empty when every result is current.
 func (e *Evaluator) Stale(db *database.CatalogDB) ([]string, error) {
-	states, err := db.ListPolicyState()
+	states, err := db.ListPolicyState("", "")
 	if err != nil {
 		return nil, err
 	}
@@ -27,11 +27,11 @@ func (e *Evaluator) Stale(db *database.CatalogDB) ([]string, error) {
 	for _, s := range states {
 		have[s.ResourceID+"\x00"+s.Policy] = true
 		entry, found := current[s.ResourceID]
-		p, loaded := e.lookup(s.Policy)
+		_, loaded := e.lookup(s.Policy)
 		switch {
 		case !found || entry.ID != s.EntryID || entry.Schema != s.Type:
 			superseded++
-		case loaded && p.Digest != s.Digest:
+		case e.IsStale(s):
 			digest++
 		case !loaded && !e.broken[s.Policy]:
 			unloaded++

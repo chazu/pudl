@@ -194,17 +194,9 @@ func (e *EnhancedImporter) transformSource(opts ImportOptions, sourcePath string
 				return err
 			}
 		}
-		encoded, err := json.Marshal(record)
+		encoded, err := EncodeRecord(shape.collection, index, record)
 		if err != nil {
 			return fmt.Errorf("encode record %d: %w", index, err)
-		}
-		switch shape.collection {
-		case "ndjson":
-			encoded = append(encoded, '\n')
-		case "json-array":
-			if index > 0 {
-				encoded = append([]byte(","), encoded...)
-			}
 		}
 		_, err = w.Write(encoded)
 		return err
@@ -231,6 +223,26 @@ func (e *EnhancedImporter) transformSource(opts ImportOptions, sourcePath string
 		result.path = ""
 	}
 	return result, nil
+}
+
+// EncodeRecord encodes one record as the transform stores it: a document as its
+// JSON, and a collection record ("ndjson" or "json-array") with its framing.
+// An array's enclosing brackets are the caller's. The sensitive scrub calls it
+// too, so a scrubbed payload holds exactly what a fresh import would store.
+func EncodeRecord(collection string, index int, record any) ([]byte, error) {
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return nil, err
+	}
+	switch collection {
+	case "ndjson":
+		encoded = append(encoded, '\n')
+	case "json-array":
+		if index > 0 {
+			encoded = append([]byte(","), encoded...)
+		}
+	}
+	return encoded, nil
 }
 
 // checkUnstructuredDocument handles YAML/CSV and other non-JSON documents,
@@ -290,6 +302,10 @@ func (e *EnhancedImporter) assignForTransform(record any, opts ImportOptions, sh
 	return spooled, nil
 }
 
+// WithheldValidationMessage replaces a validation message for a schema with
+// sensitive fields: CUE messages quote the conflicting values.
+const WithheldValidationMessage = "value rejected (details withheld: schema declares sensitive fields)"
+
 // stripValidationValues returns a copy of vr whose errors no longer quote data:
 // values are dropped and messages (CUE messages quote conflicting values) are
 // replaced. Paths are kept; they name fields, not data. Used only for schemas
@@ -302,7 +318,7 @@ func stripValidationValues(vr *validator.ValidationResult) *validator.Validation
 		out := make([]validator.ValidationError, len(errs))
 		for i, e := range errs {
 			e.Value = nil
-			e.Message = "value rejected (details withheld: schema declares sensitive fields)"
+			e.Message = WithheldValidationMessage
 			out[i] = e
 		}
 		return out

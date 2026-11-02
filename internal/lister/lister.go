@@ -321,6 +321,13 @@ func (l *Lister) FindEntry(id string) (*ListEntry, error) {
 		if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
 			dbEntry, err = l.catalogDB.GetEntryByProquint(id)
 			if err != nil {
+				// The sensitive scrub re-derives IDs; old IDs and proquints
+				// (in reports and fact history) redirect to the current one.
+				if current, ok, redirectErr := l.catalogDB.ResolveEntryRedirect(id); redirectErr == nil && ok {
+					dbEntry, err = l.catalogDB.GetEntry(current)
+				}
+			}
+			if err != nil {
 				if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
 					return nil, errors.NewInputError(
 						fmt.Sprintf("Entry not found: %s", id),

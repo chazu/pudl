@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"cuelang.org/go/cue/parser"
@@ -55,18 +56,17 @@ func LoadDraft(file string, schemaPaths []string) (_ *Draft, resultErr error) {
 		return nil, err
 	}
 	namespace := draftNamespace(file, parsed.PackageName(), schemaPaths)
-	target := filepath.Join(d.dir, namespace, strings.TrimSuffix(filepath.Base(file), ".cue")+".cue")
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(target, src, 0o600); err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(filepath.Join(d.dir, "cue.mod"), 0o755); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(d.dir, "cue.mod", "module.cue"), []byte(draftModule), 0o600); err != nil {
-		return nil, err
+	for path, content := range map[string][]byte{
+		filepath.Join(namespace, strings.TrimSuffix(filepath.Base(file), ".cue")+".cue"): src,
+		filepath.Join("cue.mod", "module.cue"):                                           []byte(draftModule),
+	} {
+		path = filepath.Join(d.dir, path)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(path, content, 0o600); err != nil {
+			return nil, err
+		}
 	}
 	inferrer, err := inference.NewSchemaInferrer(append([]string{d.dir}, schemaPaths...)...)
 	if err != nil {
@@ -83,7 +83,7 @@ func LoadDraft(file string, schemaPaths []string) (_ *Draft, resultErr error) {
 			return nil, le
 		}
 	}
-	for _, p := range d.Evaluator.Set().Policies() {
+	for _, p := range d.Evaluator.set.Policies() {
 		if source, _ := inferrer.SchemaSource(p.Name); source == d.dir {
 			d.Policies = append(d.Policies, p)
 		}
@@ -94,27 +94,21 @@ func LoadDraft(file string, schemaPaths []string) (_ *Draft, resultErr error) {
 	return d, nil
 }
 
-// Select returns the named draft policies; a name the draft does not declare
-// is an error.
+// Select returns the named draft policies, or all of them when none are
+// named; a name the draft does not declare is an error.
 func (d *Draft) Select(names []string) ([]*policy.Policy, error) {
+	if len(names) == 0 {
+		return d.Policies, nil
+	}
 	var out []*policy.Policy
 	for _, name := range names {
 		p, ok := d.Evaluator.lookup(name)
-		if !ok || !containsPolicy(d.Policies, p) {
+		if !ok || !slices.Contains(d.Policies, p) {
 			return nil, fmt.Errorf("the draft declares no policy %q", name)
 		}
 		out = append(out, p)
 	}
 	return out, nil
-}
-
-func containsPolicy(policies []*policy.Policy, p *policy.Policy) bool {
-	for _, q := range policies {
-		if q == p {
-			return true
-		}
-	}
-	return false
 }
 
 // draftNamespace is the package directory the draft's schemas are named by.

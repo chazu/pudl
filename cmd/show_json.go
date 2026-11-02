@@ -15,12 +15,14 @@ type showOutput struct {
 	Raw      json.RawMessage  `json:"raw,omitempty"`
 	// RawText carries stored data that is not JSON (YAML, CSV) verbatim.
 	RawText string `json:"raw_text,omitempty"`
+	// Compliance is each applicable policy's stored result.
+	Compliance []complianceResult `json:"compliance"`
 }
 
 // writeEntryJSON writes entry as one JSON document. Stored JSON is embedded
 // byte-for-byte, so numbers keep their exact value.
 func writeEntryJSON(entry lister.ListEntry, includeMetadata, includeRaw bool) error {
-	out := showOutput{Entry: entry}
+	out := showOutput{Entry: entry, Compliance: entryCompliance(entry)}
 	if includeMetadata {
 		content, err := os.ReadFile(entry.MetadataPath)
 		if err != nil {
