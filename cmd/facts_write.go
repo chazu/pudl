@@ -9,6 +9,7 @@ import (
 
 	"github.com/chazu/pudl/internal/cliadvanced"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/secrets"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -93,6 +94,7 @@ Examples:
 		if err != nil {
 			return fmt.Errorf("failed to add fact: %w", err)
 		}
+		warnFactSecrets(obj)
 
 		if jsonOutput {
 			out, _ := json.MarshalIndent(f, "", "  ")
@@ -102,6 +104,18 @@ Examples:
 		}
 		return nil
 	},
+}
+
+// warnFactSecrets warns on stderr about likely secrets in fact args, by path
+// and kind only, once the fact is written: facts are never redacted, so the
+// warning is the only signal.
+func warnFactSecrets(args map[string]interface{}) {
+	findings := secrets.Scan(args, secrets.Options{})
+	if len(findings) == 0 {
+		return
+	}
+	fmt.Fprintf(errw(), "⚠️  args contain likely secrets: %s\n", secrets.Describe(findings))
+	fmt.Fprintln(errw(), "   Facts are stored unredacted and kept in history; store a reference to the secret instead.")
 }
 
 var factsSearchCmd = &cobra.Command{

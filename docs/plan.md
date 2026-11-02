@@ -629,6 +629,13 @@ implemented. Beads work:
     naming a policy is an error naming its type; `pudl doctor --fix --only
     policy-leaves` moves existing policy-leaf entries to their type with
     identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
+- `pudl-udi`: likely-secret detection outside sensitive-field coverage.
+  - Done: pure detector (`internal/secrets`), `_pudl.secret_scan_ignore`
+    allowlist, import and `--dry-run` warnings (`secret_warnings` in `--json`),
+    `pudl facts add` warning and opt-in `factstore.WithSecretRejection`. See
+    `implog/2026_11_01_secret_pattern_detection.md`.
+  - Not yet: `pudl doctor` scan of stored payloads and facts; observe-ingest
+    warnings (wiring described in the implog).
 
 The convergence and value-wiring sections below are historical.
 

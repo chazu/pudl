@@ -11,6 +11,7 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -91,6 +92,11 @@ type ImportResult struct {
 	// FactWarnings says what was not projected and why.
 	Facts        map[string]int `json:"facts,omitempty"`
 	FactWarnings []string       `json:"fact_warnings,omitempty"`
+	// SecretWarnings lists likely secrets found outside schema sensitive-field
+	// coverage, by record, path and kind (never the value), capped at
+	// maxSecretWarnings; SecretWarningsTotal counts them all.
+	SecretWarnings      []SecretWarning `json:"secret_warnings,omitempty"`
+	SecretWarningsTotal int             `json:"secret_warnings_total,omitempty"`
 	// DryRun marks a Preview result; Preview holds what it found.
 	DryRun  bool           `json:"dry_run,omitempty"`
 	Preview *PreviewReport `json:"preview,omitempty"`
@@ -150,6 +156,7 @@ func newImporterState(dataPath, pudlHome string, schemaPaths ...string) (*Enhanc
 	imp.inferrer = inferrer
 	imp.redactor = redact.NewRegistry(inferrer)
 	imp.projector = projection.NewRegistry(inferrer, imp.redactor)
+	imp.secretScan = secretscan.New(inferrer, imp.redactor)
 
 	return imp, nil
 }

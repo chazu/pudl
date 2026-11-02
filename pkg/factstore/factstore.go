@@ -24,17 +24,22 @@ type Tuple = datalog.Tuple
 
 // Store provides read/write and query access to a pudl data store.
 type Store struct {
-	db *database.CatalogDB
+	db            *database.CatalogDB
+	rejectSecrets bool
 }
 
 // Open creates a Store backed by the pudl catalog at the given config directory
 // (e.g. factstore.GlobalDir() or a workspace's repo .pudl directory).
-func Open(pudlDir string) (*Store, error) {
+func Open(pudlDir string, opts ...Option) (*Store, error) {
 	db, err := database.NewCatalogDB(pudlDir)
 	if err != nil {
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s, nil
 }
 
 // Close releases the database connection.
@@ -45,7 +50,12 @@ func (s *Store) Close() error {
 // AddFact inserts a new fact, or returns the stored fact on an identical-ID
 // replay, preserving its lifecycle and provenance. Reusing an ID for different
 // identity content returns an error. Numeric ID canonicalization is lossless.
+// On a store opened WithSecretRejection, args containing a likely secret
+// return *SecretError and nothing is written.
 func (s *Store) AddFact(f Fact) (Fact, error) {
+	if err := s.checkSecrets(f); err != nil {
+		return Fact{}, err
+	}
 	return s.db.AddFact(f)
 }
 

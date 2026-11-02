@@ -89,6 +89,7 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 		}
 	}
 	var tally identityTally
+	var secretsFound secretTally
 	facts := projection.NewTally()
 	intended := intendedSchema(opts)
 	traced := opts
@@ -126,6 +127,7 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 			result.Redacted += redact.Apply(record, paths)
 			assigned.Validation = stripValidationValues(assigned.Validation)
 		}
+		e.scanSecrets(&secretsFound, record, index, intended, schema)
 
 		if intended != "" && !assigned.Validated {
 			report.ValidationFailures++
@@ -178,6 +180,7 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 	result.RecordCount = n
 	tally.apply(result)
 	applyTally(result, facts)
+	secretsFound.apply(result)
 	return result, nil
 }
 

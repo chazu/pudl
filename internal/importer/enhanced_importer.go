@@ -15,6 +15,7 @@ import (
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -34,6 +35,7 @@ type EnhancedImporter struct {
 	chain       *validator.ChainValidator // built on first manual-schema import
 	redactor    *redact.Registry          // sensitive-field paths per schema
 	projector   *projection.Registry      // schema-declared fact projections
+	secretScan  *secretscan.Scanner       // likely-secret warnings outside sensitive coverage
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -251,6 +253,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	})
 	if result != nil && stream != nil {
 		result.SchemaMismatches = stream.schemaMismatches
+		stream.secrets.apply(result)
 	}
 	if result != nil && transformed != nil {
 		result.Redacted = transformed.redacted
