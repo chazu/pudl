@@ -1290,6 +1290,61 @@
               "type": "string"
             }
           ]
+        },
+        {
+          "use": "list",
+          "short": "List loaded policies with their stored result counts",
+          "long": "List every loaded compliance policy: the type it applies to, the policy it\nextends, its rule count, the type's review status (draft results are\nprovisional), when it was last evaluated, and its stored compliant,\nnoncompliant, unknown and stale result counts. A result is stale when it was\nevaluated with an older version of the policy; pudl policy evaluate refreshes it.\n\n--type T lists the policies that apply to type T.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "type",
+              "usage": "List only the policies that apply to type `T`",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "show POLICY",
+          "short": "Show a policy's rules, inheritance and failing resources",
+          "long": "Show one compliance policy: its inheritance chain, its rules (inherited ones\nincluded) with severity, doc and the policy that declared each, how many\nresources currently fail each rule, its stored result counts and staleness, and\nthe resources failing most (most severe first, then most violations).\n\n--limit caps the failing resources listed (0 lists all).",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "Maximum failing resources to list (0 = all)",
+              "type": "int",
+              "default": "10"
+            }
+          ]
         }
       ]
     },
@@ -1629,7 +1684,7 @@
     {
       "use": "show \u003cid\u003e",
       "short": "Show detailed information about a specific data entry",
-      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
       "args": "custom",
       "flags": [
         {

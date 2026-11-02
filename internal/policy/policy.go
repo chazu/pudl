@@ -110,8 +110,8 @@ type Rule struct {
 	DeclaredBy string `json:"declared_by_policy"`
 }
 
-// sortViolations orders violations by path, rule and kind.
-func sortViolations(vs []Violation) {
+// SortViolations orders violations by path, rule and kind.
+func SortViolations(vs []Violation) {
 	sort.Slice(vs, func(i, j int) bool {
 		if vs[i].Path != vs[j].Path {
 			return vs[i].Path < vs[j].Path

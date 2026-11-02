@@ -59,6 +59,8 @@ These flags apply to every command.
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 - [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
   - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
+  - [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
+  - [pudl policy show](#pudl-policy-show) — Show a policy's rules, inheritance and failing resources
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
 - [pudl report](#pudl-report) — Read the latest or named check report
@@ -1304,6 +1306,8 @@ reports stale results and pudl policy evaluate refreshes them.
 Subcommands:
 
 - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
+- [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
+- [pudl policy show](#pudl-policy-show) — Show a policy's rules, inheritance and failing resources
 
 ## pudl policy evaluate
 
@@ -1345,6 +1349,67 @@ Flags:
 |------|------|---------|-------------|
 | `--dry-run` | bool |  | Report what would change without writing |
 | `--what-if` | string |  | Evaluate a draft policy `FILE` without installing it or writing results |
+
+## pudl policy list
+
+List loaded policies with their stored result counts
+
+```text
+pudl policy list [flags]
+```
+
+```text
+List every loaded compliance policy: the type it applies to, the policy it
+extends, its rule count, the type's review status (draft results are
+provisional), when it was last evaluated, and its stored compliant,
+noncompliant, unknown and stale result counts. A result is stale when it was
+evaluated with an older version of the policy; pudl policy evaluate refreshes it.
+
+--type T lists the policies that apply to type T.
+```
+
+Examples:
+
+```bash
+pudl policy list
+  pudl policy list --type pudl/aws.#Bucket --json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--type` | string |  | List only the policies that apply to type `T` |
+
+## pudl policy show
+
+Show a policy's rules, inheritance and failing resources
+
+```text
+pudl policy show POLICY [flags]
+```
+
+```text
+Show one compliance policy: its inheritance chain, its rules (inherited ones
+included) with severity, doc and the policy that declared each, how many
+resources currently fail each rule, its stored result counts and staleness, and
+the resources failing most (most severe first, then most violations).
+
+--limit caps the failing resources listed (0 lists all).
+```
+
+Examples:
+
+```bash
+pudl policy show pudl/aws.#BucketBestPractice
+  pudl policy show pudl/aws.#BucketBestPractice --limit 0 --json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--limit` | int | `10` | Maximum failing resources to list (0 = all) |
 
 ## pudl prime
 
@@ -1691,6 +1756,11 @@ pudl show <id> [flags]
 ```text
 Show detailed information about a specific data entry including its content,
 metadata, and schema information.
+
+A compliance section lists each policy applicable to the entry's type with the
+resource's stored status (provisional when the type is a draft), its highest
+violation severity, and its violations (rule, severity, path, kind, declaring
+policy). --json includes it as "compliance".
 
 The ID parameter should be the unique identifier of the data entry as shown
 in the 'pudl list' command output.
