@@ -153,6 +153,10 @@ func TestGCPContentPack(t *testing.T) {
 	for _, rule := range []string{"gcp-sql-backups", "gcp-sql-pitr", "gcp-sql-public-ip", "gcp-sql-world-authorized-network"} {
 		require.Contains(t, r.Stdout, `"rule":"`+rule+`"`)
 	}
+	// Policies declare no identity_fields: they are not family members.
+	require.NotContains(t, r.Stderr, "projection disabled")
+	r = runCLI(t, "doctor")
+	require.NotContains(t, r.Stdout+r.Stderr, "Inconsistent identity_fields")
 
 	// Sensitive values never reach storage; secret references are kept.
 	r = runCLI(t, "list", "--schema", "gcp.#RunService", "--select", "spec.template.spec.containers[*].env", "--all", "--json")

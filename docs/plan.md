@@ -15,7 +15,9 @@ three checks-only families (network hygiene, data protection, GKE posture)
 that fail on high-severity noncompliance. See the
 [pack README](../examples/gcp/README.md) and the
 [delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
-five policy and doctor engine findings.
+five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
+(`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see
+`implog/2026_11_02_policy_engine_pack_fixes.md`.
 
 ### `pudl check MODEL...`: one command and one report (2026-11-01)
 
@@ -664,6 +666,12 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-opz` policy annotations survive comprehensions the bare
+    policy cannot decide (an annotation that still cannot be read fails the
+    load), and evaluation ignores closedness at every depth; `pudl-pob` the
+    doctor identity_fields family check and fact projection skip policies.
+    GCP pack workarounds removed. See
+    `implog/2026_11_02_policy_engine_pack_fixes.md`.
 - `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type

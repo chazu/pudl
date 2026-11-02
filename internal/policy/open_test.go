@@ -78,6 +78,11 @@ func TestLoad_UndecidableComprehensionKeepsRules(t *testing.T) {
 	res, err = set.Evaluate(p, "gcp.#Firewall", record)
 	require.NoError(t, err)
 	assert.Equal(t, StatusCompliant, res.Status)
+
+	delete(record, "direction")
+	res, err = set.Evaluate(p, "gcp.#Firewall", record)
+	require.NoError(t, err)
+	assert.Equal(t, StatusCompliant, res.Status, "a condition the record leaves undecided applies nothing: %v", res.Violations)
 }
 
 func TestLoad_RuleOnlyInsideComprehensionFailsToLoad(t *testing.T) {
