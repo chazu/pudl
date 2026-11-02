@@ -40,6 +40,21 @@ type PolicySummary struct {
 	Provisional int `json:"provisional"`
 }
 
+// count adds one result.
+func (s *PolicySummary) count(status policy.Status, provisional bool) {
+	switch status {
+	case policy.StatusCompliant:
+		s.Compliant++
+	case policy.StatusNoncompliant:
+		s.Noncompliant++
+	case policy.StatusUnknown:
+		s.Unknown++
+	}
+	if provisional {
+		s.Provisional++
+	}
+}
+
 // RuleSummary counts the resources one rule fails on.
 type RuleSummary struct {
 	Policy    string          `json:"policy"`
@@ -77,17 +92,7 @@ func (t *tally) note(p *Prepared) {
 		if s == nil {
 			continue
 		}
-		switch r.Status {
-		case policy.StatusCompliant:
-			s.Compliant++
-		case policy.StatusNoncompliant:
-			s.Noncompliant++
-		case policy.StatusUnknown:
-			s.Unknown++
-		}
-		if r.Provisional {
-			s.Provisional++
-		}
+		s.count(r.Status, r.Provisional)
 		seen := map[RuleSummary]bool{}
 		for _, v := range r.Violations {
 			key := RuleSummary{Policy: r.Policy, Rule: v.Rule, Severity: v.Severity, Kind: v.Kind}

@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/policy"
+	"github.com/chazu/pudl/internal/projection"
 )
 
 // Options select what Refresh evaluates.
@@ -23,47 +24,42 @@ type Options struct {
 // Select resolves policy names against the loaded set; no names selects
 // every loaded policy.
 func (e *Evaluator) Select(names []string) ([]*policy.Policy, error) {
+	var loaded []*policy.Policy
+	if e.set != nil {
+		loaded = e.set.Policies()
+	}
 	if len(names) == 0 {
-		if e.Set() == nil {
-			return nil, nil
-		}
-		return e.set.Policies(), nil
+		return loaded, nil
 	}
 	var out []*policy.Policy
 	for _, name := range names {
-		p, ok := e.lookup(name)
-		if !ok {
-			for _, le := range e.loadErrors {
-				if le.Policy == name {
-					return nil, le
-				}
-			}
-			return nil, fmt.Errorf("policy %q is not loaded (loaded: %s)", name, strings.Join(e.names(), ", "))
+		if p, ok := e.lookup(name); ok {
+			out = append(out, p)
+			continue
 		}
-		out = append(out, p)
+		for _, le := range e.loadErrors {
+			if le.Policy == name {
+				return nil, le
+			}
+		}
+		var list []string
+		for _, p := range loaded {
+			list = append(list, p.Name)
+		}
+		if list == nil {
+			list = []string{"none"}
+		}
+		return nil, fmt.Errorf("policy %q is not loaded (loaded: %s)", name, strings.Join(list, ", "))
 	}
 	return out, nil
 }
 
 // lookup returns a loaded policy by name.
 func (e *Evaluator) lookup(name string) (*policy.Policy, bool) {
-	if e.Set() == nil {
+	if e.set == nil {
 		return nil, false
 	}
 	return e.set.Policy(name)
-}
-
-func (e *Evaluator) names() []string {
-	var names []string
-	if e.set != nil {
-		for _, p := range e.set.Policies() {
-			names = append(names, p.Name)
-		}
-	}
-	if len(names) == 0 {
-		return []string{"none"}
-	}
-	return names
 }
 
 var errDryRun = errors.New("policy evaluation dry run")
@@ -73,7 +69,7 @@ var errDryRun = errors.New("policy evaluation dry run")
 // transaction. Changed results replace the current facts as an observation,
 // so history keeps the previous result and its policy digest. Results whose
 // entry was deleted or re-identified are retracted as corrections.
-func (e *Evaluator) Refresh(ctx context.Context, db *database.CatalogDB, load LoadFunc, opts Options) (Report, error) {
+func (e *Evaluator) Refresh(ctx context.Context, db *database.CatalogDB, load projection.LoadFunc, opts Options) (Report, error) {
 	selected, err := e.Select(opts.Policies)
 	if err != nil {
 		return Report{}, err
@@ -132,7 +128,7 @@ func (e *Evaluator) Refresh(ctx context.Context, db *database.CatalogDB, load Lo
 
 // Preview evaluates policies against every stored current resource without
 // writing anything: a what-if evaluation of a draft policy.
-func (e *Evaluator) Preview(ctx context.Context, db *database.CatalogDB, load LoadFunc, policies []*policy.Policy) (Report, error) {
+func (e *Evaluator) Preview(ctx context.Context, db *database.CatalogDB, load projection.LoadFunc, policies []*policy.Policy) (Report, error) {
 	t := newTally(policies)
 	entries, err := db.CurrentResourceEntries()
 	if err != nil {
@@ -152,7 +148,7 @@ func (e *Evaluator) Preview(ctx context.Context, db *database.CatalogDB, load Lo
 // prepareStored evaluates the selected policies that apply to a stored entry.
 // The payload is read only when one applies; an unreadable payload is
 // reported and the entry's results are left as they were.
-func (e *Evaluator) prepareStored(selected []*policy.Policy, scope []string, entry database.CatalogEntry, load LoadFunc, report *Report) (*Prepared, bool) {
+func (e *Evaluator) prepareStored(selected []*policy.Policy, scope []string, entry database.CatalogEntry, load projection.LoadFunc, report *Report) (*Prepared, bool) {
 	applicable := intersect(e.Applicable(entry.Schema), selected)
 	var record any
 	if len(applicable) > 0 {
@@ -165,17 +161,9 @@ func (e *Evaluator) prepareStored(selected []*policy.Policy, scope []string, ent
 	return e.prepare(applicable, scope, entry.Schema, entry.ID, *entry.ResourceID, record), true
 }
 
+// intersect keeps the applicable policies (sorted by name) that are selected.
 func intersect(applicable, selected []*policy.Policy) []*policy.Policy {
-	keep := map[string]bool{}
-	for _, p := range selected {
-		keep[p.Name] = true
-	}
-	var out []*policy.Policy
-	for _, p := range applicable {
-		if keep[p.Name] {
-			out = append(out, p)
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
+	return slices.DeleteFunc(applicable, func(p *policy.Policy) bool {
+		return !slices.ContainsFunc(selected, func(s *policy.Policy) bool { return s.Name == p.Name })
+	})
 }

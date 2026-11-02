@@ -58,7 +58,7 @@ func ReadStored(db *database.CatalogDB, resourceID, policyName string) ([]Stored
 
 // Review returns a type schema's review; draft when no policy is loaded.
 func (e *Evaluator) Review(typeName string) validator.SchemaReview {
-	if e.Set() == nil {
+	if e.set == nil {
 		return validator.SchemaReview{Status: validator.ReviewDraft}
 	}
 	return e.set.Review(typeName)
@@ -99,17 +99,7 @@ func (e *Evaluator) Summarize(states []database.PolicyState, policies []*policy.
 		if sum == nil {
 			continue
 		}
-		switch policy.Status(s.Status) {
-		case policy.StatusCompliant:
-			sum.Compliant++
-		case policy.StatusNoncompliant:
-			sum.Noncompliant++
-		case policy.StatusUnknown:
-			sum.Unknown++
-		}
-		if e.Review(s.Type).Status != validator.ReviewValidated {
-			sum.Provisional++
-		}
+		sum.count(policy.Status(s.Status), e.Review(s.Type).Status != validator.ReviewValidated)
 		if e.IsStale(s) {
 			sum.Stale++
 		}
