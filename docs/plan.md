@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui pushes catalog changes (2026-11-02)
+
+`/api/events` (Server-Sent Events) pushes the change stamp. The server checks
+it every second, and the browser reloads about 0.3 s after a `pudl check`
+finishes, with no client polling. Polling remains as a fallback.
+
 ### Security edges from real data: SG ingress, firewall sources, role trust (2026-11-02)
 
 The AWS pack projects security-group ingress (from groups and IPv4/IPv6

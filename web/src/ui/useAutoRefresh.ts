@@ -1,6 +1,8 @@
-// Poll a live source's change stamp and reload when the catalog changed
-// (for example when a pudl check finishes in another terminal). Paused while
-// the tab is hidden or a reload is running.
+// Reload when the catalog changes (for example when a pudl check finishes in
+// another terminal). Live sources push the change stamp (/api/events); if
+// the stream is unavailable this falls back to polling version() every
+// AUTO_REFRESH_MS. A change seen while the tab is hidden reloads when it is
+// shown again. Refs keep one subscription across reloads.
 
 import { useEffect, useRef } from 'react';
 import type { GraphSource } from '../data/source';
@@ -11,21 +13,44 @@ export function useAutoRefresh(
   source: GraphSource | null,
   loadedVersion: string | undefined,
   enabled: boolean,
+  reloading: boolean,
   reload: () => void,
 ) {
-  const busy = useRef(false);
+  const loaded = useRef(loadedVersion);
+  const busy = useRef(reloading);
+  const doReload = useRef(reload);
+  loaded.current = loadedVersion;
+  busy.current = reloading;
+  doReload.current = reload;
+
   useEffect(() => {
-    if (!enabled || !source?.version || !loadedVersion) return;
-    const timer = setInterval(async () => {
-      if (busy.current || document.hidden) return;
-      busy.current = true;
-      try {
-        const current = await source.version!();
-        if (current && current !== loadedVersion) reload();
-      } finally {
-        busy.current = false;
+    if (!enabled || !source) return;
+    let pending = false;
+    const seen = (version: string | null) => {
+      if (!version || !loaded.current || version === loaded.current || busy.current) return;
+      if (document.hidden) pending = true;
+      else doReload.current();
+    };
+    const onVisible = () => {
+      if (!document.hidden && pending) {
+        pending = false;
+        doReload.current();
       }
-    }, AUTO_REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [source, loadedVersion, enabled, reload]);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const poll = () => {
+      if (timer || !source.version) return;
+      timer = setInterval(() => {
+        if (!document.hidden) source.version!().then(seen).catch(() => {});
+      }, AUTO_REFRESH_MS);
+    };
+    const unsubscribe = source.subscribe ? source.subscribe(seen, poll) : (poll(), () => {});
+    return () => {
+      unsubscribe();
+      if (timer) clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [source, enabled]);
 }

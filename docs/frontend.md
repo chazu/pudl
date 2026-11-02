@@ -366,13 +366,18 @@ load:
   Loaded neighbourhoods merge (`mergeGraphs`). Reload and auto-refresh
   re-fetch every neighbourhood loaded so far; time travel works the same way.
 - **Auto-refresh.** The change stamp combines the catalog's fact write
-  sequence and its entry and snapshot counters
-  (`CatalogDB.ChangeStamp`) with fingerprints of the rule and schema `.cue`
-  files. The server builds the graph once per stamp and serves it from cache
-  otherwise. The UI polls `/api/version` every 3 s (not while the tab is
-  hidden) and reloads when it differs, keeping view state. When the schema
-  files change, the server resets its cached CUE schemas before rebuilding,
-  so no restart is needed. The "auto" box in the banner turns this off.
+  sequence and its entry and snapshot counters (`CatalogDB.ChangeStamp`) with
+  fingerprints of the rule and schema `.cue` files. The server builds the
+  graph once per stamp and serves it from cache otherwise. `GET /api/events`
+  is a Server-Sent Events stream that sends the stamp on connect and on every
+  change. The catalog is SQLite written by other pudl processes and cannot
+  notify anyone, so the server checks the stamp every second and pushes only
+  real changes. A view updated about 0.3 s after a `pudl check` finished. If
+  the stream is unavailable, the UI falls back to polling `/api/version` every
+  3 s. A change while the tab is hidden reloads when it is shown. Schema
+  changes reset the server's cached CUE schemas, so no restart is needed. The
+  "auto" box in the banner turns all of this off. Open streams end when the
+  server stops, so Ctrl-C never hangs.
 - **Network exposure.** It listens on `127.0.0.1:7468` by default. A
   non-loopback `--addr` needs `--allow-remote`. Requests with any other
   `Host` header get 403, so a web page cannot read the inventory through DNS
@@ -398,7 +403,8 @@ load:
 
 ## Known limitations
 
-- Auto-refresh polls every 3 s; there is no push channel.
+- Change detection is a 1 s server-side check of a cheap stamp; pudl writes
+  do not notify a running `pudl ui`.
 - The packs do not project IAM policy attachments or policy documents (only
   role trust), instance profiles, or egress rules.
 - Collapse and expand still move nodes outside the toggled group (anchored,
