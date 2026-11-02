@@ -92,11 +92,9 @@ func whatIfPolicies(cmd *cobra.Command, db *database.CatalogDB, args []string) (
 		return policyfacts.Report{}, err
 	}
 	defer draft.Close()
-	selected := draft.Policies
-	if len(args) > 0 {
-		if selected, err = draft.Select(args); err != nil {
-			return policyfacts.Report{}, err
-		}
+	selected, err := draft.Select(args)
+	if err != nil {
+		return policyfacts.Report{}, err
 	}
 	report, err := draft.Evaluator.Preview(cmd.Context(), db, loadEntryPayload, selected)
 	report.LoadErrors = nil // installed policies' load errors are not the draft's

@@ -37,13 +37,13 @@ func loadEntryCompliance(entry lister.ListEntry) ([]complianceResult, error) {
 	}
 	applicable := policies.Applicable(entry.Schema)
 	stored := map[string]policyfacts.Stored{}
-	if len(applicable) > 0 && entry.ResourceID != nil {
+	if len(applicable) > 0 && entry.ResourceID != nil && *entry.ResourceID != "" {
 		db, err := database.OpenCatalogDBReadOnly(effectivePudlDir())
 		if err != nil {
 			return nil, err
 		}
 		defer db.Close()
-		rows, err := policyfacts.ReadStored(db, func(s database.PolicyState) bool { return s.ResourceID == *entry.ResourceID })
+		rows, err := policyfacts.ReadStored(db, *entry.ResourceID, "")
 		if err != nil {
 			return nil, err
 		}
