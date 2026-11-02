@@ -22,8 +22,13 @@ var exampleInstallCmd = &cobra.Command{
 	Args:      cobra.ExactArgs(1),
 	Long: `Install a bundled example in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
-No source checkout or download is needed. Identical files are left alone;
-existing files with different content are preserved and reported as conflicts.
+No source checkout or download is needed.
+
+Installing again upgrades the example: files you have not edited since pudl
+installed them are replaced with this version's, and new files are added.
+Files you edited, and files from an install by an older pudl (which kept no
+record of what it wrote), are conflicts: nothing is written and each is
+listed. --overwrite replaces them, keeping your versions as <file>.bak.
 
 The git-inventory example includes a model expecting default branch main and
 baseline and changed inventories. The model observes the current inventory
@@ -50,14 +55,22 @@ Example:
 		if err != nil {
 			return err
 		}
-		files, err := examples.Install(root, args[0])
+		overwrite, _ := cmd.Flags().GetBool("overwrite")
+		res, err := examples.Install(root, args[0], examples.Options{Overwrite: overwrite})
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": root, "files": files})
+			return GetOutputWriter().WriteJSON(map[string]any{
+				"example": args[0], "root": root, "files": res.Files, "added": res.Added,
+				"upgraded": res.Upgraded, "replaced": res.Replaced, "unchanged": res.Unchanged, "backups": res.Backups,
+			})
 		}
-		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], root)
+		fmt.Fprintf(outw(), "Installed %s in %s: %d added, %d upgraded, %d replaced, %d unchanged\n",
+			args[0], root, len(res.Added), len(res.Upgraded), len(res.Replaced), len(res.Unchanged))
+		for _, path := range res.Replaced {
+			fmt.Fprintf(outw(), "  replaced %s (yours kept as %s)\n", path, res.Backups[path])
+		}
 		if args[0] == "aws" {
 			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
 			return nil
@@ -96,4 +109,5 @@ func exampleInstallRoot(global bool) (string, error) {
 func init() {
 	rootCmd.AddCommand(exampleCmd)
 	exampleCmd.AddCommand(exampleInstallCmd)
+	exampleInstallCmd.Flags().Bool("overwrite", false, "Replace files that differ from this version, keeping yours as <file>.bak")
 }

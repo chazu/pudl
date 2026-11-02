@@ -584,14 +584,19 @@ Subcommands:
 Install a runnable example and its fixture data
 
 ```text
-pudl example install <name>
+pudl example install <name> [flags]
 ```
 
 ```text
 Install a bundled example in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
-No source checkout or download is needed. Identical files are left alone;
-existing files with different content are preserved and reported as conflicts.
+No source checkout or download is needed.
+
+Installing again upgrades the example: files you have not edited since pudl
+installed them are replaced with this version's, and new files are added.
+Files you edited, and files from an install by an older pudl (which kept no
+record of what it wrote), are conflicts: nothing is written and each is
+listed. --overwrite replaces them, keeping your versions as <file>.bak.
 
 The git-inventory example includes a model expecting default branch main and
 baseline and changed inventories. The model observes the current inventory
@@ -613,6 +618,12 @@ Example:
     pudl init
     pudl example install git-inventory
 ```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--overwrite` | bool |  | Replace files that differ from this version, keeping yours as &lt;file&gt;.bak |
 
 Available examples: `git-inventory`, `gcp-network-hygiene`, `gcp` and `aws`.
 Each includes its model and fixture data; no checkout or download is needed.

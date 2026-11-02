@@ -181,6 +181,18 @@ export function App() {
             <div className="canvas-empty">Laying out…</div>
           )}
           {error && <div className="canvas-error">Layout failed: {error}</div>}
+          {!gs.partial && rendered && rendered.graph.nodes.size === 0 && loaded.graph.resources.length > 0 && (
+            <div className="canvas-hint">
+              <div>
+                <strong>This view shows none of the {loaded.graph.resources.length} resources.</strong>{' '}
+                {view.projection.description} Try{' '}
+                {PROJECTIONS.filter((p) => p.id !== projectionId && (views.get(p.id)?.members.size ?? 0) > 0)
+                  .map((p) => p.label)
+                  .join(' or ') || 'another view'}
+                .
+              </div>
+            </div>
+          )}
           {gs.partial && loaded.graph.resources.length === 0 && (
             <div className="canvas-hint">
               <div>

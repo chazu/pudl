@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Sparse graphs explain themselves; GCE instances; pack upgrades (2026-11-02)
+
+The export reports catalog coverage: how many entries are shown, and which
+schemas are hidden and why (no identity, or pudl's own records). The UI shows
+it next to a notice when no relationship rules are loaded. The GCP pack gains
+`gcp.#ComputeInstance` (collector, fixture, subnet placement, service
+account, and firewall `applies_to` by target tag or whole network). `pudl
+example install` now upgrades a pack: an install manifest tells unedited
+files from edits, and `--overwrite` replaces conflicts, keeping `.bak`
+copies. See `implog/2026_11_02_coverage_gce_upgrades.md`.
+
 ### pudl ui pushes catalog changes (2026-11-02)
 
 `/api/events` (Server-Sent Events) pushes the change stamp. The server checks

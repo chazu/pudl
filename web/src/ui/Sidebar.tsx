@@ -7,6 +7,7 @@ import { ownerResource } from '../projection/views/common';
 import type { ProjectionId, SemanticView } from '../projection/types';
 import type { Selection } from '../render/highlight';
 import type { ViewState } from '../visual/viewState';
+import { CoveragePanel } from './CoveragePanel';
 import { HierarchyTree } from './HierarchyTree';
 
 interface Props {
@@ -165,6 +166,7 @@ export function Sidebar(props: Props) {
         onAutoRefresh={props.onAutoRefresh}
       />
       {props.timeControl}
+      {props.meta.coverage && <CoveragePanel coverage={props.meta.coverage} />}
 
       <section>
         <h3>Views</h3>

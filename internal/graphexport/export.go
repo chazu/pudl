@@ -82,6 +82,7 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		return nil, err
 	}
 	applyProperties(g.Relationships, props, index, warn)
+	g.Meta.Coverage = coverage(in, len(g.Resources), warn)
 	g.Resources = append(g.Resources, index.externalResources()...)
 	return g, nil
 }
@@ -136,4 +137,32 @@ func observationsUntil(list ObservationsFunc, t time.Time) ObservationsFunc {
 		}
 		return out, err
 	}
+}
+
+// coverage compares the graph with the catalog. Counts are for the catalog
+// as it is now, also for an as-of graph.
+func coverage(in Input, resources int, warn func(string)) *Coverage {
+	c := &Coverage{Resources: resources}
+	for _, r := range in.Rules {
+		if r.Head.Rel == EdgeRelation && r.Valid() {
+			c.EdgeRules++
+		}
+	}
+	counts, err := in.DB.SchemaCoverageCounts()
+	if err != nil {
+		warn(fmt.Sprintf("catalog coverage unavailable: %v", err))
+		return c
+	}
+	for _, s := range counts {
+		c.Entries += s.Entries
+		m, ok := in.Metadata(s.Schema)
+		switch {
+		case ok && InternalTypes[m.ResourceType]:
+			c.Hidden = append(c.Hidden, HiddenSchema{Schema: s.Schema, Entries: s.Entries, Reason: "internal"})
+		case s.Unidentified > 0:
+			c.Hidden = append(c.Hidden, HiddenSchema{Schema: s.Schema, Entries: s.Unidentified, Reason: "no-identity"})
+		}
+	}
+	sort.SliceStable(c.Hidden, func(i, j int) bool { return c.Hidden[i].Entries > c.Hidden[j].Entries })
+	return c
 }

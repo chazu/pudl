@@ -444,7 +444,7 @@
         {
           "use": "install \u003cname\u003e",
           "short": "Install a runnable example and its fixture data",
-          "long": "Install a bundled example in the current initialized PUDL workspace,\nor with --global in the personal ~/.pudl workspace (after pudl init --global).\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a firewall type and policy, a\nfixture observer, a check over policy results, a corrected fixture, and a\nseparate gcloud-based live model.\n\nThe gcp content pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nThe aws content pack does the same for AWS, with aws CLI and fixture\ncollectors and three check families: network exposure, data protection and\nidentity posture.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "long": "Install a bundled example in the current initialized PUDL workspace,\nor with --global in the personal ~/.pudl workspace (after pudl init --global).\nNo source checkout or download is needed.\n\nInstalling again upgrades the example: files you have not edited since pudl\ninstalled them are replaced with this version's, and new files are added.\nFiles you edited, and files from an install by an older pudl (which kept no\nrecord of what it wrote), are conflicts: nothing is written and each is\nlisted. --overwrite replaces them, keeping your versions as \u003cfile\u003e.bak.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a firewall type and policy, a\nfixture observer, a check over policy results, a corrected fixture, and a\nseparate gcloud-based live model.\n\nThe gcp content pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nThe aws content pack does the same for AWS, with aws CLI and fixture\ncollectors and three check families: network exposure, data protection and\nidentity posture.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
             {
@@ -460,6 +460,12 @@
               "type": "bool",
               "default": "false",
               "persistent": true
+            },
+            {
+              "name": "overwrite",
+              "usage": "Replace files that differ from this version, keeping yours as \u003cfile\u003e.bak",
+              "type": "bool",
+              "default": "false"
             }
           ]
         }

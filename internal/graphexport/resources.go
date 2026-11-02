@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -59,6 +60,9 @@ func buildResource(ctx context.Context, entry database.CatalogEntry, meta Metada
 	r.Account = graphspec.Eval(specValue(spec, "account"), record)
 	r.Region = graphspec.Eval(specValue(spec, "region"), record)
 	r.Zone = graphspec.Eval(specValue(spec, "zone"), record)
+	if r.Region == "" {
+		r.Region = regionOfZone(r.Zone)
+	}
 	r.Evidence = resourceEvidence(ctx, entry, obs, warn)
 
 	// Reference values other records may use for this resource.
@@ -225,4 +229,16 @@ func resourceEvidence(ctx context.Context, entry database.CatalogEntry, obs Obse
 		})
 	}
 	return out
+}
+
+// zoneSuffix matches a zone's letter after its region: GCP's "us-central1-a"
+// and AWS's "us-east-1a".
+var zoneSuffix = regexp.MustCompile(`^(.*\d)-?[a-z]$`)
+
+// regionOfZone derives a region from a zone name, or "" when it is not one.
+func regionOfZone(zone string) string {
+	if m := zoneSuffix.FindStringSubmatch(zone); m != nil {
+		return m[1]
+	}
+	return ""
 }
