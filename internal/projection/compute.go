@@ -34,7 +34,7 @@ func Compute(spec *SchemaSpec, entryID, resourceID string, data any) Result {
 		res.PerRelation[rel.Name] += 0
 		rows := []any{data}
 		if rel.Each != nil {
-			rows = rel.Each.LookupAll(data)
+			rows = rel.lookupAll(*rel.Each, data)
 		}
 		for _, row := range rows {
 			for _, args := range rowArgs(rel, row, &res) {
@@ -68,7 +68,7 @@ func rowArgs(rel RelationSpec, row any, res *Result) []map[string]any {
 		}
 		spec := rel.Args[name]
 		if spec.Exists {
-			base[name] = len(spec.Path.LookupAll(row)) > 0
+			base[name] = len(rel.lookupAll(spec.Path, row)) > 0
 			continue
 		}
 		v, ok := spec.Path.Lookup(row)
@@ -86,7 +86,7 @@ func rowArgs(rel RelationSpec, row any, res *Result) []map[string]any {
 		return []map[string]any{base}
 	}
 	spec := rel.Args[rel.wildcard]
-	values := spec.Path.LookupAll(row)
+	values := rel.lookupAll(spec.Path, row)
 	if len(values) == 0 && spec.HasDefault {
 		values = []any{spec.Default}
 	}

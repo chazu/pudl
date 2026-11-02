@@ -16,6 +16,12 @@ package graphexport
 // EdgeRelation is the reserved relation that graph rules derive.
 const EdgeRelation = "graph_edge"
 
+// PropertyRelation optionally attaches details to edges:
+// graph_edge_property(type, source, target, key, value). Values for one key
+// collect into a list (a security group allowing ports 80 and 443 from the
+// same range is one edge with port [80, 443]).
+const PropertyRelation = "graph_edge_property"
+
 // RefPrefix marks a relationship endpoint that names no cataloged resource.
 const RefPrefix = "ref:"
 
@@ -80,12 +86,13 @@ type Resource struct {
 
 // Relationship is one derived, directed, typed edge.
 type Relationship struct {
-	ID       string     `json:"id"`
-	Type     string     `json:"type"`
-	Source   string     `json:"source"`
-	Target   string     `json:"target"`
-	Basis    string     `json:"basis"`
-	Evidence []Evidence `json:"evidence"`
+	ID         string         `json:"id"`
+	Type       string         `json:"type"`
+	Source     string         `json:"source"`
+	Target     string         `json:"target"`
+	Basis      string         `json:"basis"`
+	Properties map[string]any `json:"properties,omitempty"`
+	Evidence   []Evidence     `json:"evidence"`
 }
 
 // Evidence is where a resource or relationship came from.

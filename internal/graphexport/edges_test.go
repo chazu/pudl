@@ -64,3 +64,46 @@ func TestBuildRelationships(t *testing.T) {
 	require.Contains(t, warnings[0], `basis "maybe"`)
 	require.Contains(t, warnings[1], "rule typo: all 1 rows have a null source or target")
 }
+
+func TestExternalEndpointsAreNotMissingResources(t *testing.T) {
+	x := newRefIndex()
+	x.add("rid-sg", []string{"sg-1"})
+	rels := buildRelationships([]RuleTuples{{Rule: datalog.Rule{Name: "r"}, Tuples: []datalog.Tuple{
+		edgeRow("allows_ingress_from", "rid-sg", "0.0.0.0/0", "observed"),
+		edgeRow("allows_ingress_from", "rid-sg", "10.0.0.0/16", "observed"),
+		edgeRow("trust_allows_assume", "*", "rid-sg", "observed"),
+		edgeRow("allows_ingress_from", "rid-sg", "not-a-range", "observed"),
+	}}}, x, func(string) {})
+	targets := map[string]bool{}
+	for _, r := range rels {
+		targets[r.Target] = true
+		targets[r.Source] = true
+	}
+	require.True(t, targets["ext:cidr:0.0.0.0/0"])
+	require.True(t, targets["ext:cidr:10.0.0.0/16"])
+	require.True(t, targets["ext:any:*"])
+	require.True(t, targets["ref:not-a-range"], "anything else unresolved stays a reference")
+	ext := x.externalResources()
+	require.Len(t, ext, 3)
+	require.Equal(t, "Anywhere (0.0.0.0/0)", ext[1].Name)
+	require.Equal(t, "external.principal", ext[0].Type)
+}
+
+func TestEdgePropertiesMergePerKey(t *testing.T) {
+	x := newRefIndex()
+	x.add("rid-sg", []string{"sg-1"})
+	rels := buildRelationships([]RuleTuples{{Rule: datalog.Rule{Name: "e"}, Tuples: []datalog.Tuple{
+		edgeRow("allows_ingress_from", "rid-sg", "0.0.0.0/0", "observed"),
+	}}}, x, func(string) {})
+	prop := func(key string, value any) datalog.Tuple {
+		return datalog.Tuple{Args: map[string]any{"type": "allows_ingress_from", "source": "sg-1", "target": "0.0.0.0/0", "key": key, "value": value}}
+	}
+	var warnings []string
+	applyProperties(rels, []RuleTuples{{Tuples: []datalog.Tuple{
+		prop("port", float64(443)), prop("port", float64(80)), prop("port", float64(443)),
+		prop("protocol", "tcp"), prop("port", nil),
+		{Args: map[string]any{"type": "in_vpc", "source": "sg-1", "target": "vpc-x", "key": "k", "value": "v"}},
+	}}}, x, func(s string) { warnings = append(warnings, s) })
+	require.Equal(t, map[string]any{"port": []any{float64(80), float64(443)}, "protocol": "tcp"}, rels[0].Properties)
+	require.Equal(t, []string{"1 graph_edge_property rows name an edge no graph_edge rule derived"}, warnings)
+}

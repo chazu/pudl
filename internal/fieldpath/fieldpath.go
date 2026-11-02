@@ -152,6 +152,17 @@ func (p Path) Lookup(v any) (any, bool) {
 // LookupAll returns every value the path reaches, expanding each wildcard over
 // the elements of an array. Absent steps contribute nothing.
 func (p Path) LookupAll(v any) []any {
+	return p.lookupAll(v, false)
+}
+
+// LookupAllOneOrMany is LookupAll for "one or many" documents (AWS policy
+// JSON writes a single statement or principal without the enclosing array):
+// a wildcard over a value that is not an array yields that value itself.
+func (p Path) LookupAllOneOrMany(v any) []any {
+	return p.lookupAll(v, true)
+}
+
+func (p Path) lookupAll(v any, oneOrMany bool) []any {
 	cur := []any{v}
 	for _, s := range p.steps {
 		var next []any
@@ -159,6 +170,8 @@ func (p Path) LookupAll(v any) []any {
 			if s.wildcard {
 				if arr, ok := c.([]any); ok {
 					next = append(next, arr...)
+				} else if oneOrMany && c != nil {
+					next = append(next, c)
 				}
 				continue
 			}

@@ -51,5 +51,5 @@ export const securityProjection: ProjectionDefinition = {
     enabled: ['iam', 'security', 'other'],
   },
   flowCategories: ['iam', 'security'],
-  layout: { algorithm: 'layered', direction: 'DOWN' },
+  layout: { algorithm: 'layered', direction: 'RIGHT' },
 };

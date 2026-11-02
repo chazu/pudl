@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Security edges from real data: SG ingress, firewall sources, role trust (2026-11-02)
+
+The AWS pack projects security-group ingress (from groups and IPv4/IPv6
+ranges) and IAM role trust. The GCP pack projects firewall source ranges and
+allowed ports. All become graph edges with protocol and port details. A new
+projection option, `one_or_many`, reads AWS policy JSON's "single item or
+list" shapes. Address ranges and `*` become external nodes rather than
+"not in inventory". Unconnected leaves are grid-packed, so the security view
+is compact.
+
 ### pudl ui loads large inventories as neighbourhoods on demand (2026-11-02)
 
 Above 500 resources the explorer starts empty. Server-side search and

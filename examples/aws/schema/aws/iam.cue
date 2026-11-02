@@ -45,6 +45,23 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: {name: "RoleName", account: "AccountId"}
+		// Trust policy principals. IAM writes a lone statement, and a lone
+		// principal, without the enclosing list: one_or_many reads both
+		// shapes. aws_role_trust is one fact per AWS principal (an ARN, an
+		// account, or "*"); aws_role_trust_any records statements whose whole
+		// Principal is "*". Service principals are not projected.
+		facts: {
+			aws_role_trust: {
+				each:        "AssumeRolePolicyDocument.Statement[*]"
+				one_or_many: true
+				args: {effect: "Effect", principal: "Principal.AWS[*]", conditional: {exists: "Condition"}}
+			}
+			aws_role_trust_any: {
+				each:        "AssumeRolePolicyDocument.Statement[*]"
+				one_or_many: true
+				args: {effect: "Effect", principal: "Principal", conditional: {exists: "Condition"}}
+			}
+		}
 	}
 	AccountId:  string
 	RoleName:   string

@@ -15,12 +15,13 @@ type RuleTuples struct {
 
 // refIndex resolves endpoint values to resource IDs.
 type refIndex struct {
-	ids  map[string]bool
-	refs map[string][]string
+	ids       map[string]bool
+	refs      map[string][]string
+	externals map[string]Resource
 }
 
 func newRefIndex() *refIndex {
-	return &refIndex{ids: map[string]bool{}, refs: map[string][]string{}}
+	return &refIndex{ids: map[string]bool{}, refs: map[string][]string{}, externals: map[string]Resource{}}
 }
 
 func (x *refIndex) add(resourceID string, refs []string) {
@@ -42,6 +43,10 @@ func (x *refIndex) resolve(value string) (id string, problem string) {
 	case 1:
 		return matches[0], ""
 	case 0:
+		if ext, ok := externalFor(value); ok {
+			x.externals[ext.ID] = ext
+			return ext.ID, ""
+		}
 		return RefPrefix + value, ""
 	default:
 		return RefPrefix + value, fmt.Sprintf("reference %q matches %d resources; left unresolved", value, len(matches))
@@ -124,4 +129,89 @@ func containsEvidence(list []Evidence, e Evidence) bool {
 		}
 	}
 	return false
+}
+
+// applyProperties attaches graph_edge_property rows to the relationships
+// they name. Rows for an edge no rule derived are counted and reported.
+func applyProperties(rels []Relationship, rows []RuleTuples, index *refIndex, warn func(string)) {
+	byID := map[string]*Relationship{}
+	for i := range rels {
+		byID[rels[i].ID] = &rels[i]
+	}
+	collected := map[string]map[string][]any{}
+	orphans := 0
+	for _, rt := range rows {
+		for _, t := range rt.Tuples {
+			typ, okT := stringArg(t, "type")
+			src, okS := stringArg(t, "source")
+			tgt, okG := stringArg(t, "target")
+			key, okK := stringArg(t, "key")
+			value, present := t.Args["value"]
+			if !okT || !okS || !okG || !okK || !present || value == nil {
+				continue // an absent optional field: no property
+			}
+			srcID, _ := index.resolve(src)
+			tgtID, _ := index.resolve(tgt)
+			id := fmt.Sprintf("%s:%s->%s", typ, srcID, tgtID)
+			if byID[id] == nil {
+				orphans++
+				continue
+			}
+			if collected[id] == nil {
+				collected[id] = map[string][]any{}
+			}
+			if !containsValue(collected[id][key], value) {
+				collected[id][key] = append(collected[id][key], value)
+			}
+		}
+	}
+	if orphans > 0 {
+		warn(fmt.Sprintf("%d graph_edge_property rows name an edge no graph_edge rule derived", orphans))
+	}
+	for id, props := range collected {
+		rel := byID[id]
+		rel.Properties = map[string]any{}
+		for key, values := range props {
+			sort.Slice(values, func(i, j int) bool { return lessValue(values[i], values[j]) })
+			if len(values) == 1 {
+				rel.Properties[key] = values[0]
+			} else {
+				rel.Properties[key] = values
+			}
+		}
+	}
+}
+
+func containsValue(list []any, v any) bool {
+	for _, x := range list {
+		if fmt.Sprint(x) == fmt.Sprint(v) {
+			return true
+		}
+	}
+	return false
+}
+
+// lessValue orders numbers numerically, before strings.
+func lessValue(a, b any) bool {
+	fa, aNum := number(a)
+	fb, bNum := number(b)
+	switch {
+	case aNum && bNum:
+		return fa < fb
+	case aNum != bNum:
+		return aNum
+	}
+	return fmt.Sprint(a) < fmt.Sprint(b)
+}
+
+func number(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int64:
+		return float64(n), true
+	case int:
+		return float64(n), true
+	case float64:
+		return n, true
+	}
+	return 0, false
 }

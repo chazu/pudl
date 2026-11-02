@@ -85,10 +85,27 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {name: "GroupName"}
-		facts: aws_security_group: args: {
-			group_id: "GroupId"
-			name:     "GroupName"
-			vpc_id:   "VpcId"
+		facts: {
+			aws_security_group: args: {
+				group_id: "GroupId"
+				name:     "GroupName"
+				vpc_id:   "VpcId"
+			}
+			// Ingress rules, one fact per source: another security group, an
+			// IPv4 range or an IPv6 range. Ports are absent for all-traffic
+			// (-1) rules.
+			aws_sg_ingress_group: {
+				each: "IpPermissions[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", to_port: "ToPort", group_id: "UserIdGroupPairs[*].GroupId"}
+			}
+			aws_sg_ingress_cidr: {
+				each: "IpPermissions[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", to_port: "ToPort", cidr: "IpRanges[*].CidrIp"}
+			}
+			aws_sg_ingress_cidr6: {
+				each: "IpPermissions[*]"
+				args: {protocol: "IpProtocol", from_port: "FromPort", to_port: "ToPort", cidr: "Ipv6Ranges[*].CidrIpv6"}
+			}
 		}
 	}
 	AccountId:         string

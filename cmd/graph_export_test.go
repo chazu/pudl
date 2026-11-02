@@ -39,7 +39,9 @@ func newGraphLookup(g graphexport.Graph) graphLookup {
 func (l graphLookup) edges(typ string) []string {
 	byID := map[string]string{}
 	for _, r := range l.g.Resources {
-		byID[r.ID] = r.NativeID
+		if !strings.HasPrefix(r.ID, "ext:") {
+			byID[r.ID] = r.NativeID
+		}
 	}
 	name := func(id string) string {
 		if n, ok := byID[id]; ok {
@@ -88,6 +90,51 @@ func TestGraphExportAWSPack(t *testing.T) {
 		require.NotEmpty(t, rel.Evidence)
 		require.True(t, strings.HasPrefix(rel.Evidence[0].Source, "rule aws_graph_"), rel.Evidence[0].Source)
 	}
+
+	// Security-group ingress: from another group, from a range, and from anywhere.
+	ingress := l.edges("allows_ingress_from")
+	require.Contains(t, ingress, "sg-0aa00000000000003 -> sg-0aa00000000000004")
+	require.Contains(t, ingress, "sg-0aa00000000000003 -> ext:cidr:10.0.0.0/16")
+	require.Contains(t, ingress, "sg-0aa00000000000002 -> ext:cidr:0.0.0.0/0")
+	require.Contains(t, ingress, "sg-0aa00000000000001 -> ext:cidr:::/0", "IPv6 ranges too")
+	bastion := relationship(t, g, "allows_ingress_from", "sg-0aa00000000000002", "ext:cidr:0.0.0.0/0")
+	require.Equal(t, map[string]any{"port": float64(22), "protocol": "tcp"}, bastion.Properties)
+	web := relationship(t, g, "allows_ingress_from", "sg-0aa00000000000001", "ext:cidr:0.0.0.0/0")
+	require.Equal(t, []any{float64(80), float64(443)}, web.Properties["port"], "two rules from one range are one edge")
+	anywhere := l.byNative["0.0.0.0/0"]
+	require.Equal(t, "external.cidr", anywhere.Type, "an address range is external, not a missing resource")
+
+	// Role trust, in every policy shape the fixtures use.
+	trust := l.edges("trust_allows_assume")
+	require.Contains(t, trust, "ext:any:* -> arn:aws:iam::123456789012:role/open-trust-test", "a lone statement with Principal \"*\"")
+	require.Contains(t, trust, "ext:any:* -> arn:aws:iam::123456789012:role/legacy-cross-account", "\"*\" inside a principal list")
+	require.Contains(t, trust, "ref:arn:aws:iam::111122223333:root -> arn:aws:iam::123456789012:role/partner-audit",
+		"another account's root is an uncollected principal")
+	partner := relationship(t, g, "trust_allows_assume", "ref:arn:aws:iam::111122223333:root", "arn:aws:iam::123456789012:role/partner-audit")
+	require.Equal(t, "yes", partner.Properties["conditional"])
+	require.NotContains(t, strings.Join(trust, "\n"), "app-ec2-role", "service principals are not projected")
+}
+
+// relationship finds one edge by type and native (or ref/ext) endpoint names.
+func relationship(t *testing.T, g graphexport.Graph, typ, src, tgt string) graphexport.Relationship {
+	t.Helper()
+	native := map[string]string{}
+	for _, r := range g.Resources {
+		native[r.ID] = r.NativeID
+	}
+	name := func(id string) string {
+		if n, ok := native[id]; ok && !strings.HasPrefix(id, "ext:") {
+			return n
+		}
+		return id
+	}
+	for _, rel := range g.Relationships {
+		if rel.Type == typ && name(rel.Source) == src && name(rel.Target) == tgt {
+			return rel
+		}
+	}
+	t.Fatalf("no %s edge %s -> %s", typ, src, tgt)
+	return graphexport.Relationship{}
 }
 
 func TestGraphExportGCPPack(t *testing.T) {
@@ -110,6 +157,11 @@ func TestGraphExportGCPPack(t *testing.T) {
 	// Subnets reference networks by trimmed selfLink; refs resolve them.
 	subnetEdges := l.edges("in_network")
 	require.NotEmpty(t, l.edges("subscribed_to"))
+	fw := l.edges("allows_ingress_from")
+	require.NotEmpty(t, fw, "enabled ingress firewall rules permit their source ranges")
+	for _, e := range fw {
+		require.NotContains(t, e, "disabled", "a disabled rule permits nothing: %s", e)
+	}
 	require.NotEmpty(t, l.edges("nat_ip"))
 	require.NotEmpty(t, subnetEdges)
 	for _, e := range subnetEdges {

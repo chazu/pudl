@@ -51,6 +51,24 @@ Rules for args:
 - **One wildcard per relation.** At most one arg may contain `[*]`; it yields
   one fact per value. Use `each` to keep values paired, for example protocol
   with port.
+- **One or many.** Some documents write a single item without its list. AWS
+  policy JSON does this for a lone statement, and for a lone principal or
+  action. With `one_or_many: true` on a relation, every `[*]` in it (in
+  `each` and in args) treats a value that is not a list as a one-element
+  list:
+
+  ```cue
+  aws_role_trust: {
+  	each:        "AssumeRolePolicyDocument.Statement[*]"
+  	one_or_many: true
+  	args: {effect: "Effect", principal: "Principal.AWS[*]"}
+  }
+  ```
+
+  Without it, `[*]` over a non-list yields nothing, as before.
+- **Booleans come back as numbers.** The query layer returns a stored `true`
+  as `1`. Match it in a rule body with the constant `true`, but do not expect
+  a boolean in rule output.
 - **Implicit args.** Every fact gets `entry_id` (the catalog entry) and
   `resource_id`. To join a relation to the catalog, use
   `catalog_entry(id: $E)` with `entry_id: $E`.
