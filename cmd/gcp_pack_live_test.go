@@ -12,7 +12,8 @@ import (
 // fakeGcloud answers the gcloud commands the GCP pack's live collectors run,
 // for two projects, and logs every invocation's arguments to $GCLOUD_LOG.
 // $GCLOUD_PROJECTS replaces the project list; in proj-nocompute the Compute
-// Engine API is disabled, so compute commands fail as gcloud's do.
+// Engine and KMS APIs are disabled, so those commands fail as gcloud's do
+// (KMS without the SERVICE_DISABLED reason).
 const fakeGcloud = `#!/bin/sh
 echo "$*" >> "$GCLOUD_LOG"
 for a in "$@"; do
@@ -27,6 +28,10 @@ if [ "$1" = compute ] && [ "$p" = proj-nocompute ]; then
 	echo "ERROR: (gcloud.$1.$2.list) Compute Engine API has not been used in project $p before or it is disabled." >&2
 	echo "- '@type': type.googleapis.com/google.rpc.ErrorInfo" >&2
 	echo "  reason: SERVICE_DISABLED" >&2
+	exit 1
+fi
+if [ "$1" = kms ] && [ "$p" = proj-nocompute ]; then
+	echo "ERROR: (gcloud.kms.$2.list) PERMISSION_DENIED: Google Cloud KMS API has not been used in project $p before or it is disabled. Enable it, then retry." >&2
 	exit 1
 fi
 case "$1 $2" in
@@ -161,5 +166,18 @@ func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
 	require.Len(t, check.Members, 4)
 	for _, m := range check.Members {
 		require.Equal(t, "succeeded", m.Result, m.Model)
+	}
+
+	// KMS reports a disabled API without SERVICE_DISABLED; the pack's second
+	// pattern still makes the project an empty input, through the helper
+	// script too.
+	for _, model := range []string{"gcp-kms-keyrings", "gcp-kms-keys"} {
+		r = runCLI(t, "check", model, "--json")
+		require.NoError(t, r.Err, r.Stdout+r.Stderr)
+		pr := checkedModel(t, r.Stdout).Populate
+		require.Empty(t, pr.FailedInputs, model)
+		require.Len(t, pr.EmptyInputs, 1, model)
+		require.Equal(t, "proj-nocompute", pr.EmptyInputs[0].Item, model)
+		require.Equal(t, "API has not been used in project [^ ]+ before or it is disabled", pr.EmptyInputs[0].Pattern, model)
 	}
 }

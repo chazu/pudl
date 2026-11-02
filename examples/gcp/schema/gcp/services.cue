@@ -30,7 +30,12 @@ package gcp
 	metadata: {
 		name:      string
 		namespace: string
-		labels: "cloud.googleapis.com/location": string @pudl(match)
+		// Services carry other labels too (Cloud Functions 2nd gen adds
+		// goog-cloudfunctions-*), so labels stays open.
+		labels: {
+			"cloud.googleapis.com/location": string @pudl(match)
+			...
+		}
 		...
 	}
 	...

@@ -901,6 +901,11 @@ Beads work:
   GCP pack's live collectors and the live network-hygiene model set
   `empty_when: ["SERVICE_DISABLED"]`. See
   `implog/2026_11_02_populate_empty_when.md`.
+- GCP pack fixes from a live run (done): the live collectors also match
+  gcloud's "API has not been used in project P before or it is disabled"
+  (container and kms print no SERVICE_DISABLED), and `gcp.#RunService` keeps
+  `metadata.labels` open (Cloud Functions 2nd gen adds labels). See
+  `implog/2026_11_02_gcp_pack_live_fixes.md`.
 - `pudl-167` (done): the `name|path|id` inventory identity fallback is one
   function (`acute.IdentityFields`), and inventory drift and snapshot
   comparison report each schema that used it (`identity_fallbacks`). Not fail
