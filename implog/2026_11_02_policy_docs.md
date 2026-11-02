@@ -95,6 +95,6 @@ None changed.
   `internal/examples/install.go` 1/1, `bundle.go` 1/1).
 - Test Go: +3 / −2.
 - CUE: +16 / −26 (`schema.cue` 15/13, `model.cue` 1/1, `rules.cue` −12).
-- Docs: `schema-authoring.md` +220/−28, `gcp-network-hygiene.md` +24/−13,
+- Docs: `schema-authoring.md` +222/−28 (incl. a waiver pointer added after merging the waivers work), `gcp-network-hygiene.md` +24/−13,
   design +3/−2, skill +18/−1 (twice, embedded copy), plan, this log.
 - Generated: `cli-reference.md` +3/−2, `help.golden.json` +1/−1.

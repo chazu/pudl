@@ -325,7 +325,9 @@ policy_digest)` and `policy_violation(resource, policy, rule, severity, path,
 kind, declared_by)`. Both names are reserved. Checks use the built-in rule
 `policy_noncompliant(resource, policy, severity)`: a `#Check` with `query:
 "policy_noncompliant"` and `expect: "empty"` fails on any violation, within the
-check's evidence selection. `pudl query policy_noncompliant severity=high`
+check's evidence selection. A model's `waivers` can accept one violation
+until a date by `policy`, `rule` and `resource` (see `pudl help check`).
+`pudl query policy_noncompliant severity=high`
 limits it to one severity; for a threshold, write a rule over it. Each result records a digest of the
 policy's effective CUE; comments and `_pudl.description` do not change it.
 After a policy or its type changes, `pudl policy list` and `pudl doctor`
