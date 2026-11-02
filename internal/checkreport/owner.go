@@ -121,5 +121,5 @@ func writeWitnesses(w io.Writer, witnesses []Witness) {
 
 func writeWitness(w io.Writer, indent string, witness Witness) {
 	args, _ := json.Marshal(witness.Arguments)
-	fmt.Fprintf(w, "%s- %s\n", indent, args)
+	fmt.Fprintf(w, "%s- %s%s\n", indent, args, waiverNote(witness.Waiver))
 }

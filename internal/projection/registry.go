@@ -103,8 +103,8 @@ func (r *Registry) For(schema string) *SchemaSpec {
 
 func (r *Registry) compute(schema string) *SchemaSpec {
 	own, ok := r.src.GetSchemaMetadata(schema)
-	if !ok {
-		return nil
+	if !ok || own.IsPolicy() {
+		return nil // a policy is never assigned to a record, so it projects nothing
 	}
 	spec := &SchemaSpec{Schema: schema}
 	byName := map[string]RelationSpec{}

@@ -124,14 +124,18 @@ type declares `owner`, with its team label path where it has labels
   `pudl doctor`; the installed GCP pack attributes the fixture Pub/Sub topics
   to `orders` and lists unlabeled buckets as unowned.
 
-## Line deltas against sre-focus (9bbba78)
+## Line deltas against sre-focus (8dcd306, after merging it)
 
-`git diff --numstat`, Go files:
+`git diff --numstat sre-focus`, Go files:
 
 | | Added | Removed | Net |
 | --- | --- | --- | --- |
-| Production | +660 | −24 | +636 |
+| Production | +661 | −24 | +637 |
 | Tests | +565 | −0 | +565 |
+
+The merge with the waivers work (`pudl-xf5.4`) put both `Witness.Waiver` and
+`Witness.Owner` on findings; grouped human output keeps each finding's waiver
+note.
 
 ## Verification
 

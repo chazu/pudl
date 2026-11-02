@@ -216,10 +216,10 @@ func (r *modelRun) phases(report *checkreport.ModelReport) (runErr error, err er
 			scope = strings.TrimSpace(r.opts.CatalogScope)
 		} else {
 			pr, err := r.runPopulate()
+			report.Populate = pr
 			if err != nil {
 				return nil, err
 			}
-			report.Populate = pr
 			scope = pr.SnapshotID
 			if scope == "" {
 				return nil, fmt.Errorf("populate produced no snapshot to compare against")
@@ -240,6 +240,10 @@ func (r *modelRun) phases(report *checkreport.ModelReport) (runErr error, err er
 		// cannot write a clean status.
 		res.Verified = !r.opts.FromCatalog && !res.Uncertain
 		report.Drift = &res
+		// Failed inputs are why an inventory is incomplete, so they come first.
+		if err := failedInputsError(report.Populate); err != nil {
+			return err, nil
+		}
 		if res.Uncertain {
 			return fmt.Errorf("incomplete inventory cannot establish absence; collect and select an explicitly complete snapshot"), nil
 		}
@@ -248,10 +252,11 @@ func (r *modelRun) phases(report *checkreport.ModelReport) (runErr error, err er
 		report.Mode = "checks-only"
 	default:
 		pr, err := r.runPopulate()
+		report.Populate = pr
 		if err != nil {
 			return nil, err
 		}
-		report.Populate = pr
+		return failedInputsError(pr), nil
 	}
 	return nil, nil
 }

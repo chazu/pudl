@@ -87,7 +87,8 @@ _gcpRuns: {
 	}]
 }
 
-// A collector observes one type completely: a run that fails publishes nothing.
+// A collector observes one type completely. A run that fails is a failed
+// input: the other runs are ingested and the observation is incomplete.
 _#GCPCollector: {
 	_type:   string
 	_prefix: string

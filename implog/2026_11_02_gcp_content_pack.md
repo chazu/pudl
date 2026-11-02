@@ -99,6 +99,9 @@ with every check passing.
 
 ## Engine findings (reported, not fixed)
 
+Findings 1, 2 and 4 were later fixed (`pudl-opz`, `pudl-pob`) and their pack
+workarounds removed: `implog/2026_11_02_policy_engine_pack_fixes.md`.
+
 1. **A comprehension whose condition is incomplete in the bare policy drops
    every rule of the policy, silently.** `internal/policy/tree.go`
    `merge` ignores the error from `v.Fields(...)`. Repro (standalone policy on
