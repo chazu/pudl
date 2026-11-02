@@ -39,7 +39,7 @@ func TestScrubValueSearchesSnapshotsAndMetadata(t *testing.T) {
 	require.NoError(t, os.WriteFile(snapshotFile, snapshotJSON, 0o600))
 	collection, hash := "collection", hashOf(snapshotJSON)
 	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: snapshotID, StoredPath: snapshotFile, Format: "json", Origin: "observe",
-		Schema: "pudl/mu.#ObserveSnapshot", CollectionType: &collection, ContentHash: &hash, ImportTimestamp: time.Now()}))
+		Schema: "pudl/core.#ObserveSnapshot", CollectionType: &collection, ContentHash: &hash, ImportTimestamp: time.Now()}))
 	require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: snapshotID, Source: "command", CreatedAt: time.Now()}))
 
 	otherFile := filepath.Join(raw, "note.json")

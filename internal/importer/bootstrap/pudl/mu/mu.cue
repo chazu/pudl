@@ -3,9 +3,9 @@ package mu
 // Package mu keeps the schemas of the retired mu integration (see
 // docs/retired-commands.md) so catalog entries written before the removal —
 // manifests, actions, drift observations, plans and targets — still list,
-// show and validate. Nothing new is written with them, except #ObserveResult
-// and #ObserveSnapshot: observation ingest still files untyped records and
-// snapshot collections under these historical names.
+// show and validate. Nothing new is written with them. Observation ingest's
+// #ObserveResult and #ObserveSnapshot moved to pudl/core (observe.cue); their
+// old names still resolve.
 //
 // LEGACY: #Manifest, #ManifestTarget, #ManifestAction, #DriftObservation,
 // #PlanOutput, #PlanPlugin, #PlanAction and #Target.
@@ -56,51 +56,6 @@ package mu
 	cached:    bool
 	exit_code: int
 	outputs: {[string]: string} | *{}
-}
-
-// ObserveResult represents a single observe record that doesn't declare a
-// _schema field. Records with _schema are routed to their specific schema
-// (e.g. pudl/linux.#Host); this is the fallback for untyped observe data.
-#ObserveResult: {
-	_pudl: {
-		schema_type:   "base"
-		resource_type: "mu.observe"
-		// Identity includes `current` (the observed-state payload) so a full
-		// target *definition* — which has no `current` — does not tie with this
-		// fallback observe-record schema during inference. See pudl/mu.#Target.
-		identity_fields: ["target", "current"]
-	}
-
-	target?: string
-	current?: {...}
-	error?: string
-	...
-}
-
-// ObserveSnapshot represents a single observation — the collection of all
-// records observed across one or more targets at a point in time. Created by
-// each populate phase to group the records from one run.
-#ObserveSnapshot: {
-	_pudl: {
-		schema_type:   "collection"
-		resource_type: "mu.observe_snapshot"
-		identity_fields: ["snapshot_id"]
-	}
-
-	snapshot_id: string // timestamp-based ID
-	timestamp:   string // ISO 8601
-	origin:      string // e.g. "mu-observe"
-	run_id?:     string // enclosing pudl run, when available
-	targets: [...string] // targets that were observed
-	record_count:        int & >=0 // total records across all targets
-	schema_summary: [...{// distribution of _schema types
-		schema: string
-		count:  int & >=0
-	}]
-	errors?: [...{// targets that reported errors
-		target: string
-		error:  string
-	}]
 }
 
 // DriftObservation is the durable evidence behind a differential observe

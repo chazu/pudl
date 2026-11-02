@@ -21,8 +21,8 @@ func CopyBootstrapSchemas(schemaPath string) error {
 
 // copyBootstrapSchemasTo copies bootstrap CUE schema files to the specified directory
 func copyBootstrapSchemasTo(schemaPath string) error {
-	if err := retireMemorySchema(schemaPath); err != nil {
-		return fmt.Errorf("retire memory schema: %w", err)
+	if err := retireBootstrapFiles(schemaPath); err != nil {
+		return err
 	}
 	// Walk the embedded bootstrap schemas and copy them to the schema path
 	if err := fs.WalkDir(bootstrapSchemas, "bootstrap", func(path string, d fs.DirEntry, err error) error {
@@ -131,6 +131,10 @@ func (e *EnhancedImporter) ensureBasicSchemas() error {
 	modulePath := filepath.Join(e.schemaPath, "cue.mod", "module.cue")
 	if _, err := os.Stat(modulePath); os.IsNotExist(err) {
 		return fmt.Errorf("schema repository not initialized: missing %s (run 'pudl init' first)", modulePath)
+	}
+
+	if err := retireBootstrapFiles(e.schemaPath); err != nil {
+		return err
 	}
 
 	required, err := bootstrapSchemaFiles()

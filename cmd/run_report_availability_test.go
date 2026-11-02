@@ -18,7 +18,7 @@ func TestRunReportEvidenceAvailabilityKeepsExactFrozenValues(t *testing.T) {
 	for _, id := range []string{"previous", "current"} {
 		require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: id, Model: "m", Workspace: "repo", Source: database.SnapshotSourceMuObserve, CreatedAt: time.Now().Add(-time.Hour)}))
 		collection, entryType := "collection", "observe"
-		require.NoError(t, db.AddEntry(database.CatalogEntry{ID: id, ImportTimestamp: time.Now().Add(-time.Hour), Format: "json", Schema: "pudl/mu.#ObserveSnapshot", CollectionType: &collection, EntryType: &entryType}))
+		require.NoError(t, db.AddEntry(database.CatalogEntry{ID: id, ImportTimestamp: time.Now().Add(-time.Hour), Format: "json", Schema: "pudl/core.#ObserveSnapshot", CollectionType: &collection, EntryType: &entryType}))
 	}
 	require.NoError(t, db.RetainObserveSnapshot("current", true))
 	payload := []byte(`{"run_id":"r","model":"m","report_version":1,"drift":{"clean":false,"verified":false,"snapshot_id":"current","drifted":[{"resource":"x","reason":"changed","fields":[{"path":"count","expected":9007199254740993,"observed":1,"previous":{"status":"available","snapshot_id":"previous","value":9007199254740993}}]}]},"future_field":{"exact":9007199254740995}}`)

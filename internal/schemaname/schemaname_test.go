@@ -151,3 +151,11 @@ func TestIsFallbackSchema(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeResolvesMovedSchemas(t *testing.T) {
+	for _, old := range []string{"pudl/mu.#ObserveResult", "pudl.schemas/pudl/mu@v0:#ObserveResult"} {
+		if got := Normalize(old); got != "pudl/core.#ObserveResult" {
+			t.Errorf("Normalize(%q) = %q, want pudl/core.#ObserveResult", old, got)
+		}
+	}
+}

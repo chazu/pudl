@@ -1,6 +1,8 @@
 package importer
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -83,4 +85,32 @@ func TestBootstrapRepairPreservesMemorySchemaSymlink(t *testing.T) {
 	info, err := os.Lstat(path)
 	require.NoError(t, err)
 	require.NotZero(t, info.Mode()&os.ModeSymlink)
+}
+
+func TestRetireFileRemovesOnlyShippedVersions(t *testing.T) {
+	shipped := []byte("package brick\n")
+	sum := fmt.Sprintf("%x", sha256.Sum256(shipped))
+	for name, tc := range map[string]struct {
+		content  []byte
+		wantGone bool
+	}{
+		"shipped version": {shipped, true},
+		"edited copy":     {append(append([]byte{}, shipped...), "// mine\n"...), false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "pudl", "brick", "brick.cue")
+			require.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+			require.NoError(t, os.WriteFile(path, tc.content, 0644))
+			require.NoError(t, retireFile(path, []string{"0000", sum}))
+			_, err := os.Stat(path)
+			require.Equal(t, tc.wantGone, os.IsNotExist(err))
+			_, dirErr := os.Stat(filepath.Dir(path))
+			require.Equal(t, tc.wantGone, os.IsNotExist(dirErr), "an emptied package directory is removed")
+		})
+	}
+}
+
+func TestBrickIsRetired(t *testing.T) {
+	require.False(t, BootstrapPackages()["pudl/brick"])
+	require.Len(t, retiredBootstrapFiles["pudl/brick/brick.cue"], 2)
 }

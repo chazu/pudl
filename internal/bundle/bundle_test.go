@@ -95,7 +95,7 @@ func bundleFixture(t *testing.T) bundleFixtureState {
 	// The approval-only snapshot has no manual owner and must not acquire one on restore.
 	kind := "collection"
 	snapshotRaw := write("data/raw/snapshot.json", `{"snapshot_id":"approval-snapshot"}`)
-	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "approval-snapshot", StoredPath: snapshotRaw, ImportTimestamp: now, Format: "json", Origin: "bundle-test", Schema: "pudl/mu.#ObserveSnapshot", CollectionType: &kind}))
+	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "approval-snapshot", StoredPath: snapshotRaw, ImportTimestamp: now, Format: "json", Origin: "bundle-test", Schema: "pudl/core.#ObserveSnapshot", CollectionType: &kind}))
 	require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: "approval-snapshot", RunID: "historical-run", Model: "demo", Workspace: "original", Source: database.SnapshotSourceMuObserve, CreatedAt: now}))
 	require.NoError(t, db.SetSnapshotPin(database.SnapshotPin{SnapshotID: "approval-snapshot", OwnerKind: database.SnapshotPinApproval, OwnerID: "pending-set"}, true))
 	return bundleFixtureState{root: root, report: report, facts: facts, sequence: sequence}
@@ -183,7 +183,7 @@ func TestBundleMovedRootRoundTripPreservesEvidenceAndHistory(t *testing.T) {
 	kind := "collection"
 	freshPath := filepath.Join(root, "data/raw/fresh-snapshot.json")
 	require.NoError(t, os.WriteFile(freshPath, []byte(`{"snapshot_id":"fresh-snapshot"}`), 0600))
-	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "fresh-snapshot", StoredPath: freshPath, Schema: "pudl/mu.#ObserveSnapshot", Format: "json", Origin: "new-observation", ImportTimestamp: time.Now(), CollectionType: &kind}))
+	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "fresh-snapshot", StoredPath: freshPath, Schema: "pudl/core.#ObserveSnapshot", Format: "json", Origin: "new-observation", ImportTimestamp: time.Now(), CollectionType: &kind}))
 	require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: "fresh-snapshot", RunID: "live-after-restore", Model: "demo", Workspace: "original", Source: database.SnapshotSourceMuObserve, CreatedAt: time.Now()}))
 	require.NoError(t, db.FinishRun("live-after-restore", database.RunConclusion{CompletionStatus: database.RunStatusSucceeded}))
 	var freshBlocked int
@@ -480,7 +480,7 @@ func TestBundlePreservesGappedSnapshotChronology(t *testing.T) {
 			kind := "collection"
 			path := filepath.Join(fixture.root, "data/raw/"+id+".json")
 			require.NoError(t, os.WriteFile(path, []byte(`{"snapshot_id":"`+id+`"}`), 0600))
-			require.NoError(t, db.AddEntry(database.CatalogEntry{ID: id, StoredPath: path, Schema: "pudl/mu.#ObserveSnapshot", Format: "json", Origin: "chronology", ImportTimestamp: created, CollectionType: &kind}))
+			require.NoError(t, db.AddEntry(database.CatalogEntry{ID: id, StoredPath: path, Schema: "pudl/core.#ObserveSnapshot", Format: "json", Origin: "chronology", ImportTimestamp: created, CollectionType: &kind}))
 		}
 		require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: id, Model: "chronology", Workspace: "original", Source: database.SnapshotSourceMuObserve, CreatedAt: created}))
 	}

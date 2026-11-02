@@ -85,7 +85,7 @@ func TestIngestObserveResults_Basic(t *testing.T) {
 	if snapshot == nil {
 		t.Fatal("expected snapshot collection entry")
 	}
-	if snapshot.Schema != "pudl/mu.#ObserveSnapshot" {
+	if snapshot.Schema != "pudl/core.#ObserveSnapshot" {
 		t.Errorf("expected snapshot schema, got %s", snapshot.Schema)
 	}
 	if snapshot.RecordCount != 4 {
@@ -294,7 +294,7 @@ func TestIngestObserveResults_NoRecordsKey(t *testing.T) {
 		t.Fatal("expected observe entry for simple")
 	}
 	// No _schema field, should fall back to generic observe result
-	if entry.Schema != "pudl/mu.#ObserveResult" {
+	if entry.Schema != "pudl/core.#ObserveResult" {
 		t.Errorf("expected fallback schema, got %s", entry.Schema)
 	}
 }
@@ -367,7 +367,7 @@ func TestResourceTypeToSchema(t *testing.T) {
 		{"aws.ec2.vpc", "pudl/aws.#VPC"},
 		{"aws.ec2.nat_gateway", "pudl/aws.#NATGateway"},
 		{"aws.ec2.network_acl", "pudl/aws.#NetworkACL"},
-		{"unknown", "pudl/mu.#ObserveResult"}, // no dot separator
+		{"unknown", "pudl/core.#ObserveResult"}, // no dot separator
 	}
 
 	for _, tt := range tests {

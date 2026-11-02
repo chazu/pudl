@@ -167,7 +167,7 @@ func TestPrune_IgnoresSnapshotsWithNoContractRow(t *testing.T) {
 	entryType, collectionType := "observe", "collection"
 	require.NoError(t, db.AddEntry(CatalogEntry{
 		ID: "legacy_hash", ImportTimestamp: base, Format: "json", Origin: "mu-observe",
-		Schema: "pudl/mu.#ObserveSnapshot", EntryType: &entryType, CollectionType: &collectionType,
+		Schema: "pudl/core.#ObserveSnapshot", EntryType: &entryType, CollectionType: &collectionType,
 	}))
 	seedSnapshot(t, db, snapshotFor("snap_1", "m", SnapshotSourceMuObserve, base.Add(time.Hour)), raw, "rec")
 

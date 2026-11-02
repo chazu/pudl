@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Bootstrap cleanup: brick retired, observe schemas moved (2026-11-02)
+
+`pudl/brick` (mu build targets) is removed, and unmodified copies of retired
+built-in files are deleted from existing workspaces. Observation ingest's
+`#ObserveResult` and `#ObserveSnapshot` moved from `pudl/mu` to `pudl/core`;
+the old names still resolve. An audit of the other built-in packages found
+nine with no users; they are listed in the
+[delivery log](../implog/2026_11_02_bootstrap_cleanup.md).
+
 ### GCP records must carry a valid project ID (2026-11-02)
 
 GCP pack types require `project` to be a project ID, not the project number

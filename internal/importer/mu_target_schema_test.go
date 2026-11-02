@@ -71,9 +71,7 @@ func TestMuTargetBootstrapSchemaCoversStrictSealedRouting(t *testing.T) {
 }
 
 // TestMuTargetInference verifies a real `mu target list --json` record
-// classifies as pudl/mu.#Target. The decisive disambiguation from
-// pudl/brick.#Target is the identity field: mu emits `target`, brick keys on
-// `name`, so a target record scores on mu.#Target and not brick.
+// still classifies as the legacy pudl/mu.#Target.
 func TestMuTargetInference(t *testing.T) {
 	inferrer, err := inference.NewSchemaInferrer(gitSchemaDir(t))
 	if err != nil {
@@ -133,41 +131,5 @@ func TestMuTargetInference(t *testing.T) {
 					res.Schema, res.Confidence, res.Reason, tc.want)
 			}
 		})
-	}
-}
-
-// TestMuTargetVsBrickTarget guards the inference boundary: a brick-style record
-// (keyed on `name`, with `kind`) must NOT be captured by pudl/mu.#Target, and a
-// mu-style record (keyed on `target`) must NOT be captured by brick.
-func TestMuTargetVsBrickTarget(t *testing.T) {
-	inferrer, err := inference.NewSchemaInferrer(gitSchemaDir(t))
-	if err != nil {
-		t.Fatalf("NewSchemaInferrer: %v", err)
-	}
-
-	brickRecord := map[string]interface{}{
-		"name":      "//k8s/api",
-		"kind":      "component",
-		"toolchain": "k8s",
-		"config":    map[string]interface{}{},
-	}
-	res, err := inferrer.Infer(brickRecord, inference.InferenceHints{})
-	if err != nil {
-		t.Fatalf("Infer brick: %v", err)
-	}
-	if res.Schema == "pudl/mu.#Target" {
-		t.Errorf("brick-style record (keyed on name) must not classify as pudl/mu.#Target")
-	}
-
-	muRecord := map[string]interface{}{
-		"target":    "//cmd/mu",
-		"toolchain": "go",
-	}
-	res, err = inferrer.Infer(muRecord, inference.InferenceHints{})
-	if err != nil {
-		t.Fatalf("Infer mu: %v", err)
-	}
-	if res.Schema == "pudl/brick.#Target" {
-		t.Errorf("mu-style record (keyed on target) must not classify as pudl/brick.#Target")
 	}
 }

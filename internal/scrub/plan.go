@@ -88,7 +88,7 @@ func (p *Plan) Subjects() []Subject {
 var valueSearchSchemas = map[string]bool{}
 
 func init() {
-	for _, name := range []string{"pudl/mu.#DriftObservation", "pudl/mu.#Manifest", "pudl/mu.#ManifestAction", "pudl/mu.#PlanOutput", "pudl/mu.#ObserveSnapshot"} {
+	for _, name := range []string{"pudl/mu.#DriftObservation", "pudl/mu.#Manifest", "pudl/mu.#ManifestAction", "pudl/mu.#PlanOutput", "pudl/core.#ObserveSnapshot"} {
 		valueSearchSchemas[schemaname.Normalize(name)] = true
 	}
 }
