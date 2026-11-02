@@ -45,6 +45,14 @@ package gcp
 		identity_fields: ["project", "name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		facts: {
+			gcp_dns_zone: args: {project: "project", name: "name"}
+			// One fact per network a private zone is visible to.
+			gcp_dns_zone_network: {
+				each: "privateVisibilityConfig.networks[*]"
+				args: network: {path: "networkUrl", trim_prefix: _gcpComputeAPI}
+			}
+		}
 	}
 	kind:        "dns#managedZone"
 	project:     string

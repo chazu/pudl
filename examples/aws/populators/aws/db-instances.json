@@ -1,0 +1,111 @@
+[
+  {
+    "DBInstanceIdentifier": "orders-db",
+    "DBInstanceClass": "db.r6g.large",
+    "Engine": "postgres",
+    "DBInstanceStatus": "available",
+    "MasterUsername": "orders_admin",
+    "Endpoint": {"Address": "orders-db.cexample00001.us-east-1.rds.amazonaws.com", "Port": 5432, "HostedZoneId": "Z2R2ITUGPM61AM"},
+    "AllocatedStorage": 200,
+    "InstanceCreateTime": "2025-11-02T09:31:10.442000+00:00",
+    "PreferredBackupWindow": "03:00-03:30",
+    "BackupRetentionPeriod": 7,
+    "DBSecurityGroups": [],
+    "VpcSecurityGroups": [{"VpcSecurityGroupId": "sg-0aa00000000000003", "Status": "active"}],
+    "AvailabilityZone": "us-east-1a",
+    "DBSubnetGroup": {
+      "DBSubnetGroupName": "prod-db-subnets",
+      "DBSubnetGroupDescription": "Private subnets for prod databases",
+      "VpcId": "vpc-0a1b2c3d4e5f60001",
+      "SubnetGroupStatus": "Complete",
+      "Subnets": [
+        {"SubnetIdentifier": "subnet-0aa000000000000a2", "SubnetAvailabilityZone": {"Name": "us-east-1a"}, "SubnetOutpost": {}, "SubnetStatus": "Active"},
+        {"SubnetIdentifier": "subnet-0aa000000000000a3", "SubnetAvailabilityZone": {"Name": "us-east-1b"}, "SubnetOutpost": {}, "SubnetStatus": "Active"}
+      ]
+    },
+    "MultiAZ": true,
+    "EngineVersion": "16.4",
+    "AutoMinorVersionUpgrade": true,
+    "PubliclyAccessible": false,
+    "StorageType": "gp3",
+    "DbInstancePort": 0,
+    "StorageEncrypted": true,
+    "KmsKeyId": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000002",
+    "DbiResourceId": "db-EXAMPLEORDERS0000000000001",
+    "DeletionProtection": true,
+    "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:orders-db",
+    "TagList": [{"Key": "Team", "Value": "orders"}]
+  },
+  {
+    "DBInstanceIdentifier": "reporting-db",
+    "DBInstanceClass": "db.t3.medium",
+    "Engine": "mysql",
+    "DBInstanceStatus": "available",
+    "MasterUsername": "admin",
+    "Endpoint": {"Address": "reporting-db.cexample00001.us-east-1.rds.amazonaws.com", "Port": 3306, "HostedZoneId": "Z2R2ITUGPM61AM"},
+    "AllocatedStorage": 100,
+    "InstanceCreateTime": "2021-03-05T14:10:51.008000+00:00",
+    "PreferredBackupWindow": "06:00-06:30",
+    "BackupRetentionPeriod": 0,
+    "DBSecurityGroups": [],
+    "VpcSecurityGroups": [{"VpcSecurityGroupId": "sg-0dd00000000000002", "Status": "active"}],
+    "AvailabilityZone": "us-east-1a",
+    "DBSubnetGroup": {
+      "DBSubnetGroupName": "default",
+      "DBSubnetGroupDescription": "default",
+      "VpcId": "vpc-0d0d0d0d0d0d0d0d0",
+      "SubnetGroupStatus": "Complete",
+      "Subnets": [
+        {"SubnetIdentifier": "subnet-0dd000000000000d1", "SubnetAvailabilityZone": {"Name": "us-east-1a"}, "SubnetOutpost": {}, "SubnetStatus": "Active"}
+      ]
+    },
+    "MultiAZ": false,
+    "EngineVersion": "8.0.39",
+    "AutoMinorVersionUpgrade": true,
+    "PubliclyAccessible": true,
+    "StorageType": "gp2",
+    "DbInstancePort": 0,
+    "StorageEncrypted": false,
+    "DbiResourceId": "db-EXAMPLEREPORTING00000000001",
+    "DeletionProtection": false,
+    "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:reporting-db",
+    "TagList": []
+  },
+  {
+    "DBInstanceIdentifier": "analytics-db",
+    "DBInstanceClass": "db.r6g.xlarge",
+    "Engine": "postgres",
+    "DBInstanceStatus": "available",
+    "MasterUsername": "analytics_admin",
+    "Endpoint": {"Address": "analytics-db.cexample00001.us-east-1.rds.amazonaws.com", "Port": 5432, "HostedZoneId": "Z2R2ITUGPM61AM"},
+    "AllocatedStorage": 500,
+    "InstanceCreateTime": "2024-07-19T20:05:33.917000+00:00",
+    "PreferredBackupWindow": "04:00-04:30",
+    "BackupRetentionPeriod": 14,
+    "DBSecurityGroups": [],
+    "VpcSecurityGroups": [{"VpcSecurityGroupId": "sg-0aa00000000000003", "Status": "active"}],
+    "AvailabilityZone": "us-east-1b",
+    "DBSubnetGroup": {
+      "DBSubnetGroupName": "prod-db-subnets",
+      "DBSubnetGroupDescription": "Private subnets for prod databases",
+      "VpcId": "vpc-0a1b2c3d4e5f60001",
+      "SubnetGroupStatus": "Complete",
+      "Subnets": [
+        {"SubnetIdentifier": "subnet-0aa000000000000a2", "SubnetAvailabilityZone": {"Name": "us-east-1a"}, "SubnetOutpost": {}, "SubnetStatus": "Active"},
+        {"SubnetIdentifier": "subnet-0aa000000000000a3", "SubnetAvailabilityZone": {"Name": "us-east-1b"}, "SubnetOutpost": {}, "SubnetStatus": "Active"}
+      ]
+    },
+    "MultiAZ": false,
+    "EngineVersion": "15.8",
+    "AutoMinorVersionUpgrade": true,
+    "PubliclyAccessible": false,
+    "StorageType": "gp3",
+    "DbInstancePort": 0,
+    "StorageEncrypted": true,
+    "KmsKeyId": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000003",
+    "DbiResourceId": "db-EXAMPLEANALYTICS0000000001",
+    "DeletionProtection": true,
+    "DBInstanceArn": "arn:aws:rds:us-east-1:123456789012:db:analytics-db",
+    "TagList": [{"Key": "Team", "Value": "data"}]
+  }
+]

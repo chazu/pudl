@@ -10,6 +10,11 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["settings.userLabels.team"]}
+		// The VPC of a private IP, in path form; absent without one.
+		facts: gcp_sql_network: args: {
+			self_link: "selfLink"
+			network:   "settings.ipConfiguration.privateNetwork"
+		}
 	}
 	kind:            "sql#instance"
 	project:         string

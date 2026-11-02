@@ -4,6 +4,26 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### AWS content pack, relationship rules and impact queries (2026-11-02)
+
+`pudl example install aws` installs a pack written in CUE (`pudl-xf5.2`):
+draft schemas for VPCs, subnets, security groups, EC2 instances, EBS volumes,
+S3 buckets, RDS instances, KMS keys and IAM users and roles, with identity,
+ownership by account, redacted user data and fact projection; the VPC, subnet
+and security group types specialize the built-in `pudl/aws` types. Live
+(`aws-<type>`, aws CLI fanned out over accounts and regions) and fixture
+(`aws-fixture-<type>`) collectors; eight best-practice policies (open
+security groups, IMDSv2, EBS and RDS encryption, RDS public access and
+backups, S3 public access block and versioning, KMS rotation, console users
+without MFA, roles anyone can assume); and three checks-only families
+(network exposure, data protection, identity posture). The AWS part of
+`pudl-xf5.7` ships relationship rules (EC2 → subnet → VPC, EC2 → security
+group, RDS → subnet group/VPC), checks that use them (internet-exposed
+instance, instance in the default VPC, database on an unusable key) and impact
+queries: `aws_depends_on_vpc` and the recursive `aws_depends_on` for AWS, and
+`gcp_depends_on_network` for GCP. See the [pack README](../examples/aws/README.md)
+and the [delivery log](../implog/2026_11_02_aws_content_pack.md).
+
 ### Ownership attribution (2026-11-02)
 
 Schemas declare `_pudl.owner` (label or tag paths, a mapping table such as

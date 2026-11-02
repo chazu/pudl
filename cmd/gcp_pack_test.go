@@ -28,6 +28,7 @@ type packCheck struct {
 	Passed    bool   `json:"passed"`
 	Witnesses []struct {
 		Arguments map[string]any `json:"arguments"`
+		Owner     string         `json:"owner"`
 	} `json:"witnesses"`
 }
 
@@ -35,13 +36,23 @@ type packCheck struct {
 // requires the exit code, and returns each family's checks by name.
 func checkGCPPack(t *testing.T, exitCode int) map[string]map[string]packCheck {
 	t.Helper()
+	return checkPack(t, "gcp-fixture-", gcpPackTypes, gcpPackFamilies, exitCode)
+}
+
+// checkPack runs a content pack's fixture collectors (prefix + type) and
+// families (prefix + family + "-checks") in one `pudl check`, requires the
+// exit code, and returns each family's checks by name. extra flags are
+// appended to the command.
+func checkPack(t *testing.T, prefix string, types, familyNames []string, exitCode int, extra ...string) map[string]map[string]packCheck {
+	t.Helper()
 	args := []string{"check"}
-	for _, typ := range gcpPackTypes {
-		args = append(args, "gcp-fixture-"+typ)
+	for _, typ := range types {
+		args = append(args, prefix+typ)
 	}
-	for _, family := range gcpPackFamilies {
-		args = append(args, "gcp-fixture-"+family+"-checks")
+	for _, family := range familyNames {
+		args = append(args, prefix+family+"-checks")
 	}
+	args = append(args, extra...)
 	r := runCLI(t, append(args, "--json", "--detailed-exitcode")...)
 	require.Equal(t, exitCode, exitCodeFor(r.Err), r.Stdout+r.Stderr)
 	var check struct {
@@ -57,10 +68,10 @@ func checkGCPPack(t *testing.T, exitCode int) map[string]map[string]packCheck {
 		} `json:"members"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &check), r.Stdout)
-	require.Len(t, check.Members, len(gcpPackTypes)+len(gcpPackFamilies))
+	require.Len(t, check.Members, len(types)+len(familyNames))
 	families := map[string]map[string]packCheck{}
 	for _, m := range check.Members {
-		family, ok := strings.CutSuffix(strings.TrimPrefix(m.Model, "gcp-fixture-"), "-checks")
+		family, ok := strings.CutSuffix(strings.TrimPrefix(m.Model, prefix), "-checks")
 		if !ok {
 			require.Equal(t, "succeeded", m.Result, "collector %s", m.Model)
 			continue
@@ -70,7 +81,7 @@ func checkGCPPack(t *testing.T, exitCode int) map[string]map[string]packCheck {
 			families[family][c.Name] = c
 		}
 	}
-	require.Len(t, families, len(gcpPackFamilies))
+	require.Len(t, families, len(familyNames))
 	return families
 }
 
@@ -82,6 +93,20 @@ func witnessArgs(c packCheck, arg string) []string {
 		out = append(out, v[strings.LastIndex(v, "/")+1:])
 	}
 	return out
+}
+
+// kindCounts counts the tuples of `pudl query` output by their kind argument.
+func kindCounts(stdout string) map[string]int {
+	counts := map[string]int{}
+	for _, line := range strings.Split(stdout, "\n") {
+		_, rest, ok := strings.Cut(line, `"kind":"`)
+		if !ok {
+			continue
+		}
+		kind, _, _ := strings.Cut(rest, `"`)
+		counts[kind]++
+	}
+	return counts
 }
 
 func requireCheck(t *testing.T, checks map[string]packCheck, name, outcome string, count int) packCheck {
@@ -153,6 +178,14 @@ func TestGCPContentPack(t *testing.T) {
 	for _, rule := range []string{"gcp-sql-backups", "gcp-sql-pitr", "gcp-sql-public-ip", "gcp-sql-world-authorized-network"} {
 		require.Contains(t, r.Stdout, `"rule":"`+rule+`"`)
 	}
+	// Impact: what depends on the prod-vpc network.
+	r = runCLI(t, "query", "gcp_depends_on_network", "network=projects/example-project/global/networks/prod-vpc")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.Equal(t, map[string]int{
+		"subnet": 3, "firewall": 5, "route": 2, "router": 1,
+		"gke_cluster": 2, "sql_instance": 2, "dns_zone": 1,
+	}, kindCounts(r.Stdout))
+
 	// Policies declare no identity_fields: they are not family members.
 	require.NotContains(t, r.Stderr, "projection disabled")
 	r = runCLI(t, "doctor")

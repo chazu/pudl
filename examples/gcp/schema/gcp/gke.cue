@@ -25,6 +25,7 @@ package gcp
 				// networkConfig.subnetwork is in path form; the top-level
 				// subnetwork is a short name and does not join.
 				subnetwork: "networkConfig.subnetwork"
+				network:    "networkConfig.network"
 				private_nodes: {path: "privateClusterConfig.enablePrivateNodes", default: false}
 			}
 			gcp_gke_secrets_key: args: {
