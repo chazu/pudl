@@ -26,8 +26,12 @@ Installed files, under `.pudl/`:
 Each collector is a `#CommandObserve` model that runs one `gcloud ... list
 --format=json` per project, injects `project` into every record and routes the
 records to one schema. Each declares a complete observation of scope
-`gcp/<type>` (`fixture/gcp/<type>` for fixtures). If any run fails, nothing is
-ingested.
+`gcp/<type>` (`fixture/gcp/<type>` for fixtures). If a project's run fails
+(a missing permission, a disabled API), the other projects are ingested, the
+observation is incomplete, and the collector fails with the project listed
+under `populate.failed_inputs` in its report. A family checked with it is
+blocked; checked later on its own, its checks over that observation are
+unknown, not passing.
 
 | Collector | gcloud | Schema | Identity | Permission (role) |
 | --- | --- | --- | --- | --- |
@@ -111,6 +115,36 @@ The fixtures contain compliant and noncompliant resources, so every fixture
 family exits 2 (a failing fail-severity check). `pudl model list` shows every
 model; each `gcp-fixture-*` model has a live `gcp-*` twin.
 
+## Waiving a finding
+
+To accept a finding until a date, add a waiver to the family in
+`.pudl/schema/models/gcp_pack_checks.cue`. A policy waiver names the policy,
+the rule and the resource ID (`pudl policy show gcp.#FirewallBestPractice`
+lists failing resources by ID):
+
+```cue
+#GCPNetworkHygieneChecks: _#GCPNetworkHygiene & {
+	_prefix: "gcp-"
+	waivers: [{
+		policy:   "gcp.#FirewallBestPractice"
+		rule:     "gcp-firewall-world-ingress"
+		resource: "<resource ID>"
+		owner:    "security"
+		reason:   "public bastion until the VPN lands"
+		created:  "2026-11-01"
+		expires:  "2026-12-31"
+	}]
+}
+```
+
+`policy-high` and `policy-any` then report that firewall `waived`, with the
+waiver, and the family no longer exits 2 for it. After 2026-12-31 the finding
+counts again and the report flags the expired waiver. A waiver can instead
+target a cross-resource check's witness, for example `{check:
+"nat-ip-not-in-use", witness: {address: "<address selfLink>"}, ...}`. The
+policy-high rules carry `severity` so a waiver covers only the high and
+critical violations that check reports.
+
 ## Run against one live project
 
 1. Edit the live settings at the top of `.pudl/schema/models/gcp_pack.cue`:
@@ -140,6 +174,39 @@ model; each `gcp-fixture-*` model has a live `gcp-*` twin.
 A collector's observation is complete only for the projects, locations and
 key rings you list. Keep fixture and live runs in separate workspaces if you
 want `pudl query` (latest-known facts) to show only one of them.
+
+## Enumerate projects at run time
+
+`_gcpProjects` is fixed when the CUE is written. To collect every project your
+credentials can list instead, write a collector with `each`. Its command's JSON
+output supplies the inputs, and each run is repeated per project with
+`{{item}}` replaced (CUE interpolation cannot see a value that exists only at
+run time). For example, in `.pudl/schema/models/gcp_org.cue`:
+
+```cue
+package models
+
+import sm "pudl.schemas/pudl/systemmodel@v0"
+
+#GCPOrgFirewalls: sm.#SystemModel & {
+	name: "gcp-org-firewalls"
+	observation: {scope: "gcp-org/firewalls", complete: true}
+	populate: {
+		schema: "gcp.#Firewall"
+		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+		runs: [{
+			argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"]
+			set: project: "{{item}}"
+		}]
+	}
+}
+```
+
+The report records the projects it enumerated under `populate.inputs`. A
+failing project is a failed input as above; a failing `gcloud projects list`
+fails the collector with nothing ingested. The check families read
+`model:gcp-<type>`, so point a check's `evidence` at `model:gcp-org-firewalls`
+to evaluate this collector's observation.
 
 ## Limits
 

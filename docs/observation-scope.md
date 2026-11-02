@@ -29,8 +29,25 @@ checks: [{
 
 `complete` is an explicit collector assertion. The collector must successfully
 finish every required page and fan-out member before asserting it. A successful
-exit or a JSON array alone does not imply completeness. Command failure publishes
-no replacement observation; reported target errors prevent complete status.
+exit or a JSON array alone does not imply completeness. Reported target errors
+prevent complete status.
+
+A failing `#CommandRun` is a failed input. The records of the runs that
+succeeded are ingested, and each failed run is recorded as a target error, so
+the snapshot is incomplete. Its scope is not closed: resources the failed input
+covered are `not-observed`, never `removed`, and their policy results stay
+open. Checks that select the snapshot are unknown (`incomplete_observation`);
+the model's own checks that read the catalog directly are unknown too
+(`failed_inputs`), and the model fails. The report lists each failed input
+under `populate.failed_inputs` (argv, exit status, stderr tail, and the
+enumerated item when `each` produced it). If every run fails, no replacement
+observation is published. `populate.fail_fast: true` makes any failure fail
+the populate with nothing ingested.
+
+Verdicts are per check, not per input, so the failed input's slice is not
+partitioned out of the check: the whole check is unknown. A run therefore
+needs no label of the input it covers. The failure is named by its
+enumerated item, or by its argv for a static run.
 Omitted completeness defaults to false, including for older stored snapshots.
 An explicitly permitted schema mismatch also makes the observation incomplete.
 Command observers can opt into exploratory fallback with

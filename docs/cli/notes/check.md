@@ -44,7 +44,7 @@ can gate on it without parsing the report:
 
 | Exit | Meaning |
 |------|---------|
-| `0` | Clean: no drift, every fail-severity check passed |
+| `0` | Clean: no drift, every fail-severity check passed or is waived |
 | `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
 | `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
 
@@ -52,6 +52,43 @@ Under this flag every error exits 1, so `2` always means findings. When several
 models fail, the check exits 2 only when every failed model failed on its
 fail-severity checks alone; models blocked or cancelled behind them do not
 count as separate errors.
+
+**Waivers.** A model's `waivers` list declares accepted, time-boxed
+exceptions to its checks' findings, reviewed and versioned with the checks.
+Each names an `owner`, a `reason`, a `created` date and an `expires` date
+(`YYYY-MM-DD`, all required), and one target: a check's witnesses, or one
+compliance-policy violation.
+
+```cue
+waivers: [{
+	check:   "nat-ip-not-in-use"   // an expect: "empty" check of this model
+	witness: {address: "https://.../addresses/nat-ip-2"}  // values the witness must carry
+	owner: "network-team", reason: "held for failover"
+	created: "2026-11-01", expires: "2027-01-31"
+}, {
+	policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingress"
+	resource: "<resource ID from pudl policy show>"
+	owner: "security", reason: "public bastion until the VPN lands"
+	created: "2026-11-01", expires: "2026-12-31"
+}]
+```
+
+A policy waiver applies to any check of the model whose witnesses carry
+`resource` and `policy` arguments (such as `policy_noncompliant`): a witness is
+waived when every violation it stands for — narrowed by any `rule`, `severity`,
+`path` or `kind` argument it also carries — has a waiver. Loading fails on a
+missing field, an invalid date, `expires` before `created`, or a check the model
+does not have.
+
+A waived finding stays in the report with its waiver (`witnesses[].waiver`).
+A check whose every finding is waived has outcome `waived` (not a pass; the
+summary counts it in `waived_checks`) and does not fail the check or
+`--detailed-exitcode`. A waiver applies through its `expires` date (UTC); after
+that its findings count again and the report flags it as `expired`. A waiver
+that matches no finding is reported `stale`. The model report's `waivers` list
+gives each waiver's state and how many findings it matched. `pudl policy show`
+and `pudl show` do not mark waived violations: waivers belong to a model's
+checks.
 
 **Command populate.** A `#CommandObserve` arm runs plain commands that print
 JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
@@ -68,10 +105,25 @@ populate: {
 }
 ```
 
-The environment is inherited (cloud CLI credentials work). Any failing run
-fails the populate phase and nothing is ingested; the error quotes the end of
-its stderr. argv and `set` are recorded with the model: keep secrets out.
+The environment is inherited (cloud CLI credentials work). A failing run is a
+failed input: the other runs' records are ingested, the observation is
+incomplete, the report lists each failed run (`populate.failed_inputs`: argv,
+exit status, stderr tail), its checks are unknown, and the model fails. If
+every run fails, nothing is ingested. `fail_fast: true` restores
+all-or-nothing. argv and `set` are recorded with the model: keep secrets out.
 `pudl check --populate 'command:<cmdline>'` checks one ad hoc.
+
+To enumerate the inputs at run time, give `each` a command that prints a JSON
+list of strings, or of objects with `select` naming the field. Every run is
+repeated per input with `{{item}}` replaced in its argv and `set`, and the
+report records the inputs (`populate.inputs`):
+
+```cue
+populate: {
+	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+	runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+}
+```
 
 **Checks-only models.** A model without `populate` evaluates its checks over
 the catalog as it is — e.g. data brought in with `pudl import` — after syncing
