@@ -67,26 +67,13 @@ func reportHasFindings(r *RunReport) bool {
 	return anyFailSeverityFailed(r.Checks)
 }
 
-// detailedRunExit maps a finished `pudl run` to the --detailed-exitcode
-// contract. A run that fails only because a fail-severity check did not pass
-// found something (2); any other error is 1, whatever its own code would be,
-// so 2 always means findings.
-func detailedRunExit(report *RunReport, err error) error {
-	switch {
-	case err == nil && !reportHasFindings(report):
-		return nil
-	case err == nil || errors.Is(err, errFailSeverityChecks):
-		return &exitCodeError{code: exitFindings, err: err}
-	default:
-		return &exitCodeError{code: exitError, err: err}
-	}
-}
-
-// detailedRunSetExit maps a finished `pudl run set` to the same contract. A set
-// exits 2 when any member found drift or a failing check. A failed set exits 2
-// only when every failed member failed on its checks alone — blocked and
-// cancelled members are consequences of those failures, not new errors.
-func detailedRunSetExit(result *runSetResult, err error) error {
+// detailedCheckExit maps a finished `pudl check` to the --detailed-exitcode
+// contract. A check exits 2 when any model found drift or a failing check. A
+// failed check exits 2 only when every failed model failed on its
+// fail-severity checks alone — blocked and cancelled models are consequences
+// of those failures, not new errors. Any other error is 1, whatever its own
+// code would be, so 2 always means findings.
+func detailedCheckExit(result *checkResult, err error) error {
 	if err == nil {
 		if result != nil && result.findings {
 			return &exitCodeError{code: exitFindings}

@@ -26,6 +26,7 @@ func NewRunSession() *RunSession {
 	}
 }
 
-func NewRunSetID() string { return "runset_" + idgen.GenerateRandomProquint() }
+// NewCheckID allocates the identity of one check (its report ID).
+func NewCheckID() string { return "check_" + idgen.GenerateRandomProquint() }
 
 func NewMemberRunID() string { return "run_" + idgen.GenerateRandomProquint() }

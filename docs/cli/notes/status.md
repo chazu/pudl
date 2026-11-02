@@ -6,4 +6,4 @@ real verdict and a note.
 
 `clean` is the single in-sync state (drift == ∅), written only off a live
 observation, never off a `--from-catalog` replay. `failed` appears only on rows
-written by the retired convergence workflow; the next run replaces it.
+written by the retired convergence workflow; the next check replaces it.

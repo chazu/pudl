@@ -5,54 +5,48 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-func runSetTemplate(name string, bindings, declared []string) *systemmodel.ModelTemplate {
-	return &systemmodel.ModelTemplate{Name: name, BindingProducers: bindings, DependsOn: declared}
+func member(name string, dependsOn ...string) RunSetModel {
+	return RunSetModel{Name: name, DependsOn: dependsOn}
 }
 
 func TestRunSetPlanOrdersProducersFirstWithLexicalTieBreak(t *testing.T) {
 	plan, err := NewRunSetPlan([]RunSetModel{
-		{Template: runSetTemplate("app", []string{"network"}, []string{"dns"})},
-		{Template: runSetTemplate("network", nil, nil)},
-		{Template: runSetTemplate("dns", nil, nil)},
-		{Template: runSetTemplate("audit", nil, []string{"outside-advisory"})},
+		member("app", "dns", "network"),
+		member("network"),
+		member("dns"),
+		member("audit", "outside-advisory"),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"audit", "dns", "network", "app"}, plan.Ordered)
 	require.Len(t, plan.Edges, 2)
 	assert.Equal(t, RunSetEdge{From: "app", To: "dns", Sources: []string{"declared"}}, plan.Edges[0])
-	assert.Equal(t, RunSetEdge{From: "app", To: "network", Sources: []string{"binding"}}, plan.Edges[1])
+	assert.Equal(t, RunSetEdge{From: "app", To: "network", Sources: []string{"declared"}}, plan.Edges[1])
 }
 
-func TestRunSetPlanRequiresBindingProducerInsideExactSet(t *testing.T) {
-	_, err := NewRunSetPlan([]RunSetModel{{Template: runSetTemplate("app", []string{"network"}, nil)}})
-	require.ErrorContains(t, err, "outside the explicit run set")
+func TestRunSetPlanNeverAddsModelsOutsideTheNamedSet(t *testing.T) {
+	plan, err := NewRunSetPlan([]RunSetModel{member("app", "network")})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"app"}, plan.Ordered)
+	assert.Empty(t, plan.Edges)
 }
 
 func TestRunSetPlanRejectsDuplicatesSelfDependenciesAndCycles(t *testing.T) {
-	_, err := NewRunSetPlan([]RunSetModel{
-		{Template: runSetTemplate("app", nil, nil)},
-		{Template: runSetTemplate("app", nil, nil)},
-	})
-	require.ErrorContains(t, err, "duplicate")
+	_, err := NewRunSetPlan([]RunSetModel{member("app"), member("app")})
+	require.ErrorContains(t, err, "more than once")
 
-	_, err = NewRunSetPlan([]RunSetModel{{Template: runSetTemplate("app", nil, []string{"app"})}})
+	_, err = NewRunSetPlan([]RunSetModel{member("app", "app")})
 	require.ErrorContains(t, err, "self-dependency")
 
-	_, err = NewRunSetPlan([]RunSetModel{
-		{Template: runSetTemplate("a", []string{"b"}, nil)},
-		{Template: runSetTemplate("b", []string{"a"}, nil)},
-	})
+	_, err = NewRunSetPlan([]RunSetModel{member("a", "b"), member("b", "a")})
 	require.ErrorContains(t, err, "cycle")
 }
 
 func TestRunSetPlanResolvesRegistryAliases(t *testing.T) {
 	plan, err := NewRunSetPlan([]RunSetModel{
-		{Template: runSetTemplate("consumer", []string{"ProducerDef"}, nil)},
-		{Template: runSetTemplate("producer", nil, nil), Aliases: []string{"ProducerDef"}},
+		member("consumer", "ProducerDef"),
+		{Name: "producer", Aliases: []string{"ProducerDef"}},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"producer", "consumer"}, plan.Ordered)

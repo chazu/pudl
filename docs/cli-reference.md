@@ -14,9 +14,8 @@ other diagnostics go to stderr, and empty lists are written as `[]`. Commands
 without structured output (scaffolding, editors, Git and CUE wrappers) still
 print text under `--json`.
 
-Errors exit nonzero. `pudl run` and `pudl run set` can also report their
-findings in the exit status with `--detailed-exitcode`; see
-[pudl run](#pudl-run).
+Errors exit nonzero. `pudl check` can also report its findings in the exit
+status with `--detailed-exitcode`; see [pudl check](#pudl-check).
 
 ## Global flags
 
@@ -29,6 +28,7 @@ These flags apply to every command.
 
 ## Commands
 
+- [pudl check](#pudl-check) — Observe and evaluate exactly the named models; one report
 - [pudl completion](#pudl-completion) — Generate the autocompletion script for the specified shell
   - [pudl completion bash](#pudl-completion-bash) — Generate the autocompletion script for bash
   - [pudl completion fish](#pudl-completion-fish) — Generate the autocompletion script for fish
@@ -61,12 +61,10 @@ These flags apply to every command.
   - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
+- [pudl report](#pudl-report) — Read the latest or named check report
 - [pudl rule](#pudl-rule) — Manage Datalog rules
   - [pudl rule add](#pudl-rule-add) — Install a Datalog rule file into the workspace
   - [pudl rule new](#pudl-rule-new) — Scaffold a Datalog rule
-- [pudl run](#pudl-run) — Run a #SystemModel instance: observe, compare and check
-  - [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-  - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
 - [pudl schema](#pudl-schema) — Manage CUE schemas for data validation
   - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
   - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
@@ -81,6 +79,141 @@ These flags apply to every command.
   - [pudl snapshot show](#pudl-snapshot-show) — Show one snapshot's provenance and contents
 - [pudl status](#pudl-status) — Show the verified status of models and targets
 - [pudl version](#pudl-version) — Show version information
+
+## pudl check
+
+Observe and evaluate exactly the named models; one report
+
+```text
+pudl check <model>... [flags]
+```
+
+```text
+Observe and evaluate exactly the named #SystemModel instances.
+
+Each <model> is a registered #SystemModel, resolved by name (its name field or
+short definition name) from the project .pudl/schema and explicitly vendored
+packages. Register one with "pudl schema add".
+
+A check runs only the models it names, producers first: a model runs after
+every named model it lists in depends_on. A model whose named producer does
+not succeed is recorded as blocked. Models that were not named never run.
+
+Each model is observe-only: populate -> drift -> checks. A model without a
+populate arm is checks-only: it evaluates its checks over what the catalog
+already holds (e.g. data brought in with pudl import). A #CommandObserve
+populate runs plain commands that print JSON records (gcloud, kubectl,
+aws ... --format=json). Nothing is changed.
+
+A check records one report, whether it names one model or several. Read it
+again with "pudl report [ID]".
+
+With --detailed-exitcode the exit status reports the result: 0 clean,
+2 drift or a failing fail-severity check, 1 error.
+
+Examples:
+    pudl check github-chazu
+    pudl check network app --detailed-exitcode
+    pudl check git-inventory --from-catalog --catalog-scope snap_...
+    pudl check --populate 'command:gcloud compute networks list --format=json'
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--catalog-scope` | string |  | which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under |
+| `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
+| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
+| `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
+| `--populate` | string |  | Check an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
+| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
+
+**A check observes and reports; it never changes anything.** For each named
+model it populates the catalog, compares `desired` with what was observed,
+evaluates checks and records the result. Apply changes with the tool that owns
+them, then check again to verify.
+
+**Exactly the named models.** `pudl check a b c` runs `a`, `b` and `c` and
+nothing else. A model runs after every named model it lists in `depends_on`;
+dependencies that are not named add no ordering and are never run. When a
+named producer does not succeed, its dependents are recorded `blocked` and do
+not run; independent models continue. The order and the edges are recorded in
+the report (`ordered_members`, `edges`, `plan_digest`).
+
+**One report.** A check records one report whether it names one model or
+several: an aggregate `summary` (execution, conformity, checks, verification),
+and one entry per model under `members` with its result, run ID, summary and
+full `report` (populate, drift, checks). Read it again with
+[`pudl report`](#pudl-report). Under `--json` the check writes that report as
+its only output. Human output shows each model's findings as it concludes, then
+the summary; internal catalog keys such as `//models/<name>` appear only in the
+JSON evidence.
+
+**Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
+against records already in the catalog, so its verdict describes what was
+*recorded*, not what is live. A replay therefore never writes a model status;
+the model keeps the verdict of its last real observation. The scope is
+mandatory because there is no way to infer which ingested records belong to a
+model, and a replay names exactly one model. A model with `desired` state
+populates its own snapshot and compares against it without `--from-catalog`.
+
+**Interrupting a check.** The first Ctrl-C (SIGINT or SIGTERM) stops the check
+cleanly: the running command receives SIGTERM and has 10 seconds to finish
+(then it is killed), temporary workspaces are removed, the model in progress
+concludes `cancelled`, the remaining models are recorded `cancelled`, and the
+check's status is `cancelled`. A second Ctrl-C exits immediately (status 130),
+still removing temporary workspaces. Check again to continue. A populate
+`timeout` expiry is recorded as `failed`, not `cancelled`.
+
+**Exit status.** By default `pudl check` exits 0 whenever every model
+completed, including when it found drift; the report says what it found. A
+failing fail-severity check or any other error exits nonzero.
+
+With `--detailed-exitcode` the exit status is the result, so a script or CI job
+can gate on it without parsing the report:
+
+| Exit | Meaning |
+|------|---------|
+| `0` | Clean: no drift, every fail-severity check passed |
+| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
+| `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
+
+Under this flag every error exits 1, so `2` always means findings. When several
+models fail, the check exits 2 only when every failed model failed on its
+fail-severity checks alone; models blocked or cancelled behind them do not
+count as separate errors.
+
+**Command populate.** A `#CommandObserve` arm runs plain commands that print
+JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
+`aws … --format=json` — directly, with no shell. Fan out with a CUE
+comprehension and stamp fields the tool omits with `set`:
+
+```cue
+populate: {
+	schema: "pudl/gcp.#Firewall"     // optional; routes records like import --schema
+	runs: [for p in ["prod-a", "prod-b"] {
+		argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+		set: project: p
+	}]
+}
+```
+
+The environment is inherited (cloud CLI credentials work). Any failing run
+fails the populate phase and nothing is ingested; the error quotes the end of
+its stderr. argv and `set` are recorded with the model: keep secrets out.
+`pudl check --populate 'command:<cmdline>'` checks one ad hoc.
+
+**Checks-only models.** A model without `populate` evaluates its checks over
+the catalog as it is — e.g. data brought in with `pudl import` — after syncing
+projected facts ([projection](projection.md)). It cannot declare `desired`.
+
+**Retired commands, fields and flags.** `pudl check` replaces `pudl run` and
+`pudl run set`. `--converge` and its flags, `--max-observation-age`, and the
+model fields `converge`, `plugins`, `sealed_inputs`, `sealed_outputs`, `inputs`
+and `bindings`, and the `#PluginObserve` and `#EweTarget` populate arms were
+removed. A model that uses one fails to load with an error naming the field; see
+[retired commands](retired-commands.md).
 
 ## pudl completion
 
@@ -907,7 +1040,7 @@ configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
 
-`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
+`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots do not count as a model's latest live observation until it is observed again. See [backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -1037,7 +1170,7 @@ A model is a registered `#SystemModel` describing a `desired` state and the
 sources that populate observed state. Catalog rows carry a `target` — the run
 target that produced them (e.g. `//models/<name>`, a populate
 phase `//models/<name>:populate`);
-status is recorded per target. Drift detection is a phase of `pudl run`, not a
+status is recorded per target. Drift detection is a phase of `pudl check`, not a
 standalone command.
 
 ## pudl model deps
@@ -1074,8 +1207,8 @@ List every #SystemModel-derived definition registered in the schema
 repository (project definitions precede explicitly vendored packages), with its
 populate kind and desired/check counts.
 
-This is the static registry of runnable models — what 'pudl run <name>' can
-resolve — independent of whether a model has been run yet.
+This is the static registry of runnable models — what 'pudl check <name>' can
+resolve — independent of whether a model has been checked yet.
 ```
 
 ## pudl model new
@@ -1139,12 +1272,12 @@ pudl model validate <name>
 ```text
 Resolve and validate a #SystemModel by name. It validates the authored
 CUE template and runs structural checks on its arms without touching any external
-system. Bound models remain valid templates before their catalog values exist;
-their final concrete values are validated again when pudl runs them.
+system.
 ```
 
-Models with plain bindings are valid before their catalog values exist; the
-resolved scalars and final concrete model are validated again at run time.
+A model is validated as authored: CUE decode, structural checks on its arms,
+and its schema contracts. A model that still declares a retired field (such as
+`inputs` or `bindings`) fails with an error naming the field.
 
 ## pudl policy
 
@@ -1299,6 +1432,41 @@ fields are errors. Empty values and values containing `=` remain valid.
 Every query presentation mode returns output errors. A failed stdout consumer may
 receive a prefix; automation must check the command's exit status.
 
+## pudl report
+
+Read the latest or named check report
+
+```text
+pudl report [ID]
+```
+
+```text
+Read a stored report: the newest one, or the one ID names.
+
+ID is a check ID, or the run ID of one model within a check. Reports recorded
+by the retired "pudl run" and "pudl run set" commands read the same way;
+fields those reports carry that current reports do not are shown as recorded
+under "legacy fields".
+
+Examples:
+    pudl report
+    pudl report check_... --json
+```
+
+`report` reads every stored report: check reports, the report of one model
+within a check (by its run ID), and reports recorded by the retired `pudl run`
+and `pudl run set` commands. With no ID it selects the newest stored report.
+With an ID it reads that exact report. The JSON payload is the report as stored.
+
+Check reports from `report_version` 3 embed each model's full report under
+`members[].report`, and the human rendering shows each model's findings before
+the check summary. Older run-set reports (versions 1 and 2) carry only member
+summaries; read a member's findings with `pudl report <run_id>`. Fields a stored
+report has that current reports do not, such as those from the retired
+convergence workflow, are shown as recorded under "legacy fields".
+
+Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
+
 ## pudl rule
 
 Manage Datalog rules
@@ -1365,189 +1533,6 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace an existing rule scaffold |
-
-## pudl run
-
-Run a #SystemModel instance: observe, compare and check
-
-```text
-pudl run [<model>] [flags]
-```
-
-```text
-Run a #SystemModel instance through the ACUTE cycle.
-
-<model> is a registered #SystemModel — a definition inheriting #SystemModel,
-resolved by name (its name field or short definition name) from the project
-.pudl/schema and explicitly vendored packages. Register one with
-"pudl schema add". A run is observe-only: populate -> drift -> checks ->
-report. It reports differences and changes nothing.
-
-A model without a populate arm is checks-only: it syncs projected facts and
-evaluates its checks over what the catalog already holds (e.g. data brought in
-with pudl import). A #CommandObserve populate runs plain commands that print
-JSON records (gcloud, kubectl, aws ... --format=json).
-
-With --detailed-exitcode the exit status reports the result: 0 clean,
-2 drift or a failing fail-severity check, 1 error.
-
-Examples:
-    pudl run github-chazu
-    pudl run github-chazu --detailed-exitcode
-    pudl run --populate 'command:gcloud compute networks list --format=json'
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--catalog-scope` | string |  | which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under |
-| `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
-| `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
-| `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
-| `--populate` | string |  | Run an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-
-Subcommands:
-
-- [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-- [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
-
-**A run observes and reports; it never changes anything.** It populates the
-catalog, compares `desired` with what was observed, evaluates checks and
-records a report. Apply changes with the tool that owns them, then run again to
-verify.
-
-**Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
-against records already in the catalog, so its verdict describes what was
-*recorded*, not what is live. A replay therefore never writes a model status;
-the model keeps the verdict of its last real observation. The scope is
-mandatory because there is no way to infer which ingested records belong to a
-model. A model with `desired` state populates its own snapshot and compares
-against it without `--from-catalog`.
-
-**Interrupting a run.** The first Ctrl-C (SIGINT or SIGTERM) stops the run
-cleanly: the running command receives SIGTERM and has 10 seconds to finish
-(then it is killed), temporary workspaces are removed, and the run is recorded
-with completion status `cancelled`. A second Ctrl-C exits immediately (status
-130), still removing temporary workspaces. Re-run the model to continue. A
-populate `timeout` expiry is recorded as `failed`, not `cancelled`.
-
-**Exit status.** By default `pudl run` exits 0 whenever the run completed,
-including when it found drift; the report says what it found. A failing
-fail-severity check or any other error exits nonzero.
-
-With `--detailed-exitcode` the exit status is the result, so a script or CI job
-can gate on it without parsing the report:
-
-| Exit | Meaning |
-|------|---------|
-| `0` | Clean: no drift, every fail-severity check passed |
-| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
-| `1` | Error: the run could not establish the answer (bad flags, unknown model, populate failure) |
-
-Under this flag every error exits 1, so `2` always means findings.
-
-**Producers.** A standalone `pudl run` never starts another model
-automatically. If the model has a plain binding, PUDL reuses the latest eligible
-successful producer snapshot in the same workspace; use `pudl run set` to
-observe and pin producers in the current operation.
-
-**Command populate.** A `#CommandObserve` arm runs plain commands that print
-JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
-`aws … --format=json` — directly, with no shell. Fan out with a CUE
-comprehension and stamp fields the tool omits with `set`:
-
-```cue
-populate: {
-	schema: "pudl/gcp.#Firewall"     // optional; routes records like import --schema
-	runs: [for p in ["prod-a", "prod-b"] {
-		argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
-		set: project: p
-	}]
-}
-```
-
-The environment is inherited (cloud CLI credentials work). Any failing run
-fails the populate phase and nothing is ingested; the error quotes the end of
-its stderr. argv and `set` are recorded with the model: keep secrets out.
-`pudl run --populate 'command:<cmdline>'` runs one ad hoc.
-
-**Checks-only models.** A model without `populate` evaluates its checks over
-the catalog as it is — e.g. data brought in with `pudl import` — after syncing
-projected facts ([projection](projection.md)). It cannot declare `desired`.
-
-**Retired fields and flags.** `--converge` and its flags, and the model fields
-`converge`, `plugins`, `sealed_inputs` and `sealed_outputs`, and the
-`#PluginObserve` and `#EweTarget` populate arms were removed. A model that uses
-one fails to load with an error naming the field; see
-[retired commands](retired-commands.md#convergence-and-mu-integration).
-
-## pudl run report
-
-Read the latest or named standalone/set operation report
-
-```text
-pudl run report [operation-id]
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-
-Standalone runs and run sets share `report`. With no ID, `report` selects the
-newest persisted standalone or aggregate set report. With an ID, it reads that
-exact report. The JSON payload retains its existing standalone or set
-representation.
-
-Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
-
-## pudl run set
-
-Run an explicit producer/consumer model set in dependency order
-
-```text
-pudl run set <model> [<model>...] [flags]
-```
-
-```text
-Run exactly the named models in dependency order.
-
-The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Every
-member is observe-only, and successful producer snapshots are pinned for
-downstream plain bindings.
-
-Examples:
-  pudl run set network app
-  pudl run set network app --max-observation-age 15m
-  pudl run set network app --detailed-exitcode
-  pudl run report
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
-| `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-
-Every member of a set is observe-only. A set continues independent branches
-after a member failure while blocking that member's dependents; a blocked
-member records the binding it could not resolve.
-
-An interrupted set starts no further member: the member in progress concludes
-`cancelled`, the remaining members are recorded `cancelled`, and the set's
-status is `cancelled`.
-
-With `--detailed-exitcode`, a set exits 2 when any member found drift or a
-failing fail-severity check. A failed set exits 2 only when every failed member
-failed on its checks alone (members blocked or cancelled behind them do not
-count as separate errors); otherwise it exits 1.
 
 ## pudl schema
 
@@ -1745,7 +1730,7 @@ Observation snapshots are what a run saw.
 
 Each populate or observe ingest records one snapshot: which model it was taken
 for, by which run, in which workspace, from which source, and how many records it
-holds. A snapshot ID is what "pudl run --from-catalog --catalog-scope <id>"
+holds. A snapshot ID is what "pudl check <model> --from-catalog --catalog-scope <id>"
 replays against.
 
 Snapshots accumulate — one per run, plus one raw file per record — so they need
@@ -1866,14 +1851,14 @@ pudl status [target]
 
 ```text
 Display the status recorded in the catalog — the per-target verdict
-pudl run writes (a model run's verdict is recorded on its instance row,
+pudl check writes (a model's verdict is recorded on its instance row,
 "//models/<name>").
 
 Status values:
   unknown     — no verified status recorded yet (the retired "converging" value also reads as unknown)
   clean       — observed == desired, confirmed by a live observation
   drifted     — observed != desired, or a fail-severity check did not pass
-  failed      — recorded by the retired convergence workflow; re-run the model to replace it
+  failed      — recorded by the retired convergence workflow; check the model again to replace it
 
 Examples:
     pudl status
@@ -1889,7 +1874,7 @@ real verdict and a note.
 
 `clean` is the single in-sync state (drift == ∅), written only off a live
 observation, never off a `--from-catalog` replay. `failed` appears only on rows
-written by the retired convergence workflow; the next run replaces it.
+written by the retired convergence workflow; the next check replaces it.
 
 ## pudl version
 

@@ -114,7 +114,8 @@ THE DAY-TO-DAY VERBS
   pudl show <id>              Inspect an entry's content and metadata.
   pudl facts list --relation depends   Query assertions in the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
-  pudl run <model>            Observe, compare with desired state, run checks.
+  pudl check <model>...       Observe, compare with desired state, run checks.
+  pudl report [id]            Read a check's report again.
   pudl status                 Show each model's recorded verdict.
   pudl doctor                 Health check the workspace.
 
@@ -355,7 +356,7 @@ PROJECTED FACTS
   Schemas that declare _pudl.facts project imported records into facts
   (source "projection:<resource_id>", reserved). They track each
   resource's most recently observed record, and are kept in sync by
-  import, run, doctor repairs and delete. Run
+  import, check, doctor repairs and delete. Run
   'pudl doctor --fix --only projections' to sync explicitly; 'pudl query' warns when a sync is pending.
 
 SEE ALSO
@@ -478,24 +479,23 @@ SEE ALSO
 }
 
 func printGuideModels() {
-	fmt.Fprint(outw(), `pudl guide models — declaring and running #SystemModels
+	fmt.Fprint(outw(), `pudl guide models — declaring and checking #SystemModels
 
 OVERVIEW
 
   A #SystemModel packages how to observe a system (commands that print JSON
   records), optional desired state, and checks — in one declaration.
-  'pudl run <model>' drives it: populate → drift → checks → report. A run
-  reports differences and changes nothing; the tools that own the system
-  apply changes.
+  'pudl check <model>...' drives it: populate → drift → checks → report. A
+  check reports differences and changes nothing; the tools that own the
+  system apply changes.
 
 COMMANDS
 
-  pudl model list                      List registered models (+ last-run status)
+  pudl model list                      List registered models (+ last status)
   pudl model show <name>               Show populate/desired/checks
   pudl model validate <name>           Structurally validate without running
-  pudl run <name>                      Observe, compare and check
-  pudl run set <models...>             Observe an exact dependency set
-  pudl run report [id]                 Read a durable run or run-set report
+  pudl check <name>...                 Observe, compare and check the named models
+  pudl report [id]                     Read a check report again
   pudl status                          Show each model's recorded verdict
 
 WHAT A MODEL DECLARES
@@ -520,29 +520,29 @@ WHAT A MODEL DECLARES
   A model with no populate is checks-only. It runs its checks over the
   catalog as it stands, for example over data from 'pudl import'.
 
-  Register with 'pudl schema add'; resolve and run it by name (its 'name'
+  Register with 'pudl schema add'; resolve and check it by name (its 'name'
   field or short definition name). Retired fields (converge, plugins,
-  sealed_inputs, sealed_outputs, #PluginObserve, #EweTarget) fail to load
-  with an error naming the field; see docs/retired-commands.md.
+  sealed_inputs, sealed_outputs, inputs, bindings, #PluginObserve,
+  #EweTarget) fail to load with an error naming the field; see
+  docs/retired-commands.md.
 
 SCAFFOLD FIRST
 
   pudl model new fw --populate 'command:gcloud compute firewall-rules list --format=json'
   pudl model new inventory              # placeholder command to replace
   pudl model show fw --json
-  pudl run --populate 'command:gcloud compute networks list --format=json'
+  pudl check --populate 'command:gcloud compute networks list --format=json'
 
   The ad-hoc form writes no model definition. For a durable model, edit the
   path printed by 'model new' rather than authoring registration boilerplate
-  by hand. Use 'pudl run report [run-id]' after a run.
+  by hand. Use 'pudl report [id]' after a check.
 
-CROSS-MODEL VALUES
+SEVERAL MODELS
 
-  Required scalar inputs can bind to a producer observation. Both the consumer
-  input and source schema field must declare @pudl(binding=plain). 'run set'
-  runs exactly the named models, rejects omitted producers/cycles in preflight,
-  orders producers first, and pins their successful snapshots. It never expands
-  the set implicitly.
+  'pudl check a b c' runs exactly the named models, producers first by
+  depends_on, rejects cycles before anything runs, and records one report.
+  A model whose named producer did not succeed is blocked. It never runs a
+  model that was not named.
 
 SEE ALSO
 
@@ -558,18 +558,18 @@ START WITH THE PROJECT
 
   pudl model list --json
   pudl model show <name> --json
-  pudl run <name>
-  pudl run report --json
+  pudl check <name>
+  pudl report --json
 
   Existing repository state lives under .pudl/. Create it with pudl init if
   needed; use --global explicitly for global initialization.
 
 EXECUTION SCOPE
 
-  pudl run set <producer> <consumer>   Observe exactly the named set
+  pudl check <producer> <consumer>   Observe exactly the named models
 
-  Every run observes; nothing changes the systems PUDL catalogs. Missing
-  producers are not started implicitly.
+  Every check observes; nothing changes the systems PUDL catalogs. Models
+  that were not named are never started.
 
 INTERPRET THE RESULT
 
@@ -609,7 +609,7 @@ DISCOVER THE ACTUAL SURFACE
 
 RUN DIAGNOSTICS
 
-  pudl run report [<run-id>] --json   retrieve the most recent/stored report
+  pudl report [<id>] --json           retrieve the most recent/stored report
   pudl status                         model verdicts
   pudl snapshot list --json           observation snapshots
 
@@ -623,7 +623,7 @@ COMMON CASES
     remove the named field; docs/retired-commands.md lists replacements.
 
   The populate command fails:
-    the run error quotes the end of its stderr. Run the argv by hand from the
+    the check error quotes the end of its stderr. Run the argv by hand from the
     model file's directory; set populate.timeout for slow commands.
 
   Observed records have an unexpected schema:

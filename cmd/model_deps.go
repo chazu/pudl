@@ -39,16 +39,12 @@ Examples:
 
 		var warnings []string
 
-		// 1. Declared and authoritative binding edges for every retained model
-		// template (no successful value resolution or run needed).
+		// 1. Declared edges for every retained model template (no run needed).
 		for _, model := range models {
 			declared, warns := declaredDepsOfTemplate(model.Template)
 			warnings = append(warnings, warns...)
 			if rerr := reconcileEdges(db, model.Name, declaredSource(model.Name), declared); rerr != nil {
 				return fmt.Errorf("reconcile declared deps for %s: %w", model.Name, rerr)
-			}
-			if rerr := reconcileBindingDependencies(db, model.Template); rerr != nil {
-				return fmt.Errorf("reconcile binding deps for %s: %w", model.Name, rerr)
 			}
 		}
 
@@ -137,7 +133,7 @@ func sourceLabel(source string) string {
 	case len(source) >= 8 && source[:8] == "derived:":
 		return "derived"
 	case len(source) >= 8 && source[:8] == "binding:":
-		return "binding"
+		return "binding" // recorded by the retired value bindings
 	default:
 		return source
 	}

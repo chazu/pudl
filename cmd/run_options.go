@@ -3,22 +3,18 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/spf13/cobra"
 )
 
-// runFlags is the validated catalog-replay surface for `pudl run`: the subset
+// runFlags is the validated catalog-replay surface of a model run: the subset
 // of the options the phase helpers consult.
 type runFlags struct {
 	fromCatalog  bool
 	catalogScope string
 }
 
-// runOptions is the complete input of one model run. It is built once — from
-// the command's flags or from a run-set member's settings — and passed
-// explicitly, so no caller re-enters another command's handler or mutates
-// package flag variables to drive a run.
+// runOptions is the complete input of one model run within a check. It is
+// built once from the check's options and passed explicitly, so no caller
+// mutates package flag variables to drive a run.
 type runOptions struct {
 	runFlags
 
@@ -26,45 +22,6 @@ type runOptions struct {
 	model         string
 	populateSpec  string
 	checkUpstream bool
-
-	maxObservationAge    time.Duration
-	maxObservationAgeSet bool
-}
-
-// runDeps are the collaborators a run reaches outside its own options: the
-// run-set coordinator when the run is a set member.
-type runDeps struct {
-	// set is nil for a standalone run.
-	set *runSetExecutionContext
-}
-
-// runOptionsFromFlags reads `pudl run`'s flags once. Changed() is consulted
-// here and nowhere else; downstream code reads the *Set booleans.
-func runOptionsFromFlags(cmd *cobra.Command, args []string) runOptions {
-	opts := runOptions{
-		runFlags: runFlags{
-			fromCatalog:  runFromCatalog,
-			catalogScope: runCatalogScope,
-		},
-		populateSpec:         runPopulateSpec,
-		checkUpstream:        runCheckUpstream,
-		maxObservationAge:    runMaxObservationAge,
-		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
-	}
-	if len(args) > 0 {
-		opts.model = args[0]
-	}
-	return opts
-}
-
-// memberRunOptions is the observe-only run a run-set member performs: the
-// set's observation-age policy.
-func memberRunOptions(model string, set runSetOptions) runOptions {
-	return runOptions{
-		model:                model,
-		maxObservationAge:    set.maxObservationAge,
-		maxObservationAgeSet: set.maxObservationAgeSet,
-	}
 }
 
 // validateRunFlags enforces that a catalog replay names the records it

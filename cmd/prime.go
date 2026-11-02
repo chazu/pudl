@@ -30,14 +30,14 @@ const primeText = `# PUDL for humans and agents
 
 PUDL retains typed observations of systems, compares them with declared
 expectations, and records evidence. It never changes the systems it observes:
-a run reports drift, and the tools that own those systems apply changes.
+a check reports drift, and the tools that own those systems apply changes.
 
 ## Start with the existing workspace
 
 pudl model list
 pudl model show <name> --json
-pudl run <name>
-pudl run report --json
+pudl check <name>
+pudl report --json
 
 Create local state with pudl init; use pudl init --global for ~/.pudl.
 Repository catalogs and mutable state remain isolated beneath .pudl/.
@@ -46,21 +46,19 @@ Use pudl help <command> --json or pudl guide <topic> for targeted instructions.
 ## Observe with commands
 
 pudl model new <name> --populate 'command:<cmdline printing JSON>'
-pudl run --populate 'command:gcloud compute networks list --format=json'
-pudl run <name> --detailed-exitcode
+pudl check --populate 'command:gcloud compute networks list --format=json'
+pudl check <name> --detailed-exitcode
 
 A model's populate arm (#CommandObserve) runs commands that print JSON records,
 such as gcloud, kubectl or aws with JSON output, and ingests them as one
 snapshot. A model with desired state reports drift against that snapshot.
 
-## Exact sets
+## Several models
 
-pudl run set <producer> <consumer>
+pudl check <producer> <consumer>
 
-An exact set runs only the named models in dependency order. Missing binding
-producers are errors. Standalone runs can reuse eligible recorded producer
-snapshots; they never start a producer automatically. Plain bindings pin scoped
-snapshots.
+A check runs only the named models, producers first by depends_on, and records
+one report for all of them. It never starts a model that was not named.
 
 Report completion, resource conformity, checks, and evidence verification are
 separate dimensions. Successful execution can still find drift. Stored replay
@@ -96,8 +94,8 @@ pudl schema new --from <id> --path <package>/#<Definition>
 pudl doctor --json
 
 Formats and schemas are inferred on import. --origin is an explicit list filter.
-Replaying a stored run snapshot requires run --from-catalog --catalog-scope
-<snapshot-id> and remains unverified.
+Replaying a stored snapshot requires check <model> --from-catalog
+--catalog-scope <snapshot-id> and remains unverified.
 Use Git, your editor, and cue on the paths from pudl config --paths --json.
 
 ## Facts and rules

@@ -18,17 +18,16 @@ missing_check: {head: {rel:"missing_check",args:{name:"$N"}}, body:[{rel:"missin
 import sm "pudl.schemas/pudl/systemmodel@v0"
 #Missing: sm.#SystemModel & {name:"missing", checks:[{name:"check",query:"missing_check",expect:"empty",severity:"fail",message:"must have evidence"}]}
 `)
-	r := runCLI(t, "run", "missing", "--json", "--detailed-exitcode")
+	r := runCLI(t, "check", "missing", "--json", "--detailed-exitcode")
 	require.Error(t, r.Err)
 	require.Equal(t, 1, exitCodeFor(r.Err))
-	var report RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report), r.Stdout+r.Stderr)
+	report := checkedModel(t, r.Stdout)
 	require.False(t, report.OK)
 	require.Len(t, report.Checks, 1)
 	require.Equal(t, "unknown", report.Checks[0].Outcome)
 	require.False(t, report.Checks[0].Passed)
 	require.NotEmpty(t, report.Checks[0].Diagnostics)
-	stored := runCLI(t, "run", "report", report.RunID, "--json")
+	stored := runCLI(t, "report", report.RunID, "--json")
 	require.NoError(t, stored.Err)
 	require.Contains(t, stored.Stdout, "missing_evidence")
 	require.NoError(t, json.Unmarshal([]byte(stored.Stdout), &report))
@@ -47,10 +46,9 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
  checks:[{name:"empty",query:"gcp_firewall",expect:"empty",severity:"fail",message:"empty inventory"}]
 }
 `)
-	r := runCLI(t, "run", "empty", "--json")
+	r := runCLI(t, "check", "empty", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	var report RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report))
+	report := checkedModel(t, r.Stdout)
 	require.NotNil(t, report.Populate)
 	require.Zero(t, report.Populate.Records)
 	require.NotEmpty(t, report.Populate.SnapshotID)
@@ -58,10 +56,10 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 	// Existing relation names remain attributable when their specs break.
 	writeFile(t, schemaPath, fmt.Sprintf(e2eFirewallBase, `facts: gcp_firewall: args: {a:"a[*]",b:"b[*]"}`))
 	reloadSchemas()
-	r = runCLI(t, "run", "empty", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "empty", "--json", "--detailed-exitcode")
 	require.Error(t, r.Err)
 	require.Equal(t, 1, exitCodeFor(r.Err))
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report), r.Stdout+r.Stderr)
+	report = checkedModel(t, r.Stdout)
 	require.Equal(t, "unknown", report.Checks[0].Outcome)
 	require.Contains(t, r.Stdout, "invalid_projection")
 }

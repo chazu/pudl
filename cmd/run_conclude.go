@@ -9,11 +9,11 @@ import (
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// concludeRun finalizes a standalone run, then saves and renders its report.
+// concludeRun finalizes a member run, then saves and renders its report.
 // runErr is the phases' outcome error; the returned error is the run's final
 // one. persisted reports whether the report was saved, so the caller's
 // deferred save does not repeat it.
-func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error, deps runDeps) (persisted bool, err error) {
+func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error) (persisted bool, err error) {
 	ctx := in.ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -27,19 +27,16 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	}
 
 	persisted = persistRunReport(in.cat, report, in.live)
-	out, err := report.render(jsonOutput)
-	if err != nil {
-		return persisted, err
-	}
-	if in.live && deps.set.emitOutput() {
-		fmt.Fprint(outw(), "\n")
-	}
-	if deps.set.emitOutput() {
-		if _, err := fmt.Fprint(outw(), out); err != nil {
+	// Human output shows each member's report as it concludes; JSON output is
+	// the check's one report, written when the check ends.
+	if in.live {
+		out, err := report.render(false)
+		if err != nil {
 			return persisted, err
 		}
-	}
-	if in.live {
+		if _, err := fmt.Fprint(outw(), "\n"+out); err != nil {
+			return persisted, err
+		}
 		for _, notice := range fin.notices {
 			fmt.Fprint(outw(), notice)
 		}

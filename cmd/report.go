@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -11,10 +12,20 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-var runReportCmd = &cobra.Command{
-	Use:   "report [operation-id]",
-	Short: "Read the latest or named standalone/set operation report",
-	Args:  cobra.MaximumNArgs(1),
+var reportCmd = &cobra.Command{
+	Use:   "report [ID]",
+	Short: "Read the latest or named check report",
+	Long: `Read a stored report: the newest one, or the one ID names.
+
+ID is a check ID, or the run ID of one model within a check. Reports recorded
+by the retired "pudl run" and "pudl run set" commands read the same way;
+fields those reports carry that current reports do not are shown as recorded
+under "legacy fields".
+
+Examples:
+    pudl report
+    pudl report check_... --json`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db, err := database.OpenCatalogDBReadOnly(effectivePudlDir())
 		if err != nil {
@@ -69,7 +80,7 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 			fmt.Fprintln(outw(), string(payload))
 			return nil
 		}
-		if err := printRunSetReport(&report); err != nil {
+		if err := printCheckReport(&report, true); err != nil {
 			return err
 		}
 		if err := printSetLegacyFields(set.Report); err != nil {
@@ -171,26 +182,6 @@ func printEvidenceAvailability(evidence []operationEvidence) {
 	}
 }
 
-func isRunSetOperation(id string) (bool, error) {
-	db, err := database.OpenCatalogDBReadOnly(effectivePudlDir())
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
-	single, err := db.GetRunReport(id)
-	if err != nil {
-		return false, err
-	}
-	set, err := db.GetRunSetReport(id)
-	if err != nil {
-		return false, err
-	}
-	if single != nil && set != nil {
-		return false, fmt.Errorf("operation id %q is ambiguous", id)
-	}
-	return set != nil, nil
-}
-
 func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 	if report == nil || report.RunID == "" {
 		return false
@@ -222,6 +213,66 @@ func persistRunReport(cat *runCatalog, report *RunReport, live bool) bool {
 	return true
 }
 
+// printCheckReport writes a check report: under --json the report itself;
+// otherwise the outcome of each model and, with members, each model's full
+// report first (a live check has already printed those as they concluded).
+func printCheckReport(report *acute.RunSetReport, members bool) error {
+	if jsonOutput {
+		payload, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(outw(), string(payload))
+		return err
+	}
+	if members {
+		for _, member := range report.Members {
+			if err := printMemberReport(member.Report); err != nil {
+				return err
+			}
+		}
+	}
+	fmt.Fprintf(outw(), "\ncheck %s: %s\n", report.RunSetID, report.Status)
+	if s := report.Summary; s != nil {
+		fmt.Fprintf(outw(), "conformity: %s | checks: %s | verification: %s\n", s.Conformity, s.Checks, s.Verification)
+	}
+	for _, member := range report.Members {
+		line := fmt.Sprintf("  %s: %s (%s)", member.Model, member.Result, member.RunID)
+		if s := member.Summary; s != nil {
+			line += fmt.Sprintf(" | conformity: %s | checks: %s | verification: %s | scope: %s", s.Conformity, s.Checks, s.Verification, s.Scope)
+		}
+		if member.Error != "" {
+			line += ": " + member.Error
+		}
+		fmt.Fprintln(outw(), strings.TrimSpace(line))
+		if member.Summary != nil {
+			for _, e := range member.Summary.Evidence {
+				fmt.Fprintf(outw(), "    evidence: %s%s | age at check: %s | complete: %t\n", e.SnapshotID, e.ObservationID, e.Age, e.Complete)
+			}
+		}
+	}
+	return nil
+}
+
+// printMemberReport renders one embedded member report as markdown.
+func printMemberReport(payload json.RawMessage) error {
+	if len(payload) == 0 {
+		return nil
+	}
+	var report RunReport
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&report); err != nil {
+		return fmt.Errorf("decode member report: %w", err)
+	}
+	text, err := report.render(false)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprint(outw(), "\n"+text)
+	return err
+}
+
 func init() {
-	runCmd.AddCommand(runReportCmd)
+	rootCmd.AddCommand(reportCmd)
 }

@@ -31,7 +31,7 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(filepath.Join(root, ".pudl/populators/git-inventory/current.json"), data, 0o644))
 		}
-		saved = append(saved, cli("run", "git-inventory", "--json"))
+		saved = append(saved, checkedModelJSON(t, cli("check", "git-inventory", "--json")))
 	}
 	var reports []walkthroughReport
 	for index, stage := range []string{"baseline", "changed", "repeat"} {
@@ -53,7 +53,7 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 		// Replay after every run has completed: later observations must not
 		// overwrite the baseline verdict or any run's retained evidence.
 		var replay map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(cli("run", "report", report.RunID, "--json"), &replay))
+		require.NoError(t, json.Unmarshal(cli("report", report.RunID, "--json"), &replay))
 		var availability []struct {
 			SnapshotID string `json:"snapshot_id"`
 			Status     string `json:"status"`
@@ -139,6 +139,30 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 		globalMuNames = append(globalMuNames, entry.Name())
 	}
 	require.True(t, os.IsNotExist(err), "walkthrough must not create global mu state: %v", globalMuNames)
+}
+
+// checkedModelJSON returns the one model's report embedded in a check report.
+func checkedModelJSON(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var check struct {
+		Members []struct {
+			Report json.RawMessage `json:"report"`
+		} `json:"members"`
+	}
+	require.NoError(t, json.Unmarshal(data, &check), "%s", data)
+	require.Len(t, check.Members, 1)
+	return check.Members[0].Report
+}
+
+// withoutAvailability drops the evidence availability a report read adds.
+func withoutAvailability(t *testing.T, data []byte) string {
+	t.Helper()
+	var fields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(data, &fields))
+	delete(fields, "evidence_availability")
+	out, err := json.Marshal(fields)
+	require.NoError(t, err)
+	return string(out)
 }
 
 type walkthroughReport struct {

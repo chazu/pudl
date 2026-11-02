@@ -71,9 +71,9 @@ See [architecture.md](docs/architecture.md)
 
 ## Run & Drift — CORE
 
-- `pudl run <name>` drives the observe-only loop: populate → drift → checks → report
+- `pudl check <name>...` drives the observe-only loop for exactly the named models, producers first: populate → drift → checks → one report (`pudl report [id]` reads it again)
 - Populate runs plain commands that print JSON records (`#CommandObserve`), with no shell
-- Drift is a phase of `pudl run`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed). PUDL reports drift and changes nothing
+- Drift is a phase of `pudl check`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed). PUDL reports drift and changes nothing
 - Status tracking per model instance: unknown, drifted or clean; a run records its verdict on the instance row, read back via `pudl status`
 - Convergence and the mu integration were removed on 2026-11-01; see [retired commands](docs/retired-commands.md#convergence-and-mu-integration)
 

@@ -6,8 +6,8 @@ import (
 	"cuelang.org/go/cue"
 )
 
-// TemplateSummary is concrete discovery metadata that remains inspectable even
-// while desired/config fields depend on unresolved plain inputs.
+// TemplateSummary is discovery metadata read from the authored value without
+// decoding the whole model.
 type TemplateSummary struct {
 	PopulateKind PopulateKind
 	DesiredCount int

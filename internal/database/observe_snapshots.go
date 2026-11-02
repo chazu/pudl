@@ -181,58 +181,6 @@ func (c *CatalogDB) CurrentObserveSnapshot(model string) (*ObserveSnapshot, erro
 	return &snapshot, nil
 }
 
-// LatestSuccessfulObserveSnapshot returns the newest real observation for the
-// exact producer model and workspace whose owning run reached structured
-// successful completion. Legacy rows without a completion status, unfinished
-// runs, failed runs, registrations, and observations from another workspace are
-// deliberately ineligible.
-func (c *CatalogDB) LatestSuccessfulObserveSnapshot(model, workspace string) (*ObserveSnapshot, error) {
-	return c.successfulObserveSnapshot(model, workspace, "")
-}
-
-// SuccessfulObserveSnapshotForRun returns the newest eligible observation
-// owned by one exact run-set member. It is the current-run counterpart to
-// LatestSuccessfulObserveSnapshot and never falls back to historical data.
-func (c *CatalogDB) SuccessfulObserveSnapshotForRun(model, workspace, runID string) (*ObserveSnapshot, error) {
-	if runID == "" {
-		return nil, fmt.Errorf("successful observe snapshot for run: empty run id")
-	}
-	return c.successfulObserveSnapshot(model, workspace, runID)
-}
-
-func (c *CatalogDB) successfulObserveSnapshot(model, workspace, runID string) (*ObserveSnapshot, error) {
-	args := []any{model, workspace, RunStatusSucceeded}
-	placeholders := make([]string, len(observationSources))
-	for i, source := range observationSources {
-		placeholders[i] = "?"
-		args = append(args, source)
-	}
-	query := `SELECT ` + c.snapshotSelectColumns("s") + `
-		FROM observe_snapshots s
-		JOIN runs r ON r.run_id = s.run_id AND r.model = s.model
-		WHERE s.model = ? AND s.workspace = ? AND r.completion_status = ?
-		AND s.source IN (` + strings.Join(placeholders, ", ") + `)`
-	condition, err := c.snapshotReuseCondition("s")
-	if err != nil {
-		return nil, err
-	}
-	query += condition
-	if runID != "" {
-		query += ` AND s.run_id = ?`
-		args = append(args, runID)
-	}
-	query += ` ORDER BY s.created_at DESC, s.rowid DESC LIMIT 1`
-
-	snapshot, err := scanObserveSnapshot(c.db.QueryRow(query, args...))
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("successful observe snapshot for model %q in workspace %q: %w", model, workspace, err)
-	}
-	return &snapshot, nil
-}
-
 func prefixedObserveSnapshotColumns(alias string) string {
 	columns := strings.Split(strings.ReplaceAll(observeSnapshotColumns, "\n", ""), ",")
 	for i, column := range columns {

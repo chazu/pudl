@@ -61,7 +61,7 @@ Use `pudl model show git-inventory --json` to inspect the model's desired values
 
 <!-- walkthrough:baseline -->
 ```bash
-pudl run git-inventory
+pudl check git-inventory
 ```
 
 The model's populate step runs `cat` over the supplied inventory
@@ -69,15 +69,16 @@ The model's populate step runs `cat` over the supplied inventory
 an observation snapshot. Any command that prints JSON records works the same
 way; a real model would run a Git or forge CLI instead. The report says the
 desired resources exist and match: the observed default branch and the model's
-expectation are both `main`. Keep the printed `run_id` if you want to return to
-this exact report later.
+expectation are both `main`. The last lines summarize the check: its ID
+(`check_...`) and, for each model, its result and run ID. Keep the printed check
+ID if you want to return to this exact report later.
 
 ## 4. Change the inventory and find drift
 
 <!-- walkthrough:change -->
 ```bash
 cp .pudl/populators/git-inventory/changed.json .pudl/populators/git-inventory/current.json
-pudl run git-inventory
+pudl check git-inventory
 ```
 
 The changed inventory has default branch `release`. The model still expects
@@ -95,37 +96,41 @@ desired record has no identity to match), or `ambiguous` (several differing
 observed records share its identity). Every differing field is listed with its
 expected and observed values, the value from the previous observation, and
 `observed_at` says when the compared record was recorded. The JSON report
-carries the same finding under `drift.drifted`, with the field differences in
+carries one entry per checked model under `members`; this model's finding is
+under `members[0].report.drift.drifted`, with the field differences in
 `fields`.
 
-PUDL reports the difference and changes nothing. Each run keeps its own
+PUDL reports the difference and changes nothing. Each check keeps its own
 snapshot, so the baseline evidence is preserved.
 
 ## 5. Repeat the check
 
 <!-- walkthrough:repeat -->
 ```bash
-pudl run git-inventory
-pudl run report
-pudl run report --json
+pudl check git-inventory
+pudl report
+pudl report --json
 ```
 
-The same mismatch appears under a new run ID. In JSON, `drift.clean` is `false`
-and `drift.verified` is `true` because the run observed the inventory. `ok: true`
-means the check ran successfully, even though it found drift. For automation,
-inspect `drift.clean` or use `pudl run --detailed-exitcode`.
+The same mismatch appears under a new check ID. `pudl report` reads the newest
+check again. In JSON, the check's `summary.conformity` is `drifted`; the model's
+own report under `members[0].report` has `drift.clean: false` and
+`drift.verified: true` because the check observed the inventory. Its
+`ok: true` means the check ran successfully, even though it found drift. For
+automation, inspect `summary.conformity` or use
+`pudl check git-inventory --detailed-exitcode`.
 
 ## 6. Inspect the evidence
 
 List the changed record, then replace `RECORD_ID` below with the record ID
-printed by the list command. Replace `BASELINE_RUN_ID` with the run ID from
+printed by the list command. Replace `BASELINE_CHECK_ID` with the check ID from
 step 3 to reopen the original clean report.
 
 <!-- walkthrough:evidence -->
 ```bash
 pudl list --where default_branch=release --items-only
 pudl show RECORD_ID --raw
-pudl run report BASELINE_RUN_ID
+pudl report BASELINE_CHECK_ID
 ```
 
 The raw record shows `default_branch: "release"` and the assigned
@@ -144,7 +149,7 @@ The [automated acceptance check](TESTING.md#git-inventory-walkthrough) executes
 these tutorial commands with only PUDL, Git, `cat` and `cp` on `PATH`.
 
 Reports keep previous/current/expected values and failed-check witnesses. A
-catalog replay (`pudl run --from-catalog`) re-checks a stored snapshot without
+catalog replay (`pudl check <model> --from-catalog`) re-checks a stored snapshot without
 observing; without an eligible prior snapshot it records an explicit
 unavailable baseline rather than inventing observation history. See
 [evidence and recovery](evidence.md) for report retention, faithful exports,

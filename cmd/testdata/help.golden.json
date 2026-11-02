@@ -1,7 +1,7 @@
 {
   "use": "pudl",
   "short": "Personal Unified Data Lake - A tool for managing cloud infrastructure data",
-  "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only #SystemModel runs: discovery, desired-state comparison and checks\n- Exact producer/consumer run-sets with value bindings",
+  "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only #SystemModel checks: discovery, desired-state comparison and checks\n- One check and one report for any number of explicitly named models",
   "flags": [
     {
       "name": "global",
@@ -26,6 +26,62 @@
     }
   ],
   "subcommands": [
+    {
+      "use": "check \u003cmodel\u003e...",
+      "short": "Observe and evaluate exactly the named models; one report",
+      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "catalog-scope",
+          "usage": "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under",
+          "type": "string"
+        },
+        {
+          "name": "check-upstream",
+          "usage": "warn if any transitive upstream model (depends_on) is drifted/failed",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "detailed-exitcode",
+          "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "from-catalog",
+          "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "populate",
+          "usage": "Check an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
+          "type": "string"
+        },
+        {
+          "name": "progress-json",
+          "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
     {
       "use": "completion",
       "short": "Generate the autocompletion script for the specified shell",
@@ -1061,7 +1117,7 @@
         {
           "use": "list",
           "short": "List registered #SystemModel definitions",
-          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project definitions precede explicitly vendored packages), with its\npopulate kind and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl run \u003cname\u003e' can\nresolve — independent of whether a model has been run yet.",
+          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project definitions precede explicitly vendored packages), with its\npopulate kind and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl check \u003cname\u003e' can\nresolve — independent of whether a model has been checked yet.",
           "args": "custom",
           "flags": [
             {
@@ -1160,7 +1216,7 @@
         {
           "use": "validate \u003cname\u003e",
           "short": "Validate a registered #SystemModel without running it",
-          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem. Bound models remain valid templates before their catalog values exist;\ntheir final concrete values are validated again when pudl runs them.",
+          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem.",
           "args": "custom",
           "flags": [
             {
@@ -1327,6 +1383,28 @@
       ]
     },
     {
+      "use": "report [ID]",
+      "short": "Read the latest or named check report",
+      "long": "Read a stored report: the newest one, or the one ID names.\n\nID is a check ID, or the run ID of one model within a check. Reports recorded\nby the retired \"pudl run\" and \"pudl run set\" commands read the same way;\nfields those reports carry that current reports do not are shown as recorded\nunder \"legacy fields\".\n\nExamples:\n    pudl report\n    pudl report check_... --json",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
       "use": "rule",
       "short": "Manage Datalog rules",
       "long": "Manage Datalog rules used by pudl query.\n\nRules are CUE files stored in:\n  .pudl/schema/pudl/rules/     (repo-scoped)\n  ~/.pudl/schema/pudl/rules/   (global)\n\nAvailable subcommands:\n- add: Install a rule file into the workspace\n\nExamples:\n    pudl rule add my-rules.cue\n    pudl rule add my-rules.cue --global",
@@ -1389,140 +1467,6 @@
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "use": "run [\u003cmodel\u003e]",
-      "short": "Run a #SystemModel instance: observe, compare and check",
-      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema and explicitly vendored packages. Register one with\n\"pudl schema add\". A run is observe-only: populate -\u003e drift -\u003e checks -\u003e\nreport. It reports differences and changes nothing.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json).\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
-      "args": "custom",
-      "flags": [
-        {
-          "name": "catalog-scope",
-          "usage": "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under",
-          "type": "string"
-        },
-        {
-          "name": "check-upstream",
-          "usage": "warn if any transitive upstream model (depends_on) is drifted/failed",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "detailed-exitcode",
-          "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "from-catalog",
-          "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "global",
-          "usage": "Use the personal ~/.pudl workspace explicitly",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "json",
-          "usage": "Output results as JSON for scripting",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "max-observation-age",
-          "usage": "reject a bound producer snapshot older than this duration",
-          "type": "duration",
-          "default": "0s"
-        },
-        {
-          "name": "populate",
-          "usage": "Run an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
-          "type": "string"
-        },
-        {
-          "name": "progress-json",
-          "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        }
-      ],
-      "subcommands": [
-        {
-          "use": "report [operation-id]",
-          "short": "Read the latest or named standalone/set operation report",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "progress-json",
-              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "set \u003cmodel\u003e [\u003cmodel\u003e...]",
-          "short": "Run an explicit producer/consumer model set in dependency order",
-          "long": "Run exactly the named models in dependency order.\n\nThe set is closed and explicit: pudl does not add missing producers. A binding\nwhose producer is not named fails preflight before any member runs. Every\nmember is observe-only, and successful producer snapshots are pinned for\ndownstream plain bindings.\n\nExamples:\n  pudl run set network app\n  pudl run set network app --max-observation-age 15m\n  pudl run set network app --detailed-exitcode\n  pudl run report",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "detailed-exitcode",
-              "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
-              "type": "bool",
-              "default": "false"
-            },
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "max-observation-age",
-              "usage": "reject a bound producer snapshot older than this duration",
-              "type": "duration",
-              "default": "0s"
-            },
-            {
-              "name": "progress-json",
-              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
               "type": "bool",
               "default": "false",
               "persistent": true
@@ -1730,7 +1674,7 @@
     {
       "use": "snapshot",
       "short": "Inspect and retain observation snapshots",
-      "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl run --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
+      "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl check \u003cmodel\u003e --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
       "flags": [
         {
           "name": "global",
@@ -1905,7 +1849,7 @@
     {
       "use": "status [target]",
       "short": "Show the verified status of models and targets",
-      "long": "Display the status recorded in the catalog — the per-target verdict\npudl run writes (a model run's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet (the retired \"converging\" value also reads as unknown)\n  clean       — observed == desired, confirmed by a live observation\n  drifted     — observed != desired, or a fail-severity check did not pass\n  failed      — recorded by the retired convergence workflow; re-run the model to replace it\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
+      "long": "Display the status recorded in the catalog — the per-target verdict\npudl check writes (a model's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet (the retired \"converging\" value also reads as unknown)\n  clean       — observed == desired, confirmed by a live observation\n  drifted     — observed != desired, or a fail-severity check did not pass\n  failed      — recorded by the retired convergence workflow; check the model again to replace it\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
       "args": "custom",
       "flags": [
         {
