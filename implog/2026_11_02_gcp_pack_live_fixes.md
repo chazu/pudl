@@ -46,3 +46,18 @@ and `gcp-kms-keys` (through the helper script) list it as an empty input
 matched by the new pattern.
 
 No CLI, JSON or Go API changes.
+
+## Setting: _gcpExtraEmptyWhen
+
+Whether a billing-disabled project counts as "none here" is the operator's
+call, so the pack keeps it a failed input and adds a live setting:
+
+```cue
+// .pudl/schema/models/gcp_settings.cue
+_gcpExtraEmptyWhen: ["Billing is disabled for project"]  // default []
+```
+
+The disabled-API patterns moved to `_gcpEmptyWhen`; every live collector sets
+`empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])`.
+`TestGCPPackExtraEmptyWhen` covers the default (failed input) and the
+setting (empty input). Documented in examples/gcp/README.md.

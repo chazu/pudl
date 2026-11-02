@@ -201,10 +201,13 @@ fails the collector with nothing ingested.
 
    _gcpProjectFilter: "labels.env=staging"   // any gcloud --filter; default "" (all)
    _gcpKMSLocations: ["global", "us-central1"] // default ["global"]
+   _gcpExtraEmptyWhen: ["Billing is disabled for project"] // default []
    ```
 
    Key rings are listed per project and location; `gcp-kms-keys` lists the
-   keys of every ring it finds there.
+   keys of every ring it finds there. A project whose API is disabled is
+   always an empty input; `_gcpExtraEmptyWhen` adds errors you have decided
+   also mean "none here", such as billing being disabled.
 2. Check your credentials and the models:
 
    ```bash
