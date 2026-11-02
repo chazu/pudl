@@ -634,8 +634,10 @@ implemented. Beads work:
     allowlist, import and `--dry-run` warnings (`secret_warnings` in `--json`),
     `pudl facts add` warning and opt-in `factstore.WithSecretRejection`. See
     `implog/2026_11_01_secret_pattern_detection.md`.
-  - Not yet: `pudl doctor` scan of stored payloads and facts; observe-ingest
-    warnings (wiring described in the implog).
+  - Done: `pudl doctor` scan of stored payloads and current (non-projection)
+    facts, reported as warnings in text and the `secrets` section of the
+    version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
+  - Not yet: observe-ingest warnings (wiring described in the first implog).
 
 The convergence and value-wiring sections below are historical.
 
