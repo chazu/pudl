@@ -631,8 +631,9 @@ The git-inventory example includes a model expecting default branch main and
 baseline and changed inventories. The model observes the current inventory
 with cat, so the tutorial needs nothing beyond PUDL.
 
-The gcp-network-hygiene example includes a fixture observer, saved checks,
-a corrected fixture, and a separate gcloud-based live model.
+The gcp-network-hygiene example includes a firewall type and policy, a
+fixture observer, a check over policy results, a corrected fixture, and a
+separate gcloud-based live model.
 
 The gcp content pack includes draft schemas for the core GCP inventory,
 best-practice policies, gcloud and fixture collectors, and three check

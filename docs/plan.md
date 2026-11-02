@@ -722,6 +722,15 @@ Beads work:
     type, one-pass CUE error paths. `policy_state` is kept: fact provenance
     and `tx_start` do not track the latest evaluated entry and time. See
     `implog/2026_11_02_policy_simplification.md`.
+  - Done: `pudl-xf5.8.9` policy documentation: the Compliance Policies
+    section of `docs/schema-authoring.md` (standalone policies, rule
+    attributes, absent/unknown semantics, review status, extension, sensitive
+    paths, CUE gotchas, workflow commands, checks and doctor repairs), the
+    `pudl-core` skill, and the design marked Implemented. The
+    `gcp-network-hygiene` example's firewall rule is now a policy
+    (`#FirewallNoInternetIngress`) and its check queries
+    `policy_noncompliant`; `rules.cue` and the schema's projection metadata
+    are gone. See `implog/2026_11_02_policy_docs.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See

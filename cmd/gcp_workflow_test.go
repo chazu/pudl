@@ -22,7 +22,8 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	before := checkedModel(t, r.Stdout)
 	require.Equal(t, 1, before.Checks[0].Count, "DENY and private-source rules are not internet ALLOW findings")
 	require.Len(t, before.Checks[0].Witnesses, 1)
-	require.NotEmpty(t, before.Checks[0].Witnesses[0].EvidenceIDs)
+	require.Equal(t, "pudl/gcphygiene.#FirewallNoInternetIngress", before.Checks[0].Witnesses[0].Arguments["policy"])
+	require.Equal(t, "high", before.Checks[0].Witnesses[0].Arguments["severity"])
 	r = runCLI(t, "list", "--collection-id", before.Populate.SnapshotID, "--where", "name=public-ssh", "--select", "name", "--select", "sourceRanges[*]", "--all", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var listing ui.ListOutput
@@ -33,7 +34,7 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	r = runCLI(t, "show", entryID, "--field", "sourceRanges[*]")
 	require.NoError(t, r.Err)
 	require.JSONEq(t, `["0.0.0.0/0"]`, r.Stdout)
-	r = runCLI(t, "model", "new", "saved-firewall-check", "--check", "gcp_internet_ingress_allow", "--evidence", "scope:fixture/example-project/firewalls", "--max-age", "15m", "--json")
+	r = runCLI(t, "model", "new", "saved-firewall-check", "--check", "policy_noncompliant", "--evidence", "scope:fixture/example-project/firewalls", "--max-age", "15m", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	reloadSchemas()
 	r = runCLI(t, "check", "saved-firewall-check", "--json", "--detailed-exitcode")

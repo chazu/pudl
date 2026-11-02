@@ -97,20 +97,17 @@ covered in [projection.md](projection.md).
 
 Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).
 A policy schema also names its type through `base_schema`, but policies are never
-tried during classification: only types are assigned.
+tried during classification: only types are assigned. See
+[Compliance Policies](#compliance-policies).
 
-```cue
-// A compliant EC2 instance inherits from the base EC2 instance schema
-#CompliantInstance: #Instance & {
-    _pudl: {
-        schema_type:  "policy"
-        base_schema:  "aws/ec2.#Instance"
-    }
+### `review` (optional)
 
-    // Additional compliance requirements
-    Tags: [...{Key: string, Value: string}] & list.MinItems(1)
-}
-```
+`review: {status: "draft" | "validated", by?: string, at?: string}` records
+whether a person or agent has reviewed a type schema as a complete
+representation of its resource. An absent or invalid block means `draft`; an
+invalid one is also a schema load error. `pudl schema list` and `pudl schema
+show` display it, and `pudl schema new` writes `status: "draft"`. Policies use
+it (see [Absent fields](#absent-fields-and-status)).
 
 ## How Validation Works
 
@@ -135,6 +132,210 @@ This means:
 - **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
 - **Exploratory imports use the catchall**; explicit schema requests are strict unless `--allow-schema-fallback` is supplied.
 - **Explicit schemas must be types**: `--schema` or a model's `populate.schema` naming a policy is an error that names the policy's type.
+
+## Compliance Policies
+
+A **type** schema says what a resource is; classification assigns exactly one
+type to each record. A **policy** schema (`schema_type: "policy"`) says what a
+good instance of a type looks like. Policies are never assigned. After every
+import and `#CommandObserve` ingest, PUDL evaluates every policy that applies to
+each record's type, and stores one result per resource and policy:
+`compliant`, `noncompliant`, or `unknown`, with named violations. A policy
+applies when its `base_schema` chain reaches the record's type or one of that
+type's ancestors, so several policies can apply to one resource.
+
+Policies cover rules about one resource. Use Datalog rules and checks for
+rules that span resources.
+
+### Writing a policy
+
+A policy is a standalone definition that names its type in `base_schema`. Do
+not write `#S3BucketBestPractice: #S3Bucket & {...}`: it does not load, because
+`_pudl.schema_type` conflicts (`"base"` against `"policy"`) and the closed
+definition rejects fields the policy adds. PUDL assembles the chain from
+`base_schema` itself.
+
+```cue
+package aws
+
+#S3Bucket: {
+    _pudl: {
+        schema_type:     "base"
+        resource_type:   "aws.s3.bucket"
+        identity_fields: ["Name"]
+        review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
+    }
+    Name:   string
+    Region: string
+    PublicAccessBlock?:    {...}
+    ServerSideEncryption?: {...}
+    ...
+}
+
+#S3BucketBestPractice: {
+    _pudl: {
+        schema_type: "policy"
+        base_schema: "aws.#S3Bucket"
+        description: "Baseline S3 hardening"
+    }
+    PublicAccessBlock: {
+        BlockPublicAcls:       true @pudl(rule="s3-block-public-acls", severity="high")
+        RestrictPublicBuckets: true @pudl(rule="s3-restrict-public", severity="high", doc="Public policies are ignored")
+    } @pudl(absent="violation")
+    ServerSideEncryption: {
+        Algorithm: "aws:kms" | "AES256" @pudl(rule="s3-encryption")
+    }
+}
+
+// Extends the best practice. The chain must end at a type.
+#S3BucketPCI: {
+    _pudl: {schema_type: "policy", base_schema: "aws.#S3BucketBestPractice"}
+    Versioning: Status: "Enabled" @pudl(rule="s3-versioning", severity="medium")
+}
+```
+
+A policy constrains only the fields it names. Evaluation ignores closedness at
+every depth, so extra record fields never cause a violation and nested policy
+structs need no `...`. Policies need no `identity_fields`.
+
+### Rule attributes
+
+`@pudl(...)` on a field names the constraint on it. The keys are:
+
+| Key | Meaning |
+|-----|---------|
+| `rule` | The rule name reported for a violation at or below this field |
+| `severity` | `low`, `medium` (default), `high` or `critical`; requires `rule` |
+| `doc` | One-line explanation shown by `pudl policy show`; requires `rule` |
+| `absent` | Only `"violation"`; see below. Applies to the field and everything beneath it |
+
+A violation reports the nearest rule at or above the failing path. A failing
+constraint with no rule above it reports its path as the rule name, with
+severity `medium`. A policy fails to load on an unknown key, an invalid
+severity, `severity` or `doc` without `rule`, a rule declared again with a
+different severity or doc, or a field with two different rules. Attributes are
+checked along the whole chain, so a leftover `@pudl(...)` key on a type field
+also breaks that type's policies.
+
+### Absent fields and status
+
+A field the policy requires (not `field?:`) that the record lacks is
+**absent**. By default an absence makes the result `unknown`, because the
+collector may not have gathered the field. An absence is a **violation** when:
+
+- `@pudl(absent="violation")` is on the field or an ancestor. Use it where the
+  source omits a field to mean "off". A missing `PublicAccessBlock` above
+  reports `s3-block-public-acls` and `s3-restrict-public`, one per rule
+  beneath it.
+- The field is required in a type schema of the record's type chain whose
+  `review.status` is `validated`. A validated type is a promise that its
+  required fields are always collected.
+
+The result is `noncompliant` with any violation, `unknown` with only
+absences, and `compliant` otherwise. Each violation has a rule, severity, path
+and kind (`conflict` or `absent`); record values are never stored. A result
+against a draft type is marked `provisional`.
+
+### Extending policies
+
+A policy whose `base_schema` names another policy extends it. Its result
+reports every rule, including inherited ones, so each result stands alone.
+Each violation names the policy that declared its rule (`declared_by`). In the
+example, a bucket without `PublicAccessBlock` is noncompliant for both
+`#S3BucketBestPractice` and `#S3BucketPCI`, and both name
+`#S3BucketBestPractice` as the declarer.
+
+### Sensitive paths
+
+Values at `sensitive_fields` paths are redacted before storage, so a policy
+cannot evaluate them. A policy that constrains a path the chain declares
+sensitive, or a path beneath one, fails to load. A sibling field is fine.
+
+### CUE gotchas
+
+**`&&` and `||` do not short-circuit over absent fields.** `if x == _|_ || x
+== false {...}` is undecided when the record lacks `x`, and an undecided
+condition applies nothing: the policy silently passes. To treat an absent field
+as a value, test the list of present values with `list.Contains`:
+
+```cue
+import "list"
+
+#S3NoPublicAcl: {
+    _pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
+    Archived?: _
+    Acl?:      _ @pudl(rule="s3-no-public-acl", severity="high")
+    // Unless Archived is true; an absent Archived counts as false.
+    if !list.Contains([if Archived != _|_ {Archived}], true) {
+        Acl?: !="public-read"
+    }
+}
+```
+
+**Annotate outside comprehensions.** Rules are read from the bare policy, where
+a condition that reads record data is undecided. A field annotated only inside
+such a comprehension fails to load ("cannot be applied: the field is declared
+only inside a comprehension..."). Declare the field with its annotation
+outside (`Acl?: _ @pudl(...)` above) and constrain it inside. Fields used in
+conditions must be declared too (`Archived?: _`).
+
+**Conditional absence cannot be expressed.** Absences are found from the bare
+policy, so a field required only inside a comprehension is never reported as
+absent: with `if Website != _|_ {Logging: _}`, a website bucket without
+`Logging` is compliant. Instead, put a conflict on a field that is present
+whenever the rule matters (an anchor) and name the rule there:
+
+```cue
+#S3WebsiteLogging: {
+    _pudl: {schema_type: "policy", base_schema: "aws.#S3Bucket"}
+    Logging?: _
+    // Reported at Website: a website bucket must log access.
+    Website?: _ @pudl(rule="s3-website-logging", severity="medium")
+    if Logging == _|_ {Website?: "a website bucket needs access logging"}
+}
+```
+
+`examples/gcp/schema/gcp/policies.cue` uses all three patterns.
+
+### Known limitations
+
+- Pattern constraints (`[string]: T`) are checked for conflicts but not for
+  absences; a violation under one takes the nearest named rule above it.
+- A constraint that refers to another field the record lacks
+  (`size: <=max` without `max`) is neither a conflict nor an absence.
+- Conflicts between chain members themselves are not reported at load.
+
+### Policy workflow
+
+```bash
+pudl policy list [--type T]              # policies, rule counts, review, result counts, stale
+pudl policy show POLICY [--limit N]      # rules, chain, failing resources
+pudl policy evaluate [POLICY...]         # re-evaluate stored resources from retained payloads
+pudl policy evaluate --dry-run           # report what would change, write nothing
+pudl policy evaluate --what-if draft.cue # evaluate an uninstalled draft, write nothing
+pudl show ID                             # Compliance: each applicable policy, status, violations
+```
+
+A `--what-if` draft must be standalone CUE (no imports of other workspace
+packages) and shadows an installed policy of the same name. A policy that
+fails to load is reported by these commands and keeps its existing results.
+
+Results are bitemporal facts, `policy_status(resource, policy, type, status,
+policy_digest)` and `policy_violation(resource, policy, rule, severity, path,
+kind, declared_by)`. Both names are reserved. Checks use the built-in rule
+`policy_noncompliant(resource, policy, severity)`: a `#Check` with `query:
+"policy_noncompliant"` and `expect: "empty"` fails on any violation, within the
+check's evidence selection. `pudl query policy_noncompliant severity=high`
+limits it to one severity; for a threshold, write a rule over it. Each result records a digest of the
+policy's effective CUE; comments and `_pudl.description` do not change it.
+After a policy or its type changes, `pudl policy list` and `pudl doctor`
+report stale results. Two doctor repairs cover policies:
+
+```bash
+pudl doctor --fix --only policy-results  # re-evaluate stale, orphaned or missing results
+pudl doctor --fix --only policy-leaves   # move entries classified to a policy (before
+                                         # policies left classification) to its type
+```
 
 ## Resource Identity and Schema Families
 
@@ -291,13 +492,6 @@ This updates the schema assignments of inferred entries. Add
 `--include-explicit` (optionally with `--schema` or `--origin`) to re-infer
 explicit assignments too. Entries that previously fell through to the catchall may now match your new, more specific schema.
 
-Entries classified to a policy schema before policies left classification are
-moved to the policy's type, keeping their `resource_id` and version history:
-
-```bash
-pudl doctor --fix --only policy-leaves
-```
-
 You can also verify that inference is stable after changes:
 
 ```bash
@@ -312,8 +506,6 @@ Here is a complete example for a custom API resource:
 
 ```cue
 package myapi
-
-import "list"
 
 // User represents a user account from the internal API
 #User: {
@@ -334,16 +526,15 @@ import "list"
     ...
 }
 
-// AdminUser is a policy schema -- admin-specific requirements evaluated
-// against Users; it is never assigned as a record's schema
-#AdminUser: #User & {
+// A policy evaluated against every User; never assigned as a record's schema
+#UserBestPractice: {
     _pudl: {
-        schema_type:  "policy"
-        base_schema:  "myapi.#User"
+        schema_type: "policy"
+        base_schema: "myapi.#User"
+        description: "Every user has MFA"
     }
 
-    role: "admin"
-    mfa_enabled: true
+    mfa_enabled: true @pudl(rule="user-mfa", severity="high", absent="violation")
 }
 ```
 
@@ -362,3 +553,4 @@ pudl doctor --fix --only inference  # Re-classify existing imports
 - **Run `pudl doctor --fix --only inference`** after any schema change to re-classify existing data
 - **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match -- consider adding more identity fields or refining the schema structure.
 - **Use `base_schema` for inheritance**: Policy schemas reference their type via `base_schema`; the chain must end at a type. Classification and validation fallback skip policies.
+- **Try a policy before installing it**: `pudl policy evaluate --what-if draft.cue` evaluates it against stored resources and writes nothing.
