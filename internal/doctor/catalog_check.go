@@ -1,4 +1,4 @@
-package cmd
+package doctor
 
 import (
 	"context"
@@ -9,14 +9,16 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/doctor"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/validator"
 )
 
-type catalogDiagnostic struct {
+// CatalogDiagnostic is one catalog entry's validation result: "ok",
+// "invalid" against its schema, "mismatch" with what inference now selects,
+// or "error" when it could not be checked.
+type CatalogDiagnostic struct {
 	ID               string `json:"id"`
 	Proquint         string `json:"proquint"`
 	Schema           string `json:"schema"`
@@ -26,27 +28,35 @@ type catalogDiagnostic struct {
 	InferenceChecked bool   `json:"inference_checked"`
 }
 
-// checkCatalogEntries validates the entries in scope, streaming them, and
+// CatalogScan selects what CheckCatalogEntries checks: the catalog beside
+// DataPath, validated against the schemas in SchemaPaths, either one entry
+// (EntryID, by proquint or full ID) or every entry Filter selects.
+type CatalogScan struct {
+	DataPath    string
+	SchemaPaths []string
+	EntryID     string
+	Filter      database.FilterOptions
+}
+
+// CheckCatalogEntries validates the entries in scope, streaming them, and
 // scans each loaded payload for likely secrets. Current facts are scanned too
-// unless --entry, --schema or --origin scope the check to catalog entries.
-func checkCatalogEntries(ctx context.Context, entryID string, filter database.FilterOptions) ([]catalogDiagnostic, *doctor.SecretReport, error) {
+// unless an entry, schema or origin scopes the check to catalog entries. A
+// missing catalog has nothing to check, and is not created.
+func CheckCatalogEntries(ctx context.Context, scan CatalogScan) ([]CatalogDiagnostic, *SecretReport, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, nil, err
-	}
-	catalogRoot := filepath.Dir(cfg.DataPath)
+	entryID, filter := scan.EntryID, scan.Filter
+	catalogRoot := filepath.Dir(scan.DataPath)
 	if _, err := os.Stat(filepath.Join(catalogRoot, "data", "sqlite", "catalog.db")); os.IsNotExist(err) && entryID == "" {
-		return []catalogDiagnostic{}, &doctor.SecretReport{FactsScanned: true, Findings: []doctor.SecretFinding{}}, nil
+		return []CatalogDiagnostic{}, &SecretReport{FactsScanned: true, Findings: []SecretFinding{}}, nil
 	}
 	db, err := database.OpenCatalogDBReadOnly(catalogRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer db.Close()
-	paths := effectiveSchemaPaths(cfg)
+	paths := scan.SchemaPaths
 	validation, err := validator.NewValidationService(paths...)
 	if err != nil {
 		return nil, nil, err
@@ -55,8 +65,8 @@ func checkCatalogEntries(ctx context.Context, entryID string, filter database.Fi
 	if err != nil {
 		return nil, nil, err
 	}
-	secretScan := doctor.NewSecretScan(inferrer)
-	out := []catalogDiagnostic{}
+	secretScan := NewSecretScan(inferrer)
+	out := []CatalogDiagnostic{}
 	check := func(entry database.CatalogEntry) error {
 		out = append(out, checkCatalogEntry(entry, validation, inferrer, secretScan))
 		return nil
@@ -84,8 +94,8 @@ func checkCatalogEntries(ctx context.Context, entryID string, filter database.Fi
 
 // checkCatalogEntry validates one entry, re-checks its inference, and scans
 // its payload for likely secrets.
-func checkCatalogEntry(entry database.CatalogEntry, validation *validator.ValidationService, inferrer *inference.SchemaInferrer, secretScan *doctor.SecretScan) catalogDiagnostic {
-	diagnostic := catalogDiagnostic{ID: entry.ID, Proquint: idgen.HashToProquint(entry.ID), Schema: entry.Schema, Status: "ok"}
+func checkCatalogEntry(entry database.CatalogEntry, validation *validator.ValidationService, inferrer *inference.SchemaInferrer, secretScan *SecretScan) CatalogDiagnostic {
+	diagnostic := CatalogDiagnostic{ID: entry.ID, Proquint: idgen.HashToProquint(entry.ID), Schema: entry.Schema, Status: "ok"}
 	data, loadErr := loadVerifyData(entry.StoredPath)
 	if loadErr == nil {
 		secretScan.Entry(entry, data)
@@ -136,4 +146,16 @@ func loadVerifyData(path string) (interface{}, error) {
 		return string(data), nil
 	}
 	return value, nil
+}
+
+// DriftEntryIDs lists the entries whose schema inference now selects another
+// schema: what the inference repair re-infers after a scan.
+func DriftEntryIDs(catalog []CatalogDiagnostic) []string {
+	var ids []string
+	for _, entry := range catalog {
+		if entry.Status == "mismatch" {
+			ids = append(ids, entry.ID)
+		}
+	}
+	return ids
 }
