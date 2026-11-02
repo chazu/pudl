@@ -5,8 +5,8 @@
 with Vite, laid out by [ELK](https://eclipse.dev/elk/) (elkjs), and rendered
 as SVG. Run instructions are in [web/README.md](../web/README.md).
 
-pudl has no HTTP API today, so the UI runs on a synthetic demo dataset (always
-labelled DEMO DATA) or on a canonical-graph JSON file. See
+The UI runs on a synthetic demo dataset (always labelled DEMO DATA) or on a
+canonical-graph JSON file, such as the output of `pudl graph export`. See
 [Backend integration](#backend-integration).
 
 ## Data flow
@@ -280,12 +280,41 @@ Shipped sources:
 }
 ```
 
-A live source would map pudl's catalog to this shape: catalog entries become
-resources (`resource_type`, identity, payload fields), facts become
-relationships (a relation such as `aws_instance_sg` becomes `protected_by`),
-and observation snapshots become evidence. That needs a read API, which pudl
-does not have yet, for example a `pudl graph export --json` command or a local
-HTTP endpoint over `pkg/factstore`. Live data would set `origin: 'live'`.
+### From a pudl workspace: `pudl graph export`
+
+```bash
+pudl graph export -o web/public/graph.json
+# then open http://localhost:5178/?graph=/graph.json
+```
+
+The command (`internal/graphexport`) writes this shape from the catalog:
+
+- **Resources** are the catalog's current entries, one per resource, except
+  pudl's own bookkeeping types (`system_model`, observation records). The
+  `id` is the pudl `resource_id`; `type` is the schema's `resource_type`;
+  `provider` is its first segment. Name, account, region and zone come from
+  the schema's [`_pudl.graph`](schema-authoring.md#graph) block. Properties are
+  the record's top-level scalars (already redacted). `schema` and `entryId`
+  point back at the record (`pudl show <entryId>`).
+- **Evidence** for a resource is the observation snapshots that saw it,
+  basis `observed`. A resource that was only ever imported gets basis
+  `unknown`, because pudl did not observe it.
+- **Relationships** come from rules for the
+  [`graph_edge`](datalog.md#resource-graph-edges-graph_edge) relation. The
+  AWS and GCP packs ship these in `schema/pudl/rules/*_graph.cue`. Each
+  relationship's evidence names the rule that derived it. An unresolved
+  reference becomes a `ref:<value>` endpoint, which the UI shows as not in
+  the inventory.
+- **Warnings** (unreadable payloads, ambiguous references, failing rules)
+  are listed in `meta.warnings` and shown in the status bar. They never stop
+  the export.
+
+The UI owns the edge vocabulary: `type` values are keys of
+`src/model/relationshipTypes.ts`. A pack that emits a type the UI does not
+know still shows it, under the `other` category ("meaning unknown").
+
+A file is a snapshot, so the UI labels it FILE, not LIVE. Serving the graph
+from pudl directly is the next step.
 
 ## Extension points
 
@@ -299,7 +328,9 @@ HTTP endpoint over `pkg/factstore`. Live data would set `origin: 'live'`.
 
 ## Known limitations
 
-- No live inventory; see above.
+- No live connection: the UI reads an exported file, not the catalog.
+- The packs project no IAM trust or policy facts and no security-group rules,
+  so on pack data the security view shows few edges.
 - Collapse and expand still move nodes outside the toggled group (anchored,
   77–99% sibling order kept). There is no pinning and no animation.
 - A refreshed inventory relays out from scratch. That is deterministic, but a

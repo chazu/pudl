@@ -368,7 +368,7 @@ func (loader *CUEModuleLoader) CheckModuleIntegrity(modules map[string]*LoadedMo
 				})
 			}
 			meta := module.Metadata[schemaName]
-			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError, meta.OwnerError, meta.MatchError} {
+			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError, meta.OwnerError, meta.MatchError, meta.GraphError} {
 				if metaErr != "" {
 					problems = append(problems, SchemaLoadError{
 						Path:    loader.schemaPath,

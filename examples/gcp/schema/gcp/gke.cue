@@ -11,6 +11,7 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["resourceLabels.team"]}
+		graph: _gcpGraph & {region: "location"}
 		sensitive_fields: [
 			"nodeConfig.metadata",
 			"nodePools[*].config.metadata",

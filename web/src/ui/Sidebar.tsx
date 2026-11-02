@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { GraphIndex, GraphMeta, ResourceId } from '../model/canonical';
 import { resourceType } from '../model/resourceTypes';
 import { PROJECTIONS } from '../projection/registry';
+import { ownerResource } from '../projection/views/common';
 import type { ProjectionId, SemanticView } from '../projection/types';
 import type { Selection } from '../render/highlight';
 import type { ViewState } from '../visual/viewState';
@@ -52,7 +53,7 @@ export function Sidebar(props: Props) {
     const out = new Map<string, { provider: string; label: string }>();
     for (const r of index.graph.resources) {
       if (!r.account || out.has(r.account)) continue;
-      const owner = index.resource(r.provider === 'gcp' ? `gcp:project:${r.account}` : `aws:account:${r.account}`);
+      const owner = ownerResource(index, r);
       out.set(r.account, { provider: r.provider, label: owner && owner.name !== r.account ? `${owner.name} (${r.account})` : r.account });
     }
     return [...out.entries()].sort((a, b) => a[1].provider.localeCompare(b[1].provider) || a[0].localeCompare(b[0]));

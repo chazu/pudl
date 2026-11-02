@@ -17,6 +17,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["User.Arn"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: {name: "User.UserName", account: "AccountId"}
 	}
 	AccountId: string
 	User: {
@@ -43,6 +44,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["Arn"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: {name: "RoleName", account: "AccountId"}
 	}
 	AccountId:  string
 	RoleName:   string

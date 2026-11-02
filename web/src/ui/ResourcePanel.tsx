@@ -72,6 +72,18 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
         )}
         <dt>PUDL ID</dt>
         <dd><code className="wrap">{r.id}</code></dd>
+        {r.schema && (
+          <>
+            <dt>Schema</dt>
+            <dd><code className="wrap">{r.schema}</code></dd>
+          </>
+        )}
+        {r.entryId && (
+          <>
+            <dt>Entry</dt>
+            <dd title="Inspect the record with pudl show"><code className="wrap">pudl show {r.entryId}</code></dd>
+          </>
+        )}
       </dl>
 
       <h3>In this view</h3>

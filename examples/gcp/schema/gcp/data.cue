@@ -10,6 +10,7 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["settings.userLabels.team"]}
+		graph: _gcpGraph & {region: "region"}
 		// The VPC of a private IP, in path form; absent without one.
 		facts: gcp_sql_network: args: {
 			self_link: "selfLink"
@@ -43,6 +44,7 @@ package gcp
 		identity_fields: ["name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpGraph & {region: "location"}
 	}
 	project:                      _gcpProjectID
 	name:                         string
@@ -62,6 +64,7 @@ package gcp
 		identity_fields: ["name"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 	}
 	project: _gcpProjectID
 	name:    =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+$" @pudl(match)
@@ -78,6 +81,7 @@ package gcp
 		identity_fields: ["name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 		facts: gcp_kms_key: args: {
 			project:       "project"
 			name:          "name"

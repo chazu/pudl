@@ -47,6 +47,8 @@ These flags apply to every command.
   - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
   - [pudl facts show](#pudl-facts-show) — Show details of a single fact
   - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
+- [pudl graph](#pudl-graph) — Export the resource graph
+  - [pudl graph export](#pudl-graph-export) — Write the current resource graph as JSON
 - [pudl guide](#pudl-guide) — Quick-reference guide for agents and humans
 - [pudl import](#pudl-import) — Import data into PUDL data lake
 - [pudl init](#pudl-init) — Initialize or repair a local PUDL workspace (--global for ~/.pudl)
@@ -862,6 +864,65 @@ Flags:
 Without `--group-by`, counts are grouped by `relation`, including when a
 relation filter is supplied. Explicit grouping can select `source` or any args
 field; several comma-separated fields produce a cross-tabulation.
+
+## pudl graph
+
+Export the resource graph
+
+```text
+pudl graph
+```
+
+```text
+Work with the resource graph: cataloged resources and the relationships
+between them, as read by the web graph explorer (web/).
+
+Available subcommands:
+- export:  Write the current resource graph as JSON
+```
+
+Subcommands:
+
+- [pudl graph export](#pudl-graph-export) — Write the current resource graph as JSON
+
+## pudl graph export
+
+Write the current resource graph as JSON
+
+```text
+pudl graph export [flags]
+```
+
+```text
+Write the current resource graph as JSON, in the canonical graph format the
+web explorer loads (docs/frontend.md#backend-integration).
+
+Resources are the catalog's current entries, one per resource. Each schema's
+optional _pudl.graph block names the fields used for name, account, region and
+zone, and the values other records use to refer to the resource.
+
+Relationships come from Datalog rules whose head is the reserved relation
+
+    graph_edge(type, source, target, basis)
+
+where source and target are a resource ID or a reference value such as an
+AWS ID or a GCP path. A reference that matches no cataloged resource is kept
+as "ref:<value>", so the graph shows the resource as unknown instead of
+dropping the edge. Problems (unreadable payloads, ambiguous references, rules
+that fail) are listed in meta.warnings and never stop the export.
+
+Output is always JSON; the global --json flag changes nothing.
+
+Examples:
+    pudl graph export > graph.json
+    pudl graph export -o web/public/graph.json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-o`, `--output` | string |  | Output file (default: stdout) |
 
 ## pudl guide
 

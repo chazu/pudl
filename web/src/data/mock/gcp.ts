@@ -24,7 +24,7 @@ export function buildGcp(b = new GraphBuilder('gcp')): GraphBuilder {
   const folder = b.res({ id: 'gcp:folder:production', type: 'gcp.folder', name: 'production', nativeId: 'folders/90817263', evidence: ev(ASSET) });
   b.rel('in_organization', folder, org, 'observed', { evidence: ev(ASSET) });
   const project = (id: string, num: string) => {
-    const pid = b.res({ id: `gcp:project:${id}`, type: 'gcp.project', name: id, nativeId: `projects/${num}`, account: id, properties: { projectNumber: num }, evidence: ev('gcloud projects list') });
+    const pid = b.res({ id: `gcp:project:${id}`, type: 'gcp.project', name: id, nativeId: id, account: id, properties: { projectNumber: num }, evidence: ev('gcloud projects list') });
     b.rel('in_folder', pid, folder, 'observed', { evidence: ev(ASSET) });
     return pid;
   };
