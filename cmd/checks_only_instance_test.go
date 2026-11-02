@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -10,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -56,12 +59,22 @@ func TestLegacyChecksOnlyModelInstancePassesDoctor(t *testing.T) {
 	pudlDir := checksOnlyWorkspace(t)
 	legacy := map[string]any{"name": "gcp-posture", "populate": map[string]any{}, "_schema": "systemmodel.system_model",
 		"checks": []any{map[string]any{"name": "no-open-ingress", "query": "open_ingress", "expect": "empty", "severity": "fail", "message": "firewall open to the internet"}}}
-	wrapped, err := json.Marshal([]any{map[string]any{"target": modelTarget("gcp-posture"), "current": map[string]any{"records": []any{legacy}}}})
+	wrapped, err := json.Marshal([]any{map[string]any{"target": systemmodel.InstanceTarget("gcp-posture"), "current": map[string]any{"records": []any{legacy}}}})
 	require.NoError(t, err)
-	cat := newRunCatalog(pudlDir)
-	_, _, err = ingestPopulateOutput(cat, wrapped, populateIngest{runID: "legacy", model: "gcp-posture", source: database.SnapshotSourceModelInstance})
+	cfg, err := loadEffectiveConfig()
 	require.NoError(t, err)
-	require.NoError(t, cat.Close())
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
+	require.NoError(t, err)
+	db, err := database.NewCatalogDB(pudlDir)
+	require.NoError(t, err)
+	_, err = observe.IngestObserve(db, observe.ObserveIngest{
+		Reader: bytes.NewReader(wrapped), DataDir: cfg.DataPath,
+		Graph: inferrer.GetInheritanceGraph(), Inferrer: inferrer,
+		RunID: "legacy", Model: "gcp-posture", Origin: "pudl-run",
+		Source: database.SnapshotSourceModelInstance,
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
 
 	require.Equal(t, 2, requireModelInstancesOK(t), "the fixed and the legacy instance")
 }
