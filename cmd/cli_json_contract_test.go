@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ var jsonContractExempt = map[string]string{
 // seeded workspace and requires stdout to be exactly one JSON document: no
 // banners, progress or warnings mixed in, and no top-level null.
 func TestJSONOutputContract(t *testing.T) {
-	cliWorkspace(t)
+	pudlDir := cliWorkspace(t)
 	require.NoError(t, os.WriteFile("widget.json", []byte(`{"kind":"Widget","name":"w1"}`), 0o644))
 
 	run := func(args ...string) []byte {
@@ -113,8 +114,14 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "stats")
 	run("doctor", "--fix", "--dry-run")
 	run("doctor", "--fix")
+	run("policy", "list")
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "bucket.cue"), policyTypes)
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "policies.cue"), strings.Replace(policyBP, "%s", "medium", 1))
+	reloadSchemas()
 	run("policy", "evaluate", "--dry-run")
 	run("policy", "evaluate")
+	run("policy", "list", "--type", "pudl/aws.#Bucket")
+	run("policy", "show", "pudl/aws.#BucketBestPractice")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)

@@ -27,11 +27,11 @@ func (e *Evaluator) Stale(db *database.CatalogDB) ([]string, error) {
 	for _, s := range states {
 		have[s.ResourceID+"\x00"+s.Policy] = true
 		entry, found := current[s.ResourceID]
-		p, loaded := e.lookup(s.Policy)
+		_, loaded := e.lookup(s.Policy)
 		switch {
 		case !found || entry.ID != s.EntryID || entry.Schema != s.Type:
 			superseded++
-		case loaded && p.Digest != s.Digest:
+		case e.IsStale(s):
 			digest++
 		case !loaded && !e.broken[s.Policy]:
 			unloaded++

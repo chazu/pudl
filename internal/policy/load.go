@@ -196,3 +196,12 @@ func (s *Set) Applicable(typeName string) []*Policy {
 	}
 	return out
 }
+
+// Review returns a type schema's review; a schema that is not loaded is a
+// draft.
+func (s *Set) Review(typeName string) validator.SchemaReview {
+	if meta, ok := s.src.GetSchemaMetadata(schemaname.Normalize(typeName)); ok {
+		return meta.Review
+	}
+	return validator.SchemaReview{Status: validator.ReviewDraft}
+}

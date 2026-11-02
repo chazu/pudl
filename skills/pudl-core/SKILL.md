@@ -62,6 +62,8 @@ global catalogs are independent; mutable state never falls back across them.
 - `pudl list` — list entries in the active catalog
   (`--origin` filters explicitly; `--artifacts` = run outputs; `--schema` with `#` matches whole definition names; `--json` is paginated, count with `total_matched`)
 - `pudl show <id>` / `pudl export --id <proquint> --format json` (exact payload, pipeable) / `pudl delete <id>`
+  (`show` includes a compliance section: each applicable policy's status and violations)
+- `pudl policy list [--type T]` / `pudl policy show POLICY [--limit N]` — compliance policies, result counts (stale ones included), rules and the resources failing most; `pudl policy evaluate` refreshes results
 - `pudl doctor` — workspace health, assigned-schema validation, and inference stability
 
 ### Schema

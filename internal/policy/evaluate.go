@@ -54,8 +54,8 @@ func (s *Set) Evaluate(p *Policy, typeName string, record map[string]any) (*Resu
 		Unknown:     f.unknown,
 		Provisional: !typeMeta.IsValidated(),
 	}
-	sortViolations(res.Violations)
-	sortViolations(res.Unknown)
+	SortViolations(res.Violations)
+	SortViolations(res.Unknown)
 	switch {
 	case len(res.Violations) > 0:
 		res.Status = StatusNoncompliant
