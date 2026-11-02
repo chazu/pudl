@@ -9,7 +9,7 @@ import (
 // AWS content pack models (README: examples/aws/README.md in the PUDL source).
 //
 // One collector per resource type, in two variants:
-//   aws-<type>          runs the AWS CLI against the accounts and regions below;
+//   aws-<type>          runs the AWS CLI against every profile in your config;
 //   aws-fixture-<type>  reads the bundled fixtures in .pudl/populators/aws.
 // Three checks-only families evaluate the latest collector observations:
 //   aws[-fixture]-network-exposure-checks, -data-protection-checks and
@@ -17,17 +17,20 @@ import (
 // Run a family together with its collectors, which it depends on, e.g.
 //   pudl check aws-vpcs aws-subnets aws-security-groups aws-instances aws-network-exposure-checks
 
-// ---- Live settings: replace these before running the aws-* models. ----
+// ---- Live settings. Each has a default; to change one without editing this
+// file, set it in another file of package models, e.g.
+// .pudl/schema/models/aws_settings.cue: _awsProfileFilter: "*-readonly"
 
-// Account IDs, each mapped to the AWS CLI profile (~/.aws/config) that reads
-// it. Every live collector runs once per account.
-_awsAccounts: {
-	"REPLACE_WITH_ACCOUNT_ID": "REPLACE_WITH_PROFILE"
-}
+// The live collectors fan out over the AWS CLI profiles in your config
+// (`aws configure list-profiles`), discovered at run time; each run reads its
+// profile's account ID with `aws sts get-caller-identity`. A shell glob
+// narrows the profiles, e.g. "*-readonly"; "*" takes them all.
+_awsProfileFilter: string | *"*"
 
-// Regions every regional collector lists in each account. S3 and IAM are
-// global and run once per account.
-_awsRegions: ["us-east-1"]
+// Regional collectors list every region enabled in each profile's account
+// (`aws ec2 describe-regions`) whose name matches this filter, e.g. "us-*" or
+// "eu-west-1"; "*" takes them all. S3 and IAM are global.
+_awsRegionFilter: string | *"*"
 
 // ---- End of live settings. ----
 
@@ -45,23 +48,27 @@ _awsSchemas: {
 	"iam-roles":       "aws.#IAMRole"
 }
 
-// Regional list commands. --query unwraps the response's top-level list so
-// the CLI prints a JSON array of records; the CLI follows pagination.
+// Regional list commands, and the JMESPath query that unwraps the response's
+// top-level list into a JSON array of records; the CLI follows pagination.
 _awsRegional: {
-	vpcs: ["ec2", "describe-vpcs", "--query", "Vpcs"]
-	subnets: ["ec2", "describe-subnets", "--query", "Subnets"]
-	"security-groups": ["ec2", "describe-security-groups", "--query", "SecurityGroups"]
-	instances: ["ec2", "describe-instances", "--query", "Reservations[].Instances[]"]
-	volumes: ["ec2", "describe-volumes", "--query", "Volumes"]
-	"db-instances": ["rds", "describe-db-instances", "--query", "DBInstances"]
+	vpcs: {query: "Vpcs", args: ["ec2", "describe-vpcs"]}
+	subnets: {query: "Subnets", args: ["ec2", "describe-subnets"]}
+	"security-groups": {query: "SecurityGroups", args: ["ec2", "describe-security-groups"]}
+	instances: {query: "Reservations[].Instances[]", args: ["ec2", "describe-instances"]}
+	volumes: {query: "Volumes", args: ["ec2", "describe-volumes"]}
+	"db-instances": {query: "DBInstances", args: ["rds", "describe-db-instances"]}
 }
 
-// Settings that are only available per resource are read by a short POSIX
-// shell script around the AWS CLI. opt KEY CODES ARGS... prints ,"KEY":<JSON>
+// Every live collector is a short POSIX shell script around the AWS CLI;
+// settings only available per resource are read per resource. opt KEY CODES ARGS... prints ,"KEY":<JSON>
 // with the output of `aws ARGS`, or nothing when aws fails with one of the
 // |-separated error CODES, which mean "not configured". Any other error fails
-// the run (a failed input). Scripts take the profile as $1 and the
-// region, where one applies, as $2, and print one JSON object per resource.
+// the run (a failed input). account PROFILE prints the profile's account ID;
+// regions PROFILE FILTER prints the enabled regions matching FILTER, asked of
+// the profile's configured region (us-east-1 when it has none). AWS omits the
+// account and region from most records, so every script adds AccountId (and
+// Region) to each record it prints. Scripts take the profile as $1 and the
+// region filter, where regions apply, as $2.
 _awsShPrelude: """
 	set -eu
 	opt() {
@@ -77,14 +84,36 @@ _awsShPrelude: """
 		printf '%s\\n' "$out" >&2
 		return 1
 	}
+	account() {
+		aws sts get-caller-identity --profile "$1" --query Account --output text
+	}
+	regions() {
+		home=$(aws configure get region --profile "$1" || echo us-east-1)
+		aws ec2 describe-regions --profile "$1" --region "$home" --filters "Name=region-name,Values=$2" --query 'Regions[].RegionName' --output text
+	}
 	"""
 
 _awsScripts: {
+	// Any regional list command: $3 is the JMESPath query that unwraps its
+	// records, and the rest is the command. Each record gains AccountId and
+	// Region through JMESPath merge().
+	regional: """
+		\(_awsShPrelude)
+		p=$1 rf=$2 query=$3
+		shift 3
+		a=$(account "$p")
+		rs=$(regions "$p" "$rf")
+		for r in $rs; do
+			fields=$(printf '`{"AccountId":"%s","Region":"%s"}`' "$a" "$r")
+			aws "$@" --profile "$p" --region "$r" --output json --query "$query | [].merge(@, $fields)"
+		done
+		"""
 	// One record per bucket: list-buckets, then the public access block,
 	// default encryption and versioning status of each bucket.
 	"s3-buckets": """
 		\(_awsShPrelude)
 		p=$1
+		a=$(account "$p")
 		buckets=$(aws s3api list-buckets --profile "$p" --query 'Buckets[].[Name,CreationDate]' --output text)
 		printf '%s\\n' "$buckets" | while read -r b created; do
 			[ -n "$b" ] || continue
@@ -93,19 +122,23 @@ _awsScripts: {
 			status=$(aws s3api get-bucket-versioning --profile "$p" --bucket "$b" --query Status --output json)
 			ver=
 			[ "$status" = null ] || ver=$(printf ',"Versioning":{"Status":%s}' "$status")
-			printf '{"Name":"%s","CreationDate":"%s"%s%s%s}\\n' "$b" "$created" "$pab" "$enc" "$ver"
+			printf '{"Name":"%s","CreationDate":"%s","AccountId":"%s"%s%s%s}\\n' "$b" "$created" "$a" "$pab" "$enc" "$ver"
 		done
 		"""
 	// One record per key: describe-key, and rotation status where AWS can
 	// report it.
 	"kms-keys": """
 		\(_awsShPrelude)
-		p=$1 r=$2
-		keys=$(aws kms list-keys --profile "$p" --region "$r" --query 'Keys[].KeyId' --output text)
-		for k in $keys; do
-			meta=$(aws kms describe-key --profile "$p" --region "$r" --key-id "$k" --query KeyMetadata --output json)
-			rot=$(opt KeyRotationEnabled 'UnsupportedOperationException|KMSInvalidStateException' kms get-key-rotation-status --profile "$p" --region "$r" --key-id "$k" --query KeyRotationEnabled)
-			printf '{"KeyMetadata":%s%s}\\n' "$meta" "$rot"
+		p=$1 rf=$2
+		a=$(account "$p")
+		rs=$(regions "$p" "$rf")
+		for r in $rs; do
+			keys=$(aws kms list-keys --profile "$p" --region "$r" --query 'Keys[].KeyId' --output text)
+			for k in $keys; do
+				meta=$(aws kms describe-key --profile "$p" --region "$r" --key-id "$k" --query KeyMetadata --output json)
+				rot=$(opt KeyRotationEnabled 'UnsupportedOperationException|KMSInvalidStateException' kms get-key-rotation-status --profile "$p" --region "$r" --key-id "$k" --query KeyRotationEnabled)
+				printf '{"KeyMetadata":%s,"AccountId":"%s","Region":"%s"%s}\\n' "$meta" "$a" "$r" "$rot"
+			done
 		done
 		"""
 	// One record per user: get-user, the login profile if the user has a
@@ -113,41 +146,45 @@ _awsScripts: {
 	"iam-users": """
 		\(_awsShPrelude)
 		p=$1
+		a=$(account "$p")
 		users=$(aws iam list-users --profile "$p" --query 'Users[].UserName' --output text)
 		for u in $users; do
 			user=$(aws iam get-user --profile "$p" --user-name "$u" --query User --output json)
 			login=$(opt LoginProfile NoSuchEntity iam get-login-profile --profile "$p" --user-name "$u" --query LoginProfile)
 			mfa=$(aws iam list-mfa-devices --profile "$p" --user-name "$u" --query MFADevices --output json)
-			printf '{"User":%s,"MFADevices":%s%s}\\n' "$user" "$mfa" "$login"
+			printf '{"User":%s,"MFADevices":%s,"AccountId":"%s"%s}\\n' "$user" "$mfa" "$a" "$login"
 		done
+		"""
+	"iam-roles": """
+		\(_awsShPrelude)
+		p=$1
+		a=$(account "$p")
+		fields=$(printf '`{"AccountId":"%s"}`' "$a")
+		aws iam list-roles --profile "$p" --output json --query "Roles | [].merge(@, $fields)"
 		"""
 }
 
-// Live runs: accounts x regions for regional types, accounts for global ones.
-// AWS omits the account and region from most records, so every run sets them.
+// The enumeration every live collector repeats its runs over: one input per
+// AWS CLI profile matching _awsProfileFilter.
+_awsProfileList: argv: ["sh", "-c", """
+	set -eu
+	profiles=$(aws configure list-profiles)
+	for p in $profiles; do
+		case $p in $1) printf '"%s"\\n' "$p" ;; esac
+	done
+	""", "aws-profiles", _awsProfileFilter]
+
+// Live runs, one per enumerated profile ({{item}}). Regional collectors walk
+// the profile's enabled regions inside the run, so a failing region fails
+// that profile's input.
 _awsRuns: {
-	for t, args in _awsRegional {
-		(t): [for a, p in _awsAccounts for r in _awsRegions {
-			argv: list.Concat([["aws"], args, ["--profile", p, "--region", r, "--output", "json"]])
-			set: {AccountId: a, Region: r}
-		}]
+	for t, c in _awsRegional {
+		(t): [{argv: list.Concat([["sh", "-c", _awsScripts.regional, "aws-\(t)", "{{item}}", _awsRegionFilter, c.query], c.args])}]
 	}
-	"kms-keys": [for a, p in _awsAccounts for r in _awsRegions {
-		argv: ["sh", "-c", _awsScripts["kms-keys"], "aws-kms-keys", p, r]
-		set: {AccountId: a, Region: r}
-	}]
-	"s3-buckets": [for a, p in _awsAccounts {
-		argv: ["sh", "-c", _awsScripts["s3-buckets"], "aws-s3-buckets", p]
-		set: AccountId: a
-	}]
-	"iam-users": [for a, p in _awsAccounts {
-		argv: ["sh", "-c", _awsScripts["iam-users"], "aws-iam-users", p]
-		set: AccountId: a
-	}]
-	"iam-roles": [for a, p in _awsAccounts {
-		argv: ["aws", "iam", "list-roles", "--query", "Roles", "--profile", p, "--output", "json"]
-		set: AccountId: a
-	}]
+	"kms-keys": [{argv: ["sh", "-c", _awsScripts["kms-keys"], "aws-kms-keys", "{{item}}", _awsRegionFilter]}]
+	for t in ["s3-buckets", "iam-users", "iam-roles"] {
+		(t): [{argv: ["sh", "-c", _awsScripts[t], "aws-\(t)", "{{item}}"]}]
+	}
 }
 
 // Global types carry no Region.
@@ -171,6 +208,7 @@ _#AWSLive: _#AWSCollector & {
 	_prefix: "aws-"
 	_scope:  "aws"
 	_runs:   _awsRuns[_type]
+	populate: each: _awsProfileList
 }
 
 // Fixtures hold what the live command prints, for account 123456789012 in

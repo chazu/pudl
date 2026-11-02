@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Packs discover projects, accounts and regions at run time; global example install (2026-11-02)
+
+No pack or tutorial names a project, account or region. GCP collectors list
+projects with `gcloud projects list` when they run; AWS collectors list CLI
+profiles, read each profile's account and enabled regions, and add
+`AccountId`/`Region` themselves. Optional filters (`_gcpProjectFilter`,
+`_awsProfileFilter`, `_awsRegionFilter`) narrow them. `pudl example install
+--global` installs packs into `~/.pudl`. See the
+[delivery log](../implog/2026_11_02_packs_runtime_discovery.md).
+
 ### Import fall-through made visible (2026-11-02)
 
 The generic `pudl/infra.#Organization` and `#Service` are removed. Changed

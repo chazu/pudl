@@ -72,21 +72,23 @@ The comparison shows the source-range change. History lists the resource's
 stored versions and the snapshots that observed them. The original report
 still holds the original failing finding.
 
-## Collect a real project
+## Collect real projects
 
 The installed `schema/models/gcp_network_hygiene.cue` also contains the separate
-`gcp-network-hygiene-live` model. Set its `_project` to your project ID and ensure
-your normal `gcloud` credentials can list firewall rules, then run:
+`gcp-network-hygiene-live` model. It lists the projects your normal `gcloud`
+credentials can see (`gcloud projects list`) when it runs, so ensure they can
+list projects and firewall rules, then run:
 
 ```bash
 pudl model validate gcp-network-hygiene-live
 pudl check gcp-network-hygiene-live --detailed-exitcode --json
 ```
 
-This model uses `gcloud compute firewall-rules list` with an explicit project
-and injects that project into each record. It declares a complete
-observation, so do not add a limit or a partial filter to the command. If the
-command fails, no snapshot is published.
+This model runs `gcloud compute firewall-rules list` once per listed project
+and injects that project into each record; the report names the projects under
+`populate.inputs`. It declares a complete observation, so do not add a limit
+or a partial filter to the command. A project whose command fails is a failed
+input: the others are ingested and the observation is incomplete.
 
 The policy identifies broad IPv4 ALLOW declarations. Effective reachability also
 depends on priorities, DENY rules, targets and other policy layers; this example

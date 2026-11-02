@@ -17,10 +17,12 @@ A COLLECTOR
         observation: {scope: "gcp/firewalls", complete: true}
         populate: {
             schema: "gcp.#Firewall"            // route records, like import --schema
-            runs: [for p in ["prod-a", "prod-b"] {
+            each: {argv: ["gcloud", "projects", "list", "--format=json"],
+                select: "projectId"}           // one input per project, at run time
+            runs: [{
                 argv: ["gcloud", "compute", "firewall-rules", "list",
-                    "--project=\(p)", "--format=json"]
-                set: project: p                // add a field the output omits
+                    "--project={{item}}", "--format=json"]
+                set: project: "{{item}}"       // add a field the output omits
             }]
         }
     }
@@ -31,12 +33,12 @@ A COLLECTOR
 
 FAN-OUT
 
-  Write one run per project, account or region with a CUE comprehension
-  (above), or enumerate inputs at run time with each:
-
-    each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
-    runs: [{argv: ["gcloud", "compute", "firewall-rules", "list",
-        "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+  each (above) runs a command whose JSON output lists the inputs: an array
+  of strings, or of objects with select naming the field. Every run is
+  repeated per input with {{item}} replaced in argv and set. Discover
+  projects, profiles or regions this way rather than writing them into the
+  model. A CUE comprehension over a fixed list also works, for inputs that
+  really are fixed.
 
   A failed run is a failed input: the other runs are ingested, the snapshot
   is incomplete, and the report lists it under populate.failed_inputs.

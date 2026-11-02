@@ -585,7 +585,8 @@ pudl example install <name>
 ```
 
 ```text
-Install a bundled example in the current initialized PUDL workspace.
+Install a bundled example in the current initialized PUDL workspace,
+or with --global in the personal ~/.pudl workspace (after pudl init --global).
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 

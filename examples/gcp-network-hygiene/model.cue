@@ -23,13 +23,13 @@ _checks: [{
 }
 
 #GCPNetworkHygieneLive: sm.#SystemModel & {
-	// Set this project explicitly before running the live model.
-	_project: "REPLACE_WITH_YOUR_PROJECT"
+	// Every project your gcloud credentials can list, discovered at run time.
 	name: "gcp-network-hygiene-live"
-	observation: {scope: "gcp/\(_project)/firewalls", complete: true}
+	observation: {scope: "gcp/firewalls", complete: true}
 	populate: {
 		schema: "pudl/gcphygiene.#Firewall"
-		runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(_project)", "--format=json"], set: project: _project}]
+		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+		runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
 	}
 	checks: _checks
 }

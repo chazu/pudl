@@ -55,9 +55,33 @@ func TestSmoke_ExampleInstallRequiresWorkspace(t *testing.T) {
 	command.Env = envWith(map[string]string{"HOME": home})
 	out, err := command.CombinedOutput()
 	require.Error(t, err)
-	require.Contains(t, string(out), "run pudl init first")
+	require.Contains(t, string(out), "pass --global")
 	require.NoDirExists(t, filepath.Join(root, ".pudl"))
 	require.NoDirExists(t, filepath.Join(home, ".pudl"))
+}
+
+func TestSmoke_ExampleInstallGlobal(t *testing.T) {
+	root, sandbox, env := exampleWorkspace(t, "git", "cat")
+	run := func(args ...string) (string, error) {
+		command := exec.Command(pudlBin, args...)
+		command.Dir, command.Env = root, env
+		out, err := command.CombinedOutput()
+		return string(out), err
+	}
+	global := filepath.Join(sandbox, "home", ".pudl")
+	out, err := run("example", "install", "gcp", "--global")
+	require.Error(t, err)
+	require.Contains(t, out, "pudl init --global")
+	require.NoDirExists(t, global)
+
+	out, err = run("init", "--global")
+	require.NoError(t, err, "%s", out)
+	out, err = run("example", "install", "gcp", "--global")
+	require.NoError(t, err, "%s", out)
+	require.Contains(t, out, global)
+	require.FileExists(t, filepath.Join(global, "schema/models/gcp_pack.cue"))
+	require.FileExists(t, filepath.Join(global, "populators/gcp/firewalls.json"))
+	require.NoDirExists(t, filepath.Join(root, ".pudl"))
 }
 
 // The tutorial's PATH contains the installed CLI and only the requested tools.

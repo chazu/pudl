@@ -2,7 +2,6 @@ package models
 
 import (
 	"list"
-	"strings"
 
 	sm "pudl.schemas/pudl/systemmodel@v0"
 )
@@ -10,7 +9,7 @@ import (
 // GCP content pack models (README: examples/gcp/README.md in the PUDL source).
 //
 // One collector per resource type, in two variants:
-//   gcp-<type>          runs gcloud against the projects below;
+//   gcp-<type>          runs gcloud against every project gcloud lists;
 //   gcp-fixture-<type>  reads the bundled fixtures in .pudl/populators/gcp.
 // Three checks-only families evaluate the latest collector observations:
 //   gcp[-fixture]-network-hygiene-checks, -data-protection-checks and
@@ -18,16 +17,17 @@ import (
 // Run a family together with its collectors, which it depends on, e.g.
 //   pudl check gcp-firewalls gcp-addresses gcp-routers gcp-network-hygiene-checks
 
-// ---- Live settings: replace these before running the gcp-* models. ----
+// ---- Live settings. Each has a default; to change one without editing this
+// file, set it in another file of package models, e.g.
+// .pudl/schema/models/gcp_settings.cue: _gcpProjectFilter: "labels.env=staging"
 
-// Project IDs every live collector fans out over.
-_gcpProjects: ["REPLACE_WITH_YOUR_PROJECT"]
+// The live collectors fan out over every project `gcloud projects list` prints
+// for your credentials, discovered at run time. A gcloud filter narrows the
+// list, e.g. "labels.env=staging" or "projectId:staging"; "" lists them all.
+_gcpProjectFilter: string | *""
 
-// Locations gcp-kms-keyrings lists in each project.
-_gcpKMSLocations: ["global"]
-
-// Fully qualified key rings gcp-kms-keys lists keys from.
-_gcpKMSKeyRings: ["projects/REPLACE_WITH_YOUR_PROJECT/locations/global/keyRings/REPLACE_WITH_YOUR_KEYRING"]
+// Locations gcp-kms-keyrings and gcp-kms-keys list key rings in, per project.
+_gcpKMSLocations: [...string] | *["global"]
 
 // ---- End of live settings. ----
 
@@ -68,22 +68,33 @@ _gcpCommands: {
 	"pubsub-subscriptions": ["pubsub", "subscriptions", "list"]
 }
 
-// Live runs: projects for most types, projects x locations for key rings, and
-// the listed key rings for keys. gcloud omits the project, so every run sets it.
+// The enumeration every live collector repeats its runs over: one input per
+// project ID.
+_gcpProjectList: {
+	argv: list.Concat([
+		["gcloud", "projects", "list", "--format=json"],
+		[if _gcpProjectFilter != "" {"--filter=\(_gcpProjectFilter)"}],
+	])
+	select: "projectId"
+}
+
+// Live runs, repeated per enumerated project ({{item}}): one per type, one per
+// location for key rings, and a helper that lists each ring's keys. gcloud
+// omits the project, so every run sets it.
 _gcpRuns: {
 	for t, args in _gcpCommands {
-		(t): [for p in _gcpProjects {
-			argv: list.Concat([["gcloud"], args, ["--project=\(p)", "--format=json"]])
-			set: project: p
+		(t): [{
+			argv: list.Concat([["gcloud"], args, ["--project={{item}}", "--format=json"]])
+			set: project: "{{item}}"
 		}]
 	}
-	"kms-keyrings": [for p in _gcpProjects for l in _gcpKMSLocations {
-		argv: ["gcloud", "kms", "keyrings", "list", "--location=\(l)", "--project=\(p)", "--format=json"]
-		set: project: p
+	"kms-keyrings": [for l in _gcpKMSLocations {
+		argv: ["gcloud", "kms", "keyrings", "list", "--location=\(l)", "--project={{item}}", "--format=json"]
+		set: project: "{{item}}"
 	}]
-	"kms-keys": [for k in _gcpKMSKeyRings {
-		argv: ["gcloud", "kms", "keys", "list", "--keyring=\(k)", "--format=json"]
-		set: project: strings.Split(k, "/")[1]
+	"kms-keys": [{
+		argv: list.Concat([["sh", "../../populators/gcp/kms-keys.sh", "{{item}}"], _gcpKMSLocations])
+		set: project: "{{item}}"
 	}]
 }
 
@@ -105,6 +116,7 @@ _#GCPLive: _#GCPCollector & {
 	_prefix: "gcp-"
 	_scope:  "gcp"
 	_runs:   _gcpRuns[_type]
+	populate: each: _gcpProjectList
 }
 
 _#GCPFixture: _#GCPCollector & {

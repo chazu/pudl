@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/examples"
 )
 
@@ -18,7 +20,8 @@ var exampleInstallCmd = &cobra.Command{
 	Short:     "Install a runnable example and its fixture data",
 	ValidArgs: []string{"git-inventory", "gcp-network-hygiene", "gcp", "aws"},
 	Args:      cobra.ExactArgs(1),
-	Long: `Install a bundled example in the current initialized PUDL workspace.
+	Long: `Install a bundled example in the current initialized PUDL workspace,
+or with --global in the personal ~/.pudl workspace (after pudl init --global).
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 
@@ -42,17 +45,19 @@ Example:
     pudl init
     pudl example install git-inventory`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if wsPolicy == nil || !wsPolicy.InWorkspace() {
-			return fmt.Errorf("example installation needs a repository workspace; run pudl init first")
+		global, _ := cmd.Flags().GetBool("global")
+		root, err := exampleInstallRoot(global)
+		if err != nil {
+			return err
 		}
-		files, err := examples.Install(wsPolicy.Workspace.PudlDir, args[0])
+		files, err := examples.Install(root, args[0])
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
-			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": wsPolicy.Workspace.PudlDir, "files": files})
+			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": root, "files": files})
 		}
-		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
+		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], root)
 		if args[0] == "aws" {
 			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
 			return nil
@@ -69,6 +74,23 @@ Example:
 		fmt.Fprintln(outw(), "Next: pudl model show git-inventory")
 		return nil
 	},
+}
+
+// exampleInstallRoot is the workspace an example is installed into: the
+// repository workspace, or ~/.pudl only when --global names it explicitly, so
+// running outside a repository never writes to ~/.pudl by accident.
+func exampleInstallRoot(global bool) (string, error) {
+	if !global {
+		if wsPolicy == nil || !wsPolicy.InWorkspace() {
+			return "", fmt.Errorf("example installation needs a workspace; run pudl init here, or pass --global to install into ~/.pudl")
+		}
+		return wsPolicy.Workspace.PudlDir, nil
+	}
+	root := wsPolicy.GlobalDir
+	if _, err := os.Stat(config.ConfigPath(root)); err != nil {
+		return "", fmt.Errorf("the global workspace %s is not initialized; run pudl init --global first", root)
+	}
+	return root, nil
 }
 
 func init() {

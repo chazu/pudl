@@ -33,9 +33,12 @@ WHAT A CLOUD PACK HOLDS
 
 GO LIVE
 
-  Edit the settings at the top of .pudl/schema/models/gcp_pack.cue
-  (_gcpProjects) or aws_pack.cue (_awsAccounts, _awsRegions), name each
-  project's or account's team in schema/<cloud>/owners.cue, then:
+  Live collectors name no project, account or region: GCP ones list your
+  projects at run time (gcloud projects list), AWS ones your CLI profiles
+  (aws configure list-profiles) and each account's enabled regions. Narrow
+  them with _gcpProjectFilter, _awsProfileFilter or _awsRegionFilter in a file
+  of your own under .pudl/schema/models/. Name each project's or account's
+  team in schema/<cloud>/owners.cue, then:
 
   pudl model validate gcp-firewalls
   pudl check gcp-firewalls gcp-addresses gcp-routers gcp-network-hygiene-checks

@@ -18,13 +18,15 @@ Installed files, under `.pudl/`:
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
-| `schema/models/gcp_pack.cue` | Collectors, and the live settings you edit |
+| `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
 | `schema/models/gcp_pack_checks.cue` | The three check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
+| `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
 
 ## What it collects
 
-Each collector is a `#CommandObserve` model that runs one `gcloud ... list
+Each collector is a `#CommandObserve` model. A live collector lists your
+projects at run time (`gcloud projects list`), runs one `gcloud ... list
 --format=json` per project, injects `project` into every record and routes the
 records to one schema. Each declares a complete observation of scope
 `gcp/<type>` (`fixture/gcp/<type>` for fixtures). If a project's run fails
@@ -50,7 +52,7 @@ unknown, not passing.
 | `gcp-pubsub-topics` | `pubsub topics list` | `gcp.#PubSubTopic` | `name` | `pubsub.topics.list` (`roles/pubsub.viewer`) |
 | `gcp-pubsub-subscriptions` | `pubsub subscriptions list` | `gcp.#PubSubSubscription` | `name` | `pubsub.subscriptions.list` (same) |
 | `gcp-kms-keyrings` | `kms keyrings list --location=L` | `gcp.#KMSKeyRing` | `name` | `cloudkms.keyRings.list` (`roles/cloudkms.viewer`) |
-| `gcp-kms-keys` | `kms keys list --keyring=K` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
+| `gcp-kms-keys` | `kms keys list` per key ring, via `kms-keys.sh` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
 
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
@@ -177,22 +179,33 @@ critical violations that check reports.
 See [governance](../../docs/governance.md) for how waivers match and expire,
 finding changes (`--fail-on new`), owners and CI exit codes.
 
-## Run against one live project
+## Run against live projects
 
-1. Edit the live settings at the top of `.pudl/schema/models/gcp_pack.cue`:
+The live collectors name no project. Each lists the projects your gcloud
+credentials can see when it runs (`gcloud projects list --format=json`) and
+repeats its command per project, with `{{item}}` replaced by the project ID.
+The report records the projects it enumerated under `populate.inputs`. A
+failing project is a failed input as above; a failing `gcloud projects list`
+fails the collector with nothing ingested.
+
+1. Optionally narrow the projects or widen the KMS locations. Set them in a
+   file of your own, so the pack's files stay identical to the bundle, e.g.
+   `.pudl/schema/models/gcp_settings.cue`:
 
    ```cue
-   _gcpProjects: ["my-project"]
-   _gcpKMSLocations: ["global", "us-central1"]
-   _gcpKMSKeyRings: ["projects/my-project/locations/us-central1/keyRings/my-ring"]
+   package models
+
+   _gcpProjectFilter: "labels.env=staging"   // any gcloud --filter; default "" (all)
+   _gcpKMSLocations: ["global", "us-central1"] // default ["global"]
    ```
 
-   Every project in `_gcpProjects` is collected by every collector. Key rings
-   are listed per location, and keys per key ring you name.
+   Key rings are listed per project and location; `gcp-kms-keys` lists the
+   keys of every ring it finds there.
 2. Check your credentials and the models:
 
    ```bash
    gcloud auth list
+   gcloud projects list
    pudl model validate gcp-firewalls
    ```
 
@@ -203,42 +216,9 @@ finding changes (`--fail-on new`), owners and CI exit codes.
    pudl policy evaluate --json
    ```
 
-A collector's observation is complete only for the projects, locations and
-key rings you list. Keep fixture and live runs in separate workspaces if you
-want `pudl query` (latest-known facts) to show only one of them.
-
-## Enumerate projects at run time
-
-`_gcpProjects` is fixed when the CUE is written. To collect every project your
-credentials can list instead, write a collector with `each`. Its command's JSON
-output supplies the inputs, and each run is repeated per project with
-`{{item}}` replaced (CUE interpolation cannot see a value that exists only at
-run time). For example, in `.pudl/schema/models/gcp_org.cue`:
-
-```cue
-package models
-
-import sm "pudl.schemas/pudl/systemmodel@v0"
-
-#GCPOrgFirewalls: sm.#SystemModel & {
-	name: "gcp-org-firewalls"
-	observation: {scope: "gcp-org/firewalls", complete: true}
-	populate: {
-		schema: "gcp.#Firewall"
-		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
-		runs: [{
-			argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"]
-			set: project: "{{item}}"
-		}]
-	}
-}
-```
-
-The report records the projects it enumerated under `populate.inputs`. A
-failing project is a failed input as above; a failing `gcloud projects list`
-fails the collector with nothing ingested. The check families read
-`model:gcp-<type>`, so point a check's `evidence` at `model:gcp-org-firewalls`
-to evaluate this collector's observation.
+A collector's observation is complete only for the projects gcloud listed and
+the KMS locations you set. Keep fixture and live runs in separate workspaces if
+you want `pudl query` (latest-known facts) to show only one of them.
 
 ## Impact: what depends on this network
 

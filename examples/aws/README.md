@@ -18,7 +18,7 @@ Installed files, under `.pudl/`:
 | `schema/aws/owners.cue` | Ownership: the account-to-team table the types share |
 | `schema/aws/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/aws_pack.cue` | Datalog rules: relationships, impact, checks |
-| `schema/models/aws_pack.cue` | Collectors, and the live settings you edit |
+| `schema/models/aws_pack.cue` | Collectors, and the optional live settings |
 | `schema/models/aws_pack_checks.cue` | The three check families |
 | `populators/aws/*.json` | Fixtures: CLI-shaped output for account `123456789012` in `us-east-1` |
 
@@ -39,22 +39,25 @@ counterpart.
 
 ## What it collects
 
-Each collector is a `#CommandObserve` model that runs once per account (and
-per region for regional types), adds `AccountId` (and `Region`) to every
-record and routes the records to one schema. List commands use `--query` to
-unwrap the response's top-level list (`{"Vpcs": [...]}` becomes `[...]`); the
-CLI follows pagination. Settings that AWS only reports per resource (S3
-bucket settings, KMS key metadata and rotation, IAM login profiles and MFA)
-are read by a short POSIX `sh` script around the CLI, held in the model file,
-which prints one JSON object per resource. A setting that is not configured
+Each collector is a `#CommandObserve` model. A live collector lists your AWS
+CLI profiles at run time (`aws configure list-profiles`) and runs once per
+profile: a short POSIX `sh` script around the CLI, held in the model file,
+reads the profile's account ID (`aws sts get-caller-identity`), walks its
+enabled regions for regional types (`aws ec2 describe-regions`), adds
+`AccountId` (and `Region`) to every record and routes the records to one
+schema. List commands use `--query` to unwrap the response's top-level list
+(`{"Vpcs": [...]}` becomes `[...]`) and JMESPath `merge()` to add the
+fields; the CLI follows pagination. Settings that AWS only reports per
+resource (S3 bucket settings, KMS key metadata and rotation, IAM login
+profiles and MFA) are read per resource, one JSON object each. A setting that is not configured
 (for example `NoSuchPublicAccessBlockConfiguration`) is left out of the
 record; any other error fails the run.
 
 Each collector declares a complete observation of scope `aws/<type>`
-(`fixture/aws/<type>` for fixtures). If one account's or region's run fails
-(a missing permission, an expired session), the other runs are ingested, the
-observation is incomplete, and the collector fails with that run listed under
-`populate.failed_inputs` in its report. A family checked with it is blocked;
+(`fixture/aws/<type>` for fixtures). If one profile's run fails (a missing
+permission, an expired session, a failing region), the other profiles are
+ingested, the observation is incomplete, and the collector fails with that
+profile listed under `populate.failed_inputs` in its report. A family checked with it is blocked;
 checked later on its own, its checks over that observation are unknown, not
 passing.
 
@@ -71,9 +74,10 @@ passing.
 | `aws-iam-users` | `iam list-users`, then per user `get-user`, `get-login-profile`, `list-mfa-devices` | `aws.#IAMUser` | `User.Arn` | `iam:ListUsers`, `iam:GetUser`, `iam:GetLoginProfile`, `iam:ListMFADevices` |
 | `aws-iam-roles` | `iam list-roles` | `aws.#IAMRole` | `Arn` | `iam:ListRoles` |
 
-The AWS managed `SecurityAudit` (or `ReadOnlyAccess`) policy covers every
-collector. S3 and IAM are global: their collectors run once per account and
-their records carry no `Region`. The scripts need `sh`, `tr` and the AWS CLI
+Every live collector also calls `sts:GetCallerIdentity`, and regional ones
+`ec2:DescribeRegions`. The AWS managed `SecurityAudit` (or `ReadOnlyAccess`)
+policy covers every collector. S3 and IAM are global: their records carry no
+`Region`. The scripts need `sh`, `tr` and the AWS CLI
 v2; nothing else.
 
 EC2 user data (`UserData`) is redacted before anything is stored.
@@ -234,26 +238,30 @@ finding changes (`--fail-on new`), owners and CI exit codes.
 Do this in a workspace of its own if you want `pudl query` (latest-known
 facts) to show only live data.
 
-1. Edit the live settings at the top of `.pudl/schema/models/aws_pack.cue`.
-   Map each account ID to the AWS CLI profile that reads it, and list the
-   regions to collect:
+The live collectors name no account or region. Each lists your AWS CLI
+profiles when it runs and repeats its script per profile, with `{{item}}`
+replaced by the profile name; the report records the profiles under
+`populate.inputs`. A profile can assume a role in another account
+(`role_arn`/`source_profile` in `~/.aws/config`), so one set of credentials
+can read many accounts. Regions are asked of the profile's configured region,
+or `us-east-1` when it has none.
+
+1. Optionally narrow the profiles or regions. Set them in a file of your own,
+   so the pack's files stay identical to the bundle, e.g.
+   `.pudl/schema/models/aws_settings.cue`:
 
    ```cue
-   _awsAccounts: {
-   	"123456789012": "prod-readonly"
-   	"210987654321": "data-readonly"
-   }
-   _awsRegions: ["us-east-1", "eu-west-1"]
+   package models
+
+   _awsProfileFilter: "*-readonly" // a shell glob; default "*" (all profiles)
+   _awsRegionFilter: "us-*"        // a describe-regions name filter; default "*"
    ```
 
-   Every regional collector runs once per account and region; S3 and IAM run
-   once per account. A profile can assume a role in its account
-   (`role_arn`/`source_profile` in `~/.aws/config`), so one set of
-   credentials can read many accounts.
 2. Check your credentials and the models:
 
    ```bash
-   aws sts get-caller-identity --profile prod-readonly
+   aws configure list-profiles
+   aws sts get-caller-identity --profile <profile>
    pudl model validate aws-vpcs
    ```
 
@@ -266,40 +274,8 @@ facts) to show only live data.
    pudl query aws_depends_on_vpc vpc=<a VPC ID from the run>
    ```
 
-A collector's observation is complete only for the accounts and regions you
-list.
-
-## Enumerate regions at run time
-
-`_awsRegions` is fixed when the CUE is written. To collect every region
-enabled in an account instead, write a collector with `each`; its command's
-JSON output supplies the inputs, and each run is repeated per region with
-`{{item}}` replaced. For example, in `.pudl/schema/models/aws_regions.cue`:
-
-```cue
-package models
-
-import sm "pudl.schemas/pudl/systemmodel@v0"
-
-#AWSAllRegionSecurityGroups: sm.#SystemModel & {
-	name: "aws-all-regions-security-groups"
-	observation: {scope: "aws-all-regions/security-groups", complete: true}
-	populate: {
-		schema: "aws.#SecurityGroup"
-		each: {argv: ["aws", "ec2", "describe-regions", "--profile", "prod-readonly",
-			"--query", "Regions[].RegionName", "--output", "json"]}
-		runs: [{
-			argv: ["aws", "ec2", "describe-security-groups", "--profile", "prod-readonly",
-				"--region", "{{item}}", "--query", "SecurityGroups", "--output", "json"]
-			set: {AccountId: "123456789012", Region: "{{item}}"}
-		}]
-	}
-}
-```
-
-The check families read `model:aws-<type>`, so point a check's `evidence` at
-`model:aws-all-regions-security-groups` to evaluate this collector's
-observation.
+A collector's observation is complete only for the profiles it listed and the
+regions that matched the filter.
 
 ## Limits
 

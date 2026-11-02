@@ -75,16 +75,18 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 	observation: {scope: "gcp/firewalls", complete: true}
 	populate: {
 		schema: "gcp.#Firewall"                 // route records like import --schema
-		runs: [for p in ["prod-a", "prod-b"] {
-			argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
-			set: project: p                     // add a field the output omits
+		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+		runs: [{
+			argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"]
+			set: project: "{{item}}"            // add a field the output omits
 		}]
 	}
 }
 ```
 
 - argv runs without a shell, with your environment. `populate.each: {argv,
-  select?}` enumerates inputs at run time; runs use `"{{item}}"`.
+  select?}` enumerates inputs (projects, profiles) at run time and repeats
+  every run per input with `"{{item}}"` replaced; do not hard-code them.
 - A failed run is a failed input: other runs are ingested, the snapshot is
   incomplete (`populate.failed_inputs` in the report), checks over it are
   unknown, and the model fails. `fail_fast: true` restores all-or-nothing.
