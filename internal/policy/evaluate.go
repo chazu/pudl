@@ -152,7 +152,7 @@ func (s *Set) conflicts(p *Policy, raw []byte, data any, f *findings) error {
 			if len(labels) < root {
 				continue
 			}
-			segs, present := resolveInRecord(data, parseErrorPath(labels[root:]))
+			segs, present := recordPath(data, labels[root:])
 			if !present {
 				continue
 			}

@@ -2,6 +2,7 @@ package policy
 
 import (
 	"fmt"
+	"slices"
 
 	"cuelang.org/go/cue"
 )
@@ -152,7 +153,7 @@ func (b *treeBuilder) declareRule(n *node, rule Rule, path, member string) error
 	} else if known.Severity != rule.Severity || known.Doc != rule.Doc {
 		return fmt.Errorf("%s: rule %q redeclared with a different severity or doc", path, rule.Name)
 	}
-	if !containsString(known.Paths, path) {
+	if !slices.Contains(known.Paths, path) {
 		known.Paths = append(known.Paths, path)
 	}
 	n.rule = known
@@ -174,13 +175,4 @@ func (n *node) lookup(segs []string) (*node, *Rule) {
 		}
 	}
 	return cur, rule
-}
-
-func containsString(list []string, s string) bool {
-	for _, x := range list {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }

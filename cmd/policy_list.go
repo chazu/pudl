@@ -48,7 +48,7 @@ func runPolicyList(cmd *cobra.Command, args []string) error {
 	if policyListType != "" {
 		selected = policies.Applicable(policyListType)
 	}
-	states, err := db.ListPolicyState()
+	states, err := db.ListPolicyState("", "")
 	if err != nil {
 		return err
 	}

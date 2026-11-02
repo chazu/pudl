@@ -10,7 +10,7 @@ import (
 // A result is stale when its policy digest differs from the loaded policy's.
 // Reasons are empty when every result is current.
 func (e *Evaluator) Stale(db *database.CatalogDB) ([]string, error) {
-	states, err := db.ListPolicyState()
+	states, err := db.ListPolicyState("", "")
 	if err != nil {
 		return nil, err
 	}

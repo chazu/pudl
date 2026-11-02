@@ -29,69 +29,44 @@ func pathOf(segs []string) (fieldpath.Path, error) {
 	return fieldpath.Parse(pathString(segs))
 }
 
-// errorSegment is one element of a CUE error path.
-type errorSegment struct {
-	key   string
-	index int // >= 0 for a list index
-	// meta: a hidden field or definition, never record data.
-	meta bool
-}
-
-// parseErrorPath converts the label strings of a CUE error path (as returned
-// by errors.Error.Path) into segments. CUE prints identifiers bare, other
-// string labels JSON-quoted, list indices as digits, and hidden fields and
-// definitions with their _ or # prefix.
-func parseErrorPath(labels []string) []errorSegment {
-	out := make([]errorSegment, 0, len(labels))
+// recordPath follows the label strings of a CUE error path (as returned by
+// errors.Error.Path) through record. CUE prints identifiers bare, other string
+// labels JSON-quoted, list indices as digits, and hidden fields and
+// definitions (never record data) with their _ or # prefix. It reports the
+// canonical tree segments (list indices become [*]) and whether every step is
+// present.
+func recordPath(record any, labels []string) ([]string, bool) {
+	canon := make([]string, 0, len(labels))
+	cur := record
 	for _, l := range labels {
+		key := l
 		switch {
 		case strings.HasPrefix(l, `"`):
-			key, err := strconv.Unquote(l)
-			if err != nil {
+			var err error
+			if key, err = strconv.Unquote(l); err != nil {
 				key = strings.Trim(l, `"`)
 			}
-			out = append(out, errorSegment{key: key, index: -1})
 		case strings.HasPrefix(l, "_") || strings.HasPrefix(l, "#"):
-			out = append(out, errorSegment{key: l, index: -1, meta: true})
+			return nil, false
 		default:
 			if i, err := strconv.Atoi(l); err == nil && i >= 0 {
-				out = append(out, errorSegment{index: i})
-			} else {
-				out = append(out, errorSegment{key: l, index: -1})
+				list, ok := cur.([]any)
+				if !ok || i >= len(list) {
+					return nil, false
+				}
+				cur = list[i]
+				canon = append(canon, wildcard)
+				continue
 			}
-		}
-	}
-	return out
-}
-
-// resolveInRecord follows segments through record. It reports the canonical
-// tree segments (list indices become [*]) and whether every step is present.
-func resolveInRecord(record any, segs []errorSegment) ([]string, bool) {
-	canon := make([]string, 0, len(segs))
-	cur := record
-	for _, s := range segs {
-		if s.meta {
-			return nil, false
-		}
-		if s.index >= 0 {
-			list, ok := cur.([]any)
-			if !ok || s.index >= len(list) {
-				return nil, false
-			}
-			cur = list[s.index]
-			canon = append(canon, wildcard)
-			continue
 		}
 		obj, ok := cur.(map[string]any)
 		if !ok {
 			return nil, false
 		}
-		next, ok := obj[s.key]
-		if !ok {
+		if cur, ok = obj[key]; !ok {
 			return nil, false
 		}
-		cur = next
-		canon = append(canon, s.key)
+		canon = append(canon, key)
 	}
 	return canon, true
 }

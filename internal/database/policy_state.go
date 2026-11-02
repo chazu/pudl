@@ -106,19 +106,37 @@ func (t *CatalogTx) DeletePolicyState(resourceID, policy string) error {
 	return err
 }
 
-// ListPolicyState reads every row. A catalog opened read-only before the
-// table existed has none.
-func (c *CatalogDB) ListPolicyState() ([]PolicyState, error) {
+// ListPolicyState reads the rows of resourceID and policy ("" matches any).
+// A catalog opened read-only before the table existed has none.
+func (c *CatalogDB) ListPolicyState(resourceID, policy string) ([]PolicyState, error) {
 	var n int
 	if err := c.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'policy_state'`).Scan(&n); err != nil || n == 0 {
 		return nil, err
 	}
-	return listPolicyStateIn(c.db, "")
+	return listPolicyStateIn(c.db, `WHERE ? IN ('', resource_id) AND ? IN ('', policy)`, resourceID, policy)
 }
 
-// ListPolicyState reads every row inside the transaction.
-func (t *CatalogTx) ListPolicyState() ([]PolicyState, error) {
-	return listPolicyStateIn(t.q, "")
+// PolicyViolations returns the args of the current policy_violation facts of
+// the results ListPolicyState(resourceID, policy) returns. Call it only after
+// ListPolicyState found rows.
+func (c *CatalogDB) PolicyViolations(resourceID, policy string) ([]string, error) {
+	rows, err := c.db.Query(`SELECT f.args FROM policy_state p
+		JOIN current_facts f ON f.source = ? || p.policy || ':' || p.resource_id AND f.relation = ?
+		WHERE ? IN ('', p.resource_id) AND ? IN ('', p.policy)`,
+		PolicySourcePrefix, PolicyViolationRelation, resourceID, policy)
+	if err != nil {
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "list policy violations", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var args string
+		if err := rows.Scan(&args); err != nil {
+			return nil, err
+		}
+		out = append(out, args)
+	}
+	return out, rows.Err()
 }
 
 // PolicyOrphans returns rows whose entry is gone or no longer has the row's
@@ -155,46 +173,26 @@ func (c *CatalogDB) CurrentResourceEntries() ([]CatalogEntry, error) {
 }
 
 func currentResourceEntriesIn(q dbtx) ([]CatalogEntry, error) {
-	rows, err := q.Query(`SELECT ` + entrySelect("catalog_entries") + `,
-			COALESCE((SELECT p.entry_id FROM policy_state p WHERE p.resource_id = catalog_entries.resource_id
-				ORDER BY p.evaluated_at DESC LIMIT 1),
-				(SELECT s.entry_id FROM projection_state s WHERE s.resource_id = catalog_entries.resource_id), '')
-		FROM catalog_entries
-		WHERE resource_id IS NOT NULL AND identity_json IS NOT NULL AND identity_json != ''
-		ORDER BY resource_id, import_timestamp DESC, rowid DESC`)
+	const resolved = `resource_id IS NOT NULL AND identity_json IS NOT NULL AND identity_json != ''`
+	rows, err := q.Query(`SELECT ` + entrySelect("catalog_entries") + ` FROM catalog_entries WHERE rowid IN (
+			SELECT (SELECT e.rowid FROM catalog_entries e WHERE e.resource_id = r.resource_id AND e.` + resolved + `
+				ORDER BY e.id = r.recorded DESC, e.import_timestamp DESC, e.rowid DESC LIMIT 1)
+			FROM (SELECT DISTINCT resource_id, COALESCE(
+				(SELECT p.entry_id FROM policy_state p WHERE p.resource_id = c.resource_id ORDER BY p.evaluated_at DESC LIMIT 1),
+				(SELECT s.entry_id FROM projection_state s WHERE s.resource_id = c.resource_id), '') AS recorded
+				FROM catalog_entries c WHERE c.` + resolved + `) r)
+		ORDER BY resource_id`)
 	if err != nil {
 		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "list current resources", err)
 	}
 	defer rows.Close()
 	var out []CatalogEntry
-	recorded := map[string]string{} // resource -> entry its results describe
 	for rows.Next() {
-		var cur string
-		scanned, err := scanEntry(scanWithExtra{rows: rows, extra: &cur})
+		entry, err := scanEntry(rows)
 		if err != nil {
 			return nil, err
 		}
-		entry := *scanned
-		rid := *entry.ResourceID
-		if len(out) == 0 || *out[len(out)-1].ResourceID != rid {
-			out = append(out, entry)
-			recorded[rid] = cur
-			continue
-		}
-		// A later row of the same resource is the entry its results describe.
-		if recorded[rid] == entry.ID {
-			out[len(out)-1] = entry
-		}
+		out = append(out, *entry)
 	}
 	return out, rows.Err()
-}
-
-// scanWithExtra scans an entry row followed by one extra column.
-type scanWithExtra struct {
-	rows  rowScanner
-	extra any
-}
-
-func (s scanWithExtra) Scan(dest ...any) error {
-	return s.rows.Scan(append(dest, s.extra)...)
 }

@@ -17,34 +17,29 @@ type Stored struct {
 	Violations      []policy.Violation `json:"violations"`
 }
 
-// ReadStored returns the stored results keep accepts, in policy_state order,
-// with their current violations.
-func ReadStored(db *database.CatalogDB, keep func(database.PolicyState) bool) ([]Stored, error) {
-	states, err := db.ListPolicyState()
+// ReadStored returns the stored results of resourceID and policyName ("" matches
+// any), in policy_state order, with their current violations.
+func ReadStored(db *database.CatalogDB, resourceID, policyName string) ([]Stored, error) {
+	states, err := db.ListPolicyState(resourceID, policyName)
+	if err != nil || len(states) == 0 {
+		return []Stored{}, err
+	}
+	violations, err := db.PolicyViolations(resourceID, policyName)
 	if err != nil {
 		return nil, err
 	}
-	out := []Stored{}
+	out := make([]Stored, len(states))
 	index := map[string]int{}
-	for _, s := range states {
-		if keep(s) {
-			index[s.ResourceID+"\x00"+s.Policy] = len(out)
-			out = append(out, Stored{PolicyState: s, Violations: []policy.Violation{}})
-		}
+	for i, s := range states {
+		out[i] = Stored{PolicyState: s, Violations: []policy.Violation{}}
+		index[s.ResourceID+"\x00"+s.Policy] = i
 	}
-	if len(out) == 0 {
-		return out, nil
-	}
-	facts, err := db.QueryFacts(database.FactFilter{Relation: database.PolicyViolationRelation})
-	if err != nil {
-		return nil, err
-	}
-	for _, f := range facts {
+	for _, args := range violations {
 		var a struct {
 			Resource, Policy, Rule, Severity, Path, Kind string
 			DeclaredBy                                   string `json:"declared_by"`
 		}
-		if json.Unmarshal([]byte(f.Args), &a) != nil {
+		if json.Unmarshal([]byte(args), &a) != nil {
 			continue
 		}
 		if i, ok := index[a.Resource+"\x00"+a.Policy]; ok {
@@ -63,7 +58,7 @@ func ReadStored(db *database.CatalogDB, keep func(database.PolicyState) bool) ([
 
 // Review returns a type schema's review; draft when no policy is loaded.
 func (e *Evaluator) Review(typeName string) validator.SchemaReview {
-	if e.Set() == nil {
+	if e.set == nil {
 		return validator.SchemaReview{Status: validator.ReviewDraft}
 	}
 	return e.set.Review(typeName)
@@ -104,17 +99,7 @@ func (e *Evaluator) Summarize(states []database.PolicyState, policies []*policy.
 		if sum == nil {
 			continue
 		}
-		switch policy.Status(s.Status) {
-		case policy.StatusCompliant:
-			sum.Compliant++
-		case policy.StatusNoncompliant:
-			sum.Noncompliant++
-		case policy.StatusUnknown:
-			sum.Unknown++
-		}
-		if e.Review(s.Type).Status != validator.ReviewValidated {
-			sum.Provisional++
-		}
+		sum.count(policy.Status(s.Status), e.Review(s.Type).Status != validator.ReviewValidated)
 		if e.IsStale(s) {
 			sum.Stale++
 		}

@@ -57,7 +57,7 @@ func runPolicyShow(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	p := selected[0]
-	stored, err := policyfacts.ReadStored(db, func(s database.PolicyState) bool { return s.Policy == p.Name })
+	stored, err := policyfacts.ReadStored(db, "", p.Name)
 	if err != nil {
 		return err
 	}
