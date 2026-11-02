@@ -38,3 +38,40 @@ func TestExplicitSchemaRejectsAtomicallyAndPreviewAgrees(t *testing.T) {
 		})
 	}
 }
+
+const bucketPolicySchemas = `package gcp
+
+#Bucket: {
+	_pudl: {schema_type: "base", resource_type: "gcp.bucket", identity_fields: ["name"]}
+	name: string
+	...
+}
+
+#BucketHardened: {
+	_pudl: {schema_type: "policy", base_schema: "pudl/gcp.#Bucket"}
+	encrypted: true
+	...
+}
+`
+
+// TestExplicitPolicySchemaIsRejected covers --schema naming a policy: preview
+// and import fail up front, fallback does not excuse it, the error names the
+// policy's type and policy evaluation, and inference assigns the type.
+func TestExplicitPolicySchemaIsRejected(t *testing.T) {
+	imp, source := gcpFixture(t, bucketPolicySchemas, "bucket.json", `{"name":"b","encrypted":true}`)
+	for _, fallback := range []bool{false, true} {
+		opts := ImportOptions{SourcePath: source, ManualSchema: "pudl/gcp.#BucketHardened", AllowSchemaFallback: fallback}
+		_, err := imp.Preview(opts)
+		require.ErrorContains(t, err, "name its type pudl/gcp.#Bucket instead")
+		_, err = imp.ImportFileWithFriendlyIDs(opts)
+		require.ErrorContains(t, err, "pudl/gcp.#BucketHardened is a policy schema")
+		require.ErrorContains(t, err, "pudl policy evaluate")
+	}
+	entries, err := imp.catalogDB.QueryEntries(database.FilterOptions{}, database.QueryOptions{})
+	require.NoError(t, err)
+	require.Empty(t, entries.Entries)
+
+	result, err := imp.ImportFileWithFriendlyIDs(ImportOptions{SourcePath: source})
+	require.NoError(t, err)
+	require.Equal(t, "pudl/gcp.#Bucket", result.AssignedSchema, "inference assigns the type, never the policy")
+}

@@ -624,6 +624,11 @@ implemented. Beads work:
     sensitive-path load errors, digests; not yet wired into ingest). Policies
     are written standalone and linked by `base_schema`. See
     `implog/2026_11_01_policy_evaluation_engine.md`.
+  - Done: `pudl-xf5.8.1` policies leave classification (inference candidates
+    and validation fallback skip policies; `--schema` or `populate.schema`
+    naming a policy is an error naming its type; `pudl doctor --fix --only
+    policy-leaves` moves existing policy-leaf entries to their type with
+    identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
 
 The convergence and value-wiring sections below are historical.
 

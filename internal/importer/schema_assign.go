@@ -151,15 +151,20 @@ func enrichAssignment(info *SchemaInfo, result *ImportResult, assigned schemaAss
 	}
 }
 
+// validateExplicitSchema rejects an explicit schema up front: one that names a
+// policy (always), or one that is not loaded (unless fallback is allowed).
 func (e *EnhancedImporter) validateExplicitSchema(opts ImportOptions) error {
-	if opts.ManualSchema == "" || opts.AllowSchemaFallback {
+	if opts.ManualSchema == "" {
 		return nil
 	}
 	chain, err := e.chainValidator(opts)
 	if err != nil {
 		return err
 	}
-	if !chain.HasSchema(schemaname.Normalize(opts.ManualSchema)) {
+	if err := chain.CheckAssignable(opts.ManualSchema); err != nil {
+		return err
+	}
+	if !opts.AllowSchemaFallback && !chain.HasSchema(schemaname.Normalize(opts.ManualSchema)) {
 		return fmt.Errorf("requested schema %s is unavailable", opts.ManualSchema)
 	}
 	return nil

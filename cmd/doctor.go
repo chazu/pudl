@@ -27,6 +27,7 @@ reclassified. Use --entry ID to inspect one catalog record, or --health-only for
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
   schema-refs   declared schema references now present in the schema cache
+  policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
   projections   projected facts that no longer match the catalog or facts specs
