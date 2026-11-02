@@ -46,6 +46,15 @@ var catalogEntryViewSQL = fmt.Sprintf(`CREATE VIEW %s AS
 			item_id
 		FROM catalog_entries;`, CatalogEntryView)
 
+// CatalogEntryColumns are the catalog_entry relation's arguments: the view's
+// columns. The rule loader rejects any other argument on catalog_entry, since
+// it would compile to a column SQLite does not have. A test keeps this list
+// in sync with catalogEntryViewSQL.
+var CatalogEntryColumns = []string{
+	"id", "schema", "origin", "format", "status", "entry_type", "target", "run_id",
+	"resource_id", "content_hash", "version", "collection_id", "collection_type", "item_id",
+}
+
 // ensureCatalogEntryView makes the database's catalog_entry_edb view match
 // catalogEntryViewSQL.
 //

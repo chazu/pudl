@@ -48,7 +48,8 @@ func TestSmoke_GitInventoryObservation(t *testing.T) {
 		if stage == "repeat" {
 			newRecords = 0 // Identical content is already in the catalog.
 		}
-		require.Equal(t, newRecords, report.Populate.Records)
+		require.Equal(t, 1, report.Populate.Records, "every run observes the one inventory record")
+		require.Equal(t, newRecords, report.Populate.NewRecords)
 		require.True(t, report.Drift.Verified)
 		// Replay after every run has completed: later observations must not
 		// overwrite the baseline verdict or any run's retained evidence.
@@ -173,6 +174,7 @@ type walkthroughReport struct {
 	OK               bool   `json:"ok"`
 	Populate         struct {
 		Records    int    `json:"records"`
+		NewRecords int    `json:"new_records"`
 		SnapshotID string `json:"snapshot_id"`
 	} `json:"populate"`
 	Drift struct {

@@ -189,6 +189,9 @@ columns:
 | `version` | Version number within its `resource_id` |
 | `collection_id`, `collection_type`, `item_id` | Collection membership |
 
+An argument that is not one of its columns is a load error naming the rule
+and the valid columns.
+
 Join it to facts through `entry_id`:
 
 ```cue
