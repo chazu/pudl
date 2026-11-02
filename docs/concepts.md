@@ -1,229 +1,247 @@
-# Core Concepts
+# Concepts
 
-This document explains the key ideas behind PUDL. Understanding these will make everything else -- the CLI, the schemas, the catalog -- click into place.
+pudl answers three questions about your infrastructure: what exists, what it
+looks like, and what is wrong with it. This page defines the terms the rest of
+the documentation uses. [Getting started](getting-started.md) shows each one in
+action.
 
-## Data Import Pipeline
+pudl only reads. It never changes the systems it observes.
 
-When you run `pudl import --path data.json`, a series of steps happen automatically:
+## Workspace
 
-```
-File -> Content Hash -> Format Detection -> Collection Detection ->
-Schema Inference -> Identity Extraction -> Storage -> Catalog
-```
+`pudl init` creates `.pudl/` in a repository. Schemas, models and rules under
+`.pudl/schema/` are files you commit. The catalog, raw records, facts,
+snapshots and reports under `.pudl/data/` are local state that stays out of
+Git. Outside a repository workspace, or with `--global`, pudl uses `~/.pudl/`.
+See [workspace](workspace.md).
 
-### Format Detection
+## Observations and snapshots
 
-PUDL auto-detects file format from content and extension. Supported formats:
+An **observation** brings records into pudl in one of two ways:
 
-- **JSON** -- single objects or arrays
-- **NDJSON** -- newline-delimited JSON, automatically split into collections
-- **YAML** / **YML**
-- **CSV**
+- A **collector** runs commands. A model's `populate` field holds a
+  `#CommandObserve`: one or more commands that print JSON records, such as
+  `gcloud ... --format=json`, `aws ... --output json` or
+  `kubectl get ... -o json`. pudl runs each command directly, with no shell.
+  `pudl check` runs the collector.
+- An **import** reads files: `pudl import --path FILE` (JSON, YAML, CSV or
+  NDJSON, from a file, directory, pattern or stdin).
 
-### Collection Handling
+Each collector observation is stored as a **snapshot** (`snap_...`) with two
+properties:
 
-PUDL handles multi-record data in two ways:
+- **Scope** names the population the observation covers, for example
+  `gcp/prod/firewalls` (`observation.scope` on the model).
+- **Completeness** says whether the observation saw the whole scope
+  (`observation.complete`, false when omitted). Only a complete snapshot can
+  show that a resource is gone.
 
-**NDJSON files** are automatically detected and processed as collections. Each line
-becomes an individual catalog entry linked to a parent collection entry. Observe
-ingestion uses the same membership mechanism for a timestamped snapshot collection.
+A collector can **fan out**: run one command per project, account or region.
+List the runs in CUE, or use `each` to enumerate the inputs at run time from a
+command such as `gcloud projects list`. If one run fails, it is a **failed
+input**. pudl still ingests the other runs' records, but the snapshot is
+incomplete and the report lists the failure. A failed input never makes
+resources look deleted.
 
-Ordinary JSON objects are not guessed to be collection wrappers. (Typed-envelope
-unwrapping was retired with the mu integration; such a file now imports as an
-ordinary object.)
+`pudl snapshot list|show|current` inspects snapshots, and
+`pudl snapshot retain|prune` keeps or removes them. See
+[observation scope](observation-scope.md) for evidence selection and
+freshness.
 
-Collection items get their own schema assignment, resource identity, and content hash.
-Memberships are stored separately, so a content-addressed item can belong to more than
-one collection without duplicating its catalog row.
+### Collections
 
-### Streaming
+An NDJSON file is imported as a **collection**: one collection entry
+(`pudl/core.#Collection`) plus one entry per line. Each item is classified and
+identified on its own. Membership is stored separately, so one item can belong
+to several collections without being stored twice. A JSON object is never
+treated as a collection.
 
-All imports use streaming by default. For very large files, you can tune memory usage with `--streaming-memory` and `--streaming-chunk-size`.
-
-## Content-Addressed Identity
-
-Every imported file is identified by the **SHA256 hash** of its contents. This serves two purposes:
-
-1. **Deduplication**: If you import the same file twice, the second import is skipped immediately -- the content hash already exists in the catalog.
-2. **Integrity**: The hash proves the stored data matches what was originally imported.
-
-### Proquint IDs
-
-Raw SHA256 hashes are 64 hex characters -- not something you would want to type or say aloud. PUDL encodes the first 32 bits as a **proquint**: a pronounceable, human-friendly identifier.
-
-```
-SHA256: 87e21d152d1240a46293487b54f707069a2e054a39f72f58896b43d67458302c
-Proquint: mivof-duhij
-```
-
-Proquints follow a consonant-vowel pattern that makes them easy to read, remember, and communicate. You use them everywhere: `pudl show mivof-duhij`, `pudl delete mivof-duhij`.
-
-The full hex hash is stored in the catalog as the canonical `id`. The proquint is a display format derived from it.
-
-### Three Layers of Identity
-
-PUDL tracks three distinct identity concepts:
-
-**Content Hash (file-level dedup)** -- `content_hash` is the SHA256 of the raw file bytes. Two identical files produce the same hash. This is the dedup gate -- if the hash already exists, the import is skipped.
-
-**Resource ID (logical identity)** -- `resource_id` is the SHA256 of the normalized schema name combined with identity field values. This identifies the logical resource regardless of which file it came from. For example, an EC2 instance with `InstanceId: "i-abc123"` always produces the same `resource_id`, whether you import it today or next week. This enables version tracking. For catchall schemas (where no identity fields are defined), the content hash is used as the identity component.
-
-**Entry ID / Proquint (catalog reference)** -- The `id` stored in the catalog is the full content hash. The proquint is the human-friendly display form used in CLI commands.
-
-```
-File bytes ---SHA256---> content_hash (dedup gate)
-
-Schema + identity fields ---SHA256---> resource_id (logical identity)
-
-content_hash ---first 32 bits---> proquint (display ID)
+```bash
+pudl list --collections-only
+pudl list --collection-id COLLECTION_ID --schema aws/ec2.#Instance
+pudl delete COLLECTION_ID --cascade --force
 ```
 
-When the same logical resource is imported multiple times with different data (e.g., an EC2 instance whose state changed), the `resource_id` stays the same but the `content_hash` and `version` number change.
+`--cascade` deletes the collection and its memberships. It deletes an item only
+when no other collection still includes it.
 
-## Schema System
+## Entries and resources
 
-PUDL uses [CUE](https://cuelang.org/) for schema definition and validation.
-Schemas live in `.pudl/schema/` inside an initialized repository, or
-`~/.pudl/schema/` in global mode, organized into packages (directories).
+Every stored record is a **catalog entry**. Its **entry ID** is the SHA-256
+hash of its content, displayed as a pronounceable proquint such as
+`vomap-foqab`. The same content always gets the same ID, so identical content
+is stored once. Commands accept the proquint or the full hash.
 
-What makes PUDL schemas special is the `_pudl` metadata block embedded in each definition. This metadata drives the inference engine:
+A **resource** is the thing a record describes, such as a firewall rule or a
+bucket, followed over time. Its **resource ID** is a hash of the type's family
+and the values of the type's `identity_fields` (for example `selfLink`). When
+a resource changes, it gets a new entry with the same resource ID, so pudl
+keeps its **history**:
+
+```bash
+pudl show vomap-foqab --history
+```
+
+A type without identity fields falls back to the content hash, so every change
+looks like a new resource. Declare identity fields on every type you check.
+
+## Types and policies
+
+pudl schemas are [CUE](https://cuelang.org/) definitions named
+`<package>.#<Definition>`, such as `gcp.#Firewall`. Each has a `_pudl`
+metadata block. There are two kinds that matter day to day.
+
+A **type schema** (`schema_type: "base"` or `"custom"`) says what a resource
+**is**. **Classification** assigns each record exactly one type: either the one
+you name with `--schema` (or `populate.schema`), which the record must
+satisfy, or the most specific type that inference finds. A record that matches
+no type falls back to `pudl/core.#Item`. Type metadata:
+
+| Field | Purpose |
+| --- | --- |
+| `identity_fields` | Fields that identify the resource |
+| `sensitive_fields` | Paths replaced with `[REDACTED]` before anything is stored |
+| `facts` | Projects record fields into Datalog relations |
+| `owner` | Derives the owning team from labels, tags or a mapping table |
+| `review` | `draft` or `validated`: whether a person or agent has confirmed the type fully represents the resource |
+| `base_schema` | The parent type, for specialization |
+| `secret_scan_ignore` | Paths the likely-secret scan skips |
+
+A **policy schema** (`schema_type: "policy"`) says what a **good** instance
+looks like. It names its type with `base_schema` and is never assigned to a
+record. On every import and observation, pudl evaluates each applicable policy
+against each resource. The result is `compliant`, `noncompliant` or `unknown`
+(a field the policy constrains is missing). Fields carry named rules:
 
 ```cue
-#EC2Instance: {
-    _pudl: {
-        schema_type:     "base"          // "base", "custom", "catchall"
-        resource_type:   "aws.ec2.instance"
-        identity_fields: ["InstanceId"]  // Fields that uniquely identify a resource
-        tracked_fields:  ["State", "InstanceType", "Tags"]  // Fields to monitor for changes
-    }
-    InstanceId:   string
-    InstanceType: string
-    State:        { Name: string }
-    ...
-}
+sourceRanges?: _ @pudl(rule="gcp-firewall-world-ingress", severity="high")
 ```
 
-The `_pudl` metadata fields are:
+`absent="violation"` on a rule treats a missing field as a violation. Results
+against a draft type are marked provisional. `pudl policy list|show` reads the
+stored results, and `pudl policy evaluate` re-evaluates them after a policy
+changes. `pudl show ID` lists a resource's results.
 
-- **schema_type** -- Classifies the schema as `"base"`, `"custom"`, or `"catchall"`.
-- **resource_type** -- A dotted identifier for the kind of resource (e.g., `"aws.ec2.instance"`).
-- **identity_fields** -- Fields that uniquely identify a resource instance. Used to compute the `resource_id`.
-- **tracked_fields** -- Fields monitored for changes across imports. Used for drift detection.
+See the [schema authoring guide](schema-authoring.md) to write both kinds.
 
-### Schema Names
+## Facts and Datalog
 
-Schema names follow a canonical format: `<package>.#<Definition>`. Examples:
+pudl keeps a **fact store**: relations such as `gcp_firewall_network(...)`
+with valid time and transaction time, so you can ask what was true and what
+pudl knew at any point. Facts come from three places:
 
-- `pudl/core.#Item` -- the universal catchall
-- `pudl/core.#Collection` -- collection entries
-- `aws/ec2.#Instance` -- an AWS EC2 instance
+- **Projection.** A type's `_pudl.facts` turns record fields into facts.
+- **Policy results.** These are stored as `policy_status` and
+  `policy_violation`. The built-in rule
+  `policy_noncompliant(resource, policy, severity)` serves checks.
+- **The catalog.** `catalog_entry` is a built-in relation that can be joined
+  in a rule body but not queried on its own.
 
-The `#` prefix is a CUE convention for definitions (as opposed to concrete values).
+**Rules** are Datalog written in CUE, in `.pudl/schema/pudl/rules/`. They can
+be recursive, for example "everything that depends on this VPC".
+`pudl query RELATION` evaluates them, and `pudl rule add|new` installs or
+scaffolds them. Writing facts by hand is an advanced operation; normally you
+let projection create facts and you write queries. See [facts](facts.md),
+[Datalog](datalog.md) and [projection](projection.md).
 
-## Schema Inference
+## Models
 
-When data is imported without a `--schema` flag, PUDL automatically determines the best matching schema. This happens in two phases:
+A **model** is a `#SystemModel` value in CUE, under `.pudl/schema/models/`.
+It is the unit `pudl check` runs:
 
-### Phase 1: Heuristic Scoring
+| Field | Purpose |
+| --- | --- |
+| `populate` | The collector (`#CommandObserve`) |
+| `observation` | The scope it covers and whether it is complete |
+| `desired` | Resources you expect to exist, with expected field values |
+| `checks` | Datalog queries with an expectation and a severity |
+| `waivers` | Accepted exceptions to the checks' findings |
+| `depends_on` | Models whose output this one reads |
 
-Before doing expensive CUE validation, PUDL quickly scores each schema as a candidate based on lightweight checks:
+A model without `populate` is **checks-only**. Its checks read what earlier
+observations or imports put in the catalog. A content pack's check families
+are checks-only models that read their collectors' snapshots.
 
-| Signal | Score | Description |
-|--------|-------|-------------|
-| All identity fields present | +0.5 | Strong match -- data has all the key fields the schema expects |
-| Partial identity fields | +0.2 x ratio | Weaker signal |
-| Tracked fields present | +0.1 x ratio | Supporting evidence |
-| Origin matches resource_type | +0.15 | Filename hints match schema's declared resource type |
-| Catchall fallback | +0.01 | Always included as last resort |
+`desired` produces **drift**: a desired resource that is `missing`, `changed`
+(a field differs), `unidentifiable` or `ambiguous`. Drift is reported; pudl
+never acts on it.
 
-### Phase 2: CUE Unification
+`pudl model list|show|validate|new|deps` manages models.
 
-Candidates are tried in order (highest score first, most specific schema first). For each candidate:
+## Checks and findings
 
-1. The data is converted to a CUE value
-2. `schema.Unify(data)` merges the schema constraints with the actual data
-3. `Validate()` checks if the unified value is consistent
+A **check** runs a Datalog query and expects its result to be `empty` or
+`nonempty`. Its `severity` is `info`, `warn` or `fail`. Its `evidence` can
+select which observations it reads (`current`, `model:NAME`, `scope:NAME` or
+snapshot IDs), and `max_age` can bound their age. Each check has one
+**outcome**:
 
-The first schema that validates successfully wins. If nothing matches, the catchall (`pudl/core.#Item`) accepts anything.
+| Outcome | Meaning |
+| --- | --- |
+| `pass` | The result matched the expectation |
+| `fail` | It did not |
+| `unknown` | The evidence was incomplete, missing, stale or ambiguous |
+| `error` | The query could not be evaluated |
+| `waived` | It failed, but waivers cover every failing row |
 
-## Validation
+Each failing row is a **finding**, shown with its witness values. Findings
+carry:
 
-PUDL validates data against schemas using native CUE unification. When a schema is specified explicitly via `--schema`, validation follows a three-step fallback:
+- **Change.** Compared with the model's earlier comparable reports, a finding
+  is `new`, `persisting`, `resolved` (gone from a complete observation) or
+  `unknown` (gone, but the evidence cannot show it is absent). Incomplete
+  evidence never resolves a finding.
+- **Owner.** Taken from the resource type's `_pudl.owner`.
+  `pudl check --owner TEAM` prints one team's findings, and
+  `pudl query resource_unowned` lists resources that nobody owns.
 
-1. **Intended schema** -- the schema you specified
-2. **Base schema** -- a less restrictive schema for the same resource type
-3. **Catchall** -- `pudl/core.#Item`, which accepts anything
+A **waiver** on a model accepts findings until a date. It targets either a
+check witness (`check` and `witness`) or a policy violation (`policy`, `rule`
+and `resource`), and must name an `owner`, a `reason`, and `created` and
+`expires` dates. A waived finding keeps its change state; waiving never
+resolves it. After `expires` the waiver stops applying and the report flags
+it. A waiver that matches nothing is reported as stale.
 
-This ensures data is always accepted at some level. If the intended schema rejects the data, it falls through to progressively less specific schemas.
+## Reports and exit codes
 
-### Never-Reject Philosophy
+`pudl check MODEL...` runs exactly the models it names, with producers first
+by `depends_on`. A model whose named producer failed is recorded as `blocked`.
+Each `pudl check` records one versioned **report** (`check_...`) for all of
+its models, with the evidence each one used.
 
-PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl doctor --fix --only inference` to re-classify existing entries.
+```bash
+pudl report                      # the newest report
+pudl report check_B --since check_A
+pudl report check_A --json
+```
 
-## System Models
+The summary rates `execution`, `conformity` (drift), `checks` and
+`verification` separately. Exit codes:
 
-A model is a `#SystemModel` instance -- a named CUE value that declares the desired shape of a slice of your system. Where a schema describes the shape of a resource type, a model declares concrete intent: how to observe the world (`populate`), what the world should look like (`desired`), and what invariants must hold (`checks`).
+| Command | 0 | 1 | 2 |
+| --- | --- | --- | --- |
+| `pudl check` | Every model succeeded (drift alone does not fail) | A `fail` check did not pass, or a model failed or was blocked | not used |
+| `pudl check --detailed-exitcode` | No drift and no failing `fail` check | A model failed or was blocked for another reason | Drift, or a `fail` check did not pass |
 
-A model's `desired` block is a set of named resources. Each resource is the per-status
-unit: it declares the intended state for one thing the model is responsible for.
-
-Use `pudl model list` to see available models, `pudl model show <name>` to inspect one, and `pudl model validate <name>` to check that a model parses and conforms to `#SystemModel`.
-
-## Checking Models
-
-`pudl check <name>...` drives each named model through an observe-only loop:
-
-1. **Populate** -- runs the model's `#CommandObserve` commands and ingests the JSON records they print as one observation snapshot.
-2. **Drift** -- set-diffs the model's `desired` state against the records it just observed. `--from-catalog` replays an already-ingested snapshot instead.
-3. **Checks** -- evaluates the model's invariants against current facts.
-4. **Report** -- records the model's verdict in the check's report.
-
-A check runs exactly the models it names, producers first: a model runs after
-every named model it lists in `depends_on`. Dependencies that are not named are
-never run; a model whose named producer did not succeed is recorded `blocked`.
-Each check records one report for one model or many, embedding every model's
-full report; `pudl report [id]` reads it again.
-
-`pudl check` never changes anything in the world: it reports drift, and the tools that own a system apply changes. (Convergence through mu was removed on 2026-11-01; see [retired commands](retired-commands.md#convergence-and-mu-integration).)
-
-`pudl status` reads each model's recorded verdict (`unknown | drifted | clean`). `clean` is the single in-sync state, written only when a live observation shows no drift. Rows written by the retired convergence workflow may still hold `failed`, and their `converging` value reads as `unknown`.
-
-## Fixed-Point Verification
-
-The `pudl doctor` command re-runs schema inference on all catalog entries and confirms every entry still resolves to the same schema it was originally assigned. This is an idempotency check: if inference is deterministic, re-running it on stored data should always produce the same schema assignment. Any mismatch indicates drift between the stored schema and the current inference rules.
-
-## Catalog Layer
-
-The catalog (`pudl schema list`) is a central registry of all known schema types. It lists each registered type along with its `schema_type`, `resource_type`, and description. This includes built-in types (`pudl/core.#Item`, `pudl/core.#Collection`) and any user-defined types that include `_pudl` metadata.
+With `--fail-on new`, failing `fail` checks count only when they have a new
+finding. `pudl status` prints each model's last recorded status.
 
 ## Doctor
 
-The `pudl doctor` command runs health checks on your workspace, including:
+`pudl doctor` checks the workspace and the catalog: schema names,
+classification, identity, projected facts, policy results, file permissions,
+likely secrets and sensitive values stored before a field was marked
+sensitive. It names the repair for each problem. `pudl doctor --fix` applies
+the repairs, `--only NAME` limits them, and `--dry-run` previews them. The
+sensitive-value scrub runs only when you name it with `--only sensitive-scrub`.
 
-- Workspace structure (required directories)
-- Database integrity
-- Schema repository setup
-- Git repository initialization
-- Directory structure validation
-- Orphaned files
+## Content packs
 
-## Workspace Layout
+`pudl example install NAME` copies CUE files and fixtures into the workspace:
 
-```
-~/.pudl/
-├── config.yaml                    # Configuration
-├── data/
-│   ├── raw/YYYY/MM/DD/            # Date-partitioned imported data
-│   ├── metadata/                  # Per-import JSON metadata sidecar files
-│   ├── sqlite/catalog.db          # SQLite catalog database
-│   └── .drift/                    # Drift detection reports
-├── schema/                        # Git-tracked CUE schema repository
-│   ├── cue.mod/module.cue         # CUE module definition
-│   ├── pudl/
-│   │   ├── core/core.cue          # Bootstrap schemas (catchall, collection)
-│   │   └── <your packages>/       # AWS, K8s, custom schemas
-│   └── definitions/               # Named definition instances
-```
-
-Schema files use ordinary Git history. Use native Git commands from their owning
-repository; `pudl config --paths --json` shows the active paths.
+- `gcp` and `aws`: types, policies, collectors, rules and check families. See
+  the [GCP](../examples/gcp/README.md) and [AWS](../examples/aws/README.md)
+  pack READMEs.
+- `gcp-network-hygiene`: a single worked firewall example. See
+  [GCP network hygiene](gcp-network-hygiene.md).
+- `git-inventory`: the drift tutorial in [getting started](getting-started.md).

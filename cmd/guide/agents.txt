@@ -1,0 +1,49 @@
+pudl guide agents — JSON contracts and conventions for agents
+
+Start with 'pudl prime'. This topic lists the machine-readable surfaces.
+
+DISCOVER THE SURFACE
+
+  pudl help --json                 command tree, flags; "advanced": true marks
+                                   hidden commands
+  pudl help check --json           one command
+  pudl model list --json
+  pudl model show <model> --json
+  pudl query --list
+  pudl config --paths --json       effective workspace paths
+
+VERSIONED DOCUMENTS (--json)
+
+  pudl check MODEL... --json       report_version 3: run_set_id (the check
+                                   ID), status, summary (execution,
+                                   conformity, checks, verification,
+                                   new_findings), members[].report per model
+  pudl report [ID] --json          the same document, read again
+  pudl report ID --since ID2 --json  findings per check: new, persisting,
+                                   resolved, unknown
+  pudl doctor --json               report_version 3: health, catalog,
+                                   secrets, repairs[] with status
+  pudl policy list|show|evaluate --json   report_version 1
+
+  Other --json views: list (paginated: total_matched, --all), show (entry,
+  metadata, raw, compliance), import (one element per file), snapshot,
+  status, query. --progress-json on check streams phase events to stderr.
+
+EXIT CODES
+
+  0 success. 1 error, or a failed check without --detailed-exitcode.
+  With --detailed-exitcode: 2 drift or a failing fail-severity check.
+  With --fail-on new, only fail-severity failures with a new finding count.
+
+CONVENTIONS
+
+  - Preview first: import --dry-run, doctor --fix --dry-run,
+    policy evaluate --dry-run or --what-if, snapshot prune --dry-run.
+  - Scaffold, then edit the printed path: model new, rule new, schema new.
+  - Query projected facts instead of post-processing payloads with jq.
+  - Unknown is not pass: report incomplete or stale evidence as unknown.
+  - Name every model a check needs; pudl never runs unnamed producers.
+  - pudl never changes infrastructure; hand fixes to the owning tool.
+  - Do not use retired commands: run, run set, run report, converge,
+    approvals, mu, schema reinfer/migrate, reclassify, migrate identity,
+    facts reproject (docs/retired-commands.md).

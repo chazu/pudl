@@ -1,0 +1,58 @@
+pudl guide schemas — types, identity, sensitive fields, ownership, review
+
+A type schema is a CUE definition that says what a resource is. Every record
+gets exactly one type: inferred on import or observation, or named with
+--schema (import) or populate.schema (collector). Names are <package>.#<Name>.
+
+BROWSE AND CREATE
+
+  pudl schema list
+  pudl schema show gcp.#Firewall
+  pudl schema new --from <entry-id> --path mygcp:#Firewall
+  pudl import fw.json --schema mygcp.#Firewall --dry-run
+  pudl schema add mygcp.firewall firewall.cue     install a hand-written file
+
+  'schema new' infers a draft from a cataloged record and prints the file it
+  wrote; edit that file.
+
+THE _pudl BLOCK
+
+    #Firewall: {
+        _pudl: {
+            schema_type:     "base"
+            resource_type:   "gcp.compute.firewall"
+            identity_fields: ["selfLink"]       // the resource ID
+            sensitive_fields: ["metadata.items[*].value"]
+            facts: gcp_firewall: args: {name: "name", disabled: {path: "disabled", default: false}}
+            owner: {paths: ["labels.team"], map: {path: "project", owners: _owners}, fallback: "platform"}
+            review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
+        }
+        name:     string
+        selfLink: string
+        ...
+    }
+
+  identity_fields   paths that identify one resource across observations;
+                    without them a record has no history
+  sensitive_fields  values stored as "[REDACTED]" before anything is written;
+                    route such data with --schema so the type applies
+  facts             projects fields into Datalog relations (pudl guide query)
+  owner             label paths, then a mapping table, then a fallback;
+                    projected as resource_owner / resource_unowned
+  review            draft (default) or validated: someone confirmed the type
+                    is a complete representation; policy results against a
+                    draft type are provisional
+  secret_scan_ignore  paths 'pudl doctor' should not flag as likely secrets
+
+  Policies (schema_type: "policy") are separate: pudl guide policies.
+
+AFTER CHANGING A SCHEMA
+
+  pudl doctor                                  what needs repair
+  pudl doctor --fix --only inference,identity,projections
+  pudl doctor --fix --only sensitive-scrub     redact already-stored values
+
+  The sensitive scrub rewrites stored payloads; fact history and exported
+  bundles keep the plaintext, so rotate any credential it redacts.
+
+  Full reference: docs/schema-authoring.md, docs/projection.md.

@@ -1,0 +1,59 @@
+pudl guide policies — per-resource compliance rules
+
+A policy says what a good instance of one type looks like. It is never
+assigned to records. Every import and observation evaluates each applicable
+policy per resource: compliant, noncompliant, or unknown (a constrained
+field was absent). Rules that span resources are Datalog checks instead.
+
+WRITE ONE
+
+    package gcp
+
+    #FirewallLogging: {
+        _pudl: {schema_type: "policy", base_schema: "gcp.#Firewall"}
+        logConfig: {
+            enable: true @pudl(rule="firewall-logging", severity="low", doc="Log rule matches")
+        } @pudl(absent="violation")
+        sourceRanges?: [...(!="0.0.0.0/0")] @pudl(rule="world-ingress", severity="high")
+    }
+
+  A policy is a standalone definition linked by base_schema. Do not write
+  #Policy: #Type & {...}; it does not load. A policy whose base_schema names
+  another policy extends it.
+
+  @pudl keys: rule, severity (low|medium|high|critical), doc, and
+  absent="violation" (a missing field is a violation, not unknown; also
+  implied for required fields of a type with review status validated).
+
+GOTCHAS
+
+  - && and || do not short-circuit over absent fields; the policy silently
+    passes. Test present values with list.Contains([if x != _|_ {x}], v).
+  - Annotate fields outside comprehensions (f?: _ @pudl(rule=...)), then
+    constrain them inside; otherwise the policy fails to load.
+  - A field required only inside a comprehension is never reported absent.
+    Put the rule on a field that is present (an anchor) as a conflict.
+  - A policy cannot constrain a sensitive field; its value is redacted.
+
+TRY, INSTALL, READ
+
+  pudl policy evaluate --what-if draft.cue      evaluate a draft; writes nothing
+  pudl schema add gcp.firewall-logging draft.cue
+  pudl policy evaluate --dry-run                what a refresh would change
+  pudl policy evaluate                          refresh stored results
+  pudl policy list --type gcp.#Firewall         counts, review status, stale
+  pudl policy show gcp.#FirewallBestPractice --owner platform
+  pudl show <entry-id>                          compliance section per entry
+
+IN CHECKS
+
+  Results are facts: policy_status and policy_violation. The built-in rule
+  policy_noncompliant(resource, policy, severity) feeds checks:
+
+    {name: "policy-high", query: "policy_noncompliant", expect: "empty",
+     severity: "fail", message: "Fix policy violations", evidence: ["model:firewalls"]}
+
+  pudl query policy_noncompliant severity=high
+
+  Details and worked patterns: docs/schema-authoring.md#compliance-policies,
+  examples/gcp/schema/gcp/policies.cue.

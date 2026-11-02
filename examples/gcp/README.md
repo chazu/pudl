@@ -164,6 +164,8 @@ target a cross-resource check's witness, for example `{check:
 "nat-ip-not-in-use", witness: {address: "<address selfLink>"}, ...}`. The
 policy-high rules carry `severity` so a waiver covers only the high and
 critical violations that check reports.
+See [governance](../../docs/governance.md) for how waivers match and expire,
+finding changes (`--fail-on new`), owners and CI exit codes.
 
 ## Run against one live project
 

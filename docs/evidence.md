@@ -1,83 +1,81 @@
-# Evidence integrity, explanations, and recovery
+# Evidence: explanations, retention and backup
 
-PUDL keeps observations, imported data, facts, and check reports locally. These
-features make the retained evidence inspectable and portable without granting
-execution authority to restored history.
+pudl keeps its observations, imported data, facts and check reports locally.
+This page covers how to see why a record was classified, how imports and
+exports treat your data, how long report evidence is kept, and how to back up
+and restore a workspace. For checks and findings, see
+[governance](governance.md).
 
-## Imports and exports
+## Why was a record classified this way?
 
-JSON numbers keep their digits through import, observation ingestion, export,
-identity extraction, and report replay. SQL queries retain their existing checked
-numeric domain; retaining a value does not promise that SQLite can evaluate it.
+```bash
+pudl import --path data.json --explain --json
+pudl import --path data.json --dry-run
+```
 
-`pudl import --path data.json --explain --json` shows schema candidates, heuristic
-scores, rejection paths, the selected schema source, local/global shadowing,
-explicit-schema fallback, and unavailable declarations. The score is a ranking
-heuristic, not a calibrated probability. Ordinary imports persist the assignment
-reason; detailed traces are opt-in. Reimport uses the retained original trace when
-available rather than presenting today's classification as an earlier decision.
-Collection output includes at most 32 item explanations and marks truncation.
+`--explain` shows the schema candidates, their heuristic scores, rejection
+paths, the selected schema's source, local-over-global shadowing,
+explicit-schema fallback and unavailable declarations. The score ranks
+candidates; it is not a probability. A collection explains at most 32 items
+and marks the truncation. Ordinary imports store only the assignment reason.
 
-Collection imports and observation ingestion prepare private artifacts and a
-descriptor spool before taking the SQLite write transaction. Publication and
-catalog commit share an artifact lock with deletion, pruning, and backup. A failed
-commit removes only artifacts newly published by that operation. A killed process
-may leave inert private files or unreferenced bytes; it cannot authorize a partial
-snapshot. Resource versions and deduplication are decided atomically at commit.
+`--dry-run` writes nothing and reports, per schema, what an import would
+store: validation failures, unresolved identity, projected facts, likely
+secrets, and records already cataloged.
 
-Import exposes byte limits. Defaults are 64 MiB per JSON record, 1 GiB decoded
-input, and 2 GiB preparation storage; a populate command's output counts against
-the same staging limit. Nonstreamed documents, including CSV/YAML documents, use the
-record limit for their complete input. Compressed imports count decoded bytes and
-their temporary copies. Limits fail explicitly; records are never truncated.
-Increase `--max-record-bytes`, `--max-decoded-bytes`, or `--max-staging-bytes` for
-larger trusted inputs. Preparation and lock waiting honor cancellation.
+## Imports and exports keep your data exact
 
-Export walks supported source formats and normalized collection membership, keeps
-exact JSON numbers, and orders CSV columns deterministically. CSV supports scalar
-object fields and rejects shapes it cannot represent. A selected entry that cannot
-be read fails the export. `--allow-partial` publishes readable data but reports
-incomplete output on stderr and exits nonzero. File destinations are replaced only
-after serialization and closing succeed; stdout may already contain a prefix if
-its writer fails. Invalid formats preserve an existing destination.
+- **Numbers** keep their digits through import, observation, export, identity
+  and report replay. Queries have a narrower numeric domain; see the
+  [numeric contract](library-api.md#numeric-query-contract).
+- **Limits.** Defaults are 64 MiB per JSON record, 1 GiB of decoded input and
+  2 GiB of preparation storage; a populate command's output counts against
+  the staging limit. Non-streamed documents (CSV, YAML) use the record limit
+  for the whole input, and compressed input counts decoded bytes. A limit
+  fails the import; records are never truncated. Raise them with
+  `--max-record-bytes`, `--max-decoded-bytes` and `--max-staging-bytes`.
+- **Atomic commits.** An import or observation prepares its files privately
+  and publishes them with the catalog commit. A failed or killed import
+  cannot leave a partial snapshot; at most it leaves inert private files.
+- **Exports** keep source formats, collection membership and exact numbers.
+  CSV columns are sorted and only scalar fields are supported. An unreadable
+  entry fails the export; `--allow-partial` writes what it can, reports the
+  rest on stderr and exits nonzero. A file destination is replaced only after
+  the export succeeds.
+
+To print one entry's payload exactly as stored, for piping:
+`pudl export --id <proquint> --format json`.
 
 ## Reports and evidence lifetime
 
-Live inventory findings contain expected, observed, and previous values. The
-previous observation must belong to the same model and workspace and an eligible
-earlier successful run. Historical values are frozen into the report. States
-distinguish available values, absent fields, no baseline, ambiguous identities,
-incompatible identity contracts, and pruned evidence. JSON null remains a value.
-Catalog replay without a single observation scope cannot invent a prior baseline.
+A report freezes what a check found: expected, observed and previous values
+for drift, and up to 20 witnesses per failed check. Oversized witness values
+are omitted with a marker. Reading a report later with `pudl report` adds
+whether each referenced snapshot is still available (or `pruned`); it never
+recomputes the findings.
 
-Failed checks include the expectation, query scope, total count, and at most 20
-deterministically ordered witnesses. A failed nonempty check reports missing
-evidence rather than fabricating a proof. Oversized witness values are omitted
-with an explicit marker. Human reports present drift and failed checks
-in the finding view; the existing JSON drift/check sections remain available.
+Snapshots are kept until you prune them. Three independent owners can pin a
+snapshot against pruning:
 
-`pudl report [id]` adds current evidence availability to retained findings.
-This does not recompute their historical previous values. A pruned reference is
-visible as pruned in human and JSON output. Fields recorded by the retired
-convergence workflow (converge results, approval state, sealed bindings) appear
-under "legacy fields" in human output and unchanged in JSON.
+- **a report**: a report's evidence is kept for 30 days after it is saved; the
+  report itself is kept after that;
+- **you**: `pudl snapshot retain ID` pins it until `--release`;
+- **legacy approvals** from older workspaces.
 
-Snapshot pins have independent manual, legacy approval, and retained-report owners.
-Releasing one owner does not release another. Report evidence is protected for
-30 days by default; reports themselves remain after their evidence expires.
-Use `pudl snapshot retain ID` to pin important evidence indefinitely and
-`pudl snapshot show ID --json` to inspect active owners and expiration.
-Pruning protects the latest eligible successful observation per model/workspace,
-rechecks ownership inside its transaction, and preserves shared records. Explicit
-deletion cannot bypass active evidence protection. File cleanup happens after
-catalog deletion commits; cleanup errors are reported separately.
-Cleanup resolves raw/metadata paths through directory handles and refuses escaping
-parent symlinks. An explicitly configured external prune data directory remains
-its own removal boundary.
+Releasing one owner leaves the others.
 
-`pudl query RELATION --timeout 10s` bounds a query. SQL evaluation, recursive
-rounds and transaction acquisition honor cancellation. The recursion-round cap remains a separate bound.
-Public Go consumers can use `Store.QueryContext` without changing existing callers.
+```bash
+pudl snapshot list --model gcp-firewalls
+pudl snapshot show ID --json      # provenance, completeness, pin owners, expiry
+pudl snapshot prune --model gcp-firewalls --keep 5 --older-than 720h --dry-run
+```
+
+Pruning never removes a pinned snapshot or the latest successful observation
+of a model, and keeps records that another snapshot still cites. Explicit
+deletion cannot bypass a pin either.
+
+`pudl query RELATION --timeout 10s` bounds a query; Go callers use
+`Store.QueryContext`.
 
 ## Backup and restore
 
@@ -86,31 +84,18 @@ pudl doctor --verify-payloads --health-only
 pudl export --bundle ../pudl-backup.tar.zst
 ```
 
-Bundles capture a consistent SQLite snapshot, referenced raw/metadata files,
-configuration, schemas, rules, models, definitions, and populators. Exact byte
-checksums protect every archive member. Authored files changing during capture
-fail the operation. Generated execution workspaces and private temporary files are
-excluded. References outside the state root and symlinks are rejected; external
-executables, providers, and personal global schemas are not bundled.
-Explicit vendored definition packages are included.
-Use a self-contained workspace when those dependencies need to travel together.
+A bundle holds a consistent copy of the catalog, the raw and metadata files it
+references, and the workspace's configuration, schemas, models, rules,
+definitions, populators and vendored CUE packages. Every member carries a
+checksum. The export fails if authored files change during capture, and
+rejects symlinks and references outside the workspace. External executables,
+cloud credentials and personal global schemas are not bundled; keep a
+workspace self-contained if they must travel with it.
 
-The source payload audit checks available SHA256 claims, including canonical JSON
-item hashes. Older opaque identifiers have no verifiable source hash, but their
-files still receive exact bundle checksums. Legacy manifest rows advertising
-nonexistent synthetic `.meta` files are normalized only in the private backup
-catalog; the manifest records this repair and the source remains unchanged.
+The default limit is 16 GiB uncompressed, raised with `--max-bundle-bytes`.
+Write the bundle outside the workspace. It is published only on success.
 
-The default uncompressed bundle limit is 16 GiB; `--max-bundle-bytes` can increase
-it for export or restore. The archive is written beside the destination and
-published only on success. Keep the archive outside the captured state root.
-The SQLite copy is checked against that budget before copying and after each
-incremental backup step. Temporary step overshoot and SQLite journal/WAL bytes
-are not included in an exact filesystem quota.
-Both export and restore cap manifest metadata at 8 MiB. An inventory whose
-manifest exceeds that limit fails export without replacing an existing archive.
-
-Restore into a directory which has no `.pudl/` yet:
+Restore into a directory that has no `.pudl/` yet:
 
 ```bash
 mkdir restored-project
@@ -118,58 +103,11 @@ cd restored-project
 pudl init --from-bundle ../pudl-backup.tar.zst
 ```
 
-Restore verifies member paths, lengths, checksums, catalog integrity, references,
-and schema compatibility in a private sibling directory before publishing it.
-Storage/configuration paths are rebased; original source paths and historical
-reports remain history. Existing workspaces are never overwritten. Unsupported
-versions, missing members, corruption, symlinks, and appended nonarchive data fail.
+Restore verifies paths, lengths, checksums, catalog integrity, references and
+schema compatibility in a private directory before publishing it, and never
+overwrites an existing workspace. Restored observations are history: model
+status becomes `unknown`, and retention does not count a restored snapshot as
+a model's latest observation until the model is observed again.
 
-Legacy pending approvals become rejected. Resource status becomes
-unknown. Restored observations remain readable history, but retention does not
-count them as a model's latest successful observation until a new live
-observation is recorded. Restoring a backup
-does not claim live verification or execute an operation.
-
-These checks detect damage and incomplete backups. They do not authenticate who
-created a bundle; a bundle's checksums are supplied by its own manifest.
-
-## Check evidence diagnostics
-
-Each model's report uses `report_version: 2`. Checks add an `outcome` field
-(`pass`, `fail`, `unknown`, `error`) and structured `diagnostics`. The existing
-`passed` field is true only for a pass. Unknown/error means the check could not
-establish its claim, independent of severity; detailed exit status is 1. A
-fail-severity assertion violation still uses detailed status 2. A failed check
-whose every finding a model waiver excuses has outcome `waived` (`passed` stays
-false); it does not fail the check or count toward status 2. See
-[waivers](cli-reference.md#pudl-check). Historical version-1 reports remain
-readable without being reinterpreted as fresh evidence.
-
-Empty JSON arrays from command observers create valid zero-record snapshots.
-
-## Report summaries and machine errors
-
-Check reports (`report_version: 3`) and each model's report include a `summary`
-with separate `execution`, `conformity`, `checks`, `verification`, and `scope`
-fields, finding counts, evidence references, and `next_actions`. Each member of
-a check carries its own summary and its full report under `members[].report`,
-so one response answers every model's result. `age_at_check` is frozen at
-evaluation time; reading an old report does not refresh its evidence. Stored
-`pudl run` and `pudl run set` reports (versions 1 and 2) remain readable with
-`pudl report`.
-
-A completed command may report drift. Inspect conformity and checks instead of
-using `ok` as a synonym for a matching system. `needs-verification` appears only
-in reports from the retired convergence workflow, where a mutation may have
-occurred without adequate confirmation.
-
-With `--json`, early command failures emit one error document when no result was
-already written, including `code`, `message`, `exit_code`, and suggestions.
-Failures after a check starts retain its report when available. Output
-failures are not retried by appending another document.
-
-`pudl check ... --progress-json` emits JSON progress events on stderr, alongside
-ordinary diagnostics. Events have `type: "progress"`, `event_version`, phase,
-subject, state, and time. Stdout remains the final JSON result. Queries return
-all matching tuples; catalog lists are paginated, and `total_matched` identifies
-whether additional pages exist. See the list reference for page controls.
+Checksums detect damage and incomplete bundles. They do not authenticate who
+made a bundle, because the manifest supplies them.

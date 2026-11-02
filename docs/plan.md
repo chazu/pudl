@@ -4,6 +4,39 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Guide and reference documentation rewritten (2026-11-02)
+
+The schema-authoring, observation, evidence, projection, facts, Datalog,
+dependencies, library API and GCP walkthrough docs and the CLI notes now
+describe only current commands. A new [governance guide](governance.md)
+gathers checks, findings, policies in checks, waivers, finding changes,
+owners, failed inputs and CI exit codes. Schema authoring documents every
+`_pudl` key. `cross-model-dependencies.md` shrank to dependencies and impact
+queries. New CLI notes cover `policy`, `snapshot` and `model deps`. These files
+went from 3,599 to 2,976 lines. See the
+[delivery log](../implog/2026_11_02_guide_reference_docs.md).
+
+### In-CLI guidance rewritten (2026-11-02)
+
+`pudl guide` topics are now overview, observe, schemas, policies, checks,
+query, doctor, packs and agents, one embedded text file each. `pudl prime` is
+a short agent briefing whose loop matches the README tour, and the
+`pudl-core` skill matches both. Every command, flag and offline example was
+checked against `pudl help --json` and run in a temporary workspace. See the
+[delivery log](../implog/2026_11_02_cli_guidance_rewrite.md), which also
+lists four product issues the examples exposed.
+
+### Front-door documentation rewritten (2026-11-02)
+
+The README, getting-started, concepts, workspace, vision and docs index now
+describe pudl as a tool that discovers, catalogs and governs infrastructure and
+never changes it. The README has an offline five-minute tour on the GCP pack
+fixtures. The tutorial adds a second part on policies, checks, owners and
+waivers, and keeps the Git inventory walkthrough the smoke test runs.
+`FEATURES.md` is folded into the README, and `docs/collections.md` into
+concepts. The docs index separates current docs from internals and history.
+See the [delivery log](../implog/2026_11_02_front_door_docs.md).
+
 ### Go 1.26.10 for GO-2026-6809 (2026-11-02)
 
 Raised the Go toolchain pins from 1.26.9 to 1.26.10 for a `crypto/x509`
@@ -240,7 +273,7 @@ root commands and 59 leaf paths. Current guidance is updated; older memory-relat
 entries below are historical records rather than supported features.
 
 See [implementation log](../implog/2026_09_30_agent_memory_removal.md) and
-[retirement guidance](../README.md#agent-memory-removal).
+[retirement guidance](retired-commands.md#agent-memory-application).
 
 ### Overlapping CLI commands consolidated (2026-09-30)
 

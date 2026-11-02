@@ -1,0 +1,75 @@
+pudl guide checks — checks, findings, waivers, exit codes and CI
+
+A CHECK
+
+  A check is a Datalog query on a model with an expectation and a severity:
+
+    checks: [{
+        name:     "no-world-ingress"
+        query:    "policy_noncompliant"
+        expect:   "empty"                 // or "nonempty"
+        severity: "fail"                  // fail | warn | info
+        message:  "Fix firewalls open to the internet"
+        evidence: ["model:firewalls"]     // which snapshots to read
+        max_age:  "1h"
+    }]
+
+  A model without populate is checks-only. Save an existing relation as one;
+  its evidence must cover every relation the query reads:
+
+  pudl model new nat-check --check gcp_nat_ip_not_in_use \
+    --evidence model:gcp-fixture-routers --evidence model:gcp-fixture-addresses
+  pudl check gcp-fixture-routers gcp-fixture-addresses nat-check
+
+RUN
+
+  pudl check firewalls firewall-checks
+  pudl check firewall-checks --owner platform     print one owner's findings
+  pudl report                                     newest report again
+  pudl report <check-id> --since <older-check-id>
+  pudl status                                     each model's last verdict
+
+  'pudl check' runs exactly the named models, producers first by
+  depends_on, and records one report. Name a check family together with its
+  collectors. Models that were not named never run.
+
+OUTCOMES AND FINDINGS
+
+  A check is pass, fail, unknown, error or waived. Missing, incomplete or
+  stale evidence is unknown, never pass. Each failing row is a finding with
+  its witnesses, owner and change state against earlier comparable reports:
+  new, persisting, resolved, or unknown (an incomplete observation never
+  resolves a finding).
+
+WAIVERS
+
+  Accept a finding until a date on the model that owns the check:
+
+    waivers: [{
+        policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingress"
+        resource: "<resource ID>"              // from pudl policy show
+        owner: "security", reason: "public bastion until the VPN lands"
+        created: "2026-11-01", expires: "2026-12-31"
+    }]
+
+  Or target a check witness: {check: "nat-ip-not-in-use", witness:
+  {address: "<selfLink>"}, owner: ..., reason: ..., created: ..., expires: ...}.
+  A waived finding stays in the report as waived and does not fail the check.
+  Expired waivers stop applying and are flagged; unmatched ones are stale.
+
+EXIT CODES AND CI
+
+  pudl check firewalls firewall-checks --detailed-exitcode
+  pudl check firewalls firewall-checks --fail-on new --detailed-exitcode
+  pudl check firewalls firewall-checks --json > report.json
+
+  Without --detailed-exitcode: 0 passed, 1 failed or error.
+  With it: 0 clean, 2 drift or a failing fail-severity check, 1 error.
+  --fail-on new counts a fail-severity failure only when it has a new
+  finding; drift and errors still count. warn and info checks are reported
+  but never fail the command.
+
+DESIRED INVENTORY
+
+  desired: [...] on a model lists expected resources. A check reports them
+  as drift (missing, changed); nothing is changed.

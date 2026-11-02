@@ -1,11 +1,9 @@
 # Library API (`pkg/factstore`, `pkg/eval`)
 
-PUDL exposes a small public Go API so external programs can read and query a
-PUDL data store — global (`~/.pudl`) or repo-scoped (`.pudl/`) — without depending
-on PUDL's internal packages. Everything under `internal/` is import-restricted by
-the Go compiler; only `pkg/factstore` and `pkg/eval` are importable, and neither
-exposes an `internal/` type in its API (plain-data types are re-exported as
-aliases).
+pudl's public Go API lets other programs read and query a pudl store, a
+project's `.pudl/` or the global `~/.pudl`, the same way `pudl query` does.
+Only `pkg/factstore` and `pkg/eval` are importable; their plain-data types are
+re-exported as aliases, so no `internal/` package is needed.
 
 The module path is `github.com/chazu/pudl`, so imports are
 `github.com/chazu/pudl/pkg/factstore` and `github.com/chazu/pudl/pkg/eval`.
@@ -33,6 +31,7 @@ func (s *Store) Transact(fn func(tx *Tx) error) error
 
 // Datalog query
 func (s *Store) Query(opts QueryOptions) ([]Tuple, error)
+func (s *Store) QueryContext(ctx context.Context, opts QueryOptions) ([]Tuple, error)
 
 // Catalog listing
 func (s *Store) ListCatalog(filter CatalogFilter, query CatalogQuery) (*CatalogResult, error)
@@ -59,11 +58,8 @@ returns `*SecretError`; nothing is written. It is off by default. `Tx.AddFact`
 inside `Transact` is not checked; call `ScanFactArgs` there.
 
 `AddFact` and `Tx.AddFact` return the stored fact on an identical-ID replay,
-including original provenance and terminal temporal bounds. They reject reuse
-of an ID for different identity content. Fact ID canonicalization preserves
-exact decimal numbers and normalizes equivalent numeric spellings. See
-[existing-store compatibility](facts.md#existing-store-compatibility) for the
-one-time projection repair and handling of IDs created by older releases.
+including its original provenance and temporal bounds, and reject reuse of an
+ID for different content. See [fact IDs](facts.md#fact-ids).
 
 Transaction time is append-only. `InvalidateFact` ends the belief in the open
 version and records a successor version with `valid_end` set; its
@@ -71,14 +67,12 @@ version and records a successor version with `valid_end` set; its
 `TxAt` queries for earlier moments return what was believed then.
 `LatestFactVersion` follows an ID to the newest version, and `FactVersions`
 returns the whole chain. `RetractFact` and `InvalidateFact` act on the newest
-version of the ID's fact. See [retraction vs
-invalidation](facts.md#retraction-vs-invalidation).
+version of the ID's fact. See [retract or invalidate](facts.md#retract-or-invalidate).
 
 `Fact.TxSeq`/`Fact.TxEndSeq` record the store-wide write sequence that
 created and ended each version. `FactFilter.TxSeqAt` queries the state right
 after a given write. That is exact where whole-second `TxAt` cannot separate
-two writes in the same second (see [whole seconds and write
-sequence](facts.md#whole-seconds-and-write-sequence)). `QueryFacts` and
+two writes in the same second (see [time travel](facts.md#time-travel)). `QueryFacts` and
 `FactHistory` return an empty, non-nil slice when nothing matches.
 
 ### `Transact`
@@ -124,19 +118,17 @@ Both `ValidAt` and `TxAt` nil evaluates over current facts; setting either evalu
 over the historical `facts` table. A query against a base relation with no producing
 rule returns matching facts directly.
 
-Every supplied constraint is applied as a conjunction. Recursive evaluation
-supports multiple derived atoms in one rule body, including repeated occurrences
-of the same relation. It combines new tuples with accumulated results until no
-new tuples remain. The existing 100-iteration limit and rejection of recursive
-aggregation still apply.
+Every supplied constraint must match. Recursive rules run to a fixed point,
+with at most 100 rounds per recursive cycle. `QueryContext` stops at the
+context's deadline or cancellation and returns an error, never a partial
+result.
 
 ### Numeric query contract
 
 `Store.Query` returns integral fact values and SQLite INTEGER results as Go
 `int64`, including `count` results. Non-integral fact values and SQLite REAL
-results use `float64`. This changes the previous behavior that returned every
-number as `float64`; callers asserting that type must also handle `int64`.
-JSON output preserves the integer digits. Nested base-fact arguments follow
+results use `float64`, so a type switch must handle both. JSON output
+preserves the integer digits. Nested base-fact arguments follow
 the same conversion rules.
 
 The supported input domain is signed 64-bit integers
@@ -158,8 +150,8 @@ and recursive temporary tables.
 
 Raw `Fact.Args` returned by `QueryFacts` and `FactHistory`, stored IDs, and
 `AddFact` remain unchanged and retain numbers outside the query domain.
-Arithmetic over REAL values, including mixed/real `sum` and computed decay
-scores, retains SQLite's binary64 semantics; this is not an arbitrary-precision
+Arithmetic over REAL values, including a mixed or real `sum`, keeps SQLite's
+binary64 semantics; this is not an arbitrary-precision
 decimal arithmetic engine. Integer-only `sum` retains SQLite's integer overflow
 error. Built-in catalog columns describe their native SQLite values.
 
@@ -187,9 +179,15 @@ Rule loading, parsing, and rule types.
 ```go
 func LoadRulesFromPaths(paths ...string) ([]Rule, error) // load *.cue rules from dirs
 func ParseRulesFromSource(source string) ([]Rule, error) // parse rules from a CUE string
+func InvalidRules(rules []Rule) []Rule                   // rules that failed to load
+func RuleSetProblems(rules []Rule) []string              // every problem, one line each
 func Var(name string) Term                               // variable term
 func Val(v interface{}) Term                             // ground value term
 ```
+
+A malformed rule is returned with `Rule.LoadErr` set rather than dropped. A
+query that depends on one fails with an error naming it; call `InvalidRules`
+to report them up front.
 
 Types: `Rule`, `Atom`, `Term`, `Tuple` (same underlying types as `factstore`'s
 `Rule`/`Tuple`).
@@ -210,17 +208,21 @@ import (
 func main() {
     cwd, _ := os.Getwd()
 
-    // Resolve rule search paths (repo + global) and load rules.
+    // Resolve the rule search paths the CLI uses and load the rules.
     ws, _ := factstore.DiscoverWorkspace(cwd)
     rules, _ := eval.LoadRulesFromPaths(ws.RulePaths...)
 
-    // Open the active store and use the same rule paths as the CLI.
+    // Open the active store: the project's, or the global one outside a project.
     storeDir := ws.RepoDir
     if storeDir == "" { storeDir = ws.GlobalDir }
     st, _ := factstore.Open(storeDir)
     defer st.Close()
 
-    out, _ := st.Query(factstore.QueryOptions{Relation: "at_risk", Rules: rules})
+    out, _ := st.Query(factstore.QueryOptions{
+        Relation:    "policy_noncompliant",
+        Constraints: map[string]interface{}{"severity": "high"},
+        Rules:       rules,
+    })
     for _, t := range out {
         fmt.Printf("%s %v\n", t.Relation, t.Args)
     }
