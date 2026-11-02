@@ -6,7 +6,9 @@
 //
 //	GET /api/health   {"pudl": true, "workspace": ...}; the UI probes it to pick its data source
 //	GET /api/version  {"version": stamp}; changes whenever the graph would change
-//	GET /api/graph    the current resource graph (graphexport.Graph, meta.origin "live")
+//	GET /api/graph    the current resource graph (graphexport.Graph, meta.origin "live");
+//	                  ?as_of=<RFC3339> gives the graph as recorded at that time
+//	GET /api/snapshots  recent observation snapshots, newest first (as-of quick picks)
 //	GET /*            the UI bundle; unknown paths fall back to index.html
 //
 // Requests whose Host header is not the loopback address the server was
@@ -23,12 +25,25 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/chazu/pudl/internal/graphexport"
 )
 
-// GraphFunc builds the current graph.
-type GraphFunc func(ctx context.Context) (*graphexport.Graph, error)
+// GraphFunc builds the graph now (asOf nil) or as recorded at asOf.
+type GraphFunc func(ctx context.Context, asOf *time.Time) (*graphexport.Graph, error)
+
+// Snapshot is one observation snapshot, offered as an as-of point.
+type Snapshot struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+	Model     string    `json:"model,omitempty"`
+	Scope     string    `json:"scope,omitempty"`
+	Complete  bool      `json:"complete"`
+}
+
+// SnapshotsFunc lists recent snapshots, newest first.
+type SnapshotsFunc func(ctx context.Context) ([]Snapshot, error)
 
 // StampFunc returns the current change stamp: equal stamps mean an equal
 // graph. Nil disables caching and /api/version.
@@ -39,6 +54,7 @@ type Options struct {
 	Assets    fs.FS
 	Graph     GraphFunc
 	Stamp     StampFunc
+	Snapshots SnapshotsFunc
 	Workspace string
 	Version   string
 	// AllowedHosts are the Host header values accepted (host[:port]). Empty
@@ -65,7 +81,36 @@ func Handler(opts Options) http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"version": v})
 	})
+	mux.HandleFunc("GET /api/snapshots", func(w http.ResponseWriter, r *http.Request) {
+		list := []Snapshot{}
+		if opts.Snapshots != nil {
+			got, err := opts.Snapshots(r.Context())
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			list = append(list, got...)
+		}
+		writeJSON(w, http.StatusOK, list)
+	})
 	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
+		if raw := r.URL.Query().Get("as_of"); raw != "" {
+			at, err := time.Parse(time.RFC3339, raw)
+			if err != nil {
+				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "as_of must be RFC 3339: " + err.Error()})
+				return
+			}
+			// History does not change, but it is cheap to rebuild and rarely
+			// asked for twice; it is not cached.
+			g, err := opts.Graph(r.Context(), &at)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+			g.Meta.Origin = "live"
+			writeJSON(w, http.StatusOK, g)
+			return
+		}
 		g, err := cache.get(r.Context())
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -105,7 +150,7 @@ func (c *graphCache) get(ctx context.Context) (*graphexport.Graph, error) {
 		}
 		version = v
 	}
-	g, err := c.build(ctx)
+	g, err := c.build(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

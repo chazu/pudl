@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -128,4 +129,47 @@ func mustJSON(t *testing.T, v any) []byte {
 	b, err := json.MarshalIndent(v, "", "  ")
 	require.NoError(t, err)
 	return b
+}
+
+func TestGraphExportAsOf(t *testing.T) {
+	cliWorkspace(t)
+	for _, pack := range []string{"aws", "gcp"} {
+		r := runCLI(t, "example", "install", pack, "--json")
+		require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	}
+	r := runCLI(t, "check", "aws-fixture-vpcs", "aws-fixture-subnets", "aws-fixture-instances", "--json")
+	require.Contains(t, []int{0, 2}, exitCodeFor(r.Err), r.Stdout+r.Stderr)
+	// Facts are timestamped in whole seconds: keep the GCP writes clear of T.
+	time.Sleep(1100 * time.Millisecond)
+	before := time.Now().UTC().Format(time.RFC3339)
+	time.Sleep(1100 * time.Millisecond)
+	r = runCLI(t, "check", "gcp-fixture-networks", "gcp-fixture-subnets", "--json")
+	require.Contains(t, []int{0, 2}, exitCodeFor(r.Err), r.Stdout+r.Stderr)
+
+	providers := func(g graphexport.Graph) map[string]int {
+		out := map[string]int{}
+		for _, res := range g.Resources {
+			out[res.Provider]++
+		}
+		return out
+	}
+	now := exportGraph(t)
+	require.Positive(t, providers(now)["gcp"])
+	require.Empty(t, now.Meta.AsOf)
+
+	r = runCLI(t, "graph", "export", "--as-of", before)
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	var past graphexport.Graph
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &past))
+	require.Equal(t, before, past.Meta.AsOf)
+	require.Zero(t, providers(past)["gcp"], "GCP was observed after --as-of")
+	require.Equal(t, providers(now)["aws"], providers(past)["aws"])
+	l := newGraphLookup(past)
+	require.NotEmpty(t, l.edges("in_subnet"), "AWS facts were already believed at --as-of")
+	require.Empty(t, l.edges("in_network"), "GCP facts were not")
+
+	r = runCLI(t, "graph", "export", "--as-of", "2000-01-01T00:00:00Z")
+	require.NoError(t, r.Err)
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &past))
+	require.Empty(t, past.Resources, "nothing was recorded in 2000")
 }

@@ -912,17 +912,24 @@ as "ref:<value>", so the graph shows the resource as unknown instead of
 dropping the edge. Problems (unreadable payloads, ambiguous references, rules
 that fail) are listed in meta.warnings and never stop the export.
 
+--as-of exports the graph as pudl had recorded it at a past time: each
+resource's latest entry by then, the snapshots taken by then, and facts as
+believed then about then. Rules and schemas are always today's, and entries
+deleted since cannot be shown.
+
 Output is always JSON; the global --json flag changes nothing.
 
 Examples:
     pudl graph export > graph.json
     pudl graph export -o web/public/graph.json
+    pudl graph export --as-of 2026-10-01T00:00:00Z
 ```
 
 Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--as-of` | string |  | Export the graph as recorded at this time (RFC3339 or Unix seconds) |
 | `-o`, `--output` | string |  | Output file (default: stdout) |
 
 ## pudl guide

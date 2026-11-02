@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Graph time travel: pudl ui Time picker and graph export --as-of (2026-11-02)
+
+The graph can be viewed as pudl had recorded it at any past time: each
+resource's latest entry by then, snapshots by then, and facts as believed
+then about then. `pudl ui` offers recent snapshots and custom times, keeping
+the layout and view state. See `docs/frontend.md#live-pudl-ui`.
+
 ### pudl ui refreshes itself when the catalog changes (2026-11-02)
 
 A cheap catalog change stamp (`CatalogDB.ChangeStamp` plus rule and schema

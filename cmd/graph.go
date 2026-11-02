@@ -16,7 +16,10 @@ import (
 	"github.com/chazu/pudl/internal/importer"
 )
 
-var graphExportOutput string
+var (
+	graphExportOutput string
+	graphExportAsOf   string
+)
 
 var graphCmd = &cobra.Command{
 	Use:   "graph",
@@ -53,11 +56,17 @@ as "ref:<value>", so the graph shows the resource as unknown instead of
 dropping the edge. Problems (unreadable payloads, ambiguous references, rules
 that fail) are listed in meta.warnings and never stop the export.
 
+--as-of exports the graph as pudl had recorded it at a past time: each
+resource's latest entry by then, the snapshots taken by then, and facts as
+believed then about then. Rules and schemas are always today's, and entries
+deleted since cannot be shown.
+
 Output is always JSON; the global --json flag changes nothing.
 
 Examples:
     pudl graph export > graph.json
-    pudl graph export -o web/public/graph.json`,
+    pudl graph export -o web/public/graph.json
+    pudl graph export --as-of 2026-10-01T00:00:00Z`,
 	RunE: pudlRunE(runGraphExport),
 }
 
@@ -65,10 +74,20 @@ func init() {
 	rootCmd.AddCommand(graphCmd)
 	graphCmd.AddCommand(graphExportCmd)
 	graphExportCmd.Flags().StringVarP(&graphExportOutput, "output", "o", "", "Output file (default: stdout)")
+	graphExportCmd.Flags().StringVar(&graphExportAsOf, "as-of", "", "Export the graph as recorded at this time (RFC3339 or Unix seconds)")
 }
 
 func runGraphExport(cmd *cobra.Command, args []string) error {
-	graph, err := buildWorkspaceGraph(cmd.Context())
+	var asOf *time.Time
+	if graphExportAsOf != "" {
+		unix, err := parseTime(graphExportAsOf)
+		if err != nil {
+			return fmt.Errorf("invalid --as-of: %w", err)
+		}
+		t := time.Unix(unix, 0)
+		asOf = &t
+	}
+	graph, err := buildWorkspaceGraph(cmd.Context(), asOf)
 	if err != nil {
 		return err
 	}
@@ -94,10 +113,11 @@ func runGraphExport(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// buildWorkspaceGraph exports the current workspace's resource graph. It
+// buildWorkspaceGraph exports the workspace's resource graph, now or as of a
+// past time. It
 // opens the catalog and loads rules on every call, so a long-running caller
 // (pudl ui) sees new observations and rules without a restart.
-func buildWorkspaceGraph(ctx context.Context) (*graphexport.Graph, error) {
+func buildWorkspaceGraph(ctx context.Context, asOf *time.Time) (*graphexport.Graph, error) {
 	configDir := effectivePudlDir()
 	db, err := database.NewCatalogDB(configDir)
 	if err != nil {
@@ -120,5 +140,6 @@ func buildWorkspaceGraph(ctx context.Context) (*graphexport.Graph, error) {
 		Load:      importer.DecodeEntry,
 		Workspace: effectiveWorkspaceName(),
 		Now:       time.Now(),
+		AsOf:      asOf,
 	})
 }

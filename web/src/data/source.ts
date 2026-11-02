@@ -7,12 +7,28 @@
 import type { CanonicalGraph } from '../model/canonical';
 import { validateGraph, type GraphIssue } from './validate';
 
+export interface LoadOptions {
+  /** RFC 3339: the graph as recorded at this time (sources with history only). */
+  asOf?: string;
+}
+
+/** An observation snapshot, offered as a point to view the graph at. */
+export interface SnapshotInfo {
+  id: string;
+  createdAt: string;
+  model?: string;
+  scope?: string;
+  complete: boolean;
+}
+
 export interface GraphSource {
   readonly id: string;
   readonly label: string;
-  load(): Promise<CanonicalGraph>;
+  load(opts?: LoadOptions): Promise<CanonicalGraph>;
   /** Current change stamp, for sources that can tell when to reload (live only). */
   version?(): Promise<string | null>;
+  /** Recent snapshots, newest first, for sources with history (live only). */
+  snapshots?(): Promise<SnapshotInfo[]>;
 }
 
 export interface LoadedGraph {
@@ -20,8 +36,8 @@ export interface LoadedGraph {
   issues: GraphIssue[];
 }
 
-export async function loadFrom(source: GraphSource): Promise<LoadedGraph> {
-  const graph = await source.load();
+export async function loadFrom(source: GraphSource, opts?: LoadOptions): Promise<LoadedGraph> {
+  const graph = await source.load(opts);
   return { graph, issues: validateGraph(graph) };
 }
 

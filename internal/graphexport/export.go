@@ -18,6 +18,10 @@ type Input struct {
 	Load      LoadFunc
 	Workspace string
 	Now       time.Time
+	// AsOf, when set, builds the graph as pudl had recorded it at that time:
+	// each resource's latest entry by then, snapshots taken by then, and
+	// facts as believed then about then. Rules and schemas are today's.
+	AsOf *time.Time
 }
 
 // Build exports the current resource graph.
@@ -37,7 +41,20 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 	}
 	warn := func(s string) { g.Meta.Warnings = append(g.Meta.Warnings, s) }
 
-	entries, err := in.DB.CurrentResourceEntries()
+	var entries []database.CatalogEntry
+	var err error
+	scope := datalog.TemporalScope{}
+	observations := in.DB.ResourceObservations
+	if in.AsOf != nil {
+		at := in.AsOf.UTC()
+		g.Meta.AsOf = at.Format(time.RFC3339)
+		unix := at.Unix()
+		scope = datalog.TemporalScope{ValidAt: &unix, TxAt: &unix}
+		entries, err = in.DB.ResourceEntriesAsOf(at)
+		observations = observationsUntil(in.DB.ResourceObservations, at)
+	} else {
+		entries, err = in.DB.CurrentResourceEntries()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -46,13 +63,13 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		if m, ok := in.Metadata(entry.Schema); ok && InternalTypes[m.ResourceType] {
 			continue
 		}
-		r, refs := buildResource(ctx, entry, in.Metadata, in.Load, in.DB.ResourceObservations, warn)
+		r, refs := buildResource(ctx, entry, in.Metadata, in.Load, observations, warn)
 		g.Resources = append(g.Resources, r)
 		index.add(r.ID, refs)
 	}
 	sort.Slice(g.Resources, func(i, j int) bool { return g.Resources[i].ID < g.Resources[j].ID })
 
-	derived, err := EvaluateEdgeRules(ctx, in.DB, in.Rules, warn)
+	derived, err := EvaluateEdgeRules(ctx, in.DB, in.Rules, scope, warn)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +83,7 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 // EvaluateEdgeRules evaluates each graph_edge rule on its own, so every
 // relationship can name the rule that derived it. A rule that does not load
 // or evaluate is reported and skipped; the rest of the graph still exports.
-func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []datalog.Rule, warn func(string)) ([]RuleTuples, error) {
+func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []datalog.Rule, scope datalog.TemporalScope, warn func(string)) ([]RuleTuples, error) {
 	var others, edges []datalog.Rule
 	for _, r := range rules {
 		if r.Head.Rel == EdgeRelation {
@@ -82,7 +99,7 @@ func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []data
 			continue
 		}
 		set := append(append([]datalog.Rule{}, others...), r)
-		tuples, err := datalog.EvaluateContext(ctx, db, set, EdgeRelation, nil, datalog.TemporalScope{}, datalog.EvalOptions{})
+		tuples, err := datalog.EvaluateContext(ctx, db, set, EdgeRelation, nil, scope, datalog.EvalOptions{})
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
@@ -93,4 +110,18 @@ func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []data
 		out = append(out, RuleTuples{Rule: r, Tuples: tuples})
 	}
 	return out, nil
+}
+
+// observationsUntil keeps only snapshots taken at or before t.
+func observationsUntil(list ObservationsFunc, t time.Time) ObservationsFunc {
+	return func(ctx context.Context, resourceID string) ([]database.ResourceObservation, error) {
+		all, err := list(ctx, resourceID)
+		out := all[:0:0]
+		for _, o := range all {
+			if !o.ObservedAt.After(t) {
+				out = append(out, o)
+			}
+		}
+		return out, err
+	}
 }

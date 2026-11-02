@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -83,6 +84,7 @@ func runUI(cmd *cobra.Command, args []string) error {
 		Assets:    webui.Assets(),
 		Graph:     src.graph,
 		Stamp:     src.stamp,
+		Snapshots: src.snapshots,
 		Workspace: effectiveWorkspaceName(),
 		Version:   version,
 	}
@@ -153,7 +155,7 @@ func (s *uiGraphSource) stamp(context.Context) (string, error) {
 
 // graph builds the current graph. Schemas are cached per process, so when
 // the schema files changed since the last build the caches are reset first.
-func (s *uiGraphSource) graph(ctx context.Context) (*graphexport.Graph, error) {
+func (s *uiGraphSource) graph(ctx context.Context, asOf *time.Time) (*graphexport.Graph, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if schema := uiserver.FileTreeStamp(s.schemaDirs...); schema != s.builtSchema {
@@ -163,5 +165,18 @@ func (s *uiGraphSource) graph(ctx context.Context) (*graphexport.Graph, error) {
 		}
 		s.builtSchema = schema
 	}
-	return buildWorkspaceGraph(ctx)
+	return buildWorkspaceGraph(ctx, asOf)
+}
+
+// snapshots lists the most recent observation snapshots for as-of picks.
+func (s *uiGraphSource) snapshots(context.Context) ([]uiserver.Snapshot, error) {
+	list, err := s.db.ListObserveSnapshots("", 200)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]uiserver.Snapshot, len(list))
+	for i, snap := range list {
+		out[i] = uiserver.Snapshot{ID: snap.SnapshotID, CreatedAt: snap.CreatedAt, Model: snap.Model, Scope: snap.Scope, Complete: snap.Complete}
+	}
+	return out, nil
 }
