@@ -74,3 +74,10 @@ func apply(tx *database.CatalogTx, p *Prepared, mode database.ProjectionMode) er
 		Fingerprint: p.Fingerprint, Status: status,
 	})
 }
+
+// Correct makes p its resource's current projection as a correction, the mode
+// Sync uses: the facts it replaces are retracted, not invalidated. The
+// sensitive scrub calls it to re-project an entry under its re-derived ID.
+func Correct(tx *database.CatalogTx, p *Prepared) error {
+	return apply(tx, p, database.ProjectionCorrection)
+}
