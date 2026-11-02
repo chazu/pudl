@@ -15,6 +15,7 @@ Installed files, under `.pudl/`:
 | Path | Contents |
 | --- | --- |
 | `schema/gcp/{network,gke,data,services}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the live settings you edit |
@@ -58,6 +59,25 @@ references are kept), GKE node metadata (startup scripts) and legacy
 The schemas are drafts. Compare each with your own gcloud output, then set
 `review: {status: "validated", by: "...", at: "YYYY-MM-DD"}`. Until then
 policy results are marked provisional.
+
+## Ownership
+
+Every type declares `_pudl: owner`. A resource belongs to the team in its
+`team` label (`labels.team`; `resourceLabels.team` for GKE,
+`settings.userLabels.team` for Cloud SQL, `metadata.labels.team` for Cloud
+Run), else to its project's team, else to nobody. Networks, subnets,
+firewalls, routes, routers and key rings have no labels and are owned by
+project only. Name each project's team in `.pudl/schema/gcp/owners.cue`:
+
+```cue
+_gcpProjectOwners: {"my-project": "platform"}
+```
+
+Check findings and `pudl policy show` then name each resource's owner;
+`pudl check ... --owner platform` shows one team's findings, and
+`pudl query resource_unowned` lists what no label or project names. The
+fixture Pub/Sub topics carry `team: orders`; everything else in
+`example-project` is unowned until you map the project.
 
 ## Policies
 

@@ -155,6 +155,48 @@ From the command line, booleans and numbers are typed:
 The datalog has no negation. To express "has no X", project `{exists: "X"}` or
 give a `default`, then match on that value.
 
+## Resource ownership
+
+A schema that declares `_pudl.owner` (see
+[schema-authoring.md](schema-authoring.md#owner-optional)) projects one more
+fact per resource, kept current exactly like its facts block:
+
+- `resource_owner(entry_id, resource_id, type, owner, via)` when a path, the
+  mapping table or the fallback names an owner. `via` is `path:<path>`,
+  `map:<path>` or `fallback`.
+- `resource_unowned(entry_id, resource_id, type)` otherwise.
+
+Because unowned is a positive fact, a check can list unowned resources without
+negation:
+
+```cue
+{name: "unowned", query: "resource_unowned", expect: "empty", severity: "warn",
+ message: "Label these resources with a team or map their project"}
+```
+
+and a rule can join any resource-keyed relation to its owner:
+
+```cue
+violation_owner: {
+	head: {rel: "violation_owner", args: {resource: "$R", policy: "$P", owner: "$O"}}
+	body: [
+		{rel: "policy_violation", args: {resource: "$R", policy: "$P"}},
+		{rel: "resource_owner", args: {resource_id: "$R", owner: "$O"}},
+	]
+}
+```
+
+A facts block cannot declare these two relation names. Changing a type's
+`owner` block or its mapping table re-derives every owner on the next sync.
+
+`pudl check` attributes each finding (a check witness) to the owner of the
+resource it references: its `resource_id` or `resource` argument, else a
+catalog entry ID among its arguments (`entry_id`, `evidence_id`,
+`observation_id`). Report JSON carries `owner` on every witness (`""` when
+none was resolved), human output groups each failed check's findings by owner,
+and `--owner TEAM` prints only TEAM's findings. A witness that names neither a
+resource ID nor an entry, such as one keyed by a selfLink, has no owner.
+
 ## Sensitive fields (`_pudl.sensitive_fields`)
 
 ```cue

@@ -29,7 +29,7 @@
     {
       "use": "check \u003cmodel\u003e...",
       "short": "Observe and evaluate exactly the named models; one report",
-      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
+      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nEach finding names its resource's owner, derived from the schema's\n_pudl.owner declaration; human output groups findings by owner. --owner TEAM\nprints only TEAM's findings (a failed check without one is left out); the\nrecorded report, its counts and the exit status still cover every finding.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check network --owner payments\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
       "args": "custom",
       "flags": [
         {
@@ -68,6 +68,11 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "owner",
+          "usage": "Print only the findings whose resource this owner owns (_pudl.owner); the recorded report is complete",
+          "type": "string"
         },
         {
           "name": "populate",
@@ -1321,7 +1326,7 @@
         {
           "use": "show POLICY",
           "short": "Show a policy's rules, inheritance and failing resources",
-          "long": "Show one compliance policy: its inheritance chain, its rules (inherited ones\nincluded) with severity, doc and the policy that declared each, how many\nresources currently fail each rule, its stored result counts and staleness, and\nthe resources failing most (most severe first, then most violations).\n\n--limit caps the failing resources listed (0 lists all).",
+          "long": "Show one compliance policy: its inheritance chain, its rules (inherited ones\nincluded) with severity, doc and the policy that declared each, how many\nresources currently fail each rule, its stored result counts and staleness, and\nthe resources failing most (most severe first, then most violations).\n\nEach failing resource names its owner, derived from its type's _pudl.owner\ndeclaration; --owner lists only that owner's failing resources.\n\n--limit caps the failing resources listed (0 lists all).",
           "args": "custom",
           "flags": [
             {
@@ -1343,6 +1348,11 @@
               "usage": "Maximum failing resources to list (0 = all)",
               "type": "int",
               "default": "10"
+            },
+            {
+              "name": "owner",
+              "usage": "List only the failing resources this owner owns (_pudl.owner)",
+              "type": "string"
             }
           ]
         }

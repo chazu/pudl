@@ -15,6 +15,7 @@ package gcp
 		resource_type: "gcp.compute.network"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner
 	}
 	kind:                   "compute#network"
 	project:                string
@@ -31,6 +32,7 @@ package gcp
 		resource_type: "gcp.compute.subnetwork"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner
 		facts: gcp_subnet: args: {
 			project: "project"
 			name:    "name"
@@ -56,6 +58,7 @@ package gcp
 		resource_type: "gcp.compute.firewall"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner
 	}
 	kind:      "compute#firewall"
 	project:   string
@@ -76,6 +79,7 @@ package gcp
 		resource_type: "gcp.compute.route"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner
 	}
 	kind:      "compute#route"
 	project:   string
@@ -93,6 +97,7 @@ package gcp
 		resource_type: "gcp.compute.router"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner
 		facts: {
 			gcp_router: args: {project: "project", name: "name", self_link: "selfLink"}
 			// One fact per NAT IP a Cloud NAT gateway is configured to use.
@@ -115,6 +120,7 @@ package gcp
 		resource_type: "gcp.compute.address"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 		facts: gcp_address: args: {
 			project:   "project"
 			name:      "name"

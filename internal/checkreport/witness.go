@@ -22,6 +22,9 @@ type Witness struct {
 	Resource    string         `json:"resource,omitempty"`
 	Arguments   map[string]any `json:"arguments"`
 	EvidenceIDs []string       `json:"evidence_ids,omitempty"`
+	// Owner is the owner of the resource or catalog entry the witness
+	// references (see AttributeOwners); "" when none was resolved.
+	Owner string `json:"owner"`
 }
 
 // Witnesses selects the deterministic, bounded witnesses of an `expect:
@@ -84,10 +87,7 @@ func WriteFindings(w io.Writer, result CheckResult) {
 	if result.Expect == "nonempty" && !result.Passed {
 		fmt.Fprintf(w, "    - no matching evidence for relation %s in %s scope (expected nonempty)\n", result.Query, result.Scope)
 	}
-	for _, witness := range result.Witnesses {
-		args, _ := json.Marshal(witness.Arguments)
-		fmt.Fprintf(w, "    - %s\n", args)
-	}
+	writeWitnesses(w, result.Witnesses)
 	if result.WitnessesTruncated {
 		fmt.Fprintf(w, "    - witnesses truncated to %d; counts include all matches\n", len(result.Witnesses))
 	}

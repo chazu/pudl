@@ -2,10 +2,12 @@ package operation
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/ownership"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -44,5 +46,10 @@ func runChecks(evalCtx context.Context, cat *runCatalog, ws Workspace, out Outpu
 		witnesses, truncated := checkreport.Witnesses(e.Tuples, e.Expect)
 		results = append(results, checkreport.CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated})
 	}
+	owners, err := ownership.Load(db)
+	if err != nil {
+		return nil, fmt.Errorf("load resource owners: %w", err)
+	}
+	checkreport.AttributeOwners(results, owners.OwnerOf)
 	return results, nil
 }

@@ -10,6 +10,7 @@ package gcp
 		resource_type: "gcp.container.cluster"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["resourceLabels.team"]}
 		sensitive_fields: [
 			"nodeConfig.metadata",
 			"nodePools[*].config.metadata",

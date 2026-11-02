@@ -44,6 +44,12 @@ func (r *Registry) RelationSchemas() map[string][]string {
 	out := map[string][]string{}
 	for _, schema := range r.Schemas() {
 		seen := map[string]bool{}
+		if r.chainDeclaresOwner(schema) {
+			for name := range ownerRelationArgs {
+				out[name] = append(out[name], schema)
+				seen[name] = true
+			}
+		}
 		for _, parent := range r.src.GetInheritanceGraph().GetCascadeChain(schema) {
 			meta, ok := r.src.GetSchemaMetadata(parent)
 			if !ok {

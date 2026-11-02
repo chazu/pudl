@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/operation"
 )
 
@@ -18,6 +19,7 @@ var (
 	checkCheckUpstream    bool
 	checkPopulateSpec     string
 	checkDetailedExitCode bool
+	checkOwner            string
 )
 
 var checkCmd = &cobra.Command{
@@ -45,9 +47,15 @@ again with "pudl report [ID]".
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift or a failing fail-severity check, 1 error.
 
+Each finding names its resource's owner, derived from the schema's
+_pudl.owner declaration; human output groups findings by owner. --owner TEAM
+prints only TEAM's findings (a failed check without one is left out); the
+recorded report, its counts and the exit status still cover every finding.
+
 Examples:
     pudl check github-chazu
     pudl check network app --detailed-exitcode
+    pudl check network --owner payments
     pudl check git-inventory --from-catalog --catalog-scope snap_...
     pudl check --populate 'command:gcloud compute networks list --format=json'`,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -89,9 +97,18 @@ func checkOptionsFromFlags(models []string) operation.Options {
 // model as it concludes (human output) and the check report at the end.
 func executeCheck(ctx context.Context, opts operation.Options) (*operation.Result, error) {
 	return operation.Check(ctx, invocationWorkspace(), operation.Output{
-		Out: outw(), Err: errw(), Live: !jsonOutput,
-		Progress:  emitRunProgress,
-		Concluded: func(report *acute.RunSetReport) error { return printCheckReport(report, false) },
+		Out: outw(), Err: errw(), Live: !jsonOutput, Owner: checkOwner,
+		Progress: emitRunProgress,
+		Concluded: func(report *acute.RunSetReport) error {
+			if checkOwner != "" {
+				filtered, err := checkreport.CheckForOwner(report, checkOwner)
+				if err != nil {
+					return err
+				}
+				report = filtered
+			}
+			return printCheckReport(report, false)
+		},
 	}, opts)
 }
 
@@ -102,5 +119,6 @@ func init() {
 	checkCmd.Flags().StringVar(&checkCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	checkCmd.Flags().BoolVar(&checkCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 	checkCmd.Flags().BoolVar(&checkDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
+	checkCmd.Flags().StringVar(&checkOwner, "owner", "", "Print only the findings whose resource this owner owns (_pudl.owner); the recorded report is complete")
 	checkCmd.Flags().BoolVar(&runProgressJSON, "progress-json", false, "Emit phase progress events as JSON lines on stderr (alongside diagnostics)")
 }

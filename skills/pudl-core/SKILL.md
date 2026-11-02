@@ -103,6 +103,10 @@ _pudl: {
 - CLI constraints are typed: `disabled=false`, `port=22`; `name='"22"'` forces a string.
 - `pudl query` and model checks warn on stderr about stale projection and about rules referencing relations/args nothing produces — read those warnings when a check passes unexpectedly.
 - Route sensitive data with `--schema` (or a model's `populate.schema`).
+- Ownership: `_pudl: owner: {paths: ["labels.team"], map: {path: "project", owners: _projectOwners}, fallback?: "team"}`
+  (tried in that order, inherited along `base_schema`) projects `resource_owner(resource_id, owner, via, type)` or
+  `resource_unowned(resource_id, type)`. Check findings carry `owner`; `pudl check --owner TEAM` and
+  `pudl policy show P --owner TEAM` filter to one owner; a check on `resource_unowned` lists unowned resources.
 
 See `docs/projection.md`.
 
