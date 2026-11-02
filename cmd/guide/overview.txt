@@ -1,0 +1,53 @@
+pudl guide overview — what pudl is and how the pieces fit
+
+WHAT PUDL IS
+
+  pudl discovers, catalogs and governs cloud infrastructure. It observes and
+  reports; it never changes infrastructure. One binary keeps a local SQLite
+  catalog per repository workspace (.pudl/), or in ~/.pudl with --global.
+
+THE LOOP
+
+  pudl init                                   create .pudl/ in this repo
+  pudl example install gcp                    or aws, or write a collector
+  pudl check gcp-fixture-firewalls gcp-fixture-addresses \
+    gcp-fixture-routers gcp-fixture-network-hygiene-checks
+  pudl report                                 read the report again
+  fix the resource, or add a waiver           then check again
+
+TERMS
+
+  observation   a collector run (plain gcloud/aws/kubectl commands printing
+                JSON) or a 'pudl import'; stored as a snapshot with a scope
+                and a completeness flag
+  resource      a cataloged record; its resource ID comes from the type's
+                identity_fields, so it keeps a history across observations
+  type schema   CUE: what a resource is (identity, sensitive fields, facts,
+                owner, review status)
+  policy        CUE: what a good instance of a type looks like; evaluated
+                per resource as compliant, noncompliant or unknown
+  model         a #SystemModel: a collector (populate), checks, waivers,
+                expected inventory (desired) and depends_on
+  check         a Datalog query with expect empty|nonempty and a severity;
+                failing rows are findings, each with an owner and a change
+                state (new, persisting, resolved, unknown)
+  waiver        an accepted finding, with owner, reason and expiry
+  report        what one 'pudl check' recorded; versioned JSON with --json
+
+WHERE STATE LIVES
+
+  .pudl/workspace.cue            workspace identity and dependencies
+  .pudl/schema/                  CUE module: types, policies, models, rules
+  .pudl/populators/              fixtures and helper programs collectors use
+  .pudl/data/sqlite/catalog.db   catalog, facts, snapshots, reports
+
+TOPICS
+
+  pudl guide observe    collectors, import, fan-out, snapshots
+  pudl guide schemas    types, identity, sensitive fields, ownership, review
+  pudl guide policies   per-resource compliance rules
+  pudl guide checks     checks, findings, waivers, exit codes and CI
+  pudl guide query      facts, Datalog rules and pudl query
+  pudl guide doctor     diagnose and repair the workspace
+  pudl guide packs      the bundled GCP, AWS and tutorial packs
+  pudl guide agents     JSON contracts and conventions for agents

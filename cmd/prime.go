@@ -13,7 +13,7 @@ var primeCmd = &cobra.Command{
 
 Include a line like this in your CLAUDE.md or similar agent config:
 
-    Run 'pudl prime' to learn how to use the pudl data lake CLI.
+    Run 'pudl prime' to learn how to use pudl.
 
 The agent will then know to execute the command and read the output
 to understand pudl's capabilities and conventions.`,
@@ -26,98 +26,79 @@ func init() {
 	rootCmd.AddCommand(primeCmd)
 }
 
-const primeText = `# PUDL for humans and agents
+const primeText = `# pudl: agent briefing
 
-PUDL retains typed observations of systems, compares them with declared
-expectations, and records evidence. It never changes the systems it observes:
-a check reports drift, and the tools that own those systems apply changes.
+pudl discovers, catalogs and governs cloud infrastructure. It runs collectors
+(plain gcloud/aws/kubectl commands that print JSON) or imports files, stores
+every observation as a snapshot in a local SQLite catalog (.pudl/ in this
+repository), classifies each record against a CUE type schema, evaluates
+compliance policies per resource, and runs Datalog checks. It observes and
+reports; it never changes infrastructure. Hand fixes to the tool that owns
+the resource.
 
-## Start with the existing workspace
+## The loop
 
-pudl model list
-pudl model show <name> --json
-pudl check <name>
-pudl report --json
+1. Set up:       pudl init
+2. Observe:      pudl example install gcp      (or aws; or write a collector:
+                 pudl model new NAME --populate 'command:<cmd printing JSON>')
+3. Check:        pudl check COLLECTOR... CHECK-FAMILY --json
+4. Read:         pudl report --json            (findings, owners, new/persisting)
+5. Fix or waive: fix the resource with its owning tool, or add a waiver
+                 (owner, reason, created, expires) to the model
+6. Re-check:     the same pudl check; resolved findings show as resolved
 
-Create local state with pudl init; use pudl init --global for ~/.pudl.
-Repository catalogs and mutable state remain isolated beneath .pudl/.
-Use pudl help <command> --json or pudl guide <topic> for targeted instructions.
+Offline first run, with the GCP pack's fixtures:
 
-## Observe with commands
+  pudl init
+  pudl example install gcp
+  pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+    gcp-fixture-network-hygiene-checks --json --detailed-exitcode
 
-pudl model new <name> --populate 'command:<cmdline printing JSON>'
-pudl check --populate 'command:gcloud compute networks list --format=json'
-pudl check <name> --detailed-exitcode
+## Rules that matter
 
-A model's populate arm (#CommandObserve) runs commands that print JSON records,
-such as gcloud, kubectl or aws with JSON output, and ingests them as one
-snapshot. A model with desired state reports drift against that snapshot.
+- pudl check runs exactly the named models, producers first by depends_on.
+  Name the collectors a check family reads; nothing else runs.
+- A check is pass, fail, unknown, error or waived. Unknown (missing,
+  incomplete or stale evidence) is not pass. A failed collector input makes
+  the snapshot incomplete; it never makes resources look absent.
+- Findings carry an owner and a change state: new, persisting, resolved,
+  unknown. Only a complete observation resolves a finding.
+- Preview before writing: import --dry-run, doctor --fix --dry-run,
+  policy evaluate --what-if FILE.
+- Query projected facts (pudl query) rather than parsing payloads.
 
-## Several models
+## JSON contracts
 
-pudl check <producer> <consumer>
+- pudl check ... --json and pudl report [ID] --json: one versioned report
+  (report_version 3): run_set_id, status, summary, members[].report.
+- pudl report ID --since ID2 --json: findings classified per check.
+- pudl doctor --json (report_version 3); pudl policy list|show|evaluate --json
+  (report_version 1); list, show, import, query, model and snapshot take --json.
+- pudl help --json is the command tree; trust it over any document.
+- Exit codes: 0 ok, 1 error or failed check. With --detailed-exitcode, 2 means
+  drift or a failing fail-severity check. --fail-on new fails only on new
+  findings.
 
-A check runs only the named models, producers first by depends_on, and records
-one report for all of them. It never starts a model that was not named.
+## Everyday commands
 
-Report completion, resource conformity, checks, and evidence verification are
-separate dimensions. Successful execution can still find drift. Stored replay
-does not establish fresh live verification.
+  pudl import FILE [--schema TYPE] [--set path=value] [--dry-run]
+  pudl list --json / pudl show ID [--history] / pudl export --id ID
+  pudl model list|show|validate|new|deps
+  pudl check MODEL... / pudl report [ID] [--since ID] / pudl status
+  pudl policy list|show|evaluate
+  pudl schema list|show|new|add / pudl rule new|add
+  pudl query RELATION key=value / pudl query --list
+  pudl snapshot list|show|current|retain|prune
+  pudl doctor [--fix [--only NAME] [--dry-run]]
 
-## Investigate and retain evidence
+Retired; do not use: run, run set, run report, converge, approvals, mu,
+schema reinfer/migrate, reclassify, migrate identity, facts reproject
+(docs/retired-commands.md).
 
-pudl example install gcp-network-hygiene
-pudl list --where name=example --select name --all --json
-pudl show <id> --field metadata.name
-pudl show <id> --history --json
-pudl snapshot show <new> --compare <old> --json
-pudl model new <name> --check <relation> --evidence scope:<population> --max-age 15m
+## More
 
-Checks carry pass/fail/unknown/error outcomes and structured diagnostics.
-Missing or incomplete evidence is not a pass. Use explicit snapshot evidence
-and completeness declarations for inventory checks. Summaries separate execution,
-conformity, checks and verification. age_at_check is historical, not a fresh age.
-The GCP example defaults to local fixture data; its live model is separately named.
-
-Project definitions are local or explicitly vendored through workspace.cue.
-pudl config --paths --json shows effective paths; --global selects personal state.
-Doctor's repairs list gives reviewable preview/apply arguments; it applies nothing.
-
-## Imported evidence and schemas
-
-pudl import --path <file>
-pudl list --json
-pudl show <id> --raw
-pudl schema list --json
-pudl schema show <package.#Definition>
-pudl schema new --from <id> --path <package>/#<Definition>
-pudl doctor --json
-
-Formats and schemas are inferred on import. --origin is an explicit list filter.
-Replaying a stored snapshot requires check <model> --from-catalog
---catalog-scope <snapshot-id> and remains unverified.
-Use Git, your editor, and cue on the paths from pudl config --paths --json.
-
-## Facts and rules
-
-pudl query <relation> key=value --json
-pudl facts list --relation <name> --json
-pudl facts search "<text>" --json
-pudl facts show <id> --json
-pudl rule add <file.cue>
-
-Read the fact store through pudl query; facts list/search/show inspect stored
-facts directly. Facts are arbitrary JSON assertions with valid-time and
-transaction-time history; --as-of-valid and --as-of-tx select historical facts.
-Datalog supports joins and recursion, including model dependency and impact
-queries.
-
-Fact writes are advanced commands, hidden from everyday help: facts add
---relation <name> --args '<json-object>' --source <origin> records an assertion
-(--schema validates it against an authored CUE schema), facts retract withdraws
-one, and facts invalidate records that reality changed. See pudl guide facts.
-
-Use --json for supported structured views. Attribute fact writes with --source.
-Use retained IDs to inspect evidence; content hashes and provenance remain
-available after subsequent observations.
+  pudl guide              topics: observe, schemas, policies, checks, query,
+                          doctor, packs, agents
+  pudl help CMD --json    one command's flags
+  docs/cli-reference.md, docs/schema-authoring.md
 `

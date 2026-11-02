@@ -1,249 +1,189 @@
 ---
 name: pudl-core
-description: Using the pudl CLI — data lake import/query, CUE schemas, the bitemporal fact store, and #SystemModel checks that observe with commands, compare with desired state and evaluate checks. Use when working with pudl commands, schemas, facts, or checking system models.
+description: Using the pudl CLI to discover, catalog and govern cloud infrastructure — collectors and imports, CUE type schemas, compliance policies, Datalog checks, findings, waivers and reports. Use when working with pudl commands, .pudl/ workspaces, schemas, policies, models or check reports.
 ---
 
 # PUDL Core
 
-CLI for an infrastructure data lake: import data, infer/validate CUE schemas,
-store bitemporal facts, and check `#SystemModel` instances that observe real
-infrastructure with plain commands, compare it with desired state and evaluate
-checks.
+pudl observes infrastructure and reports on it; it never changes it. It runs
+collectors (plain `gcloud`/`aws`/`kubectl ... --format json` commands) or
+imports files, stores each observation as a snapshot in a local SQLite catalog
+(`.pudl/` per repository; `~/.pudl` with `--global`), classifies every record
+against a CUE type schema, evaluates compliance policies per resource and runs
+Datalog checks. Hand fixes to the tool that owns the resource.
 
-PUDL discovers, catalogs and governs; it never changes the systems it observes.
-A check reports drift; Terraform, kubectl or whatever tool owns the system
-applies changes.
+The binary is the source of truth: `pudl prime` (briefing), `pudl guide
+<topic>` (overview, observe, schemas, policies, checks, query, doctor, packs,
+agents), `pudl help [CMD] --json` (commands and flags).
 
-## Agent routing
+## Agent workflow
 
-Use the binary as the source of truth for the current command surface:
-
-- `pudl help --json` — complete command tree, flags, and descriptions.
-- `pudl guide <topic>` — operational guidance (`overview`, `models`,
-  `troubleshooting`, and the other listed topics).
-- `pudl model show <name> --json` — a model's actual runtime contract.
-
-Scaffold first, then edit the returned path:
-
-- `pudl model new <name> --populate 'command:<cmdline>'` — a command printing JSON records, run by pudl (without `--populate`, a placeholder command to replace)
-- `pudl rule new <name>`
-
-For a one-off observer, use `pudl check --populate 'command:<cmdline>'`; it
-writes no model definition. Retrieve diagnostics with
-`pudl report [<id>] --json`.
-
-## State Layout
-
-```
-.pudl/                   # active inside a repo; ~/.pudl/ outside one
-  workspace.cue          # repo identity and policy (repository mode)
-  config.yaml            # local path configuration
-  schema/                # CUE module; repo copy is tracked by enclosing Git
-    cue.mod/             # CUE module metadata
-    pudl/                # built-in + local schema defs (incl. #SystemModel)
-    pudl/rules/          # Datalog rules
-  populators/            # helper programs and fixtures models' commands use
-  data/
-    raw/                 # content-addressed imports
-    metadata/            # provenance sidecars
-    sqlite/catalog.db    # catalog, facts, reports, snapshots
+```bash
+pudl init                                   # idempotent; repairs .pudl/
+pudl example install gcp                    # or aws; or write a collector
+pudl model list --json
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks --json --detailed-exitcode
+pudl report --json                          # findings, owners, change states
+# fix with the owning tool, or add a waiver to the model; then check again
+pudl report <new-check-id> --since <old-check-id> --json
 ```
 
-`pudl init` is idempotent and repairs this local layout. Repository and
-global catalogs are independent; mutable state never falls back across them.
+- `pudl check MODEL...` runs exactly the named models, producers first by
+  `depends_on`, and records one report. Name a check family together with the
+  collectors it reads; models that were not named never run.
+- Outcomes: pass, fail, unknown, error, waived. Missing, incomplete or stale
+  evidence is unknown, never pass.
+- Findings carry an `owner` and a change state (new, persisting, resolved,
+  unknown). Only a complete observation resolves a finding.
+- Scaffold, then edit the printed path: `pudl model new`, `pudl rule new`,
+  `pudl schema new --from <entry-id> --path <pkg>:#<Def>`.
+- Preview writes: `import --dry-run`, `doctor --fix --dry-run`,
+  `policy evaluate --dry-run` or `--what-if FILE`, `snapshot prune --dry-run`.
 
-## Common Commands
+## JSON contracts and exit codes
 
-### Data pipeline
-- `pudl import <file|dir|glob>...` — import JSON/YAML/CSV/NDJSON (schema inferred unless `--schema` given; `--path` also works, `-` for stdin)
-  - `--dry-run` first: per-schema counts, validation failures, unresolved identity, facts that would be projected; writes nothing
-  - `--set path=value` (repeatable, overwrites) adds a field the source omits, e.g. `--set project=prod-a` for gcloud output
-  - re-importing cataloged data with a `--schema` it satisfies moves it to that schema
-- `pudl list` — list entries in the active catalog
-  (`--origin` filters explicitly; `--artifacts` = run outputs; `--schema` with `#` matches whole definition names; `--json` is paginated, count with `total_matched`)
-- `pudl show <id>` / `pudl export --id <proquint> --format json` (exact payload, pipeable) / `pudl delete <id>`
-  (`show` includes a compliance section: each applicable policy's status and violations)
-- `pudl policy list [--type T]` / `pudl policy show POLICY [--limit N]` — compliance policies, result counts (stale ones included), rules and the resources failing most; `pudl policy evaluate` refreshes results
-- `pudl doctor` — workspace health, assigned-schema validation, and inference stability
+- `check --json` / `report [ID] --json`: `report_version` 3; `run_set_id` is
+  the check ID; `summary` (execution, conformity, checks, verification,
+  new_findings); `members[].report` per model. `report ID --since ID2`
+  classifies findings per check.
+- `doctor --json`: `report_version` 3 with `repairs[]`. `policy
+  list|show|evaluate --json`: `report_version` 1.
+- `list --json` is paginated (`total_matched`; `--all` for every row).
+  `show ID --json` includes `compliance`. `import --json` is one element per file.
+- `help --json` marks hidden commands `"advanced": true`.
+- Exit: 0 ok; 1 error or failed check. With `--detailed-exitcode`, 2 means
+  drift or a failing fail-severity check. `--fail-on new` fails only on
+  findings no comparable earlier report recorded. warn and info checks never
+  fail the command.
 
-### Schema
-- `pudl schema list|show <name>` — browse schemas
-- `pudl schema new --from <id> --path <package>/#<Definition>` — generate a schema from data
-- `pudl schema add` — register a definition (e.g. a `#SystemModel`)
-- `cue mod get <module@version>` — add CUE module deps
-
-### Facts
-- `pudl facts` — query the bitemporal fact store
-- `pudl query <relation> [key=value ...]` — derived facts via Datalog rules
-  (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
-- `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
-- `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, policy-leaves, inference, identity, projections, policy-results (projected-fact sync also runs automatically after import/check/delete)
-
-### Querying imported data
-
-Imported payloads are not visible to Datalog until a schema projects them.
-Declare relations in `_pudl.facts`, then write rules and checks over them —
-don't post-process payloads with jq:
+## Collectors (models)
 
 ```cue
-_pudl: {
-	identity_fields: ["project", "name"]          // required for facts; quote dotted keys: "a.\"b.c\""
-	facts: {
-		gcp_firewall: args: {project: "project", name: "name", disabled: {path: "disabled", default: false}}
-		gcp_firewall_allow: {each: "allowed[*]", args: {proto: "IPProtocol", port: {path: "ports[*]", default: "*"}}}
+package models
+
+import sm "pudl.schemas/pudl/systemmodel@v0"
+
+#Firewalls: sm.#SystemModel & {
+	name: "firewalls"
+	observation: {scope: "gcp/firewalls", complete: true}
+	populate: {
+		schema: "gcp.#Firewall"                 // route records like import --schema
+		runs: [for p in ["prod-a", "prod-b"] {
+			argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+			set: project: p                     // add a field the output omits
+		}]
 	}
-	sensitive_fields: ["env[*].value"]           // stored as "[REDACTED]"; fails closed
 }
 ```
 
-- Every projected fact carries `entry_id` and `resource_id`; join relations of one record on `entry_id`.
-- Facts follow each resource's most recently observed record.
-- `{exists: path}` and `default` stand in for negation (the Datalog has none).
-- CLI constraints are typed: `disabled=false`, `port=22`; `name='"22"'` forces a string.
-- `pudl query` and model checks warn on stderr about stale projection and about rules referencing relations/args nothing produces — read those warnings when a check passes unexpectedly.
-- Route sensitive data with `--schema` (or a model's `populate.schema`).
-- Ownership: `_pudl: owner: {paths: ["labels.team"], map: {path: "project", owners: _projectOwners}, fallback?: "team"}`
-  (tried in that order, inherited along `base_schema`) projects `resource_owner(resource_id, owner, via, type)` or
-  `resource_unowned(resource_id, type)`. Check findings carry `owner`; `pudl check --owner TEAM` and
-  `pudl policy show P --owner TEAM` filter to one owner; a check on `resource_unowned` lists unowned resources.
+- argv runs without a shell, with your environment. `populate.each: {argv,
+  select?}` enumerates inputs at run time; runs use `"{{item}}"`.
+- A failed run is a failed input: other runs are ingested, the snapshot is
+  incomplete (`populate.failed_inputs` in the report), checks over it are
+  unknown, and the model fails. `fail_fast: true` restores all-or-nothing.
+- A model without `populate` is checks-only. `desired: [...]` reports
+  inventory drift; nothing is changed.
+- One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).
+- Snapshots: `pudl snapshot list|show|current|retain|prune`;
+  `snapshot show NEW --compare OLD`; `pudl show ID --history`.
 
-See `docs/projection.md`.
+## Checks and waivers
 
-### Compliance policies
+```cue
+checks: [{name: "policy-high", query: "policy_noncompliant", expect: "empty",
+	severity: "fail", message: "Fix violations", evidence: ["model:firewalls"], max_age: "1h"}]
+waivers: [{policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingress",
+	resource: "<resource ID>", owner: "security", reason: "bastion until VPN",
+	created: "2026-11-01", expires: "2026-12-31"}]
+```
 
-Single-resource rules are policies, not Datalog rules: a standalone definition
-with `_pudl: {schema_type: "policy", base_schema: "<pkg>.#Type"}` (never
-`#Type & {...}`, which does not load). It is evaluated at every ingest against
-each resource of that type; results are `policy_status`/`policy_violation`
-facts. Checks query the built-in `policy_noncompliant(resource, policy,
-severity)`.
+- `evidence`: snapshot IDs, `current`, `model:<name>` or `scope:<name>`.
+- A waiver targets `check` + `witness: {arg: value}`, or `policy` + `rule` +
+  `resource`. `owner`, `reason`, `created`, `expires` (YYYY-MM-DD) are
+  required. Waived findings stay in the report as `waived`; expired waivers
+  stop applying; unmatched waivers are reported stale.
+- `pudl model new NAME --check RELATION --evidence model:X --max-age 1h` saves
+  a relation as a checks-only model. Evidence must cover every relation the
+  query reads, or the check is unknown. `--owner TEAM` filters printed findings.
 
-- `field: value @pudl(rule="name", severity="low|medium|high|critical", doc="...")`; an absent required field makes the result `unknown` unless `@pudl(absent="violation")` is on it or an ancestor, or the type has `_pudl.review: {status: "validated"}`.
-- Annotate fields outside comprehensions (`f?: _ @pudl(rule=...)`), else the policy fails to load.
-- `&&`/`||` do not short-circuit over absent fields; treat absent as a value with `list.Contains([if x != _|_ {x}], v)`.
-- A field required only inside a comprehension is never reported absent; anchor the rule as a conflict on a field that is present.
-- `pudl policy evaluate --what-if draft.cue` tries a draft without writing; `--dry-run` previews a refresh.
+## Type schemas
+
+```cue
+#Firewall: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "gcp.compute.firewall"
+		identity_fields: ["selfLink"]          // resource ID; quote dotted keys
+		sensitive_fields: ["metadata.items[*].value"]   // "[REDACTED]" before storage
+		facts: gcp_firewall: args: {name: "name", disabled: {path: "disabled", default: false}}
+		owner: {paths: ["labels.team"], map: {path: "project", owners: _owners}, fallback: "platform"}
+		review: {status: "validated", by: "sre-platform", at: "2026-11-01"}   // default draft
+	}
+	...
+}
+```
+
+- Records are not queryable until `facts` projects them. Each fact carries
+  `entry_id` and `resource_id`; join one record's relations on `entry_id`.
+  `{exists: path}` and `default` stand in for negation.
+- Ownership projects `resource_owner` / `resource_unowned`.
+- Policy results against a draft type are provisional.
+- `secret_scan_ignore: [paths]` silences doctor's secret warning for a path.
+- Explicit `--schema` is strict; `--allow-schema-fallback` permits fallback.
+
+## Compliance policies
+
+A policy is a standalone definition: `_pudl: {schema_type: "policy",
+base_schema: "<pkg>.#Type"}`. Never `#Policy: #Type & {...}`; it does not
+load. Results are `policy_status` / `policy_violation` facts; checks use
+`policy_noncompliant(resource, policy, severity)`.
+
+- `field: value @pudl(rule="name", severity="low|medium|high|critical", doc="...")`.
+- An absent required field makes the result unknown unless
+  `@pudl(absent="violation")` is on it or an ancestor, or the type's review
+  status is validated.
+- `&&` and `||` do not short-circuit over absent fields (the policy silently
+  passes); use `list.Contains([if x != _|_ {x}], v)`.
+- Annotate fields outside comprehensions (`f?: _ @pudl(rule=...)`) and
+  constrain inside; otherwise the policy fails to load.
+- A field required only inside a comprehension is never reported absent;
+  anchor the rule as a conflict on a field that is present.
+- A policy cannot constrain a sensitive field.
+- `pudl policy evaluate --what-if draft.cue` tries a draft; `pudl policy
+  list|show` reads results; `pudl show ID` has a compliance section.
 
 See `docs/schema-authoring.md#compliance-policies`.
 
-### #SystemModel loop
-- `pudl model list` — list registered `#SystemModel` definitions + last status
-- `pudl model show <model>` — show a model's populate/desired/checks
-- `pudl model validate <model>` — structural validation without running
-- `pudl check <model>...` — check exactly the named models, producers first by `depends_on`: populate, drift, checks; one report for all of them; never runs a model that was not named
-- `pudl check <model>... --detailed-exitcode` — exit 0 clean, 2 drift or failing check, 1 error
-- `pudl check <model>... --fail-on new [--detailed-exitcode]` — fail (or exit 2) on fail-severity check failures only when one has a finding no comparable earlier report recorded; drift and errors still count
-- `pudl check <model> --from-catalog --catalog-scope <snapshot-or-origin>` — explicitly replay ingested records for inventory drift (one model); a normal inventory check populates and compares its own current snapshot
-- `pudl check <model>... --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
-- `pudl report [id]` — read a check report (or one model's report by run ID); stored `run`/`run set` reports read too, with retired fields shown as legacy JSON
-- `pudl report [id] --since <id2> [--json]` — classify each check's failing matches against an earlier report: new, persisting, resolved, unknown, with first-seen times
-- `pudl model deps` — reconcile + show the cross-model dependency graph (no check needed)
-- `pudl status [target]` — recorded verdict by catalog target (a check records each model's verdict)
+## Query and rules
 
-### Utilities
-- `pudl init` / `pudl init --global` / `pudl doctor` / `pudl config` / `pudl version`
-- `pudl guide` / `pudl prime` — agent-facing usage reference
-
-## The #SystemModel loop
-
-`pudl check <model>...` resolves each named `#SystemModel` definition (project
-`.pudl/schema` precedes explicitly vendored dependencies; register with
-`pudl schema add`) and runs each, producers first:
-
-```
-1. populate -> ingest   (Accumulate observed state into the catalog)
-2. drift                (Unify desired vs observed)
-3. checks               (flag violations)
-4. report
+```bash
+pudl query --list
+pudl query gcp_address status=RESERVED --json   # typed: false, 22, '"22"'
+pudl query -f draft.cue my_relation              # try a rule file
+pudl rule add rules.cue
+pudl model deps && pudl query impacted_by changed=<model>
 ```
 
-- **Populate arm**: `#CommandObserve` — `runs: [{argv: [...], set?: {...}}]`
-  plus optional `schema:` — whose commands pudl runs itself (no shell; fan out
-  with a CUE comprehension; the environment is inherited, so cloud CLI
-  credentials work). A model without `populate` is checks-only: it evaluates
-  its checks over the catalog as it stands (e.g. imported data).
-- **Failed inputs**: a failing run does not discard the others. Their records
-  are ingested, the snapshot is incomplete, the report lists the failed run
-  under `populate.failed_inputs` (argv, exit status, stderr tail), checks over
-  it are unknown, and the model fails. `fail_fast: true` restores
-  all-or-nothing.
-- **Enumerated inputs**: `each: {argv: [...], select?: "field"}` runs a command
-  that prints a JSON list (strings, or objects with `select` naming the field);
-  every run is repeated per item with `"{{item}}"` replaced in its argv and
-  `set`. The report records the items under `populate.inputs`.
-- **Drift** set-diffs `desired` against the records the check just observed and
-  reports `missing`/`changed`/`unidentifiable`/`ambiguous` findings. Nothing is
-  changed.
-- **Waivers**: `waivers: [...]` on the model accepts findings until a date.
-  Each needs `owner`, `reason`, `created`, `expires` (`YYYY-MM-DD`) and a
-  target: `check` + `witness: {arg: value}` (an `expect: "empty"` check's
-  witnesses), or `policy` + `rule` + `resource` (a policy violation behind a
-  check whose witnesses carry `resource` and `policy`). A fully waived check
-  has outcome `waived`, stays in the report, and does not fail the check or
-  `--detailed-exitcode`; expired waivers stop applying and are flagged; waivers
-  matching nothing are reported `stale`.
-- **Retired fields** — `converge`, `plugins`, `sealed_inputs`,
-  `sealed_outputs`, `inputs`, `bindings`, `#PluginObserve`, `#EweTarget` — fail
-  to load with an error naming the field (`docs/retired-commands.md`).
-- **One report**: `pudl check --json` writes one report (`report_version` 3)
-  with an aggregate `summary` and one entry per model under `members`, each
-  embedding that model's full report (`members[].report`).
-- Each check records the model instance in the catalog (identity = name) so it's
-  inventoriable via `pudl list` / `pudl query`.
+Rules are CUE: `name: {head: {rel, args}, body: [{rel, args}, ...]}` with
+`$`-prefixed variables. `catalog_entry` is join-only. `pudl query` warns on
+stderr about rules naming relations or args nothing produces, and about stale
+projections; read those warnings when a check passes unexpectedly. Writing
+facts by hand (`facts add/retract/invalidate`) is advanced; prefer projection.
 
-### Workspace schema precedence
+## Doctor
 
-Repository definition resolution uses local schemas and explicitly declared
-packages under `.pudl/vendor/`. `workspace.cue` lists their relative roots in
-`dependencies`. Ambient global definitions are excluded. Use `pudl --global`
-for personal state, `pudl config --paths --json` for effective paths, and
-`pudl config --legacy-dependencies --json` to inventory migration candidates.
+`pudl doctor` diagnoses; `pudl doctor --fix [--only NAME] [--dry-run]`
+repairs: schema-names, policy-leaves, inference, identity, projections,
+policy-results, data-permissions, and sensitive-scrub (opt-in, only when
+named; rotate any credential it redacts).
 
-## Cross-model dependencies
+## Do not use (retired)
 
-A model can depend on another model's output. Declare it with `depends_on` (a
-list of model **names**) on the `#SystemModel`:
-
-```cue
-#Workloads: sm.#SystemModel & { name: "workloads", depends_on: ["network"], ... }
-```
-
-`pudl check` (and `pudl model deps`) reconcile declared deps into bitemporal
-`model_depends_on(from,to)` facts. Built-in recursive Datalog rules reason over
-them (query with positional `key=value`):
-
-- `pudl query depends_transitive from=<m>` — what `<m>` depends on (transitively)
-- `pudl query impacted_by changed=<m>` — blast radius: who depends on `<m>`
-- `pudl query cyclic` — models in a dependency cycle (no valid run order)
-- `pudl query --topo model_depends_on` — a topological run order (deps first)
-
-`pudl model deps` records edges for **every** registered model without running
-them. Dependencies come from explicit `depends_on` declarations. PUDL does not
-guess edges from coincidental values or check downstream models automatically.
-`pudl check a b` orders `a` and `b` by the `depends_on` edges between them,
-rejects cycles before anything runs, and records a model whose named producer
-did not succeed as `blocked`. See `docs/cross-model-dependencies.md`.
-
-## Evidence workflow
-
-Use `pudl example install gcp-network-hygiene` for a credential-free fixture.
-Its live gcloud model is separately named. The tutorial is
-`docs/gcp-network-hygiene.md`. `list --where path=value --select path --all`
-inspects payloads before pagination. `show --field` reads one field; `show
---history` lists resource versions and sightings; `snapshot show NEW --compare
-OLD` compares matching populations. `list --fancy` is retained.
-
-Save a query as a check with `model new NAME --check RELATION --evidence
-scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/waived/unknown/error.
-Missing, broken, incomplete or stale required evidence cannot pass. Reports
-include separate execution/conformity/checks/verification summaries and retained
-evidence; age_at_check is frozen. Each check result records `findings` (every
-failing match by a stable key: head arguments without evidence IDs) with a
-state — new, persisting, resolved, unknown — and `first_seen`, and `changes`
-against the model's comparable earlier reports. Only a complete observation
-resolves; a partial or failed one leaves earlier findings unknown. Waived
-findings keep their state, are marked `waived`, and never count for
-`--fail-on new`. `doctor --json` lists repair diagnoses with
-preview/apply arguments; only `doctor --fix` writes. Explicit --schema is strict; exploratory
-fallback requires --allow-schema-fallback.
+`pudl run`, `run set`, `run report` (use `pudl check` / `pudl report`);
+`converge`, approvals, sealed values, value bindings and model `inputs`;
+`pudl mu ...`, the `#PluginObserve` and `#EweTarget` populate arms;
+`schema reinfer`, `schema migrate`, `reclassify`, `migrate identity`,
+`facts reproject` (use `pudl doctor --fix`).
+Models with retired fields fail to load naming the field. See
+`docs/retired-commands.md`.
