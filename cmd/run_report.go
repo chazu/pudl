@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/wiring"
 )
@@ -64,6 +65,10 @@ type PopulateReport struct {
 	Target           string `json:"target"`
 	Records          int    `json:"records"`
 	SnapshotID       string `json:"snapshot_id,omitempty"`
+	// SecretWarnings are likely secrets outside sensitive-field coverage, by
+	// record, path and kind (never the value); stored data is unchanged.
+	SecretWarnings      []secretscan.Warning `json:"secret_warnings,omitempty"`
+	SecretWarningsTotal int                  `json:"secret_warnings_total,omitempty"`
 }
 
 // render emits the report as JSON when machine output is requested, else markdown.

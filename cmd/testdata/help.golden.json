@@ -284,7 +284,7 @@
     {
       "use": "doctor",
       "short": "Check workspace health and catalog data, and repair the catalog",
-      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  data-permissions  data files or directories group or other users can access\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  policy-results policy results that are stale (evaluated with an older policy\n                digest), orphaned, or never evaluated\n  data-permissions  data files or directories group or other users can access\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
       "args": "custom",
       "flags": [
         {
@@ -332,7 +332,7 @@
         },
         {
           "name": "only",
-          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, data-permissions",
+          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions",
           "type": "stringSlice",
           "default": "[]"
         },
@@ -1176,6 +1176,62 @@
               "type": "bool",
               "default": "false",
               "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "policy",
+      "short": "Evaluate compliance policies against cataloged resources",
+      "long": "Compliance policies are schemas with _pudl.schema_type: \"policy\" that name\ntheir type through _pudl.base_schema. Every import and observation evaluates the\napplicable policies per resource and stores the results as facts:\n\n  policy_status(resource, policy, type, status, policy_digest)\n  policy_violation(resource, policy, rule, severity, path, kind, declared_by)\n\nStatus is compliant, noncompliant or unknown (a constrained field was absent).\nThe built-in rule policy_noncompliant(resource, policy, severity) serves checks.\nA result is stale when its digest differs from the loaded policy's; pudl doctor\nreports stale results and pudl policy evaluate refreshes them.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "evaluate [POLICY...]",
+          "short": "Re-evaluate policies against stored current resources",
+          "long": "Re-evaluate compliance policies against every stored current resource, from\nits retained payload, without re-importing. Changed results replace the current\npolicy_status and policy_violation facts; history keeps the previous result and\nthe policy digest it was evaluated with. Results of policies that no longer apply,\nor are no longer loaded, are closed. A policy that fails to load is reported and\nits results are left unchanged.\n\nName policies to evaluate only those. --dry-run reports what would change and\nwrites nothing.\n\n--what-if FILE evaluates a draft policy file that is not installed: it is loaded\nbeside the installed schemas (shadowing an installed policy of the same name),\nevaluated against the stored current resources, and reported as status counts and\nthe top violations. Nothing is written. The draft must be standalone CUE (its\npolicies name their type through _pudl.base_schema).",
+          "flags": [
+            {
+              "name": "dry-run",
+              "usage": "Report what would change without writing",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "what-if",
+              "usage": "Evaluate a draft policy `FILE` without installing it or writing results",
+              "type": "string"
             }
           ]
         }

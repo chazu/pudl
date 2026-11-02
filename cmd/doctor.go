@@ -32,6 +32,8 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
   projections   projected facts that no longer match the catalog or facts specs
+  policy-results policy results that are stale (evaluated with an older policy
+                digest), orphaned, or never evaluated
   data-permissions  data files or directories group or other users can access
 
 Without --fix nothing is written. --fix applies every repair (or those named by

@@ -125,6 +125,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 	tally := projection.NewTally()
 	projected, projectedRes := projection.Prepare(e.projector, schema, doc.id, resourceID, len(identityValues) > 0, data)
 	tally.Note(e.projector, schema, projectedRes)
+	results := e.policies.Prepare(schema, doc.id, resourceID, len(identityValues) > 0, data)
 
 	var existing *database.CatalogEntry
 	err = e.catalogDB.WithCatalogTxContext(opts.Context, func(tx *database.CatalogTx) error {
@@ -148,7 +149,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		if err := tx.AddEntry(entry); err != nil {
 			return err
 		}
-		return projection.Observe(tx, projected)
+		return observeFacts(tx, projected, results)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("commit document: %w", err)
