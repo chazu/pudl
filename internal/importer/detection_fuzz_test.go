@@ -11,7 +11,9 @@ import (
 // FuzzDetectFormat runs content-based detection (a file with no extension).
 //
 // Guaranteed properties:
-//   - detection never panics and never errors on a readable file;
+//   - detection never panics, and never errors on a readable file unless the
+//     content claims a compression format (gzip or zstd magic bytes) and does
+//     not decompress: that is a corrupt file, reported rather than guessed at;
 //   - a single valid JSON object or array that fits in the 4KB detection window
 //     is detected as json or ndjson;
 //   - whenever detection says ndjson, the content imports as NDJSON: every
@@ -39,6 +41,9 @@ func FuzzDetectFormat(f *testing.F) {
 		}
 		format, err := importer.detectFormat(path)
 		if err != nil {
+			if DetectCompression(path) != "none" {
+				return // corrupt compressed content: an error is the right answer
+			}
 			t.Fatalf("detectFormat error on %q: %v", data, err)
 		}
 		if len(data) > 4096 {
