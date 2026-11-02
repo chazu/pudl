@@ -77,7 +77,7 @@ These flags apply to every command.
   - [pudl snapshot prune](#pudl-snapshot-prune) — Remove snapshots a retention policy no longer wants
   - [pudl snapshot retain](#pudl-snapshot-retain) — Pin a snapshot against pruning (--release to unpin)
   - [pudl snapshot show](#pudl-snapshot-show) — Show one snapshot's provenance and contents
-- [pudl status](#pudl-status) — Show convergence status of models and targets
+- [pudl status](#pudl-status) — Show the verified status of models and targets
 - [pudl version](#pudl-version) — Show version information
 
 ## pudl completion
@@ -1770,23 +1770,22 @@ Flags:
 
 ## pudl status
 
-Show convergence status of models and targets
+Show the verified status of models and targets
 
 ```text
 pudl status [target]
 ```
 
 ```text
-Display the convergence status recorded in the catalog — the per-target
-status the run loop writes (a model run's verdict is recorded on its instance row,
+Display the status recorded in the catalog — the per-target verdict
+pudl run writes (a model run's verdict is recorded on its instance row,
 "//models/<name>").
 
 Status values:
-  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted
-  clean       — observed == desired, drift re-check confirmed (in sync)
-  drifted     — observed != desired
-  converging  — actions applied, pending re-verification
-  failed      — a converge run failed (cap exhausted or execute error)
+  unknown     — no verified status recorded yet (the retired "converging" value also reads as unknown)
+  clean       — observed == desired, confirmed by a live observation
+  drifted     — observed != desired, or a fail-severity check did not pass
+  failed      — recorded by the retired convergence workflow; re-run the model to replace it
 
 Examples:
     pudl status
@@ -1794,16 +1793,15 @@ Examples:
     pudl status --json
 ```
 
-`unknown` means there is no verified terminal status, including when an
-external apply completed but PUDL could not persist its manifest receipt, and
-when the only clean observation came from an `--only` run that covered part of
-the model. The run row (`runs`) distinguishes these: it carries the run's real
-verdict and a note.
+`unknown` means there is no verified terminal status: the model has not been
+observed, its last run could not establish a verdict (an incomplete inventory or
+a check without evidence), or the row still holds the `converging` value written
+by the retired convergence workflow. The run row (`runs`) carries each run's
+real verdict and a note.
 
-Lifecycle: `drifted → converging` (apply, via `ingest-manifest`) `→ clean`
-(verified ∅ by the drift re-check) `| failed`. `clean` is the single in-sync
-state (drift == ∅), written only off an actual observation with successful
-receipt persistence — never a bare apply.
+`clean` is the single in-sync state (drift == ∅), written only off a live
+observation, never off a `--from-catalog` replay. `failed` appears only on rows
+written by the retired convergence workflow; the next run replaces it.
 
 ## pudl version
 

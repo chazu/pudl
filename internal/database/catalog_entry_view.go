@@ -23,13 +23,16 @@ const catalogEntryViewMetaKey = "view:" + CatalogEntryView
 // stale as soon as the item was shared, a membership was removed, or a snapshot
 // was pruned. A rule joining on collection_id now sees the unambiguous
 // membership, or nothing when there is more than one.
+//
+// status reads the legacy `converging` value as `unknown`, as every other
+// catalog read does (readStatus).
 var catalogEntryViewSQL = fmt.Sprintf(`CREATE VIEW %s AS
 		SELECT
 			id,
 			schema,
 			origin,
 			format,
-			status,
+			CASE status WHEN 'converging' THEN 'unknown' ELSE status END AS status,
 			entry_type,
 			target,
 			run_id,

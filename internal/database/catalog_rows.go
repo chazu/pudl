@@ -103,6 +103,10 @@ func scanEntry(row rowScanner) (*CatalogEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	if entry.Status != nil {
+		status := readStatus(*entry.Status)
+		entry.Status = &status
+	}
 	return &entry, nil
 }
 

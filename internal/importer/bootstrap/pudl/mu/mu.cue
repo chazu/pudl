@@ -1,5 +1,15 @@
 package mu
 
+// Package mu keeps the schemas of the retired mu integration (see
+// docs/retired-commands.md) so catalog entries written before the removal —
+// manifests, actions, drift observations, plans and targets — still list,
+// show and validate. Nothing new is written with them, except #ObserveResult
+// and #ObserveSnapshot: observation ingest still files untyped records and
+// snapshot collections under these historical names.
+//
+// LEGACY: #Manifest, #ManifestTarget, #ManifestAction, #DriftObservation,
+// #PlanOutput, #PlanPlugin, #PlanAction and #Target.
+
 // Manifest represents the output of `mu build --emit-manifest`.
 // Each build produces one manifest documenting what actions were executed,
 // which were cached, and what artifacts were produced.
@@ -70,9 +80,9 @@ package mu
 	...
 }
 
-// ObserveSnapshot represents a single mu observe run — the collection of all
-// records observed across one or more targets at a point in time.
-// Created by `pudl ingest-observe` to group records from one invocation.
+// ObserveSnapshot represents a single observation — the collection of all
+// records observed across one or more targets at a point in time. Created by
+// each populate phase to group the records from one run.
 #ObserveSnapshot: {
 	_pudl: {
 		schema_type:   "collection"

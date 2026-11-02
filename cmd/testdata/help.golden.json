@@ -1848,8 +1848,8 @@
     },
     {
       "use": "status [target]",
-      "short": "Show convergence status of models and targets",
-      "long": "Display the convergence status recorded in the catalog — the per-target\nstatus the run loop writes (a model run's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted\n  clean       — observed == desired, drift re-check confirmed (in sync)\n  drifted     — observed != desired\n  converging  — actions applied, pending re-verification\n  failed      — a converge run failed (cap exhausted or execute error)\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
+      "short": "Show the verified status of models and targets",
+      "long": "Display the status recorded in the catalog — the per-target verdict\npudl run writes (a model run's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet (the retired \"converging\" value also reads as unknown)\n  clean       — observed == desired, confirmed by a live observation\n  drifted     — observed != desired, or a fail-severity check did not pass\n  failed      — recorded by the retired convergence workflow; re-run the model to replace it\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
       "args": "custom",
       "flags": [
         {

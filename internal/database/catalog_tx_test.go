@@ -27,14 +27,14 @@ func TestWithCatalogTx_CommitsOnSuccess(t *testing.T) {
 		if err := tx.AddEntry(txTestEntry("a", "web")); err != nil {
 			return err
 		}
-		return tx.UpdateStatus("web", "converging")
+		return tx.UpdateStatus("web", "drifted")
 	}))
 
 	entry, err := db.GetEntry("a")
 	require.NoError(t, err)
 	require.NotNil(t, entry)
 	require.NotNil(t, entry.Status)
-	assert.Equal(t, "converging", *entry.Status)
+	assert.Equal(t, "drifted", *entry.Status)
 }
 
 // The whole point: a step that fails part-way leaves nothing behind, rather than
@@ -48,7 +48,7 @@ func TestWithCatalogTx_RollsBackOnError(t *testing.T) {
 		if err := tx.AddEntry(txTestEntry("a", "web")); err != nil {
 			return err
 		}
-		if err := tx.UpdateStatus("web", "converging"); err != nil {
+		if err := tx.UpdateStatus("web", "drifted"); err != nil {
 			return err
 		}
 		return wanted
@@ -80,7 +80,7 @@ func TestCatalogTx_ReadsSeeUncommittedWrites(t *testing.T) {
 		}
 		assert.Equal(t, "a", entry.ID)
 
-		if err := tx.UpdateStatus("web", "converging"); err != nil {
+		if err := tx.UpdateStatus("web", "drifted"); err != nil {
 			return err
 		}
 		statuses, err := tx.GetTargetStatuses()
@@ -88,7 +88,7 @@ func TestCatalogTx_ReadsSeeUncommittedWrites(t *testing.T) {
 			return err
 		}
 		require.Len(t, statuses, 1)
-		assert.Equal(t, "converging", statuses[0].Status, "status written in this transaction is visible to it")
+		assert.Equal(t, "drifted", statuses[0].Status, "status written in this transaction is visible to it")
 		return nil
 	}))
 }

@@ -173,7 +173,7 @@ func getTargetStatusesIn(q dbtx) ([]TargetStatus, error) {
 			return nil, fmt.Errorf("failed to scan target status: %w", err)
 		}
 		if statusVal != nil {
-			ds.Status = *statusVal
+			ds.Status = readStatus(*statusVal)
 		} else {
 			ds.Status = "unknown"
 		}

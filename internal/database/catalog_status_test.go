@@ -78,7 +78,7 @@ func TestUpdateStatus_Valid(t *testing.T) {
 	require.NoError(t, db.AddEntry(entry))
 
 	// Test each valid status value
-	validStatuses := []string{"unknown", "clean", "drifted", "converging", "failed"}
+	validStatuses := []string{"unknown", "clean", "drifted", "failed"}
 	for _, status := range validStatuses {
 		err := db.UpdateStatus(defName, status)
 		require.NoError(t, err, "UpdateStatus should succeed for %q", status)
@@ -133,6 +133,14 @@ func TestGetTargetStatuses(t *testing.T) {
 			EntryType:       &entryType,
 		}
 		require.NoError(t, db.AddEntry(entry))
+		if d.status == legacyConvergingStatus {
+			// Only the retired convergence workflow wrote it; it is no
+			// longer a valid write.
+			require.Error(t, db.UpdateStatus(d.name, d.status))
+			_, err := db.DB().Exec(`UPDATE catalog_entries SET status = ? WHERE target = ?`, d.status, d.name)
+			require.NoError(t, err)
+			continue
+		}
 		require.NoError(t, db.UpdateStatus(d.name, d.status))
 	}
 
@@ -148,5 +156,13 @@ func TestGetTargetStatuses(t *testing.T) {
 
 	assert.Equal(t, "clean", statusMap["app_a"])
 	assert.Equal(t, "drifted", statusMap["app_b"])
-	assert.Equal(t, "converging", statusMap["app_c"])
+	assert.Equal(t, "unknown", statusMap["app_c"], "a legacy converging row reads as unknown")
+
+	entry, err := db.GetEntry("def-status-002")
+	require.NoError(t, err)
+	require.NotNil(t, entry.Status)
+	assert.Equal(t, "unknown", *entry.Status, "entry reads map the legacy status too")
+	var viewStatus string
+	require.NoError(t, db.DB().QueryRow(`SELECT status FROM `+CatalogEntryView+` WHERE id = 'def-status-002'`).Scan(&viewStatus))
+	assert.Equal(t, "unknown", viewStatus, "the datalog catalog_entry view maps it as well")
 }
