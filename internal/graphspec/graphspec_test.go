@@ -12,7 +12,7 @@ func TestParseAndEval(t *testing.T) {
 		"name": "name",
 		"account": "project",
 		"region": {"path": "region", "last_segment": true},
-		"refs": [{"path": "selfLink", "trim_prefix": "https://x/v1/"}, "id"]
+		"refs": [{"path": "selfLink", "trim_prefix": "https://x/v1/"}, "id", {"path": "email", "prepend": "serviceAccount:"}]
 	}`))
 	require.NoError(t, err)
 	rec := map[string]any{
@@ -21,12 +21,13 @@ func TestParseAndEval(t *testing.T) {
 		"region":   "https://x/v1/projects/p1/regions/us-central1",
 		"selfLink": "https://x/v1/projects/p1/global/networks/net-a",
 		"id":       json.Number("42"),
+		"email":    "etl@p1.iam.gserviceaccount.com",
 	}
 	require.Equal(t, "net-a", Eval(spec.Name, rec))
 	require.Equal(t, "p1", Eval(spec.Account, rec))
 	require.Equal(t, "us-central1", Eval(spec.Region, rec))
 	require.Equal(t, "", Eval(spec.Zone, rec))
-	require.Equal(t, []string{"projects/p1/global/networks/net-a", "42"}, spec.RefValues(rec))
+	require.Equal(t, []string{"projects/p1/global/networks/net-a", "42", "serviceAccount:etl@p1.iam.gserviceaccount.com"}, spec.RefValues(rec))
 }
 
 func TestParseRejectsMistakes(t *testing.T) {

@@ -412,8 +412,10 @@ load:
 
 - Change detection is a 1 s server-side check of a cheap stamp; pudl writes
   do not notify a running `pudl ui`.
-- The packs do not project IAM policy attachments or policy documents (only
-  role trust), instance profiles, or egress rules.
+- Pack coverage: AWS IAM policy attachments and policy documents
+  (`grants_on`) are not projected; GCP IAM covers project-level bindings only
+  (not folder, organization or resource-level policies), and firewall rules
+  that target service accounts are not matched to instances.
 - Collapse and expand still move nodes outside the toggled group (anchored,
   77–99% sibling order kept). There is no pinning and no animation.
 - A refreshed inventory relays out from scratch. That is deterministic, but a

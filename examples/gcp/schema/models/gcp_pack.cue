@@ -56,6 +56,8 @@ _gcpSchemas: {
 	"kms-keyrings":         "gcp.#KMSKeyRing"
 	"kms-keys":             "gcp.#KMSKey"
 	instances:              "gcp.#ComputeInstance"
+	"service-accounts":     "gcp.#ServiceAccount"
+	"iam-policies":         "gcp.#ProjectIAMPolicy"
 }
 
 // The gcloud list command of each per-project collector. Each prints every
@@ -75,6 +77,7 @@ _gcpCommands: {
 	"pubsub-topics": ["pubsub", "topics", "list"]
 	"pubsub-subscriptions": ["pubsub", "subscriptions", "list"]
 	instances: ["compute", "instances", "list"]
+	"service-accounts": ["iam", "service-accounts", "list"]
 }
 
 // The enumeration every live collector repeats its runs over: one input per
@@ -103,6 +106,11 @@ _gcpRuns: {
 	}]
 	"kms-keys": [{
 		argv: list.Concat([["sh", "../../populators/gcp/kms-keys.sh", "{{item}}"], _gcpKMSLocations])
+		set: project: "{{item}}"
+	}]
+	// get-iam-policy takes the project as an argument and prints one object.
+	"iam-policies": [{
+		argv: ["gcloud", "projects", "get-iam-policy", "{{item}}", "--format=json"]
 		set: project: "{{item}}"
 	}]
 }
@@ -166,6 +174,8 @@ _#GCPFixture: _#GCPCollector & {
 #GCPKMSKeyRings: _#GCPLive & {_type: "kms-keyrings"}
 #GCPKMSKeys: _#GCPLive & {_type: "kms-keys"}
 #GCPInstances: _#GCPLive & {_type: "instances"}
+#GCPServiceAccounts: _#GCPLive & {_type: "service-accounts"}
+#GCPIAMPolicies: _#GCPLive & {_type: "iam-policies"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -182,3 +192,5 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixtureKMSKeyRings: _#GCPFixture & {_type: "kms-keyrings"}
 #GCPFixtureKMSKeys: _#GCPFixture & {_type: "kms-keys"}
 #GCPFixtureInstances: _#GCPFixture & {_type: "instances"}
+#GCPFixtureServiceAccounts: _#GCPFixture & {_type: "service-accounts"}
+#GCPFixtureIAMPolicies: _#GCPFixture & {_type: "iam-policies"}

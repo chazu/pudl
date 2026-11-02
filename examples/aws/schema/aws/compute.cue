@@ -30,6 +30,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 				vpc_id:    "VpcId"
 				state:     "State.Name"
 				public_ip: {exists: "PublicIpAddress"}
+				instance_profile: "IamInstanceProfile.Arn"
 			}
 			aws_instance_sg: {each: "SecurityGroups[*]", args: {group_id: "GroupId"}}
 		}

@@ -113,6 +113,16 @@ func TestGraphExportAWSPack(t *testing.T) {
 	partner := relationship(t, g, "trust_allows_assume", "ref:arn:aws:iam::111122223333:root", "arn:aws:iam::123456789012:role/partner-audit")
 	require.Equal(t, "yes", partner.Properties["conditional"])
 	require.NotContains(t, strings.Join(trust, "\n"), "app-ec2-role", "service principals are not projected")
+
+	// Instance -> instance profile -> role.
+	profile := "arn:aws:iam::123456789012:instance-profile/app-ec2-role"
+	require.Contains(t, l.edges("has_instance_profile"), "i-0aa00000000000001 -> "+profile)
+	require.Contains(t, l.edges("profile_role"), profile+" -> arn:aws:iam::123456789012:role/app-ec2-role")
+
+	// Egress: the default allow-all, with protocol -1 and no port.
+	egress := relationship(t, g, "allows_egress_to", "sg-0aa00000000000001", "ext:cidr:0.0.0.0/0")
+	require.Equal(t, "-1", egress.Properties["protocol"])
+	require.NotContains(t, egress.Properties, "port")
 }
 
 // relationship finds one edge by type and native (or ref/ext) endpoint names.
@@ -178,7 +188,21 @@ func TestGraphExportGCPPack(t *testing.T) {
 	require.Equal(t, "us-central1-a", bastion.Zone)
 	require.Equal(t, "us-central1", bastion.Region, "derived from the zone")
 	require.Contains(t, l.edges("in_subnet"), vm("us-central1-a/instances/bastion-1")+" -> https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app")
-	require.Contains(t, l.edges("runs_as"), vm("us-central1-a/instances/bastion-1")+" -> ref:ops@example-project.iam.gserviceaccount.com")
+	runsAs := l.edges("runs_as")
+	require.Contains(t, runsAs, vm("us-central1-a/instances/bastion-1")+" -> ops@example-project.iam.gserviceaccount.com", "a collected service account resolves")
+	require.Contains(t, runsAs, vm("us-central1-c/instances/batch-worker-1")+" -> ref:123456789012-compute@developer.gserviceaccount.com", "the default compute account was not collected")
+
+	// Project IAM bindings: member -> the project's policy, with roles.
+	bindings := l.edges("iam_binding")
+	policy := l.byNative["example-project"]
+	require.Equal(t, "gcp.iam.project_policy", policy.Type)
+	require.Contains(t, bindings, "ops@example-project.iam.gserviceaccount.com -> example-project", "serviceAccount: members resolve to the account")
+	require.Contains(t, bindings, "ref:user:alice@example.com -> example-project")
+	require.Contains(t, bindings, "ext:any:* -> example-project", "allUsers is Anyone, not a missing resource")
+	ops := relationship(t, g, "iam_binding", "ops@example-project.iam.gserviceaccount.com", "example-project")
+	require.Equal(t, "roles/editor", ops.Properties["role"])
+	sre := relationship(t, g, "iam_binding", "ref:group:sre@example.com", "example-project")
+	require.Equal(t, "yes", sre.Properties["conditional"])
 	applies := l.edges("applies_to")
 	require.Contains(t, applies, fwl("allow-ssh-world")+" -> "+vm("us-central1-a/instances/bastion-1"), "matched by target tag")
 	require.NotContains(t, applies, fwl("allow-ssh-world")+" -> "+vm("us-central1-b/instances/orders-api-1"), "untagged instance")

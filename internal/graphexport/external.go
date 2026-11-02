@@ -5,8 +5,9 @@ import (
 	"sort"
 )
 
-// External endpoints. A rule may name an address range ("0.0.0.0/0") or
-// "*" (any principal) as an edge end. Those are not uncollected resources,
+// External endpoints. A rule may name an address range ("0.0.0.0/0"), "*"
+// (any principal), or a cloud's public principal (GCP's allUsers and
+// allAuthenticatedUsers) as an edge end. Those are not uncollected resources,
 // so they must not read as "not in inventory": they become external
 // resources, outside every account.
 const (
@@ -16,7 +17,14 @@ const (
 
 // externalFor returns the external resource a value denotes, if any.
 func externalFor(value string) (Resource, bool) {
-	if value == "*" {
+	if value == "allAuthenticatedUsers" {
+		return Resource{
+			ID: "ext:any-authenticated", Type: externalAnyType, Name: "Any signed-in Google account", Provider: "external", NativeID: value,
+			Properties: map[string]any{"note": "Any authenticated Google account, inside or outside your organization."},
+			Evidence:   []Evidence{},
+		}, true
+	}
+	if value == "*" || value == "allUsers" {
 		return Resource{
 			ID: "ext:any:*", Type: externalAnyType, Name: "Anyone (*)", Provider: "external", NativeID: "*",
 			Properties: map[string]any{"note": "Any principal. Named by a rule, not a cataloged resource."},

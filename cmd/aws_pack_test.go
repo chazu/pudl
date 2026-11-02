@@ -13,7 +13,7 @@ import (
 // awsPackTypes are the collectors of the AWS content pack.
 var awsPackTypes = []string{
 	"vpcs", "subnets", "security-groups", "instances", "volumes",
-	"db-instances", "kms-keys", "s3-buckets", "iam-users", "iam-roles",
+	"db-instances", "kms-keys", "s3-buckets", "iam-users", "iam-roles", "iam-instance-profiles",
 }
 
 var awsPackFamilies = []string{"network-exposure", "data-protection", "identity-posture"}

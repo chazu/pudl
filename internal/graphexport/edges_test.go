@@ -73,6 +73,8 @@ func TestExternalEndpointsAreNotMissingResources(t *testing.T) {
 		edgeRow("allows_ingress_from", "rid-sg", "10.0.0.0/16", "observed"),
 		edgeRow("trust_allows_assume", "*", "rid-sg", "observed"),
 		edgeRow("allows_ingress_from", "rid-sg", "not-a-range", "observed"),
+		edgeRow("iam_binding", "allUsers", "rid-sg", "observed"),
+		edgeRow("iam_binding", "allAuthenticatedUsers", "rid-sg", "observed"),
 	}}}, x, func(string) {})
 	targets := map[string]bool{}
 	for _, r := range rels {
@@ -83,10 +85,16 @@ func TestExternalEndpointsAreNotMissingResources(t *testing.T) {
 	require.True(t, targets["ext:cidr:10.0.0.0/16"])
 	require.True(t, targets["ext:any:*"])
 	require.True(t, targets["ref:not-a-range"], "anything else unresolved stays a reference")
+	require.True(t, targets["ext:any-authenticated"])
 	ext := x.externalResources()
-	require.Len(t, ext, 3)
-	require.Equal(t, "Anywhere (0.0.0.0/0)", ext[1].Name)
-	require.Equal(t, "external.principal", ext[0].Type)
+	require.Len(t, ext, 4, "allUsers is the same Anyone node as *")
+	names := map[string]string{}
+	for _, r := range ext {
+		names[r.ID] = r.Name
+	}
+	require.Equal(t, "Anywhere (0.0.0.0/0)", names["ext:cidr:0.0.0.0/0"])
+	require.Equal(t, "Anyone (*)", names["ext:any:*"])
+	require.Equal(t, "Any signed-in Google account", names["ext:any-authenticated"])
 }
 
 func TestEdgePropertiesMergePerKey(t *testing.T) {

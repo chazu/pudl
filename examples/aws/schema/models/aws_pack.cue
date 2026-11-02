@@ -46,6 +46,7 @@ _awsSchemas: {
 	"s3-buckets":      "aws.#S3Bucket"
 	"iam-users":       "aws.#IAMUser"
 	"iam-roles":       "aws.#IAMRole"
+	"iam-instance-profiles": "aws.#IAMInstanceProfile"
 }
 
 // Regional list commands, and the JMESPath query that unwraps the response's
@@ -162,6 +163,13 @@ _awsScripts: {
 		fields=$(printf '`{"AccountId":"%s"}`' "$a")
 		aws iam list-roles --profile "$p" --output json --query "Roles | [].merge(@, $fields)"
 		"""
+	"iam-instance-profiles": """
+		\(_awsShPrelude)
+		p=$1
+		a=$(account "$p")
+		fields=$(printf '`{"AccountId":"%s"}`' "$a")
+		aws iam list-instance-profiles --profile "$p" --output json --query "InstanceProfiles | [].merge(@, $fields)"
+		"""
 }
 
 // The enumeration every live collector repeats its runs over: one input per
@@ -182,13 +190,13 @@ _awsRuns: {
 		(t): [{argv: list.Concat([["sh", "-c", _awsScripts.regional, "aws-\(t)", "{{item}}", _awsRegionFilter, c.query], c.args])}]
 	}
 	"kms-keys": [{argv: ["sh", "-c", _awsScripts["kms-keys"], "aws-kms-keys", "{{item}}", _awsRegionFilter]}]
-	for t in ["s3-buckets", "iam-users", "iam-roles"] {
+	for t in ["s3-buckets", "iam-users", "iam-roles", "iam-instance-profiles"] {
 		(t): [{argv: ["sh", "-c", _awsScripts[t], "aws-\(t)", "{{item}}"]}]
 	}
 }
 
 // Global types carry no Region.
-_awsGlobal: {"s3-buckets": true, "iam-users": true, "iam-roles": true}
+_awsGlobal: {"s3-buckets": true, "iam-users": true, "iam-roles": true, "iam-instance-profiles": true}
 
 // A collector observes one type completely. A run that fails is a failed
 // input: the other runs are ingested and the observation is incomplete.
@@ -234,6 +242,7 @@ _#AWSFixture: _#AWSCollector & {
 #AWSS3Buckets: _#AWSLive & {_type: "s3-buckets"}
 #AWSIAMUsers: _#AWSLive & {_type: "iam-users"}
 #AWSIAMRoles: _#AWSLive & {_type: "iam-roles"}
+#AWSIAMInstanceProfiles: _#AWSLive & {_type: "iam-instance-profiles"}
 #AWSFixtureVPCs: _#AWSFixture & {_type: "vpcs"}
 #AWSFixtureSubnets: _#AWSFixture & {_type: "subnets"}
 #AWSFixtureSecurityGroups: _#AWSFixture & {_type: "security-groups"}
@@ -244,3 +253,4 @@ _#AWSFixture: _#AWSCollector & {
 #AWSFixtureS3Buckets: _#AWSFixture & {_type: "s3-buckets"}
 #AWSFixtureIAMUsers: _#AWSFixture & {_type: "iam-users"}
 #AWSFixtureIAMRoles: _#AWSFixture & {_type: "iam-roles"}
+#AWSFixtureIAMInstanceProfiles: _#AWSFixture & {_type: "iam-instance-profiles"}

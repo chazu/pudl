@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Identity edges: GCP service accounts and project IAM; AWS instance profiles and egress (2026-11-02)
+
+GCP: `gcp.#ServiceAccount` (so `runs_as` resolves) and
+`gcp.#ProjectIAMPolicy` (member → project policy `iam_binding` edges with
+role and conditional properties; `allUsers` and `allAuthenticatedUsers` become
+external principals). AWS: `aws.#IAMInstanceProfile` (instance → profile →
+role) and security-group egress (`allows_egress_to`). `_pudl.graph` values
+gain `prepend`. See `implog/2026_11_02_identity_edges.md`.
+
 ### Sparse graphs explain themselves; GCE instances; pack upgrades (2026-11-02)
 
 The export reports catalog coverage: how many entries are shown, and which

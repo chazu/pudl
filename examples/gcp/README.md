@@ -49,6 +49,8 @@ stays complete.
 | `gcp-routers` | `compute routers list` | `gcp.#Router` | `selfLink` | `compute.routers.list` (same) |
 | `gcp-addresses` | `compute addresses list` | `gcp.#Address` | `selfLink` | `compute.addresses.list`, `compute.globalAddresses.list` (same) |
 | `gcp-instances` | `compute instances list` | `gcp.#ComputeInstance` | `selfLink` | `compute.instances.list` (`roles/compute.viewer`) |
+| `gcp-service-accounts` | `iam service-accounts list` | `gcp.#ServiceAccount` | `email` | `iam.serviceAccounts.list` (`roles/iam.serviceAccountViewer`) |
+| `gcp-iam-policies` | `projects get-iam-policy P` | `gcp.#ProjectIAMPolicy` | `project` | `resourcemanager.projects.getIamPolicy` (`roles/iam.securityReviewer`) |
 | `gcp-gke-clusters` | `container clusters list` | `gcp.#GKECluster` | `selfLink` | `container.clusters.list` (`roles/container.clusterViewer`) |
 | `gcp-sql-instances` | `sql instances list` | `gcp.#SQLInstance` | `selfLink` | `cloudsql.instances.list` (`roles/cloudsql.viewer`) |
 | `gcp-buckets` | `storage buckets list` | `gcp.#Bucket` | `name` | `storage.buckets.list` (`roles/viewer`) |
