@@ -2,8 +2,8 @@ package importer
 
 import (
 	"encoding/json"
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/inference"
-	"os"
 )
 
 // ImportMetadata represents the metadata structure for imported data
@@ -101,5 +101,5 @@ func (e *EnhancedImporter) saveMetadata(metadata ImportMetadata, path string) er
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	return artifacts.WriteFilePrivate(path, data)
 }

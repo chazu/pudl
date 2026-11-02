@@ -3,7 +3,6 @@ package artifacts
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 
 	"github.com/chazu/pudl/internal/filelock"
@@ -14,7 +13,7 @@ import (
 // a catalog transaction. Preparation of private temporary files needs no lock.
 func WithLock(ctx context.Context, pudlRoot string, fn func() error) error {
 	path := filepath.Join(pudlRoot, "data", "sqlite", "artifacts.lock")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := MkdirPrivate(filepath.Dir(path)); err != nil {
 		return err
 	}
 	lock, err := filelock.AcquireContext(ctx, path)
