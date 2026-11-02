@@ -200,7 +200,7 @@ func phaseVerdict(r *RunReport) string {
 }
 
 // persistRunStatus records a run verdict on the model instance row
-// (target = modelTargetKey(name)). Best-effort: a status-write failure (or no
+// (target = systemmodel.InstanceTarget(name)). Best-effort: a status-write failure (or no
 // catalog) never fails the run, but it is reported rather than swallowed — a
 // silently dropped verdict leaves the previous run's status standing, which is
 // how a stale `clean` used to survive.
@@ -215,7 +215,7 @@ func persistRunStatus(cat *runCatalog, name, status string, live bool) {
 		}
 		return
 	}
-	if err := db.UpdateStatus(modelTargetKey(name), status); err != nil && live {
+	if err := db.UpdateStatus(systemmodel.InstanceTarget(name), status); err != nil && live {
 		fmt.Fprintf(errw(), "warning: could not record status %q: %v\n", status, err)
 	}
 }

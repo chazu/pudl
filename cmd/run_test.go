@@ -82,7 +82,7 @@ func TestCleanRun_ModelRowClean(t *testing.T) {
 
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	require.NoError(t, err)
-	target := modelTargetKey("mymodel")
+	target := systemmodel.InstanceTarget("mymodel")
 	entryType := "model-instance"
 	require.NoError(t, db.AddEntry(database.CatalogEntry{
 		ID: "model-row", StoredPath: "m.json", MetadataPath: "m.meta",

@@ -9,6 +9,7 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 // checkReportVersion is the version of the one report a check records. Version
@@ -80,13 +81,13 @@ func checkPlan(args []string, opts checkOptions) (*acute.RunSetPlan, error) {
 	}
 	selected := make([]acute.RunSetModel, 0, len(args))
 	for _, requested := range args {
-		template, _, _, err := resolveModelTemplate(requested)
+		template, err := resolveModelTemplate(requested)
 		if err != nil {
 			return nil, err
 		}
 		selected = append(selected, acute.RunSetModel{
 			Name: template.Name, DependsOn: template.DependsOn,
-			Aliases: []string{requested, shortDefName(template.Origin.SchemaName)},
+			Aliases: []string{requested, systemmodel.ShortDefName(template.Origin.SchemaName)},
 		})
 	}
 	return acute.NewRunSetPlan(selected)

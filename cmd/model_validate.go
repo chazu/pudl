@@ -23,7 +23,7 @@ system.`,
 	SilenceUsage:      true,
 	ValidArgsFunction: completeModelNames,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		template, _, _, err := resolveModelTemplate(args[0])
+		template, err := resolveModelTemplate(args[0])
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-package cmd
+package systemmodel
 
 import (
 	"testing"
@@ -14,22 +14,29 @@ func TestSplitCommandLine(t *testing.T) {
 		`  x   ''  `:                                       {"x", ""},
 	}
 	for line, want := range cases {
-		got, err := splitCommandLine(line)
+		got, err := SplitCommandLine(line)
 		require.NoError(t, err, line)
 		assert.Equal(t, want, got, line)
 	}
 	for _, bad := range []string{``, `a 'b`, `a "b`, `a \`} {
-		_, err := splitCommandLine(bad)
+		_, err := SplitCommandLine(bad)
 		assert.Error(t, err, bad)
 	}
 }
 
 func TestParsePopulateSpec(t *testing.T) {
-	p, err := parsePopulateSpec("command:gcloud sql instances list --format=json")
+	argv, err := ParsePopulateSpec("command:gcloud sql instances list --format=json")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"gcloud", "sql", "instances", "list", "--format=json"}, p.argv)
-	_, err = parsePopulateSpec("plugin:k8s")
+	assert.Equal(t, []string{"gcloud", "sql", "instances", "list", "--format=json"}, argv)
+	_, err = ParsePopulateSpec("plugin:k8s")
 	require.ErrorContains(t, err, "retired")
-	_, err = parsePopulateSpec("k8s")
+	_, err = ParsePopulateSpec("k8s")
 	require.Error(t, err)
+}
+
+func TestAdHocModelIsNamedAfterItsProgram(t *testing.T) {
+	m, err := AdHocModel("command:/usr/bin/gcloud compute networks list")
+	require.NoError(t, err)
+	assert.Equal(t, "adhoc-gcloud", m.Name)
+	assert.Equal(t, []CommandRun{{Argv: []string{"/usr/bin/gcloud", "compute", "networks", "list"}}}, m.Populate.Runs)
 }

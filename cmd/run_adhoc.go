@@ -2,25 +2,18 @@ package cmd
 
 import (
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// adHocModel constructs the same model shape used by registered runs from a
-// `--populate command:<cmdline>` spec. The model is intentionally not written
-// to the schema repository; only its run/snapshot artifacts are durable.
+// adHocModel builds the model a `--populate command:<cmdline>` check runs. Its
+// commands run from the current directory.
 func adHocModel(spec string) (*systemmodel.SystemModel, string, error) {
-	parsed, err := parsePopulateSpec(spec)
+	model, err := systemmodel.AdHocModel(spec)
 	if err != nil {
 		return nil, "", err
 	}
-	name := "adhoc-" + strings.ToLower(nonIdentifier.ReplaceAllString(filepath.Base(parsed.argv[0]), "-"))
-	return &systemmodel.SystemModel{
-		Name:     name,
-		Populate: systemmodel.Populate{Runs: []systemmodel.CommandRun{{Argv: parsed.argv}}},
-	}, mustCurrentDir(), nil
+	return model, mustCurrentDir(), nil
 }
 
 func mustCurrentDir() string {

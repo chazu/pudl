@@ -51,7 +51,7 @@ func TestModelValidateRejectsDesiredAtSensitivePath(t *testing.T) {
 	wsPolicy = &workspace.Policy{ModelSearchPaths: []string{schemaRoot}, SchemaSearchPaths: []string{schemaRoot}}
 	t.Cleanup(func() { wsPolicy = previousPolicy })
 
-	template, _, _, err := resolveModelTemplate("leaky")
+	template, err := resolveModelTemplate("leaky")
 	require.NoError(t, err)
 	problems, err := validateModelTemplate(template)
 	require.NoError(t, err)

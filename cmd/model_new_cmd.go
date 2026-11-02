@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/spf13/cobra"
 )
 
@@ -32,11 +33,11 @@ Examples:
 		}
 		var argv []string
 		if modelNewPopulate != "" {
-			spec, err := parsePopulateSpec(modelNewPopulate)
+			parsed, err := systemmodel.ParsePopulateSpec(modelNewPopulate)
 			if err != nil {
 				return err
 			}
-			argv = spec.argv
+			argv = parsed
 		}
 		path, err := writeModelScaffold(args[0], argv, false, modelNewForce)
 		if err != nil {

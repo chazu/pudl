@@ -46,7 +46,7 @@ func declaredDeps(model string, dependencies []string) (map[string]struct{}, []s
 			continue
 		}
 		canonical := dep
-		if found, _, _, rerr := resolveModelTemplate(dep); rerr == nil && found != nil {
+		if found, rerr := resolveModelTemplate(dep); rerr == nil && found != nil {
 			canonical = found.Name
 		} else {
 			warnings = append(warnings, fmt.Sprintf("depends_on %q does not resolve to a known model (edge recorded; impact answers stay partial until it is registered/run)", dep))
@@ -204,9 +204,9 @@ func checkUpstreamFreshness(cat *runCatalog, m *systemmodel.SystemModel) []strin
 			continue
 		}
 		seen[to] = struct{}{}
-		switch statusByTarget[modelTargetKey(to)] {
+		switch statusByTarget[systemmodel.InstanceTarget(to)] {
 		case "drifted", "failed":
-			stale = append(stale, fmt.Sprintf("%s (%s)", to, statusByTarget[modelTargetKey(to)]))
+			stale = append(stale, fmt.Sprintf("%s (%s)", to, statusByTarget[systemmodel.InstanceTarget(to)]))
 		}
 	}
 	if len(stale) == 0 {

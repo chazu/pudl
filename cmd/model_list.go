@@ -100,7 +100,7 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 			m, _ := systemmodel.DecodeValue(val)
 			out = append(out, ModelInfo{
 				Name:       template.Name,
-				DefName:    shortDefName(schemaName),
+				DefName:    systemmodel.ShortDefName(schemaName),
 				SchemaName: schemaName,
 				Dir:        mod.LoadPath,
 				Model:      m,
@@ -113,7 +113,7 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 }
 
 // modelRunStatuses returns the latest run verdict keyed by model target
-// (modelTargetKey(name)) — the catalog target key, best-effort — an empty map if the catalog is unavailable.
+// (systemmodel.InstanceTarget(name)) — the catalog target key, best-effort — an empty map if the catalog is unavailable.
 func modelRunStatuses() map[string]string {
 	out := map[string]string{}
 	db, err := database.NewCatalogDB(effectivePudlDir())
@@ -162,7 +162,7 @@ resolve — independent of whether a model has been checked yet.`,
 		fmt.Fprintf(outw(), "Registered models (%d):\n\n", len(models))
 		fmt.Fprintf(outw(), "  %-24s %-9s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
 		for _, mi := range models {
-			status := statuses[modelTargetKey(mi.Name)]
+			status := statuses[systemmodel.InstanceTarget(mi.Name)]
 			if status == "" {
 				status = "-"
 			}
@@ -204,7 +204,7 @@ func printModelsJSON(models []ModelInfo) error {
 	out := make([]modelSummary, 0, len(models))
 	for _, mi := range models {
 		s := mi.summary()
-		s.Status = statuses[modelTargetKey(mi.Name)]
+		s.Status = statuses[systemmodel.InstanceTarget(mi.Name)]
 		out = append(out, s)
 	}
 	b, err := json.MarshalIndent(out, "", "  ")

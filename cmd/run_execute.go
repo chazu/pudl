@@ -135,7 +135,7 @@ func loadRunModel(opts runOptions) (*resolvedRun, error) {
 		}
 		return &resolvedRun{model: model, modelDir: modelDir}, nil
 	}
-	template, templateDir, _, err := resolveModelTemplate(opts.model)
+	template, err := resolveModelTemplate(opts.model)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func loadRunModel(opts runOptions) (*resolvedRun, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &resolvedRun{model: model, modelDir: templateDir}, nil
+	return &resolvedRun{model: model, modelDir: template.Origin.LoadDir}, nil
 }
 
 // recordRunContext writes the model instance and its dependency facts, and

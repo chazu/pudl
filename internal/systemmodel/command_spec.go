@@ -1,17 +1,19 @@
-package cmd
+package systemmodel
 
 import (
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-// splitCommandLine splits a command line into argv the way a POSIX shell
+// SplitCommandLine splits a command line into argv the way a POSIX shell
 // would, without any expansion: whitespace separates words, single quotes
 // keep everything literally, double quotes keep everything except \" \\ \$
 // and \` escapes, and a backslash outside quotes escapes the next character.
 // It is how `--populate command:<cmdline>` becomes a #CommandRun argv, which
 // pudl then runs directly — no shell, so nothing in the line is interpreted.
-func splitCommandLine(line string) ([]string, error) {
+func SplitCommandLine(line string) ([]string, error) {
 	var argv []string
 	var word strings.Builder
 	inWord := false
@@ -78,22 +80,36 @@ func splitCommandLine(line string) ([]string, error) {
 	return argv, nil
 }
 
-// populateSpec is a parsed `--populate command:<cmdline>` value.
-type populateSpec struct {
-	argv []string
-}
-
-func parsePopulateSpec(spec string) (populateSpec, error) {
+// ParsePopulateSpec parses a `--populate command:<cmdline>` value into the
+// argv of one #CommandRun.
+func ParsePopulateSpec(spec string) ([]string, error) {
 	spec = strings.TrimSpace(spec)
 	if line, ok := strings.CutPrefix(spec, "command:"); ok {
-		argv, err := splitCommandLine(line)
+		argv, err := SplitCommandLine(line)
 		if err != nil {
-			return populateSpec{}, fmt.Errorf("populate command: %w", err)
+			return nil, fmt.Errorf("populate command: %w", err)
 		}
-		return populateSpec{argv: argv}, nil
+		return argv, nil
 	}
 	if strings.HasPrefix(spec, "plugin:") {
-		return populateSpec{}, fmt.Errorf("--populate plugin:<name> was retired with mu observers; run the program as command:<cmdline> (see docs/retired-commands.md)")
+		return nil, fmt.Errorf("--populate plugin:<name> was retired with mu observers; run the program as command:<cmdline> (see docs/retired-commands.md)")
 	}
-	return populateSpec{}, fmt.Errorf("populate must use command:<cmdline> (got %q)", spec)
+	return nil, fmt.Errorf("populate must use command:<cmdline> (got %q)", spec)
+}
+
+var nonIdentifier = regexp.MustCompile(`[^[:alnum:]]+`)
+
+// AdHocModel constructs the same model shape a registered model has from a
+// `--populate command:<cmdline>` spec. The model is intentionally not written
+// to the schema repository; only its run and snapshot artifacts are durable.
+func AdHocModel(spec string) (*SystemModel, error) {
+	argv, err := ParsePopulateSpec(spec)
+	if err != nil {
+		return nil, err
+	}
+	name := "adhoc-" + strings.ToLower(nonIdentifier.ReplaceAllString(filepath.Base(argv[0]), "-"))
+	return &SystemModel{
+		Name:     name,
+		Populate: Populate{Runs: []CommandRun{{Argv: argv}}},
+	}, nil
 }
