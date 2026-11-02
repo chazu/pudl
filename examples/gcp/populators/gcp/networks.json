@@ -1,0 +1,32 @@
+[
+  {
+    "kind": "compute#network",
+    "id": "1000000000000000001",
+    "creationTimestamp": "2024-01-10T09:00:00.000-08:00",
+    "name": "prod-vpc",
+    "description": "Production VPC",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+    "selfLinkWithId": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/1000000000000000001",
+    "autoCreateSubnetworks": false,
+    "subnetworks": [
+      "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/gke-nodes",
+      "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/gke-secure",
+      "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app"
+    ],
+    "routingConfig": {"routingMode": "REGIONAL"},
+    "mtu": 1460,
+    "networkFirewallPolicyEnforcementOrder": "AFTER_CLASSIC_FIREWALL"
+  },
+  {
+    "kind": "compute#network",
+    "id": "1000000000000000002",
+    "creationTimestamp": "2023-06-01T12:00:00.000-07:00",
+    "name": "default",
+    "description": "Default network for the project",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/default",
+    "selfLinkWithId": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/1000000000000000002",
+    "autoCreateSubnetworks": true,
+    "routingConfig": {"routingMode": "REGIONAL"},
+    "networkFirewallPolicyEnforcementOrder": "AFTER_CLASSIC_FIREWALL"
+  }
+]

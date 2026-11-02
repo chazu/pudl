@@ -4,6 +4,19 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP content pack (2026-11-02)
+
+`pudl example install gcp` installs a pack written in CUE (`pudl-xf5.1`):
+draft schemas for 15 GCP resource types with identity, sensitive fields and
+fact projection; live (`gcp-<type>`, gcloud with project fan-out) and fixture
+(`gcp-fixture-<type>`) collectors; best-practice policies for firewalls,
+addresses, buckets, Cloud SQL, KMS keys and GKE; cross-resource rules; and
+three checks-only families (network hygiene, data protection, GKE posture)
+that fail on high-severity noncompliance. See the
+[pack README](../examples/gcp/README.md) and the
+[delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
+five policy and doctor engine findings.
+
 ### `pudl check MODEL...`: one command and one report (2026-11-01)
 
 `pudl check MODEL...` replaces `pudl run` and `pudl run set` (`pudl-4fx.1`).
@@ -649,6 +662,8 @@ Beads work:
 - `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
   multi-project fan-out, waivers, finding changes over time, ownership,
   relationship rules).
+  - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
+    `implog/2026_11_02_gcp_content_pack.md`.
 - `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type

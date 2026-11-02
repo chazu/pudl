@@ -1,0 +1,33 @@
+[
+  {
+    "kind": "dns#managedZone",
+    "id": "7000000000000000001",
+    "name": "example-com",
+    "dnsName": "example.com.",
+    "description": "Public zone",
+    "creationTime": "2023-04-01T10:00:00.000Z",
+    "nameServers": ["ns-cloud-a1.googledomains.com.", "ns-cloud-a2.googledomains.com."],
+    "visibility": "public",
+    "dnssecConfig": {"kind": "dns#managedZoneDnsSecConfig", "state": "on", "nonExistence": "nsec3"},
+    "cloudLoggingConfig": {"kind": "dns#managedZoneCloudLoggingConfig"}
+  },
+  {
+    "kind": "dns#managedZone",
+    "id": "7000000000000000002",
+    "name": "internal-example",
+    "dnsName": "internal.example.",
+    "description": "Private zone for prod-vpc",
+    "creationTime": "2024-01-10T09:30:00.000Z",
+    "nameServers": ["ns-gcp-private.googledomains.com."],
+    "visibility": "private",
+    "privateVisibilityConfig": {
+      "kind": "dns#managedZonePrivateVisibilityConfig",
+      "networks": [
+        {
+          "kind": "dns#managedZonePrivateVisibilityConfigNetwork",
+          "networkUrl": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc"
+        }
+      ]
+    }
+  }
+]
