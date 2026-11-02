@@ -2,11 +2,33 @@ package operation
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/chazu/pudl/internal/checkreport"
+	"github.com/chazu/pudl/internal/checks"
+	"github.com/chazu/pudl/internal/populate"
 )
+
+// TestFailedInputsLeaveFindingsUnknown: a run whose populate had a failed
+// input reaches no verdict on its latest-known checks, so the findings an
+// earlier report recorded are unknown, not resolved.
+func TestFailedInputsLeaveFindingsUnknown(t *testing.T) {
+	earlier := checkreport.CheckResult{Name: "c", Query: "q", Expect: "empty", Severity: "fail", Scope: checks.ScopeLatestKnown, Outcome: "fail",
+		Findings: []checkreport.Finding{{Key: "k", State: checkreport.FindingNew, Arguments: map[string]any{"name": "a"}}}}
+	now := checkreport.CheckResult{Name: "c", Query: "q", Expect: "empty", Severity: "fail", Scope: checks.ScopeLatestKnown, Outcome: "pass", Passed: true}
+	results := []checkreport.CheckResult{now}
+	markFailedInputChecks(results, &checkreport.Populate{Runs: 2, FailedInputs: []populate.FailedInput{{Run: 1}}})
+
+	at := time.Now()
+	findings, changes := checkreport.Classify(
+		checkreport.NewObservation("run_1", "observe-only", at, results[0], false),
+		[]checkreport.Observation{checkreport.NewObservation("run_0", "observe-only", at.Add(-time.Hour), earlier, true)})
+	assert.Equal(t, 0, changes.Resolved)
+	assert.Equal(t, 1, changes.Unknown)
+	assert.Equal(t, checkreport.FindingUnknown, findings[0].State)
+}
 
 // TestReportHasNewFailures: only a new, unwaived finding of a failing
 // fail-severity check is a new failure for --fail-on new.
