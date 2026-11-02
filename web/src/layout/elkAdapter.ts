@@ -20,9 +20,9 @@ import { SIZES } from '../visual/ids';
 import { ISOLATED_PREFIX, isolatedPlan, packedIds, placeBlock, type IsolatedBlock } from './isolatedPacking';
 import type { Box, EdgeRoute, LayoutConfig, LayoutEngine, LayoutHints, LayoutResult, Point } from './types';
 
-const GROUP_PADDING = '[top=34,left=12,bottom=12,right=12]';
+export const GROUP_PADDING = '[top=34,left=12,bottom=12,right=12]';
 
-function rootOptions(config: LayoutConfig): LayoutOptions {
+export function rootOptions(config: LayoutConfig): LayoutOptions {
   const common: LayoutOptions = {
     'elk.json.shapeCoords': 'ROOT',
     'elk.json.edgeCoords': 'ROOT',
@@ -166,7 +166,7 @@ export function fromElkGraph(out: ElkNode, graph: VisualGraph, durationMs: numbe
   };
 }
 
-function straight(a?: Box, b?: Box): Point[] {
+export function straight(a?: Box, b?: Box): Point[] {
   const c = (box?: Box): Point => (box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : { x: 0, y: 0 });
   return [c(a), c(b)];
 }

@@ -173,69 +173,78 @@ conservation (every candidate has exactly one disposition).
 
 ## Layout
 
-`LayoutEngine` (`src/layout/types.ts`) is the boundary. `ElkLayoutEngine`
-(`src/layout/elkAdapter.ts`) is the only code that knows ELK's JSON format.
-Another engine, for example fCoSE for an exploratory view, would implement the
-same interface and return the same `LayoutResult` (absolute boxes, port boxes
-and edge polylines).
+`LayoutEngine` (`src/layout/types.ts`) is the boundary; `createLayoutEngine`
+(`src/layout/engine.ts`) picks the implementation. Two ELK engines exist, and
+only they know ELK's JSON format. Another engine, for example fCoSE for an
+exploratory view, would implement the same interface and return the same
+`LayoutResult` (absolute boxes, port boxes and edge polylines).
 
-The ELK configuration for the layered views:
+- **Incremental engine** (`elkIncremental.ts`), the default for layered
+  views. Each group is laid out on its own (`hierarchyHandling:
+  SEPARATE_CHILDREN`). An edge that crosses group boundaries is split into
+  one segment per level, through generated boundary ports on each group it
+  leaves or enters (exit ports on the flow's out side, entry ports on its in
+  side), and the segments' routes are joined. Every level is then a flat
+  graph, which lets ELK's interactive strategies run there (see below).
+- **Single-pass engine** (`elkAdapter.ts`): `hierarchyHandling:
+  INCLUDE_CHILDREN`, which routes everything in one pass. It is used for the
+  packed inventory view (`rectpacking` per group, edges drawn straight), and
+  for every view with `?engine=classic`.
 
-- `elk.algorithm: layered` with `hierarchyHandling: INCLUDE_CHILDREN`, so
-  edges between nodes in different nested groups are routed in one pass.
-- Orthogonal routing; ports are `FIXED_SIDE`; group padding reserves the header.
-- `elk.json.shapeCoords` / `edgeCoords: ROOT`, so all coordinates come back
-  absolute.
-- Node placement is `BRANDES_KOEPF`. `NETWORK_SIMPLEX` throws
-  `NEdge must have a source and target NNode specified` on some cross-hierarchy
-  edges in a top-to-bottom hierarchical layout (the security view).
-- Aggregated edges get an ELK label, so ELK reserves room for the count pill.
-
-The inventory view uses `rectpacking` per group and draws edges straight (they
-are off by default).
+Both engines use orthogonal routing, `FIXED_SIDE` ports, group padding that
+reserves the header, `elk.json.shapeCoords`/`edgeCoords: ROOT` (absolute
+output), Brandes–Köpf node placement, and an ELK label on aggregated edges so
+room is reserved for the count pill. `NETWORK_SIMPLEX` throws on some
+cross-hierarchy edges under `INCLUDE_CHILDREN`, and in the incremental engine
+it was less stable than BK.
 
 ### Layout stability
 
-These rules were measured on the demo data with a sibling-order metric (the
-share of sibling pairs whose left/right and above/below relation is
-unchanged).
+These rules were measured with a sibling-order metric: the share of sibling
+pairs whose left/right and above/below relation is unchanged.
 
-1. **ELK is deterministic, so model order is canonical.** Children are always
-   passed in projection order with `considerModelOrder: NODES_AND_EDGES`, and
-   the same state reproduces the same layout exactly. An earlier version sorted
-   children by their previous on-screen position. That changed the model order
-   and kept only 39–54% of sibling order on an identical rerun, so it was
-   removed.
-2. **Filters are render-only by default.** Layout runs on a graph built with
+1. **Model order is canonical.** Children are passed in projection order with
+   `considerModelOrder: NODES_AND_EDGES`. ELK is deterministic, so an
+   identical input gives an identical layout. (Sorting children by their
+   previous positions made it worse and was removed.)
+2. **Previous positions keep the order.** `LayoutMemory` keeps each view's
+   last result and passes it as `LayoutHints.previous`. In every level where
+   most children were laid out before, the incremental engine sets
+   interactive layering, crossing minimisation and cycle breaking, and feeds
+   each child's previous centre relative to its parent. New children go after
+   everything else along the flow. Node placement stays normal: interactive
+   placement treats inputs as minimums, and the diagram drifted and grew on
+   every pass. ELK rejects these strategies under `INCLUDE_CHILDREN`, which
+   is why the incremental engine lays out levels separately.
+3. **States seen before are reproduced exactly.** `layoutSignature` hashes
+   everything a layout depends on (nodes, parents, sizes, ports, edges,
+   labels, config). `LayoutMemory` caches results by signature, so collapsing
+   a group and expanding it again restores every position. Relayout clears
+   the view's memory and starts fresh.
+4. **Filters are render-only by default.** Layout runs on a graph built with
    filters neutralised (all available categories, no hidden types, full
-   scope). The drawn graph is a subset of that graph (a test checks nodes,
-   ports and edges in all four views), so toggling a type, scope or category
-   moves nothing. Small filter changes can otherwise reorder a whole group:
-   hiding one KMS key kept only 31–36% of sibling order, because ELK's
-   hierarchical layer sweep settles on a different local optimum. "Reflow on
-   filter" opts into compacting.
-3. **Selection never relays out.** Highlighting is computed from the visual
-   graph.
-4. **Unconnected leaves are packed in a grid.** Layered layout puts every
-   node without edges in one layer, which turns a group of IAM users into
-   one long row. The adapter (`layout/isolatedPacking.ts`) removes such leaves
-   from the ELK graph (three or more per parent), reserves a placeholder box
-   sized for a compact grid, and places them inside it afterwards. On the
-   pack fixtures this took the security view from 5314×880 to 3792×1046.
-   Left-to-right flow then took it to 1653×1494, so the security view now
-   defaults to left-to-right.
-5. **Collapse and expand relay out, with an anchor.** The canvas keeps the
-   toggled group fixed on screen. Collapsing the largest VPC keeps 77% of
-   sibling order; the security and application views keep 83–99%. A test pins
-   these thresholds.
-6. ELK's interactive layering and crossing minimisation are not supported
-   with `INCLUDE_CHILDREN`. `semiInteractive`, `forceNodeModelOrder`,
-   thoroughness and every other layering strategy made no material difference.
+   scope). The drawn graph is a tested subset of it, so toggling a type,
+   scope or category moves nothing. "Reflow on filter" opts into compacting.
+5. **Selection never relays out.**
+6. **Unconnected leaves are packed in a grid** (`isolatedPacking.ts`):
+   layered layout puts every edge-less node in one layer, so three or more
+   per parent are replaced by a placeholder box and placed in a grid inside
+   it afterwards.
+7. **The canvas anchors the toggled group**, so it stays put on screen.
 
-`LayoutMemory` (`src/layout/layoutMemory.ts`) keeps the last result per view
-and passes it to the engine as `LayoutHints.previous`. The ELK adapter ignores
-it today. It is the seam for incremental work such as pinning or relaying out
-only the changed subtree.
+Measured on the demo data and the pack fixtures (incremental vs single-pass):
+collapsing the largest group kept network 0.85 vs 0.73 and security 0.89 vs
+0.39; a refresh that drops one resource kept network 0.87 vs 0.54 and security
+0.85 vs 0.62. In the application view, with three top-level applications, one
+vertical flip can cost a third of the pairs. A test requires the incremental
+engine to beat the single-pass engine across these cases, with no case
+below 0.6. In the browser, collapsing `prod-core` moved none of the other
+top-level groups, and expanding it restored all 60 positions.
+
+Costs: laying out levels separately is less compact. The demo views are
+1.1–1.3× wider. The fixture network view is 2.2× wider and 0.8× as tall
+(2780×1761 vs 1236×2177). An edge crossing several groups is drawn as
+joined segments.
 
 ## Semantic correctness rules
 
@@ -416,10 +425,8 @@ load:
   (`grants_on`) are not projected; GCP IAM covers project-level bindings only
   (not folder, organization or resource-level policies), and firewall rules
   that target service accounts are not matched to instances.
-- Collapse and expand still move nodes outside the toggled group (anchored,
-  77–99% sibling order kept). There is no pinning and no animation.
-- A refreshed inventory relays out from scratch. That is deterministic, but a
-  small change can reorder a large group.
+- Layout keeps relative order, not exact positions: after a change, nodes
+  near it shift to make room. There is no manual pinning and no animation.
 - With filters render-only, filtering leaves gaps until "Reflow on filter" or
   Relayout.
 - Edges into an *expanded* group (peering → VPC) end on the group border via
