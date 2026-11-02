@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/ingestprep"
 	"io"
 	"os"
@@ -46,7 +47,7 @@ func stageSourceLimited(ctx context.Context, sourcePath, rawDir string, maxBytes
 	}
 	defer source.Close()
 
-	if err := os.MkdirAll(rawDir, 0o755); err != nil {
+	if err := artifacts.MkdirPrivate(rawDir); err != nil {
 		return nil, fmt.Errorf("create raw directory: %w", err)
 	}
 	temp, err := os.CreateTemp(rawDir, ".staging-*")
@@ -78,7 +79,7 @@ func (s *stagedSource) Commit(finalPath string) (string, error) {
 	if s.tempPath == "" {
 		return finalPath, nil
 	}
-	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+	if err := artifacts.MkdirPrivate(filepath.Dir(finalPath)); err != nil {
 		return "", fmt.Errorf("create raw directory: %w", err)
 	}
 	if err := os.Rename(s.tempPath, finalPath); err != nil {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -61,7 +62,11 @@ func validateModelTemplate(template *systemmodel.ModelTemplate) ([]string, error
 	if err != nil {
 		return nil, err
 	}
-	return validateModel(model), nil
+	problems := validateModel(model)
+	if err := checkModelSchemas(model); err != nil {
+		problems = append(problems, err.Error())
+	}
+	return problems, nil
 }
 
 // validateModel runs structural checks beyond CUE decode (resolveModel already
@@ -84,6 +89,23 @@ func validateModel(m *systemmodel.SystemModel) []string {
 	}
 
 	return problems
+}
+
+// checkModelSchemas applies systemmodel.CheckSchemaContracts against the
+// workspace's schemas. A model that names no schema does not load them.
+func checkModelSchemas(m *systemmodel.SystemModel) error {
+	if m.Populate.Schema == "" && len(m.Desired) == 0 {
+		return nil
+	}
+	cfg, err := loadEffectiveConfig()
+	if err != nil {
+		return err
+	}
+	schemas, err := inference.Shared(effectiveSchemaPaths(cfg)...)
+	if err != nil {
+		return fmt.Errorf("load schemas for model %q: %w", m.Name, err)
+	}
+	return systemmodel.CheckSchemaContracts(m, schemas)
 }
 
 func init() {

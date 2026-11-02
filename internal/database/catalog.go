@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/filelock"
 	"github.com/chazu/pudl/internal/idgen"
@@ -123,7 +124,7 @@ func OpenCatalogDBReadOnly(configDir string) (*CatalogDB, error) {
 func (c *CatalogDB) initialize() (err error) {
 	// Ensure sqlite directory exists under config/data/sqlite/
 	sqliteDir := filepath.Join(c.configDir, "data", "sqlite")
-	if err := os.MkdirAll(sqliteDir, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(sqliteDir); err != nil {
 		return fmt.Errorf("failed to create sqlite directory: %w", err)
 	}
 	initLock, err := filelock.Acquire(filepath.Join(sqliteDir, "catalog.init.lock"))
@@ -141,6 +142,9 @@ func (c *CatalogDB) initialize() (err error) {
 
 	// Open database connection
 	dbPath := filepath.Join(sqliteDir, "catalog.db")
+	if err := artifacts.CreateFileExclPrivate(dbPath); err != nil {
+		return fmt.Errorf("failed to create database file: %w", err)
+	}
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=cache_size(10000)")
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)

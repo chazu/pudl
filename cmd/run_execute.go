@@ -114,9 +114,20 @@ func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (final
 
 // resolveRunModel loads the registered model the options name (project
 // .pudl/schema wins over global ~/.pudl/schema) — or builds the ad-hoc one
-// --populate describes. The model's directory is the base for relative
-// command paths.
+// --populate describes — and checks its schema contracts before any command
+// runs. The model's directory is the base for relative command paths.
 func resolveRunModel(opts runOptions) (*resolvedRun, error) {
+	resolved, err := loadRunModel(opts)
+	if err != nil {
+		return nil, err
+	}
+	if err := checkModelSchemas(resolved.model); err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
+func loadRunModel(opts runOptions) (*resolvedRun, error) {
 	if opts.populateSpec != "" {
 		model, modelDir, err := adHocModel(opts.populateSpec)
 		if err != nil {

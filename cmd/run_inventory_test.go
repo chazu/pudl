@@ -44,6 +44,7 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 	assert.False(t, res.Clean)
 	require.Len(t, res.Drifted, 2, "htop missing + restic changed; podman satisfied")
 	assert.False(t, res.Verified, "runInventoryDrift cannot know whether its scope is fresh")
+	assert.Equal(t, map[string][]string{"pudl/linux.#Package": {"name"}}, res.IdentityFallbacks, "reported once per schema, not per record")
 
 	changed := res.Drifted[1]
 	assert.Equal(t, "changed", changed.Reason)

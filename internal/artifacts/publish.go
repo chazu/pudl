@@ -36,7 +36,7 @@ func Publish(source, destination string) (bool, error) {
 }
 
 func PublishContext(ctx context.Context, source, destination string) (bool, error) {
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := MkdirPrivate(filepath.Dir(destination)); err != nil {
 		return false, err
 	}
 	if info, err := os.Lstat(destination); err == nil {

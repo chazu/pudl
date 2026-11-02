@@ -33,6 +33,9 @@ func (r ModelDriftResult) WriteMarkdown(w io.Writer) {
 			}
 		}
 	}
+	for _, note := range FallbackNotes(r.IdentityFallbacks) {
+		fmt.Fprintf(w, "- identity fallback: %s\n", note)
+	}
 	fmt.Fprintf(w, "- verified: %t\n", r.Verified)
 	if r.ObservedAt != nil {
 		fmt.Fprintf(w, "- observed_at: %s\n", formatTime(*r.ObservedAt))

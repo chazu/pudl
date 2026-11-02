@@ -649,6 +649,14 @@ Beads work:
     naming a policy is an error naming its type; `pudl doctor --fix --only
     policy-leaves` moves existing policy-leaf entries to their type with
     identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
+- `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
+  paths (and broken sensitive declarations), and a `populate.schema` naming a
+  policy, before any command runs. See
+  `implog/2026_11_02_model_load_schema_contracts.md`.
+- `pudl-167` (done): the `name|path|id` inventory identity fallback is one
+  function (`acute.IdentityFields`), and inventory drift and snapshot
+  comparison report each schema that used it (`identity_fallbacks`). Not fail
+  closed. See `implog/2026_11_02_identity_fallback_reported.md`.
 - `pudl-udi`: likely-secret detection outside sensitive-field coverage.
   - Done: pure detector (`internal/secrets`), `_pudl.secret_scan_ignore`
     allowlist, import and `--dry-run` warnings (`secret_warnings` in `--json`),
@@ -658,6 +666,11 @@ Beads work:
     facts, reported as warnings in text and the `secrets` section of the
     version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
   - Not yet: observe-ingest warnings (wiring described in the first implog).
+- Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
+  observe snapshots, staging files and the SQLite catalog are written 0600
+  under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
+  --only data-permissions` tightens older data. Schemas, rules, models and
+  config keep their modes. See `implog/2026_11_01_owner_only_data.md`.
 
 The convergence and value-wiring sections below are historical.
 
