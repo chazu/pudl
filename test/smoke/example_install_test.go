@@ -40,7 +40,9 @@ func TestSmoke_ExampleInstall(t *testing.T) {
 	command.Dir, command.Env = root, env
 	out, err := command.CombinedOutput()
 	require.Error(t, err)
-	require.Contains(t, string(out), "preserving your file")
+	require.Contains(t, string(out), "differ from this version and were left as they are")
+	require.Contains(t, string(out), "schema/models/git_inventory.cue")
+	require.Contains(t, string(out), "--overwrite")
 	after, err := os.ReadFile(model)
 	require.NoError(t, err)
 	require.Equal(t, edited, after)
