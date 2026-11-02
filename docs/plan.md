@@ -916,7 +916,9 @@ Beads work:
 - GCP pack fixes from a live run (done): the live collectors also match
   gcloud's "API has not been used in project P before or it is disabled"
   (container and kms print no SERVICE_DISABLED), and `gcp.#RunService` keeps
-  `metadata.labels` open (Cloud Functions 2nd gen adds labels). See
+  `metadata.labels` open (Cloud Functions 2nd gen adds labels). The live setting
+  `_gcpExtraEmptyWhen` adds operator-chosen empty patterns (e.g. billing
+  disabled). See
   `implog/2026_11_02_gcp_pack_live_fixes.md`.
 - `pudl-167` (done): the `name|path|id` inventory identity fallback is one
   function (`acute.IdentityFields`), and inventory drift and snapshot

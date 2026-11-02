@@ -30,6 +30,12 @@ _gcpProjectFilter: string | *""
 // Locations gcp-kms-keyrings and gcp-kms-keys list key rings in, per project.
 _gcpKMSLocations: [...string] | *["global"]
 
+// More errors to treat as "this project has none" on top of the disabled-API
+// patterns every live collector matches (_gcpEmptyWhen). Only add an error
+// you have decided means no resources for you, e.g. "Billing is disabled for
+// project" when unbilled projects' resources do not count.
+_gcpExtraEmptyWhen: [...string] | *[]
+
 // ---- End of live settings. ----
 
 // The schema each collector routes its records to.
@@ -107,7 +113,12 @@ _gcpRuns: {
 // most print the reason SERVICE_DISABLED; some (container, kms) print only
 // "... API has not been used in project P before or it is disabled". Any
 // other failure, including a project with billing disabled, is still a
-// failed input.
+// failed input unless _gcpExtraEmptyWhen names it.
+_gcpEmptyWhen: [
+	"SERVICE_DISABLED",
+	"API has not been used in project [^ ]+ before or it is disabled",
+]
+
 _#GCPCollector: {
 	_type:   string
 	_prefix: string
@@ -126,10 +137,7 @@ _#GCPLive: _#GCPCollector & {
 	_runs:   _gcpRuns[_type]
 	populate: {
 		each: _gcpProjectList
-		empty_when: [
-			"SERVICE_DISABLED",
-			"API has not been used in project [^ ]+ before or it is disabled",
-		]
+		empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])
 	}
 }
 

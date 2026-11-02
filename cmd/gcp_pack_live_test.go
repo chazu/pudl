@@ -13,7 +13,8 @@ import (
 // for two projects, and logs every invocation's arguments to $GCLOUD_LOG.
 // $GCLOUD_PROJECTS replaces the project list; in proj-nocompute the Compute
 // Engine and KMS APIs are disabled, so those commands fail as gcloud's do
-// (KMS without the SERVICE_DISABLED reason).
+// (KMS without the SERVICE_DISABLED reason); in proj-nobilling every command
+// fails with billing disabled.
 const fakeGcloud = `#!/bin/sh
 echo "$*" >> "$GCLOUD_LOG"
 for a in "$@"; do
@@ -28,6 +29,10 @@ if [ "$1" = compute ] && [ "$p" = proj-nocompute ]; then
 	echo "ERROR: (gcloud.$1.$2.list) Compute Engine API has not been used in project $p before or it is disabled." >&2
 	echo "- '@type': type.googleapis.com/google.rpc.ErrorInfo" >&2
 	echo "  reason: SERVICE_DISABLED" >&2
+	exit 1
+fi
+if [ "$p" = proj-nobilling ] && [ "$1" != projects ]; then
+	echo "ERROR: (gcloud.$1.$2.list) FAILED_PRECONDITION: Billing is disabled for project $p. Enable it, then retry." >&2
 	exit 1
 fi
 if [ "$1" = kms ] && [ "$p" = proj-nocompute ]; then
@@ -180,4 +185,29 @@ func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
 		require.Equal(t, "proj-nocompute", pr.EmptyInputs[0].Item, model)
 		require.Equal(t, "API has not been used in project [^ ]+ before or it is disabled", pr.EmptyInputs[0].Pattern, model)
 	}
+}
+
+// A billing-disabled project is a failed input by default; a pattern in
+// _gcpExtraEmptyWhen, set outside the pack, makes it an empty input.
+func TestGCPPackExtraEmptyWhen(t *testing.T) {
+	pudlDir := cliWorkspace(t)
+	fakeGcloudOnPath(t)
+	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-nobilling"}]`)
+	r := runCLI(t, "example", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.Error(t, r.Err)
+	pr := checkedModel(t, r.Stdout).Populate
+	require.Len(t, pr.FailedInputs, 1)
+	require.Equal(t, "proj-nobilling", pr.FailedInputs[0].Item)
+
+	writeFile(t, filepath.Join(pudlDir, "schema", "models", "gcp_settings.cue"),
+		"package models\n\n_gcpExtraEmptyWhen: [\"Billing is disabled for project\"]\n")
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr = checkedModel(t, r.Stdout).Populate
+	require.Empty(t, pr.FailedInputs)
+	require.Len(t, pr.EmptyInputs, 1)
+	require.Equal(t, "Billing is disabled for project", pr.EmptyInputs[0].Pattern)
 }
