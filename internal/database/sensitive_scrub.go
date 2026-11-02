@@ -100,38 +100,19 @@ func (c *CatalogDB) PendingScrubs() (oldFiles, uncompacted []string, err error) 
 	if ok, err := c.hasTable("sensitive_scrubs"); err != nil || !ok {
 		return nil, nil, err
 	}
-	rows, err := c.db.Query(`SELECT old_files FROM sensitive_redactions WHERE old_files IS NOT NULL`)
+	encoded, err := c.queryStrings(`SELECT old_files FROM sensitive_redactions WHERE old_files IS NOT NULL`)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var encoded string
-		if err := rows.Scan(&encoded); err != nil {
-			return nil, nil, err
-		}
+	for _, list := range encoded {
 		var files []string
-		if err := json.Unmarshal([]byte(encoded), &files); err != nil {
+		if err := json.Unmarshal([]byte(list), &files); err != nil {
 			return nil, nil, fmt.Errorf("decode scrub old_files: %w", err)
 		}
 		oldFiles = append(oldFiles, files...)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, err
-	}
-	scrubs, err := c.db.Query(`SELECT scrub_id FROM sensitive_scrubs WHERE compacted_at IS NULL ORDER BY scrubbed_at`)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer scrubs.Close()
-	for scrubs.Next() {
-		var id string
-		if err := scrubs.Scan(&id); err != nil {
-			return nil, nil, err
-		}
-		uncompacted = append(uncompacted, id)
-	}
-	return oldFiles, uncompacted, scrubs.Err()
+	uncompacted, err = c.queryStrings(`SELECT scrub_id FROM sensitive_scrubs WHERE compacted_at IS NULL ORDER BY scrubbed_at`)
+	return oldFiles, uncompacted, err
 }
 
 // IsArtifactReferenced reports whether any entry names path as its stored or
