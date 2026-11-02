@@ -142,6 +142,15 @@ See `docs/projection.md`.
   with a CUE comprehension; the environment is inherited, so cloud CLI
   credentials work). A model without `populate` is checks-only: it evaluates
   its checks over the catalog as it stands (e.g. imported data).
+- **Failed inputs**: a failing run does not discard the others. Their records
+  are ingested, the snapshot is incomplete, the report lists the failed run
+  under `populate.failed_inputs` (argv, exit status, stderr tail), checks over
+  it are unknown, and the model fails. `fail_fast: true` restores
+  all-or-nothing.
+- **Enumerated inputs**: `each: {argv: [...], select?: "field"}` runs a command
+  that prints a JSON list (strings, or objects with `select` naming the field);
+  every run is repeated per item with `"{{item}}"` replaced in its argv and
+  `set`. The report records the items under `populate.inputs`.
 - **Drift** set-diffs `desired` against the records the check just observed and
   reports `missing`/`changed`/`unidentifiable`/`ambiguous` findings. Nothing is
   changed.

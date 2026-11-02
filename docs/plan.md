@@ -4,6 +4,19 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Multi-project fan-out: failed inputs and enumeration (2026-11-02)
+
+A failing `#CommandRun` is a failed input (`pudl-xf5.3`). The other runs'
+records are ingested, and the snapshot is incomplete, so no scope is closed.
+The report lists each failure under `populate.failed_inputs` (argv, exit
+status, stderr tail). Checks over the observation are unknown, not passing,
+and the model fails. If every run fails, nothing is ingested;
+`populate.fail_fast: true` restores all-or-nothing. `populate.each` runs a
+command whose JSON list supplies the inputs, and repeats every run per item
+with `{{item}}` substituted. The report records the items as
+`populate.inputs`. See the
+[delivery log](../implog/2026_11_02_fanout_failed_inputs.md).
+
 ### GCP content pack (2026-11-02)
 
 `pudl example install gcp` installs a pack written in CUE (`pudl-xf5.1`):
@@ -679,6 +692,10 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.3` multi-project fan-out (failed inputs ingest the rest
+    as an incomplete observation with unknown checks; `populate.each`
+    enumeration; `populate.fail_fast`). See
+    `implog/2026_11_02_fanout_failed_inputs.md`.
   - Done: `pudl-xf5.4` check waivers: a `waivers` list on `#SystemModel`
     (check + witness selector, or policy + rule + resource; owner, reason,
     created and expires required, validated at load). Fully waived checks

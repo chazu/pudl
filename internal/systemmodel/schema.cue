@@ -76,8 +76,25 @@ package systemmodel
 //	    "list", "--project=\(p)", "--format=json"], set: project: p}]
 //
 // Each run's stdout is a JSON array of records, or a stream of JSON objects.
-// Any failing run fails the populate phase and nothing is ingested. argv and
-// set are recorded with the model instance: keep secrets out of them.
+// A run that fails is a failed input: the other runs' records are ingested,
+// the observation is incomplete, and the report lists the failed run (argv,
+// exit status, stderr tail). If every run fails, nothing is ingested.
+// fail_fast: true restores all-or-nothing: the first failure fails the
+// populate phase and nothing is ingested. argv and set are recorded with the
+// model instance: keep secrets out of them.
+//
+// each enumerates the fan-out inputs at run time instead of in CUE: its
+// command prints a JSON list of strings, or of objects whose select field
+// holds the input. Every run is then repeated once per input, with "{{item}}"
+// replaced in its argv and in set's string values:
+//
+//	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+//	runs: [{argv: ["gcloud", "compute", "firewall-rules", "list",
+//	    "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+//
+// CUE interpolation cannot see a value that exists only at run time, so the
+// placeholder is a literal string pudl substitutes. With each, every run must
+// use it; without each, none may.
 //
 // A record may self-tag with a QUOTED "_schema" label (e.g.
 // {"_schema": "git.repository", ...}) to route it. The quote matters in CUE —
@@ -88,8 +105,20 @@ package systemmodel
 	// allow_schema_fallback explicitly permits exploratory base/catchall fallback.
 	schema?: string
  allow_schema_fallback?: bool | *false
-	// timeout applies to each run (Go duration).
-	timeout?: string
+	// timeout applies to each run and to each's command (Go duration).
+	timeout?:   string
+	each?:      #Enumeration
+	fail_fast?: bool | *false
+}
+
+// #Enumeration — a command whose JSON output lists the fan-out inputs.
+#Enumeration: {
+	argv: [string, ...string]
+	// select is the field path of the input in each object; omit it when the
+	// command prints strings.
+	select?: string & !=""
+	// dir is the working directory, relative to the model file.
+	dir?: string
 }
 
 // #CommandRun — one command. argv is executed directly (no shell).

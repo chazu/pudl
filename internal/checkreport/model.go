@@ -11,6 +11,7 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/evidence"
+	"github.com/chazu/pudl/internal/populate"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/waiver"
@@ -52,6 +53,12 @@ type Populate struct {
 	// record, path and kind (never the value); stored data is unchanged.
 	SecretWarnings      []secretscan.Warning `json:"secret_warnings,omitempty"`
 	SecretWarningsTotal int                  `json:"secret_warnings_total,omitempty"`
+	// Inputs are the inputs `each` enumerated, recorded for provenance.
+	Inputs []string `json:"inputs,omitempty"`
+	// Runs counts the runs attempted; FailedInputs are those that failed.
+	// Their resources are unknown: the observation is incomplete.
+	Runs         int                    `json:"runs,omitempty"`
+	FailedInputs []populate.FailedInput `json:"failed_inputs,omitempty"`
 }
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated
@@ -137,11 +144,7 @@ func (r *ModelReport) Markdown() string {
 	}
 
 	if r.Populate != nil {
-		// The populate target is an internal catalog key; JSON carries it.
-		fmt.Fprintf(&b, "\n## populate\n- records: %d\n", r.Populate.Records)
-		if r.Populate.SnapshotID != "" {
-			fmt.Fprintf(&b, "- snapshot_id: %s\n", r.Populate.SnapshotID)
-		}
+		r.Populate.writeMarkdown(&b)
 	}
 	if r.Drift != nil || len(r.Checks) > 0 {
 		fmt.Fprintf(&b, "\n## findings\n")

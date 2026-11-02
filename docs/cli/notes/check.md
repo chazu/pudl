@@ -146,10 +146,25 @@ populate: {
 }
 ```
 
-The environment is inherited (cloud CLI credentials work). Any failing run
-fails the populate phase and nothing is ingested; the error quotes the end of
-its stderr. argv and `set` are recorded with the model: keep secrets out.
+The environment is inherited (cloud CLI credentials work). A failing run is a
+failed input: the other runs' records are ingested, the observation is
+incomplete, the report lists each failed run (`populate.failed_inputs`: argv,
+exit status, stderr tail), its checks are unknown, and the model fails. If
+every run fails, nothing is ingested. `fail_fast: true` restores
+all-or-nothing. argv and `set` are recorded with the model: keep secrets out.
 `pudl check --populate 'command:<cmdline>'` checks one ad hoc.
+
+To enumerate the inputs at run time, give `each` a command that prints a JSON
+list of strings, or of objects with `select` naming the field. Every run is
+repeated per input with `{{item}}` replaced in its argv and `set`, and the
+report records the inputs (`populate.inputs`):
+
+```cue
+populate: {
+	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+	runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+}
+```
 
 **Checks-only models.** A model without `populate` evaluates its checks over
 the catalog as it is — e.g. data brought in with `pudl import` — after syncing
