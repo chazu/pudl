@@ -653,6 +653,10 @@ Beads work:
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
   `implog/2026_11_02_model_load_schema_contracts.md`.
+- `pudl-167` (done): the `name|path|id` inventory identity fallback is one
+  function (`acute.IdentityFields`), and inventory drift and snapshot
+  comparison report each schema that used it (`identity_fallbacks`). Not fail
+  closed. See `implog/2026_11_02_identity_fallback_reported.md`.
 - `pudl-udi`: likely-secret detection outside sensitive-field coverage.
   - Done: pure detector (`internal/secrets`), `_pudl.secret_scan_ignore`
     allowlist, import and `--dry-run` warnings (`secret_warnings` in `--json`),
