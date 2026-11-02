@@ -15,14 +15,19 @@ type ObservationEvidence struct {
 
 // VerdictSummary keeps execution, expectations and evidence as separate axes.
 type VerdictSummary struct {
-	Execution     string                `json:"execution"`
-	Conformity    string                `json:"conformity"`
-	Checks        string                `json:"checks"`
-	Verification  string                `json:"verification"`
-	Scope         string                `json:"scope"`
-	DriftCount    int                   `json:"drift_count"`
-	FailedChecks  int                   `json:"failed_checks"`
-	UnknownChecks int                   `json:"unknown_checks"`
-	Evidence      []ObservationEvidence `json:"evidence,omitempty"`
-	NextActions   []string              `json:"next_actions,omitempty"`
+	Execution  string `json:"execution"`
+	Conformity string `json:"conformity"`
+	// Checks is not-checked, pass, waived (no failing check, at least one
+	// failing only on waived findings), fail or unknown.
+	Checks        string `json:"checks"`
+	Verification  string `json:"verification"`
+	Scope         string `json:"scope"`
+	DriftCount    int    `json:"drift_count"`
+	FailedChecks  int    `json:"failed_checks"`
+	UnknownChecks int    `json:"unknown_checks"`
+	// WaivedChecks counts checks whose every finding is waived; they are not
+	// FailedChecks.
+	WaivedChecks int                   `json:"waived_checks,omitempty"`
+	Evidence     []ObservationEvidence `json:"evidence,omitempty"`
+	NextActions  []string              `json:"next_actions,omitempty"`
 }

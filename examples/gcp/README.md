@@ -115,6 +115,36 @@ The fixtures contain compliant and noncompliant resources, so every fixture
 family exits 2 (a failing fail-severity check). `pudl model list` shows every
 model; each `gcp-fixture-*` model has a live `gcp-*` twin.
 
+## Waiving a finding
+
+To accept a finding until a date, add a waiver to the family in
+`.pudl/schema/models/gcp_pack_checks.cue`. A policy waiver names the policy,
+the rule and the resource ID (`pudl policy show gcp.#FirewallBestPractice`
+lists failing resources by ID):
+
+```cue
+#GCPNetworkHygieneChecks: _#GCPNetworkHygiene & {
+	_prefix: "gcp-"
+	waivers: [{
+		policy:   "gcp.#FirewallBestPractice"
+		rule:     "gcp-firewall-world-ingress"
+		resource: "<resource ID>"
+		owner:    "security"
+		reason:   "public bastion until the VPN lands"
+		created:  "2026-11-01"
+		expires:  "2026-12-31"
+	}]
+}
+```
+
+`policy-high` and `policy-any` then report that firewall `waived`, with the
+waiver, and the family no longer exits 2 for it. After 2026-12-31 the finding
+counts again and the report flags the expired waiver. A waiver can instead
+target a cross-resource check's witness, for example `{check:
+"nat-ip-not-in-use", witness: {address: "<address selfLink>"}, ...}`. The
+policy-high rules carry `severity` so a waiver covers only the high and
+critical violations that check reports.
+
 ## Run against one live project
 
 1. Edit the live settings at the top of `.pudl/schema/models/gcp_pack.cue`:

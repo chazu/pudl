@@ -49,6 +49,9 @@ package systemmodel
 	// CHECK — the observe-only flag queries (pudl Datalog).
 	checks?: [...#Check]
 
+	// WAIVERS — accepted, time-boxed exceptions to the checks' findings.
+	waivers?: [...#Waiver]
+
 	// DESIRED — declared desired state (IDEA Definition layer). Present → each
 	// run reports drift between it and what was observed; nothing is changed.
 	desired?: [...#DesiredResource]
@@ -183,6 +186,38 @@ package systemmodel
 	severity: "info" | "warn" | "fail"
 	message:  string
 }
+
+// #Waiver — an accepted exception to this model's check findings. A waived
+// finding is reported `waived`, not passed, and does not fail the check. Target
+// either one check's witnesses:
+//
+//	{check: "nat-ip-not-in-use", witness: {address: "<selfLink>"}, ...}
+//
+// (a witness is waived when it carries every selector value), or one
+// compliance-policy violation:
+//
+//	{policy: "gcp.#BucketBestPractice", rule: "gcp-bucket-uniform-access",
+//	 resource: "<resource ID>", ...}
+//
+// (a check witness with resource and policy arguments is waived when every
+// violation it stands for is). owner, reason, created and expires are
+// required. A waiver applies through its expires date (UTC); after that the
+// finding counts again and the report flags the expired waiver. A waiver that
+// matches no finding is reported stale.
+#Waiver: {
+	check?:    string & !=""
+	witness?:  {[string]: _}
+	policy?:   string & !=""
+	rule?:     string & !=""
+	resource?: string & !=""
+	owner:     string & !=""
+	reason:    string & !=""
+	created:   #Date
+	expires:   #Date
+}
+
+// #Date — a calendar date, YYYY-MM-DD.
+#Date: =~"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 
 // #Freshness — how the model stays current.
 #Freshness: {

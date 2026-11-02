@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/populate"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/secretscan"
+	"github.com/chazu/pudl/internal/waiver"
 )
 
 // ModelReportVersion is the version a model report is recorded with.
@@ -33,8 +34,11 @@ type ModelReport struct {
 	Populate         *Populate               `json:"populate,omitempty"`
 	Drift            *acute.ModelDriftResult `json:"drift,omitempty"`
 	Checks           []CheckResult           `json:"checks,omitempty"`
-	OK               bool                    `json:"ok"` // overall: no phase error, no fail-severity check failed
-	Error            string                  `json:"error,omitempty"`
+	// Waivers are the model's declared waivers after its checks: active,
+	// expired or stale, with how many findings each matched.
+	Waivers []waiver.Outcome `json:"waivers,omitempty"`
+	OK      bool             `json:"ok"` // overall: no phase error, no fail-severity check failed
+	Error   string           `json:"error,omitempty"`
 }
 
 // Populate summarizes a model's populate phase.
@@ -74,10 +78,23 @@ type CheckResult struct {
 	Scope              string                  `json:"scope"`
 	Passed             bool                    `json:"passed"`
 	Message            string                  `json:"message,omitempty"`
+	// Waived counts the findings an active waiver excuses. When it equals
+	// Count the outcome is waived.
+	Waived int `json:"waived,omitempty"`
 }
+
+// OutcomeWaived is the outcome of a failed check whose every finding an
+// active waiver excuses. It is not a pass: Passed stays false.
+const OutcomeWaived = "waived"
 
 // Uncertain reports whether the check could not establish a verdict.
 func (c CheckResult) Uncertain() bool { return c.Outcome == "unknown" || c.Outcome == "error" }
+
+// IsWaived reports whether the check failed only on waived findings.
+func (c CheckResult) IsWaived() bool { return c.Outcome == OutcomeWaived }
+
+// Failing reports whether the check did not pass and is not waived.
+func (c CheckResult) Failing() bool { return !c.Passed && !c.IsWaived() }
 
 // Render emits the report as indented JSON when asJSON, else as markdown. A
 // version-2 report without a summary gets one computed from its own fields.
@@ -140,13 +157,19 @@ func (r *ModelReport) Markdown() string {
 				}
 				continue
 			}
-			if c.Passed {
+			switch {
+			case c.Passed:
 				fmt.Fprintf(&b, "  - ✓ %s (%s)\n", c.Name, c.Severity)
-			} else {
+			case c.IsWaived():
+				fmt.Fprintf(&b, "  - ~ %s [%s] waived — %d match(es), all waived: %s\n", c.Name, c.Severity, c.Count, c.Message)
+			case c.Waived > 0:
+				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es), %d waived: %s\n", c.Name, c.Severity, c.Count, c.Waived, c.Message)
+			default:
 				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es): %s\n", c.Name, c.Severity, c.Count, c.Message)
 			}
 			WriteFindings(&b, c)
 		}
 	}
+	writeWaivers(&b, r.Waivers)
 	return b.String()
 }

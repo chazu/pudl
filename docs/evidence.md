@@ -139,8 +139,11 @@ Each model's report uses `report_version: 2`. Checks add an `outcome` field
 (`pass`, `fail`, `unknown`, `error`) and structured `diagnostics`. The existing
 `passed` field is true only for a pass. Unknown/error means the check could not
 establish its claim, independent of severity; detailed exit status is 1. A
-fail-severity assertion violation still uses detailed status 2. Historical
-version-1 reports remain readable without being reinterpreted as fresh evidence.
+fail-severity assertion violation still uses detailed status 2. A failed check
+whose every finding a model waiver excuses has outcome `waived` (`passed` stays
+false); it does not fail the check or count toward status 2. See
+[waivers](cli-reference.md#pudl-check). Historical version-1 reports remain
+readable without being reinterpreted as fresh evidence.
 
 Empty JSON arrays from command observers create valid zero-record snapshots.
 
