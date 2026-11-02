@@ -71,7 +71,8 @@ var migrations = []migration{
 	{23, "projection_state", (*CatalogDB).ensureProjectionState},
 	{24, "retire_guessed_dependencies", (*CatalogDB).retireGuessedDependencies},
 	{25, "observation_completeness", (*CatalogDB).ensureObservationCompleteness},
-	{26, "sensitive_scrub_audit", (*CatalogDB).ensureSensitiveScrubTables},
+	{26, "policy_state", (*CatalogDB).ensurePolicyState},
+	{27, "sensitive_scrub_audit", (*CatalogDB).ensureSensitiveScrubTables},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step

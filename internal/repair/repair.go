@@ -46,11 +46,12 @@ type Repair struct {
 // Registry lists every repair in the order `pudl doctor --fix` applies them:
 // names are canonical before classification, classification settles before
 // identity is computed from it, and projected facts follow the final entries.
-// Policy leaves move to their types before inference re-checks classification.
-// Data permissions depend on no other repair. The opt-in sensitive scrub runs
-// last, against the final classification, and re-projects what it rewrites.
+// Policy leaves move to their types before inference re-checks classification,
+// and policy results are re-evaluated against the final entries. Data
+// permissions depend on no other repair. The opt-in sensitive scrub runs last,
+// against the final classification, and re-projects what it rewrites.
 func Registry() []Repair {
-	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, dataPermissions, sensitiveScrub}
+	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, policyResults, dataPermissions, sensitiveScrub}
 }
 
 // Names returns the registered repair names in order.

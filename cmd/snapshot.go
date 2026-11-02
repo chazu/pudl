@@ -26,7 +26,7 @@ var snapshotCmd = &cobra.Command{
 
 Each populate or observe ingest records one snapshot: which model it was taken
 for, by which run, in which workspace, from which source, and how many records it
-holds. A snapshot ID is what "pudl run --from-catalog --catalog-scope <id>"
+holds. A snapshot ID is what "pudl check <model> --from-catalog --catalog-scope <id>"
 replays against.
 
 Snapshots accumulate — one per run, plus one raw file per record — so they need

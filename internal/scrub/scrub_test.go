@@ -183,6 +183,9 @@ func TestScrubRedactsRederivesIDsAndKeepsHistory(t *testing.T) {
 	oldIDs := []string{collection.ID, document.ID, items[0].ID, items[1].ID}
 	report := fmt.Sprintf(`{"evidence_ids":[%q],"observed":"token is %s"}`, items[0].ID, secretA)
 	require.NoError(t, db.SaveRunReport("run-1", "m", []byte(report)))
+	require.NoError(t, db.WithCatalogTx(func(tx *database.CatalogTx) error {
+		return tx.PutPolicyState(database.PolicyState{ResourceID: document.ResourceID, Policy: "p", EntryID: document.ID, Type: "pudl/vault.#Login", Digest: "d", Status: "pass"})
+	}))
 	history, err := db.DB().Query(`SELECT id, args, provenance, valid_start, tx_start FROM facts`)
 	require.NoError(t, err)
 	var before []string
@@ -242,6 +245,7 @@ func TestScrubRedactsRederivesIDsAndKeepsHistory(t *testing.T) {
 	for _, query := range []string{
 		`SELECT COUNT(*) FROM collection_memberships WHERE collection_id IN (?,?,?,?) OR item_id IN (?,?,?,?)`,
 		`SELECT COUNT(*) FROM projection_state WHERE entry_id IN (?,?,?,?)`,
+		`SELECT COUNT(*) FROM policy_state WHERE entry_id IN (?,?,?,?)`,
 		`SELECT COUNT(*) FROM catalog_entries WHERE item_id IN (?,?,?,?)`,
 	} {
 		args := []any{}

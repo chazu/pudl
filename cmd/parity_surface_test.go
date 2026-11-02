@@ -10,12 +10,12 @@ import (
 
 func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	tree := commandTreeJSON(rootCmd)
-	run, ok := helpChild(tree, "run [<model>]")
-	require.True(t, ok, "root help must expose the run command")
-	assert.True(t, hasHelpFlag(run, "populate"))
-	assert.True(t, hasHelpFlag(run, "detailed-exitcode"))
-	report, ok := helpChild(run, "report [operation-id]")
-	require.True(t, ok, "run help must expose durable reports")
+	check, ok := helpChild(tree, "check <model>...")
+	require.True(t, ok, "root help must expose the check command")
+	assert.True(t, hasHelpFlag(check, "populate"))
+	assert.True(t, hasHelpFlag(check, "detailed-exitcode"))
+	report, ok := helpChild(tree, "report [ID]")
+	require.True(t, ok, "root help must expose durable reports")
 	assert.Equal(t, "custom", report.Args)
 
 	model, ok := helpChild(tree, "model")

@@ -66,9 +66,10 @@ the catalog, and reports.
   command arm depends on it.
 - **Subprocesses.** `internal/proc` stays: the command arm uses it for
   cancellable runs. Only its mu-specific callers go.
-- **Coordination.** Observe-only `run set` stays for now, together with plain
-  value bindings (see [open questions](#open-questions)). `depends_on`
-  facts and the shipped dependency rules stay.
+- **Coordination.** Observe-only `run set` stayed at first, together with
+  plain value bindings (see [open questions](#open-questions)); both were
+  later replaced by `pudl check` and removed. `depends_on` facts and the
+  shipped dependency rules stay.
 - **Unchanged:** snapshots, checks and verdicts, observation scopes, reports,
   bundles, facts, Datalog, the public library API, and `list --fancy`.
 
@@ -151,6 +152,18 @@ Implementation logs follow the repository convention (`implog/`, `docs/plan.md`)
    but uncommon for inventory work. **Recommendation:** decide during the
    `pudl check` unification. Keep them if a real use appears; otherwise remove
    `run set`, `bindings` and `internal/wiring`.
+
+   **Resolved (2026-11-01, `pudl-4fx.1`): removed.** No shipped example,
+   documented workflow or bundled skill relied on bindings; their only users
+   were their own tests and the repository's mu kick-the-tires fixtures, which
+   had already stopped loading when `plugins` was retired. `pudl check
+   MODEL...` replaced `run` and `run set`; it orders named models by
+   `depends_on` only, so the number of models named never changes how values
+   are resolved. `internal/wiring`, template `inputs`/`bindings`, the
+   `@pudl(binding=...)` classification, the producer-snapshot accessors and
+   `--max-observation-age` are gone; models that declare `inputs` or
+   `bindings` fail to load naming the field. See
+   [`implog/2026_11_01_pudl_check.md`](../../implog/2026_11_01_pudl_check.md).
 2. **Typed-envelope import.** The envelope format was designed for mu plugins,
    but any producer could use it. This document removes it with the mu bridge.
    If a non-mu producer needs to hand over data with its CUE definitions, it

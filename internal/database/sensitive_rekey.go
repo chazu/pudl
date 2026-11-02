@@ -84,6 +84,9 @@ func moveEntryReferences(q dbtx, oldID, newID string) error {
 		{"collection_memberships", "item_id"},
 		{"collection_memberships", "collection_id"},
 		{"item_schemas", "item_id"},
+		// Policy results carry no record value; only the entry they describe
+		// moves. Their facts' provenance keeps the old ID, which redirects.
+		{"policy_state", "entry_id"},
 	} {
 		if _, err := q.Exec(fmt.Sprintf(`UPDATE OR IGNORE %s SET %s = ? WHERE %s = ?`, ref.table, ref.column, ref.column), newID, oldID); err != nil {
 			return fmt.Errorf("re-key %s.%s: %w", ref.table, ref.column, err)

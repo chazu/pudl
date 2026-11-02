@@ -147,6 +147,7 @@ how the scrub treats each one in the rewrite transaction:
 | `item_schemas.item_id` (legacy) | Rewritten, with the same merge rule |
 | `projection_state.entry_id` (and `resource_id` for identity-less resources) | Re-projected under the new ID (§3); repointed when the schema no longer projects |
 | `current_facts` args `entry_id` and `provenance.entry_id` | Re-projected (§3) |
+| `policy_state.entry_id` (policy results, `pudl-xf5.8.3`) | Repointed. Policy facts carry no record value and no entry ID in their args, so they are not re-evaluated; their `provenance.entry_id` keeps the old ID, which redirects |
 | `facts` (history) args and `provenance` | **Unchanged** (§3) |
 | `observe_snapshots.snapshot_id`, `snapshot_pins.snapshot_id`, `report_snapshot_refs.snapshot_id`, `observe_snapshot_tombstones`, `snapshot_reuse_blocks` | Snapshot IDs are pre-allocated, never content-derived, so they never change |
 | `run_reports`, `run_set_reports`, `run_approvals`, `run_set_approvals` JSON (`evidence_ids`, `entry_id`) | Not rewritten for IDs. They are records of what a run saw; the redirects resolve them |

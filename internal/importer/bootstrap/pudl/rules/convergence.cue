@@ -2,7 +2,7 @@ package rules
 
 // Cross-model dependency reasoning over the model_depends_on EDB.
 //
-// model_depends_on(from, to) facts are emitted by `pudl run` from each model's
+// model_depends_on(from, to) facts are emitted by `pudl check` from each model's
 // declared `depends_on:` (see docs/cross-model-dependencies.md). These rules are
 // plain top-level fields (NOT #-prefixed definitions) so the rule loader picks
 // them up — ParseRules skips definitions.

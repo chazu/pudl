@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -19,6 +20,7 @@ import (
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
 	"pudl model":                 "command group",
+	"pudl policy":                "command group",
 	"pudl rule":                  "command group",
 	"pudl schema":                "command group",
 	"pudl snapshot":              "command group",
@@ -29,7 +31,6 @@ var jsonContractExempt = map[string]string{
 	"pudl model new":             "scaffold authoring; needs a plugin",
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
-	"pudl run set":               "observes live through mu",
 	"pudl snapshot current":      "needs a live observation recorded for a model",
 	"pudl completion":            "generates shell scripts",
 	"pudl completion bash":       "generates shell scripts",
@@ -42,7 +43,7 @@ var jsonContractExempt = map[string]string{
 // seeded workspace and requires stdout to be exactly one JSON document: no
 // banners, progress or warnings mixed in, and no top-level null.
 func TestJSONOutputContract(t *testing.T) {
-	cliWorkspace(t)
+	pudlDir := cliWorkspace(t)
 	require.NoError(t, os.WriteFile("widget.json", []byte(`{"kind":"Widget","name":"w1"}`), 0o644))
 
 	run := func(args ...string) []byte {
@@ -75,9 +76,9 @@ func TestJSONOutputContract(t *testing.T) {
 	run("version")
 	run("init")
 	run("example", "install", "git-inventory")
-	observed := field(run("run", "git-inventory"), "populate", "snapshot_id")
-	run("run", "git-inventory", "--from-catalog", "--catalog-scope", observed)
-	run("run", "report")
+	observed := field(run("check", "git-inventory"), "members", "report", "populate", "snapshot_id")
+	run("check", "git-inventory", "--from-catalog", "--catalog-scope", observed)
+	run("report")
 	run("status")
 	run("model", "list")
 	run("model", "show", "git-inventory")
@@ -112,6 +113,14 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "stats")
 	run("doctor", "--fix", "--dry-run")
 	run("doctor", "--fix")
+	run("policy", "list")
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "bucket.cue"), policyTypes)
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "policies.cue"), strings.Replace(policyBP, "%s", "medium", 1))
+	reloadSchemas()
+	run("policy", "evaluate", "--dry-run")
+	run("policy", "evaluate")
+	run("policy", "list", "--type", "pudl/aws.#Bucket")
+	run("policy", "show", "pudl/aws.#BucketBestPractice")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)

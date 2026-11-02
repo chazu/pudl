@@ -1,17 +1,17 @@
 ---
 name: pudl-core
-description: Using the pudl CLI — data lake import/query, CUE schemas, the bitemporal fact store, and #SystemModel runs that observe with commands, compare with desired state and evaluate checks. Use when working with pudl commands, schemas, facts, or running system models.
+description: Using the pudl CLI — data lake import/query, CUE schemas, the bitemporal fact store, and #SystemModel checks that observe with commands, compare with desired state and evaluate checks. Use when working with pudl commands, schemas, facts, or checking system models.
 ---
 
 # PUDL Core
 
 CLI for an infrastructure data lake: import data, infer/validate CUE schemas,
-store bitemporal facts, and run `#SystemModel` instances that observe real
+store bitemporal facts, and check `#SystemModel` instances that observe real
 infrastructure with plain commands, compare it with desired state and evaluate
 checks.
 
 PUDL discovers, catalogs and governs; it never changes the systems it observes.
-A run reports drift; Terraform, kubectl or whatever tool owns the system
+A check reports drift; Terraform, kubectl or whatever tool owns the system
 applies changes.
 
 ## Agent routing
@@ -28,9 +28,9 @@ Scaffold first, then edit the returned path:
 - `pudl model new <name> --populate 'command:<cmdline>'` — a command printing JSON records, run by pudl (without `--populate`, a placeholder command to replace)
 - `pudl rule new <name>`
 
-For a one-off observer, use `pudl run --populate 'command:<cmdline>'`; it
+For a one-off observer, use `pudl check --populate 'command:<cmdline>'`; it
 writes no model definition. Retrieve diagnostics with
-`pudl run report [<run-id>] --json`.
+`pudl report [<id>] --json`.
 
 ## State Layout
 
@@ -62,6 +62,8 @@ global catalogs are independent; mutable state never falls back across them.
 - `pudl list` — list entries in the active catalog
   (`--origin` filters explicitly; `--artifacts` = run outputs; `--schema` with `#` matches whole definition names; `--json` is paginated, count with `total_matched`)
 - `pudl show <id>` / `pudl export --id <proquint> --format json` (exact payload, pipeable) / `pudl delete <id>`
+  (`show` includes a compliance section: each applicable policy's status and violations)
+- `pudl policy list [--type T]` / `pudl policy show POLICY [--limit N]` — compliance policies, result counts (stale ones included), rules and the resources failing most; `pudl policy evaluate` refreshes results
 - `pudl doctor` — workspace health, assigned-schema validation, and inference stability
 
 ### Schema
@@ -76,7 +78,7 @@ global catalogs are independent; mutable state never falls back across them.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, policy-leaves, inference, identity, projections (projected-fact sync also runs automatically after import/run/delete)
+- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, policy-leaves, inference, identity, projections (projected-fact sync also runs automatically after import/check/delete)
 
 ### Querying imported data
 
@@ -99,23 +101,22 @@ _pudl: {
 - Facts follow each resource's most recently observed record.
 - `{exists: path}` and `default` stand in for negation (the Datalog has none).
 - CLI constraints are typed: `disabled=false`, `port=22`; `name='"22"'` forces a string.
-- `pudl query` and run checks warn on stderr about stale projection and about rules referencing relations/args nothing produces — read those warnings when a check passes unexpectedly.
+- `pudl query` and model checks warn on stderr about stale projection and about rules referencing relations/args nothing produces — read those warnings when a check passes unexpectedly.
 - Route sensitive data with `--schema` (or a model's `populate.schema`).
 
 See `docs/projection.md`.
 
 ### #SystemModel loop
-- `pudl model list` — list registered `#SystemModel` definitions + last-run status
+- `pudl model list` — list registered `#SystemModel` definitions + last status
 - `pudl model show <model>` — show a model's populate/desired/checks
 - `pudl model validate <model>` — structural validation without running
-- `pudl run <model>` — run a registered `#SystemModel`: populate, drift, checks, report
-- `pudl run <model> --detailed-exitcode` — exit 0 clean, 2 drift or failing check, 1 error
-- `pudl run <model> --from-catalog` — explicitly replay ingested records for inventory drift; a normal inventory run populates and compares its own current snapshot
-- `pudl run <model> --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
-- `pudl run set <models...>` — run exactly the named models in producer-first order; no implicit producer expansion
-- `pudl run report [id]` — inspect standalone/set operations (older converge reports show retired fields as legacy JSON)
-- `pudl model deps` — reconcile + show the cross-model dependency graph (no run needed)
-- `pudl status [target]` — recorded verdict by catalog target (a run records its verdict)
+- `pudl check <model>...` — check exactly the named models, producers first by `depends_on`: populate, drift, checks; one report for all of them; never runs a model that was not named
+- `pudl check <model>... --detailed-exitcode` — exit 0 clean, 2 drift or failing check, 1 error
+- `pudl check <model> --from-catalog --catalog-scope <snapshot-or-origin>` — explicitly replay ingested records for inventory drift (one model); a normal inventory check populates and compares its own current snapshot
+- `pudl check <model>... --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
+- `pudl report [id]` — read a check report (or one model's report by run ID); stored `run`/`run set` reports read too, with retired fields shown as legacy JSON
+- `pudl model deps` — reconcile + show the cross-model dependency graph (no check needed)
+- `pudl status [target]` — recorded verdict by catalog target (a check records each model's verdict)
 
 ### Utilities
 - `pudl init` / `pudl init --global` / `pudl doctor` / `pudl config` / `pudl version`
@@ -123,8 +124,9 @@ See `docs/projection.md`.
 
 ## The #SystemModel loop
 
-`pudl run <model>` resolves a `#SystemModel` definition (project `.pudl/schema`
-precedes explicitly vendored dependencies; register with `pudl schema add`) and runs:
+`pudl check <model>...` resolves each named `#SystemModel` definition (project
+`.pudl/schema` precedes explicitly vendored dependencies; register with
+`pudl schema add`) and runs each, producers first:
 
 ```
 1. populate -> ingest   (Accumulate observed state into the catalog)
@@ -138,13 +140,16 @@ precedes explicitly vendored dependencies; register with `pudl schema add`) and 
   with a CUE comprehension; the environment is inherited, so cloud CLI
   credentials work). A model without `populate` is checks-only: it evaluates
   its checks over the catalog as it stands (e.g. imported data).
-- **Drift** set-diffs `desired` against the records the run just observed and
+- **Drift** set-diffs `desired` against the records the check just observed and
   reports `missing`/`changed`/`unidentifiable`/`ambiguous` findings. Nothing is
   changed.
 - **Retired fields** — `converge`, `plugins`, `sealed_inputs`,
-  `sealed_outputs`, `#PluginObserve`, `#EweTarget` — fail to load with an error
-  naming the field (`docs/retired-commands.md`).
-- Each run records the model instance in the catalog (identity = name) so it's
+  `sealed_outputs`, `inputs`, `bindings`, `#PluginObserve`, `#EweTarget` — fail
+  to load with an error naming the field (`docs/retired-commands.md`).
+- **One report**: `pudl check --json` writes one report (`report_version` 3)
+  with an aggregate `summary` and one entry per model under `members`, each
+  embedding that model's full report (`members[].report`).
+- Each check records the model instance in the catalog (identity = name) so it's
   inventoriable via `pudl list` / `pudl query`.
 
 ### Workspace schema precedence
@@ -164,7 +169,7 @@ list of model **names**) on the `#SystemModel`:
 #Workloads: sm.#SystemModel & { name: "workloads", depends_on: ["network"], ... }
 ```
 
-`pudl run` (and `pudl model deps`) reconcile declared deps into bitemporal
+`pudl check` (and `pudl model deps`) reconcile declared deps into bitemporal
 `model_depends_on(from,to)` facts. Built-in recursive Datalog rules reason over
 them (query with positional `key=value`):
 
@@ -174,18 +179,11 @@ them (query with positional `key=value`):
 - `pudl query --topo model_depends_on` — a topological run order (deps first)
 
 `pudl model deps` records edges for **every** registered model without running
-them. Dependencies come from explicit `depends_on` declarations and value
-bindings. PUDL does not guess edges from coincidental values or re-run downstream
-models automatically. See `docs/cross-model-dependencies.md`.
-
-### Value bindings
-
-For actual value flow, a model template declares required scalar `inputs` and
-matching `bindings`. Both the consumer slot and source schema field must carry
-`@pudl(binding=plain)`. A standalone run may reuse the latest successful scoped
-producer snapshot but never starts it. `pudl run set` names the exact closed set,
-rejects missing producers/cycles before execution, and pins current-run producer
-observations for downstream resolution.
+them. Dependencies come from explicit `depends_on` declarations. PUDL does not
+guess edges from coincidental values or check downstream models automatically.
+`pudl check a b` orders `a` and `b` by the `depends_on` edges between them,
+rejects cycles before anything runs, and records a model whose named producer
+did not succeed as `blocked`. See `docs/cross-model-dependencies.md`.
 
 ## Evidence workflow
 

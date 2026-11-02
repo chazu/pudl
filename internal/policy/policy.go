@@ -28,6 +28,9 @@ const DefaultSeverity = SeverityMedium
 
 var severityRank = map[Severity]int{SeverityLow: 1, SeverityMedium: 2, SeverityHigh: 3, SeverityCritical: 4}
 
+// Rank orders severities: 1 (low) to 4 (critical), 0 for none.
+func (s Severity) Rank() int { return severityRank[s] }
+
 // Status is the outcome of one policy against one resource.
 type Status string
 
@@ -107,8 +110,8 @@ type Rule struct {
 	DeclaredBy string `json:"declared_by_policy"`
 }
 
-// sortViolations orders violations by path, rule and kind.
-func sortViolations(vs []Violation) {
+// SortViolations orders violations by path, rule and kind.
+func SortViolations(vs []Violation) {
 	sort.Slice(vs, func(i, j int) bool {
 		if vs[i].Path != vs[j].Path {
 			return vs[i].Path < vs[j].Path

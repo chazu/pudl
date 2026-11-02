@@ -3,32 +3,28 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/chazu/pudl/internal/acute"
 	"strings"
 
-	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/wiring"
+	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/secretscan"
 )
 
-// RunReport is the structured result of a `pudl run`, collected across phases and
+// RunReport is the structured result of one model within a `pudl check`, collected across phases and
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
-	Summary          *acute.VerdictSummary    `json:"summary,omitempty"`
-	ReportVersion    int                      `json:"report_version"`
-	RunSetID         string                   `json:"run_set_id,omitempty"`
-	RunID            string                   `json:"run_id"`
-	Model            string                   `json:"model"`
-	Mode             string                   `json:"mode"` // observe-only | observe-only (inventory) | checks-only
-	CompletionStatus string                   `json:"completion_status"`
-	Populate         *PopulateReport          `json:"populate,omitempty"`
-	Drift            *ModelDriftResult        `json:"drift,omitempty"`
-	Checks           []CheckResult            `json:"checks,omitempty"`
-	OK               bool                     `json:"ok"` // overall: no phase error, no fail-severity check failed
-	Error            string                   `json:"error,omitempty"`
-	Bindings         []wiring.BindingEvidence `json:"bindings,omitempty"`
-	BindingIssues    []wiring.BindingIssue    `json:"unresolved_bindings,omitempty"`
+	Summary          *acute.VerdictSummary `json:"summary,omitempty"`
+	ReportVersion    int                   `json:"report_version"`
+	RunSetID         string                `json:"run_set_id,omitempty"`
+	RunID            string                `json:"run_id"`
+	Model            string                `json:"model"`
+	Mode             string                `json:"mode"` // observe-only | observe-only (inventory) | checks-only
+	CompletionStatus string                `json:"completion_status"`
+	Populate         *PopulateReport       `json:"populate,omitempty"`
+	Drift            *ModelDriftResult     `json:"drift,omitempty"`
+	Checks           []CheckResult         `json:"checks,omitempty"`
+	OK               bool                  `json:"ok"` // overall: no phase error, no fail-severity check failed
+	Error            string                `json:"error,omitempty"`
 }
 
 // applyRunError copies a phase error into the report before it is rendered or
@@ -43,19 +39,6 @@ func applyRunError(report *RunReport, err error) {
 	report.CompletionStatus = failureStatus(err)
 }
 
-func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, err error) *RunReport {
-	mode := "observe-only"
-	model := ""
-	if template != nil {
-		model = template.Name
-	}
-	return &RunReport{
-		ReportVersion: 2, Model: model, Mode: mode,
-		CompletionStatus: database.RunStatusFailed, OK: false, Error: errorString(err),
-		BindingIssues: resolutionBindingIssues(template, err),
-	}
-}
-
 // PopulateReport summarizes an inventory populate.
 type PopulateReport struct {
 	RequestedSchema  string `json:"requested_schema,omitempty"`
@@ -64,6 +47,10 @@ type PopulateReport struct {
 	Target           string `json:"target"`
 	Records          int    `json:"records"`
 	SnapshotID       string `json:"snapshot_id,omitempty"`
+	// SecretWarnings are likely secrets outside sensitive-field coverage, by
+	// record, path and kind (never the value); stored data is unchanged.
+	SecretWarnings      []secretscan.Warning `json:"secret_warnings,omitempty"`
+	SecretWarningsTotal int                  `json:"secret_warnings_total,omitempty"`
 }
 
 // render emits the report as JSON when machine output is requested, else markdown.
@@ -91,7 +78,7 @@ func (r *RunReport) markdown() string {
 		s := r.Summary
 		fmt.Fprintf(&b, "Execution: %s | conformity: %s | checks: %s | verification: %s | scope: %s\n\n", s.Execution, s.Conformity, s.Checks, s.Verification, s.Scope)
 	}
-	fmt.Fprintf(&b, "# run: %s\n\n", r.Model)
+	fmt.Fprintf(&b, "# model: %s\n\n", r.Model)
 	fmt.Fprintf(&b, "- run_id: %s\n", r.RunID)
 	fmt.Fprintf(&b, "- mode: %s\n", r.Mode)
 	if r.CompletionStatus != "" {
@@ -105,25 +92,10 @@ func (r *RunReport) markdown() string {
 	if r.Error != "" {
 		fmt.Fprintf(&b, "- error: %s\n", r.Error)
 	}
-	if len(r.Bindings) > 0 {
-		fmt.Fprintf(&b, "\n## bindings\n")
-		for _, binding := range r.Bindings {
-			fmt.Fprintf(&b, "- %s <- %s %s%s (%s, snapshot %s, age %s)\n",
-				binding.Input, binding.ProducerModel, binding.Schema, binding.Path,
-				binding.Selection, binding.SnapshotID, binding.Age)
-		}
-	}
-	if len(r.BindingIssues) > 0 {
-		fmt.Fprintf(&b, "\n## unresolved bindings\n")
-		for _, issue := range r.BindingIssues {
-			fmt.Fprintf(&b, "- %s <- %s %s%s (%s): %s\n",
-				issue.Input, issue.ProducerModel, issue.Schema, issue.Path,
-				issue.Code, issue.Message)
-		}
-	}
 
 	if r.Populate != nil {
-		fmt.Fprintf(&b, "\n## populate\n- target: %s\n- records: %d\n", r.Populate.Target, r.Populate.Records)
+		// The populate target is an internal catalog key; JSON carries it.
+		fmt.Fprintf(&b, "\n## populate\n- records: %d\n", r.Populate.Records)
 		if r.Populate.SnapshotID != "" {
 			fmt.Fprintf(&b, "- snapshot_id: %s\n", r.Populate.SnapshotID)
 		}

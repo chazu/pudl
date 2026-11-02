@@ -1,7 +1,7 @@
 {
   "use": "pudl",
   "short": "Personal Unified Data Lake - A tool for managing cloud infrastructure data",
-  "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only #SystemModel runs: discovery, desired-state comparison and checks\n- Exact producer/consumer run-sets with value bindings",
+  "long": "PUDL is a CLI tool that helps those who work with cloud resources\namplify their ability to leverage data as part of their regular workflows.\n\nIt manages the import, querying, and organization of a local 'data lake'\ncomprising data on remote resources such as AWS or GCP resources, Kubernetes\nresources, logs, metrics, et cetera.\n\nKey features:\n- Schema management using CUE Lang\n- Automatic CUE-based schema inference with cascade validation\n- Version-controlled schema repository with git integration\n- Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)\n- Schema generation from imported data\n- Observe-only #SystemModel checks: discovery, desired-state comparison and checks\n- One check and one report for any number of explicitly named models",
   "flags": [
     {
       "name": "global",
@@ -26,6 +26,62 @@
     }
   ],
   "subcommands": [
+    {
+      "use": "check \u003cmodel\u003e...",
+      "short": "Observe and evaluate exactly the named models; one report",
+      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "catalog-scope",
+          "usage": "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under",
+          "type": "string"
+        },
+        {
+          "name": "check-upstream",
+          "usage": "warn if any transitive upstream model (depends_on) is drifted/failed",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "detailed-exitcode",
+          "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "from-catalog",
+          "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "populate",
+          "usage": "Check an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
+          "type": "string"
+        },
+        {
+          "name": "progress-json",
+          "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
     {
       "use": "completion",
       "short": "Generate the autocompletion script for the specified shell",
@@ -284,7 +340,7 @@
     {
       "use": "doctor",
       "short": "Check workspace health and catalog data, and repair the catalog",
-      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  data-permissions  data files or directories group or other users can access\n  sensitive-scrub   plaintext stored before a schema declared the field in\n                _pudl.sensitive_fields (opt-in: applied only when --only names it)\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them. The sensitive scrub\nre-derives the IDs of the entries it rewrites (old IDs still resolve) and\ncompacts the catalog; fact history and exported bundles keep the plaintext, so\nrotate every credential it redacts.",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  policy-results policy results that are stale (evaluated with an older policy\n                digest), orphaned, or never evaluated\n  data-permissions  data files or directories group or other users can access\n  sensitive-scrub   plaintext stored before a schema declared the field in\n                _pudl.sensitive_fields (opt-in: applied only when --only names it)\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them. The sensitive scrub\nre-derives the IDs of the entries it rewrites (old IDs still resolve) and\ncompacts the catalog; fact history and exported bundles keep the plaintext, so\nrotate every credential it redacts.",
       "args": "custom",
       "flags": [
         {
@@ -332,7 +388,7 @@
         },
         {
           "name": "only",
-          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, data-permissions, sensitive-scrub",
+          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions, sensitive-scrub",
           "type": "stringSlice",
           "default": "[]"
         },
@@ -1061,7 +1117,7 @@
         {
           "use": "list",
           "short": "List registered #SystemModel definitions",
-          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project definitions precede explicitly vendored packages), with its\npopulate kind and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl run \u003cname\u003e' can\nresolve — independent of whether a model has been run yet.",
+          "long": "List every #SystemModel-derived definition registered in the schema\nrepository (project definitions precede explicitly vendored packages), with its\npopulate kind and desired/check counts.\n\nThis is the static registry of runnable models — what 'pudl check \u003cname\u003e' can\nresolve — independent of whether a model has been checked yet.",
           "args": "custom",
           "flags": [
             {
@@ -1160,7 +1216,7 @@
         {
           "use": "validate \u003cname\u003e",
           "short": "Validate a registered #SystemModel without running it",
-          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem. Bound models remain valid templates before their catalog values exist;\ntheir final concrete values are validated again when pudl runs them.",
+          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem.",
           "args": "custom",
           "flags": [
             {
@@ -1176,6 +1232,117 @@
               "type": "bool",
               "default": "false",
               "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "policy",
+      "short": "Evaluate compliance policies against cataloged resources",
+      "long": "Compliance policies are schemas with _pudl.schema_type: \"policy\" that name\ntheir type through _pudl.base_schema. Every import and observation evaluates the\napplicable policies per resource and stores the results as facts:\n\n  policy_status(resource, policy, type, status, policy_digest)\n  policy_violation(resource, policy, rule, severity, path, kind, declared_by)\n\nStatus is compliant, noncompliant or unknown (a constrained field was absent).\nThe built-in rule policy_noncompliant(resource, policy, severity) serves checks.\nA result is stale when its digest differs from the loaded policy's; pudl doctor\nreports stale results and pudl policy evaluate refreshes them.",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "evaluate [POLICY...]",
+          "short": "Re-evaluate policies against stored current resources",
+          "long": "Re-evaluate compliance policies against every stored current resource, from\nits retained payload, without re-importing. Changed results replace the current\npolicy_status and policy_violation facts; history keeps the previous result and\nthe policy digest it was evaluated with. Results of policies that no longer apply,\nor are no longer loaded, are closed. A policy that fails to load is reported and\nits results are left unchanged.\n\nName policies to evaluate only those. --dry-run reports what would change and\nwrites nothing.\n\n--what-if FILE evaluates a draft policy file that is not installed: it is loaded\nbeside the installed schemas (shadowing an installed policy of the same name),\nevaluated against the stored current resources, and reported as status counts and\nthe top violations. Nothing is written. The draft must be standalone CUE (its\npolicies name their type through _pudl.base_schema).",
+          "flags": [
+            {
+              "name": "dry-run",
+              "usage": "Report what would change without writing",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "what-if",
+              "usage": "Evaluate a draft policy `FILE` without installing it or writing results",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List loaded policies with their stored result counts",
+          "long": "List every loaded compliance policy: the type it applies to, the policy it\nextends, its rule count, the type's review status (draft results are\nprovisional), when it was last evaluated, and its stored compliant,\nnoncompliant, unknown and stale result counts. A result is stale when it was\nevaluated with an older version of the policy; pudl policy evaluate refreshes it.\n\n--type T lists the policies that apply to type T.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "type",
+              "usage": "List only the policies that apply to type `T`",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "show POLICY",
+          "short": "Show a policy's rules, inheritance and failing resources",
+          "long": "Show one compliance policy: its inheritance chain, its rules (inherited ones\nincluded) with severity, doc and the policy that declared each, how many\nresources currently fail each rule, its stored result counts and staleness, and\nthe resources failing most (most severe first, then most violations).\n\n--limit caps the failing resources listed (0 lists all).",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "Maximum failing resources to list (0 = all)",
+              "type": "int",
+              "default": "10"
             }
           ]
         }
@@ -1271,6 +1438,28 @@
       ]
     },
     {
+      "use": "report [ID]",
+      "short": "Read the latest or named check report",
+      "long": "Read a stored report: the newest one, or the one ID names.\n\nID is a check ID, or the run ID of one model within a check. Reports recorded\nby the retired \"pudl run\" and \"pudl run set\" commands read the same way;\nfields those reports carry that current reports do not are shown as recorded\nunder \"legacy fields\".\n\nExamples:\n    pudl report\n    pudl report check_... --json",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ]
+    },
+    {
       "use": "rule",
       "short": "Manage Datalog rules",
       "long": "Manage Datalog rules used by pudl query.\n\nRules are CUE files stored in:\n  .pudl/schema/pudl/rules/     (repo-scoped)\n  ~/.pudl/schema/pudl/rules/   (global)\n\nAvailable subcommands:\n- add: Install a rule file into the workspace\n\nExamples:\n    pudl rule add my-rules.cue\n    pudl rule add my-rules.cue --global",
@@ -1333,140 +1522,6 @@
             {
               "name": "json",
               "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "use": "run [\u003cmodel\u003e]",
-      "short": "Run a #SystemModel instance: observe, compare and check",
-      "long": "Run a #SystemModel instance through the ACUTE cycle.\n\n\u003cmodel\u003e is a registered #SystemModel — a definition inheriting #SystemModel,\nresolved by name (its name field or short definition name) from the project\n.pudl/schema and explicitly vendored packages. Register one with\n\"pudl schema add\". A run is observe-only: populate -\u003e drift -\u003e checks -\u003e\nreport. It reports differences and changes nothing.\n\nA model without a populate arm is checks-only: it syncs projected facts and\nevaluates its checks over what the catalog already holds (e.g. data brought in\nwith pudl import). A #CommandObserve populate runs plain commands that print\nJSON records (gcloud, kubectl, aws ... --format=json).\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nExamples:\n    pudl run github-chazu\n    pudl run github-chazu --detailed-exitcode\n    pudl run --populate 'command:gcloud compute networks list --format=json'",
-      "args": "custom",
-      "flags": [
-        {
-          "name": "catalog-scope",
-          "usage": "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under",
-          "type": "string"
-        },
-        {
-          "name": "check-upstream",
-          "usage": "warn if any transitive upstream model (depends_on) is drifted/failed",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "detailed-exitcode",
-          "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "from-catalog",
-          "usage": "drift over already-ingested records (inventory; no live observe); requires --catalog-scope",
-          "type": "bool",
-          "default": "false"
-        },
-        {
-          "name": "global",
-          "usage": "Use the personal ~/.pudl workspace explicitly",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "json",
-          "usage": "Output results as JSON for scripting",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "max-observation-age",
-          "usage": "reject a bound producer snapshot older than this duration",
-          "type": "duration",
-          "default": "0s"
-        },
-        {
-          "name": "populate",
-          "usage": "Run an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
-          "type": "string"
-        },
-        {
-          "name": "progress-json",
-          "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        }
-      ],
-      "subcommands": [
-        {
-          "use": "report [operation-id]",
-          "short": "Read the latest or named standalone/set operation report",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "progress-json",
-              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            }
-          ]
-        },
-        {
-          "use": "set \u003cmodel\u003e [\u003cmodel\u003e...]",
-          "short": "Run an explicit producer/consumer model set in dependency order",
-          "long": "Run exactly the named models in dependency order.\n\nThe set is closed and explicit: pudl does not add missing producers. A binding\nwhose producer is not named fails preflight before any member runs. Every\nmember is observe-only, and successful producer snapshots are pinned for\ndownstream plain bindings.\n\nExamples:\n  pudl run set network app\n  pudl run set network app --max-observation-age 15m\n  pudl run set network app --detailed-exitcode\n  pudl run report",
-          "args": "custom",
-          "flags": [
-            {
-              "name": "detailed-exitcode",
-              "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
-              "type": "bool",
-              "default": "false"
-            },
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "max-observation-age",
-              "usage": "reject a bound producer snapshot older than this duration",
-              "type": "duration",
-              "default": "0s"
-            },
-            {
-              "name": "progress-json",
-              "usage": "Emit phase progress events as JSON lines on stderr (alongside diagnostics)",
               "type": "bool",
               "default": "false",
               "persistent": true
@@ -1629,7 +1684,7 @@
     {
       "use": "show \u003cid\u003e",
       "short": "Show detailed information about a specific data entry",
-      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
       "args": "custom",
       "flags": [
         {
@@ -1674,7 +1729,7 @@
     {
       "use": "snapshot",
       "short": "Inspect and retain observation snapshots",
-      "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl run --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
+      "long": "Observation snapshots are what a run saw.\n\nEach populate or observe ingest records one snapshot: which model it was taken\nfor, by which run, in which workspace, from which source, and how many records it\nholds. A snapshot ID is what \"pudl check \u003cmodel\u003e --from-catalog --catalog-scope \u003cid\u003e\"\nreplays against.\n\nSnapshots accumulate — one per run, plus one raw file per record — so they need\npruning. Pruning is explicit and never happens as a side effect of a run.\n\nExamples:\n    pudl snapshot list --model k8sPolicy\n    pudl snapshot current k8sPolicy\n    pudl snapshot retain snap_kisut-hipol\n    pudl snapshot prune --model k8sPolicy --keep 5 --older-than 720h --dry-run",
       "flags": [
         {
           "name": "global",
@@ -1849,7 +1904,7 @@
     {
       "use": "status [target]",
       "short": "Show the verified status of models and targets",
-      "long": "Display the status recorded in the catalog — the per-target verdict\npudl run writes (a model run's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet (the retired \"converging\" value also reads as unknown)\n  clean       — observed == desired, confirmed by a live observation\n  drifted     — observed != desired, or a fail-severity check did not pass\n  failed      — recorded by the retired convergence workflow; re-run the model to replace it\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
+      "long": "Display the status recorded in the catalog — the per-target verdict\npudl check writes (a model's verdict is recorded on its instance row,\n\"//models/\u003cname\u003e\").\n\nStatus values:\n  unknown     — no verified status recorded yet (the retired \"converging\" value also reads as unknown)\n  clean       — observed == desired, confirmed by a live observation\n  drifted     — observed != desired, or a fail-severity check did not pass\n  failed      — recorded by the retired convergence workflow; check the model again to replace it\n\nExamples:\n    pudl status\n    pudl status //models/github-chazu\n    pudl status --json",
       "args": "custom",
       "flags": [
         {

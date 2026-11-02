@@ -12,8 +12,8 @@ remove the block between `# PUDL Shell Integration` and
 `# End PUDL Shell Integration`. Preserve any customizations you still use.
 Upgrades do not modify shell profiles or their backups.
 
-`pudl model deps --derive` is removed. Declare `depends_on` or use explicit value
-bindings to establish dependencies. Migration 24 retracts current
+`pudl model deps --derive` is removed. Declare `depends_on` to establish
+dependencies. Migration 24 retracts current
 `model_depends_on` facts whose source is exactly `derived:<from>` and whose
 arguments are exactly the heuristic's `from` and `to` fields. It preserves fact
 history and other sources. That source convention belonged to the retired
@@ -26,6 +26,43 @@ retired. They are advanced commands: `pudl facts --help` and shell completion
 no longer list them, but they run unchanged and are documented under "Advanced
 commands" in [cli-reference.md](cli-reference.md#advanced-commands). Read the
 fact store with `pudl query`; Go programs write facts through `pkg/factstore`.
+
+## Run and run set
+
+`pudl check MODEL...` replaced `pudl run` and `pudl run set` on 2026-11-01. One
+command observes and evaluates exactly the named models, producers first by
+`depends_on`, and records one report whether it names one model or several.
+Stored `run` and `run set` reports stay readable with `pudl report`. Cobra
+suggests `check` when `run` is typed; there are no aliases.
+
+| Retired command or flag | Replacement |
+| --- | --- |
+| `pudl run <model>` | `pudl check <model>` |
+| `pudl run set <a> <b>...` | `pudl check <a> <b>...` |
+| `pudl run report [ID]` | `pudl report [ID]` |
+| `pudl run --populate 'command:<cmdline>'` | `pudl check --populate 'command:<cmdline>'` |
+| `pudl run <model> --from-catalog --catalog-scope <scope>` | `pudl check <model> --from-catalog --catalog-scope <scope>` (one model) |
+| `--max-observation-age` (`run`, `run set`) | None. It bounded the age of a bound producer snapshot, and value bindings were removed |
+
+`pudl check --json` writes one report (`report_version` 3): the aggregate
+summary plus one entry per model under `members`, each embedding that model's
+full report under `report`. A script that read `pudl run <model> --json` reads
+the same document at `.members[0].report`.
+
+### Value bindings
+
+Value bindings fed one model's observed scalar into another model's
+`#CommandObserve` arguments. Nothing shipped used them, so they were removed
+with `pudl run set` rather than carried into `pudl check`. A model that still
+declares `inputs` or `bindings` fails to load with an error naming the field.
+
+| Retired field or attribute | Replacement |
+| --- | --- |
+| `inputs:`, `bindings:` (`#ValueBinding`) | Write the value into the model, or have the populate command look it up itself. Order models with `depends_on` |
+| `@pudl(binding=plain)`, `@pudl(binding=sealed)` on schema fields | None. The attribute is ignored; remove it at your convenience |
+
+Existing `model_depends_on` facts with source `binding:<model>` stay as history;
+`pudl model deps` labels them `binding`.
 
 ## Native Git and CUE replacements
 
@@ -59,15 +96,15 @@ and run-set reports, approval rows and run history remain readable.
 
 | Retired command or flag | Replacement |
 | --- | --- |
-| `pudl run --converge` and `--only`, `--dry-run`, `--max-iters`, `--max-applies`, `--require-approval` | `pudl run <model>` reports drift between `desired` and what was observed; apply changes with the tool that owns them, then run again to verify |
+| `pudl run --converge` and `--only`, `--dry-run`, `--max-iters`, `--max-applies`, `--require-approval` | `pudl check <model>` reports drift between `desired` and what was observed; apply changes with the tool that owns them, then run again to verify |
 | `pudl run resume`, `pudl run reject` | None. Nothing waits for approval any more |
-| `pudl run set --converge` and its `--require-approval`, `--max-iters`, `--max-applies` | `pudl run set <model>...` (observe-only) |
-| `pudl run --populate plugin:<name>` and `--input` | `pudl run --populate 'command:<cmdline>'` running the same program |
+| `pudl run set --converge` and its `--require-approval`, `--max-iters`, `--max-applies` | `pudl check <model>...` (observe-only) |
+| `pudl run --populate plugin:<name>` and `--input` | `pudl check --populate 'command:<cmdline>'` running the same program |
 | `pudl model new --populate plugin:<name>` and `--input` | `pudl model new <name> --populate 'command:<cmdline>'`; without `--populate` the scaffold is a `#CommandObserve` placeholder |
 | `pudl model populator add`, `pudl model populator new` | Keep helper programs and fixtures anywhere in the repository and reference them from a `#CommandObserve` run (`dir:` is relative to the model file) |
 | `pudl model show --discover` | None. Models no longer reference mu plugins |
 | `pudl run --mu-root`, `pudl run set --mu-root`, `--mu-timeout` | None. Bound a command with `populate.timeout` |
-| `pudl mu ingest-observe` | `pudl run <model>` with a `#CommandObserve` arm that prints the records; `pudl import` for one-off data |
+| `pudl mu ingest-observe` | `pudl check <model>` with a `#CommandObserve` arm that prints the records; `pudl import` for one-off data |
 | `pudl mu ingest-manifest` | None. PUDL no longer records mu build manifests |
 | Typed-envelope import (`{"schema": …, "definitions": …, "data": …}`) | `pudl import --schema <package>.#<Definition>` on the bare payload. An envelope file now imports as an ordinary JSON object |
 | `pudl doctor --fix --only schema-refs`, `--schema-ref` | None. The mu schema cache was removed; existing `item_schemas` rows are kept but no longer read |

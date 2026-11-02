@@ -55,8 +55,8 @@ Key features:
 - Version-controlled schema repository with git integration
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
 - Schema generation from imported data
-- Observe-only #SystemModel runs: discovery, desired-state comparison and checks
-- Exact producer/consumer run-sets with value bindings`,
+- Observe-only #SystemModel checks: discovery, desired-state comparison and checks
+- One check and one report for any number of explicitly named models`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error

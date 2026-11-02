@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### `pudl check MODEL...`: one command and one report (2026-11-01)
+
+`pudl check MODEL...` replaces `pudl run` and `pudl run set` (`pudl-4fx.1`).
+It observes and evaluates exactly the named models, producers first by
+`depends_on` within the named set, and records one report (`report_version` 3)
+for one model or many, embedding each model's full report under
+`members[].report`. `pudl report [ID]` replaces `pudl run report` and still
+reads stored run and run-set reports. `--detailed-exitcode`, `--from-catalog`,
+`--check-upstream` and `--populate` carry over. Value bindings (`inputs`,
+`bindings`, `@pudl(binding=...)`, `internal/wiring`) and `--max-observation-age`
+were removed; nothing shipped used them. `pudl status` stays. See
+[retired commands](retired-commands.md#run-and-run-set) and the
+[delivery log](../implog/2026_11_01_pudl_check.md).
+
 ### Convergence and mu integration removed (2026-11-01)
 
 PUDL discovers, catalogs and governs infrastructure; it no longer changes it
@@ -18,7 +32,8 @@ arm and `pudl model new` scaffolds it by default; the observation ingest moved
 to `internal/observe`. Models using retired fields fail to load with an error
 naming the field. Old catalogs open unchanged: approval tables stay, `converging`
 reads as `unknown`, legacy report fields render as JSON, and the `pudl/mu`
-schemas are kept as legacy. The Git walkthrough observes with `pudl run`. See
+schemas are kept as legacy. The Git walkthrough observes with `pudl run` (now
+`pudl check`). See
 [retired commands](retired-commands.md#convergence-and-mu-integration) and the
 [delivery log](../implog/2026_11_01_remove_convergence_and_mu.md).
 
@@ -622,13 +637,15 @@ PUDL narrows to discovering, cataloging and governing infrastructure. The
 convergence workflow and all mu integration were removed (see What's Built).
 Observation is `#CommandObserve` only. See
 [the removal design](design/2026-11-01-remove-convergence-and-mu.md). Open
-follow-ups: the fate of observe-only `run set` and plain value bindings, and
-dropping the legacy approval tables and `pudl/mu` schemas after a release.
+follow-up: dropping the legacy approval tables and `pudl/mu` schemas after a
+release. (Observe-only `run set` and value bindings were removed with
+`pudl check`.)
 Beads work:
 
 - `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5` (done).
-- `pudl-4fx`: simplify the everyday command surface (`pudl check`,
-  `doctor --fix`, demoting fact-store writes, moving orchestration out of `cmd/`).
+- `pudl-4fx`: simplify the everyday command surface (`pudl check` — done in
+  `pudl-4fx.1`; `doctor --fix`, demoting fact-store writes, moving
+  orchestration out of `cmd/`).
 - `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
   multi-project fan-out, waivers, finding changes over time, ownership,
   relationship rules).
@@ -649,6 +666,19 @@ Beads work:
     naming a policy is an error naming its type; `pudl doctor --fix --only
     policy-leaves` moves existing policy-leaf entries to their type with
     identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
+  - Done: `pudl-xf5.8.3` policy results persisted as facts at every import and
+    observation (`policy_status`, `policy_violation` under
+    `policy:<policy>:<resource>`, reconciled like projection; reserved names;
+    complete-scope exits closed), `pudl policy evaluate [POLICY...] [--dry-run]
+    [--what-if FILE]`, the built-in `policy_noncompliant` rule, and stale
+    detection as the `policy-results` doctor repair. See
+    `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-xf5.8.4` `pudl policy list [--type T]` (type, extends, rule
+    count, type review, last evaluated, compliant/noncompliant/unknown/stale
+    counts), `pudl policy show POLICY [--limit N]` (chain, rules with severity,
+    doc and declaring policy, failing counts per rule, resources failing most)
+    and the compliance section of `pudl show ID`, all with `--json`, read from
+    stored results. See `implog/2026_11_02_policy_list_show.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
@@ -665,7 +695,9 @@ Beads work:
   - Done: `pudl doctor` scan of stored payloads and current (non-projection)
     facts, reported as warnings in text and the `secrets` section of the
     version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
-  - Not yet: observe-ingest warnings (wiring described in the first implog).
+  - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
+    kind, in the run's stderr and the populate report's `secret_warnings`.
+    See `implog/2026_11_02_policy_results_as_facts.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix

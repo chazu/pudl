@@ -29,7 +29,7 @@ func (c *collectionStream) reobserve(tx *database.CatalogTx, existing *database.
 		c.reassigned++
 	}
 	if moved || existing.Schema == item.Entry.Schema {
-		return projection.Observe(tx, item.Projection)
+		return observeFacts(tx, item.Projection, item.Policies)
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (e *EnhancedImporter) reobserveDocument(opts ImportOptions, existing *datab
 			return nil
 		}
 		prepared, _ := projection.Prepare(e.projector, want.Schema, existing.ID, *want.ResourceID, resolved, data)
-		return projection.Observe(tx, prepared)
+		return observeFacts(tx, prepared, e.policies.Prepare(want.Schema, existing.ID, *want.ResourceID, resolved, data))
 	})
 	if moved {
 		return 1, err

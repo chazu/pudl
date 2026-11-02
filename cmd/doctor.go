@@ -32,6 +32,8 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
   projections   projected facts that no longer match the catalog or facts specs
+  policy-results policy results that are stale (evaluated with an older policy
+                digest), orphaned, or never evaluated
   data-permissions  data files or directories group or other users can access
   sensitive-scrub   plaintext stored before a schema declared the field in
                 _pudl.sensitive_fields (opt-in: applied only when --only names it)

@@ -78,9 +78,6 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 	if r.Drift != nil {
 		snapshotIDs = append(snapshotIDs, r.Drift.SnapshotID)
 	}
-	for _, binding := range r.Bindings {
-		snapshotIDs = append(snapshotIDs, binding.SnapshotID)
-	}
 	for _, id := range snapshotIDs {
 		if db != nil && id != "" {
 			if snapshot, err := db.GetObserveSnapshot(id); err == nil && snapshot != nil {
@@ -93,7 +90,7 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		add(acute.ObservationEvidence{ObservationID: observation.ObservationID, Source: "differential-observe", Scope: s.Scope, ObservedAt: *observation.ObservedAt, Age: time.Since(*observation.ObservedAt).String(), Complete: true})
 	}
 	if r.RunID != "" {
-		s.NextActions = append(s.NextActions, "pudl run report "+r.RunID+" --json")
+		s.NextActions = append(s.NextActions, "pudl report "+r.RunID+" --json")
 	}
 	for _, e := range s.Evidence {
 		if e.SnapshotID != "" {
@@ -119,6 +116,7 @@ func enrichSetSummary(db *database.CatalogDB, report *acute.RunSetReport) error 
 			return err
 		}
 		if stored != nil {
+			member.Report = stored.Report
 			var r RunReport
 			decoder := json.NewDecoder(bytes.NewReader(stored.Report))
 			decoder.UseNumber()
@@ -175,7 +173,7 @@ func enrichSetSummary(db *database.CatalogDB, report *acute.RunSetReport) error 
 	} else if verification["live"] {
 		s.Verification = "live"
 	}
-	s.NextActions = []string{"pudl run report " + report.RunSetID + " --json"}
+	s.NextActions = []string{"pudl report " + report.RunSetID + " --json"}
 	report.Summary = s
 	return nil
 }

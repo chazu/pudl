@@ -4,15 +4,14 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// RunSetModel is one explicitly selected model plus any registry aliases that
-// authored depends_on/source names may use. Name always comes from Template.
+// RunSetModel is one explicitly selected model: its name, the models it
+// declares it depends on, and any registry aliases depends_on names may use.
 type RunSetModel struct {
-	Template *systemmodel.ModelTemplate
-	Aliases  []string
+	Name      string
+	DependsOn []string
+	Aliases   []string
 }
 
 type RunSetEdge struct {
@@ -23,7 +22,8 @@ type RunSetEdge struct {
 
 type runSetEdgeKey struct{ from, to string }
 
-// RunSetPlan is a deterministic, exact named set. Ordered is producer-first;
+// RunSetPlan is a deterministic, exact named set: the plan of one check.
+// Ordered is producer-first;
 // Edges retain the canonical consumer-to-producer relation direction.
 type RunSetPlan struct {
 	Models  map[string]RunSetModel
@@ -33,59 +33,44 @@ type RunSetPlan struct {
 
 func NewRunSetPlan(selected []RunSetModel) (*RunSetPlan, error) {
 	if len(selected) == 0 {
-		return nil, fmt.Errorf("run set requires at least one model")
+		return nil, fmt.Errorf("a check requires at least one model")
 	}
 	models := make(map[string]RunSetModel, len(selected))
 	aliases := map[string]string{}
 	for _, member := range selected {
-		if member.Template == nil || member.Template.Name == "" {
-			return nil, fmt.Errorf("run set contains an invalid model template")
+		name := member.Name
+		if name == "" {
+			return nil, fmt.Errorf("a check contains a model without a name")
 		}
-		name := member.Template.Name
 		if _, duplicate := models[name]; duplicate {
-			return nil, fmt.Errorf("run set contains duplicate model %q", name)
+			return nil, fmt.Errorf("model %q is named more than once", name)
 		}
 		models[name] = member
 		for _, alias := range append([]string{name}, member.Aliases...) {
 			if owner, exists := aliases[alias]; exists && owner != name {
-				return nil, fmt.Errorf("run set alias %q is ambiguous between %q and %q", alias, owner, name)
+				return nil, fmt.Errorf("model alias %q is ambiguous between %q and %q", alias, owner, name)
 			}
 			aliases[alias] = name
 		}
 	}
 
 	edges := map[runSetEdgeKey]map[string]struct{}{}
-	addEdge := func(from, rawTo, source string, required bool) error {
-		to, exists := aliases[rawTo]
-		if !exists {
-			if required {
-				return fmt.Errorf("model %q binding producer %q is outside the explicit run set", from, rawTo)
-			}
-			return nil
-		}
-		if from == to {
-			return fmt.Errorf("model %q has a self-dependency", from)
-		}
-		key := runSetEdgeKey{from: from, to: to}
-		if edges[key] == nil {
-			edges[key] = map[string]struct{}{}
-		}
-		edges[key][source] = struct{}{}
-		return nil
-	}
+	// A dependency outside the named set adds no edge: a check never runs a
+	// model that was not named.
 	for name, member := range models {
-		for _, producer := range member.Template.BindingProducers {
-			if err := addEdge(name, producer, "binding", true); err != nil {
-				return nil, err
-			}
-		}
-		for _, dependency := range member.Template.DependsOn {
-			if dependency == name {
+		for _, dependency := range member.DependsOn {
+			to, named := aliases[dependency]
+			if dependency == name || to == name {
 				return nil, fmt.Errorf("model %q has a self-dependency", name)
 			}
-			if err := addEdge(name, dependency, "declared", false); err != nil {
-				return nil, err
+			if !named {
+				continue
 			}
+			key := runSetEdgeKey{from: name, to: to}
+			if edges[key] == nil {
+				edges[key] = map[string]struct{}{}
+			}
+			edges[key]["declared"] = struct{}{}
 		}
 	}
 
@@ -150,7 +135,7 @@ func topologicalRunSetOrder(models map[string]RunSetModel, edges map[runSetEdgeK
 			}
 		}
 		sort.Strings(cycle)
-		return nil, fmt.Errorf("run set dependency cycle among: %s", strings.Join(cycle, ", "))
+		return nil, fmt.Errorf("dependency cycle among: %s", strings.Join(cycle, ", "))
 	}
 	return ordered, nil
 }

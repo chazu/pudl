@@ -46,6 +46,14 @@ func NewRegistry(src redact.Source, redactor *redact.Registry) *Registry {
 	return &Registry{src: src, redactor: redactor, cache: map[string]*SchemaSpec{}}
 }
 
+// Source returns the schema source the registry reads.
+func (r *Registry) Source() redact.Source {
+	if r == nil {
+		return nil
+	}
+	return r.src
+}
+
 // Schemas returns every loaded schema whose chain declares facts, sorted.
 func (r *Registry) Schemas() []string {
 	if r == nil || r.src == nil {

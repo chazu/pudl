@@ -51,6 +51,16 @@ app: #SystemModel & {
 	plugins: [{name: "k8s", script: "./plugin.bb"}]
 	populate: {runs: [{argv: ["true"]}]}
 }`},
+		"value bindings": {field: "bindings", source: `
+app: #SystemModel & {
+	name: "app"
+	inputs: value: string
+	bindings: value: {
+		source: {model: "producer", schema: "a.#B", identity: {name: "one"}}
+		path: "/value"
+	}
+	populate: {runs: [{argv: ["echo", inputs.value]}]}
+}`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

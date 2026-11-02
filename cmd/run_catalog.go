@@ -6,7 +6,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-// runCatalog is the one catalog handle a `pudl run` owns for its whole lifetime.
+// runCatalog is the one catalog handle one model run within a `pudl check` owns for its whole lifetime.
 // Every phase that touches the catalog borrows it instead of opening its own.
 //
 // The run path used to call database.NewCatalogDB eleven times — the inventory

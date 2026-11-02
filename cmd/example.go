@@ -45,7 +45,7 @@ Example:
 		}
 		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
 		if args[0] == "gcp-network-hygiene" {
-			fmt.Fprintln(outw(), "Next: pudl run gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
+			fmt.Fprintln(outw(), "Next: pudl check gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
 			return nil
 		}
 		fmt.Fprintf(outw(), "Model: git-inventory\nInventories: .pudl/populators/git-inventory/{baseline,changed}.json (the model observes current.json)\n")

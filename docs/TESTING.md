@@ -163,15 +163,17 @@ test/
 
 ### System Model Tests
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
-- Run verdict mapping and the `pudl run` phase plan (`cmd` run tests)
+- Run verdict mapping and the per-model phase plan of `pudl check` (`cmd` run tests)
 - Retired model fields fail to load with an error naming the field
   (`internal/systemmodel`)
-- Plain binding classification, exact run-set ordering over `#CommandObserve`
-  members, producer snapshot pinning, and durable linked reports
+- `pudl check` ordering over `#CommandObserve` members (producers first by
+  `depends_on`, blocked dependents), the one versioned check report with
+  embedded member reports, and durable linked reports
+  (`cmd/check_integration_test.go`)
 - A catalog written before the convergence/mu removal still lists, shows,
   reports and validates (`cmd/legacy_catalog_test.go`)
 - Bootstrap installation and repair derived from the complete embedded schema
-  tree, including built-in `@pudl(binding=plain)` projections
+  tree
 
 ### Environment-sensitive tests
 

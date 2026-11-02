@@ -22,14 +22,14 @@ var statusCmd = &cobra.Command{
 	Use:   "status [target]",
 	Short: "Show the verified status of models and targets",
 	Long: `Display the status recorded in the catalog — the per-target verdict
-pudl run writes (a model run's verdict is recorded on its instance row,
+pudl check writes (a model's verdict is recorded on its instance row,
 "//models/<name>").
 
 Status values:
   unknown     — no verified status recorded yet (the retired "converging" value also reads as unknown)
   clean       — observed == desired, confirmed by a live observation
   drifted     — observed != desired, or a fail-severity check did not pass
-  failed      — recorded by the retired convergence workflow; re-run the model to replace it
+  failed      — recorded by the retired convergence workflow; check the model again to replace it
 
 Examples:
     pudl status
