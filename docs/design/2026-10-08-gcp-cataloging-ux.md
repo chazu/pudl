@@ -433,7 +433,8 @@ Fields are the union along `base_schema`.
   unredacted. Projection still redacts in memory (§5.5). A `pudl doctor` scrub
   is follow-up work.
 - **Drift.** Redacted observed values never equal plaintext `desired` values,
-  so do not declare desired state on sensitive paths.
+  so do not declare desired state on sensitive paths. Since 2026-11-01
+  (`pudl-o5i`) `pudl run` and `pudl model validate` reject such a model at load.
 
 ## 7. Command populate arm and checks-only models
 

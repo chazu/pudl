@@ -133,6 +133,9 @@ func resolveRunModel(ctx context.Context, cat *runCatalog, opts runOptions, deps
 	if err != nil {
 		return nil, err
 	}
+	if err := checkModelSchemas(resolved.model); err != nil {
+		return nil, err
+	}
 	return resolved, nil
 }
 

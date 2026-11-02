@@ -224,5 +224,7 @@ func runInventoryDriftContext(ctx context.Context, db *database.CatalogDB, scope
 		Drifted:    drifted,
 		SnapshotID: observed.snapshotID,
 		ObservedAt: observed.observedAt,
+
+		IdentityFallbacks: acute.IdentityFallbacks(identity, desired, observed.records),
 	}, nil
 }

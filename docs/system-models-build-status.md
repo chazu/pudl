@@ -54,8 +54,11 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go`,
   e.g. host). They are separate code paths.
 - **`_schema` is a CUE hidden field** → `Decode` drops it; `decodeDesired` re-extracts
   desired with `cue.Hidden(true)` so identity survives.
-- Inventory identity = `_schema` + first present key (`name|path|id`) — V1 heuristic;
-  schema-driven `identity_fields` (from the inference graph) is a follow-up.
+- Inventory identity = `_schema` + the schema's declared `identity_fields` (via the
+  inference graph, `cmd/inventory_identity.go`). When the schema is unknown or
+  declares none, `acute.IdentityFields` falls back to the first present key of
+  `name|path|id`; drift and `snapshot show --compare` report each such schema once
+  as an `identity_fallbacks` diagnostic (`pudl-167`).
 
 ## How it's validated (and the environment limits)
 
@@ -139,10 +142,10 @@ Branch: work merged to `pudl/main`. Code lives in `cmd/run*.go`,
 ## Good next steps (self-contained, validatable here)
 
 1. ✅ **Catalog status persistence** (§8) — DONE 2026-06-29 (see frontier above).
-2. ✅ **Schema-driven identity** for inventory drift — DONE 2026-06-29. `recordIdentity`
-   (`cmd/run_inventory.go`) now keys records by the schema's declared `identity_fields`
-   (from the inference graph via `schemaIdentityResolver`), falling back to the
-   name|path|id heuristic only when a schema declares none or a field is absent.
+2. ✅ **Schema-driven identity** for inventory drift — DONE 2026-06-29. `acute.RecordIdentity`
+   keys records by the schema's declared `identity_fields` (from the inference graph
+   via `inventoryIdentityPolicy`), falling back to the name|path|id heuristic only
+   when the schema is unknown or declares none; that use is reported (`pudl-167`).
 3. ✅ **Cross-model data dependencies — Phase 1 + Phase 2** — DONE 2026-06-30 (see
    frontier above). Phase 1 + both leftovers (`pudl model deps` no-run discovery
    pass; completion lists derived/EDB relations) + Phase 2 (`pudl model deps
