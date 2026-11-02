@@ -196,3 +196,17 @@ describe('render-only filters', () => {
     }
   });
 });
+
+describe('synthetic owner groups', () => {
+  it('use the owner type code when the owner was not collected', async () => {
+    const { GraphBuilder } = await import('../data/mock/builder');
+    const b = new GraphBuilder('gcp');
+    b.res({ id: 'n1', type: 'gcp.compute.network', name: 'vpc', account: 'proj-x' });
+    const idx = new GraphIndex({ meta: { origin: 'file', label: 't' }, resources: b.resources, relationships: [] });
+    const view = project(idx, projectionById('network'));
+    const g = buildVisualGraph(view, idx, initialViewState(view));
+    const owner = [...g.nodes.values()].find((n) => n.label === 'proj-x')!;
+    expect(owner.synthetic).toBe(true);
+    expect(owner.code).toBe('PROJ');
+  });
+});

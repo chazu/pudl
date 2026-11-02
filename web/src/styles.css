@@ -302,3 +302,5 @@ code, .code { font-family: var(--mono); }
 .banner-err { font-weight: 400; color: var(--cat-security); margin-top: 3px; }
 .banner .reload { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 3px; padding: 1px 7px; font-size: 10.5px; cursor: pointer; }
 .banner .reload:disabled { opacity: 0.5; cursor: default; }
+.banner .auto { display: flex; align-items: center; gap: 3px; cursor: pointer; }
+.banner .auto input { margin: 0; }

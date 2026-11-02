@@ -5,6 +5,7 @@
 // Endpoints:
 //
 //	GET /api/health   {"pudl": true, "workspace": ...}; the UI probes it to pick its data source
+//	GET /api/version  {"version": stamp}; changes whenever the graph would change
 //	GET /api/graph    the current resource graph (graphexport.Graph, meta.origin "live")
 //	GET /*            the UI bundle; unknown paths fall back to index.html
 //
@@ -21,17 +22,23 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/chazu/pudl/internal/graphexport"
 )
 
-// GraphFunc builds the current graph. It is called once per request.
+// GraphFunc builds the current graph.
 type GraphFunc func(ctx context.Context) (*graphexport.Graph, error)
+
+// StampFunc returns the current change stamp: equal stamps mean an equal
+// graph. Nil disables caching and /api/version.
+type StampFunc func(ctx context.Context) (string, error)
 
 // Options configures the handler.
 type Options struct {
 	Assets    fs.FS
 	Graph     GraphFunc
+	Stamp     StampFunc
 	Workspace string
 	Version   string
 	// AllowedHosts are the Host header values accepted (host[:port]). Empty
@@ -45,13 +52,25 @@ func Handler(opts Options) http.Handler {
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"pudl": true, "workspace": opts.Workspace, "version": opts.Version})
 	})
-	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
-		g, err := opts.Graph(r.Context())
+	cache := &graphCache{build: opts.Graph, stamp: opts.Stamp}
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
+		if opts.Stamp == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "change tracking unavailable"})
+			return
+		}
+		v, err := opts.Stamp(r.Context())
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		g.Meta.Origin = "live"
+		writeJSON(w, http.StatusOK, map[string]string{"version": v})
+	})
+	mux.HandleFunc("GET /api/graph", func(w http.ResponseWriter, r *http.Request) {
+		g, err := cache.get(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
 		writeJSON(w, http.StatusOK, g)
 	})
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +78,43 @@ func Handler(opts Options) http.Handler {
 	})
 	mux.Handle("/", spa(opts.Assets))
 	return hostGuard(opts.AllowedHosts, mux)
+}
+
+// graphCache builds the graph at most once per change stamp. Builds are
+// serialized: concurrent requests wait for one build instead of racing.
+type graphCache struct {
+	build GraphFunc
+	stamp StampFunc
+
+	mu      sync.Mutex
+	version string
+	graph   *graphexport.Graph
+}
+
+func (c *graphCache) get(ctx context.Context) (*graphexport.Graph, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var version string
+	if c.stamp != nil {
+		v, err := c.stamp(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if c.graph != nil && v == c.version {
+			return c.graph, nil
+		}
+		version = v
+	}
+	g, err := c.build(ctx)
+	if err != nil {
+		return nil, err
+	}
+	g.Meta.Origin = "live"
+	g.Meta.Version = version
+	if c.stamp != nil {
+		c.graph, c.version = g, version
+	}
+	return g, nil
 }
 
 // spa serves files from assets; any path that is not a file gets index.html.

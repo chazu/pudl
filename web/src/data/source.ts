@@ -11,6 +11,8 @@ export interface GraphSource {
   readonly id: string;
   readonly label: string;
   load(): Promise<CanonicalGraph>;
+  /** Current change stamp, for sources that can tell when to reload (live only). */
+  version?(): Promise<string | null>;
 }
 
 export interface LoadedGraph {

@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"testing/fstest"
 
@@ -95,4 +97,44 @@ func TestServeStopsOnCancel(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	cancel()
 	require.NoError(t, <-done)
+}
+
+func TestGraphIsCachedPerStampAndVersionIsExposed(t *testing.T) {
+	builds := 0
+	stamp := "v1"
+	h := Handler(Options{
+		Assets: fstest.MapFS{"index.html": {}},
+		Graph: func(context.Context) (*graphexport.Graph, error) {
+			builds++
+			return &graphexport.Graph{}, nil
+		},
+		Stamp: func(context.Context) (string, error) { return stamp, nil },
+	})
+	for i := 0; i < 3; i++ {
+		require.Equal(t, http.StatusOK, get(t, h, "localhost", "/api/graph").Code)
+	}
+	require.Equal(t, 1, builds, "an unchanged stamp reuses the graph")
+	var g graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph").Body.Bytes(), &g))
+	require.Equal(t, "v1", g.Meta.Version)
+	require.JSONEq(t, `{"version":"v1"}`, get(t, h, "localhost", "/api/version").Body.String())
+
+	stamp = "v2"
+	get(t, h, "localhost", "/api/graph")
+	require.Equal(t, 2, builds, "a new stamp rebuilds")
+}
+
+func TestVersionWithoutStampIs404(t *testing.T) {
+	require.Equal(t, http.StatusNotFound, get(t, testHandler(nil), "localhost", "/api/version").Code)
+}
+
+func TestFileTreeStamp(t *testing.T) {
+	dir := t.TempDir()
+	a := FileTreeStamp(dir)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "r.cue"), []byte("x: 1"), 0o644))
+	b := FileTreeStamp(dir)
+	require.NotEqual(t, a, b)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignored"), 0o644))
+	require.Equal(t, b, FileTreeStamp(dir), "only .cue files count")
+	require.Equal(t, FileTreeStamp(dir), FileTreeStamp(dir, filepath.Join(dir, "missing")))
 }

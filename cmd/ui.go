@@ -1,16 +1,22 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"sync"
 	"syscall"
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/graphexport"
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/uiserver"
+	"github.com/chazu/pudl/internal/validator"
 	"github.com/chazu/pudl/internal/webui"
 )
 
@@ -36,8 +42,9 @@ only requests addressed to that host, so other web pages cannot read the
 inventory. Serving on another interface exposes the inventory to anyone who
 can reach it, so it needs --allow-remote.
 
-Schema changes (new types, _pudl.graph blocks) take effect after a restart;
-new observations and rules do not need one.
+The UI refreshes itself when the catalog, the rules or the schemas change
+(for example when a 'pudl check' finishes in another terminal), keeping the
+current view.
 
 Examples:
     pudl ui
@@ -66,9 +73,16 @@ func runUI(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("listen on %s: %w (another pudl ui? try --addr 127.0.0.1:0)", uiAddr, err)
 	}
 
+	src, err := newUIGraphSource()
+	if err != nil {
+		ln.Close()
+		return err
+	}
+	defer src.close()
 	opts := uiserver.Options{
 		Assets:    webui.Assets(),
-		Graph:     buildWorkspaceGraph,
+		Graph:     src.graph,
+		Stamp:     src.stamp,
 		Workspace: effectiveWorkspaceName(),
 		Version:   version,
 	}
@@ -101,4 +115,53 @@ func openBrowser(url string) error {
 		c = exec.Command("xdg-open", url)
 	}
 	return c.Start()
+}
+
+// uiGraphSource builds graphs for pudl ui and fingerprints what they depend
+// on: the catalog, the rule files and the schema files.
+type uiGraphSource struct {
+	db          *database.CatalogDB
+	ruleDirs    []string
+	schemaDirs  []string
+	mu          sync.Mutex
+	builtSchema string
+}
+
+func newUIGraphSource() (*uiGraphSource, error) {
+	configDir := effectivePudlDir()
+	db, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open catalog: %w", err)
+	}
+	cfg, err := loadEffectiveConfig()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	return &uiGraphSource{db: db, ruleDirs: queryRulePaths(configDir), schemaDirs: effectiveSchemaPaths(cfg)}, nil
+}
+
+func (s *uiGraphSource) close() { s.db.Close() }
+
+func (s *uiGraphSource) stamp(context.Context) (string, error) {
+	catalog, err := s.db.ChangeStamp()
+	if err != nil {
+		return "", err
+	}
+	return catalog + "|" + uiserver.FileTreeStamp(s.ruleDirs...) + "|" + uiserver.FileTreeStamp(s.schemaDirs...), nil
+}
+
+// graph builds the current graph. Schemas are cached per process, so when
+// the schema files changed since the last build the caches are reset first.
+func (s *uiGraphSource) graph(ctx context.Context) (*graphexport.Graph, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if schema := uiserver.FileTreeStamp(s.schemaDirs...); schema != s.builtSchema {
+		if s.builtSchema != "" {
+			inference.ResetShared()
+			validator.ResetSharedLoaders()
+		}
+		s.builtSchema = schema
+	}
+	return buildWorkspaceGraph(ctx)
 }
