@@ -1,10 +1,8 @@
-// Backend integration point.
-//
-// The UI only ever talks to a GraphSource. PUDL has no HTTP API today (it is a
-// CLI over a local SQLite catalog), so the shipped sources are the mock demo
-// dataset and a JSON file loader. A live source would implement this
-// interface, set meta.origin = 'live', and return a CanonicalGraph built from
-// catalog entries (resources) and facts (relationships). See docs/frontend.md.
+// Backend integration point. The UI only ever talks to a GraphSource:
+//   LiveGraphSource  the catalog, via the `pudl ui` server (origin 'live')
+//   JsonFileSource   a `pudl graph export` file or any graph JSON (?graph=<url>)
+//   MockGraphSource  the synthetic demo dataset (?demo, or no pudl server)
+// See docs/frontend.md.
 
 import type { CanonicalGraph } from '../model/canonical';
 import { validateGraph, type GraphIssue } from './validate';
@@ -26,9 +24,9 @@ export async function loadFrom(source: GraphSource): Promise<LoadedGraph> {
 }
 
 /**
- * Pick a source from the page URL. `?graph=<url>` loads a canonical graph JSON
- * file; anything else uses the mock dataset. Mock and file data are always
- * labelled as such in the UI.
+ * Pick a source: `?graph=<url>` loads that file, `?demo` the demo dataset;
+ * otherwise the live catalog when `pudl ui` served the page, else the demo.
+ * Every origin is labelled in the UI.
  */
 export async function sourceFromLocation(search: string): Promise<GraphSource> {
   const params = new URLSearchParams(search);
@@ -36,6 +34,10 @@ export async function sourceFromLocation(search: string): Promise<GraphSource> {
   if (url) {
     const { JsonFileSource } = await import('./jsonSource');
     return new JsonFileSource(url);
+  }
+  if (!params.has('demo')) {
+    const { LiveGraphSource, servedByPudl } = await import('./liveSource');
+    if (await servedByPudl()) return new LiveGraphSource();
   }
   const { MockGraphSource } = await import('./mock');
   return new MockGraphSource();

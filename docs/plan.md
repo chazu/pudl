@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui: graph explorer embedded in the binary, on the live catalog (2026-11-02)
+
+`pudl ui` serves the explorer from the binary (a committed Vite bundle,
+embedded with `go:embed`, so no Node is needed to build pudl) and reads the
+catalog on every load. It is read-only, loopback-only by default, and
+guarded against DNS rebinding. Reload keeps view state. See the
+[delivery log](../implog/2026_11_02_pudl_ui.md).
+
 ### pudl graph export feeds the web explorer real data (2026-11-02)
 
 `pudl graph export` writes the catalog's current resources and their

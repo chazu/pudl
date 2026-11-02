@@ -146,6 +146,12 @@ The [concepts guide](docs/concepts.md) explains each term.
   (`pudl list --where`, `--select`), exports and portable workspace bundles
   (`pudl export`).
 
+**Explore**
+- `pudl ui` opens a graph explorer, embedded in the binary, on the live
+  catalog: network, application, inventory and security views of the same
+  resources, with evidence for every relationship. `pudl graph export` writes
+  the same graph as JSON. See [frontend](docs/frontend.md).
+
 **Govern**
 - Policy schemas evaluated per resource on every observation, with named rules
   and severities (`pudl policy list|show|evaluate`).

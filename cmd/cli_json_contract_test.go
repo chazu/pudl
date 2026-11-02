@@ -20,6 +20,7 @@ import (
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
 	"pudl graph":                 "command group",
+	"pudl ui":                    "starts a long-running web server; see ui_test.go",
 	"pudl model":                 "command group",
 	"pudl policy":                "command group",
 	"pudl rule":                  "command group",

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -67,29 +68,7 @@ func init() {
 }
 
 func runGraphExport(cmd *cobra.Command, args []string) error {
-	configDir := effectivePudlDir()
-	db, err := database.NewCatalogDB(configDir)
-	if err != nil {
-		return fmt.Errorf("failed to open catalog: %w", err)
-	}
-	defer db.Close()
-
-	rules, err := datalog.LoadRulesFromPaths(queryRulePaths(configDir)...)
-	if err != nil {
-		return fmt.Errorf("failed to load rules: %w", err)
-	}
-	reg, err := projectionRegistry()
-	if err != nil {
-		return err
-	}
-	graph, err := graphexport.Build(cmd.Context(), graphexport.Input{
-		DB:        db,
-		Rules:     rules,
-		Metadata:  reg.Source().GetSchemaMetadata,
-		Load:      importer.DecodeEntry,
-		Workspace: effectiveWorkspaceName(),
-		Now:       time.Now(),
-	})
+	graph, err := buildWorkspaceGraph(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -113,4 +92,33 @@ func runGraphExport(cmd *cobra.Command, args []string) error {
 			len(graph.Resources), len(graph.Relationships), graphExportOutput, len(graph.Meta.Warnings))
 	}
 	return nil
+}
+
+// buildWorkspaceGraph exports the current workspace's resource graph. It
+// opens the catalog and loads rules on every call, so a long-running caller
+// (pudl ui) sees new observations and rules without a restart.
+func buildWorkspaceGraph(ctx context.Context) (*graphexport.Graph, error) {
+	configDir := effectivePudlDir()
+	db, err := database.NewCatalogDB(configDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open catalog: %w", err)
+	}
+	defer db.Close()
+
+	rules, err := datalog.LoadRulesFromPaths(queryRulePaths(configDir)...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load rules: %w", err)
+	}
+	reg, err := projectionRegistry()
+	if err != nil {
+		return nil, err
+	}
+	return graphexport.Build(ctx, graphexport.Input{
+		DB:        db,
+		Rules:     rules,
+		Metadata:  reg.Source().GetSchemaMetadata,
+		Load:      importer.DecodeEntry,
+		Workspace: effectiveWorkspaceName(),
+		Now:       time.Now(),
+	})
 }

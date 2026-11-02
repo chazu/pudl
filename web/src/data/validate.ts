@@ -62,8 +62,12 @@ export function validateGraph(graph: CanonicalGraph): GraphIssue[] {
   return issues;
 }
 
-/** Shape check for JSON input. Throws on anything that is not a graph. */
-export function parseCanonicalGraph(data: unknown, fallbackLabel: string): CanonicalGraph {
+/**
+ * Shape check for JSON input. Throws on anything that is not a graph. The
+ * origin comes from the source that fetched it, never from the document: a
+ * file cannot claim to be live.
+ */
+export function parseCanonicalGraph(data: unknown, fallbackLabel: string, origin: 'file' | 'live' = 'file'): CanonicalGraph {
   if (!data || typeof data !== 'object') throw new Error('graph JSON must be an object');
   const obj = data as Record<string, unknown>;
   if (!Array.isArray(obj.resources)) throw new Error('graph JSON needs a resources array');
@@ -84,9 +88,8 @@ export function parseCanonicalGraph(data: unknown, fallbackLabel: string): Canon
   }
   const meta = (obj.meta as Record<string, unknown> | undefined) ?? {};
   return {
-    // A file is never treated as live inventory, whatever it claims.
     meta: {
-      origin: 'file',
+      origin,
       label: typeof meta.label === 'string' ? meta.label : fallbackLabel,
       generatedAt: typeof meta.generatedAt === 'string' ? meta.generatedAt : undefined,
       warnings: Array.isArray(meta.warnings) ? meta.warnings.filter((w): w is string => typeof w === 'string') : undefined,

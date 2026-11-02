@@ -5,8 +5,11 @@ topology, application architecture, resource inventory, security
 relationships) of the same resources. Architecture, data flow and design
 rules are in [docs/frontend.md](../docs/frontend.md).
 
-The app loads a synthetic demo dataset (bannered DEMO DATA) or a graph file
-exported from a pudl workspace (bannered FILE).
+Most people never build this directly: `pudl ui` serves the bundle embedded
+in the pudl binary against the workspace catalog (bannered LIVE). This
+directory is the source. After changing it, run `make web` from the repository
+root and commit `internal/webui/static`. Standalone, the app loads a graph
+file (bannered FILE) or a synthetic demo dataset (bannered DEMO DATA).
 
 ## Run
 
@@ -18,8 +21,13 @@ npm install
 npm run dev          # http://localhost:5178
 ```
 
-View your own pudl catalog: export it into `web/public/` (git-ignored) and
-point the app at it:
+Against a running `pudl ui`, with hot reload:
+
+```bash
+PUDL_API=http://127.0.0.1:7468 npm run dev
+```
+
+Or from an exported file in `web/public/` (git-ignored):
 
 ```bash
 pudl graph export -o web/public/graph.json     # from your workspace
@@ -35,7 +43,7 @@ infrastructure, install the AWS or GCP pack and run its fixture collectors
 ```bash
 npm test             # vitest: projection, visual-graph, layout and validation tests
 npm run typecheck    # tsc
-npm run build        # typecheck + production bundle in web/dist
+npm run build        # typecheck + bundle into ../internal/webui/static (embedded by pudl ui)
 ```
 
 ## Use

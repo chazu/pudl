@@ -82,6 +82,7 @@ These flags apply to every command.
   - [pudl snapshot retain](#pudl-snapshot-retain) — Pin a snapshot against pruning (--release to unpin)
   - [pudl snapshot show](#pudl-snapshot-show) — Show one snapshot's provenance and contents
 - [pudl status](#pudl-status) — Show the verified status of models and targets
+- [pudl ui](#pudl-ui) — Open the graph explorer on this workspace's catalog
 - [pudl version](#pudl-version) — Show version information
 
 ## pudl check
@@ -2058,6 +2059,41 @@ state, has not been observed, or its last check could not establish one (an
 incomplete inventory, a check without evidence). `failed` and the value
 `converging` appear only on rows written by retired commands; `converging`
 reads as `unknown`, and the next check replaces both.
+
+## pudl ui
+
+Open the graph explorer on this workspace's catalog
+
+```text
+pudl ui [flags]
+```
+
+```text
+Serve the web graph explorer, embedded in the pudl binary, and open it in
+a browser. The explorer reads the workspace catalog live: every load or
+Reload shows the current resources and relationships (the same graph as
+'pudl graph export').
+
+The server is read-only and listens on the loopback interface. It answers
+only requests addressed to that host, so other web pages cannot read the
+inventory. Serving on another interface exposes the inventory to anyone who
+can reach it, so it needs --allow-remote.
+
+Schema changes (new types, _pudl.graph blocks) take effect after a restart;
+new observations and rules do not need one.
+
+Examples:
+    pudl ui
+    pudl ui --addr 127.0.0.1:9000 --no-open
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--addr` | string | `127.0.0.1:7468` | Address to listen on (port 0 picks a free port) |
+| `--allow-remote` | bool |  | Allow a non-loopback --addr (exposes the inventory) |
+| `--no-open` | bool |  | Do not open a browser |
 
 ## pudl version
 
