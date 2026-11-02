@@ -55,11 +55,12 @@ func TestDoctorSensitiveScrubIsOptInAndNeverPrintsValues(t *testing.T) {
 	assert.Contains(t, human.Stdout, "Repair sensitive-scrub: needed")
 	outputs = append(outputs, human.Stdout, human.Stderr)
 
-	// Plain --fix never scrubs: naming the repair is the confirmation. (A dry
-	// run, so the inference repair leaves this explicit import alone.)
-	_, repairs = doctorRepairs(t, "--fix", "--dry-run")
+	// Plain --fix never scrubs: naming the repair is the confirmation. Nor
+	// does it reclassify this explicit import.
+	_, repairs = doctorRepairs(t, "--fix")
 	assert.Equal(t, repair.StatusSkipped, repairs["sensitive-scrub"].Status)
 	assert.Contains(t, repairs["sensitive-scrub"].Message, "opt-in")
+	assert.Equal(t, repair.StatusOK, repairs["inference"].Status, "%+v", repairs["inference"])
 	_, repairs = doctorRepairs(t, "--fix", "--dry-run", "--only", "sensitive-scrub")
 	assert.Equal(t, repair.StatusNeeded, repairs["sensitive-scrub"].Status)
 

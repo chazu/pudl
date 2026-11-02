@@ -38,6 +38,7 @@ type collectionStream struct {
 	truncated           bool
 	identity            identityTally
 	reassigned          int
+	reassignedMeta      []reassignedMeta
 	tally               *projection.Tally
 	secrets             secretTally
 }
@@ -163,6 +164,9 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 		result, err = c.importer.createCollectionEntryIn(tx, c.opts, c.timestamp, origin, c.collectionID, storedPath, c.metadataDir, sizeBytes, c.recordCount)
 		return err
 	})
+	if err == nil {
+		err = c.recordReassignments()
+	}
 	if result != nil {
 		result.ItemExplanations = c.explanations
 		result.ExplanationsTruncated = c.truncated
@@ -268,7 +272,7 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 		SchemaInfo: SchemaInfo{
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
-			ValidationStatus: "auto-assigned",
+			ValidationStatus: validationStatus(assigned),
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
