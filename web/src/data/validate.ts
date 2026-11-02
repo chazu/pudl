@@ -2,7 +2,7 @@
 // repaired: a relationship to a missing resource stays in the graph and the
 // projection shows it as an unresolved reference.
 
-import type { CanonicalGraph } from '../model/canonical';
+import type { CanonicalGraph, GraphMeta } from '../model/canonical';
 import { isKnownRelationshipType } from '../model/relationshipTypes';
 
 export type GraphIssueKind =
@@ -95,6 +95,7 @@ export function parseCanonicalGraph(data: unknown, fallbackLabel: string, origin
       version: typeof meta.version === 'string' ? meta.version : undefined,
       asOf: typeof meta.asOf === 'string' ? meta.asOf : undefined,
       partial: meta.partial === true ? true : undefined,
+      coverage: meta.coverage && typeof meta.coverage === 'object' ? (meta.coverage as GraphMeta['coverage']) : undefined,
       degree: meta.degree && typeof meta.degree === 'object' ? (meta.degree as Record<string, number>) : undefined,
       totals: meta.totals && typeof meta.totals === 'object' ? (meta.totals as { resources: number; relationships: number }) : undefined,
       warnings: Array.isArray(meta.warnings) ? meta.warnings.filter((w): w is string => typeof w === 'string') : undefined,

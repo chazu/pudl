@@ -149,6 +149,13 @@ func TestGraphExportGCPPack(t *testing.T) {
 	}
 	l := newGraphLookup(g)
 	require.Empty(t, g.Meta.Warnings)
+	cov := g.Meta.Coverage
+	require.NotNil(t, cov)
+	require.Positive(t, cov.EdgeRules)
+	require.Greater(t, cov.Entries, cov.Resources-1)
+	for _, h := range cov.Hidden {
+		require.Equal(t, "internal", h.Reason, "every pack fixture record has an identity; only pudl's own records are hidden: %+v", h)
+	}
 	for _, r := range g.Resources {
 		require.False(t, graphexport.InternalTypes[r.Type], "pudl's own %s records are not infrastructure", r.Type)
 	}
@@ -157,6 +164,28 @@ func TestGraphExportGCPPack(t *testing.T) {
 	// Subnets reference networks by trimmed selfLink; refs resolve them.
 	subnetEdges := l.edges("in_network")
 	require.NotEmpty(t, l.edges("subscribed_to"))
+
+	// Compute instances: placed by subnet, the service account they run as,
+	// and the firewall rules GCP applies to them.
+	vm := func(name string) string {
+		return "https://www.googleapis.com/compute/v1/projects/example-project/zones/" + name
+	}
+	fwl := func(name string) string {
+		return "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/" + name
+	}
+	bastion := l.byNative[vm("us-central1-a/instances/bastion-1")]
+	require.Equal(t, "gcp.compute.instance", bastion.Type)
+	require.Equal(t, "us-central1-a", bastion.Zone)
+	require.Equal(t, "us-central1", bastion.Region, "derived from the zone")
+	require.Contains(t, l.edges("in_subnet"), vm("us-central1-a/instances/bastion-1")+" -> https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app")
+	require.Contains(t, l.edges("runs_as"), vm("us-central1-a/instances/bastion-1")+" -> ref:ops@example-project.iam.gserviceaccount.com")
+	applies := l.edges("applies_to")
+	require.Contains(t, applies, fwl("allow-ssh-world")+" -> "+vm("us-central1-a/instances/bastion-1"), "matched by target tag")
+	require.NotContains(t, applies, fwl("allow-ssh-world")+" -> "+vm("us-central1-b/instances/orders-api-1"), "untagged instance")
+	require.Contains(t, applies, fwl("allow-internal")+" -> "+vm("us-central1-b/instances/orders-api-1"), "untargeted rules apply to the whole network")
+	require.NotContains(t, strings.Join(applies, "\n"), "allow-rdp-world-disabled", "a disabled rule applies to nothing")
+	tagged := relationship(t, g, "applies_to", fwl("allow-ssh-world"), vm("us-central1-a/instances/bastion-1"))
+	require.Equal(t, "bastion", tagged.Properties["matched_tag"])
 	fw := l.edges("allows_ingress_from")
 	require.NotEmpty(t, fw, "enabled ingress firewall rules permit their source ranges")
 	for _, e := range fw {
@@ -224,4 +253,21 @@ func TestGraphExportAsOf(t *testing.T) {
 	require.NoError(t, r.Err)
 	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &past))
 	require.Empty(t, past.Resources, "nothing was recorded in 2000")
+}
+
+func TestGraphExportCoverageNamesUnidentifiedSchemas(t *testing.T) {
+	cliWorkspace(t)
+	require.NoError(t, os.WriteFile("widgets.json", []byte(`[{"widget": "w1", "size": 3}, {"widget": "w2", "size": 4}]`), 0o644))
+	r := runCLI(t, "import", "--path", "widgets.json", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	g := exportGraph(t)
+	require.Empty(t, g.Resources, "records with no identity are not resources")
+	cov := g.Meta.Coverage
+	require.NotNil(t, cov)
+	require.Equal(t, 2, cov.Entries, "the array wrapper is not counted")
+	require.Zero(t, cov.EdgeRules)
+	require.Len(t, cov.Hidden, 1)
+	require.Equal(t, "no-identity", cov.Hidden[0].Reason)
+	require.Equal(t, 2, cov.Hidden[0].Entries)
 }

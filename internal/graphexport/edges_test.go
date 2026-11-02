@@ -107,3 +107,9 @@ func TestEdgePropertiesMergePerKey(t *testing.T) {
 	require.Equal(t, map[string]any{"port": []any{float64(80), float64(443)}, "protocol": "tcp"}, rels[0].Properties)
 	require.Equal(t, []string{"1 graph_edge_property rows name an edge no graph_edge rule derived"}, warnings)
 }
+
+func TestRegionOfZone(t *testing.T) {
+	for zone, region := range map[string]string{"us-central1-a": "us-central1", "us-east-1a": "us-east-1", "europe-west1-b": "europe-west1", "us-central1": "", "": "", "global": ""} {
+		require.Equal(t, region, regionOfZone(zone), zone)
+	}
+}

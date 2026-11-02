@@ -77,7 +77,13 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			gcp_firewall_network: args: {
 				self_link: "selfLink"
 				network: {path: "network", trim_prefix: _gcpComputeAPI}
+				// Whom the rule targets: tagged instances, service accounts,
+				// or (neither) every instance in the network.
+				targeted: {exists: "targetTags"}
+				sa_targeted: {exists: "targetServiceAccounts"}
+				disabled: {path: "disabled", default: false}
 			}
+			gcp_firewall_target_tag: args: tag: "targetTags[*]"
 			// One fact per source range, with the rule's direction and state.
 			gcp_firewall_source: args: {
 				range:     "sourceRanges[*]"

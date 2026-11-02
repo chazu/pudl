@@ -160,8 +160,14 @@ func isCollectionContainer(entry database.CatalogEntry) bool {
 const collectionSchema = "pudl/core.#Collection"
 
 // Explicit assignments are validated, never heuristically reclassified.
+// Items of an imported array were inferred one by one, so they are checked
+// like any other inferred entry (an item imported with --schema is explicit
+// and skipped). Only the collection container itself is not a record.
 func shouldVerifyInference(data interface{}, entry database.CatalogEntry) bool {
-	return entry.CollectionType == nil && !importer.ExplicitAssignment(entry, data)
+	if entry.CollectionType != nil && *entry.CollectionType != "item" {
+		return false
+	}
+	return !importer.ExplicitAssignment(entry, data)
 }
 
 func loadVerifyData(path string) (interface{}, error) {

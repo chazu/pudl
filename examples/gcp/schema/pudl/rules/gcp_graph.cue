@@ -89,3 +89,51 @@ gcp_graph_firewall_protocol: {
 		{rel: "gcp_firewall_allow", args: {resource_id: "$R", protocol: "$P"}},
 	]
 }
+
+// ---- Compute instances ----
+
+gcp_graph_instance_subnet: {
+	head: {rel: "graph_edge", args: {type: "in_subnet", source: "$R", target: "$S", basis: "observed"}}
+	body: [{rel: "gcp_instance_nic", args: {resource_id: "$R", subnetwork: "$S"}}]
+}
+
+// The service account an instance runs as. Service accounts are not
+// collected by this pack, so they show as references not in the inventory.
+gcp_graph_instance_sa: {
+	head: {rel: "graph_edge", args: {type: "runs_as", source: "$R", target: "$A", basis: "observed"}}
+	body: [{rel: "gcp_instance_sa", args: {resource_id: "$R", email: "$A"}}]
+}
+
+// Which firewall rules apply to which instances, as GCP decides it: an
+// enabled rule with no target tags and no target service accounts applies
+// to every instance with an interface in its network; a rule with target
+// tags applies to instances carrying one of them, in its network. (Rules
+// targeting service accounts are not matched here.) Applying is not
+// allowing: the rule may deny, and priorities are not evaluated.
+gcp_graph_firewall_applies_all: {
+	head: {rel: "graph_edge", args: {type: "applies_to", source: "$F", target: "$I", basis: "observed"}}
+	body: [
+		{rel: "gcp_firewall_network", args: {resource_id: "$F", network: "$N", targeted: false, sa_targeted: false, disabled: false}},
+		{rel: "gcp_instance_nic", args: {resource_id: "$I", network: "$N"}},
+	]
+}
+
+gcp_graph_firewall_applies_tag: {
+	head: {rel: "graph_edge", args: {type: "applies_to", source: "$F", target: "$I", basis: "observed"}}
+	body: [
+		{rel: "gcp_firewall_network", args: {resource_id: "$F", network: "$N", disabled: false}},
+		{rel: "gcp_firewall_target_tag", args: {resource_id: "$F", tag: "$T"}},
+		{rel: "gcp_instance_tag", args: {resource_id: "$I", tag: "$T"}},
+		{rel: "gcp_instance_nic", args: {resource_id: "$I", network: "$N"}},
+	]
+}
+
+gcp_graph_firewall_applies_tag_property: {
+	head: {rel: "graph_edge_property", args: {type: "applies_to", source: "$F", target: "$I", key: "matched_tag", value: "$T"}}
+	body: [
+		{rel: "gcp_firewall_network", args: {resource_id: "$F", network: "$N", disabled: false}},
+		{rel: "gcp_firewall_target_tag", args: {resource_id: "$F", tag: "$T"}},
+		{rel: "gcp_instance_tag", args: {resource_id: "$I", tag: "$T"}},
+		{rel: "gcp_instance_nic", args: {resource_id: "$I", network: "$N"}},
+	]
+}

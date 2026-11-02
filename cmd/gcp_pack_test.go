@@ -14,7 +14,7 @@ import (
 var gcpPackTypes = []string{
 	"networks", "subnets", "firewalls", "routes", "routers", "addresses",
 	"gke-clusters", "sql-instances", "buckets", "run-services", "dns-zones",
-	"pubsub-topics", "pubsub-subscriptions", "kms-keyrings", "kms-keys",
+	"pubsub-topics", "pubsub-subscriptions", "kms-keyrings", "kms-keys", "instances",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture"}

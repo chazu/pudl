@@ -56,10 +56,35 @@ type Meta struct {
 	// present. Degree is each present resource's total relationship count, so
 	// a client can tell how many relationships are not loaded; Totals is the
 	// size of the whole graph.
-	Partial  bool           `json:"partial,omitempty"`
+	Partial bool `json:"partial,omitempty"`
+	// Coverage explains what the graph leaves out of the catalog.
+	Coverage *Coverage      `json:"coverage,omitempty"`
 	Degree   map[string]int `json:"degree,omitempty"`
 	Totals   *Totals        `json:"totals,omitempty"`
 	Warnings []string       `json:"warnings,omitempty"`
+}
+
+// Coverage compares the graph with the catalog, so a sparse graph explains
+// itself: which schemas' entries are not shown, and why.
+type Coverage struct {
+	// Entries counts catalog entries (collection wrappers excluded).
+	Entries int `json:"entries"`
+	// Resources counts resources in the graph from the catalog (externals excluded).
+	Resources int `json:"resources"`
+	// Hidden lists schemas with entries that are not in the graph.
+	Hidden []HiddenSchema `json:"hidden,omitempty"`
+	// EdgeRules counts loaded graph_edge rules; zero means no relationships.
+	EdgeRules int `json:"edgeRules"`
+}
+
+// HiddenSchema is one schema's entries that the graph does not show.
+type HiddenSchema struct {
+	Schema  string `json:"schema"`
+	Entries int    `json:"entries"`
+	// Reason is "no-identity" (the schema has no identity fields, or they did
+	// not resolve, as with generic catch-all types) or "internal" (pudl's own
+	// records).
+	Reason string `json:"reason"`
 }
 
 // Totals is the size of a whole graph.

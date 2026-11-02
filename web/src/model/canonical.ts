@@ -68,6 +68,20 @@ export interface Relationship {
 
 export type GraphOrigin = 'live' | 'mock' | 'file';
 
+export interface HiddenSchema {
+  schema: string;
+  entries: number;
+  /** 'no-identity': the records resolve to no resource identity; 'internal': pudl's own records. */
+  reason: 'no-identity' | 'internal' | string;
+}
+
+export interface Coverage {
+  entries: number;
+  resources: number;
+  hidden?: HiddenSchema[];
+  edgeRules: number;
+}
+
 export interface GraphMeta {
   origin: GraphOrigin;
   /** Human label for the data source, shown in the UI. */
@@ -85,6 +99,8 @@ export interface GraphMeta {
    * totals is the whole graph's size.
    */
   partial?: boolean;
+  /** How the graph compares with the catalog it came from (pudl exports). */
+  coverage?: Coverage;
   degree?: Record<string, number>;
   totals?: { resources: number; relationships: number };
 }

@@ -1,107 +1,153 @@
 // Package examples installs bundled examples into initialized PUDL workspaces.
+//
+// Upgrades: every install records the digest of each file it wrote in a
+// manifest (<workspace>/.examples/<name>.json). On the next install, a file
+// that differs from the new version but still matches its recorded digest
+// was never edited and is upgraded in place. A file the user edited, or one
+// installed by a pudl that kept no manifest, is a conflict: nothing is
+// written unless Overwrite is set, which keeps the old file as <path>.bak.
 package examples
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-
-	awspack "github.com/chazu/pudl/examples/aws"
-	gcppack "github.com/chazu/pudl/examples/gcp"
-	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
-	gitinventory "github.com/chazu/pudl/examples/git-inventory"
+	"strings"
 )
 
-// Install supplies the model, fixture inventories, and optional live observer.
-// Existing identical files are left alone; any conflict fails before writing.
-func Install(root, name string) ([]string, error) {
-	var files map[string][]byte
-	var err error
-	switch name {
-	case "git-inventory":
-		files, err = gitInventoryFiles()
-	case "gcp-network-hygiene":
-		files, err = gcpNetworkFiles()
-	case "gcp":
-		files, err = treeFiles(gcppack.Files)
-	case "aws":
-		files, err = treeFiles(awspack.Files)
-	default:
-		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp, aws)", name)
-	}
+// Options controls an install.
+type Options struct {
+	// Overwrite replaces conflicting files, keeping each as <path>.bak.
+	Overwrite bool
+}
+
+// Result says what an install did with each file of the example.
+type Result struct {
+	Files     []string          `json:"files"`
+	Added     []string          `json:"added"`
+	Upgraded  []string          `json:"upgraded"`
+	Replaced  []string          `json:"replaced"`
+	Unchanged []string          `json:"unchanged"`
+	Backups   map[string]string `json:"backups,omitempty"`
+}
+
+// ConflictError lists files that differ from the example and were not
+// written.
+type ConflictError struct {
+	Example string
+	Paths   []string
+}
+
+func (e *ConflictError) Error() string {
+	return fmt.Sprintf("%d %s file(s) differ from this version and were left as they are:\n  %s\n"+
+		"They were edited, or installed by an earlier pudl that kept no record of what it wrote. "+
+		"To replace them, keeping your versions as <file>.bak, run: pudl example install %s --overwrite",
+		len(e.Paths), e.Example, strings.Join(e.Paths, "\n  "), e.Example)
+}
+
+// Install writes example name into the workspace at root. All checks run
+// before anything is written.
+func Install(root, name string, opts Options) (*Result, error) {
+	files, err := packFiles(name)
 	if err != nil {
 		return nil, err
 	}
-	var paths []string
-	for path := range files {
-		paths = append(paths, path)
+	manifest, err := readManifest(root, name)
+	if err != nil {
+		return nil, err
 	}
-	sort.Strings(paths)
-	var pending []string
-	for _, path := range paths {
+	res := &Result{Added: []string{}, Upgraded: []string{}, Replaced: []string{}, Unchanged: []string{}}
+	for path := range files {
+		res.Files = append(res.Files, path)
+	}
+	sort.Strings(res.Files)
+
+	var conflicts []string
+	for _, path := range res.Files {
 		if err := checkParents(root, filepath.Dir(path)); err != nil {
 			return nil, err
 		}
 		info, err := os.Lstat(filepath.Join(root, path))
-		if os.IsNotExist(err) {
-			pending = append(pending, path)
+		switch {
+		case os.IsNotExist(err):
+			res.Added = append(res.Added, path)
 			continue
-		}
-		if err != nil {
+		case err != nil:
 			return nil, err
-		}
-		if !info.Mode().IsRegular() {
+		case !info.Mode().IsRegular():
 			return nil, fmt.Errorf("example destination is not a regular file: %s", path)
 		}
-		data, err := os.ReadFile(filepath.Join(root, path))
+		current, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
 			return nil, err
 		}
-		if !bytes.Equal(data, files[path]) {
-			return nil, fmt.Errorf("example file already exists with different content: %s; preserving your file", path)
+		switch {
+		case bytes.Equal(current, files[path]):
+			res.Unchanged = append(res.Unchanged, path)
+		case manifest[path] != "" && manifest[path] == digest(current):
+			res.Upgraded = append(res.Upgraded, path)
+		case opts.Overwrite:
+			res.Replaced = append(res.Replaced, path)
+		default:
+			conflicts = append(conflicts, path)
 		}
 	}
-	for _, path := range pending {
-		absolute := filepath.Join(root, path)
-		if err := os.MkdirAll(filepath.Dir(absolute), 0o755); err != nil {
-			return nil, err
-		}
-		f, err := os.OpenFile(absolute, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
-		if err != nil {
-			return nil, err
-		}
-		_, writeErr := f.Write(files[path])
-		closeErr := f.Close()
-		if writeErr != nil {
-			return nil, writeErr
-		}
-		if closeErr != nil {
-			return nil, closeErr
-		}
+	if len(conflicts) > 0 {
+		return nil, &ConflictError{Example: name, Paths: conflicts}
 	}
-	return paths, nil
-}
 
-func gitInventoryFiles() (map[string][]byte, error) {
-	files := make(map[string][]byte)
-	model, err := gitinventory.Files.ReadFile("model.cue")
-	if err != nil {
+	res.Backups = map[string]string{}
+	for _, path := range res.Replaced {
+		backup, err := backupFile(root, path)
+		if err != nil {
+			return nil, err
+		}
+		res.Backups[path] = backup
+	}
+	for _, list := range [][]string{res.Added, res.Upgraded, res.Replaced} {
+		for _, path := range list {
+			if err := writeFile(filepath.Join(root, path), files[path]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := writeManifest(root, name, files); err != nil {
 		return nil, err
 	}
-	files["schema/models/git_inventory.cue"] = model
-	const populator = "populators/git-inventory/"
-	for _, name := range []string{"baseline.json", "changed.json"} {
-		data, err := gitinventory.Files.ReadFile(name)
-		if err != nil {
-			return nil, err
-		}
-		files[populator+name] = data
+	return res, nil
+}
+
+func digest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func writeFile(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
-	files[populator+"current.json"] = files[populator+"baseline.json"]
-	return files, nil
+	return os.WriteFile(path, data, 0o644)
+}
+
+// backupFile copies path to the first free <path>.bak[.N]. The suffix is not
+// .cue, so CUE never loads a backup.
+func backupFile(root, path string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(root, path))
+	if err != nil {
+		return "", err
+	}
+	backup := path + ".bak"
+	for n := 1; ; n++ {
+		if _, err := os.Lstat(filepath.Join(root, backup)); os.IsNotExist(err) {
+			break
+		}
+		backup = fmt.Sprintf("%s.bak.%d", path, n)
+	}
+	return backup, os.WriteFile(filepath.Join(root, backup), data, 0o644)
 }
 
 // Refuse symlinked destinations so example installation stays in its workspace.
@@ -117,31 +163,4 @@ func checkParents(root, relative string) error {
 		relative = filepath.Dir(relative)
 	}
 	return nil
-}
-
-// treeFiles installs every file of a bundle at its path in the bundle.
-func treeFiles(bundle fs.FS) (map[string][]byte, error) {
-	files := map[string][]byte{}
-	err := fs.WalkDir(bundle, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := fs.ReadFile(bundle, path)
-		files[path] = data
-		return err
-	})
-	return files, err
-}
-
-func gcpNetworkFiles() (map[string][]byte, error) {
-	files := map[string][]byte{}
-	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
-		data, err := gcpnetwork.Files.ReadFile(source)
-		if err != nil {
-			return nil, err
-		}
-		files[destination] = data
-	}
-	files["populators/gcp-network-hygiene/current.json"] = files["populators/gcp-network-hygiene/baseline.json"]
-	return files, nil
 }

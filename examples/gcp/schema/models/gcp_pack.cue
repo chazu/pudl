@@ -55,6 +55,7 @@ _gcpSchemas: {
 	"pubsub-subscriptions": "gcp.#PubSubSubscription"
 	"kms-keyrings":         "gcp.#KMSKeyRing"
 	"kms-keys":             "gcp.#KMSKey"
+	instances:              "gcp.#ComputeInstance"
 }
 
 // The gcloud list command of each per-project collector. Each prints every
@@ -73,6 +74,7 @@ _gcpCommands: {
 	"dns-zones": ["dns", "managed-zones", "list"]
 	"pubsub-topics": ["pubsub", "topics", "list"]
 	"pubsub-subscriptions": ["pubsub", "subscriptions", "list"]
+	instances: ["compute", "instances", "list"]
 }
 
 // The enumeration every live collector repeats its runs over: one input per
@@ -163,6 +165,7 @@ _#GCPFixture: _#GCPCollector & {
 #GCPPubSubSubscriptions: _#GCPLive & {_type: "pubsub-subscriptions"}
 #GCPKMSKeyRings: _#GCPLive & {_type: "kms-keyrings"}
 #GCPKMSKeys: _#GCPLive & {_type: "kms-keys"}
+#GCPInstances: _#GCPLive & {_type: "instances"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -178,3 +181,4 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixturePubSubSubscriptions: _#GCPFixture & {_type: "pubsub-subscriptions"}
 #GCPFixtureKMSKeyRings: _#GCPFixture & {_type: "kms-keyrings"}
 #GCPFixtureKMSKeys: _#GCPFixture & {_type: "kms-keys"}
+#GCPFixtureInstances: _#GCPFixture & {_type: "instances"}
