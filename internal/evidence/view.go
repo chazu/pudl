@@ -13,6 +13,8 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/policy"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
@@ -116,6 +118,12 @@ func Open(ctx context.Context, source *database.CatalogDB, reg *projection.Regis
 	}
 	resources := map[string]string{}
 	entries := map[string]bool{}
+	// Policy results are evaluated over the selected records only, so a
+	// resource absent from a complete selection has none.
+	var policies *policyfacts.Evaluator
+	if src, ok := reg.Source().(policy.Source); ok {
+		policies = policyfacts.New(src)
+	}
 	budget := int64(256 << 20)
 	err = v.DB.WithCatalogTxContext(ctx, func(tx *database.CatalogTx) error {
 		for _, snapshot := range snapshots {
@@ -144,34 +152,8 @@ func Open(ctx context.Context, source *database.CatalogDB, reg *projection.Regis
 				if err := tx.AddEntry(entry); err != nil {
 					return err
 				}
-				spec := reg.For(entry.Schema)
-				if spec == nil {
-					continue
-				}
-				if spec.Err != nil {
-					v.issue("invalid_projection", spec.Err.Error(), entry.ID)
-					continue
-				}
-				if entry.IdentityJSON == nil || entry.ResourceID == nil {
-					v.issue("identity_unresolved", "record has no resolved identity", entry.ID)
-					continue
-				}
-				data, err := readPayload(entry.StoredPath, &budget)
-				if err != nil {
-					v.issue("payload_unavailable", err.Error(), entry.ID)
-					continue
-				}
-				redact.Apply(data, spec.Sensitive)
-				projected := projection.Compute(spec, entry.ID, *entry.ResourceID, data)
-				for _, message := range projected.Omitted {
-					v.issue("projection_omitted", message, entry.ID)
-				}
-				for _, fact := range projected.Facts {
-					fact.Source = "snapshot:" + snapshot.SnapshotID
-					fact.ValidStart = snapshot.CreatedAt.Unix()
-					if _, err := tx.AddFact(fact); err != nil {
-						return err
-					}
+				if err := v.materialize(tx, reg, policies, snapshot, entry, &budget); err != nil {
+					return err
 				}
 			}
 		}
@@ -181,6 +163,54 @@ func Open(ctx context.Context, source *database.CatalogDB, reg *projection.Regis
 		return nil, err
 	}
 	return v, nil
+}
+
+// materialize adds one selected record's projected facts and policy results to
+// the view.
+func (v *View) materialize(tx *database.CatalogTx, reg *projection.Registry, policies *policyfacts.Evaluator, snapshot *database.ObserveSnapshot, entry database.CatalogEntry, budget *int64) error {
+	spec := reg.For(entry.Schema)
+	if spec != nil && spec.Err != nil {
+		v.issue("invalid_projection", spec.Err.Error(), entry.ID)
+		spec = nil
+	}
+	evaluate := len(policies.Applicable(entry.Schema)) > 0
+	if spec == nil && !evaluate {
+		return nil
+	}
+	if entry.IdentityJSON == nil || entry.ResourceID == nil {
+		if spec != nil {
+			v.issue("identity_unresolved", "record has no resolved identity", entry.ID)
+		}
+		return nil
+	}
+	data, err := readPayload(entry.StoredPath, budget)
+	if err != nil {
+		v.issue("payload_unavailable", err.Error(), entry.ID)
+		return nil
+	}
+	if spec != nil {
+		redact.Apply(data, spec.Sensitive)
+		projected := projection.Compute(spec, entry.ID, *entry.ResourceID, data)
+		for _, message := range projected.Omitted {
+			v.issue("projection_omitted", message, entry.ID)
+		}
+		for _, fact := range projected.Facts {
+			fact.Source = "snapshot:" + snapshot.SnapshotID
+			fact.ValidStart = snapshot.CreatedAt.Unix()
+			if _, err := tx.AddFact(fact); err != nil {
+				return err
+			}
+		}
+	}
+	if !evaluate {
+		return nil
+	}
+	results := policies.Prepare(entry.Schema, entry.ID, *entry.ResourceID, true, data)
+	for _, message := range results.Errors {
+		v.issue("policy_failed", message, entry.ID)
+	}
+	_, err = policyfacts.Observe(tx, results, database.ProjectionObservation)
+	return err
 }
 
 func (v *View) issue(code, message, entry string) {

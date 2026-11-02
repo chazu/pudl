@@ -649,6 +649,13 @@ Beads work:
     naming a policy is an error naming its type; `pudl doctor --fix --only
     policy-leaves` moves existing policy-leaf entries to their type with
     identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
+  - Done: `pudl-xf5.8.3` policy results persisted as facts at every import and
+    observation (`policy_status`, `policy_violation` under
+    `policy:<policy>:<resource>`, reconciled like projection; reserved names;
+    complete-scope exits closed), `pudl policy evaluate [POLICY...] [--dry-run]
+    [--what-if FILE]`, the built-in `policy_noncompliant` rule, and stale
+    detection as the `policy-results` doctor repair. See
+    `implog/2026_11_02_policy_results_as_facts.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
@@ -665,7 +672,9 @@ Beads work:
   - Done: `pudl doctor` scan of stored payloads and current (non-projection)
     facts, reported as warnings in text and the `secrets` section of the
     version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
-  - Not yet: observe-ingest warnings (wiring described in the first implog).
+  - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
+    kind, in the run's stderr and the populate report's `secret_warnings`.
+    See `implog/2026_11_02_policy_results_as_facts.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix

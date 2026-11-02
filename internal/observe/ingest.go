@@ -17,8 +17,10 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -96,6 +98,14 @@ type ObserveIngestResult struct {
 	// Facts counts projected facts per relation; FactWarnings explains gaps.
 	Facts        map[string]int
 	FactWarnings []string
+	// SecretWarnings lists likely secrets found outside schema sensitive-field
+	// coverage, by record index, schema, path and kind (never the value),
+	// capped at secretscan.MaxWarnings; SecretWarningsTotal counts them all.
+	// Stored data is unchanged.
+	SecretWarnings      []secretscan.Warning
+	SecretWarningsTotal int
+	// PolicyChange counts the policy results the ingest wrote or closed.
+	PolicyChange policyfacts.Change
 }
 
 // NewSnapshotID allocates a snapshot identifier. Callers that own a run should
@@ -255,6 +265,7 @@ func prepareObserveRecord(
 	if err := route.redact(record, schema); err != nil {
 		return database.CatalogEntry{}, nil, err
 	}
+	route.scanSecrets(record, index, schema)
 
 	// Compute content hash from the canonical JSON of the record.
 	recordJSON, err := json.Marshal(record)

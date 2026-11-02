@@ -28,6 +28,9 @@ const DefaultSeverity = SeverityMedium
 
 var severityRank = map[Severity]int{SeverityLow: 1, SeverityMedium: 2, SeverityHigh: 3, SeverityCritical: 4}
 
+// Rank orders severities: 1 (low) to 4 (critical), 0 for none.
+func (s Severity) Rank() int { return severityRank[s] }
+
 // Status is the outcome of one policy against one resource.
 type Status string
 

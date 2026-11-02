@@ -159,10 +159,12 @@ func (c *CatalogDB) ListProjectionState() ([]ProjectionState, error) {
 // mode; wanted facts not current are added with valid_start = now. A wanted
 // fact whose content-addressed ID collides with an already-closed fact (it was
 // current once, at the same second) is re-added one second later, so a
-// resource that reverts gets its facts back instead of a silent no-op.
+// resource that reverts gets its facts back instead of a silent no-op. source
+// is a projection source or a policy source (PolicySource); policy evaluation
+// reconciles its results the same way.
 func (t *CatalogTx) ReconcileProjection(source string, want []Fact, mode ProjectionMode) (added, closed int, err error) {
-	if !IsProjectionSource(source) {
-		return 0, 0, fmt.Errorf("reconcile: %q is not a projection source", source)
+	if !IsProjectionSource(source) && !IsPolicySource(source) {
+		return 0, 0, fmt.Errorf("reconcile: %q is not a projection or policy source", source)
 	}
 	rows, err := t.q.Query(`SELECT id, relation, args FROM current_facts WHERE source = ?`, source)
 	if err != nil {

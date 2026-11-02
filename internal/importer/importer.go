@@ -9,6 +9,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/secretscan"
@@ -157,6 +158,7 @@ func newImporterState(dataPath, pudlHome string, schemaPaths ...string) (*Enhanc
 	imp.redactor = redact.NewRegistry(inferrer)
 	imp.projector = projection.NewRegistry(inferrer, imp.redactor)
 	imp.secretScan = secretscan.New(inferrer, imp.redactor)
+	imp.policies = policyfacts.New(inferrer)
 
 	return imp, nil
 }

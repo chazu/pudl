@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/secretscan"
 )
 
 // RunReport is the structured result of one model within a `pudl check`, collected across phases and
@@ -46,6 +47,10 @@ type PopulateReport struct {
 	Target           string `json:"target"`
 	Records          int    `json:"records"`
 	SnapshotID       string `json:"snapshot_id,omitempty"`
+	// SecretWarnings are likely secrets outside sensitive-field coverage, by
+	// record, path and kind (never the value); stored data is unchanged.
+	SecretWarnings      []secretscan.Warning `json:"secret_warnings,omitempty"`
+	SecretWarningsTotal int                  `json:"secret_warnings_total,omitempty"`
 }
 
 // render emits the report as JSON when machine output is requested, else markdown.

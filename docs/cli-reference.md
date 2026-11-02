@@ -57,6 +57,8 @@ These flags apply to every command.
   - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
+- [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
+  - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
 - [pudl report](#pudl-report) — Read the latest or named check report
@@ -505,6 +507,8 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
   projections   projected facts that no longer match the catalog or facts specs
+  policy-results policy results that are stale (evaluated with an older policy
+                digest), orphaned, or never evaluated
   data-permissions  data files or directories group or other users can access
 
 Without --fix nothing is written. --fix applies every repair (or those named by
@@ -529,7 +533,7 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, data-permissions |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
@@ -1274,6 +1278,73 @@ system.
 A model is validated as authored: CUE decode, structural checks on its arms,
 and its schema contracts. A model that still declares a retired field (such as
 `inputs` or `bindings`) fails with an error naming the field.
+
+## pudl policy
+
+Evaluate compliance policies against cataloged resources
+
+```text
+pudl policy
+```
+
+```text
+Compliance policies are schemas with _pudl.schema_type: "policy" that name
+their type through _pudl.base_schema. Every import and observation evaluates the
+applicable policies per resource and stores the results as facts:
+
+  policy_status(resource, policy, type, status, policy_digest)
+  policy_violation(resource, policy, rule, severity, path, kind, declared_by)
+
+Status is compliant, noncompliant or unknown (a constrained field was absent).
+The built-in rule policy_noncompliant(resource, policy, severity) serves checks.
+A result is stale when its digest differs from the loaded policy's; pudl doctor
+reports stale results and pudl policy evaluate refreshes them.
+```
+
+Subcommands:
+
+- [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
+
+## pudl policy evaluate
+
+Re-evaluate policies against stored current resources
+
+```text
+pudl policy evaluate [POLICY...] [flags]
+```
+
+```text
+Re-evaluate compliance policies against every stored current resource, from
+its retained payload, without re-importing. Changed results replace the current
+policy_status and policy_violation facts; history keeps the previous result and
+the policy digest it was evaluated with. Results of policies that no longer apply,
+or are no longer loaded, are closed. A policy that fails to load is reported and
+its results are left unchanged.
+
+Name policies to evaluate only those. --dry-run reports what would change and
+writes nothing.
+
+--what-if FILE evaluates a draft policy file that is not installed: it is loaded
+beside the installed schemas (shadowing an installed policy of the same name),
+evaluated against the stored current resources, and reported as status counts and
+the top violations. Nothing is written. The draft must be standalone CUE (its
+policies name their type through _pudl.base_schema).
+```
+
+Examples:
+
+```bash
+pudl policy evaluate
+  pudl policy evaluate pudl/aws.#S3BucketBestPractice --dry-run
+  pudl policy evaluate --what-if drafts/s3_strict.cue --json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--dry-run` | bool |  | Report what would change without writing |
+| `--what-if` | string |  | Evaluate a draft policy `FILE` without installing it or writing results |
 
 ## pudl prime
 

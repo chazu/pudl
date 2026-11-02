@@ -2,9 +2,12 @@
 
 **Date:** 2026-11-01
 
-**Status:** Proposed. Tracked by beads `pudl-m10`. Follows
+**Status:** Accepted with changes on 2026-11-01; see
+[Decisions](#decisions-2026-11-01). Tracked by beads `pudl-m10`. Follows
 [GCP cataloging UX](2026-10-08-gcp-cataloging-ux.md) §6.2 ("Retroactive").
-Nothing is implemented until the decisions at the end are approved.
+The user overrode two recommendations: IDs are **re-derived**, and fact history
+is **left unchanged**. Where the body below says otherwise, the decisions
+section governs.
 
 ## Decision
 
@@ -374,21 +377,27 @@ These are the ticket's criteria, made concrete:
 - A process killed after commit and before unlink, or after commit and before
   compaction, is reported by the next diagnosis and finished by the next apply.
 
-## Decisions needed from the user
+## Decisions (2026-11-01)
 
-1. **IDs.** Keep entry and fact IDs, update `content_hash` and `stored_path`,
-   and audit the change, rather than re-deriving IDs. This accepts that IDs
-   remain a SHA-256 oracle for low-entropy secrets, and tells the user to
-   rotate them. **Recommendation: keep IDs.**
-2. **Fact history.** Allow one audited exception to append-only transaction
-   time: rewrite sensitive projected args to `"[REDACTED]"` in place in every
-   version, keeping IDs, intervals and sequence numbers.
-   **Recommendation: yes.**
-3. **Opt-in.** Exclude the scrub from plain `--fix`, and apply it only with
-   `--fix --only sensitive-scrub`. Naming the repair is the confirmation, with
-   no interactive prompt. **Recommendation: yes.**
-4. **Unstructured artifacts.** Redact reports, `.meta`, legacy mu files and
-   snapshot files by searching for the collected values (8 bytes or longer)
-   as substrings, rather than only reporting them.
-   **Recommendation: search and redact them, and report the count of
-   shorter values that were skipped.**
+1. **IDs: re-derive.** This overrides the recommendation. A scrubbed entry gets
+   a new content-derived ID from its redacted bytes, so the ID no longer acts
+   as a brute-force oracle for the secret. The scrub must therefore:
+   - rewrite every reference to the old ID in one transaction: collection
+     memberships, snapshot membership and pins, `report_snapshot_refs`,
+     projection state and provenance, version history, and any other column
+     that stores an entry ID;
+   - merge rather than fail when the new ID already exists, for example
+     because the source was re-imported after the field became sensitive;
+   - record old-to-new ID mappings in the audit table, so stored reports
+     that cite old IDs stay resolvable.
+   `resource_id` is unchanged, because identity fields cannot be sensitive.
+2. **Fact history: leave it alone.** This overrides the recommendation. The
+   append-only invariant stands. Current projected facts are corrected by
+   re-projection. Historical fact versions keep their plaintext and their
+   IDs. Doctor states this limitation and recommends rotating the credential.
+3. **Opt-in: only when named.** Plain `--fix` never scrubs. It runs only with
+   `--fix --only sensitive-scrub`, which is the confirmation. There is no
+   prompt.
+4. **Unstructured artifacts: search and redact.** Substring-replace each
+   collected value that is 8 bytes or longer in reports, `.meta`, legacy mu
+   files and snapshot files. Report how many shorter values were skipped.

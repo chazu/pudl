@@ -6,6 +6,7 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -18,13 +19,22 @@ type observeRoute struct {
 	redactor      *redact.Registry
 	// Redacted counts sensitive values replaced across the observation.
 	redacted *int
+	// scanner warns of likely secrets outside sensitive coverage; secrets
+	// collects the warnings. Neither changes a record.
+	scanner *secretscan.Scanner
+	secrets *secretscan.Tally
 }
 
 func newObserveRoute(in ObserveIngest) (observeRoute, error) {
 	route := observeRoute{allowFallback: in.AllowSchemaFallback, redactor: in.Redactor, redacted: new(int), mismatches: new(int)}
-	if route.redactor == nil && in.Inferrer != nil {
-		route.redactor = redact.NewRegistry(in.Inferrer)
+	var src redact.Source
+	if in.Inferrer != nil {
+		src = in.Inferrer
 	}
+	if route.redactor == nil && src != nil {
+		route.redactor = redact.NewRegistry(src)
+	}
+	route.scanner, route.secrets = secretscan.New(src, route.redactor), &secretscan.Tally{}
 	if in.ManualSchema != "" {
 		if in.Chain == nil {
 			return observeRoute{}, fmt.Errorf("observe ingest: a manual schema needs a chain validator")
@@ -69,4 +79,10 @@ func (r observeRoute) redact(record map[string]any, schema string) error {
 	}
 	*r.redacted += redact.Apply(record, paths)
 	return nil
+}
+
+// scanSecrets notes likely secrets in an already redacted record, by record
+// index, path and kind.
+func (r observeRoute) scanSecrets(record map[string]any, index int, schema string) {
+	r.secrets.Note(index, schema, r.scanner.Scan(record, r.manual, schema))
 }

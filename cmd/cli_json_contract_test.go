@@ -19,6 +19,7 @@ import (
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
 	"pudl model":                 "command group",
+	"pudl policy":                "command group",
 	"pudl rule":                  "command group",
 	"pudl schema":                "command group",
 	"pudl snapshot":              "command group",
@@ -111,6 +112,8 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "stats")
 	run("doctor", "--fix", "--dry-run")
 	run("doctor", "--fix")
+	run("policy", "evaluate", "--dry-run")
+	run("policy", "evaluate")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)
