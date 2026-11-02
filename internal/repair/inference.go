@@ -13,8 +13,9 @@ import (
 // inferenceDrift re-runs schema inference and reassigns entries whose inferred
 // schema changed, recomputing their identity under the new schema (formerly
 // `pudl schema reinfer`). By default it covers only the drift doctor's catalog
-// scan found, so explicit producer assignments are never reclassified;
-// Options.IncludeExplicit re-infers every entry in scope.
+// scan found, and skips any explicit assignment (importer.ExplicitAssignment:
+// producer entries, declared _schema, imports with --schema) whatever the scan
+// reported; Options.IncludeExplicit re-infers every entry in scope.
 var inferenceDrift = Repair{
 	Name:      "inference",
 	Condition: "inferred catalog entries whose schema inference now selects a different schema",
@@ -37,6 +38,7 @@ func reinfer(env *Env, dryRun bool) (Result, error) {
 	}
 
 	var result Result
+	checked := 0
 	for _, entry := range entries {
 		proquint := idgen.HashToProquint(entry.ID)
 		data, err := importer.DecodeStoredFile(entry.StoredPath, entry.Format)
@@ -45,6 +47,10 @@ func reinfer(env *Env, dryRun bool) (Result, error) {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: failed to load data: %v", proquint, err))
 			continue
 		}
+		if !opts.IncludeExplicit && importer.ExplicitAssignment(entry, data) {
+			continue
+		}
+		checked++
 		collectionType := ""
 		if entry.CollectionType != nil {
 			collectionType = *entry.CollectionType
@@ -77,7 +83,7 @@ func reinfer(env *Env, dryRun bool) (Result, error) {
 		}
 		result.Changed++
 	}
-	result.Message = fmt.Sprintf("%d of %d entries checked infer a different schema", result.Pending, len(entries))
+	result.Message = fmt.Sprintf("%d of %d entries checked infer a different schema", result.Pending, checked)
 	return result, nil
 }
 

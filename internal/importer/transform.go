@@ -293,7 +293,7 @@ func (e *EnhancedImporter) assignForTransform(record any, opts ImportOptions, sh
 	}
 	spooled := spooledAssignment{
 		Schema: assigned.Schema, Confidence: assigned.Confidence, Reason: assigned.Reason,
-		SourcePath: assigned.SourcePath, Trace: assigned.Trace, Validated: assigned.Validated,
+		SourcePath: assigned.SourcePath, Trace: assigned.Trace, Intended: assigned.Intended, Validated: assigned.Validated,
 	}
 	if shape.collection == "" {
 		// Only a document reports its validation result.

@@ -192,14 +192,18 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 }
 
 // validationStatus describes how a schema assignment was reached, for the
-// import metadata.
+// import metadata: inferred (auto-assigned), or for an explicit --schema
+// validated, fallen back to another schema in its chain, or retained
+// unverified because the schema was unavailable.
 func validationStatus(assigned schemaAssignment) string {
 	switch {
-	case assigned.Validation == nil:
+	case assigned.Intended == "":
 		return "auto-assigned"
-	case assigned.Validation.Valid:
+	case assigned.Validated:
 		return "validated"
-	default:
+	case assigned.Schema != assigned.Intended:
 		return "fallback"
+	default:
+		return "unverified"
 	}
 }

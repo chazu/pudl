@@ -714,6 +714,12 @@ Beads work:
   and exported bundles keep the plaintext. See
   [the design](design/2026-11-01-sensitive-data-scrub.md) and
   `implog/2026_11_02_sensitive_scrub.md`.
+- `pudl-ww1` (done): a plain `pudl doctor --fix` no longer reclassifies
+  entries imported with an explicit `--schema`. Explicitness is recorded in
+  `.meta` (`intended_schema`) by every import path, including re-import
+  moves. Doctor's scan and the `inference` repair both read it through
+  `importer.ExplicitAssignment`. See
+  `implog/2026_11_02_doctor_fix_keeps_explicit_schema.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
