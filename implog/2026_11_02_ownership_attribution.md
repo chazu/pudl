@@ -51,18 +51,24 @@ the table re-derives every owner on the next sync.
    over `resource_unowned` pass silently when nothing declares an owner; as
    projected relations they get the usual missing-relation diagnostic.
 3. `operation.runChecks` loads `ownership.Index` (current ownership facts) and
-   `checkreport.AttributeOwners` sets `Witness.Owner` from the witness's
-   `resource_id`/`resource` argument, then its entry IDs (an older entry
-   resolves to the resource's current owner). Report JSON carries `owner` on
-   every witness (`""` when none).
-4. Human output (`ModelReport.Markdown`) groups a failed check's findings
-   under `owner X:` headings, owners in name order and `(none)` last; a check
-   whose findings have no owner prints the flat list as before.
+   `checkreport.AttributeOwners` sets `Witness.Owner` and `Finding.Owner` from
+   the arguments: a resource ID (`resource_id`, `resource`, `target`,
+   `name`), then an entry ID (`entry_id`, `evidence_id`, `observation_id`; an
+   older entry resolves to the resource's current owner). This runs before
+   change classification, so new and persisting findings keep their owner and
+   resolved ones keep the owner their earlier report recorded. Report JSON
+   carries `owner` on every witness and finding (`""` when none).
+4. Human output groups a check's findings under `owner X:` headings, owners
+   in name order and `(none)` last, both in the witness list
+   (`WriteFindings`) and in the change listing (`WriteChanges`); without
+   owners the flat list prints as before, waiver notes included.
 5. `pudl check --owner TEAM` filters what is printed: live member reports
    (`Output.Owner` -> `ModelReport.ForOwner`) and the JSON check report
-   (`checkreport.CheckForOwner`). A failed check without a TEAM finding is
-   left out; passed and uncertain checks, drift, counts, the summary, the
-   recorded report and the exit status are unchanged.
+   (`checkreport.CheckForOwner`). Each check keeps TEAM's witnesses and
+   findings; a check that did not pass is left out when none remain. Passed
+   and uncertain checks, drift, counts, change totals, the summary, the
+   recorded report and the exit status (including `--fail-on new`) are
+   unchanged.
 6. `pudl policy show` adds `owner` to every failing resource (JSON and text)
    and `--owner TEAM` keeps only TEAM's.
 
@@ -71,8 +77,9 @@ Unowned resources: `resource_unowned` is a positive fact, so a model check
 `entry_id`, `resource_id` and `type`), and `pudl query resource_unowned`
 prints them. Only types that declare (or inherit) an owner are covered.
 
-Limits: attribution covers recorded witnesses (at most 20 per check). A
-witness keyed only by another identifier (the GCP pack's selfLink-keyed
+Limits: attribution covers findings whose arguments were recorded (the
+witnesses, at most 20 per check); other findings have no owner. A finding
+keyed only by another identifier (the GCP pack's selfLink-keyed
 cross-resource rules) has no owner.
 
 ## Public API
@@ -89,14 +96,14 @@ cross-resource rules) has no owner.
 
 `internal/projection`: `SchemaSpec.Owner`; `ArgType`, `ArgOwner`, `ArgVia`.
 
-`internal/checkreport`: `Witness.Owner`, `OwnerOf`, `AttributeOwners(results,
+`internal/checkreport`: `Witness.Owner`, `Finding.Owner`, `OwnerOf`, `AttributeOwners(results,
 ownerOf)`, `(*ModelReport).ForOwner(owner)`, `CheckForOwner(report, owner)`.
 
 `internal/operation`: `Output.Owner`.
 
 CLI: `pudl check --owner TEAM`; `pudl policy show POLICY --owner TEAM`;
-`failing[].owner` in `pudl policy show --json`; `witnesses[].owner` in check
-and report JSON.
+`failing[].owner` in `pudl policy show --json`; `witnesses[].owner` and
+`findings[].owner` in check and report JSON.
 
 GCP pack: `schema/gcp/owners.cue` (`_gcpProjectOwners`, `_#GCPOwner`); every
 type declares `owner`, with its team label path where it has labels
@@ -114,8 +121,9 @@ type declares `owner`, with its team label path where it has labels
   and unowned facts; nearest declaration wins; a broken parent declaration
   disables projection; owner without identity; a mapping change reprojects
   owners through `Sync`; facts blocks cannot declare the names.
-- `internal/checkreport`: attribution by resource then entry; grouping;
-  `ForOwner`; `CheckForOwner` leaves the recorded report unchanged.
+- `internal/checkreport`: attribution by resource then entry; grouping with
+  waiver notes kept; findings carry owners, group in `WriteChanges` and
+  filter in `ForOwner`; `CheckForOwner` leaves the recorded report unchanged.
 - `cmd/ownership_e2e_test.go`: a fleet fixture with labeled, project-mapped
   and unlabeled servers plus an inheriting GPU type gives the right owners per
   finding, human grouping, `--owner` filtering (JSON and text; exit status
@@ -124,18 +132,20 @@ type declares `owner`, with its team label path where it has labels
   `pudl doctor`; the installed GCP pack attributes the fixture Pub/Sub topics
   to `orders` and lists unlabeled buckets as unowned.
 
-## Line deltas against sre-focus (8dcd306, after merging it)
+## Line deltas against sre-focus (4bc92ce, after merging it)
 
 `git diff --numstat sre-focus`, Go files:
 
 | | Added | Removed | Net |
 | --- | --- | --- | --- |
-| Production | +661 | −24 | +637 |
-| Tests | +571 | −0 | +571 |
+| Production | +698 | −25 | +673 |
+| Tests | +612 | −0 | +612 |
 
-The merge with the waivers work (`pudl-xf5.4`) put both `Witness.Waiver` and
-`Witness.Owner` on findings; grouped human output keeps each finding's waiver
-note.
+Merging the parallel work: waivers (`pudl-xf5.4`) put `Witness.Waiver` beside
+`Witness.Owner`, and grouped output keeps each waiver note; finding changes
+over time added `CheckResult.Findings`, which now carry `Owner` too, and
+`WriteChanges` groups its listing by owner; `pudl check` has both `--owner`
+and `--fail-on`, and `--owner` does not change what `--fail-on new` decides.
 
 ## Verification
 

@@ -123,6 +123,12 @@ func TestOwnershipAttributesFindingsAndListsUnowned(t *testing.T) {
 		"label first, then the project mapping; the GPU type inherits the declaration")
 	assert.Equal(t, map[string]string{"pudl/fleet.#Server": ""}, owners["unowned"], "web-3 is the one unowned resource")
 	assert.Contains(t, r.Stdout, `"owner": "payments"`)
+	findings := map[string]string{}
+	for _, f := range checkedModel(t, r.Stdout).Checks[0].Findings {
+		name, _ := f.Arguments["name"].(string)
+		findings[name] = f.Owner
+	}
+	assert.Equal(t, owners["public"], findings, "classified findings carry the same owners")
 
 	r = runCLI(t, "check", "fleet") // fails: a fail-severity check found public servers
 	require.Contains(t, r.Stdout, "unowned [warn]", r.Stdout+r.Stderr)

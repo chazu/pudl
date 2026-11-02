@@ -10,55 +10,75 @@ import (
 )
 
 // noOwner heads the findings no owner was resolved for: an unowned resource,
-// or a witness that references no resource or catalog entry.
+// or a finding that references no resource or catalog entry.
 const noOwner = "(none)"
 
 // OwnerOf resolves the owner of the first resource ID, then catalog entry ID,
 // it knows, or "" (ownership.Index.OwnerOf).
 type OwnerOf func(resourceIDs, entryIDs []string) string
 
-// AttributeOwners sets each witness's owner from the resources it references:
-// its resource_id and resource arguments, then its evidence (entry) IDs.
+// Arguments a finding references its resource by, tried in order: resource
+// IDs (or names that may be one), then catalog entry IDs.
+var (
+	resourceArgs = []string{"resource_id", "resource", "target", "name"}
+	entryArgs    = []string{"entry_id", "evidence_id", "observation_id"}
+)
+
+// AttributeOwners sets the owner of each witness, and of each finding whose
+// arguments were recorded, from the resource its arguments reference.
+// Findings without recorded arguments (beyond the witness limit) keep no
+// owner.
 func AttributeOwners(results []CheckResult, ownerOf OwnerOf) {
 	for i := range results {
 		for j := range results[i].Witnesses {
-			w := &results[i].Witnesses[j]
-			var resources []string
-			for _, key := range []string{"resource_id", "resource"} {
-				if id, ok := w.Arguments[key].(string); ok && id != "" {
-					resources = append(resources, id)
-				}
-			}
-			if w.Resource != "" {
-				resources = append(resources, w.Resource)
-			}
-			w.Owner = ownerOf(resources, w.EvidenceIDs)
+			results[i].Witnesses[j].Owner = ownerOfArgs(results[i].Witnesses[j].Arguments, ownerOf)
+		}
+		for j := range results[i].Findings {
+			results[i].Findings[j].Owner = ownerOfArgs(results[i].Findings[j].Arguments, ownerOf)
 		}
 	}
 }
 
-// ForOwner returns a copy of the report limited to one owner's findings: a
-// failed check keeps only the witnesses owner owns and is left out when none
-// remain. Passed and uncertain checks, drift and counts are unchanged; counts
-// still include every match.
+func ownerOfArgs(args map[string]any, ownerOf OwnerOf) string {
+	if len(args) == 0 {
+		return ""
+	}
+	pick := func(keys []string) []string {
+		var ids []string
+		for _, key := range keys {
+			if id, ok := args[key].(string); ok && id != "" {
+				ids = append(ids, id)
+			}
+		}
+		return ids
+	}
+	return ownerOf(pick(resourceArgs), pick(entryArgs))
+}
+
+// ForOwner returns a copy of the report limited to one owner's findings: each
+// check keeps only the witnesses and findings owner owns, and a check that
+// did not pass is left out when none remain. Passed and uncertain checks stay;
+// drift, counts and change totals are unchanged and still cover every match.
 func (r *ModelReport) ForOwner(owner string) *ModelReport {
 	filtered := *r
 	filtered.Checks = nil
 	for _, c := range r.Checks {
-		if c.Passed || c.Uncertain() {
-			filtered.Checks = append(filtered.Checks, c)
-			continue
-		}
-		var kept []Witness
+		var witnesses []Witness
 		for _, w := range c.Witnesses {
 			if w.Owner == owner {
-				kept = append(kept, w)
+				witnesses = append(witnesses, w)
 			}
 		}
-		if len(kept) == 0 {
+		var findings []Finding
+		for _, f := range c.Findings {
+			if f.Owner == owner {
+				findings = append(findings, f)
+			}
+		}
+		if !c.Passed && !c.Uncertain() && len(witnesses) == 0 && len(findings) == 0 {
 			continue
 		}
-		c.Witnesses = kept
+		c.Witnesses, c.Findings = witnesses, findings
 		filtered.Checks = append(filtered.Checks, c)
 	}
 	return &filtered
@@ -84,20 +104,26 @@ func CheckForOwner(report *acute.RunSetReport, owner string) (*acute.RunSetRepor
 	return &filtered, nil
 }
 
-// writeWitnesses lists witnesses, grouped under their owners when any has
-// one: owners in name order, then those without an owner.
-func writeWitnesses(w io.Writer, witnesses []Witness) {
-	byOwner := map[string][]Witness{}
+// ownedLine is one rendered finding and its owner.
+type ownedLine struct {
+	owner, text string
+}
+
+// writeByOwner lists findings, grouped under their owners when any has one:
+// owners in name order, then those without an owner. Without owners it is
+// the flat list.
+func writeByOwner(w io.Writer, lines []ownedLine) {
+	byOwner := map[string][]string{}
 	var owners []string
-	for _, witness := range witnesses {
-		if _, seen := byOwner[witness.Owner]; !seen {
-			owners = append(owners, witness.Owner)
+	for _, line := range lines {
+		if _, seen := byOwner[line.owner]; !seen {
+			owners = append(owners, line.owner)
 		}
-		byOwner[witness.Owner] = append(byOwner[witness.Owner], witness)
+		byOwner[line.owner] = append(byOwner[line.owner], line.text)
 	}
 	if len(owners) == 1 && owners[0] == "" {
-		for _, witness := range witnesses {
-			writeWitness(w, "    ", witness)
+		for _, line := range lines {
+			fmt.Fprintf(w, "    - %s\n", line.text)
 		}
 		return
 	}
@@ -113,13 +139,18 @@ func writeWitnesses(w io.Writer, witnesses []Witness) {
 			heading = noOwner
 		}
 		fmt.Fprintf(w, "    - owner %s:\n", heading)
-		for _, witness := range byOwner[owner] {
-			writeWitness(w, "      ", witness)
+		for _, text := range byOwner[owner] {
+			fmt.Fprintf(w, "      - %s\n", text)
 		}
 	}
 }
 
-func writeWitness(w io.Writer, indent string, witness Witness) {
-	args, _ := json.Marshal(witness.Arguments)
-	fmt.Fprintf(w, "%s- %s%s\n", indent, args, waiverNote(witness.Waiver))
+// writeWitnesses lists witnesses with their waiver notes, grouped by owner.
+func writeWitnesses(w io.Writer, witnesses []Witness) {
+	lines := make([]ownedLine, 0, len(witnesses))
+	for _, witness := range witnesses {
+		args, _ := json.Marshal(witness.Arguments)
+		lines = append(lines, ownedLine{owner: witness.Owner, text: string(args) + waiverNote(witness.Waiver)})
+	}
+	writeByOwner(w, lines)
 }

@@ -132,7 +132,7 @@ func treeFiles(bundle fs.FS) (map[string][]byte, error) {
 
 func gcpNetworkFiles() (map[string][]byte, error) {
 	files := map[string][]byte{}
-	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "rules.cue": "schema/pudl/rules/gcp_hygiene.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
+	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
 		data, err := gcpnetwork.Files.ReadFile(source)
 		if err != nil {
 			return nil, err

@@ -2,6 +2,7 @@ package checkreport
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/chazu/pudl/internal/acute"
@@ -81,6 +82,40 @@ func TestForOwnerKeepsOnlyThatOwnersFindings(t *testing.T) {
 	orders := report.ForOwner("orders")
 	require.Len(t, orders.Checks, 3)
 	assert.Len(t, orders.Checks[1].Witnesses, 1)
+}
+
+// Classified findings carry owners too, and their change listing groups and
+// filters by owner like witnesses.
+func TestFindingsCarryOwners(t *testing.T) {
+	c := CheckResult{Name: "open", Expect: "empty", Outcome: "fail", Count: 3,
+		Changes: &Changes{New: 2, Resolved: 1},
+		Findings: []Finding{
+			{Key: "a", State: FindingNew, Arguments: map[string]any{"resource": "r-orders"}},
+			{Key: "b", State: FindingNew, Arguments: map[string]any{"entry_id": "e-payments"}},
+			{Key: "c", State: FindingResolved},
+		}}
+	AttributeOwners([]CheckResult{c}, func(resources, entries []string) string {
+		if len(resources) > 0 && resources[0] == "r-orders" {
+			return "orders"
+		}
+		if len(entries) > 0 && entries[0] == "e-payments" {
+			return "payments"
+		}
+		return ""
+	})
+	assert.Equal(t, []string{"orders", "payments", ""}, []string{c.Findings[0].Owner, c.Findings[1].Owner, c.Findings[2].Owner},
+		"a finding without recorded arguments has no owner")
+
+	var b strings.Builder
+	WriteChanges(&b, c)
+	assert.Contains(t, b.String(), "    - owner orders:\n      - new {\"resource\":\"r-orders\"}")
+	assert.Contains(t, b.String(), "    - owner payments:\n      - new {\"entry_id\":\"e-payments\"}")
+
+	report := (&ModelReport{Checks: []CheckResult{c}}).ForOwner("payments")
+	require.Len(t, report.Checks, 1)
+	require.Len(t, report.Checks[0].Findings, 1)
+	assert.Equal(t, "b", report.Checks[0].Findings[0].Key)
+	assert.Empty(t, (&ModelReport{Checks: []CheckResult{c}}).ForOwner("search").Checks)
 }
 
 func TestCheckForOwnerFiltersEmbeddedMembers(t *testing.T) {

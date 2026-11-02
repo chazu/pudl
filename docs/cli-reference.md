@@ -113,15 +113,21 @@ again with "pudl report [ID]".
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift or a failing fail-severity check, 1 error.
 
+Each check's failing matches are compared with the model's comparable
+earlier reports: new, persisting, resolved, or unknown when this observation
+cannot establish their absence. With --fail-on new, fail-severity check
+failures fail the command (or exit 2) only when one of them is new.
+
 Each finding names its resource's owner, derived from the schema's
 _pudl.owner declaration; human output groups findings by owner. --owner TEAM
-prints only TEAM's findings (a failed check without one is left out); the
-recorded report, its counts and the exit status still cover every finding.
+prints only TEAM's findings (a failed check without one is left out); it does
+not narrow the recorded report, its counts or the exit status.
 
 Examples:
     pudl check github-chazu
     pudl check network app --detailed-exitcode
     pudl check network --owner payments
+    pudl check network --fail-on new --detailed-exitcode
     pudl check git-inventory --from-catalog --catalog-scope snap_...
     pudl check --populate 'command:gcloud compute networks list --format=json'
 ```
@@ -133,6 +139,7 @@ Flags:
 | `--catalog-scope` | string |  | which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under |
 | `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
 | `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
+| `--fail-on` | string | `any` | which fail-severity check failures fail the check: any, or new (a failing match no comparable earlier report recorded) |
 | `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
 | `--owner` | string |  | Print only the findings whose resource this owner owns (_pudl.owner); the recorded report is complete |
 | `--populate` | string |  | Check an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
@@ -185,7 +192,7 @@ can gate on it without parsing the report:
 | Exit | Meaning |
 |------|---------|
 | `0` | Clean: no drift, every fail-severity check passed or is waived |
-| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
+| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check (with `--fail-on new`, one with a new unwaived finding) — and nothing else went wrong |
 | `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
 
 Under this flag every error exits 1, so `2` always means findings. When several
@@ -229,6 +236,47 @@ that matches no finding is reported `stale`. The model report's `waivers` list
 gives each waiver's state and how many findings it matched. `pudl policy show`
 and `pudl show` do not mark waived violations: waivers belong to a model's
 checks.
+**Changes over time.** Each check's failing matches are compared with the
+model's earlier reports of the same check over the same scope (same mode,
+query, expectation, check scope and observation scope). A check result
+records `findings` — every failing match by a stable `key`, with a `state`
+and `first_seen` time — and `changes`, the counts by state and the report
+compared with (`since`):
+
+| State | Meaning |
+|-------|---------|
+| `new` | Failing now; no comparable report since the last complete one recorded it |
+| `persisting` | Failing now and recorded before; `first_seen` is the earliest record |
+| `resolved` | Recorded before, not failing now, and this observation is complete |
+| `unknown` | Recorded before and not seen now, but this observation cannot establish its absence |
+
+The key is a digest of the check relation's head arguments without evidence
+identifiers (`entry_id`, `evidence_id`, `observation_id`, `snapshot_id`,
+`run_id`), so a re-observed resource keeps its key and row order never
+matters. Project identifying fields in the head: a
+`policy_noncompliant(resource, policy, severity)` violation is one finding per
+resource and policy. Only a complete observation resolves: a partial
+snapshot, a run-scoped check over an incomplete observation, a check that
+reached no verdict (for example because an input failed), or more failing
+matches than the 1000 recorded leaves earlier findings `unknown`. Earlier
+reports without a verdict are skipped; incomplete ones still count as having
+seen what they recorded. The baseline is the stored reports, not earlier
+snapshots evaluated again: they are the findings pudl recorded under the rules
+in force then, and they survive snapshot retention, so changing a rule can
+show as resolved and new findings. A waived finding keeps its state and is
+marked `waived` (`changes.waived` counts them); waiving never resolves a
+finding, and once its waiver expires it counts again. The summary counts
+`new_findings` and `resolved_findings`. Compare two named reports with
+[`pudl report ID --since ID2`](#pudl-report).
+
+**Failing only on new findings.** `--fail-on new` makes fail-severity check
+failures fail the command only when one of them has a `new` finding that no
+active waiver excuses (the
+first report of a check has nothing to compare with, so its failures are
+new). A check whose only failures are known exits 0 and says so on stderr.
+With `--detailed-exitcode` it exits 0 instead of 2; drift still exits 2, and
+errors, checks without a verdict, and blocked or cancelled models still exit
+1 or 2 as above. The report still records every failure.
 
 **Command populate.** A `#CommandObserve` arm runs plain commands that print
 JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
@@ -690,8 +738,9 @@ The git-inventory example includes a model expecting default branch main and
 baseline and changed inventories. The model observes the current inventory
 with cat, so the tutorial needs nothing beyond PUDL.
 
-The gcp-network-hygiene example includes a fixture observer, saved checks,
-a corrected fixture, and a separate gcloud-based live model.
+The gcp-network-hygiene example includes a firewall type and policy, a
+fixture observer, a check over policy results, a corrected fixture, and a
+separate gcloud-based live model.
 
 The gcp content pack includes draft schemas for the core GCP inventory,
 best-practice policies, gcloud and fixture collectors, and three check
@@ -1597,7 +1646,7 @@ receive a prefix; automation must check the command's exit status.
 Read the latest or named check report
 
 ```text
-pudl report [ID]
+pudl report [ID] [flags]
 ```
 
 ```text
@@ -1608,10 +1657,22 @@ by the retired "pudl run" and "pudl run set" commands read the same way;
 fields those reports carry that current reports do not are shown as recorded
 under "legacy fields".
 
+With --since ID2 it compares instead: each check's failing matches in the
+report against the same check in report ID2, model by model, as new,
+persisting, resolved, or unknown when the report cannot establish their
+absence.
+
 Examples:
     pudl report
     pudl report check_... --json
+    pudl report check_B --since check_A
 ```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--since` | string |  | compare the report's check findings with an earlier report (check ID or run ID): new, persisting, resolved, unknown |
 
 `report` reads every stored report: check reports, the report of one model
 within a check (by its run ID), and reports recorded by the retired `pudl run`
@@ -1624,6 +1685,15 @@ the check summary. Older run-set reports (versions 1 and 2) carry only member
 summaries; read a member's findings with `pudl report <run_id>`. Fields a stored
 report has that current reports do not, such as those from the retired
 convergence workflow, are shown as recorded under "legacy fields".
+
+`--since ID2` compares instead of printing the report: each check's failing
+matches in the report (or the newest) are classified against the same check
+in report ID2, models paired by name, as `new`, `persisting`, `resolved` or
+`unknown` with their first-seen times; see
+[changes over time](#pudl-check). A check is not compared when ID2 does not
+have it, reached no verdict for it, or evaluated it differently (mode, query,
+expectation or scope). `--json` writes the comparison: `report`, `since`, and
+per model its checks' `changes` and `findings`.
 
 Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
 

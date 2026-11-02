@@ -29,7 +29,7 @@
     {
       "use": "check \u003cmodel\u003e...",
       "short": "Observe and evaluate exactly the named models; one report",
-      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nEach finding names its resource's owner, derived from the schema's\n_pudl.owner declaration; human output groups findings by owner. --owner TEAM\nprints only TEAM's findings (a failed check without one is left out); the\nrecorded report, its counts and the exit status still cover every finding.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check network --owner payments\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
+      "long": "Observe and evaluate exactly the named #SystemModel instances.\n\nEach \u003cmodel\u003e is a registered #SystemModel, resolved by name (its name field or\nshort definition name) from the project .pudl/schema and explicitly vendored\npackages. Register one with \"pudl schema add\".\n\nA check runs only the models it names, producers first: a model runs after\nevery named model it lists in depends_on. A model whose named producer does\nnot succeed is recorded as blocked. Models that were not named never run.\n\nEach model is observe-only: populate -\u003e drift -\u003e checks. A model without a\npopulate arm is checks-only: it evaluates its checks over what the catalog\nalready holds (e.g. data brought in with pudl import). A #CommandObserve\npopulate runs plain commands that print JSON records (gcloud, kubectl,\naws ... --format=json). Nothing is changed.\n\nA check records one report, whether it names one model or several. Read it\nagain with \"pudl report [ID]\".\n\nWith --detailed-exitcode the exit status reports the result: 0 clean,\n2 drift or a failing fail-severity check, 1 error.\n\nEach check's failing matches are compared with the model's comparable\nearlier reports: new, persisting, resolved, or unknown when this observation\ncannot establish their absence. With --fail-on new, fail-severity check\nfailures fail the command (or exit 2) only when one of them is new.\n\nEach finding names its resource's owner, derived from the schema's\n_pudl.owner declaration; human output groups findings by owner. --owner TEAM\nprints only TEAM's findings (a failed check without one is left out); it does\nnot narrow the recorded report, its counts or the exit status.\n\nExamples:\n    pudl check github-chazu\n    pudl check network app --detailed-exitcode\n    pudl check network --owner payments\n    pudl check network --fail-on new --detailed-exitcode\n    pudl check git-inventory --from-catalog --catalog-scope snap_...\n    pudl check --populate 'command:gcloud compute networks list --format=json'",
       "args": "custom",
       "flags": [
         {
@@ -48,6 +48,12 @@
           "usage": "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error",
           "type": "bool",
           "default": "false"
+        },
+        {
+          "name": "fail-on",
+          "usage": "which fail-severity check failures fail the check: any, or new (a failing match no comparable earlier report recorded)",
+          "type": "string",
+          "default": "any"
         },
         {
           "name": "from-catalog",
@@ -438,7 +444,7 @@
         {
           "use": "install \u003cname\u003e",
           "short": "Install a runnable example and its fixture data",
-          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a fixture observer, saved checks,\na corrected fixture, and a separate gcloud-based live model.\n\nThe gcp content pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a firewall type and policy, a\nfixture observer, a check over policy results, a corrected fixture, and a\nseparate gcloud-based live model.\n\nThe gcp content pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
             {
@@ -1450,7 +1456,7 @@
     {
       "use": "report [ID]",
       "short": "Read the latest or named check report",
-      "long": "Read a stored report: the newest one, or the one ID names.\n\nID is a check ID, or the run ID of one model within a check. Reports recorded\nby the retired \"pudl run\" and \"pudl run set\" commands read the same way;\nfields those reports carry that current reports do not are shown as recorded\nunder \"legacy fields\".\n\nExamples:\n    pudl report\n    pudl report check_... --json",
+      "long": "Read a stored report: the newest one, or the one ID names.\n\nID is a check ID, or the run ID of one model within a check. Reports recorded\nby the retired \"pudl run\" and \"pudl run set\" commands read the same way;\nfields those reports carry that current reports do not are shown as recorded\nunder \"legacy fields\".\n\nWith --since ID2 it compares instead: each check's failing matches in the\nreport against the same check in report ID2, model by model, as new,\npersisting, resolved, or unknown when the report cannot establish their\nabsence.\n\nExamples:\n    pudl report\n    pudl report check_... --json\n    pudl report check_B --since check_A",
       "args": "custom",
       "flags": [
         {
@@ -1466,6 +1472,11 @@
           "type": "bool",
           "default": "false",
           "persistent": true
+        },
+        {
+          "name": "since",
+          "usage": "compare the report's check findings with an earlier report (check ID or run ID): new, persisting, resolved, unknown",
+          "type": "string"
         }
       ]
     },

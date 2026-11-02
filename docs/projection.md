@@ -189,13 +189,15 @@ violation_owner: {
 A facts block cannot declare these two relation names. Changing a type's
 `owner` block or its mapping table re-derives every owner on the next sync.
 
-`pudl check` attributes each finding (a check witness) to the owner of the
-resource it references: its `resource_id` or `resource` argument, else a
-catalog entry ID among its arguments (`entry_id`, `evidence_id`,
-`observation_id`). Report JSON carries `owner` on every witness (`""` when
-none was resolved), human output groups each failed check's findings by owner,
-and `--owner TEAM` prints only TEAM's findings. A witness that names neither a
-resource ID nor an entry, such as one keyed by a selfLink, has no owner.
+`pudl check` attributes each finding to the owner of the resource its
+arguments reference: a resource ID (`resource_id`, `resource`, `target` or
+`name`), else a catalog entry ID (`entry_id`, `evidence_id`,
+`observation_id`). Report JSON carries `owner` on every witness and every
+finding (`""` when none was resolved), human output groups each check's
+findings by owner, and `--owner TEAM` prints only TEAM's findings. A finding
+that references neither, such as one keyed by a selfLink, has no owner, and
+neither has a finding recorded without arguments (past the 20 witnesses a
+check keeps). A resolved finding keeps the owner its earlier report recorded.
 
 ## Sensitive fields (`_pudl.sensitive_fields`)
 
