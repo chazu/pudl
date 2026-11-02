@@ -600,6 +600,11 @@ implemented. Beads work:
   - Done: `pudl-xf5.8.7` schema review status (`_pudl.review`, strict
     decode, shown by `pudl schema list`/`show`, generated schemas start as
     draft). See `implog/2026_11_01_schema_review_status.md`.
+  - Done: `pudl-xf5.8.2` policy evaluation engine (`internal/policy`, pure:
+    applicability, open evaluation, rule attribution, absent semantics,
+    sensitive-path load errors, digests; not yet wired into ingest). Policies
+    are written standalone and linked by `base_schema`. See
+    `implog/2026_11_01_policy_evaluation_engine.md`.
 
 The convergence and value-wiring sections below are historical.
 
@@ -1024,6 +1029,7 @@ under the hood.
 | `idgen` | `internal/idgen/` | Content IDs, SHA256, proquint encoding |
 | `database` | `internal/database/` | SQLite catalog CRUD and queries |
 | `validator` | `internal/validator/` | CUE validation |
+| `policy` | `internal/policy/` | Compliance policy loading and per-resource evaluation |
 | `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema and model loading |
 | `mubridge` | `internal/mubridge/` | Typed envelope, manifest, and observe-snapshot ingestion |
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |

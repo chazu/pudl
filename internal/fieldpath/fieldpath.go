@@ -274,3 +274,9 @@ func (p Path) Overlaps(other Path) bool {
 	}
 	return true
 }
+
+// HasPrefix reports whether prefix is p itself or one of its ancestors,
+// treating wildcards as matching only wildcards.
+func (p Path) HasPrefix(prefix Path) bool {
+	return len(prefix.steps) <= len(p.steps) && p.Overlaps(prefix)
+}
