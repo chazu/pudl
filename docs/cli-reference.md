@@ -1190,7 +1190,7 @@ pudl model deps
 ```
 
 ```text
-Reconcile every registered model's declared and binding-derived dependencies into model_depends_on
+Reconcile every registered model's declared depends_on edges into model_depends_on
 facts WITHOUT running the models, then print the dependency graph.
 
 This closes the run-time-only coverage gap: querying impact (impacted_by) is
@@ -1677,19 +1677,18 @@ pudl schema add <package>.<name> <cue-file>
 ```
 
 ```text
-Add a new CUE schema file to the schema repository.
+Add a CUE schema file to the workspace schema directory.
 
-The schema name should be in the format 'package.name' where:
-- package: The schema package (aws, k8s, custom, etc.)
-- name: The schema name within the package
+The schema name has the form 'package.name':
+- package: the schema package directory (aws, gcp, custom, ...)
+- name: the file name within the package (written as <name>.cue)
 
-The CUE file will be validated before adding to ensure:
-- Valid CUE syntax
-- Proper package declaration
-- Required metadata fields (_identity, _tracked, _version)
+The file must compile as CUE; syntax, build and validation errors stop the
+add. Warnings are printed but do not stop it. Declare identity, sensitive
+fields, facts, ownership and review status in the definition's _pudl block;
+see docs/schema-authoring.md.
 
-The schema file will be copied to the appropriate package directory and
-added to the git working directory (not automatically committed).
+The file is copied into the package directory. It is not committed to git.
 
 Examples:
     pudl schema add aws.rds-instance rds-schema.cue

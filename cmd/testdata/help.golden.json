@@ -1107,7 +1107,7 @@
         {
           "use": "deps",
           "short": "Refresh and show the cross-model dependency graph",
-          "long": "Reconcile every registered model's declared and binding-derived dependencies into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nExamples:\n    pudl model deps\n    pudl model deps --json",
+          "long": "Reconcile every registered model's declared depends_on edges into model_depends_on\nfacts WITHOUT running the models, then print the dependency graph.\n\nThis closes the run-time-only coverage gap: querying impact (impacted_by) is\notherwise blind to models that have never been run. 'pudl model deps' records\nevery declared edge from the schema directly.\n\nExamples:\n    pudl model deps\n    pudl model deps --json",
           "flags": [
             {
               "name": "global",
@@ -1576,7 +1576,7 @@
         {
           "use": "add \u003cpackage\u003e.\u003cname\u003e \u003ccue-file\u003e",
           "short": "Add a new schema to the repository",
-          "long": "Add a new CUE schema file to the schema repository.\n\nThe schema name should be in the format 'package.name' where:\n- package: The schema package (aws, k8s, custom, etc.)\n- name: The schema name within the package\n\nThe CUE file will be validated before adding to ensure:\n- Valid CUE syntax\n- Proper package declaration\n- Required metadata fields (_identity, _tracked, _version)\n\nThe schema file will be copied to the appropriate package directory and\nadded to the git working directory (not automatically committed).\n\nExamples:\n    pudl schema add aws.rds-instance rds-schema.cue\n    pudl schema add k8s.deployment my-deployment.cue\n    pudl schema add custom.api-response api.cue",
+          "long": "Add a CUE schema file to the workspace schema directory.\n\nThe schema name has the form 'package.name':\n- package: the schema package directory (aws, gcp, custom, ...)\n- name: the file name within the package (written as \u003cname\u003e.cue)\n\nThe file must compile as CUE; syntax, build and validation errors stop the\nadd. Warnings are printed but do not stop it. Declare identity, sensitive\nfields, facts, ownership and review status in the definition's _pudl block;\nsee docs/schema-authoring.md.\n\nThe file is copied into the package directory. It is not committed to git.\n\nExamples:\n    pudl schema add aws.rds-instance rds-schema.cue\n    pudl schema add k8s.deployment my-deployment.cue\n    pudl schema add custom.api-response api.cue",
           "args": "custom",
           "flags": [
             {

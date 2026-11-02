@@ -15,7 +15,7 @@ import (
 var modelDepsCmd = &cobra.Command{
 	Use:   "deps",
 	Short: "Refresh and show the cross-model dependency graph",
-	Long: `Reconcile every registered model's declared and binding-derived dependencies into model_depends_on
+	Long: `Reconcile every registered model's declared depends_on edges into model_depends_on
 facts WITHOUT running the models, then print the dependency graph.
 
 This closes the run-time-only coverage gap: querying impact (impacted_by) is
