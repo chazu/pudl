@@ -693,10 +693,9 @@ Available subcommands:
 - show:       Inspect a single fact by ID
 - search:     Full-text search over currently-valid facts
 - stats:      Aggregate statistics over the fact store
-- reproject:  Recompute facts projected from imported records (_pudl.facts)
 
 Writing facts and changing their lifecycle (add, retract, invalidate) are
-advanced commands, left out of this list; see 'pudl guide facts'.
+advanced commands, left out of this list; see 'pudl guide query'.
 
 Examples:
     pudl facts list --relation observation
@@ -1451,7 +1450,7 @@ Print a structured prompt that teaches AI agents how to use pudl.
 
 Include a line like this in your CLAUDE.md or similar agent config:
 
-    Run 'pudl prime' to learn how to use the pudl data lake CLI.
+    Run 'pudl prime' to learn how to use pudl.
 
 The agent will then know to execute the command and read the output
 to understand pudl's capabilities and conventions.

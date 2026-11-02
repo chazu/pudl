@@ -1,0 +1,74 @@
+pudl guide observe — collectors, import, fan-out and snapshots
+
+A COLLECTOR
+
+  A collector is a model whose populate arm (#CommandObserve) runs plain
+  commands that print JSON records. pudl runs argv directly (no shell) with
+  your environment, so cloud CLI credentials work.
+
+  pudl model new fw --populate 'command:gcloud compute firewall-rules list --format=json'
+  pudl model show fw --json
+  pudl check fw
+
+  Edit the file 'model new' prints. A fuller collector:
+
+    #Firewalls: sm.#SystemModel & {
+        name: "firewalls"
+        observation: {scope: "gcp/firewalls", complete: true}
+        populate: {
+            schema: "gcp.#Firewall"            // route records, like import --schema
+            runs: [for p in ["prod-a", "prod-b"] {
+                argv: ["gcloud", "compute", "firewall-rules", "list",
+                    "--project=\(p)", "--format=json"]
+                set: project: p                // add a field the output omits
+            }]
+        }
+    }
+
+  To try a command without writing a model:
+
+  pudl check --populate 'command:gcloud compute networks list --format=json'
+
+FAN-OUT
+
+  Write one run per project, account or region with a CUE comprehension
+  (above), or enumerate inputs at run time with each:
+
+    each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+    runs: [{argv: ["gcloud", "compute", "firewall-rules", "list",
+        "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+
+  A failed run is a failed input: the other runs are ingested, the snapshot
+  is incomplete, and the report lists it under populate.failed_inputs.
+  Checks over an incomplete snapshot are unknown, never passing, and missing
+  resources are never reported as absent. populate.fail_fast: true makes any
+  failure fail the whole populate. populate.timeout bounds each run.
+
+SCOPE AND COMPLETENESS
+
+  observation.complete: true asserts the collector covered its whole scope.
+  Only a complete snapshot can resolve a finding or count a resource gone.
+  Checks select snapshots with evidence: ["model:fw"], ["scope:gcp/firewalls"],
+  ["current"] or a snapshot ID, optionally with max_age: "1h".
+
+IMPORT A FILE
+
+  pudl import fw.json --schema gcp.#Firewall --set project=prod-a --dry-run
+  pudl import fw.json --schema gcp.#Firewall --set project=prod-a
+  pudl import exports/ --recursive
+  gcloud compute networks list --format=json | pudl import --format json
+
+  Formats: JSON, YAML, CSV, NDJSON (gzip and zstd too). Without --schema the
+  type is inferred; --explain shows why. --dry-run writes nothing and reports
+  classification, identity, redactions and projected facts.
+
+SNAPSHOTS
+
+  pudl snapshot list --model fw
+  pudl snapshot current fw
+  pudl snapshot show <new> --compare <old>
+  pudl show <id> --history
+  pudl snapshot retain <snapshot-id>
+  pudl snapshot prune --model fw --keep 5 --older-than 720h --dry-run
+
+  Pruning is explicit; nothing is removed as a side effect of a check.

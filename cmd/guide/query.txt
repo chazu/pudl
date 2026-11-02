@@ -1,0 +1,63 @@
+pudl guide query — facts and Datalog
+
+Imported and observed records are not queryable until their type projects
+them into relations with _pudl.facts (pudl guide schemas). Projected facts
+follow each resource's latest observed record; every fact carries entry_id
+and resource_id.
+
+QUERY
+
+  pudl query --list                          relations and their arg keys
+  pudl query gcp_address status=RESERVED --json
+  pudl query policy_noncompliant severity=high
+  pudl query resource_unowned
+  pudl query gcp_address --as-of-valid 2026-10-01T00:00:00Z
+
+  Constraints are typed: disabled=false is a boolean, port=22 a number,
+  name='"22"' a string. Read the warnings 'pudl query' prints on stderr: a
+  rule that names a relation or arg nothing produces matches nothing.
+
+WRITE A RULE
+
+    package rules
+
+    nat_address: {
+        head: {rel: "nat_address", args: {router: "$R", address: "$A", status: "$S"}}
+        body: [
+            {rel: "gcp_router",        args: {entry_id: "$E", name: "$R"}},
+            {rel: "gcp_router_nat_ip", args: {entry_id: "$E", address: "$A"}},
+            {rel: "gcp_address",       args: {self_link: "$A", status: "$S"}},
+        ]
+    }
+
+  pudl query -f nat.cue nat_address status=RESERVED   try it without installing
+  pudl rule add nat.cue                      validate and install
+  pudl rule new my-rule                      or scaffold one, then edit it
+
+  Variables start with $; shared variables join. Join two relations of one
+  record on entry_id. Rules can be recursive. There is no negation: use a
+  projection default or {exists: path} instead. Rules live in
+  .pudl/schema/pudl/rules/.
+
+BUILT-IN RELATIONS
+
+  catalog_entry          the catalog (id, schema, origin, resource_id, ...);
+                         join-only, use it in a rule body
+  policy_noncompliant    (resource, policy, severity)
+  policy_status, policy_violation   stored policy results
+  resource_owner, resource_unowned  ownership
+  depends_transitive, impacted_by, cyclic   over model_depends_on
+
+  pudl model deps
+  pudl query impacted_by changed=<model>
+  pudl query --topo model_depends_on
+
+FACT STORE
+
+  pudl facts list --relation gcp_address --json
+  pudl facts search RESERVED --json
+  pudl facts show <fact-id>
+
+  Facts are bitemporal: --as-of-valid (true at a time) and --as-of-tx
+  (known at a time) query history. Writing facts by hand (facts add,
+  retract, invalidate) is advanced and hidden from help; prefer projection.

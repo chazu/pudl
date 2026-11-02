@@ -1,11 +1,35 @@
 package cmd
 
 import (
+	"embed"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+// guideText holds one plain-text file per topic, cmd/guide/<topic>.txt.
+//
+//go:embed guide/*.txt
+var guideText embed.FS
+
+type guideTopic struct {
+	name    string
+	summary string
+}
+
+// guideTopics is the topic index, in reading order.
+var guideTopics = []guideTopic{
+	{"overview", "What pudl is, the loop, the terms, where state lives"},
+	{"observe", "Collectors, import, fan-out, scope and completeness, snapshots"},
+	{"schemas", "Types, identity, sensitive fields, ownership, review"},
+	{"policies", "Per-resource compliance rules and their gotchas"},
+	{"checks", "Checks, findings, waivers, exit codes and CI"},
+	{"query", "Facts, Datalog rules and pudl query"},
+	{"doctor", "Diagnose and repair the workspace"},
+	{"packs", "The bundled GCP, AWS and tutorial packs"},
+	{"agents", "JSON contracts and conventions for agents"},
+}
 
 var guideCmd = &cobra.Command{
 	Use:   "guide [topic]",
@@ -20,624 +44,47 @@ Run 'pudl guide <topic>' to read a specific guide.`,
 			printGuideIndex()
 			return
 		}
-		topic := args[0]
-		fn, ok := guideTopics[topic]
-		if !ok {
-			fmt.Fprintf(errw(), "pudl guide: unknown topic %q\n", topic)
+		text, err := guideTopicText(args[0])
+		if err != nil {
+			fmt.Fprintf(errw(), "pudl guide: unknown topic %q\n", args[0])
 			fmt.Fprintln(errw(), "Run 'pudl guide' for a list of topics.")
 			os.Exit(2)
 		}
-		fn()
+		fmt.Fprint(outw(), text)
 	},
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) > 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		topics := make([]string, 0, len(guideTopics))
-		for k := range guideTopics {
-			topics = append(topics, k)
+		names := make([]string, 0, len(guideTopics))
+		for _, t := range guideTopics {
+			names = append(names, t.name)
 		}
-		return topics, cobra.ShellCompDirectiveNoFileComp
+		return names, cobra.ShellCompDirectiveNoFileComp
 	},
-}
-
-var guideTopics = map[string]func(){
-	"overview":        printGuideOverview,
-	"import":          printGuideImport,
-	"schemas":         printGuideSchemas,
-	"facts":           printGuideFacts,
-	"datalog":         printGuideDatalog,
-	"models":          printGuideModels,
-	"agents":          printGuideAgents,
-	"troubleshooting": printGuideTroubleshooting,
 }
 
 func init() {
 	rootCmd.AddCommand(guideCmd)
 }
 
+// guideTopicText returns a listed topic's text.
+func guideTopicText(name string) (string, error) {
+	for _, t := range guideTopics {
+		if t.name == name {
+			b, err := guideText.ReadFile("guide/" + name + ".txt")
+			return string(b), err
+		}
+	}
+	return "", fmt.Errorf("unknown topic %q", name)
+}
+
 func printGuideIndex() {
-	fmt.Fprint(outw(), `pudl guide — quick-reference for agents and humans
-
-Start here if you're new to pudl:
-
-  pudl guide overview       What pudl is, the mental model, and where to go next
-
-Data management:
-
-  pudl guide import         Importing data: formats, schemas, wildcards, stdin
-  pudl guide schemas        CUE schema system: inference, authoring, versioning
-
-Reasoning and state:
-
-  pudl guide facts          Bitemporal assertions, retraction, and historical queries
-  pudl guide datalog        Datalog query engine: rules, recursive evaluation
-
-Observation and checks:
-
-  pudl guide models         #SystemModels: observe with commands, compare, check
-
-For agents:
-
-  pudl guide agents         Conventions, best practices, and tips for AI agents
-  pudl guide troubleshooting Common failure modes and recovery commands
-`)
-}
-
-func printGuideOverview() {
-	fmt.Fprint(outw(), `pudl guide overview — what pudl is, in 60 seconds
-
-WHAT PUDL IS
-
-  pudl is a personal unified data lake. You import structured data
-  (JSON, YAML, CSV, NDJSON) into a local SQLite catalog, pudl infers
-  CUE schemas, and you query, validate, and reason over the data
-  using a bitemporal fact store and Datalog engine.
-
-  pudl is not opinionated about what data you store — cloud inventory,
-  configuration files, API responses, build artifacts, and observations
-  all live in the same catalog with the same schema system.
-
-THE MENTAL MODEL
-
-  - catalog.db       stores all imported entries with metadata
-  - schemas          CUE files that define structure and validation
-  - models           #SystemModels: populate commands, desired state, checks
-  - fact store       bitemporal assertions (valid-time + transaction-time)
-  - datalog rules    CUE-defined rules for derived queries
-  - workspace        one durable state root: repo .pudl/ or global ~/.pudl/
-
-THE DAY-TO-DAY VERBS
-
-  pudl import <file>...       Import data (auto-detects format + schema).
-  pudl list                   Browse catalog entries.
-  pudl show <id>              Inspect an entry's content and metadata.
-  pudl facts list --relation depends   Query assertions in the fact store.
-  pudl query <relation>       Run Datalog queries over derived facts.
-  pudl check <model>...       Observe, compare with desired state, run checks.
-  pudl report [id]            Read a check's report again.
-  pudl status                 Show each model's recorded verdict.
-  pudl doctor                 Health check the workspace.
-
-WHERE DATA LIVES
-
-  Inside a repo initialized with pudl init, all durable state is local:
-  .pudl/data/sqlite/catalog.db    Catalog, reports, and facts.
-  .pudl/data/{raw,metadata}/      Imported content and provenance.
-  .pudl/schema/                   Local CUE module, built-ins, models, rules.
-  .pudl/config.yaml               Local path configuration.
-  .pudl/workspace.cue             Workspace identity and policy.
-
-  Outside a repo workspace the same layout lives under ~/.pudl/.
-
-WHAT TO READ NEXT
-
-  Getting started:     pudl guide import → pudl guide schemas
-  Recording state:     pudl guide facts → pudl guide datalog
-  Observation:         pudl guide models
-  For AI agents:       pudl guide agents
-`)
-}
-
-func printGuideImport() {
-	fmt.Fprint(outw(), `pudl guide import — importing data into the catalog
-
-USAGE
-
-  pudl import <file|dir|glob>... [flags]     (or --path <file|dir|glob>)
-
-FORMATS
-
-  pudl auto-detects format from file extension:
-
-    .json      JSON (single object or array)
-    .yaml/.yml YAML documents
-    .csv        CSV (first row = headers)
-    .ndjson     Newline-delimited JSON (one record per line)
-
-  Override with --format if needed.
-
-BASIC EXAMPLES
-
-  pudl import inventory.json
-  pudl import config.yaml --schema myapp.#Config
-  pudl import exports/*.json                     # every file the shell expands
-
-CHECK FIRST, THEN IMPORT
-
-  pudl import fw.json --schema 'pudl/gcp.#Firewall' --dry-run
-  pudl import fw.json --schema 'pudl/gcp.#Firewall' --set project=prod-a
-
-  --dry-run writes nothing. It reports per-schema counts, validation
-  failures, records already cataloged, unresolved identity fields,
-  redactions, and the facts that would be projected. --set path=value
-  (repeatable, overwrites) adds a field the source omits to every
-  JSON/NDJSON record.
-
-STDIN SUPPORT
-
-  Pipe data directly into pudl:
-
-    curl -s https://api.example.com/data | pudl import --path - --format json
-    cat <<'EOF' | pudl import --path - --format json
-    {"name": "test", "value": 42}
-    EOF
-
-SCHEMA INFERENCE
-
-  On import, pudl automatically:
-
-  1. Detects the data format
-  2. Infers a CUE schema from the data structure
-  3. Matches against existing schemas (exact or structural)
-  4. Assigns the best-matching schema or the catchall
-
-  Use --schema to force a specific schema assignment. Re-importing data
-  already in the catalog with a --schema it satisfies moves those records
-  to that schema.
-
-CONTENT-ADDRESSED IDS
-
-  Every imported entry gets a SHA256 content-addressed ID displayed
-  in proquint format (e.g. "babam-babam"). Re-importing identical
-  data produces the same ID (idempotent).
-
-  Records whose schema identity_fields cannot be extracted are reported:
-  they fall back to content-hash identity and form no version chain.
-
-
-WILDCARDS
-
-  Glob patterns expand against the filesystem:
-
-    pudl import --path "logs/*.json"      # quoted: pudl expands it
-    pudl import logs/*.json               # unquoted: the shell expands it
-    pudl import exports/ --recursive      # a directory
-
-  Each matching file is imported as a separate entry.
-
-FLAGS
-
-  --path <path>       File, directory or glob; '-' reads stdin
-  --format <fmt>      Force format (json, yaml, csv, ndjson)
-  --schema <name>     Force schema assignment
-  --set <path=value>  Set a field on every record (repeatable)
-  --dry-run           Preview classification, identity and facts; write nothing
-  --explain           Show why each schema was chosen
-  --json              Output results as JSON
-
-SEE ALSO
-
-  pudl guide schemas       facts and sensitive_fields declared in _pudl
-`)
-}
-
-func printGuideSchemas() {
-	fmt.Fprint(outw(), `pudl guide schemas — CUE schema system
-
-OVERVIEW
-
-  Schemas are CUE files that define the structure and validation
-  rules for data in the catalog. They live in a git-tracked
-  repository under ~/.pudl/schema/.
-
-SCHEMA NAMING
-
-  Schemas follow the CUE convention: package.#Definition
-
-    aws.#EC2Instance
-    k8s.#Deployment
-    pudl/core.#Item        (the catchall)
-
-  Normalized form: "pkg.#Name" — use this everywhere.
-
-THE _pudl BLOCK
-
-    _pudl: {
-        schema_type:      "base"
-        resource_type:    "gcp.firewall"
-        identity_fields:  ["project", "name"]       // dotted paths nest; quote
-                                                    // keys containing dots
-        facts: gcp_firewall_source: args: {range: "sourceRanges[*]"}
-        sensitive_fields: ["env[*].value"]          // redacted before storage
-    }
-
-  facts makes imported fields queryable by rules, 'pudl query' and model
-  checks (see 'pudl guide datalog'). sensitive_fields values are stored as
-  "[REDACTED]"; route such data with --schema. Full reference:
-  docs/projection.md.
-
-SCHEMA LOCATIONS
-
-  ~/.pudl/schema/           Global schema repository
-  .pudl/schema/             Project schemas (precedes explicit vendored dependencies)
-
-COMMANDS
-
-  pudl schema list                   List all schemas by package
-  pudl schema show <name>            Display schema CUE source
-  pudl schema new --from <id> --path <package>/#<Definition>
-  pudl schema add <name> <file>      Add a schema file
-  Open the source path from pudl schema show NAME --json in your editor.
-  pudl doctor --fix --only inference Re-infer entries whose inference drifted
-
-SCHEMA INFERENCE
-
-  When data is imported, pudl runs a multi-stage inference:
-
-  1. Structural heuristics — field names, shapes, nesting
-  2. CUE unification — test data against each candidate schema
-  3. Best-match selection — most specific schema that validates
-
-  The inference result is stored on the catalog entry. Re-inference
-  is diagnosed by 'pudl doctor' and repaired with
-  'pudl doctor --fix --only inference' after schema changes.
-
-  Filters such as 'pudl list --schema' match whole definition names when
-  the value contains '#' ('#Route' does not match '#Router'); otherwise
-  they match a substring.
-
-VERSION CONTROL
-
-  Use Git from the owning repository and stage only your intended files:
-
-  git status       Show uncommitted schema changes
-  git commit       Commit schema changes
-  git log          Show schema change history
-
-  This gives you a full audit trail of schema evolution.
-
-MODULES
-
-  Run native CUE commands from the schema path in pudl config --paths --json:
-
-  cue mod edit --json         List current dependencies
-  cue mod get <mod>    Add a third-party module
-  cue mod tidy         Fetch and update dependencies
-  cue mod edit --json         Show module information
-
-SEE ALSO
-
-  pudl guide import        How schemas are assigned during import
-  pudl guide models        #SystemModels built on schemas
-`)
-}
-
-func printGuideFacts() {
-	fmt.Fprint(outw(), `pudl guide facts — generic bitemporal assertions
-
-WRITE AND QUERY
-
-  pudl facts add --relation depends --args '{"from":"api","to":"database"}'
-  pudl facts add --relation config --args '{"key":"timeout","value":30}' --source operator
-  pudl facts list --relation depends --json
-  pudl facts search "timeout" --relation config --json
-  pudl facts show <id>
-
-  Args are arbitrary JSON objects. Use --schema to validate against an authored
-  CUE definition; no relation has a built-in maturity or scoring policy.
-  facts add, retract and invalidate are advanced commands: hidden from --help,
-  documented under "Advanced commands" in docs/cli-reference.md.
-
-LIFECYCLE AND HISTORY
-
-  pudl facts retract <id>      Withdraw an incorrect assertion
-  pudl facts invalidate <id>   Record that a previously true assertion expired
-  pudl facts list --relation config --as-of-valid "2026-04-01T14:30:00Z"
-  pudl facts list --relation config --as-of-tx "2026-04-01T14:30:00Z"
-
-  valid_start / valid_end describe when a fact was true in reality.
-  tx_start / tx_end describe when PUDL held that belief.
-  Historical assertions remain retained; current_facts and its full-text index
-  track currently valid, non-retracted facts transactionally.
-
-PROJECTED FACTS
-
-  Schemas that declare _pudl.facts project imported records into facts
-  (source "projection:<resource_id>", reserved). They track each
-  resource's most recently observed record, and are kept in sync by
-  import, check, doctor repairs and delete. Run
-  'pudl doctor --fix --only projections' to sync explicitly; 'pudl query' warns when a sync is pending.
-
-SEE ALSO
-
-  pudl guide datalog       Joins and recursive rules over facts and catalog data
-`)
-}
-
-func printGuideDatalog() {
-	fmt.Fprint(outw(), `pudl guide datalog — query engine and rules
-
-OVERVIEW
-
-  pudl includes a Datalog query engine that derives new facts from
-  existing ones using declarative rules. Rules are CUE files that
-  compile to parameterized SQL queries.
-
-QUERYING
-
-  pudl query <relation>                   Query derived facts
-  pudl query <relation> field=value       Filter results
-  pudl query <relation> --json            JSON output
-
-  Example:
-    pudl query stale-observations age=7d
-
-RULES
-
-  Rules are CUE files stored in:
-
-    ~/.pudl/schema/pudl/rules/       Global rules
-    .pudl/schema/pudl/rules/         Project rules (precedes explicit vendored dependencies)
-
-  Install a rule:
-    pudl rule add myrule.cue              Install to repo
-    pudl rule add myrule.cue --global     Install globally
-
-HOW RULES WORK
-
-  Each rule is a CUE field with a head (the derived relation) and a
-  body (conditions over existing facts). Arguments are named; variables
-  use the $-prefix convention:
-
-    package rules
-
-    stale_item: {
-        head: { rel: "stale_item", args: { entity: "$E", age: "$A" } }
-        body: [
-            { rel: "observation", args: { entity: "$E", time: "$T" } },
-            { rel: "older_than",  args: { time: "$T", age: "$A" } },
-        ]
-    }
-
-  The SQL compiler translates each body atom into a self-join on
-  current_facts with json_extract() for argument access. Shared
-  $Variables become equi-join conditions.
-
-EVALUATION MODES
-
-  Non-recursive rules: compiled directly to SQL, evaluated once.
-  Recursive rules: semi-naive fixpoint via SQLite temp tables.
-
-  The engine automatically partitions rules into recursive and
-  non-recursive sets.
-
-SQL COMPILATION
-
-  Each body atom becomes a self-join on current_facts:
-
-    { rel: "observation", args: { entity: "$E", desc: "$D" } }
-    →
-    SELECT json_extract(t0.args, '$.entity') AS entity,
-           json_extract(t0.args, '$.desc')   AS desc
-    FROM current_facts t0
-    WHERE t0.relation = 'observation'
-
-  Shared variables across atoms produce equi-joins.
-
-QUERYING IMPORTED FIELDS
-
-  Relations declared in a schema's _pudl.facts hold imported fields. Each
-  of their facts carries entry_id and resource_id; join on entry_id to
-  combine relations of one record:
-
-    open_ssh: {
-        head: { rel: "open_ssh", args: { project: "$P", name: "$N" } }
-        body: [
-            { rel: "gcp_firewall",        args: { entry_id: "$E", project: "$P", name: "$N", disabled: false } },
-            { rel: "gcp_firewall_source", args: { entry_id: "$E", range: "0.0.0.0/0" } },
-        ]
-    }
-
-  CLI constraints are typed: disabled=false is a boolean, port=22 a
-  number, name='"22"' a string. 'pudl query' and model checks warn on
-  stderr when a rule references a relation or arg nothing produces,
-  because such a rule silently matches nothing.
-
-CATALOG AS A RELATION
-
-  The catalog is exposed as the built-in 'catalog_entry' relation, so
-  rules can join facts against catalog data (fields: id, schema, origin,
-  format, status, entry_type, definition, resource_id, ...):
-
-    owned: {
-        head: { rel: "owned", args: { id: "$I", team: "$T" } }
-        body: [
-            { rel: "catalog_entry", args: { id: "$I", origin: "$O" } },
-            { rel: "team_owns",     args: { origin: "$O", team: "$T" } },
-        ]
-    }
-
-  catalog_entry is join-only (use it in a rule body, not as a direct
-  query target) and reserved (facts cannot be asserted under that name).
-  To list catalog entries directly, use 'pudl list'.
-
-SEE ALSO
-
-  pudl guide facts         The underlying fact store
-`)
-}
-
-func printGuideModels() {
-	fmt.Fprint(outw(), `pudl guide models — declaring and checking #SystemModels
-
-OVERVIEW
-
-  A #SystemModel packages how to observe a system (commands that print JSON
-  records), optional desired state, and checks — in one declaration.
-  'pudl check <model>...' drives it: populate → drift → checks → report. A
-  check reports differences and changes nothing; the tools that own the
-  system apply changes.
-
-COMMANDS
-
-  pudl model list                      List registered models (+ last status)
-  pudl model show <name>               Show populate/desired/checks
-  pudl model validate <name>           Structurally validate without running
-  pudl check <name>...                 Observe, compare and check the named models
-  pudl report [id]                     Read a check report again
-  pudl status                          Show each model's recorded verdict
-
-WHAT A MODEL DECLARES
-
-  A model is a CUE definition inheriting #SystemModel, registered in the
-  schema repo (project .pudl/schema and explicitly vendored dependencies).
-  Its populate arm (#CommandObserve) runs plain commands that print JSON
-  records — no shell:
-
-    #Firewalls: sm.#SystemModel & {
-        name: "firewalls"
-        populate: {
-            schema: "pudl/gcp.#Firewall"        // optional, like import --schema
-            runs: [for p in ["prod-a", "prod-b"] {
-                argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
-                set: project: p
-            }]
-        }
-        // optional: desired: [...], checks: [...]
-    }
-
-  A model with no populate is checks-only. It runs its checks over the
-  catalog as it stands, for example over data from 'pudl import'.
-
-  Register with 'pudl schema add'; resolve and check it by name (its 'name'
-  field or short definition name). Retired fields (converge, plugins,
-  sealed_inputs, sealed_outputs, inputs, bindings, #PluginObserve,
-  #EweTarget) fail to load with an error naming the field; see
-  docs/retired-commands.md.
-
-SCAFFOLD FIRST
-
-  pudl model new fw --populate 'command:gcloud compute firewall-rules list --format=json'
-  pudl model new inventory              # placeholder command to replace
-  pudl model show fw --json
-  pudl check --populate 'command:gcloud compute networks list --format=json'
-
-  The ad-hoc form writes no model definition. For a durable model, edit the
-  path printed by 'model new' rather than authoring registration boilerplate
-  by hand. Use 'pudl report [id]' after a check.
-
-SEVERAL MODELS
-
-  'pudl check a b c' runs exactly the named models, producers first by
-  depends_on, rejects cycles before anything runs, and records one report.
-  A model whose named producer did not succeed is blocked. It never runs a
-  model that was not named.
-
-SEE ALSO
-
-  pudl guide schemas       The schema system models build on
-  pudl guide datalog       Querying the catalog and derived facts
-`)
-}
-
-func printGuideAgents() {
-	fmt.Fprint(outw(), `pudl guide agents — operate models and inspect evidence
-
-START WITH THE PROJECT
-
-  pudl model list --json
-  pudl model show <name> --json
-  pudl check <name>
-  pudl report --json
-
-  Existing repository state lives under .pudl/. Create it with pudl init if
-  needed; use --global explicitly for global initialization.
-
-EXECUTION SCOPE
-
-  pudl check <producer> <consumer>   Observe exactly the named models
-
-  Every check observes; nothing changes the systems PUDL catalogs. Models
-  that were not named are never started.
-
-INTERPRET THE RESULT
-
-  Operation completion, resource conformity, check results, and verification
-  are distinct. Read the stored report by ID for provenance and findings.
-  Stored replay is not fresh live verification.
-
-DATA AND RULES
-
-  pudl import <files> --schema <name> --dry-run   then without --dry-run
-  pudl list --json                                 count with .total_matched
-  pudl export --id <proquint> --format json        exact payload, pipeable
-  pudl query <relation> key=value --json
-
-  Schema inference is automatic. Fact writes (facts add, an advanced command)
-  should name their --source and use --schema when an assertion has an
-  authored contract.
-  facts list --as-of-valid/--as-of-tx supports historical evidence queries.
-  To query imported fields, declare _pudl.facts in the schema instead of
-  post-processing payloads (pudl guide datalog).
-
-DISCOVERY
-
-  pudl help <command> --json
-  pudl guide <topic>
-  pudl prime
-`)
-}
-
-func printGuideTroubleshooting() {
-	fmt.Fprint(outw(), `pudl guide troubleshooting — diagnose the shipped path
-
-DISCOVER THE ACTUAL SURFACE
-
-  pudl help --json                 command tree and flags
-  pudl model show <name> --json
-
-RUN DIAGNOSTICS
-
-  pudl report [<id>] --json           retrieve the most recent/stored report
-  pudl status                         model verdicts
-  pudl snapshot list --json           observation snapshots
-
-COMMON CASES
-
-  No model found:
-    pudl model list
-    pudl model new <name> --populate 'command:<cmdline>'
-
-  A model fails to load with "retired field(s)":
-    remove the named field; docs/retired-commands.md lists replacements.
-
-  The populate command fails:
-    the check error quotes the end of its stderr. Run the argv by hand from the
-    model file's directory; set populate.timeout for slow commands.
-
-  Observed records have an unexpected schema:
-    set populate.schema to route every record like import --schema, or tag
-    each record with a quoted "_schema" resource type. PUDL only persists
-    references present in the loaded schema namespace.
-
-  A query or check over imported data finds nothing:
-    read the warnings 'pudl query' prints on stderr, then
-    pudl doctor --fix --dry-run --only projections
-    pudl import <file> --schema <name> --dry-run   # identity? facts per relation?
-
-  'pudl list --schema' finds nothing:
-    a value with '#' must name a whole definition ('gcp.#Route');
-    drop the '#' for a substring match.
-`)
+	fmt.Fprintln(outw(), "pudl guide — quick reference for agents and humans")
+	fmt.Fprintln(outw())
+	for _, t := range guideTopics {
+		fmt.Fprintf(outw(), "  pudl guide %-10s %s\n", t.name, t.summary)
+	}
+	fmt.Fprintln(outw())
+	fmt.Fprintln(outw(), "Agents: start with 'pudl prime'. Commands and flags: 'pudl help --json'.")
 }
