@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	pudlerrors "github.com/chazu/pudl/internal/errors"
 )
@@ -57,7 +58,7 @@ func exitCodeFor(err error) int {
 
 // reportHasFindings reports whether a concluded run found something an
 // operator must act on: drift or a failing fail-severity check.
-func reportHasFindings(r *RunReport) bool {
+func reportHasFindings(r *checkreport.ModelReport) bool {
 	if r == nil {
 		return false
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/fieldpath"
 	"github.com/chazu/pudl/internal/observe"
@@ -29,7 +30,7 @@ const stderrTail = 4 << 10
 // directly (no shell), its stdout spooled to disk, decoded as JSON
 // records, `set` applied, and every record ingested as one observation. Any
 // failing run fails the phase before anything is ingested.
-func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*PopulateReport, error) {
+func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*checkreport.Populate, error) {
 	p := m.Populate
 	timeout := defaultCommandTimeout
 	if p.Timeout != "" {
@@ -64,7 +65,7 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 	}
 
 	target := populateTargetName(m.Name)
-	summary := &PopulateReport{Target: target, RequestedSchema: p.Schema}
+	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema}
 	if p.Schema != "" {
 		summary.SchemaPolicy = "strict"
 		if p.AllowSchemaFallback {

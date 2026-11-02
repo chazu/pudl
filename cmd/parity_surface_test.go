@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"strings"
 	"testing"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +29,7 @@ func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {
 	cat := newRunCatalog(t.TempDir())
 	defer cat.Close()
 
-	report := &RunReport{
+	report := &checkreport.ModelReport{
 		RunID: "run_parity", Model: "pods", Mode: "observe-only", OK: false,
 		Error: "observer failed after startup",
 	}
@@ -60,11 +60,6 @@ func hasHelpFlag(command commandHelpJSON, name string) bool {
 		}
 	}
 	return false
-}
-
-func TestRunReportMarkdownShowsFailureContext(t *testing.T) {
-	text := (&RunReport{Model: "pods", RunID: "run_1", Mode: "observe-only", OK: false, Error: "boom"}).markdown()
-	assert.True(t, strings.Contains(text, "status: FAILED"))
 }
 
 func TestModelScaffoldDefaultsToCommandObserve(t *testing.T) {

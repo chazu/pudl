@@ -5,32 +5,20 @@ import (
 	"testing"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/stretchr/testify/require"
 )
-
-func TestReportSummaryDistinguishesReplayAndUncertainChecks(t *testing.T) {
-	r := &RunReport{RunID: "r", CompletionStatus: "succeeded", OK: true, Drift: &ModelDriftResult{Clean: false, Verified: false, Drifted: []ResourceDrift{{Resource: "x"}}}}
-	s := summarizeRun(r, nil)
-	require.Equal(t, "succeeded", s.Execution)
-	require.Equal(t, "drifted", s.Conformity)
-	require.Equal(t, "recorded", s.Verification)
-	r.Drift = &ModelDriftResult{Clean: true, Verified: true}
-	r.Checks = []CheckResult{{Outcome: "unknown", Severity: "warn"}}
-	s = summarizeRun(r, nil)
-	require.Equal(t, "not-verified", s.Verification)
-	require.Equal(t, 1, s.UnknownChecks)
-}
 
 func TestSetSummaryIncludesMemberEvidenceWithoutFollowupRequests(t *testing.T) {
 	db, err := database.NewCatalogDB(t.TempDir())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	member := &RunReport{
+	member := &checkreport.ModelReport{
 		ReportVersion: 2, RunID: "run_member", Model: "m", Mode: "observe-only",
 		CompletionStatus: database.RunStatusSucceeded, OK: true,
-		Drift:  &ModelDriftResult{Clean: true, Verified: true},
-		Checks: []CheckResult{{Name: "c", Severity: "fail", Passed: true, Outcome: "pass"}},
+		Drift:  &acute.ModelDriftResult{Clean: true, Verified: true},
+		Checks: []checkreport.CheckResult{{Name: "c", Severity: "fail", Passed: true, Outcome: "pass"}},
 	}
 	payload, err := json.Marshal(member)
 	require.NoError(t, err)

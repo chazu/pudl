@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chazu/pudl/internal/checkreport"
+	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/stretchr/testify/require"
 )
@@ -22,12 +24,12 @@ func TestGitInventoryReportJourney(t *testing.T) {
 		require.NoError(t, result.Err, "pudl %s: %s", strings.Join(args, " "), result.Stderr)
 		return result
 	}
-	decodeReport := func(output string) RunReport {
+	decodeReport := func(output string) checkreport.ModelReport {
 		t.Helper()
 		require.True(t, json.Valid([]byte(strings.TrimSpace(output))), "report stdout must be JSON: %s", output)
 		var compact bytes.Buffer
 		require.NoError(t, json.Compact(&compact, []byte(output)))
-		var report RunReport
+		var report checkreport.ModelReport
 		decoder := json.NewDecoder(&compact)
 		decoder.UseNumber()
 		require.NoError(t, decoder.Decode(&report))
@@ -35,7 +37,7 @@ func TestGitInventoryReportJourney(t *testing.T) {
 	}
 	successful("example", "install", "git-inventory", "--json")
 	// observe points the example at one fixture and runs the model live.
-	observe := func(fixture string) RunReport {
+	observe := func(fixture string) checkreport.ModelReport {
 		t.Helper()
 		populators := filepath.Join(root, "populators/git-inventory")
 		data, err := os.ReadFile(filepath.Join(populators, fixture+".json"))
@@ -120,7 +122,7 @@ git_changed_inventory: {
 	require.Equal(t, "fail", check.Severity)
 	require.False(t, check.Passed)
 	require.Equal(t, 1, check.Count)
-	require.Equal(t, checkScopeGlobal, check.Scope)
+	require.Equal(t, checks.ScopeLatestKnown, check.Scope)
 	require.Len(t, check.Witnesses, 1)
 	require.False(t, check.WitnessesTruncated)
 	witness := check.Witnesses[0]

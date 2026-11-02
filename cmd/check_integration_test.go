@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
@@ -127,7 +128,7 @@ func latestCheckReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
 	return report
 }
 
-func memberRunReportForTest(t *testing.T, pudlDir, runID string) RunReport {
+func memberRunReportForTest(t *testing.T, pudlDir, runID string) checkreport.ModelReport {
 	t.Helper()
 	db, err := database.NewCatalogDB(pudlDir)
 	require.NoError(t, err)
@@ -135,7 +136,7 @@ func memberRunReportForTest(t *testing.T, pudlDir, runID string) RunReport {
 	record, err := db.GetRunReport(runID)
 	require.NoError(t, err)
 	require.NotNil(t, record)
-	var report RunReport
+	var report checkreport.ModelReport
 	require.NoError(t, json.Unmarshal(record.Report, &report))
 	return report
 }
@@ -211,7 +212,7 @@ func TestCheckOfOneModelRecordsOneReportWithTheModelEmbedded(t *testing.T) {
 	assert.Equal(t, checkReportVersion, report.ReportVersion)
 	assert.True(t, strings.HasPrefix(report.RunSetID, "check_"), report.RunSetID)
 	require.Len(t, report.Members, 1)
-	var member RunReport
+	var member checkreport.ModelReport
 	require.NoError(t, json.Unmarshal(report.Members[0].Report, &member))
 	assert.Equal(t, "drifter", member.Model)
 	require.NotNil(t, member.Drift)

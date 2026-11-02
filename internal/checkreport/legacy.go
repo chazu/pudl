@@ -1,4 +1,4 @@
-package cmd
+package checkreport
 
 import (
 	"bytes"
@@ -78,19 +78,19 @@ func writeLegacyFields(w io.Writer, fields map[string]json.RawMessage) error {
 	return nil
 }
 
-// printLegacyFields shows the stored report's fields that report's type no
-// longer has.
-func printLegacyFields(payload []byte, report any) error {
+// writeModelLegacyFields shows the stored model report's fields that the
+// report's type no longer has.
+func writeModelLegacyFields(w io.Writer, payload []byte, report any) error {
 	fields, err := legacyFields(payload, report)
 	if err != nil {
 		return err
 	}
-	return writeLegacyFields(outw(), fields)
+	return writeLegacyFields(w, fields)
 }
 
-// printSetLegacyFields shows a stored set report's unknown fields, including
-// each member's (such as mutation_required), keyed by member.
-func printSetLegacyFields(payload []byte) error {
+// writeCheckLegacyFields shows a stored check report's unknown fields,
+// including each member's (such as mutation_required), keyed by member.
+func writeCheckLegacyFields(w io.Writer, payload []byte) error {
 	fields, err := legacyFields(payload, acute.RunSetReport{})
 	if err != nil {
 		return err
@@ -115,5 +115,5 @@ func printSetLegacyFields(payload []byte) error {
 		}
 		fields[fmt.Sprintf("members[%d]", i)] = encoded
 	}
-	return writeLegacyFields(outw(), fields)
+	return writeLegacyFields(w, fields)
 }

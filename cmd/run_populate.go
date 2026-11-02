@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -19,7 +20,7 @@ func populateTargetName(modelName string) string {
 
 // runPopulate executes the populate phase: the model's #CommandObserve runs,
 // ingested as one observation snapshot.
-func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*PopulateReport, error) {
+func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*checkreport.Populate, error) {
 	if m.Populate.Kind() == systemmodel.KindNone {
 		return nil, fmt.Errorf("model %q has no populate arm (checks-only)", m.Name)
 	}
@@ -92,7 +93,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 
 // populateIngest is the provenance a populate phase attaches to its snapshot.
 type populateIngest struct {
-	summary             *PopulateReport
+	summary             *checkreport.Populate
 	allowSchemaFallback bool
 	observation         *systemmodel.Observation
 	ctx                 context.Context

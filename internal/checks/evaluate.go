@@ -4,12 +4,22 @@ package checks
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/evidence"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/systemmodel"
-	"time"
+)
+
+// Scopes recorded on a check result. ScopeRun means the check was evaluated
+// with the run's ID bound as a constraint; ScopeLatestKnown means it saw the
+// whole catalog; ScopeSnapshots means it saw only the evidence it selected.
+const (
+	ScopeRun         = "run"
+	ScopeLatestKnown = "latest-known"
+	ScopeSnapshots   = "snapshots"
 )
 
 type Progress struct {
@@ -62,10 +72,10 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 		if req.OnProgress != nil {
 			req.OnProgress(Progress{Phase: "checks", Check: c.Name, State: "started"})
 		}
-		scope := "latest-known"
+		scope := ScopeLatestKnown
 		var constraints map[string]interface{}
 		if !req.FromCatalog && req.RunID != "" && HeadExposesRunID(rules, c.Query) {
-			scope = "run"
+			scope = ScopeRun
 			constraints = map[string]interface{}{"run_id": req.RunID}
 		}
 
@@ -73,7 +83,7 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 		queryDB := db
 		var view *evidence.View
 		if len(c.Evidence) > 0 {
-			result.Scope = "snapshots"
+			result.Scope = ScopeSnapshots
 			constraints = nil // snapshot membership scopes catalog joins as well
 			maxAge, err := parseEvidenceAge(c.MaxAge)
 			if err == nil {

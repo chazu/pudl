@@ -1,4 +1,4 @@
-package cmd
+package checkreport
 
 import (
 	"encoding/json"
@@ -9,23 +9,30 @@ import (
 	"github.com/chazu/pudl/internal/datalog"
 )
 
-const checkWitnessLimit = 20
-const checkWitnessValueLimit = 4096
+// WitnessLimit bounds how many witnesses a failed check records; counts
+// include every match.
+const WitnessLimit = 20
 
-// CheckWitness contains only projected query-head arguments, never a recursive
+// witnessValueLimit bounds one witness argument's encoded size.
+const witnessValueLimit = 4096
+
+// Witness contains only projected query-head arguments, never a recursive
 // proof or hidden body row.
-type CheckWitness struct {
+type Witness struct {
 	Resource    string         `json:"resource,omitempty"`
 	Arguments   map[string]any `json:"arguments"`
 	EvidenceIDs []string       `json:"evidence_ids,omitempty"`
 }
 
-func checkWitnesses(tuples []datalog.Tuple, expect string) ([]CheckWitness, bool) {
+// Witnesses selects the deterministic, bounded witnesses of an `expect:
+// empty` check from its result tuples. truncated reports that more matched
+// than were kept.
+func Witnesses(tuples []datalog.Tuple, expect string) (witnesses []Witness, truncated bool) {
 	if expect != "empty" || len(tuples) == 0 {
 		return nil, false
 	}
 	type candidate struct {
-		witness CheckWitness
+		witness Witness
 		key     string
 	}
 	candidates := make([]candidate, 0, len(tuples))
@@ -33,12 +40,12 @@ func checkWitnesses(tuples []datalog.Tuple, expect string) ([]CheckWitness, bool
 		args := make(map[string]any, len(tuple.Args))
 		for key, value := range tuple.Args {
 			encoded, err := json.Marshal(value)
-			if err != nil || len(encoded) > checkWitnessValueLimit {
+			if err != nil || len(encoded) > witnessValueLimit {
 				value = "<omitted: value exceeds witness limit>"
 			}
 			args[key] = value
 		}
-		witness := CheckWitness{Arguments: args}
+		witness := Witness{Arguments: args}
 		for _, key := range []string{"resource", "target", "name"} {
 			if value, ok := args[key].(string); ok {
 				witness.Resource = value
@@ -58,16 +65,19 @@ func checkWitnesses(tuples []datalog.Tuple, expect string) ([]CheckWitness, bool
 		return candidates[i].key < candidates[j].key
 	})
 	count := len(candidates)
-	if count > checkWitnessLimit {
-		count = checkWitnessLimit
+	if count > WitnessLimit {
+		count = WitnessLimit
 	}
-	witnesses := make([]CheckWitness, count)
+	witnesses = make([]Witness, count)
 	for i := range witnesses {
 		witnesses[i] = candidates[i].witness
 	}
 	return witnesses, len(candidates) > count
 }
-func writeCheckFindings(w io.Writer, result CheckResult) {
+
+// WriteFindings writes what a failed check found: its witnesses, or why a
+// nonempty check has none.
+func WriteFindings(w io.Writer, result CheckResult) {
 	if result.Passed {
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inventory"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -24,7 +25,7 @@ type resolvedRun struct {
 // ctx is the invocation's lifetime. Cancelling it (the first Ctrl-C) stops the
 // subprocess the run is waiting on, and the run then concludes `cancelled`
 // through its ordinary exit path. An interrupted run is simply re-run.
-func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (finalReport *RunReport, runError error) {
+func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (finalReport *checkreport.ModelReport, runError error) {
 	emitRunProgress("prepare", opts.model, "started")
 	defer func() {
 		state := "completed"
@@ -61,7 +62,7 @@ func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (final
 
 	live := !jsonOutput
 	if live {
-		fmt.Fprint(outw(), renderRunPlan(model))
+		fmt.Fprint(outw(), checkreport.RenderPlan(model))
 	}
 
 	// finishState is populated once the run concludes and read by the deferred
@@ -82,7 +83,7 @@ func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (final
 		return nil, fmt.Errorf("--from-catalog needs desired state; model %q declares none", model.Name)
 	}
 
-	report := &RunReport{
+	report := &checkreport.ModelReport{
 		ReportVersion: 2, RunSetID: op.id, RunID: session.RunID,
 		Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
 	}
@@ -191,7 +192,7 @@ type runPhaseInput struct {
 
 // executeRunPhases runs the observe-only arm. runErr is a run outcome recorded
 // on the report (incomplete inventory); err aborts the run.
-func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err error) {
+func executeRunPhases(in runPhaseInput, report *checkreport.ModelReport) (runErr error, err error) {
 	emitRunProgress("observe", in.model.Name, "started")
 	if in.ctx == nil {
 		in.ctx = context.Background()

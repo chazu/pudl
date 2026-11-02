@@ -1,4 +1,4 @@
-package cmd
+package checkreport
 
 import (
 	"bytes"
@@ -10,7 +10,11 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
-func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
+// Summarize computes a model report's verdict summary: execution,
+// conformity, checks and verification as separate axes, the observations it
+// rests on, and the commands that inspect them. With a catalog, the snapshots
+// the report names are looked up for their scope, source and age.
+func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 	s := &acute.VerdictSummary{Execution: r.CompletionStatus, Conformity: "not-checked", Checks: "not-checked", Verification: "not-verified", Scope: "model"}
 	if r.Drift != nil {
 		s.Conformity = "clean"
@@ -45,7 +49,7 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		if len(c.Evidence) == 0 {
 			allLiveChecks = false
 		}
-		if c.Outcome == "unknown" || c.Outcome == "error" {
+		if c.Uncertain() {
 			s.UnknownChecks++
 		} else if !c.Passed {
 			s.FailedChecks++
@@ -105,7 +109,9 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 	return s
 }
 
-func enrichSetSummary(db *database.CatalogDB, report *acute.RunSetReport) error {
+// SummarizeCheck embeds each member's stored report and summary into a check
+// report and computes the check's own summary across them.
+func SummarizeCheck(db *database.CatalogDB, report *acute.RunSetReport) error {
 	s := &acute.VerdictSummary{Execution: report.Status, Conformity: "not-checked", Checks: "not-checked", Verification: "not-verified", Scope: "exact-set"}
 	conformity, checks, verification := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	seen := map[string]bool{}
@@ -117,15 +123,13 @@ func enrichSetSummary(db *database.CatalogDB, report *acute.RunSetReport) error 
 		}
 		if stored != nil {
 			member.Report = stored.Report
-			var r RunReport
-			decoder := json.NewDecoder(bytes.NewReader(stored.Report))
-			decoder.UseNumber()
-			if err := decoder.Decode(&r); err != nil {
+			r, err := DecodeModelReport(stored.Report)
+			if err != nil {
 				return fmt.Errorf("read member %s summary: %w", member.Model, err)
 			}
 			member.Summary = r.Summary
 			if member.Summary == nil {
-				member.Summary = summarizeRun(&r, db)
+				member.Summary = Summarize(r, db)
 			}
 		}
 		if member.Summary == nil {
@@ -176,4 +180,15 @@ func enrichSetSummary(db *database.CatalogDB, report *acute.RunSetReport) error 
 	s.NextActions = []string{"pudl report " + report.RunSetID + " --json"}
 	report.Summary = s
 	return nil
+}
+
+// DecodeModelReport decodes a stored model report, keeping numbers exact.
+func DecodeModelReport(payload []byte) (*ModelReport, error) {
+	var r ModelReport
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&r); err != nil {
+		return nil, err
+	}
+	return &r, nil
 }

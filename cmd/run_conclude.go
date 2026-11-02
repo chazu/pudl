@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -13,7 +14,7 @@ import (
 // runErr is the phases' outcome error; the returned error is the run's final
 // one. persisted reports whether the report was saved, so the caller's
 // deferred save does not repeat it.
-func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishState, runErr error) (persisted bool, err error) {
+func concludeRun(in runPhaseInput, report *checkreport.ModelReport, finishState *runFinishState, runErr error) (persisted bool, err error) {
 	ctx := in.ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -30,7 +31,7 @@ func concludeRun(in runPhaseInput, report *RunReport, finishState *runFinishStat
 	// Human output shows each member's report as it concludes; JSON output is
 	// the check's one report, written when the check ends.
 	if in.live {
-		out, err := report.render(false)
+		out, err := report.Render(false)
 		if err != nil {
 			return persisted, err
 		}
@@ -76,7 +77,7 @@ var errCheckEvidence = fmt.Errorf("one or more checks could not establish a verd
 //
 // The verdict and its explanations land in state for the run row. err reports
 // a failure to evaluate the checks at all; nothing is recorded then.
-func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, runErr error) (runFinalization, error) {
+func finalizeRun(in runFinalizeInput, report *checkreport.ModelReport, state *runFinishState, runErr error) (runFinalization, error) {
 	cat, flags := in.cat, in.flags
 
 	if len(in.model.Checks) > 0 {
@@ -149,7 +150,7 @@ func finalizeRun(in runFinalizeInput, report *RunReport, state *runFinishState, 
 //
 // "clean" is the single in-sync verdict (drift == ∅). It is only ever written
 // off an actual ∅ observation.
-func runVerdict(r *RunReport) string {
+func runVerdict(r *checkreport.ModelReport) string {
 	if r.Drift != nil && r.Drift.Uncertain {
 		return "unknown"
 	}
@@ -171,7 +172,7 @@ func runVerdict(r *RunReport) string {
 	return verdict
 }
 
-func anyCheckUncertain(results []CheckResult) bool {
+func anyCheckUncertain(results []checkreport.CheckResult) bool {
 	for _, c := range results {
 		if c.Outcome == "unknown" || c.Outcome == "error" {
 			return true
@@ -182,7 +183,7 @@ func anyCheckUncertain(results []CheckResult) bool {
 
 // phaseVerdict is the verdict the run's phases alone support, before checks are
 // allowed to demote it.
-func phaseVerdict(r *RunReport) string {
+func phaseVerdict(r *checkreport.ModelReport) string {
 	if r.Drift == nil {
 		return ""
 	}
@@ -221,12 +222,12 @@ func persistRunStatus(cat *runCatalog, name, status string, live bool) {
 }
 
 // anyFailSeverityFailed reports whether any severity:"fail" check did not pass.
-func anyFailSeverityFailed(results []CheckResult) bool {
+func anyFailSeverityFailed(results []checkreport.CheckResult) bool {
 	return len(failedFailSeverityNames(results)) > 0
 }
 
 // failedFailSeverityNames lists the fail-severity checks that did not pass.
-func failedFailSeverityNames(results []CheckResult) []string {
+func failedFailSeverityNames(results []checkreport.CheckResult) []string {
 	var names []string
 	for _, c := range results {
 		if !c.Passed && c.Severity == "fail" {

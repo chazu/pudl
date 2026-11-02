@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	pudlerrors "github.com/chazu/pudl/internal/errors"
 )
@@ -29,7 +30,7 @@ func TestExitCodeForPrefersExplicitCodeThenPUDLError(t *testing.T) {
 
 // singleModelCheck is the result of a check of one model that concluded with
 // report and err, as executeCheck reports it.
-func singleModelCheck(report *RunReport, err error) (*checkResult, error) {
+func singleModelCheck(report *checkreport.ModelReport, err error) (*checkResult, error) {
 	if report == nil {
 		return nil, err
 	}
@@ -44,25 +45,25 @@ func singleModelCheck(report *RunReport, err error) (*checkResult, error) {
 }
 
 func TestDetailedCheckExitForOneModel(t *testing.T) {
-	clean := &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}
-	drifted := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}
-	replayDrift := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: false}}
-	failedCheck := &RunReport{Checks: []CheckResult{{Name: "c", Severity: "fail", Passed: false}}}
-	warnCheck := &RunReport{Checks: []CheckResult{{Name: "c", Severity: "warn", Passed: false}}}
+	clean := &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true, Verified: true}}
+	drifted := &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: false, Verified: true}}
+	replayDrift := &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: false, Verified: false}}
+	failedCheck := &checkreport.ModelReport{Checks: []checkreport.CheckResult{{Name: "c", Severity: "fail", Passed: false}}}
+	warnCheck := &checkreport.ModelReport{Checks: []checkreport.CheckResult{{Name: "c", Severity: "warn", Passed: false}}}
 
 	cases := []struct {
 		name   string
-		report *RunReport
+		report *checkreport.ModelReport
 		err    error
 		code   int
 	}{
 		{"clean drift", clean, nil, 0},
-		{"populate only", &RunReport{}, nil, 0},
+		{"populate only", &checkreport.ModelReport{}, nil, 0},
 		{"warn-severity check", warnCheck, nil, 0},
 		{"drift", drifted, nil, 2},
 		{"replayed drift", replayDrift, nil, 2},
 		{"failing check", failedCheck, errFailSeverityChecks, 2},
-		{"populate failure", &RunReport{}, fmt.Errorf("command exited 1"), 1},
+		{"populate failure", &checkreport.ModelReport{}, fmt.Errorf("command exited 1"), 1},
 		{"preflight error", nil, pudlerrors.NewInputError("bad"), 1},
 	}
 	for _, tc := range cases {
@@ -73,7 +74,7 @@ func TestDetailedCheckExitForOneModel(t *testing.T) {
 }
 
 func TestDetailedCheckExitKeepsTheErrorMessage(t *testing.T) {
-	result, checkErr := singleModelCheck(&RunReport{}, errFailSeverityChecks)
+	result, checkErr := singleModelCheck(&checkreport.ModelReport{}, errFailSeverityChecks)
 	err := detailedCheckExit(result, checkErr)
 	assert.True(t, errors.Is(err, errFailSeverityChecks))
 	assert.Equal(t, checkErr.Error(), err.Error())

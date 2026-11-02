@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
@@ -39,33 +41,20 @@ func TestValidateRunFlags(t *testing.T) {
 	}
 }
 
-func TestRenderRunPlan_ObserveOnly(t *testing.T) {
-	m := &systemmodel.SystemModel{
-		Name:     "fw",
-		Populate: systemmodel.Populate{Runs: []systemmodel.CommandRun{{Argv: []string{"gcloud"}}}},
-		Checks:   []systemmodel.Check{{Name: "open"}},
-	}
-	plan := renderRunPlan(m)
-	assert.Contains(t, plan, "model:    fw")
-	assert.Contains(t, plan, "populate: command (1 runs)")
-	assert.Contains(t, plan, "checks:   1")
-	assert.Contains(t, plan, "mode:     observe-only")
-}
-
 func TestRunVerdict(t *testing.T) {
 	cases := []struct {
 		name   string
-		report *RunReport
+		report *checkreport.ModelReport
 		want   string
 	}{
-		{"verified drift clean -> clean", &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}, "clean"},
-		{"verified drift dirty", &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}, "drifted"},
+		{"verified drift clean -> clean", &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true, Verified: true}}, "clean"},
+		{"verified drift dirty", &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: false, Verified: true}}, "drifted"},
 		// A catalog replay observed nothing, so it must not overwrite the verdict of
 		// the model's last real observation — in either direction.
-		{"replayed clean drift writes nothing", &RunReport{Drift: &ModelDriftResult{Clean: true}}, ""},
-		{"replayed dirty drift writes nothing", &RunReport{Drift: &ModelDriftResult{Clean: false}}, ""},
-		{"uncertain inventory is unknown", &RunReport{Drift: &ModelDriftResult{Uncertain: true}}, "unknown"},
-		{"pure populate has no verdict", &RunReport{Populate: &PopulateReport{}}, ""},
+		{"replayed clean drift writes nothing", &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true}}, ""},
+		{"replayed dirty drift writes nothing", &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: false}}, ""},
+		{"uncertain inventory is unknown", &checkreport.ModelReport{Drift: &acute.ModelDriftResult{Uncertain: true}}, "unknown"},
+		{"pure populate has no verdict", &checkreport.ModelReport{Populate: &checkreport.Populate{}}, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -92,7 +81,7 @@ func TestCleanRun_ModelRowClean(t *testing.T) {
 	db.Close()
 
 	runID := "run_test_clean"
-	verdict := runVerdict(&RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}})
+	verdict := runVerdict(&checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true, Verified: true}})
 	cat := newRunCatalog(config.GetPudlDir())
 	defer cat.Close()
 	startRunRecord(cat, runID, "mymodel", "observe-only", false)

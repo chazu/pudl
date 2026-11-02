@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/stretchr/testify/assert"
@@ -87,7 +88,7 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, scoped, 1)
-	assert.Equal(t, checkScopeRun, scoped[0].Scope)
+	assert.Equal(t, checks.ScopeRun, scoped[0].Scope)
 	assert.Equal(t, 0, scoped[0].Count)
 	assert.True(t, scoped[0].Passed)
 
@@ -98,7 +99,7 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, global, 1)
-	assert.Equal(t, checkScopeGlobal, global[0].Scope)
+	assert.Equal(t, checks.ScopeLatestKnown, global[0].Scope)
 	assert.Equal(t, 1, global[0].Count)
 	assert.False(t, global[0].Passed)
 }
@@ -119,7 +120,7 @@ func TestRunChecks_RunIDConstraintSeesThisRunsOwnRows(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, checkScopeRun, results[0].Scope)
+	assert.Equal(t, checks.ScopeRun, results[0].Scope)
 	assert.Equal(t, 1, results[0].Count)
 	assert.False(t, results[0].Passed)
 }
@@ -142,7 +143,7 @@ func TestRunChecks_ReplayNeverBindsRunID(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
-	assert.Equal(t, checkScopeGlobal, results[0].Scope, "a replay reports its checks as unscoped")
+	assert.Equal(t, checks.ScopeLatestKnown, results[0].Scope, "a replay reports its checks as unscoped")
 	assert.Equal(t, 1, results[0].Count, "the earlier failure is still seen")
 	assert.False(t, results[0].Passed)
 }

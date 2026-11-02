@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -209,7 +210,7 @@ func recordSyntheticMember(db *database.CatalogDB, checkID, runID, model, status
 	if err := db.FinishRun(runID, database.RunConclusion{CompletionStatus: status, Note: note}); err != nil {
 		return err
 	}
-	report := &RunReport{
+	report := &checkreport.ModelReport{
 		ReportVersion: 2, RunSetID: checkID, RunID: runID, Model: model,
 		Mode: "observe-only", CompletionStatus: status, OK: false, Error: note,
 	}
@@ -224,7 +225,7 @@ func recordSyntheticMember(db *database.CatalogDB, checkID, runID, model, status
 // reports and persists the check report.
 func saveCheckReport(db *database.CatalogDB, report *acute.RunSetReport) error {
 	report.ReportVersion = checkReportVersion
-	if err := enrichSetSummary(db, report); err != nil {
+	if err := checkreport.SummarizeCheck(db, report); err != nil {
 		return err
 	}
 	payload, err := json.Marshal(report)
