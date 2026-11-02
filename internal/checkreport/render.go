@@ -82,5 +82,8 @@ func populateRef(p systemmodel.Populate) string {
 	if p.Kind() == systemmodel.KindNone {
 		return "checks-only"
 	}
+	if p.Each != nil {
+		return fmt.Sprintf("%d runs per enumerated input", len(p.Runs))
+	}
 	return fmt.Sprintf("%d runs", len(p.Runs))
 }

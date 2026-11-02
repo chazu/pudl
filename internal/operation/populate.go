@@ -23,14 +23,17 @@ func populateTargetName(modelName string) string {
 }
 
 // runPopulate executes the populate phase: the model's #CommandObserve runs,
-// ingested as one observation snapshot.
+// ingested as one observation snapshot. The records of the runs that
+// succeeded are ingested and the failed runs recorded as failed inputs, which
+// leaves the snapshot incomplete. When every run failed nothing is ingested,
+// and the summary listing them comes back with the error.
 func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	m := r.model
 	if m.Populate.Kind() == systemmodel.KindNone {
 		return nil, fmt.Errorf("model %q has no populate arm (checks-only)", m.Name)
 	}
 	p := m.Populate
-	records, err := populate.Run(r.ctx, p, populate.Request{
+	res, err := populate.Run(r.ctx, p, populate.Request{
 		ModelDir: r.modelDir, Limits: r.ws.IngestLimits, Stderr: r.out.Err, TrackTempDir: r.ws.TrackTempDir,
 	})
 	if err != nil {
@@ -38,14 +41,18 @@ func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	}
 
 	target := populateTargetName(m.Name)
-	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema}
+	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema, Inputs: res.Inputs, Runs: res.Runs, FailedInputs: res.Failed}
+	if len(res.Failed) > 0 && len(res.Failed) == res.Runs {
+		return summary, allInputsFailed(res.Failed)
+	}
 	if p.Schema != "" {
 		summary.SchemaPolicy = "strict"
 		if p.AllowSchemaFallback {
 			summary.SchemaPolicy = "permissive"
 		}
 	}
-	wrapped, err := json.Marshal([]observe.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
+	results := []observe.ObserveResult{{Target: target, Current: map[string]any{"records": res.Records}}}
+	wrapped, err := json.Marshal(append(results, failedInputResults(target, res.Failed)...))
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}

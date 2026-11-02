@@ -26,8 +26,12 @@ Installed files, under `.pudl/`:
 Each collector is a `#CommandObserve` model that runs one `gcloud ... list
 --format=json` per project, injects `project` into every record and routes the
 records to one schema. Each declares a complete observation of scope
-`gcp/<type>` (`fixture/gcp/<type>` for fixtures). If any run fails, nothing is
-ingested.
+`gcp/<type>` (`fixture/gcp/<type>` for fixtures). If a project's run fails
+(a missing permission, a disabled API), the other projects are ingested, the
+observation is incomplete, and the collector fails with the project listed
+under `populate.failed_inputs` in its report. A family checked with it is
+blocked; checked later on its own, its checks over that observation are
+unknown, not passing.
 
 | Collector | gcloud | Schema | Identity | Permission (role) |
 | --- | --- | --- | --- | --- |
@@ -170,6 +174,39 @@ critical violations that check reports.
 A collector's observation is complete only for the projects, locations and
 key rings you list. Keep fixture and live runs in separate workspaces if you
 want `pudl query` (latest-known facts) to show only one of them.
+
+## Enumerate projects at run time
+
+`_gcpProjects` is fixed when the CUE is written. To collect every project your
+credentials can list instead, write a collector with `each`. Its command's JSON
+output supplies the inputs, and each run is repeated per project with
+`{{item}}` replaced (CUE interpolation cannot see a value that exists only at
+run time). For example, in `.pudl/schema/models/gcp_org.cue`:
+
+```cue
+package models
+
+import sm "pudl.schemas/pudl/systemmodel@v0"
+
+#GCPOrgFirewalls: sm.#SystemModel & {
+	name: "gcp-org-firewalls"
+	observation: {scope: "gcp-org/firewalls", complete: true}
+	populate: {
+		schema: "gcp.#Firewall"
+		each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+		runs: [{
+			argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"]
+			set: project: "{{item}}"
+		}]
+	}
+}
+```
+
+The report records the projects it enumerated under `populate.inputs`. A
+failing project is a failed input as above; a failing `gcloud projects list`
+fails the collector with nothing ingested. The check families read
+`model:gcp-<type>`, so point a check's `evidence` at `model:gcp-org-firewalls`
+to evaluate this collector's observation.
 
 ## Limits
 
