@@ -81,7 +81,7 @@ func (p Populate) Kind() PopulateKind {
 // omits the field (omitzero). An emitted `populate: {}` would not satisfy
 // #CommandObserve, which requires runs.
 func (p Populate) IsZero() bool {
-	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback)
+	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast)
 }
 
 // Check is an observe-only flag over a Datalog relation.
