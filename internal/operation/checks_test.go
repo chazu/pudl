@@ -1,6 +1,7 @@
-package cmd
+package operation
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func checksRulesDir(t *testing.T) string {
 	require.NoError(t, os.MkdirAll(rules, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(rules, "checks.cue"), []byte(`package rules
 
-// Head exposes run_id, so `+"`pudl run`"+` may bind this run's ID to it.
+// Head exposes run_id, so `+"`pudl check`"+` may bind this run's ID to it.
 failed_this_run: {
 	head: {rel: "failed_this_run", args: {run_id: "$R", target: "$T"}}
 	body: [{rel: "catalog_entry", args: {run_id: "$R", target: "$T", status: "failed"}}]
@@ -83,7 +84,7 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 
 	// The run-scoped rule sees only this run's rows, so the earlier failure does
 	// not gate it.
-	scoped, err := runChecks(cat, checksModel("failed_this_run", "empty"), modelDir, checkContext{
+	scoped, err := runChecks(context.Background(), cat, testWorkspace(dir), quietOutput(), checksModel("failed_this_run", "empty"), modelDir, checkContext{
 		runID: "run_current",
 	})
 	require.NoError(t, err)
@@ -94,7 +95,7 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 
 	// The catalog-wide rule sees it, and is reported as global so the difference
 	// is legible rather than silent.
-	global, err := runChecks(cat, checksModel("failed_anywhere", "empty"), modelDir, checkContext{
+	global, err := runChecks(context.Background(), cat, testWorkspace(dir), quietOutput(), checksModel("failed_anywhere", "empty"), modelDir, checkContext{
 		runID: "run_current",
 	})
 	require.NoError(t, err)
@@ -115,7 +116,7 @@ func TestRunChecks_RunIDConstraintSeesThisRunsOwnRows(t *testing.T) {
 
 	seedFailedEntry(t, db, "e1", "current-resource", "run_current")
 
-	results, err := runChecks(cat, checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
+	results, err := runChecks(context.Background(), cat, testWorkspace(dir), quietOutput(), checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
 		runID: "run_current",
 	})
 	require.NoError(t, err)
@@ -137,7 +138,7 @@ func TestRunChecks_ReplayNeverBindsRunID(t *testing.T) {
 
 	seedFailedEntry(t, db, "e1", "old-resource", "run_previous")
 
-	results, err := runChecks(cat, checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
+	results, err := runChecks(context.Background(), cat, testWorkspace(dir), quietOutput(), checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
 		runID:       "run_replay",
 		fromCatalog: true,
 	})

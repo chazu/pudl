@@ -1,4 +1,4 @@
-package cmd
+package operation
 
 import (
 	"context"
@@ -18,7 +18,6 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
-	"github.com/chazu/pudl/internal/workspace"
 )
 
 // Check fixture models observe through #CommandObserve shell runs. The
@@ -80,13 +79,18 @@ func writeCheckFixtureSchemas(t *testing.T, schemaRoot string) {
 	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "resources.cue"), []byte(resources), 0o644))
 }
 
-// checkHarness drives checks.
+// checkHarness drives checks in a fixture workspace.
 type checkHarness struct {
+	ws          Workspace
 	consumerOut string
 }
 
+func (h *checkHarness) check(models ...string) (*Result, error) {
+	return Check(context.Background(), h.ws, quietOutput(), Options{Models: models})
+}
+
 func (h *checkHarness) run(models ...string) error {
-	_, err := executeCheck(context.Background(), models, checkOptions{})
+	_, err := h.check(models...)
 	return err
 }
 
@@ -101,18 +105,9 @@ func setupCheckFixture(t *testing.T) (*checkHarness, string) {
 		validator.ResetSharedLoaders()
 		inference.ResetShared()
 	})
-	policy, err := workspace.Resolve(t.TempDir(), pudlDir)
-	require.NoError(t, err)
-	previousPolicy := wsPolicy
-	wsPolicy = policy
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-
 	consumerOut := filepath.Join(t.TempDir(), "consumer-input")
 	t.Setenv("PUDL_TEST_CONSUMER_OUT", consumerOut)
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-	return &checkHarness{consumerOut: consumerOut}, pudlDir
+	return &checkHarness{ws: testWorkspace(pudlDir), consumerOut: consumerOut}, pudlDir
 }
 
 func latestCheckReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
@@ -181,35 +176,16 @@ func TestCheckBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t 
 	assert.Equal(t, database.RunStatusSucceeded, results["zeta"])
 }
 
-func TestReportCommandReadsStoredRunSetReportByID(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	db, err := database.NewCatalogDB(config.GetPudlDir())
-	require.NoError(t, err)
-	payload, err := json.Marshal(acute.RunSetReport{
-		ReportVersion: 1, RunSetID: "set_1", Mode: "observe-only",
-		Status: database.RunStatusSucceeded,
-	})
-	require.NoError(t, err)
-	require.NoError(t, db.SaveRunSetReport("set_1", payload))
-	require.NoError(t, db.Close())
-
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-	require.NoError(t, reportCmd.RunE(reportCmd, []string{"set_1"}))
-	require.ErrorContains(t, reportCmd.RunE(reportCmd, []string{"missing"}), "not found")
-}
-
 // One model or several, a check records one report that embeds each model's
 // full report, and `pudl report` renders it with model names.
 func TestCheckOfOneModelRecordsOneReportWithTheModelEmbedded(t *testing.T) {
-	_, pudlDir := setupCheckFixture(t)
-	result, err := executeCheck(context.Background(), []string{"drifter"}, checkOptions{})
+	h, pudlDir := setupCheckFixture(t)
+	result, err := h.check("drifter")
 	require.NoError(t, err)
-	require.True(t, result.findings)
+	require.True(t, result.Findings)
 
 	report := latestCheckReportForTest(t, pudlDir)
-	assert.Equal(t, checkReportVersion, report.ReportVersion)
+	assert.Equal(t, ReportVersion, report.ReportVersion)
 	assert.True(t, strings.HasPrefix(report.RunSetID, "check_"), report.RunSetID)
 	require.Len(t, report.Members, 1)
 	var member checkreport.ModelReport
@@ -218,10 +194,88 @@ func TestCheckOfOneModelRecordsOneReportWithTheModelEmbedded(t *testing.T) {
 	require.NotNil(t, member.Drift)
 	assert.False(t, member.Drift.Clean)
 
-	jsonOutput = false
-	human := captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, []string{report.RunSetID}) })
+	db, err := database.OpenCatalogDBReadOnly(pudlDir)
+	require.NoError(t, err)
+	defer db.Close()
+	stored, err := checkreport.Find(db, report.RunSetID)
+	require.NoError(t, err)
+	var text strings.Builder
+	require.NoError(t, stored.WriteText(&text))
+	human := text.String()
 	for _, text := range []string{"# model: drifter", "### drift", "check " + report.RunSetID + ": succeeded", "drifter: succeeded"} {
 		assert.Contains(t, human, text)
 	}
 	assert.NotContains(t, human, "//models/")
+}
+
+// A populate-only member finds nothing; observe-only drift is a finding, not
+// an error.
+func TestCheckReportsFindingsSeparatelyFromErrors(t *testing.T) {
+	h, _ := setupCheckFixture(t)
+
+	result, err := h.check("producer")
+	require.NoError(t, err)
+	assert.False(t, result.Findings)
+	assert.False(t, result.OnlyCheckFailures())
+
+	result, err = h.check("drifter")
+	require.NoError(t, err, "observe-only drift is a result, not an error")
+	assert.True(t, result.Findings)
+}
+
+// A check that fails while resolving its models has no report, and says so
+// through its progress events.
+func TestCheckWithoutAReportReturnsNoResult(t *testing.T) {
+	h, _ := setupCheckFixture(t)
+	var events []string
+	out := quietOutput()
+	out.Progress = func(phase, subject, state string) { events = append(events, phase+" "+subject+" "+state) }
+	result, err := Check(context.Background(), h.ws, out, Options{Models: []string{"missing"}})
+	require.ErrorContains(t, err, `system model "missing" not found`)
+	assert.Nil(t, result)
+	assert.Equal(t, []string{"check missing started", "check missing failed"}, events)
+}
+
+func TestOnlyCheckFailures(t *testing.T) {
+	result := func(members ...acute.RunSetMemberReport) *Result {
+		return &Result{Report: &acute.RunSetReport{Members: members}}
+	}
+	checkFailed := acute.RunSetMemberReport{Model: "a", Result: database.RunStatusFailed, Error: ErrFailSeverityChecks.Error()}
+	blocked := acute.RunSetMemberReport{Model: "b", Result: database.RunStatusBlocked}
+	broken := acute.RunSetMemberReport{Model: "c", Result: database.RunStatusFailed, Error: "populate: exit 1"}
+
+	assert.True(t, result(checkFailed, blocked).OnlyCheckFailures())
+	assert.False(t, result(checkFailed, broken).OnlyCheckFailures())
+	assert.False(t, result(blocked).OnlyCheckFailures(), "nothing failed")
+	assert.False(t, (*Result)(nil).OnlyCheckFailures())
+}
+
+func TestReportHasFindings(t *testing.T) {
+	assert.False(t, reportHasFindings(nil))
+	assert.False(t, reportHasFindings(&checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true}}))
+	assert.True(t, reportHasFindings(&checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: false}}), "replayed drift is still a finding")
+	assert.True(t, reportHasFindings(&checkreport.ModelReport{Checks: []checkreport.CheckResult{{Severity: "fail"}}}))
+	assert.False(t, reportHasFindings(&checkreport.ModelReport{Checks: []checkreport.CheckResult{{Severity: "warn"}}}))
+}
+
+// Live output prints each model's plan and report as it concludes, passes a
+// failing command's stderr through, and hands the final report to Concluded.
+func TestCheckLiveOutput(t *testing.T) {
+	h, _ := setupCheckFixture(t)
+	t.Setenv("PUDL_TEST_FAIL_PRODUCER", "1")
+	var stdout, stderr strings.Builder
+	var concluded *acute.RunSetReport
+	out := Output{Out: &stdout, Err: &stderr, Live: true, Concluded: func(r *acute.RunSetReport) error {
+		concluded = r
+		return nil
+	}}
+	_, err := Check(context.Background(), h.ws, out, Options{Models: []string{"producer", "zeta"}})
+	require.ErrorContains(t, err, "producer failed")
+
+	assert.Contains(t, stdout.String(), "model:    producer")
+	assert.Contains(t, stdout.String(), "# model: zeta")
+	assert.Contains(t, stderr.String(), "producer observation failed")
+	require.NotNil(t, concluded)
+	assert.Equal(t, database.RunStatusFailed, concluded.Status)
+	require.Len(t, concluded.Members, 2)
 }

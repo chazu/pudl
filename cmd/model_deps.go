@@ -42,7 +42,7 @@ Examples:
 
 		// 1. Declared edges for every retained model template (no run needed).
 		for _, model := range models {
-			declared, warns := modeldeps.Declared(model.Template.Name, model.Template.DependsOn, resolveDependency)
+			declared, warns := modeldeps.Declared(model.Template.Name, model.Template.DependsOn, modeldeps.RegisteredIn(modelSearchDirs()))
 			warnings = append(warnings, warns...)
 			if rerr := modeldeps.Reconcile(db, model.Name, modeldeps.DeclaredSource(model.Name), declared); rerr != nil {
 				return fmt.Errorf("reconcile declared deps for %s: %w", model.Name, rerr)

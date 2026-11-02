@@ -12,7 +12,7 @@ import (
 var snapshotCompare string
 
 func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after string) error {
-	cmp, err := inventory.CompareSnapshots(ctx, db, before, after, inventoryPolicy)
+	cmp, err := inventory.CompareSnapshots(ctx, db, before, after, invocationWorkspace().InventoryPolicy)
 	if err != nil {
 		return err
 	}

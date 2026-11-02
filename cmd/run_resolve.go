@@ -1,51 +1,13 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
-
-// recordModelInstance upserts the run's #SystemModel instance into the catalog
-// (schema pudl/systemmodel.#SystemModel, identity = name) so every model that
-// has been run is inventoriable via `pudl list`/`query`. It reuses the shipped
-// observe ingester — the instance lands as an ordinary catalog record.
-func recordModelInstance(cat *runCatalog, m *systemmodel.SystemModel, runID string) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	var rec map[string]any
-	if err := json.Unmarshal(b, &rec); err != nil {
-		return err
-	}
-	rec["name"] = m.Name
-	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
-
-	results := []observe.ObserveResult{{
-		Target:  systemmodel.InstanceDefinition(m.Name),
-		Current: map[string]any{"records": []any{rec}},
-	}}
-	wrapped, err := json.Marshal(results)
-	if err != nil {
-		return err
-	}
-	// Recorded under its own source: this is a registration, not an observation
-	// of the live system, and it must not be picked up as the model's current
-	// snapshot in place of what populate actually observed.
-	_, _, err = ingestPopulateOutput(cat, wrapped, populateIngest{
-		runID:  runID,
-		model:  m.Name,
-		source: database.SnapshotSourceModelInstance,
-	})
-	return err
-}
 
 // resolveModel finds a registered #SystemModel-derived schema by name. It
 // searches the project-level .pudl/schema first (if a workspace is found by

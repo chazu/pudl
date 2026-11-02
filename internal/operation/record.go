@@ -1,4 +1,4 @@
-package cmd
+package operation
 
 import (
 	"fmt"
@@ -33,29 +33,27 @@ func (s *runFinishState) addNote(note string) {
 // earlier run of this model that never finished. An unfinished row means a prior
 // invocation died without recording a verdict, so the status that model currently
 // carries predates it. Best-effort: auditing must not fail the run.
-func startRunRecord(cat *runCatalog, runID, model, mode string, live bool) {
+func startRunRecord(cat *runCatalog, out Output, runID, model, mode string) {
 	db, err := cat.optional()
 	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not open catalog to record the run: %v\n", err)
-		}
+		out.warnf("warning: could not open catalog to record the run: %v\n", err)
 		return
 	}
 
-	if stale, err := db.UnfinishedRuns(model); err == nil && len(stale) > 0 && live {
-		fmt.Fprintf(errw(), "warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
+	if stale, err := db.UnfinishedRuns(model); err == nil && len(stale) > 0 && out.Live {
+		fmt.Fprintf(out.Err, "warning: %d earlier run(s) of %q never finished (most recent: %s, started %s)\n",
 			len(stale), model, stale[0].RunID, stale[0].StartedAt.Format(time.RFC3339))
-		fmt.Fprintln(outw(), "         that model's recorded status predates those runs and may be stale")
+		fmt.Fprintln(out.Out, "         that model's recorded status predates those runs and may be stale")
 	}
-	if err := db.StartRun(runID, model, mode); err != nil && live {
-		fmt.Fprintf(errw(), "warning: could not record run start: %v\n", err)
+	if err := db.StartRun(runID, model, mode); err != nil {
+		out.warnf("warning: could not record run start: %v\n", err)
 	}
 }
 
 // finishRunRecord marks the run terminal. It runs from a defer so that an early
 // error return is still a *recorded* termination — distinguishable from a process
 // that died without saying anything, which leaves the row unfinished.
-func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr error, live bool) {
+func finishRunRecord(cat *runCatalog, out Output, runID string, state runFinishState, runErr error) {
 	// An open failure goes unreported here alone: startRunRecord borrowed the same
 	// handle and already said so, and there is no row to finish anyway.
 	db, err := cat.optional()
@@ -63,8 +61,8 @@ func finishRunRecord(cat *runCatalog, runID string, state runFinishState, runErr
 		return
 	}
 
-	if err := db.FinishRun(runID, runConclusion(state, runErr)); err != nil && live {
-		fmt.Fprintf(errw(), "warning: could not record run completion: %v\n", err)
+	if err := db.FinishRun(runID, runConclusion(state, runErr)); err != nil {
+		out.warnf("warning: could not record run completion: %v\n", err)
 	}
 }
 

@@ -30,6 +30,18 @@ func DeclaredSource(model string) string { return "model:" + model }
 // it resolves to, or reports that it resolves to none.
 type Resolver func(name string) (canonical string, ok bool)
 
+// RegisteredIn resolves dependency names against the models registered in
+// the schema dirs (see systemmodel.ResolveTemplate).
+func RegisteredIn(dirs []string) Resolver {
+	return func(name string) (string, bool) {
+		found, err := systemmodel.ResolveTemplate(dirs, name)
+		if err != nil || found == nil {
+			return "", false
+		}
+		return found.Name, true
+	}
+}
+
 // Declared canonicalizes a model's declared depends_on into a set of resolved
 // instance names (so the `to` recorded matches the `from` that dependency
 // records for its own edges) and returns warnings for self-dependencies and

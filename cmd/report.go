@@ -57,37 +57,6 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 	return stored.WriteText(outw())
 }
 
-func persistRunReport(cat *runCatalog, report *checkreport.ModelReport, live bool) bool {
-	if report == nil || report.RunID == "" {
-		return false
-	}
-	if report.ReportVersion == 0 {
-		report.ReportVersion = 2
-	}
-	db, err := cat.optional()
-	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not open catalog to persist run report: %v\n", err)
-		}
-		return false
-	}
-	report.Summary = checkreport.Summarize(report, db)
-	b, err := json.Marshal(report)
-	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not encode run report: %v\n", err)
-		}
-		return false
-	}
-	if err := db.SaveRunReport(report.RunID, report.Model, b); err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not persist run report: %v\n", err)
-		}
-		return false
-	}
-	return true
-}
-
 // printCheckReport writes a check report: under --json the report itself;
 // otherwise the outcome of each model and, with members, each model's full
 // report first (a live check has already printed those as they concluded).

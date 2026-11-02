@@ -1,10 +1,11 @@
-package cmd
+package operation
 
 import (
 	"context"
 
 	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/checks"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -20,13 +21,9 @@ type checkContext struct {
 }
 
 // runChecks evaluates each of the model's checks (a Datalog relation over the
-// catalog) and returns the per-check verdicts. Rules are loaded from the standard
-// pudl paths plus the model's rules/ subdir.
-func runChecks(cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx checkContext) ([]checkreport.CheckResult, error) {
-	return runChecksContext(context.Background(), cat, m, modelDir, ctx)
-}
-
-func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.SystemModel, modelDir string, ctx checkContext) ([]checkreport.CheckResult, error) {
+// catalog) and returns the per-check verdicts. Rules are loaded from the
+// workspace's rule paths for the model (including its rules/ subdir).
+func runChecks(evalCtx context.Context, cat *runCatalog, ws Workspace, out Output, m *systemmodel.SystemModel, modelDir string, ctx checkContext) ([]checkreport.CheckResult, error) {
 	if len(m.Checks) == 0 {
 		return nil, nil
 	}
@@ -34,11 +31,11 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 	if err != nil {
 		return nil, err
 	}
-	reg, err := projectionRegistry()
+	reg, err := ws.Projections()
 	if err != nil {
 		return nil, err
 	}
-	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: rulePathsForModel(modelDir), Load: loadEntryPayload, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, OnProgress: emitCheckProgress})
+	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: ws.ModelRulePaths(modelDir), Load: importer.DecodeEntry, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, OnProgress: func(event checks.Progress) { out.progress(event.Phase, event.Check, event.State) }})
 	if err != nil {
 		return nil, err
 	}

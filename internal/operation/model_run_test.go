@@ -1,4 +1,4 @@
-package cmd
+package operation
 
 import (
 	"testing"
@@ -14,23 +14,23 @@ import (
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-func TestValidateRunFlags(t *testing.T) {
+func TestValidateOptions(t *testing.T) {
 	cases := []struct {
 		name    string
-		f       runFlags
+		f       Options
 		wantErr string
 	}{
-		{"bare observe", runFlags{}, ""},
+		{"bare observe", Options{}, ""},
 		// An unscoped replay would set-diff desired against every observation in
 		// the catalog, so it must be refused before any query runs.
-		{"from-catalog without scope", runFlags{fromCatalog: true}, "--from-catalog requires --catalog-scope"},
-		{"from-catalog with blank scope", runFlags{fromCatalog: true, catalogScope: "   "}, "--from-catalog requires --catalog-scope"},
-		{"from-catalog with scope", runFlags{fromCatalog: true, catalogScope: "snap-1"}, ""},
-		{"scope without from-catalog", runFlags{catalogScope: "snap-1"}, "--catalog-scope requires --from-catalog"},
+		{"from-catalog without scope", Options{FromCatalog: true}, "--from-catalog requires --catalog-scope"},
+		{"from-catalog with blank scope", Options{FromCatalog: true, CatalogScope: "   "}, "--from-catalog requires --catalog-scope"},
+		{"from-catalog with scope", Options{FromCatalog: true, CatalogScope: "snap-1"}, ""},
+		{"scope without from-catalog", Options{CatalogScope: "snap-1"}, "--catalog-scope requires --from-catalog"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateRunFlags(tc.f)
+			err := ValidateOptions(tc.f)
 			if tc.wantErr == "" {
 				assert.NoError(t, err)
 			} else {
@@ -84,9 +84,9 @@ func TestCleanRun_ModelRowClean(t *testing.T) {
 	verdict := runVerdict(&checkreport.ModelReport{Drift: &acute.ModelDriftResult{Clean: true, Verified: true}})
 	cat := newRunCatalog(config.GetPudlDir())
 	defer cat.Close()
-	startRunRecord(cat, runID, "mymodel", "observe-only", false)
-	persistRunStatus(cat, "mymodel", verdict, false)
-	finishRunRecord(cat, runID, runFinishState{verdict: verdict}, nil, false)
+	startRunRecord(cat, quietOutput(), runID, "mymodel", "observe-only")
+	persistRunStatus(cat, quietOutput(), "mymodel", verdict)
+	finishRunRecord(cat, quietOutput(), runID, runFinishState{verdict: verdict}, nil)
 
 	db2, err := database.NewCatalogDB(config.GetPudlDir())
 	require.NoError(t, err)

@@ -1,7 +1,7 @@
-package cmd
+package operation
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,53 +10,35 @@ import (
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// concludeRun finalizes a member run, then saves and renders its report.
-// runErr is the phases' outcome error; the returned error is the run's final
-// one. persisted reports whether the report was saved, so the caller's
-// deferred save does not repeat it.
-func concludeRun(in runPhaseInput, report *checkreport.ModelReport, finishState *runFinishState, runErr error) (persisted bool, err error) {
-	ctx := in.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	fin, err := finalizeRun(runFinalizeInput{
-		cat: in.cat, model: in.model, modelDir: in.modelDir,
-		runID: in.session.RunID, flags: in.flags, live: in.live, ctx: ctx,
-	}, report, finishState, runErr)
+// conclude finalizes a member run, then saves and renders its report. runErr
+// is the phases' outcome error; the returned error is the run's final one.
+// persisted reports whether the report was saved, so the caller's deferred
+// save does not repeat it.
+func (r *modelRun) conclude(report *checkreport.ModelReport, finishState *runFinishState, runErr error) (persisted bool, err error) {
+	fin, err := r.finalize(report, finishState, runErr)
 	if err != nil {
 		return false, err
 	}
 
-	persisted = persistRunReport(in.cat, report, in.live)
+	persisted = persistRunReport(r.cat, r.out, report)
 	// Human output shows each member's report as it concludes; JSON output is
 	// the check's one report, written when the check ends.
-	if in.live {
+	if r.out.Live {
 		out, err := report.Render(false)
 		if err != nil {
 			return persisted, err
 		}
-		if _, err := fmt.Fprint(outw(), "\n"+out); err != nil {
+		if _, err := fmt.Fprint(r.out.Out, "\n"+out); err != nil {
 			return persisted, err
 		}
 		for _, notice := range fin.notices {
-			fmt.Fprint(outw(), notice)
+			fmt.Fprint(r.out.Out, notice)
 		}
 	}
 	return persisted, fin.runErr
 }
 
-// runFinalizeInput is what finalizeRun needs from a finished run.
-type runFinalizeInput struct {
-	ctx      context.Context
-	cat      *runCatalog
-	model    *systemmodel.SystemModel
-	modelDir string
-	runID    string
-	flags    runFlags
-	live     bool
-}
-
-// runFinalization is what finalizeRun concluded.
+// runFinalization is what finalize concluded.
 type runFinalization struct {
 	// runErr is the phases' error, or a fail-severity check failure when the
 	// phases succeeded.
@@ -67,26 +49,20 @@ type runFinalization struct {
 	notices []string
 }
 
-// errFailSeverityChecks is the run outcome when every phase succeeded but a
+// ErrFailSeverityChecks is a model's outcome when every phase succeeded but a
 // fail-severity check did not pass.
-var errFailSeverityChecks = fmt.Errorf("one or more fail-severity checks did not pass")
+var ErrFailSeverityChecks = fmt.Errorf("one or more fail-severity checks did not pass")
 var errCheckEvidence = fmt.Errorf("one or more checks could not establish a verdict; inspect check diagnostics")
 
-// finalizeRun evaluates the model's checks, decides the run's verdict, and
+// finalize evaluates the model's checks, decides the run's verdict, and
 // records it on the model instance row.
 //
 // The verdict and its explanations land in state for the run row. err reports
 // a failure to evaluate the checks at all; nothing is recorded then.
-func finalizeRun(in runFinalizeInput, report *checkreport.ModelReport, state *runFinishState, runErr error) (runFinalization, error) {
-	cat, flags := in.cat, in.flags
-
-	if len(in.model.Checks) > 0 {
-		evalCtx := in.ctx
-		if evalCtx == nil {
-			evalCtx = context.Background()
-		}
-		currentSnapshot := flags.catalogScope
-		if !flags.fromCatalog {
+func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishState, runErr error) (runFinalization, error) {
+	if len(r.model.Checks) > 0 {
+		currentSnapshot := r.opts.CatalogScope
+		if !r.opts.FromCatalog {
 			if report.Populate != nil {
 				currentSnapshot = report.Populate.SnapshotID
 			}
@@ -94,10 +70,10 @@ func finalizeRun(in runFinalizeInput, report *checkreport.ModelReport, state *ru
 				currentSnapshot = report.Drift.SnapshotID
 			}
 		}
-		results, err := runChecksContext(evalCtx, cat, in.model, in.modelDir, checkContext{
+		results, err := runChecks(r.ctx, r.cat, r.ws, r.out, r.model, r.modelDir, checkContext{
 			currentSnapshot: currentSnapshot,
-			runID:           in.runID,
-			fromCatalog:     flags.fromCatalog,
+			runID:           r.session.RunID,
+			fromCatalog:     r.opts.FromCatalog,
 		})
 		if err != nil {
 			return runFinalization{runErr: runErr}, err
@@ -113,7 +89,7 @@ func finalizeRun(in runFinalizeInput, report *checkreport.ModelReport, state *ru
 			// First error wins: a phase failure is what the operator needs to
 			// see, and a check failure must not displace it.
 			if runErr == nil {
-				runErr = errFailSeverityChecks
+				runErr = ErrFailSeverityChecks
 			}
 		}
 	}
@@ -141,7 +117,7 @@ func finalizeRun(in runFinalizeInput, report *checkreport.ModelReport, state *ru
 			"      the model's resources may match desired state; the failure is the check's assertion\n",
 			strings.Join(names, ", ")))
 	}
-	persistRunStatus(cat, in.model.Name, verdict, in.live)
+	persistRunStatus(r.cat, r.out, r.model.Name, verdict)
 	return fin, nil
 }
 
@@ -174,7 +150,7 @@ func runVerdict(r *checkreport.ModelReport) string {
 
 func anyCheckUncertain(results []checkreport.CheckResult) bool {
 	for _, c := range results {
-		if c.Outcome == "unknown" || c.Outcome == "error" {
+		if c.Uncertain() {
 			return true
 		}
 	}
@@ -201,23 +177,21 @@ func phaseVerdict(r *checkreport.ModelReport) string {
 }
 
 // persistRunStatus records a run verdict on the model instance row
-// (target = systemmodel.InstanceTarget(name)). Best-effort: a status-write failure (or no
-// catalog) never fails the run, but it is reported rather than swallowed — a
-// silently dropped verdict leaves the previous run's status standing, which is
-// how a stale `clean` used to survive.
-func persistRunStatus(cat *runCatalog, name, status string, live bool) {
+// (target = systemmodel.InstanceTarget(name)). Best-effort: a status-write
+// failure (or no catalog) never fails the run, but it is reported rather than
+// swallowed — a silently dropped verdict leaves the previous run's status
+// standing, which is how a stale `clean` used to survive.
+func persistRunStatus(cat *runCatalog, out Output, name, status string) {
 	if status == "" {
 		return
 	}
 	db, err := cat.optional()
 	if err != nil {
-		if live {
-			fmt.Fprintf(errw(), "warning: could not open catalog to record status %q: %v\n", status, err)
-		}
+		out.warnf("warning: could not open catalog to record status %q: %v\n", status, err)
 		return
 	}
-	if err := db.UpdateStatus(systemmodel.InstanceTarget(name), status); err != nil && live {
-		fmt.Fprintf(errw(), "warning: could not record status %q: %v\n", status, err)
+	if err := db.UpdateStatus(systemmodel.InstanceTarget(name), status); err != nil {
+		out.warnf("warning: could not record status %q: %v\n", status, err)
 	}
 }
 
@@ -235,4 +209,55 @@ func failedFailSeverityNames(results []checkreport.CheckResult) []string {
 		}
 	}
 	return names
+}
+
+// applyRunError copies a phase error into the report before it is rendered or
+// persisted. Reports are persisted before the check returns, so relying only
+// on the deferred named-return finalizer would lose the error details.
+func applyRunError(report *checkreport.ModelReport, err error) {
+	if report == nil || err == nil {
+		return
+	}
+	report.OK = false
+	report.Error = err.Error()
+	report.CompletionStatus = failureStatus(err)
+}
+
+// persistRunReport saves a model's report with its summary. Best-effort: a
+// failure is a warning, and false says the report was not saved.
+func persistRunReport(cat *runCatalog, out Output, report *checkreport.ModelReport) bool {
+	if report == nil || report.RunID == "" {
+		return false
+	}
+	if report.ReportVersion == 0 {
+		report.ReportVersion = checkreport.ModelReportVersion
+	}
+	db, err := cat.optional()
+	if err != nil {
+		out.warnf("warning: could not open catalog to persist run report: %v\n", err)
+		return false
+	}
+	report.Summary = checkreport.Summarize(report, db)
+	b, err := json.Marshal(report)
+	if err != nil {
+		out.warnf("warning: could not encode run report: %v\n", err)
+		return false
+	}
+	if err := db.SaveRunReport(report.RunID, report.Model, b); err != nil {
+		out.warnf("warning: could not persist run report: %v\n", err)
+		return false
+	}
+	return true
+}
+
+// reportHasFindings reports whether a concluded run found something an
+// operator must act on: drift or a failing fail-severity check.
+func reportHasFindings(r *checkreport.ModelReport) bool {
+	if r == nil {
+		return false
+	}
+	if r.Drift != nil && !r.Drift.Clean {
+		return true
+	}
+	return anyFailSeverityFailed(r.Checks)
 }

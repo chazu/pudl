@@ -4,44 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/checkreport"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/stretchr/testify/require"
 )
-
-func TestSetSummaryIncludesMemberEvidenceWithoutFollowupRequests(t *testing.T) {
-	db, err := database.NewCatalogDB(t.TempDir())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-	member := &checkreport.ModelReport{
-		ReportVersion: 2, RunID: "run_member", Model: "m", Mode: "observe-only",
-		CompletionStatus: database.RunStatusSucceeded, OK: true,
-		Drift:  &acute.ModelDriftResult{Clean: true, Verified: true},
-		Checks: []checkreport.CheckResult{{Name: "c", Severity: "fail", Passed: true, Outcome: "pass"}},
-	}
-	payload, err := json.Marshal(member)
-	require.NoError(t, err)
-	require.NoError(t, db.SaveRunReport(member.RunID, member.Model, payload))
-	report := &acute.RunSetReport{
-		RunSetID: "runset_x", Mode: "observe-only", Status: database.RunStatusSucceeded,
-		Ordered: []string{"m"}, Members: []acute.RunSetMemberReport{{Model: "m", RunID: "run_member", Result: database.RunStatusSucceeded}},
-	}
-	require.NoError(t, saveCheckReport(db, report))
-	require.NotNil(t, report.Summary)
-	require.Len(t, report.Members, 1)
-	require.NotNil(t, report.Members[0].Summary)
-	require.Equal(t, "clean", report.Summary.Conformity)
-	require.Equal(t, "pass", report.Summary.Checks)
-	require.Equal(t, "live", report.Summary.Verification)
-	stored, err := db.GetRunSetReport(report.RunSetID)
-	require.NoError(t, err)
-	var persisted acute.RunSetReport
-	require.NoError(t, json.Unmarshal(stored.Report, &persisted))
-	require.Equal(t, report.Summary, persisted.Summary)
-	require.Equal(t, checkReportVersion, persisted.ReportVersion)
-	require.JSONEq(t, string(payload), string(persisted.Members[0].Report), "the check report embeds the member's full report")
-}
 
 func TestProgressDoesNotContaminateResultJSON(t *testing.T) {
 	cliWorkspace(t)

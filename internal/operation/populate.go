@@ -1,4 +1,4 @@
-package cmd
+package operation
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/populate"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 )
@@ -23,13 +24,14 @@ func populateTargetName(modelName string) string {
 
 // runPopulate executes the populate phase: the model's #CommandObserve runs,
 // ingested as one observation snapshot.
-func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*checkreport.Populate, error) {
+func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
+	m := r.model
 	if m.Populate.Kind() == systemmodel.KindNone {
 		return nil, fmt.Errorf("model %q has no populate arm (checks-only)", m.Name)
 	}
 	p := m.Populate
-	records, err := populate.Run(ctx, p, populate.Request{
-		ModelDir: modelDir, Limits: importIngestLimits(), Stderr: errw(), TrackTempDir: workspaces.track,
+	records, err := populate.Run(r.ctx, p, populate.Request{
+		ModelDir: r.modelDir, Limits: r.ws.IngestLimits, Stderr: r.out.Err, TrackTempDir: r.ws.TrackTempDir,
 	})
 	if err != nil {
 		return nil, err
@@ -47,11 +49,10 @@ func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemMode
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
+	count, snapshotID, err := r.ingest(wrapped, populateIngest{observation: m.Observation,
 		summary:             summary,
-		ctx:                 ctx,
-		snapshotID:          snapshotID,
-		runID:               runID,
+		ctx:                 r.ctx,
+		snapshotID:          r.session.SnapshotID,
 		model:               m.Name,
 		source:              database.SnapshotSourceCommand,
 		manualSchema:        p.Schema,
@@ -64,30 +65,65 @@ func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemMode
 	return summary, nil
 }
 
-// ingestPopulateOutput feeds wrapped observe results into the catalog as
-// observe entries and records the snapshot's provenance: which run took it,
-// for which model, in which workspace, and how it was produced.
+// recordModelInstance upserts the run's #SystemModel instance into the catalog
+// (schema pudl/systemmodel.#SystemModel, identity = name) so every model that
+// has been checked is inventoriable via `pudl list`/`query`. It reuses the
+// observe ingester — the instance lands as an ordinary catalog record.
+func (r *modelRun) recordModelInstance() error {
+	m := r.model
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(b, &rec); err != nil {
+		return err
+	}
+	rec["name"] = m.Name
+	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
+
+	results := []observe.ObserveResult{{
+		Target:  systemmodel.InstanceDefinition(m.Name),
+		Current: map[string]any{"records": []any{rec}},
+	}}
+	wrapped, err := json.Marshal(results)
+	if err != nil {
+		return err
+	}
+	// Recorded under its own source: this is a registration, not an observation
+	// of the live system, and it must not be picked up as the model's current
+	// snapshot in place of what populate actually observed.
+	_, _, err = r.ingest(wrapped, populateIngest{
+		model:  m.Name,
+		source: database.SnapshotSourceModelInstance,
+	})
+	return err
+}
+
+// ingest feeds wrapped observe results into the catalog as observe entries
+// and records the snapshot's provenance: which run took it, for which model,
+// in which workspace, and how it was produced.
 //
 // The snapshot ID is passed in rather than generated here, so the run owns the
 // identifier for an observation it initiated and can name the snapshot a failed
 // ingest would have produced.
-func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest) (int, string, error) {
-	db, err := cat.required()
+func (r *modelRun) ingest(observeJSON []byte, in populateIngest) (int, string, error) {
+	db, err := r.cat.required()
 	if err != nil {
 		return 0, "", err
 	}
 
-	cfg, err := loadEffectiveConfig()
+	cfg, err := r.ws.LoadConfig()
 	if err != nil {
 		return 0, "", fmt.Errorf("load config: %w", err)
 	}
-	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
+	inferrer, err := inference.Shared(r.ws.SchemaPaths(cfg)...)
 	if err != nil {
 		return 0, "", fmt.Errorf("init schema inferrer: %w", err)
 	}
 	var chain *validator.ChainValidator
 	if in.manualSchema != "" {
-		if chain, err = validator.NewChainValidator(effectiveSchemaPaths(cfg)...); err != nil {
+		if chain, err = validator.NewChainValidator(r.ws.SchemaPaths(cfg)...); err != nil {
 			return 0, "", fmt.Errorf("load schemas for %s: %w", in.manualSchema, err)
 		}
 		if !chain.HasSchema(in.manualSchema) {
@@ -106,9 +142,9 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 		Graph:               inferrer.GetInheritanceGraph(),
 		Inferrer:            inferrer,
 		SnapshotID:          in.snapshotID,
-		RunID:               in.runID,
+		RunID:               r.session.RunID,
 		Model:               in.model,
-		Workspace:           effectiveWorkspaceName(),
+		Workspace:           r.ws.Name,
 		Origin:              "pudl-run",
 		Source:              in.source,
 		ManualSchema:        in.manualSchema,
@@ -116,10 +152,10 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 		Chain:               chain,
 	})
 	for _, w := range result.FactWarnings {
-		fmt.Fprintf(errw(), "⚠️  %s\n", w)
+		fmt.Fprintf(r.out.Err, "⚠️  %s\n", w)
 	}
-	for _, note := range secretNotes(result.SecretWarnings, result.SecretWarningsTotal) {
-		fmt.Fprintf(errw(), "%s\n", note)
+	for _, note := range secretscan.Notes(result.SecretWarnings, result.SecretWarningsTotal) {
+		fmt.Fprintf(r.out.Err, "%s\n", note)
 	}
 	if in.summary != nil {
 		in.summary.SchemaMismatches = result.SchemaMismatches
@@ -135,7 +171,6 @@ type populateIngest struct {
 	observation         *systemmodel.Observation
 	ctx                 context.Context
 	snapshotID          string
-	runID               string
 	model               string
 	source              string
 	// manualSchema routes every record like `import --schema` (command arm).

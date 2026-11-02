@@ -3,7 +3,6 @@ package cmd
 import (
 	"testing"
 
-	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,25 +22,6 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	describe, ok := helpChild(model, "show <name>")
 	require.True(t, ok)
 	assert.Equal(t, "custom", describe.Args)
-}
-
-func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {
-	cat := newRunCatalog(t.TempDir())
-	defer cat.Close()
-
-	report := &checkreport.ModelReport{
-		RunID: "run_parity", Model: "pods", Mode: "observe-only", OK: false,
-		Error: "observer failed after startup",
-	}
-	require.True(t, persistRunReport(cat, report, false))
-
-	db, err := cat.required()
-	require.NoError(t, err)
-	stored, err := db.GetRunReport("run_parity")
-	require.NoError(t, err)
-	require.NotNil(t, stored)
-	assert.Equal(t, "pods", stored.Model)
-	assert.Contains(t, string(stored.Report), "observer failed after startup")
 }
 
 func helpChild(parent commandHelpJSON, use string) (commandHelpJSON, bool) {
