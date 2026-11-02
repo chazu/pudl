@@ -131,7 +131,7 @@ type declares `owner`, with its team label path where it has labels
 | | Added | Removed | Net |
 | --- | --- | --- | --- |
 | Production | +661 | −24 | +637 |
-| Tests | +565 | −0 | +565 |
+| Tests | +571 | −0 | +571 |
 
 The merge with the waivers work (`pudl-xf5.4`) put both `Witness.Waiver` and
 `Witness.Owner` on findings; grouped human output keeps each finding's waiver

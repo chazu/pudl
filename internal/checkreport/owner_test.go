@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/waiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -55,6 +56,11 @@ func TestMarkdownGroupsFindingsByOwner(t *testing.T) {
 	assert.Contains(t, text, "    - owner orders:\n      - {\"resource\":\"r-orders\"}\n"+
 		"    - owner payments:\n      - {\"entry_id\":\"e-payments\"}\n"+
 		"    - owner (none):\n      - {\"resource_id\":\"r-unowned\"}\n      - {\"router\":\"selfLink\"}\n")
+
+	waived := ownedReport()
+	waived.Checks[0].Witnesses[0].Waiver = &waiver.Ref{Index: 0, Owner: "sre", Reason: "migrating", Expires: "2026-12-01", State: waiver.Active}
+	assert.Contains(t, waived.Markdown(), "    - owner orders:\n      - {\"resource\":\"r-orders\"} — waived by waivers[0] (sre, until 2026-12-01): migrating\n",
+		"a grouped finding keeps its waiver note; the waiver's owner is not the resource's")
 
 	unattributed := &ModelReport{Checks: []CheckResult{{Name: "x", Expect: "empty", Outcome: "fail", Count: 1, Witnesses: []Witness{{Arguments: map[string]any{"a": "b"}}}}}}
 	assert.Contains(t, unattributed.Markdown(), "    - {\"a\":\"b\"}\n", "without owners findings stay a flat list")
