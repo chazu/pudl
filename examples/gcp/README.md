@@ -55,6 +55,15 @@ unknown, not passing.
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
 
+To import gcloud output by hand, inject the project as the collectors do and
+inference picks the pack type. Every type requires `project`, so without it a
+record falls back to a generic schema:
+
+```bash
+gcloud compute firewall-rules list --format=json > fw.json
+pudl import --path fw.json --set project=my-project   # gcp.#Firewall
+```
+
 Sensitive values are replaced with `[REDACTED]` before anything is stored:
 Cloud Run environment values and creator/modifier e-mail annotations (secret
 references are kept), GKE node metadata (startup scripts) and legacy

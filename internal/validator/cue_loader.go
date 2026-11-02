@@ -279,6 +279,9 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 
 		// Set the IsListType field based on structural detection
 		meta.IsListType = isListType
+		if !isListType {
+			meta.Discriminators = literalStringFields(schemaValue)
+		}
 		metadata[canonicalName] = meta
 	}
 
