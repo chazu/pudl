@@ -679,6 +679,13 @@ Beads work:
     doc and declaring policy, failing counts per rule, resources failing most)
     and the compliance section of `pudl show ID`, all with `--json`, read from
     stored results. See `implog/2026_11_02_policy_list_show.md`.
+  - Done: `pudl-4fx.6` simplification pass over the policy code, no behavior
+    change: stored results filtered in SQL (violations joined on their policy
+    source), current resource entries picked in SQL, one stored-resource loop
+    for `evaluate` and `--what-if`, shared status counting and payload loader
+    type, one-pass CUE error paths. `policy_state` is kept: fact provenance
+    and `tx_start` do not track the latest evaluated entry and time. See
+    `implog/2026_11_02_policy_simplification.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
