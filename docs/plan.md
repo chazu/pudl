@@ -15,7 +15,9 @@ three checks-only families (network hygiene, data protection, GKE posture)
 that fail on high-severity noncompliance. See the
 [pack README](../examples/gcp/README.md) and the
 [delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
-five policy and doctor engine findings.
+five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
+(`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see
+`implog/2026_11_02_policy_engine_pack_fixes.md`.
 
 ### Check and report orchestration moved out of `cmd/` (2026-11-01)
 
@@ -677,6 +679,12 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-opz` policy annotations survive comprehensions the bare
+    policy cannot decide (an annotation that still cannot be read fails the
+    load), and evaluation ignores closedness at every depth; `pudl-pob` the
+    doctor identity_fields family check and fact projection skip policies.
+    GCP pack workarounds removed. See
+    `implog/2026_11_02_policy_engine_pack_fixes.md`.
 - `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type
@@ -751,6 +759,10 @@ Beads work:
   moves. Doctor's scan and the `inference` repair both read it through
   `importer.ExplicitAssignment`. See
   `implog/2026_11_02_doctor_fix_keeps_explicit_schema.md`.
+- `pudl-qhx` (done): a checks-only model's catalog instance is recorded
+  without `populate`, so it satisfies `#SystemModel` and `pudl doctor` stays
+  ok. Doctor validates instances older versions stored with `populate: {}`
+  without that key. See `implog/2026_11_02_checks_only_instance_populate.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix

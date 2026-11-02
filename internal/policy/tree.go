@@ -60,7 +60,12 @@ func (b *treeBuilder) merge(n *node, v cue.Value, segs []string, member string, 
 		return nil
 	}
 	kind := v.IncompleteKind()
-	if kind&cue.StructKind != 0 {
+	// A struct with a comprehension the bare policy cannot decide (its
+	// condition reads an optional field) is incomplete: its kind is bottom,
+	// yet its fields can still be enumerated. Fields fails only for a value
+	// without fields (top or a scalar); checkAnnotations reports any @pudl
+	// attribute that the walk did not reach.
+	if kind&cue.StructKind != 0 || kind == cue.BottomKind {
 		iter, err := v.Fields(cue.Optional(true))
 		if err == nil {
 			for iter.Next() {
@@ -158,6 +163,17 @@ func (b *treeBuilder) declareRule(n *node, rule Rule, path, member string) error
 	}
 	n.rule = known
 	return nil
+}
+
+// at returns the node at exactly segs, or nil.
+func (n *node) at(segs []string) *node {
+	cur := n
+	for _, s := range segs {
+		if cur = cur.children[s]; cur == nil {
+			return nil
+		}
+	}
+	return cur
 }
 
 // lookup walks the tree along segs and returns the deepest node reached and

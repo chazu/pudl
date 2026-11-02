@@ -84,6 +84,31 @@ func TestCheckIdentityFieldConsistency(t *testing.T) {
 		}
 	})
 
+	t.Run("standalone policy without identity_fields is ok", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		// Policies are never assigned to records, so they need no identity.
+		policy := `package fam
+
+#BaseBestPractice: {
+	_pudl: {
+		schema_type: "policy"
+		base_schema: "fam.#Base"
+	}
+	id: =~"^prod-"
+}
+`
+		writeSchemaModule(t, home, map[string]string{
+			"fam/base.cue":   base,
+			"fam/policy.cue": policy,
+		})
+
+		res := CheckIdentityFieldConsistency()
+		if res.Status != "ok" {
+			t.Fatalf("expected ok, got %q: %s (%s)", res.Status, res.Message, res.Details)
+		}
+	})
+
 	t.Run("divergent identity_fields warns", func(t *testing.T) {
 		home := t.TempDir()
 		t.Setenv("HOME", home)
