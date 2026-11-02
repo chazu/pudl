@@ -1,240 +1,183 @@
-# PUDL -- Personal Unified Data Lake
+# pudl
 
-PUDL is a CLI tool for building a local, schema-validated data lake. Import JSON, YAML, CSV, and NDJSON from any source -- PUDL detects formats, infers CUE schemas, deduplicates by content hash, tracks provenance, and detects drift. Everything runs locally: one binary, a SQLite catalog, and CUE schemas in a git-tracked directory.
+pudl helps SREs and coding agents discover, catalog and govern cloud
+infrastructure. It runs the read-only commands you already use (`gcloud`,
+`aws`, `kubectl` with JSON output), or imports files you have. It stores every
+record with its evidence, tracks each resource across observations, and
+reports what violates your policies and checks.
 
-## Quick Start
+pudl observes and reports. It never changes infrastructure: Terraform,
+`kubectl` or whatever tool owns a system makes changes, and the next pudl check
+verifies them.
 
-Install the current development version with Go 1.26.10 or newer and put Go's
-binary directory (normally `~/go/bin`) on your `PATH`:
+pudl is one binary. Each repository gets its own `.pudl/` workspace: CUE
+schemas and models you commit, and a local SQLite catalog that stays out of
+Git.
+
+## Install
+
+You need Go 1.26.10 or newer. Install the current development version and put
+Go's binary directory (normally `~/go/bin`) on your `PATH`:
 
 ```bash
 go install github.com/chazu/pudl@main
+pudl version
 ```
 
-Then follow the [Git inventory walkthrough](docs/getting-started.md). Create a
-new Git repository and install its bundled model and data using PUDL commands:
+## A five-minute tour
+
+The GCP content pack ships offline fixtures, so this tour needs no cloud
+account. Run it in a new directory:
 
 ```bash
+mkdir pudl-tour && cd pudl-tour
 pudl init
-pudl example install git-inventory
+pudl example install gcp
 ```
 
-The guide observes a clean baseline and a changed inventory, finds `release`
-versus expected `main`, and inspects retained evidence. It needs only PUDL and
-Git, with no source checkout, scripts, external accounts, or Python.
+`pudl init` creates `.pudl/`. The pack installs draft GCP schemas,
+best-practice policies, collectors and check families.
 
-## What Happens When You Import
-
-```
-pudl import --path data.json
-    |
-    +-- SHA256 content hash -> deduplicate (skip if already imported)
-    +-- Detect format (json, yaml, csv, ndjson)
-    +-- Detect NDJSON collections and unwrap typed envelopes when present
-    +-- Infer schema via heuristics + CUE unification
-    +-- Extract resource identity (stable ID across re-imports)
-    +-- Store raw file in .pudl/data/raw/YYYY/MM/DD/ (repo workspace)
-    |                   or ~/.pudl/data/raw/YYYY/MM/DD/ (global mode)
-    +-- Catalog in SQLite with full provenance metadata
-```
-
-Untyped imports fall back to `pudl/core.#Item` when no specific schema matches.
-An explicit `--schema` must validate every record; use `--allow-schema-fallback`
-only when you deliberately want permissive classification.
-
-## Key Concepts
-
-- **Content-addressed IDs**: Files are identified by SHA256 hash, displayed as pronounceable [proquint](https://arxiv.org/html/0901.4016) words like `mivof-duhij`
-- **CUE schemas with `_pudl` metadata**: Schemas define both data shape and inference hints (identity fields, tracked fields)
-- **Schema inference**: Heuristic scoring narrows candidates, then CUE unification validates matches -- most specific schema wins
-- **Resource identity**: Same logical resource tracked across re-imports via `resource_id` (schema + identity fields hash)
-- **Collections**: NDJSON files are split into individual items; normalized memberships allow one item to appear in multiple collections
-- **System models**: A `#SystemModel` instance declares how to observe a system (commands that print JSON records), its desired state and its checks; `pudl check` drives it
-- **One check, one report**: `pudl check <models...>` runs only the named
-  models, producers first by `depends_on`, never expands the set implicitly,
-  and records one report for one model or many
-- **Repository isolation**: `pudl init` creates a self-contained `.pudl/`;
-  its schemas, imports, catalog, facts, reports, and snapshots do not
-  mutate the global `~/.pudl/` state
-- **Drift detection**: A phase of `pudl check` -- compare declared desired state against observed/imported data using deep diff. PUDL reports drift and changes nothing
-- **Bitemporal fact store**: General-purpose store for typed assertions (observations, dependencies, derived facts) with full valid-time and transaction-time tracking
-
-See [docs/concepts.md](docs/concepts.md) for a deeper explanation of these ideas.
-See [evidence and recovery](docs/evidence.md) for exact observations, faithful export,
-classification explanations, historical report values, bounded check witnesses,
-independent evidence retention, and verified portable workspace bundles.
-
-## Commands
-
-### Data Import and Catalog
-
-| Command | Description |
-|---------|-------------|
-| `pudl init` | Initialize or repair local `.pudl/` (`--global` selects `~/.pudl/`) |
-| `pudl import --path <file\|dir\|pattern>` | Import data with automatic detection (stdin when piped; `--recursive` for directories) |
-| `pudl list` | Query catalog (filter by `--schema`, `--origin`, `--format`, etc.) |
-| `pudl show <id>` | Inspect an entry (`--raw`, `--metadata`) |
-| `pudl delete <id>` | Remove entry from catalog |
-| `pudl export` | Export data by ID, schema, or origin to JSON/YAML/CSV/NDJSON |
-| `pudl snapshot list/show/current` | Inspect retained observation snapshots |
-| `pudl snapshot retain/prune` | Pin snapshots, or remove ones a retention policy no longer wants |
-
-### Schema Management
-
-| Command | Description |
-|---------|-------------|
-| `pudl schema list` | List schemas (`--package`, `--verbose`) |
-| `pudl schema add <package>.<name> <cue-file>` | Add a schema to the repository |
-| `pudl schema new --from <id>` | Generate CUE schema from imported data |
-| `pudl schema show <schema-name>` | Display schema details |
-
-### Models
-
-| Command | Description |
-|---------|-------------|
-| `pudl model list` | List registered `#SystemModel` instances with last status |
-| `pudl model show <name>` | Show a model's desired entries and details |
-| `pudl model validate <name>` | Validate an authored model without running it |
-| `pudl model new <name>` | Scaffold a `#SystemModel` observer (`--populate 'command:<cmdline>'`) |
-| `pudl model deps` | Refresh and show the cross-model dependency graph |
-| `pudl check <models...>` | Observe-only loop for exactly the named models, producers first: populate -> drift -> checks -> one report |
-| `pudl report [id]` | Read the latest or named check report (also stored `run`/`run set` reports) |
-| `pudl status` | Read the verdict recorded by each model's last check |
-
-### Facts
-
-| Command | Description |
-|---------|-------------|
-| `pudl facts add --relation NAME --args JSON` | Record a generic assertion (`--source`, optional `--schema`) |
-| `pudl facts list --relation <name>` | Query facts by relation with temporal filtering (`--as-of-valid`, `--as-of-tx`) |
-| `pudl facts show <id>` | Inspect a single fact (supports ID prefix matching) |
-| `pudl facts retract <id>` | Mark a fact as retracted (assertion was wrong) |
-| `pudl facts invalidate <id>` | Mark a fact as no longer valid (reality changed) |
-
-See [docs/facts.md](docs/facts.md) for the bitemporal fact store documentation.
-
-### Datalog and Rules
-
-| Command | Description |
-|---------|-------------|
-| `pudl query <relation> [key=value ...]` | Evaluate rules and query derived facts |
-| `pudl rule add <file>` | Validate and install a Datalog rule file (`--global`) |
-| `pudl rule new <name>` | Scaffold a Datalog rule |
-
-See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule authoring guide.
-
-### Workspace Operations
-
-| Command | Description |
-|---------|-------------|
-| `pudl doctor` | Workspace health, catalog validation, and inference stability; `--fix` applies catalog repairs |
-| `pudl example install git-inventory` | Install the bundled Git inventory model and sample observations |
-| `pudl config` | Show current configuration |
-| `pudl guide [topic]` / `pudl prime` | Quick-reference guide and agent prompt |
-
-See [docs/cli-reference.md](docs/cli-reference.md) for the full command reference (generated
-from the command tree; `pudl help --json` prints it in machine-readable form).
-
-## Command consolidation
-
-The overlapping command paths have been consolidated. Update existing scripts:
-
-| Former command | Current command |
-| --- | --- |
-| `pudl repo init` | `pudl init` |
-| `pudl init` for global state | `pudl init --global` |
-| `pudl catalog` | `pudl schema list` (`--verbose` includes metadata details) |
-| `pudl model describe NAME` | `pudl model show NAME` |
-| `pudl validate --all` or `pudl verify` | `pudl doctor` |
-| `pudl validate --entry ID` | `pudl doctor --entry ID` |
-| `pudl run MODEL`, `pudl run set MODELS...`, `pudl run-set MODELS...` | `pudl check MODELS...` |
-| `pudl run report ID`, `pudl run-set report ID` | `pudl report ID` |
-| `pudl run --converge`, `run resume/reject`, `pudl mu ...` | Retired with convergence and mu ([retired commands](docs/retired-commands.md#convergence-and-mu-integration)) |
-| `pudl list --all-workspaces` | `pudl list` (active catalog, explicit `--origin` filter) |
-| `pudl schema migrate`, `schema reinfer`, `migrate identity`, `reclassify`, `facts reproject` | `pudl doctor --fix` ([repairs](docs/retired-commands.md#catalog-repairs)) |
-
-Former paths are removed rather than retained as aliases. Git/editor/CUE wrappers
-are also retired; see [native replacements](docs/retired-commands.md). Every check, and every
-stored run or run-set report, is read with `pudl report`, which routes by the stored ID.
-
-## Agent memory removal
-
-The agent self-improvement application has been removed: `memory`, `hooks`,
-`pull`, `facts observe/promote/curate`, automatic observation/feedback schemas,
-and the `fact_scored` decay relation. `reflect_command` is no longer used.
-
-Generic `facts add/list/show/search/stats/retract/invalidate`, temporal history,
-transactions, and Datalog remain available. Stored facts are preserved.
-Migration 18 drops only the old derived scoring view on the next writable
-catalog open. Workspace initialization retires the unmodified shipped nous
-schema while preserving authored replacements and symlinks.
-
-For existing integrations, remove hooks invoking `pudl memory context`,
-`pudl facts curate`, or `pudl hooks suggest`, and retire generated Mu
-`//memory:*` targets. Customized workflows are user-owned; PUDL no longer
-installs or runs them.
-
-## Writing Custom Schemas
-
-PUDL schemas are CUE files with embedded `_pudl` metadata that drives inference:
-
-```cue
-package ec2
-
-#Instance: {
-    _pudl: {
-        schema_type:     "base"
-        resource_type:   "aws.ec2.instance"
-        identity_fields: ["InstanceId"]
-        tracked_fields:  ["State", "InstanceType", "Tags"]
-    }
-    InstanceId:   string
-    InstanceType: string
-    State:        { Name: string }
-    ...
-}
-```
-
-See [docs/schema-authoring.md](docs/schema-authoring.md) for the full guide.
-
-## Observing systems
-
-PUDL discovers, catalogs and governs infrastructure; it does not change it. A
-model observes by running plain commands that print JSON records, compares what
-it saw with its desired state, and evaluates checks. Terraform, kubectl or
-whatever tool owns a system applies the changes; the next run verifies them.
-
-```cue
-#Firewalls: sm.#SystemModel & {
-	name: "firewalls"
-	populate: {
-		schema: "pudl/gcp.#Firewall"
-		runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--format=json"]}]
-	}
-}
-```
+Check the network hygiene family together with the fixture collectors it reads:
 
 ```bash
-# Populate, detect drift, run checks, report
-pudl check firewalls --detailed-exitcode
-
-# Check several models, producers first by depends_on; one report
-pudl check network my-server
-pudl report
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks
 ```
+
+The three collectors observe first. Each one records a snapshot (`snap_...`)
+marked `complete: true`. Then the checks-only family evaluates its checks over
+those snapshots. The fixtures include bad resources on purpose, so the report
+lists findings and the command exits 1:
+
+- `policy-high` fails on a firewall that allows ingress from `0.0.0.0/0`.
+- `policy-any` (severity `warn`) also lists two unused external addresses.
+- `nat-ip-not-in-use` finds a Cloud NAT that lists an address GCP reports as
+  `RESERVED`.
+
+Each finding is `new` because no earlier report exists. Run the same command
+again and they become `persisting`. `pudl report` prints the newest report
+again, and `--json` gives the same report for scripts.
+
+Next, see which policies were evaluated and which resources fail them:
+
+```bash
+pudl policy list
+pudl policy show gcp.#FirewallBestPractice
+```
+
+Then inspect the failing firewall. Its entry ID comes from its content, so it
+is the same in every workspace:
+
+```bash
+pudl show vomap-foqab
+pudl show vomap-foqab --history
+```
+
+`pudl show` prints the entry's type (`gcp.#Firewall`) and its compliance
+section; add `--raw` to see the record itself. `--history` lists every
+observation of that resource.
+
+Finally, gate on the result as CI would:
+
+```bash
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks --fail-on new --detailed-exitcode
+echo $?
+```
+
+The exit status is 0: the findings still fail, but none is new.
+
+Next steps: the [tutorial](docs/getting-started.md) walks through drift,
+evidence, waivers and ownership. To collect from a real project, follow the
+[GCP pack README](examples/gcp/README.md).
+
+## How it fits together
+
+```
+ gcloud / aws / kubectl ... --format=json      pudl import --path FILE
+                  |                                       |
+                  +------------------+--------------------+
+                                     v
+   observation -> snapshot (scope, complete)  -> catalog entries
+                                                 typed by CUE schemas
+                                                 tracked as resources
+                                     |
+             +-----------------------+------------------------+
+             v                       v                        v
+     policies per resource     projected facts          desired state
+     (compliant/noncompliant)  + Datalog rules          (drift)
+             |                       |                        |
+             +-----------> checks on a model <----------------+
+                                     |
+                         findings: new / persisting / resolved,
+                         owner, waivers  ->  report + exit code
+```
+
+- **Observe.** A model's `populate` runs commands that print JSON, or you run
+  `pudl import`. Each observation is a snapshot with a scope and a completeness
+  flag.
+- **Catalog.** Each record is a catalog entry. A type schema classifies it,
+  identity fields make it a resource, and pudl keeps its history.
+- **Govern.** Policies describe what a good resource looks like. Checks are
+  Datalog queries over facts. A `pudl check` run produces one report with
+  findings, owners and waivers.
+
+The [concepts guide](docs/concepts.md) explains each term.
+
+## Features
+
+**Discover**
+- Collectors (`#CommandObserve`) run plain commands with no shell, fan out per
+  project, account or region, and can enumerate inputs at run time (`each`).
+  A failed input makes the observation incomplete; it never makes resources
+  look deleted.
+- `pudl import` reads JSON, YAML, CSV and NDJSON from files, directories or
+  stdin, including `.gz` and `.zst` files.
+- Content packs for GCP and AWS, a GCP network hygiene example and a Git
+  inventory tutorial: `pudl example install gcp|aws|gcp-network-hygiene|git-inventory`.
+
+**Catalog**
+- Content-addressed entries with short IDs (`vomap-foqab`), stable resource
+  IDs from schema identity fields, and per-resource history.
+- CUE type schemas with inference or an explicit `--schema`. Sensitive fields
+  are redacted before storage.
+- Snapshots you can list, pin and prune (`pudl snapshot`), filters
+  (`pudl list --where`, `--select`), exports and portable workspace bundles
+  (`pudl export`).
+
+**Govern**
+- Policy schemas evaluated per resource on every observation, with named rules
+  and severities (`pudl policy list|show|evaluate`).
+- Datalog rules written in CUE over projected facts, the catalog and policy
+  results (`pudl query`, `pudl rule`).
+- Models with desired state (drift) and checks. Findings are tracked as new,
+  persisting, resolved or unknown, carry owners, and can be waived until a
+  date.
+- One versioned report per check (`pudl report`), comparison between reports
+  (`--since`) and CI exit codes (`--detailed-exitcode`, `--fail-on new`).
+- `pudl doctor` diagnoses the catalog, and `pudl doctor --fix` repairs it.
+
+**Agents**
+- `pudl prime` prints an agent prompt, and `pudl guide` prints topic guides.
+  `pudl init` installs a Claude skill in `.claude/skills/`.
+- Every command takes `--json`, and `pudl help --json` prints the command tree.
+- Go programs can query a workspace through `pkg/factstore` and `pkg/eval`.
 
 ## Documentation
 
-See [docs/README.md](docs/README.md) for the full documentation index.
+- [Getting started](docs/getting-started.md): the hands-on tutorial.
+- [Concepts](docs/concepts.md): the mental model.
+- [CLI reference](docs/cli-reference.md): every command and flag.
+- [Documentation index](docs/README.md): guides, reference, content packs and
+  project history.
 
-## Project Status
-
-PUDL's data pipeline (import, catalog, schema inference, observation, drift detection, checks) is stable. The old execution runtime and, later, the convergence workflow and mu integration were removed to focus PUDL on what it does best: observing systems, cataloging what it sees, and reporting drift and check results. `#SystemModel` instances checked with `pudl check` declare what to observe and what to expect.
-
-See [docs/VISION.md](docs/VISION.md) for the roadmap.
+Commands that were removed, such as `pudl run` and convergence through mu, are
+listed with their replacements in [retired commands](docs/retired-commands.md).
 
 ## Requirements
 
-- Go 1.26.10+
-- Git (for schema version control)
-- CUE ([cuelang.org](https://cuelang.org)) for schema definitions
+- Go 1.26.10 or newer to build.
+- Git, to version your schemas and models.
+- The CLIs your collectors call (`gcloud`, `aws`, `kubectl`), for live
+  collection only.

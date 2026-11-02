@@ -38,7 +38,7 @@ standalone request-level approvals and set exact-plan approvals. The proposed
 `check`/`apply` interface, a universal result contract, saved-input shorthand,
 and stronger standalone approvals remain proposals.
 
-See [command migration](../../README.md#command-consolidation) and the
+See [command migration](../retired-commands.md#consolidated-commands) and the
 [implementation log](../../implog/2026_09_30_command_consolidation.md).
 The analysis below describes the review baseline and broader recommendations.
 
@@ -57,7 +57,7 @@ schemas and symlinks are preserved. The unmodified installed global cycle and
 schema were retired with backups; no managed hooks were found in the checked
 settings files.
 
-See [memory removal](../../README.md#agent-memory-removal) and the
+See [memory removal](../retired-commands.md#agent-memory-application) and the
 [implementation log](../../implog/2026_09_30_agent_memory_removal.md).
 
 ## Review scope and evidence

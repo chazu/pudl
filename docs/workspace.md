@@ -1,21 +1,52 @@
-# Workspace schema resolution
+# Workspaces
 
-A repository workspace resolves schemas, models, rules, and definitions from
-its own files and explicitly declared vendored dependencies. It does not inherit
-ambient `~/.pudl` definitions. `pudl --global` explicitly selects personal state,
-and outside a repository workspace the personal workspace remains the default.
+A workspace holds everything pudl knows about one project. Run `pudl init` in a
+repository to create one in `.pudl/`. pudl finds it by walking up from the
+current directory. Outside a repository workspace, or with `--global`, pudl
+uses the personal workspace in `~/.pudl/`. The two never share a catalog.
 
-Schema/model precedence is project first, then dependencies in declared order.
-Rule precedence is equivalent; project rules also override a model's adjacent
-rules directory. The CLI and `pkg/factstore.DiscoverWorkspace` use one policy.
-`pudl config --paths --json` exposes every effective path, and
-`pudl schema list --json` / `pudl import --explain` expose schema provenance.
+## Layout
+
+| Path | Contents | In Git |
+| --- | --- | --- |
+| `.pudl/workspace.cue` | Workspace name and declared dependencies | yes |
+| `.pudl/schema/` | CUE module: types, policies, models (`models/`) and rules (`pudl/rules/`) | yes |
+| `.pudl/populators/` | Fixtures and helper files that models read | yes |
+| `.pudl/definitions/` | Desired-state definitions | yes |
+| `.pudl/vendor/` | Vendored definition packages (see below) | yes |
+| `.pudl/data/` | Raw records, catalog, facts, snapshots and reports | no |
+| `.pudl/config.yaml` | Machine-local configuration | no |
+
+The generated `.pudl/.gitignore` keeps `data/` and `config.yaml` out of Git.
+`data/` is readable by its owner only; `pudl doctor` reports looser
+permissions and `pudl doctor --fix --only data-permissions` repairs them.
+In a repository workspace, the schema and data paths are fixed to
+`.pudl/schema` and `.pudl/data`; pudl rejects configuration that points state
+outside the workspace.
+
+`pudl init` is safe to repeat. It creates or repairs the data layout, the CUE
+module and the built-in schemas (including `pudl/systemmodel.#SystemModel`).
+It also installs the pudl agent skill in `.claude/skills/`. It keeps an edited
+`workspace.cue` unless you pass `--force`. Run it again after upgrading pudl.
+
+`pudl config --paths --json` prints every effective path.
+
+## Where definitions come from
+
+A repository workspace reads schemas, models and rules from its own
+`.pudl/schema/` and from the packages it declares. It does not read
+definitions from `~/.pudl`. When names collide, the project wins, then
+dependencies in declared order. Project rules also override rules that sit
+next to a model. The CLI and `pkg/factstore.DiscoverWorkspace` follow the same
+order. `pudl schema list --json` and `pudl import --explain` show where each
+schema came from.
 
 ## Shared definition packages
 
-Vendor each package under `.pudl/vendor/<name>/` with its own `schema/` tree and
-CUE module, plus any `definitions/` and `populators/` the package requires.
-Declare the package roots in `.pudl/workspace.cue`:
+To share schemas, models and rules between repositories, vendor each package
+under `.pudl/vendor/NAME/`, with its own `schema/` tree and CUE module plus
+any `definitions/` and `populators/` it needs. Declare it in
+`.pudl/workspace.cue`:
 
 ```cue
 name: "my-project"
@@ -23,42 +54,30 @@ dependencies: ["vendor/team"]
 ```
 
 Commit the vendored files and the declaration together; the Git revision pins
-their contents. CUE module dependencies inside those files retain their native
-version declarations. Package paths are relative and must remain under
-`.pudl/vendor`; missing packages, duplicates, and symlinks are rejected. Portable
-workspace bundles include vendored packages. PUDL does not fetch these package
-directories. Their CUE imports retain native module-resolution behavior; prepare
-those module dependencies separately when offline operation is required.
+their contents. Package paths are relative and must stay under `.pudl/vendor`.
+pudl rejects missing packages, duplicates and symlinks. pudl does not download
+packages. CUE imports inside them resolve as usual, so fetch those module
+dependencies yourself if you need to work offline.
 
-To migrate a workspace that relied on global definitions:
+For a small change, copy the definitions you need into `.pudl/schema/`
+instead; no package is required.
 
-1. Run `pudl config --legacy-dependencies --json` to inventory ignored global
-   schema/rule names and their source root. This only inspects them.
-2. Copy the needed CUE packages, required CUE module files, rules and populator
-   assets into a chosen vendored package. Review that set; PUDL does not copy
-   unrelated home-directory configuration automatically.
-3. Declare it in `workspace.cue`, inspect `pudl config --paths --json`, and run
-   model validation and representative checks under a clean home directory.
-4. Commit the vendored content. Keep the global originals for personal-mode use.
+## Moving from global definitions
 
-For a small customization, copying the required definitions directly into the
-project's existing schema tree is sufficient; no dependency package is required.
-Built-in schemas and rules are installed locally by `pudl init`.
+A repository workspace ignores definitions in `~/.pudl`. To find the ones a
+project relied on:
 
-## Local persistence
+1. Run `pudl config --legacy-dependencies --json`. It lists the global schemas
+   and rules the workspace ignores, and changes nothing.
+2. Copy the CUE packages, module files, rules and populator files you need into
+   `.pudl/schema/` or a vendored package.
+3. Declare any package in `workspace.cue`, then run `pudl config --paths --json`,
+   `pudl model validate NAME` and a representative `pudl check`.
+4. Commit the result. The global originals stay available in global mode.
 
-Workspace-local schemas and model files are project-owned and should be
-committed with the repository. Mutable runtime state is isolated beneath
-`<repo>/.pudl/data/`: raw imports, metadata, SQLite catalog rows, facts,
-snapshots, check reports, and legacy approval records never share the global catalog.
-The generated `.pudl/.gitignore` keeps runtime data and the machine-local path
-configuration out of Git.
-Repository `schema_path` and `data_path` are fixed to `.pudl/schema` and
-`.pudl/data`; PUDL rejects configuration that would redirect mutable state
-outside the workspace boundary.
+## Backups and moving a workspace
 
-`pudl init` is safe to repeat. It creates or repairs the local data layout,
-CUE module, every built-in schema, `pudl/systemmodel.#SystemModel`, and
-`.pudl/schema/models/` (the path used by `pudl model new`) while preserving an
-authored `workspace.cue` unless `--force` is requested. Outside a repository
-workspace, the equivalent state lives beneath `~/.pudl/`.
+`pudl export --bundle FILE` writes a verified, portable bundle of the
+workspace's history, including vendored packages.
+`pudl init --from-bundle FILE` restores it into a new workspace. See
+[evidence and recovery](evidence.md).

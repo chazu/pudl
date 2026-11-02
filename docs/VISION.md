@@ -1,169 +1,45 @@
-# PUDL Vision & Architecture
+# Vision
 
-This document describes what PUDL is today and where it's headed.
+pudl is an evidence-backed inventory and governance tool for SREs and the
+coding agents that work beside them. It answers three questions about
+infrastructure, and every answer points back to the evidence behind it:
 
-> **2026-11-01:** PUDL no longer changes infrastructure. Convergence and the mu
-> integration were removed; references to them below are historical. See
-> [the removal design](design/2026-11-01-remove-convergence-and-mu.md).
-> `pudl run` and `pudl run set` were replaced by `pudl check <model>...`, and
-> `pudl run report` by `pudl report`.
+- **What exists?** Collectors run the read-only CLIs teams already trust and
+  record what they print as scoped snapshots. Each snapshot records whether it
+  saw everything in its scope.
+- **What is it?** CUE types classify each record and give each resource a
+  stable identity, so the catalog keeps every resource's history.
+- **What is wrong with it?** Policies describe good resources, Datalog checks
+  describe good relationships, and reports track each finding over time with
+  its owner and any waiver.
 
-## Core Purpose
+## Principles
 
-PUDL is a **personal data lake that knows things**. It ingests structured data (JSON, YAML, CSV, NDJSON), infers schemas using CUE, validates entries, tracks drift, and maintains a catalog of everything it has seen. The long-term goal is **outlier detection and sprawl reduction** in cloud infrastructure and configuration.
+- **Observe, never change.** pudl reads and reports. Terraform, `kubectl`,
+  consoles and people change infrastructure; pudl's next check verifies the
+  result.
+- **Evidence over assertion.** Incomplete evidence makes a result unknown. It
+  never makes a resource look absent and never resolves a finding.
+- **Knowledge lives in CUE.** Vendor knowledge (types, policies, collectors,
+  rules) ships as CUE content packs, not Go code. A team can read, review and
+  version it like any other code.
+- **Local and explicit.** One binary, one SQLite catalog per repository, and
+  commands that run exactly what you name.
+- **Agent-ready.** Every command has `--json` output and stable IDs. pudl
+  ships with agent instructions (`pudl prime`, the bundled skill).
 
-PUDL is the knowledge layer. It tells you what exists, what shape it has, what changed, and what's wrong. It does not execute remediation -- that is the job of **mu** (a separate tool at `~/dev/go/mu/`).
+## Out of scope
 
-PUDL may coordinate an explicit set of models when catalog selection and CUE
-elaboration must occur between them. Coordination chooses and orders run units;
-execution and all external side effects remain inside mu. PUDL never turns
-dependency discovery into implicit downstream execution.
+- Changing infrastructure: applying, converging, remediating or approving
+  changes. Convergence and the mu integration were removed for this reason;
+  see [the removal design](design/2026-11-01-remove-convergence-and-mu.md).
+- Holding secrets. Sensitive fields are redacted before storage, and
+  `pudl doctor` warns about likely secrets.
 
-### The Split: pudl knows, mu acts
+## Direction
 
-- **pudl** detects drift, validates schemas, catalogs data, and renders desired state.
-- **mu** receives desired-state sources and executes them (plugin protocol, effect dispatch).
-- `pudl run --converge` bridges the two: it renders the selected model and ingests
-  mu's observe and manifest results.
-- `pudl run set <model>...` is the bounded multi-model coordinator: the operator
-  names the exact set, PUDL resolves cross-model values and approvals, and mu
-  executes each member graph.
+- More content packs, such as Kubernetes, Azure and Terraform state.
+- Correlation across providers, for example AWS and Kubernetes.
+- Catalog summaries: schema coverage, counts, outliers and sprawl.
 
-This separation keeps pudl focused on data and knowledge while mu handles side effects and execution.
-
-## What Exists Today
-
-### Data Lake Structure
-- **Repository Workspace**: `pudl init` creates a self-contained `.pudl/`
-  with schemas, local configuration, imported data, provenance, and catalog
-- **Global Mode**: outside an initialized repository, the same state layout is
-  rooted at `~/.pudl/`
-- **Catalog Database**: SQLite-based catalog with query, filter, and pagination support
-- **Bitemporal Fact Store**: General-purpose table for typed assertions with valid-time and transaction-time tracking, content-addressed dedup, and four temporal query modes (see [docs/facts.md](facts.md))
-- **Self-contained**: No external dependencies required for the PUDL binary
-
-### Schema System
-- **CUE Lang**: Schema definition, validation, and constraint checking
-- **Schema Inference**: Automatic CUE-based schema detection using heuristics and CUE unification
-- **Schema Generation**: `pudl schema new` generates CUE schemas from imported data
-- **Schema Name Normalization**: Canonical `<package>.#<Definition>` format
-- **Version control**: use Git directly on project schema files
-- **Bootstrap Schemas**: Embedded CUE files (`pudl/core.#Item`, `pudl/core.#Collection`)
-
-### Data Management
-- **Multi-format Import**: JSON, YAML, CSV, NDJSON with automatic format detection
-- **Collection Support**: NDJSON collections split into individual items with normalized memberships; typed envelopes preserve schema metadata around payloads
-- **Provenance Tracking**: Timestamp, origin, format, and schema assignment tracked per entry
-- **Content-based Identity**: SHA256 content hashing with proquint display format for resource deduplication
-- **Resource Identity**: Stable `resource_id` from schema identity fields; version tracking
-- **Export**: Multi-format output support
-
-### System Models
-- **Model Loading**: `#SystemModel` instances resolve from workspace-first CUE schemas
-- **Desired Resources**: Models declare concrete resources to observe, compare, and optionally converge
-- **Dependency Graph**: Model `depends_on` declarations become queryable bitemporal facts
-- **Validation**: `pudl model validate` checks model structure before a run
-
-### Catalog Layer
-- **Bootstrap `catalog.cue`**: Defines `#CatalogEntry` and registers core types
-- **`pudl schema list`**: Lists all registered schema types with metadata
-- **Extensible**: Users add their own catalog entries
-
-### Drift Detection
-- **Desired vs Observed State**: Compare model resources against live observations or a current catalog snapshot
-- **JSON Deep Diff**: Field-level diffing with added/removed/changed tracking
-- **Run Reports**: Verdicts and reports are recorded with the model run and catalog entries
-
-### Fixed-Point Verification
-- **`pudl doctor`**: Re-runs inference on all catalog entries and confirms schema assignments are stable
-- **Schema Stability**: Detects when schema changes cause existing data to be classified differently
-
-### Mu Bridge
-- **Observe snapshots**: `pudl mu ingest-observe` stores a timestamped collection
-- **Build manifests**: `pudl mu ingest-manifest` records per-action results
-- **Convergence**: `pudl run --converge` renders desired state and delegates mutation to mu
-
-### Structural Validation
-- **`pudl doctor`**: Validates data against CUE schemas
-- **Workspace Resolution**: Schema and model commands search project-local CUE before global CUE
-
-### CLI Commands
-- `pudl init` -- Initialize local state; `--global` selects the global data lake
-- `pudl config` -- View and manage configuration
-- `pudl import` -- Import data files
-- `pudl list` -- Query and filter catalog entries
-- `pudl show` -- Show details of a catalog entry
-- `pudl export` -- Export data in various formats
-- `pudl delete` -- Remove catalog entries
-- `pudl doctor` -- Workspace health, schema validation, inference stability, and catalog repairs (`--fix`)
-- `pudl schema list` -- Browse registered schema types
-- `pudl schema *` -- Full schema lifecycle (list, add, new, show)
-- `pudl model list/show/validate` -- Inspect and validate registered system models
-- `pudl model new` / `pudl model populator add|new` -- Scaffold models and populators
-- `pudl model deps` -- Refresh and show the cross-model dependency graph
-- `pudl run` -- Populate, detect drift, check, report, and optionally converge
-- `pudl run set` -- Observe or converge an exact, ordered set of models
-- `pudl run report/resume/reject` -- Read reports and decide pending approvals
-- `pudl snapshot list/show/current/retain/prune` -- Inspect and retain observation snapshots
-- `pudl status` -- Read recorded model/resource convergence status
-- `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
-- `pudl mu ingest-manifest` -- Ingest mu build manifests
-- CUE module dependencies are managed with the native `cue mod` commands
-- `pudl facts add` -- Record generic assertions under an explicit relation
-- `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
-- `pudl query` -- Evaluate Datalog rules and query derived facts
-- `pudl rule add` -- Validate and install Datalog rule files
-- `pudl rule new` -- Scaffold a Datalog rule
-- `pudl example install` -- Install bundled examples into a workspace
-- `pudl guide` / `pudl prime` -- Agent and human quick-reference output
-- `pudl help --json` -- Machine-readable command tree
-- `pudl completion` -- Generate shell completion scripts
-
-### Datalog Evaluator
-- **`pudl query`**: Semi-naive bottom-up evaluation over facts and catalog entries as EDB
-- **CUE-defined rules**: `#Rule` values with head/body structure, `$`-prefixed variables, stored in workspace-scoped rule directories
-- **`pudl rule add`**: Validates and installs rule files with workspace scoping (project rules precede explicitly vendored dependencies)
-- **Evaluation**: SQL joins for non-recursive queries and semi-naive SQLite evaluation for recursive rules
-
-### Technology Stack
-- **Go** -- Core application with Cobra CLI framework
-- **CUE Lang** -- Schema definition, validation, inference, and Datalog rule syntax
-- **SQLite** -- Catalog database and bitemporal fact store
-
-## Future Vision
-
-### Deeper CUE Integration
-- **Catalog-driven generation**: Use the schema catalog to drive code generation, documentation, and tooling
-- **Fixed-point properties**: Extend `pudl doctor` to check broader invariants (e.g., all definitions resolve, all schemas have at least one matching entry)
-- **Richer constraints**: Policy-tier schemas for compliance checking layered on top of base schemas
-
-### Richer Mu Plugin Protocol
-- **Bidirectional communication**: mu queries pudl for context during execution
-- **Action result feedback**: mu reports execution outcomes back to pudl for catalog update
-- **Typed action specs**: Richer action types beyond field-level drift (create, delete, reconcile)
-
-### Structural Validation
-- **Cross-source correlation**: Link resources across providers (AWS + Kubernetes)
-- **Temporal tracking**: Same resource across multiple imports using `resource_id` + `version`
-- **Schema coverage reports**: Distribution of schema matches across the catalog
-
-### Analytics
-- **Diff**: Compare two imports of the same resource type, show what changed
-- **Summary/Stats**: Aggregate views ("47 EC2 instances, 3 outliers")
-- **Basic outlier detection**: Given N instances of a schema, identify unusual field values
-- **DuckDB/Parquet integration**: Analytical query engine for large datasets
-
-### More Schema Packages
-- **Broader cloud coverage**: Azure, GCP, Terraform state files, as CUE schema packages (vendor knowledge lives in CUE, not Go; the old Go type-pattern registry was removed)
-- **Application config**: Docker Compose, Helm values, CI/CD pipeline configs
-
-### UI Improvements
-- **Dashboard/reporting**: Visual representation of catalog and drift state
-- **Interactive browsing**: TUI for navigating catalog entries and schemas
-
-## Implementation Philosophy
-
-- **Small incremental steps** to avoid large rework cycles
-- **Keep doors open** for future capabilities without over-engineering
-- **pudl knows, mu acts** -- maintain the separation of knowledge and execution
-- **CUE as the backbone** -- schema inference, validation, and definitions all flow through CUE
+[plan.md](plan.md) records what has been built and what comes next.

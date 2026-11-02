@@ -146,3 +146,30 @@ each condition and names its repair; `pudl doctor --fix` applies them and
 
 Without `--include-explicit`, the inference repair re-infers only entries the
 catalog scan found drifted, so explicit producer assignments keep their schema.
+
+## Consolidated commands
+
+Overlapping command paths were merged. The former paths are removed, not
+kept as aliases.
+
+| Former command | Current command |
+| --- | --- |
+| `pudl repo init` | `pudl init` |
+| `pudl init` for global state | `pudl init --global` |
+| `pudl catalog` | `pudl schema list` (`--verbose` adds metadata) |
+| `pudl model describe NAME` | `pudl model show NAME` |
+| `pudl validate --all`, `pudl verify` | `pudl doctor` |
+| `pudl validate --entry ID` | `pudl doctor --entry ID` |
+| `pudl list --all-workspaces` | `pudl list` (the active catalog; filter with `--origin`) |
+
+## Agent memory application
+
+The agent self-improvement application was removed: `memory`, `hooks`, `pull`,
+`facts observe/promote/curate`, the automatic observation and feedback
+schemas, and the `fact_scored` decay relation. Generic facts, temporal
+history, full-text search, transactions and Datalog remain, and stored facts
+are kept. Migration 18 drops only the old scoring view, and `pudl init` retires
+the unmodified shipped schema while keeping edited copies and symlinks.
+
+Remove hooks that call `pudl memory context`, `pudl facts curate` or
+`pudl hooks suggest`, and retire generated Mu `//memory:*` targets.
