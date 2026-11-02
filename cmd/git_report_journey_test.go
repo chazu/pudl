@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -24,8 +25,10 @@ func TestGitInventoryReportJourney(t *testing.T) {
 	decodeReport := func(output string) RunReport {
 		t.Helper()
 		require.True(t, json.Valid([]byte(strings.TrimSpace(output))), "report stdout must be JSON: %s", output)
+		var compact bytes.Buffer
+		require.NoError(t, json.Compact(&compact, []byte(output)))
 		var report RunReport
-		decoder := json.NewDecoder(strings.NewReader(output))
+		decoder := json.NewDecoder(&compact)
 		decoder.UseNumber()
 		require.NoError(t, decoder.Decode(&report))
 		return report
@@ -38,7 +41,7 @@ func TestGitInventoryReportJourney(t *testing.T) {
 		data, err := os.ReadFile(filepath.Join(populators, fixture+".json"))
 		require.NoError(t, err)
 		require.NoError(t, os.WriteFile(filepath.Join(populators, "current.json"), data, 0o644))
-		report := decodeReport(successful("run", "git-inventory", "--json").Stdout)
+		report := checkedModel(t, successful("check", "git-inventory", "--json").Stdout)
 		require.NotNil(t, report.Populate)
 		require.Equal(t, 1, report.Populate.Records)
 		require.NotEmpty(t, report.Populate.SnapshotID)
@@ -105,9 +108,9 @@ git_changed_inventory: {
 }
 `), 0o644))
 	successful("model", "validate", "git-inventory", "--json")
-	failedResult := runCLI(t, "run", "git-inventory", "--from-catalog", "--catalog-scope", changedID, "--json")
+	failedResult := runCLI(t, "check", "git-inventory", "--from-catalog", "--catalog-scope", changedID, "--json")
 	require.ErrorIs(t, failedResult.Err, errFailSeverityChecks)
-	failed := decodeReport(failedResult.Stdout)
+	failed := checkedModel(t, failedResult.Stdout)
 	require.False(t, failed.OK)
 	require.Equal(t, database.RunStatusFailed, failed.CompletionStatus)
 	require.Len(t, failed.Drift.Drifted, 1)
@@ -129,15 +132,16 @@ git_changed_inventory: {
 	require.Contains(t, witness.EvidenceIDs, entryID)
 	require.Contains(t, witness.EvidenceIDs, changedID)
 
-	humanResult := runCLI(t, "run", "git-inventory", "--from-catalog", "--catalog-scope", changedID)
+	humanResult := runCLI(t, "check", "git-inventory", "--from-catalog", "--catalog-scope", changedID)
 	require.ErrorIs(t, humanResult.Err, errFailSeverityChecks)
-	for _, text := range []string{"## findings", "### drift", "### checks", `expected "main", observed "release", previous "main" (snapshot ` + baselineID + `)`, "review-changed-inventory", entryID, changedID} {
+	require.NotContains(t, humanResult.Stdout, "//models/", "human output names models, not internal target keys")
+	for _, text := range []string{"# model: git-inventory", "git-inventory: failed", "## findings", "### drift", "### checks", `expected "main", observed "release", previous "main" (snapshot ` + baselineID + `)`, "review-changed-inventory", entryID, changedID} {
 		require.Contains(t, humanResult.Stdout, text)
 	}
 
 	// Stored findings survive later model edits/runs, and the current evidence
 	// availability annotation names the snapshot that this report retains.
-	storedResult := successful("run", "report", failed.RunID, "--json")
+	storedResult := successful("report", failed.RunID, "--json")
 	stored := decodeReport(storedResult.Stdout)
 	require.Equal(t, failed.Checks, stored.Checks)
 	require.Equal(t, failed.Drift, stored.Drift)
@@ -146,7 +150,7 @@ git_changed_inventory: {
 	}
 	require.NoError(t, json.Unmarshal([]byte(storedResult.Stdout), &evidence))
 	require.ElementsMatch(t, []database.ReportEvidence{{SnapshotID: baselineID, Status: "available"}, {SnapshotID: changedID, Status: "available"}}, evidence.Availability, "the report cites the changed snapshot and the baseline its previous values came from")
-	baselineStored := decodeReport(successful("run", "report", baseline.RunID, "--json").Stdout)
+	baselineStored := decodeReport(successful("report", baseline.RunID, "--json").Stdout)
 	require.True(t, baselineStored.Drift.Clean)
 	require.Empty(t, baselineStored.Checks)
 	var shown struct {

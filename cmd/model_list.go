@@ -138,8 +138,8 @@ var modelListCmd = &cobra.Command{
 repository (project definitions precede explicitly vendored packages), with its
 populate kind and desired/check counts.
 
-This is the static registry of runnable models — what 'pudl run <name>' can
-resolve — independent of whether a model has been run yet.`,
+This is the static registry of runnable models — what 'pudl check <name>' can
+resolve — independent of whether a model has been checked yet.`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

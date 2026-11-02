@@ -39,7 +39,7 @@ func TestSetSummaryIncludesMemberEvidenceWithoutFollowupRequests(t *testing.T) {
 		RunSetID: "runset_x", Mode: "observe-only", Status: database.RunStatusSucceeded,
 		Ordered: []string{"m"}, Members: []acute.RunSetMemberReport{{Model: "m", RunID: "run_member", Result: database.RunStatusSucceeded}},
 	}
-	require.NoError(t, saveRunSetReport(db, report))
+	require.NoError(t, saveCheckReport(db, report))
 	require.NotNil(t, report.Summary)
 	require.Len(t, report.Members, 1)
 	require.NotNil(t, report.Members[0].Summary)
@@ -51,11 +51,13 @@ func TestSetSummaryIncludesMemberEvidenceWithoutFollowupRequests(t *testing.T) {
 	var persisted acute.RunSetReport
 	require.NoError(t, json.Unmarshal(stored.Report, &persisted))
 	require.Equal(t, report.Summary, persisted.Summary)
+	require.Equal(t, checkReportVersion, persisted.ReportVersion)
+	require.JSONEq(t, string(payload), string(persisted.Members[0].Report), "the check report embeds the member's full report")
 }
 
 func TestProgressDoesNotContaminateResultJSON(t *testing.T) {
 	cliWorkspace(t)
-	r := runCLI(t, "run", "missing", "--json", "--progress-json")
+	r := runCLI(t, "check", "missing", "--json", "--progress-json")
 	require.Error(t, r.Err)
 	require.True(t, json.Valid([]byte(r.Stdout)), r.Stdout)
 	require.Contains(t, r.Stderr, `"type":"progress"`)

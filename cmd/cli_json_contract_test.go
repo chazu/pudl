@@ -29,7 +29,6 @@ var jsonContractExempt = map[string]string{
 	"pudl model new":             "scaffold authoring; needs a plugin",
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
-	"pudl run set":               "observes live through mu",
 	"pudl snapshot current":      "needs a live observation recorded for a model",
 	"pudl completion":            "generates shell scripts",
 	"pudl completion bash":       "generates shell scripts",
@@ -75,9 +74,9 @@ func TestJSONOutputContract(t *testing.T) {
 	run("version")
 	run("init")
 	run("example", "install", "git-inventory")
-	observed := field(run("run", "git-inventory"), "populate", "snapshot_id")
-	run("run", "git-inventory", "--from-catalog", "--catalog-scope", observed)
-	run("run", "report")
+	observed := field(run("check", "git-inventory"), "members", "report", "populate", "snapshot_id")
+	run("check", "git-inventory", "--from-catalog", "--catalog-scope", observed)
+	run("report")
 	run("status")
 	run("model", "list")
 	run("model", "show", "git-inventory")

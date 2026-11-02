@@ -120,7 +120,7 @@ func reconcileEdgesIn(store dependencyFactStore, from, source string, wanted map
 
 // reconcileModelDependencies reconciles a model's DECLARED depends_on into
 // model_depends_on facts (source model:<name>) and returns any warnings. Runs on
-// every `pudl run`.
+// every model run of a `pudl check`.
 func reconcileModelDependencies(cat *runCatalog, m *systemmodel.SystemModel) (warnings []string, err error) {
 	declared, warnings := declaredDepsOf(m)
 	db, err := cat.optional()

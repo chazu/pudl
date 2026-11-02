@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -36,9 +35,8 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 		{`[{"kind":"compute#firewall","name":"a","direction":"INGRESS","sourceRanges":["0.0.0.0/0"]}]`, "fail"},
 	} {
 		writeFile(t, input, tc.payload)
-		r := runCLI(t, "run", "inventory", "--json", "--detailed-exitcode")
-		var report RunReport
-		require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report), r.Stdout+r.Stderr)
+		r := runCLI(t, "check", "inventory", "--json", "--detailed-exitcode")
+		report := checkedModel(t, r.Stdout)
 		require.Len(t, report.Checks, 1)
 		require.Equal(t, tc.outcome, report.Checks[0].Outcome, r.Stdout+r.Stderr)
 		require.Equal(t, "snapshots", report.Checks[0].Scope)
@@ -49,7 +47,7 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 	// A partial empty observation cannot establish absence or erase history.
 	writeModel(false, "")
 	writeFile(t, input, `[]`)
-	r := runCLI(t, "run", "inventory", "--json", "--detailed-exitcode")
+	r := runCLI(t, "check", "inventory", "--json", "--detailed-exitcode")
 	require.Equal(t, 1, exitCodeFor(r.Err))
 	require.Contains(t, r.Stdout, "incomplete_observation")
 	for _, id := range snapshots {
@@ -58,12 +56,12 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 	}
 	// Collection failure cannot publish a replacement observation.
 	writeFile(t, input, `invalid`)
-	r = runCLI(t, "run", "inventory", "--json")
+	r = runCLI(t, "check", "inventory", "--json")
 	require.Error(t, r.Err)
 	// Freshness is checked on the selected snapshot, not the new check's run.
 	writeModel(true, `,max_age:"1ns"`)
 	writeFile(t, input, `[]`)
-	r = runCLI(t, "run", "inventory", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "inventory", "--json", "--detailed-exitcode")
 	require.Equal(t, 1, exitCodeFor(r.Err))
 	require.Contains(t, r.Stdout, "stale_observation")
 }

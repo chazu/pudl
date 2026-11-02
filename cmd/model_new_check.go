@@ -66,9 +66,9 @@ func newCheckModel(cmd *cobra.Command, name string) error {
 		return closeErr
 	}
 	if jsonOutput {
-		return printJSON(map[string]any{"path": path, "name": name, "query": modelNewCheck, "evidence": modelNewEvidence, "next_action": "pudl run " + name + " --detailed-exitcode"})
+		return printJSON(map[string]any{"path": path, "name": name, "query": modelNewCheck, "evidence": modelNewEvidence, "next_action": "pudl check " + name + " --detailed-exitcode"})
 	}
-	_, err = fmt.Fprintf(outw(), "Saved check: %s\nNext: pudl run %s --detailed-exitcode\n", path, name)
+	_, err = fmt.Fprintf(outw(), "Saved check: %s\nNext: pudl check %s --detailed-exitcode\n", path, name)
 	return err
 }
 

@@ -10,9 +10,9 @@ import (
 	"github.com/chazu/pudl/internal/workspace"
 )
 
-func TestModelValidateAcceptsStructurallyValidBoundTemplate(t *testing.T) {
+func TestModelValidateAcceptsAModelWithDependencies(t *testing.T) {
 	schemaRoot := filepath.Join(t.TempDir(), "schema")
-	writeRunSetFixtureSchemas(t, schemaRoot)
+	writeCheckFixtureSchemas(t, schemaRoot)
 	validator.ResetSharedLoaders()
 	t.Cleanup(validator.ResetSharedLoaders)
 

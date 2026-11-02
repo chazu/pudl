@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -22,10 +21,9 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
  populate:{schema:"pudl/gcp.#Firewall",runs:[{argv:["cat",%q]}]}
  desired:[{"_schema":"gcp.firewall",project:"a",name:"same",disabled:false}]
 }`, input))
-	r := runCLI(t, "run", "identity", "--json", "--detailed-exitcode")
+	r := runCLI(t, "check", "identity", "--json", "--detailed-exitcode")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	var report RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report))
+	report := checkedModel(t, r.Stdout)
 	require.True(t, report.Drift.Clean, r.Stdout)
 	require.True(t, report.Drift.Verified)
 }

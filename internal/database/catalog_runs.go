@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// RunRecord is the durable audit row for one `pudl run` invocation.
+// RunRecord is the durable audit row for one model run within a `pudl check`.
 //
 // Its purpose is to make an incomplete run *visible*: a run that dies before
 // writing its verdict leaves an unfinished row, so the model's recorded status

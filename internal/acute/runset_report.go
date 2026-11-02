@@ -7,14 +7,20 @@ import (
 	"fmt"
 )
 
+// RunSetMemberReport is one model's entry in a check report. Report is the
+// member's full report (check reports from version 3); earlier run-set
+// reports carried only the summary.
 type RunSetMemberReport struct {
 	Summary *VerdictSummary `json:"summary,omitempty"`
+	Report  json.RawMessage `json:"report,omitempty"`
 	Model   string          `json:"model"`
 	RunID   string          `json:"run_id"`
 	Result  string          `json:"result"`
 	Error   string          `json:"error,omitempty"`
 }
 
+// RunSetReport is the one report of a `pudl check`, for one model or several.
+// Stored `pudl run set` reports (versions 1 and 2) decode into it too.
 type RunSetReport struct {
 	Summary       *VerdictSummary      `json:"summary,omitempty"`
 	ReportVersion int                  `json:"report_version"`

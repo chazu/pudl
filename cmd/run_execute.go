@@ -16,16 +16,14 @@ type resolvedRun struct {
 	modelDir string
 }
 
-// executeRun drives one model through the observe-only cycle. It is the whole
-// of `pudl run`, shared by standalone runs and run-set members; each caller
-// builds its own runOptions rather than re-entering another command's handler.
+// executeRun drives one member of a check through the observe-only cycle.
 //
 // The returned report is nil when the run failed before it had one.
 //
 // ctx is the invocation's lifetime. Cancelling it (the first Ctrl-C) stops the
 // subprocess the run is waiting on, and the run then concludes `cancelled`
 // through its ordinary exit path. An interrupted run is simply re-run.
-func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport *RunReport, runError error) {
+func executeRun(ctx context.Context, opts runOptions, op *checkOperation) (finalReport *RunReport, runError error) {
 	emitRunProgress("prepare", opts.model, "started")
 	defer func() {
 		state := "completed"
@@ -55,10 +53,10 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	}
 	model, modelDir := resolved.model, resolved.modelDir
 	session := acute.NewRunSession()
-	if reserved := deps.set.memberRunID(); reserved != "" {
-		session.RunID = reserved
+	if op.nextRunID != "" {
+		session.RunID = op.nextRunID
 	}
-	deps.set.registerMemberRunID(session.RunID)
+	op.lastRunID = session.RunID
 
 	live := !jsonOutput
 	if live {
@@ -84,7 +82,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	}
 
 	report := &RunReport{
-		ReportVersion: 2, RunSetID: deps.set.id(), RunID: session.RunID,
+		ReportVersion: 2, RunSetID: op.id, RunID: session.RunID,
 		Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
 	}
 	reportPersisted := false
@@ -110,7 +108,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	if err != nil {
 		return report, err
 	}
-	reportPersisted, err = concludeRun(phases, report, finishState, runErr, deps)
+	reportPersisted, err = concludeRun(phases, report, finishState, runErr)
 	return report, err
 }
 

@@ -8,7 +8,7 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 )
 
-// RunReport is the structured result of a `pudl run`, collected across phases and
+// RunReport is the structured result of one model within a `pudl check`, collected across phases and
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
@@ -73,7 +73,7 @@ func (r *RunReport) markdown() string {
 		s := r.Summary
 		fmt.Fprintf(&b, "Execution: %s | conformity: %s | checks: %s | verification: %s | scope: %s\n\n", s.Execution, s.Conformity, s.Checks, s.Verification, s.Scope)
 	}
-	fmt.Fprintf(&b, "# run: %s\n\n", r.Model)
+	fmt.Fprintf(&b, "# model: %s\n\n", r.Model)
 	fmt.Fprintf(&b, "- run_id: %s\n", r.RunID)
 	fmt.Fprintf(&b, "- mode: %s\n", r.Mode)
 	if r.CompletionStatus != "" {
@@ -89,7 +89,8 @@ func (r *RunReport) markdown() string {
 	}
 
 	if r.Populate != nil {
-		fmt.Fprintf(&b, "\n## populate\n- target: %s\n- records: %d\n", r.Populate.Target, r.Populate.Records)
+		// The populate target is an internal catalog key; JSON carries it.
+		fmt.Fprintf(&b, "\n## populate\n- records: %d\n", r.Populate.Records)
 		if r.Populate.SnapshotID != "" {
 			fmt.Fprintf(&b, "- snapshot_id: %s\n", r.Populate.SnapshotID)
 		}
