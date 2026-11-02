@@ -138,8 +138,9 @@ type PUDLWorkspace struct {
 // It also writes empty stubs for all checked bootstrap paths so that the
 // importer's ensureBasicSchemas() doesn't trigger a full bootstrap copy.
 func (s *TempDirSetup) AddBootstrapSchemas(workspace *PUDLWorkspace) {
-	// Write empty stubs for all paths checked by ensureBasicSchemas, so it
-	// won't trigger a full bootstrap copy that drags in broken dependencies.
+	// Write empty stubs for the built-in packages. The workspace has no
+	// bootstrap digest stamp, so the first importer still refreshes every
+	// built-in from the embedded tree.
 	stubs := []struct{ dir, file, pkg string }{
 		{"schema/pudl/catalog", "catalog.cue", "catalog"},
 		{"schema/pudl/fs", "fs.cue", "fs"},
