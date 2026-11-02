@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Go 1.26.10 for GO-2026-6809 (2026-11-02)
+
+Raised the Go toolchain pins from 1.26.9 to 1.26.10 for a `crypto/x509`
+standard-library advisory found by the pre-merge vulnerability scan
+(`pudl-pps`). `make vulncheck` reports no affecting vulnerabilities. See
+[delivery log](../implog/2026_11_02_go_1_26_10.md).
+
 ### AWS content pack, relationship rules and impact queries (2026-11-02)
 
 `pudl example install aws` installs a pack written in CUE (`pudl-xf5.2`):

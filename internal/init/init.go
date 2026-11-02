@@ -432,7 +432,7 @@ import "cue.dev/x/gitlab/gitlabci"
 
 // Example pipeline definition
 examplePipeline: #GitLabPipeline & {
-	default: image: "golang:1.26.9"
+	default: image: "golang:1.26.10"
 
 	stages: ["build", "test", "deploy"]
 

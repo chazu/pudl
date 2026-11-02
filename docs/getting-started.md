@@ -8,7 +8,7 @@ credentials.
 
 ## 1. Install PUDL
 
-With Go 1.26.9 or newer installed, install the current development version, which
+With Go 1.26.10 or newer installed, install the current development version, which
 includes the bundled example command:
 
 ```bash
