@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Incremental layout: collapse, expand and refresh keep the picture (2026-11-02)
+
+The default layout engine now lays out each group separately, splitting
+cross-group edges through generated boundary ports, so ELK's interactive
+layering and crossing minimisation can keep the previous order. Layouts are
+cached by graph signature, so returning to a state reproduces it exactly.
+Collapsing the largest group keeps far more sibling order (security 0.89 vs
+0.39), and a refresh too (network 0.87 vs 0.54). See
+`docs/frontend.md#layout-stability`. Closes pudl-nb3.
+
 ### Identity edges: GCP service accounts and project IAM; AWS instance profiles and egress (2026-11-02)
 
 GCP: `gcp.#ServiceAccount` (so `runs_as` resolves) and

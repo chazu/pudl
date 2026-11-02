@@ -10,9 +10,9 @@
 // Layout is async. Until it finishes, the previous (display, layout) pair
 // stays on screen, so a frame never mixes a graph with foreign positions.
 
-import { useEffect, useMemo, useState } from 'react';
-import { ElkLayoutEngine } from '../layout/elkAdapter';
-import { LayoutMemory } from '../layout/layoutMemory';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createLayoutEngine } from '../layout/engine';
+import { LayoutMemory, layoutSignature } from '../layout/layoutMemory';
 import type { LayoutEngine, LayoutResult } from '../layout/types';
 import type { GraphIndex } from '../model/canonical';
 import type { SemanticView } from '../projection/types';
@@ -27,7 +27,7 @@ export interface Rendered {
   viewKey: string;
 }
 
-const engine: LayoutEngine = new ElkLayoutEngine();
+const engine: LayoutEngine = createLayoutEngine(new URLSearchParams(window.location.search).get('engine') === 'classic' ? 'classic' : 'incremental');
 const memory = new LayoutMemory();
 
 interface LayoutRun {
@@ -50,16 +50,31 @@ export function usePipeline(index: GraphIndex | null, view: SemanticView | null,
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const lastNonce = useRef(layoutNonce);
   useEffect(() => {
     if (!layoutGraph || !view || !layoutState || !key) return;
     let cancelled = false;
-    setPending(true);
     const memKey = `${view.projection.id}:${layoutState.direction}`;
+    if (lastNonce.current !== layoutNonce) {
+      // Relayout: start from scratch, without previous positions or cached layouts.
+      memory.forget(memKey);
+      lastNonce.current = layoutNonce;
+    }
+    const config = { ...view.projection.layout, direction: layoutState.direction };
+    const signature = layoutSignature(layoutGraph, config);
+    const cached = memory.cached(memKey, signature);
+    if (cached) {
+      // A state laid out before (e.g. collapse then expand): reproduce it exactly.
+      memory.remember(memKey, cached, signature);
+      setRun({ key, layout: cached });
+      return;
+    }
+    setPending(true);
     engine
-      .layout(layoutGraph, { ...view.projection.layout, direction: layoutState.direction }, { previous: memory.previous(memKey) })
+      .layout(layoutGraph, config, { previous: memory.previous(memKey) })
       .then((layout) => {
         if (cancelled) return;
-        memory.remember(memKey, layout);
+        memory.remember(memKey, layout, signature);
         setRun({ key, layout });
         setError(null);
       })
