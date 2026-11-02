@@ -124,6 +124,10 @@ type Output struct {
 	// Live is human output: each model's plan and report print as it runs,
 	// with best-effort warnings. Machine output writes only the final report.
 	Live bool
+	// Owner, when set, limits the findings live output prints to one
+	// resource owner (checkreport.ModelReport.ForOwner). The recorded report
+	// is complete.
+	Owner string
 	// Progress receives phase events (phase, subject, state). Nil drops them.
 	Progress func(phase, subject, state string)
 	// Concluded receives the check report once it is final and saved, to

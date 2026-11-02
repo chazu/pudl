@@ -118,9 +118,15 @@ earlier reports: new, persisting, resolved, or unknown when this observation
 cannot establish their absence. With --fail-on new, fail-severity check
 failures fail the command (or exit 2) only when one of them is new.
 
+Each finding names its resource's owner, derived from the schema's
+_pudl.owner declaration; human output groups findings by owner. --owner TEAM
+prints only TEAM's findings (a failed check without one is left out); it does
+not narrow the recorded report, its counts or the exit status.
+
 Examples:
     pudl check github-chazu
     pudl check network app --detailed-exitcode
+    pudl check network --owner payments
     pudl check network --fail-on new --detailed-exitcode
     pudl check git-inventory --from-catalog --catalog-scope snap_...
     pudl check --populate 'command:gcloud compute networks list --format=json'
@@ -135,6 +141,7 @@ Flags:
 | `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--fail-on` | string | `any` | which fail-severity check failures fail the check: any, or new (a failing match no comparable earlier report recorded) |
 | `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
+| `--owner` | string |  | Print only the findings whose resource this owner owns (_pudl.owner); the recorded report is complete |
 | `--populate` | string |  | Check an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
@@ -1527,6 +1534,9 @@ included) with severity, doc and the policy that declared each, how many
 resources currently fail each rule, its stored result counts and staleness, and
 the resources failing most (most severe first, then most violations).
 
+Each failing resource names its owner, derived from its type's _pudl.owner
+declaration; --owner lists only that owner's failing resources.
+
 --limit caps the failing resources listed (0 lists all).
 ```
 
@@ -1535,6 +1545,7 @@ Examples:
 ```bash
 pudl policy show pudl/aws.#BucketBestPractice
   pudl policy show pudl/aws.#BucketBestPractice --limit 0 --json
+  pudl policy show pudl/aws.#BucketBestPractice --owner payments
 ```
 
 Flags:
@@ -1542,6 +1553,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--limit` | int | `10` | Maximum failing resources to list (0 = all) |
+| `--owner` | string |  | List only the failing resources this owner owns (_pudl.owner) |
 
 ## pudl prime
 

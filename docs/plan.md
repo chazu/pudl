@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Ownership attribution (2026-11-02)
+
+Schemas declare `_pudl.owner` (label or tag paths, a mapping table such as
+project to team, a fallback), inherited along `base_schema` (`pudl-xf5.6`).
+Ownership is projected as `resource_owner` and `resource_unowned`; check
+findings and `pudl policy show` name each resource's owner, human check output
+groups findings by owner, and `--owner TEAM` shows one owner's. The GCP pack
+declares it on every type. See the
+[delivery log](../implog/2026_11_02_ownership_attribution.md).
+
 ### Multi-project fan-out: failed inputs and enumeration (2026-11-02)
 
 A failing `#CommandRun` is a failed input (`pudl-xf5.3`). The other runs'
@@ -692,6 +702,12 @@ Beads work:
   relationship rules).
   - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
     `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.6` ownership attribution (`_pudl.owner`: label/tag paths,
+    a mapping table, a fallback; inherited along `base_schema`; projected as
+    `resource_owner`/`resource_unowned`; check findings and `policy show`
+    carry `owner`; `pudl check --owner`, `pudl policy show --owner`; the GCP
+    pack declares it on every type). See
+    `implog/2026_11_02_ownership_attribution.md`.
   - Done: `pudl-xf5.3` multi-project fan-out (failed inputs ingest the rest
     as an incomplete observation with unknown checks; `populate.each`
     enumeration; `populate.fail_fast`). See

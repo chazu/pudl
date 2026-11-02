@@ -28,6 +28,10 @@ type Witness struct {
 	// Waiver is the model waiver this finding matched: active when it is
 	// waived, expired when an expired waiver no longer excuses it.
 	Waiver *waiver.Ref `json:"waiver,omitempty"`
+	// Owner is the owner of the resource or catalog entry the witness
+	// references (see AttributeOwners); "" when none was resolved. It is the
+	// resource's owner, not the waiver's.
+	Owner string `json:"owner"`
 }
 
 // Waived reports whether an active waiver excuses this finding.
@@ -123,10 +127,7 @@ func WriteFindings(w io.Writer, result CheckResult) {
 	if result.Expect == "nonempty" {
 		writeNoEvidence(w, result)
 	}
-	for _, witness := range result.Witnesses {
-		args, _ := json.Marshal(witness.Arguments)
-		fmt.Fprintf(w, "    - %s%s\n", args, waiverNote(witness.Waiver))
-	}
+	writeWitnesses(w, result.Witnesses)
 	if result.WitnessesTruncated {
 		fmt.Fprintf(w, "    - witnesses truncated to %d; counts include all matches\n", len(result.Witnesses))
 	}

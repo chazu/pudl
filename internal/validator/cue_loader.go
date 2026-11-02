@@ -346,7 +346,8 @@ func (loader *CUEModuleLoader) ValidateModuleIntegrity(modules map[string]*Loade
 }
 
 // CheckModuleIntegrity reports every registered schema whose CUE value does
-// not validate, or whose `_pudl.review` or `_pudl.secret_scan_ignore` is invalid. A package may contain only reusable components or rule
+// not validate, or whose `_pudl.review`, `_pudl.secret_scan_ignore` or
+// `_pudl.owner` is invalid. A package may contain only reusable components or rule
 // definitions; those are valid parts of the schema tree even though they are
 // not independently registered validation targets.
 //
@@ -364,7 +365,7 @@ func (loader *CUEModuleLoader) CheckModuleIntegrity(modules map[string]*LoadedMo
 				})
 			}
 			meta := module.Metadata[schemaName]
-			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError} {
+			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError, meta.OwnerError} {
 				if metaErr != "" {
 					problems = append(problems, SchemaLoadError{
 						Path:    loader.schemaPath,

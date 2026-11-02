@@ -41,6 +41,9 @@ type Finding struct {
 	FirstSeen *time.Time     `json:"first_seen,omitempty"`
 	Waived    bool           `json:"waived,omitempty"`
 	Arguments map[string]any `json:"arguments,omitempty"`
+	// Owner is the owner of the resource the finding's recorded arguments
+	// reference (see AttributeOwners); "" when none was resolved.
+	Owner string `json:"owner"`
 }
 
 // evidenceFields name the observation a match came from, not what failed: a

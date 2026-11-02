@@ -17,6 +17,7 @@ package gcp
 			"metadata.name",
 		]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["metadata.labels.team"]}
 		sensitive_fields: [
 			"spec.template.spec.containers[*].env[*].value",
 			"metadata.annotations.\"serving.knative.dev/creator\"",
@@ -43,6 +44,7 @@ package gcp
 		resource_type: "gcp.dns.managed_zone"
 		identity_fields: ["project", "name"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 	}
 	kind:        "dns#managedZone"
 	project:     string
@@ -60,6 +62,7 @@ package gcp
 		resource_type: "gcp.pubsub.topic"
 		identity_fields: ["name"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 	}
 	project: string
 	name:    =~"^projects/[^/]+/topics/[^/]+$"
@@ -74,6 +77,7 @@ package gcp
 		resource_type: "gcp.pubsub.subscription"
 		identity_fields: ["name"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
 	project: string

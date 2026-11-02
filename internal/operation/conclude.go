@@ -25,7 +25,11 @@ func (r *modelRun) conclude(report *checkreport.ModelReport, finishState *runFin
 	// Human output shows each member's report as it concludes; JSON output is
 	// the check's one report, written when the check ends.
 	if r.out.Live {
-		out, err := report.Render(false)
+		shown := report
+		if r.out.Owner != "" {
+			shown = report.ForOwner(r.out.Owner)
+		}
+		out, err := shown.Render(false)
 		if err != nil {
 			return persisted, err
 		}

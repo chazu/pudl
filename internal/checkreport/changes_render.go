@@ -53,6 +53,7 @@ func WriteChanges(w io.Writer, c CheckResult) {
 		}
 	}
 	unlisted := 0
+	var lines []ownedLine
 	for _, f := range c.Findings {
 		if f.Arguments == nil {
 			unlisted++
@@ -68,8 +69,9 @@ func WriteChanges(w io.Writer, c CheckResult) {
 		} else if f.Waived {
 			first += " — waived"
 		}
-		fmt.Fprintf(w, "    - %s %s%s\n", f.State, args, first)
+		lines = append(lines, ownedLine{owner: f.Owner, text: fmt.Sprintf("%s %s%s", f.State, args, first)})
 	}
+	writeByOwner(w, lines)
 	if unlisted > 0 {
 		fmt.Fprintf(w, "    - %d more finding(s) without recorded witnesses; --json lists their keys\n", unlisted)
 	}

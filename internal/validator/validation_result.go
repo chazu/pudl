@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/chazu/pudl/internal/ownership"
 )
 
 // ValidationResult represents the result of schema validation
@@ -65,6 +67,13 @@ type SchemaMetadata struct {
 	// CheckModuleIntegrity reports a load error.
 	SecretScanIgnore      []string `json:"-"`
 	SecretScanIgnoreError string   `json:"-"`
+
+	// Owner is the strictly decoded `_pudl.owner`: how a resource's owner is
+	// derived (nil when the schema declares none; see the ownership package).
+	// OwnerError carries a decode failure; projection is then disabled for
+	// the schema and CheckModuleIntegrity reports a load error.
+	Owner      *ownership.Spec `json:"-"`
+	OwnerError string          `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result

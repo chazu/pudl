@@ -93,6 +93,64 @@ so rules, `pudl query` and model checks can use imported fields.
 `sensitive_fields` lists paths redacted before anything is stored. Both are
 covered in [projection.md](projection.md).
 
+### `owner` (optional)
+
+Declares how a resource's owner is derived, so check findings and policy
+results name a team. PUDL tries, in order:
+
+1. `paths`: field paths such as labels or tags; the first that holds a
+   non-empty string is the owner.
+2. `map`: a table from one field's value to an owner, such as a project ID to
+   its team.
+3. `fallback`: an owner for everything else.
+
+A resource that none of them names is **unowned**.
+
+```cue
+_projectOwners: {"shop-prod": "payments", "data-prod": "data"} // once per package
+
+#Bucket: {
+    _pudl: {
+        schema_type:     "base"
+        resource_type:   "gcp.storage.bucket"
+        identity_fields: ["name"]
+        owner: {
+            paths: ["labels.team", "labels.owner"]
+            map: {path: "project", owners: _projectOwners}
+            fallback: "platform"                  // omit to report unowned resources
+        }
+    }
+    ...
+}
+```
+
+- **One table, many types.** Declare the mapping once as a hidden package
+  value and reference it from each type, as above. The table lives in the
+  schema tree, so ownership is known when a record is ingested, whichever
+  model observed it, and a changed table re-derives every owner on the next
+  import, check or `pudl doctor --fix --only projections`.
+- **Inheritance.** The declaration is inherited along `base_schema`; the
+  nearest schema that declares `owner` wins, whole. A specialized type
+  therefore shares its parent's owner unless it declares its own.
+- **Strict.** Unknown keys, paths containing `[*]`, empty owners and a block
+  with none of `paths`, `map` or `fallback` are schema load errors (`pudl
+  doctor` lists them). Projection is disabled for the schema until it is
+  fixed; existing facts are left unchanged.
+- `owner` needs `identity_fields`, as `facts` does.
+
+Every resource of such a type projects one built-in fact
+(see [projection.md](projection.md#resource-ownership)):
+
+| Relation | Args |
+|---|---|
+| `resource_owner` | `entry_id`, `resource_id`, `type`, `owner`, `via` (`path:<path>`, `map:<path>` or `fallback`) |
+| `resource_unowned` | `entry_id`, `resource_id`, `type` |
+
+A model check over `resource_unowned` with `expect: "empty"` reports every
+unowned resource. `pudl check --owner TEAM` and `pudl policy show POLICY
+--owner TEAM` show one owner's findings. This owner is the resource's owner;
+it is unrelated to who owns a policy or a waiver.
+
 ### `base_schema` (optional)
 
 Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).

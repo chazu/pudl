@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/chazu/pudl/internal/fieldpath"
+	"github.com/chazu/pudl/internal/ownership"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
 )
@@ -21,6 +22,9 @@ type SchemaSpec struct {
 	// backfill from data stored before a field became sensitive cannot copy it
 	// into facts.
 	Sensitive []fieldpath.Path
+	// Owner is the nearest `_pudl.owner` along the chain; when set, every
+	// record projects resource_owner or resource_unowned (see owner.go).
+	Owner *ownership.Spec
 	// Fingerprint changes whenever anything that shapes the facts changes.
 	Fingerprint string
 	// Err disables projection for the schema; the import still succeeds and
@@ -54,7 +58,8 @@ func (r *Registry) Source() redact.Source {
 	return r.src
 }
 
-// Schemas returns every loaded schema whose chain declares facts, sorted.
+// Schemas returns every loaded schema whose chain declares facts or an
+// owner, sorted.
 func (r *Registry) Schemas() []string {
 	if r == nil || r.src == nil {
 		return nil
@@ -79,7 +84,8 @@ func (r *Registry) Subset(schemas map[string]bool) *Registry {
 	return &Registry{src: r.src, redactor: r.redactor, cache: map[string]*SchemaSpec{}, allowed: schemas}
 }
 
-// For returns schema's effective spec, or nil when its chain declares no facts.
+// For returns schema's effective spec, or nil when its chain declares no facts
+// and no owner.
 func (r *Registry) For(schema string) *SchemaSpec {
 	if r == nil || r.src == nil || schema == "" {
 		return nil
@@ -102,8 +108,14 @@ func (r *Registry) compute(schema string) *SchemaSpec {
 	}
 	spec := &SchemaSpec{Schema: schema}
 	byName := map[string]RelationSpec{}
-	declared := false
-	for _, name := range r.src.GetInheritanceGraph().GetCascadeChain(schema) {
+	chain := r.src.GetInheritanceGraph().GetCascadeChain(schema)
+	owner, ownerErr := r.owner(chain)
+	declared := owner != nil || ownerErr != nil
+	spec.Owner, spec.Err = owner, ownerErr
+	for _, name := range chain {
+		if spec.Err != nil {
+			break
+		}
 		meta, ok := r.src.GetSchemaMetadata(name)
 		if !ok || (meta.FactsSpec == nil && meta.FactsError == "") {
 			continue
@@ -130,7 +142,7 @@ func (r *Registry) compute(schema string) *SchemaSpec {
 	if spec.Err == nil && len(own.IdentityFields) == 0 {
 		// Without identity every changed record is a new resource, and facts
 		// from every historical state would stay current.
-		spec.Err = fmt.Errorf("schema %s declares facts but no identity_fields", schema)
+		spec.Err = fmt.Errorf("schema %s declares %s but no identity_fields", schema, declaredWhat(spec, byName))
 	}
 	if spec.Err == nil {
 		spec.Sensitive, spec.Err = r.redactor.For(schema)
@@ -164,7 +176,8 @@ func fingerprint(spec *SchemaSpec) string {
 		Relations []relPrint
 		Sensitive []string
 		Err       string
-	}{Contract: 2}
+		Owner     string `json:",omitempty"`
+	}{Contract: 2, Owner: spec.Owner.Canonical()}
 	for _, rel := range spec.Relations {
 		rp := relPrint{Name: rel.Name, Args: map[string]argPrint{}}
 		if rel.Each != nil {
@@ -194,6 +207,9 @@ func (r *Registry) RelationArgs() map[string]map[string]bool {
 		spec := r.For(schema)
 		if spec == nil || spec.Err != nil {
 			continue
+		}
+		if spec.Owner != nil {
+			addOwnerRelationArgs(out)
 		}
 		for _, rel := range spec.Relations {
 			args := out[rel.Name]

@@ -9,6 +9,7 @@ package gcp
 		resource_type: "gcp.sql.instance"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["settings.userLabels.team"]}
 	}
 	kind:            "sql#instance"
 	project:         string
@@ -36,6 +37,7 @@ package gcp
 		resource_type: "gcp.storage.bucket"
 		identity_fields: ["name"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 	}
 	project:                      string
 	name:                         string
@@ -54,6 +56,7 @@ package gcp
 		resource_type: "gcp.kms.keyring"
 		identity_fields: ["name"]
 		review: status: "draft"
+		owner: _#GCPOwner
 	}
 	project: string
 	name:    =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+$"
@@ -69,6 +72,7 @@ package gcp
 		resource_type: "gcp.kms.key"
 		identity_fields: ["name"]
 		review: status: "draft"
+		owner: _#GCPOwner & {paths: ["labels.team"]}
 		facts: gcp_kms_key: args: {
 			project:       "project"
 			name:          "name"

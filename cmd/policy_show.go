@@ -8,11 +8,15 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/ownership"
 	"github.com/chazu/pudl/internal/policy"
 	"github.com/chazu/pudl/internal/policyfacts"
 )
 
-var policyShowLimit int
+var (
+	policyShowLimit int
+	policyShowOwner string
+)
 
 var policyShowCmd = &cobra.Command{
 	Use:   "show POLICY",
@@ -22,9 +26,13 @@ included) with severity, doc and the policy that declared each, how many
 resources currently fail each rule, its stored result counts and staleness, and
 the resources failing most (most severe first, then most violations).
 
+Each failing resource names its owner, derived from its type's _pudl.owner
+declaration; --owner lists only that owner's failing resources.
+
 --limit caps the failing resources listed (0 lists all).`,
 	Example: `  pudl policy show pudl/aws.#BucketBestPractice
-  pudl policy show pudl/aws.#BucketBestPractice --limit 0 --json`,
+  pudl policy show pudl/aws.#BucketBestPractice --limit 0 --json
+  pudl policy show pudl/aws.#BucketBestPractice --owner payments`,
 	Args: cobra.ExactArgs(1),
 	RunE: pudlRunE(runPolicyShow),
 }
@@ -34,10 +42,16 @@ type policyShowOutput struct {
 	Summary       policyfacts.Summary `json:"summary"`
 	Chain         []string            `json:"chain"`
 	Rules         []ruleRow           `json:"rules"`
-	// Failing are the resources failing most, capped by --limit;
-	// FailingTotal counts them all.
-	Failing      []policyfacts.Stored `json:"failing"`
-	FailingTotal int                  `json:"failing_total"`
+	// Failing are the resources failing most (of --owner, when set), capped
+	// by --limit; FailingTotal counts them all.
+	Failing      []failingRow `json:"failing"`
+	FailingTotal int          `json:"failing_total"`
+}
+
+// failingRow is a failing result and its resource's owner ("" when none).
+type failingRow struct {
+	policyfacts.Stored
+	Owner string `json:"owner"`
 }
 
 // ruleRow is a rule and the number of resources currently failing it.
@@ -70,7 +84,9 @@ func runPolicyShow(cmd *cobra.Command, args []string) error {
 		Summary:       policies.Summarize(states, selected)[0],
 		Chain:         p.Chain,
 		Rules:         ruleRows(p, stored),
-		Failing:       failingMost(stored),
+	}
+	if out.Failing, err = ownedFailing(db, failingMost(stored), policyShowOwner); err != nil {
+		return err
 	}
 	out.FailingTotal = len(out.Failing)
 	if policyShowLimit > 0 && len(out.Failing) > policyShowLimit {
@@ -106,6 +122,23 @@ func ruleRows(p *policy.Policy, stored []policyfacts.Stored) []ruleRow {
 		}
 	}
 	return rows
+}
+
+// ownedFailing attaches each failing resource's owner and, when owner is
+// set, keeps only that owner's.
+func ownedFailing(db *database.CatalogDB, failing []policyfacts.Stored, owner string) ([]failingRow, error) {
+	owners, err := ownership.Load(db)
+	if err != nil {
+		return nil, err
+	}
+	rows := []failingRow{}
+	for _, s := range failing {
+		row := failingRow{Stored: s, Owner: owners.OwnerOf([]string{s.ResourceID}, nil)}
+		if owner == "" || row.Owner == owner {
+			rows = append(rows, row)
+		}
+	}
+	return rows, nil
 }
 
 // failingMost orders the noncompliant results most severe first, then by
@@ -155,11 +188,12 @@ func printPolicyShow(out policyShowOutput) {
 		for _, v := range f.Violations {
 			rules = append(rules, v.Rule)
 		}
-		fmt.Fprintf(outw(), "  %-8s %s (entry %s): %s\n", f.HighestSeverity, f.ResourceID, f.EntryID, strings.Join(rules, ", "))
+		fmt.Fprintf(outw(), "  %-8s %s (entry %s, owner %s): %s\n", f.HighestSeverity, f.ResourceID, f.EntryID, orDash(f.Owner), strings.Join(rules, ", "))
 	}
 }
 
 func init() {
 	policyCmd.AddCommand(policyShowCmd)
 	policyShowCmd.Flags().IntVar(&policyShowLimit, "limit", 10, "Maximum failing resources to list (0 = all)")
+	policyShowCmd.Flags().StringVar(&policyShowOwner, "owner", "", "List only the failing resources this owner owns (_pudl.owner)")
 }
