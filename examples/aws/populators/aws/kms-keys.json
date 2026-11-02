@@ -1,0 +1,97 @@
+[
+  {
+    "KeyMetadata": {
+      "AWSAccountId": "123456789012",
+      "KeyId": "0aa00000-0000-4000-8000-000000000001",
+      "Arn": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000001",
+      "CreationDate": "2021-03-04T11:02:18.551000+00:00",
+      "Enabled": true,
+      "Description": "Default key that protects my EBS volumes when no other key is defined",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "KeyManager": "AWS",
+      "CustomerMasterKeySpec": "SYMMETRIC_DEFAULT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "MultiRegion": false
+    },
+    "KeyRotationEnabled": true
+  },
+  {
+    "KeyMetadata": {
+      "AWSAccountId": "123456789012",
+      "KeyId": "0aa00000-0000-4000-8000-000000000002",
+      "Arn": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000002",
+      "CreationDate": "2025-11-01T16:20:03.112000+00:00",
+      "Enabled": true,
+      "Description": "orders data",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "KeyManager": "CUSTOMER",
+      "CustomerMasterKeySpec": "SYMMETRIC_DEFAULT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "MultiRegion": false
+    },
+    "KeyRotationEnabled": true
+  },
+  {
+    "KeyMetadata": {
+      "AWSAccountId": "123456789012",
+      "KeyId": "0aa00000-0000-4000-8000-000000000003",
+      "Arn": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000003",
+      "CreationDate": "2024-07-19T19:58:41.006000+00:00",
+      "Enabled": false,
+      "Description": "analytics data",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeyState": "PendingDeletion",
+      "DeletionDate": "2026-11-20T00:00:00+00:00",
+      "Origin": "AWS_KMS",
+      "KeyManager": "CUSTOMER",
+      "CustomerMasterKeySpec": "SYMMETRIC_DEFAULT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "MultiRegion": false,
+      "PendingDeletionWindowInDays": 30
+    }
+  },
+  {
+    "KeyMetadata": {
+      "AWSAccountId": "123456789012",
+      "KeyId": "0aa00000-0000-4000-8000-000000000004",
+      "Arn": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000004",
+      "CreationDate": "2022-01-12T10:00:00.000000+00:00",
+      "Enabled": true,
+      "Description": "legacy application secrets",
+      "KeyUsage": "ENCRYPT_DECRYPT",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "KeyManager": "CUSTOMER",
+      "CustomerMasterKeySpec": "SYMMETRIC_DEFAULT",
+      "KeySpec": "SYMMETRIC_DEFAULT",
+      "EncryptionAlgorithms": ["SYMMETRIC_DEFAULT"],
+      "MultiRegion": false
+    },
+    "KeyRotationEnabled": false
+  },
+  {
+    "KeyMetadata": {
+      "AWSAccountId": "123456789012",
+      "KeyId": "0aa00000-0000-4000-8000-000000000005",
+      "Arn": "arn:aws:kms:us-east-1:123456789012:key/0aa00000-0000-4000-8000-000000000005",
+      "CreationDate": "2025-05-05T12:00:00.000000+00:00",
+      "Enabled": true,
+      "Description": "release artifact signing",
+      "KeyUsage": "SIGN_VERIFY",
+      "KeyState": "Enabled",
+      "Origin": "AWS_KMS",
+      "KeyManager": "CUSTOMER",
+      "CustomerMasterKeySpec": "RSA_2048",
+      "KeySpec": "RSA_2048",
+      "SigningAlgorithms": ["RSASSA_PSS_SHA_256", "RSASSA_PKCS1_V1_5_SHA_256"],
+      "MultiRegion": false
+    }
+  }
+]

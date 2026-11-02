@@ -9,6 +9,9 @@ package gcp
 // then set review: {status: "validated", by: "...", at: "YYYY-MM-DD"}. Until
 // then policy results against it are marked provisional.
 
+// The prefix that turns a Compute selfLink into path form.
+_gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
+
 #Network: {
 	_pudl: {
 		schema_type:   "base"
@@ -16,6 +19,13 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		// Network references are joined in path form
+		// (projects/P/global/networks/N), see gcp_depends_on_network.
+		facts: gcp_network: args: {
+			project: "project"
+			name:    "name"
+			path: {path: "selfLink", trim_prefix: _gcpComputeAPI}
+		}
 	}
 	kind:                   "compute#network"
 	project:                string
@@ -37,7 +47,8 @@ package gcp
 			project: "project"
 			name:    "name"
 			// GKE references subnets in path form (projects/P/regions/R/...).
-			path: {path: "selfLink", trim_prefix: "https://www.googleapis.com/compute/v1/"}
+			path: {path: "selfLink", trim_prefix: _gcpComputeAPI}
+			network: {path: "network", trim_prefix: _gcpComputeAPI}
 			private_google_access: {path: "privateIpGoogleAccess", default: false}
 		}
 	}
@@ -59,6 +70,10 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		facts: gcp_firewall_network: args: {
+			self_link: "selfLink"
+			network: {path: "network", trim_prefix: _gcpComputeAPI}
+		}
 	}
 	kind:      "compute#firewall"
 	project:   string
@@ -80,6 +95,10 @@ package gcp
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		facts: gcp_route_network: args: {
+			self_link: "selfLink"
+			network: {path: "network", trim_prefix: _gcpComputeAPI}
+		}
 	}
 	kind:      "compute#route"
 	project:   string
@@ -99,7 +118,12 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner
 		facts: {
-			gcp_router: args: {project: "project", name: "name", self_link: "selfLink"}
+			gcp_router: args: {
+				project:   "project"
+				name:      "name"
+				self_link: "selfLink"
+				network: {path: "network", trim_prefix: _gcpComputeAPI}
+			}
 			// One fact per NAT IP a Cloud NAT gateway is configured to use.
 			gcp_router_nat_ip: {each: "nats[*]", args: {nat: "name", address: "natIps[*]"}}
 		}

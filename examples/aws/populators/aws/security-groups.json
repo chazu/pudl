@@ -1,0 +1,188 @@
+[
+  {
+    "Description": "Public HTTPS load balancer targets",
+    "GroupName": "prod-web",
+    "IpPermissions": [
+      {
+        "FromPort": 443,
+        "IpProtocol": "tcp",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "HTTPS from anywhere"}],
+        "Ipv6Ranges": [{"CidrIpv6": "::/0"}],
+        "PrefixListIds": [],
+        "ToPort": 443,
+        "UserIdGroupPairs": []
+      },
+      {
+        "FromPort": 80,
+        "IpProtocol": "tcp",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "ToPort": 80,
+        "UserIdGroupPairs": []
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0aa00000000000001",
+    "IpPermissionsEgress": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "Tags": [{"Key": "Team", "Value": "web"}],
+    "VpcId": "vpc-0a1b2c3d4e5f60001",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0aa00000000000001"
+  },
+  {
+    "Description": "SSH bastion",
+    "GroupName": "prod-bastion",
+    "IpPermissions": [
+      {
+        "FromPort": 22,
+        "IpProtocol": "tcp",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0", "Description": "temporary"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "ToPort": 22,
+        "UserIdGroupPairs": []
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0aa00000000000002",
+    "IpPermissionsEgress": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "VpcId": "vpc-0a1b2c3d4e5f60001",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0aa00000000000002"
+  },
+  {
+    "Description": "PostgreSQL from the application tier",
+    "GroupName": "prod-db",
+    "IpPermissions": [
+      {
+        "FromPort": 5432,
+        "IpProtocol": "tcp",
+        "IpRanges": [{"CidrIp": "10.0.0.0/16"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "ToPort": 5432,
+        "UserIdGroupPairs": [{"GroupId": "sg-0aa00000000000004", "UserId": "123456789012"}]
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0aa00000000000003",
+    "IpPermissionsEgress": [],
+    "VpcId": "vpc-0a1b2c3d4e5f60001",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0aa00000000000003"
+  },
+  {
+    "Description": "Application tier",
+    "GroupName": "prod-app",
+    "IpPermissions": [
+      {
+        "FromPort": 8080,
+        "IpProtocol": "tcp",
+        "IpRanges": [],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "ToPort": 8080,
+        "UserIdGroupPairs": [{"GroupId": "sg-0aa00000000000001", "UserId": "123456789012"}]
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0aa00000000000004",
+    "IpPermissionsEgress": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "VpcId": "vpc-0a1b2c3d4e5f60001",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0aa00000000000004"
+  },
+  {
+    "Description": "Operations dashboards (IPv6)",
+    "GroupName": "legacy-ops",
+    "IpPermissions": [
+      {
+        "FromPort": 3000,
+        "IpProtocol": "tcp",
+        "IpRanges": [],
+        "Ipv6Ranges": [{"CidrIpv6": "::/0", "Description": "dashboards"}],
+        "PrefixListIds": [],
+        "ToPort": 3999,
+        "UserIdGroupPairs": []
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0aa00000000000005",
+    "IpPermissionsEgress": [],
+    "VpcId": "vpc-0a1b2c3d4e5f60001",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0aa00000000000005"
+  },
+  {
+    "Description": "default VPC security group",
+    "GroupName": "default",
+    "IpPermissions": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": [{"GroupId": "sg-0dd00000000000001", "UserId": "123456789012"}]
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0dd00000000000001",
+    "IpPermissionsEgress": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "VpcId": "vpc-0d0d0d0d0d0d0d0d0",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0dd00000000000001"
+  },
+  {
+    "Description": "launch-wizard-1 created 2021-03-04",
+    "GroupName": "launch-wizard-1",
+    "IpPermissions": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "OwnerId": "123456789012",
+    "GroupId": "sg-0dd00000000000002",
+    "IpPermissionsEgress": [
+      {
+        "IpProtocol": "-1",
+        "IpRanges": [{"CidrIp": "0.0.0.0/0"}],
+        "Ipv6Ranges": [],
+        "PrefixListIds": [],
+        "UserIdGroupPairs": []
+      }
+    ],
+    "VpcId": "vpc-0d0d0d0d0d0d0d0d0",
+    "SecurityGroupArn": "arn:aws:ec2:us-east-1:123456789012:security-group/sg-0dd00000000000002"
+  }
+]

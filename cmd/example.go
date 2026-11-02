@@ -16,7 +16,7 @@ var exampleCmd = &cobra.Command{
 var exampleInstallCmd = &cobra.Command{
 	Use:       "install <name>",
 	Short:     "Install a runnable example and its fixture data",
-	ValidArgs: []string{"git-inventory", "gcp-network-hygiene", "gcp"},
+	ValidArgs: []string{"git-inventory", "gcp-network-hygiene", "gcp", "aws"},
 	Args:      cobra.ExactArgs(1),
 	Long: `Install a bundled example in the current initialized PUDL workspace.
 No source checkout or download is needed. Identical files are left alone;
@@ -34,6 +34,10 @@ The gcp content pack includes draft schemas for the core GCP inventory,
 best-practice policies, gcloud and fixture collectors, and three check
 families: network hygiene, data protection and GKE posture.
 
+The aws content pack does the same for AWS, with aws CLI and fixture
+collectors and three check families: network exposure, data protection and
+identity posture.
+
 Example:
     pudl init
     pudl example install git-inventory`,
@@ -49,6 +53,10 @@ Example:
 			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": wsPolicy.Workspace.PudlDir, "files": files})
 		}
 		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
+		if args[0] == "aws" {
+			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
+			return nil
+		}
 		if args[0] == "gcp" {
 			fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
 			return nil

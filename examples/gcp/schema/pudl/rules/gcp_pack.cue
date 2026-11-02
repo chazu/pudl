@@ -69,3 +69,69 @@ gcp_gke_secrets_key_destroy_scheduled: {
 		{rel: "gcp_kms_key", args: {name: "$K", primary_state: "DESTROY_SCHEDULED"}},
 	]
 }
+
+// ---- Impact: what depends on this network ----
+
+// gcp_depends_on_network(network, resource, kind) — every cataloged resource
+// that uses a cataloged VPC network: its subnets, firewall rules, routes and
+// Cloud Routers, GKE clusters, Cloud SQL instances with a private IP on it,
+// and private DNS zones visible to it. The network is in path form
+// (projects/P/global/networks/N); resource is a selfLink, or the zone name
+// for DNS. One rule per kind.
+//   pudl query gcp_depends_on_network network=projects/my-project/global/networks/prod-vpc
+gcp_depends_on_network_subnet: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "subnet"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_subnet", args: {path: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_firewall: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "firewall"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_firewall_network", args: {self_link: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_route: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "route"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_route_network", args: {self_link: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_router: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "router"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_router", args: {self_link: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_gke: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "gke_cluster"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_gke_cluster", args: {self_link: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_sql: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "sql_instance"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_sql_network", args: {self_link: "$R", network: "$N"}},
+	]
+}
+
+gcp_depends_on_network_dns: {
+	head: {rel: "gcp_depends_on_network", args: {network: "$N", resource: "$R", kind: "dns_zone"}}
+	body: [
+		{rel: "gcp_network", args: {path: "$N"}},
+		{rel: "gcp_dns_zone_network", args: {entry_id: "$E", network: "$N"}},
+		{rel: "gcp_dns_zone", args: {entry_id: "$E", name: "$R"}},
+	]
+}

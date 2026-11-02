@@ -228,6 +228,21 @@ fails the collector with nothing ingested. The check families read
 `model:gcp-<type>`, so point a check's `evidence` at `model:gcp-org-firewalls`
 to evaluate this collector's observation.
 
+## Impact: what depends on this network
+
+`gcp_depends_on_network(network, resource, kind)` lists every cataloged
+resource that uses a cataloged VPC network: subnets, firewall rules, routes,
+Cloud Routers, GKE clusters, Cloud SQL instances with a private IP on it, and
+private DNS zones visible to it. Networks are in path form; resources are
+selfLinks, or the zone name for DNS:
+
+```bash
+pudl query gcp_depends_on_network network=projects/example-project/global/networks/prod-vpc
+```
+
+Over the fixtures, prod-vpc has 16 dependents. `pudl query` reads
+latest-known facts, so run the collectors first.
+
 ## Limits
 
 - Each record is evaluated on its own. Effective firewall reachability

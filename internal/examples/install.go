@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	awspack "github.com/chazu/pudl/examples/aws"
 	gcppack "github.com/chazu/pudl/examples/gcp"
 	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
@@ -26,8 +27,10 @@ func Install(root, name string) ([]string, error) {
 		files, err = gcpNetworkFiles()
 	case "gcp":
 		files, err = treeFiles(gcppack.Files)
+	case "aws":
+		files, err = treeFiles(awspack.Files)
 	default:
-		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp)", name)
+		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp, aws)", name)
 	}
 	if err != nil {
 		return nil, err
