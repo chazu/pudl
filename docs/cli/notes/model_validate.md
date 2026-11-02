@@ -1,2 +1,3 @@
-Models with plain bindings are valid before their catalog values exist; the
-resolved scalars and final concrete model are validated again at run time.
+A model is validated as authored: CUE decode, structural checks on its arms,
+and its schema contracts. A model that still declares a retired field (such as
+`inputs` or `bindings`) fails with an error naming the field.

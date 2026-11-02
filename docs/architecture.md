@@ -74,7 +74,7 @@ catalog_entries (
     item_id           TEXT,              -- Unique item identifier within collection
     entry_type        TEXT,              -- e.g. 'observe'; legacy 'manifest', 'manifest-action', 'drift-observation'
     target            TEXT,              -- run target that produced an observation
-    run_id            TEXT,              -- pudl run identifier (run artifacts)
+    run_id            TEXT,              -- model run identifier within a pudl check
     tags              TEXT,              -- JSON-encoded key-value tags
     status            TEXT,              -- Verdict (unknown/clean/drifted; legacy failed); legacy converging reads as unknown
     created_at        DATETIME,
@@ -173,7 +173,7 @@ ImportFileWithFriendlyIDs(opts)
 | `config` | `internal/config/` | YAML configuration loading and defaults |
 | `database` | `internal/database/` | SQLite catalog + bitemporal fact store: CRUD, migrations, queries |
 | `datalog` | `internal/datalog/` | Datalog engine: rule loader, SQL compiler, recursive fixpoint, `Evaluate` orchestrator, `catalog_entry` built-in relation |
-| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema (pudl-owned) and model instance loading for `pudl run`/`pudl model` |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema (pudl-owned) and model instance loading for `pudl check`/`pudl model` |
 | `doctor` | `internal/doctor/` | Workspace health checks |
 | `errors` | `internal/errors/` | Typed error codes for CLI error handling |
 | `git` | `internal/git/` | Git operations on schema repository |
@@ -184,7 +184,7 @@ ImportFileWithFriendlyIDs(opts)
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
 | `lister` | `internal/lister/` | List/query with filters and display options |
-| `observe` | `internal/observe/` | Observation ingest for `pudl run`: snapshots, schema routing, redaction |
+| `observe` | `internal/observe/` | Observation ingest for `pudl check`: snapshots, schema routing, redaction |
 | `repo` | `internal/repo/` | Repository-level init |
 | `workspace` | `internal/workspace/` | Workspace discovery and schema-path resolution |
 | `schema` | `internal/schema/` | Schema file management and discovery |
@@ -250,12 +250,12 @@ PUDL is a data import, cataloging, and validation system. The core flow is:
 System-model orchestration is a second, bounded flow over the same catalog:
 
 ```text
-exact named run-set
-  -> preflight dependencies and binding shapes
-  -> observe producers and pin successful snapshots
-  -> project authorized plain scalars into consumer templates
-  -> observe each consumer with its #CommandObserve runs
-  -> persist linked run-set/member reports and redacted evidence
+pudl check <models...> (exactly the named models)
+  -> order producers first by depends_on within the named set; reject cycles
+  -> observe each model with its #CommandObserve runs; block dependents of a
+     producer that did not succeed
+  -> persist one check report embedding each model's report, plus the
+     member reports and redacted evidence
 ```
 
 PUDL owns selection, observation, catalog provenance, and reports. It changes
@@ -265,8 +265,8 @@ After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
 - **Validated** against assigned schemas via `pudl doctor`
 - **Exported** in various formats via `pudl export`
-- **Compared** by `pudl run <model>`: a `#SystemModel` declares how to observe a system
-  and its desired state, `pudl run` observes and computes drift as one phase and
+- **Compared** by `pudl check <model>...`: a `#SystemModel` declares how to observe a system
+  and its desired state, `pudl check` observes and computes drift as one phase and
   reports it; inspect status via `pudl status`
 - **Re-classified** when schemas change via the `pudl doctor --fix` inference repair
 

@@ -5,6 +5,8 @@ This document describes what PUDL is today and where it's headed.
 > **2026-11-01:** PUDL no longer changes infrastructure. Convergence and the mu
 > integration were removed; references to them below are historical. See
 > [the removal design](design/2026-11-01-remove-convergence-and-mu.md).
+> `pudl run` and `pudl run set` were replaced by `pudl check <model>...`, and
+> `pudl run report` by `pudl report`.
 
 ## Core Purpose
 

@@ -1036,7 +1036,7 @@ configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
 
-`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
+`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots do not count as a model's latest live observation until it is observed again. See [backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -1166,7 +1166,7 @@ A model is a registered `#SystemModel` describing a `desired` state and the
 sources that populate observed state. Catalog rows carry a `target` — the run
 target that produced them (e.g. `//models/<name>`, a populate
 phase `//models/<name>:populate`);
-status is recorded per target. Drift detection is a phase of `pudl run`, not a
+status is recorded per target. Drift detection is a phase of `pudl check`, not a
 standalone command.
 
 ## pudl model deps
@@ -1271,8 +1271,9 @@ CUE template and runs structural checks on its arms without touching any externa
 system.
 ```
 
-Models with plain bindings are valid before their catalog values exist; the
-resolved scalars and final concrete model are validated again at run time.
+A model is validated as authored: CUE decode, structural checks on its arms,
+and its schema contracts. A model that still declares a retired field (such as
+`inputs` or `bindings`) fails with an error naming the field.
 
 ## pudl prime
 
@@ -1802,7 +1803,7 @@ real verdict and a note.
 
 `clean` is the single in-sync state (drift == ∅), written only off a live
 observation, never off a `--from-catalog` replay. `failed` appears only on rows
-written by the retired convergence workflow; the next run replaces it.
+written by the retired convergence workflow; the next check replaces it.
 
 ## pudl version
 

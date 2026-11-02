@@ -1,7 +1,7 @@
 package systemmodel
 
 // #SystemModel — a packaging of the IDEA layers / ACUTE phases behind one
-// declaration. pudl owns this schema; `pudl run <model>` loads an *instance*
+// declaration. pudl owns this schema; `pudl check <model>` loads an *instance*
 // of it (the run unit) and orchestrates its phases.
 //
 // populate is #CommandObserve. A model without populate is checks-only: it

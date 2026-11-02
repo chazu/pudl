@@ -5,7 +5,7 @@ what should happen to it: **delete**, **integrate into the ACUTE/#SystemModel
 loop**, or **keep (rename/doc-fix only)**.
 
 Working doc — we go through one item at a time. Status column tracks decisions as
-we make them.
+we make them. (2026-11-01: `pudl run`/`run set` below are now `pudl check`.)
 
 ## Background: the two parallel worlds
 

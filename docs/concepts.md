@@ -169,32 +169,24 @@ unit: it declares the intended state for one thing the model is responsible for.
 
 Use `pudl model list` to see available models, `pudl model show <name>` to inspect one, and `pudl model validate <name>` to check that a model parses and conforms to `#SystemModel`.
 
-## Running a Model
+## Checking Models
 
-`pudl run <name>` drives a model through an observe-only loop:
+`pudl check <name>...` drives each named model through an observe-only loop:
 
 1. **Populate** -- runs the model's `#CommandObserve` commands and ingests the JSON records they print as one observation snapshot.
 2. **Drift** -- set-diffs the model's `desired` state against the records it just observed. `--from-catalog` replays an already-ingested snapshot instead.
 3. **Checks** -- evaluates the model's invariants against current facts.
-4. **Report** -- records a verdict for the run.
+4. **Report** -- records the model's verdict in the check's report.
 
-`pudl run` never changes anything in the world: it reports drift, and the tools that own a system apply changes. (Convergence through mu was removed on 2026-11-01; see [retired commands](retired-commands.md#convergence-and-mu-integration).)
+A check runs exactly the models it names, producers first: a model runs after
+every named model it lists in `depends_on`. Dependencies that are not named are
+never run; a model whose named producer did not succeed is recorded `blocked`.
+Each check records one report for one model or many, embedding every model's
+full report; `pudl report [id]` reads it again.
+
+`pudl check` never changes anything in the world: it reports drift, and the tools that own a system apply changes. (Convergence through mu was removed on 2026-11-01; see [retired commands](retired-commands.md#convergence-and-mu-integration).)
 
 `pudl status` reads each model's recorded verdict (`unknown | drifted | clean`). `clean` is the single in-sync state, written only when a live observation shows no drift. Rows written by the retired convergence workflow may still hold `failed`, and their `converging` value reads as `unknown`.
-
-### Cross-model value wiring
-
-A model template can declare required scalar `inputs` and `bindings` that name
-a producer model, resource schema and identity, and RFC 6901 field path. Plain
-projection is fail-closed: the consumer slot and source schema field must both
-carry `@pudl(binding=plain)`. PUDL selects a successful observation snapshot,
-projects one scalar, type-checks the elaborated model, and records snapshot/run
-provenance plus a value digest in the run report.
-
-`pudl run set <models...>` coordinates exactly the named set. It validates
-completeness and cycles before execution, orders producers first, and pins each
-successful producer observation for its consumers. It never starts an omitted
-producer implicitly. Every member is observe-only.
 
 ## Fixed-Point Verification
 

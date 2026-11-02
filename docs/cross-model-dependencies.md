@@ -1,12 +1,15 @@
 # Design: cross-model data dependencies
 
-**Status:** Declared and binding dependencies are supported. Heuristic
+**Status:** Declared dependencies are supported. Heuristic
 value-equality dependency derivation was retired on 2026-10-10; see
 [retired commands](retired-commands.md). `pudl model deps` refreshes authoritative
 edges without running models. Historical implementation details below describe
 the original delivery. Convergence and the mu integration referred to below were
 removed on 2026-11-01 ([retired commands](retired-commands.md#convergence-and-mu-integration));
-dependency facts, `pudl run set` and plain value bindings remain.
+dependency facts remain. On the same date `pudl run` and `pudl run set` were
+replaced by `pudl check <model>...`, which orders the named models producers
+first by `depends_on`, and value bindings were removed
+([retired commands](retired-commands.md)). `pudl run` below is historical.
 
 > **Supersession note (2026-08-05):** The dependency fact substrate in this
 > document remains authoritative. The claims below that cross-model value flow
@@ -277,7 +280,7 @@ complete once the discovery pass has run).
 ### Retired heuristic dependencies
 
 Value-equality guesses could confuse unrelated strings with resource references.
-Use declared dependencies or explicit value bindings. Migration 24 retracts only
+Use declared dependencies. Migration 24 retracts only
 assertions owned by the retired heuristic and preserves their history.
 
 ## What the system does with the relation
@@ -308,7 +311,7 @@ still plans and executes each member's internal target/action graph.
 | Item | When |
 |------|------|
 | ✅ Phase 1: `depends_on` field + reconciled `model_depends_on` facts + the 3 rules + topo helper + `pudl query` | DONE 2026-06-30 |
-| ✅ Stale-upstream warning (`pudl run --check-upstream`) | DONE 2026-06-30 |
+| ✅ Stale-upstream warning (`pudl run --check-upstream`, now `pudl check --check-upstream`) | DONE 2026-06-30 |
 | ✅ Coverage: `pudl model deps` no-run discovery pass | DONE 2026-06-30 |
 | Heuristic dependency derivation | Retired 2026-10-10 |
 | Deletion-safety warning | future — `pudl delete` is generic catalog-entry deletion; a model-aware warn is a separate, small follow-up |
