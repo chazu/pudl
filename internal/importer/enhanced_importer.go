@@ -164,7 +164,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	dateDir := timestamp.Format("2006/01/02")
 	rawDir := filepath.Join(e.dataPath, "raw", dateDir)
 	metadataDir := filepath.Join(e.dataPath, "metadata")
-	if err := os.MkdirAll(metadataDir, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(metadataDir); err != nil {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -275,7 +275,7 @@ func (e *EnhancedImporter) CatalogDB() *database.CatalogDB {
 // user's source file and keeps them on the same filesystem as raw storage.
 func (e *EnhancedImporter) TempDir() (string, error) {
 	dir := filepath.Join(e.dataPath, "tmp")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := artifacts.MkdirPrivate(dir); err != nil {
 		return "", fmt.Errorf("create import temp directory: %w", err)
 	}
 	return dir, nil

@@ -44,9 +44,10 @@ type Repair struct {
 // names are canonical before classification, classification settles before
 // identity is computed from it, and projected facts follow the final entries.
 // Policy leaves move to their types before inference re-checks classification,
-// and policy results are re-evaluated last, against the final entries.
+// and policy results are re-evaluated against the final entries. Data
+// permissions depend on no other repair.
 func Registry() []Repair {
-	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, policyResults}
+	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections, policyResults, dataPermissions}
 }
 
 // Names returns the registered repair names in order.

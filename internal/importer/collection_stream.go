@@ -72,7 +72,7 @@ func (c *collectionStream) prepare(sourcePath, format string) (resultErr error) 
 			c.close()
 		}
 	}()
-	c.spool, err = os.Create(filepath.Join(c.dir, "entries.ndjson"))
+	c.spool, err = artifacts.CreatePrivate(filepath.Join(c.dir, "entries.ndjson"))
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
 	if c.stagedBytes+int64(len(stored)) > c.opts.Limits.StagingBytes {
 		return fmt.Errorf("collection exceeds staging byte limit")
 	}
-	if err := os.WriteFile(itemPath, stored, 0o644); err != nil {
+	if err := artifacts.WriteFilePrivate(itemPath, stored); err != nil {
 		return fmt.Errorf("write item %d: %w", index, err)
 	}
 

@@ -71,7 +71,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 		return nil, fmt.Errorf("snapshot id must be a filename component")
 	}
 	tmp := filepath.Join(in.DataDir, "tmp")
-	if err := os.MkdirAll(tmp, 0o755); err != nil {
+	if err := artifacts.MkdirPrivate(tmp); err != nil {
 		return nil, err
 	}
 	dir, err := os.MkdirTemp(tmp, "observe-prepare-*")
@@ -84,7 +84,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 			p.Close()
 		}
 	}()
-	p.spool, err = os.Create(filepath.Join(dir, "entries.ndjson"))
+	p.spool, err = artifacts.CreatePrivate(filepath.Join(dir, "entries.ndjson"))
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 			if staged > limits.StagingBytes {
 				return fmt.Errorf("observation exceeds staging byte limit")
 			}
-			if err := os.WriteFile(entry.StoredPath, recordJSON, 0o600); err != nil {
+			if err := artifacts.WriteFilePrivate(entry.StoredPath, recordJSON); err != nil {
 				return err
 			}
 			counts[entry.Schema]++

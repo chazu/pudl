@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/ingestprep"
 
 	"github.com/chazu/pudl/internal/database"
@@ -198,7 +198,7 @@ func prepareObserveSnapshot(in observeSnapshotEntry) (database.CatalogEntry, err
 	// Store the snapshot JSON.
 	filename := fmt.Sprintf("%s_snapshot.json", in.snapshotID)
 	storedPath := filepath.Join(in.rawDir, filename)
-	if err := os.WriteFile(storedPath, snapshotJSON, 0644); err != nil {
+	if err := artifacts.WriteFilePrivate(storedPath, snapshotJSON); err != nil {
 		return database.CatalogEntry{}, fmt.Errorf("failed to write snapshot: %w", err)
 	}
 

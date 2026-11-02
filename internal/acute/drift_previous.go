@@ -2,7 +2,7 @@ package acute
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"time"
 )
 
@@ -24,32 +24,21 @@ func attachPrevious(drift *ResourceDrift, desired map[string]any, identity Ident
 		} else {
 			var matches []ObservedRecord
 			schema, _ := desired["_schema"].(string)
-			var fields []string
-			if identity != nil {
-				fields = identity(schema)
-			}
-			declared := len(fields) > 0
-			// RecordIdentity uses name/path/id when a resource-type tag has no
-			// directly resolvable schema definition. Compare that actual contract
-			// with the retained identity, rather than treating an empty declaration
-			// as different from the same named fallback field.
-			if !declared {
-				fields = fallbackIdentityFields(desired)
-			}
-			fields = append([]string{}, fields...)
-			sort.Strings(fields)
+			// Compare the identity RecordIdentity actually used, fallback
+			// included, with the identity retained on each earlier record.
+			fields, fallback := IdentityFields(desired, identity)
+			fields = slices.Sorted(slices.Values(fields))
 			incompatible := false
 			for _, candidate := range history.Records {
 				candidateSchema, _ := candidate.Data["_schema"].(string)
 				if candidateSchema != schema {
 					continue
 				}
-				recorded := append([]string{}, candidate.IdentityFields...)
-				if len(recorded) == 0 && !declared {
-					recorded = fallbackIdentityFields(candidate.Data)
+				recorded := candidate.IdentityFields
+				if len(recorded) == 0 && fallback {
+					recorded, _ = IdentityFields(candidate.Data, identity)
 				}
-				sort.Strings(recorded)
-				if !sameFields(fields, recorded) {
+				if !slices.Equal(fields, slices.Sorted(slices.Values(recorded))) {
 					incompatible = true
 					continue
 				}
@@ -92,17 +81,6 @@ func attachPrevious(drift *ResourceDrift, desired map[string]any, identity Ident
 		field.Previous = &value
 	}
 }
-func sameFields(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
 func valueAt(record any, path []PathComponent) (any, bool) {
 	value := record
 	for _, part := range path {
@@ -128,13 +106,4 @@ func valueAt(record any, path []PathComponent) (any, bool) {
 		return nil, false
 	}
 	return value, true
-}
-
-func fallbackIdentityFields(record map[string]any) []string {
-	for _, key := range []string{"name", "path", "id"} {
-		if _, ok := record[key]; ok {
-			return []string{key}
-		}
-	}
-	return nil
 }

@@ -37,6 +37,7 @@ func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after
 	if err != nil {
 		return err
 	}
+	var compared []acute.ObservedRecord
 	index := func(id string) (map[string]acute.ObservedRecord, map[string]string, error) {
 		set, err := loadObservedRecordsContext(ctx, db, id)
 		if err != nil {
@@ -49,6 +50,7 @@ func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after
 			if err != nil {
 				return nil, nil, err
 			}
+			compared = append(compared, record)
 			key, label, ok := acute.RecordIdentity(record.Data, identity)
 			if !ok {
 				return nil, nil, fmt.Errorf("snapshot %s has unidentifiable records", id)
@@ -100,10 +102,14 @@ func compareSnapshots(ctx context.Context, db *database.CatalogDB, before, after
 		}
 		changes = append(changes, change)
 	}
+	fallbacks := acute.IdentityFallbacks(identity, nil, compared)
 	if jsonOutput {
-		return printJSON(map[string]any{"before_snapshot": old, "after_snapshot": current, "changes": changes})
+		return printJSON(map[string]any{"before_snapshot": old, "after_snapshot": current, "changes": changes, "identity_fallbacks": fallbacks})
 	}
 	fmt.Fprintf(outw(), "%s → %s: %d changes (complete: %t → %t)\n", before, after, len(changes), old.Complete, current.Complete)
+	for _, note := range acute.FallbackNotes(fallbacks) {
+		fmt.Fprintf(outw(), "  identity fallback: %s\n", note)
+	}
 	for _, change := range changes {
 		fmt.Fprintf(outw(), "  %s: %s\n", change.Resource, change.Change)
 	}

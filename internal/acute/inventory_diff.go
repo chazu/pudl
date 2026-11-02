@@ -2,6 +2,8 @@ package acute
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -20,38 +22,76 @@ type ObservedRecord struct {
 	ObservedAt     *time.Time
 }
 
+// IdentityFields returns the fields that identify rec: its schema's declared
+// identity_fields or, when the schema is unknown or declares none, the first
+// present of name | path | id (fallback true). This is the only place the
+// fallback is decided. No fields means rec has no identity.
+func IdentityFields(rec map[string]any, identity IdentityResolver) (fields []string, fallback bool) {
+	schema, _ := rec["_schema"].(string)
+	if identity != nil {
+		if declared := identity(schema); len(declared) > 0 {
+			return declared, false
+		}
+	}
+	for _, key := range []string{"name", "path", "id"} {
+		if _, ok := rec[key]; ok {
+			return []string{key}, true
+		}
+	}
+	return nil, true
+}
+
 // RecordIdentity derives a stable match key for a record: its _schema plus the
-// values of the schema's declared identity_fields. When the schema declares no
-// identity_fields it falls
-// back to the first present of name | path | id, which covers the linux/fs/k8s
-// desired shapes.
+// values of its IdentityFields.
 func RecordIdentity(rec map[string]any, identity IdentityResolver) (key string, label string, ok bool) {
 	schema, _ := rec["_schema"].(string)
+	fields, fallback := IdentityFields(rec, identity)
+	if fallback && len(fields) == 1 {
+		v := rec[fields[0]]
+		return fmt.Sprintf("%s|%v", schema, v), fmt.Sprintf("%s/%v", schemaLabel(schema), v), true
+	}
+	values, err := resourceidentity.ExtractFieldValues(rec, fields)
+	encoded, encodeErr := resourceidentity.CanonicalIdentityJSON(values)
+	if len(fields) == 0 || err != nil || encodeErr != nil {
+		return "", "", false
+	}
+	vals := make([]string, 0, len(fields))
+	for _, f := range fields {
+		vals = append(vals, fmt.Sprint(values[f]))
+	}
+	return schema + "|" + encoded, schemaLabel(schema) + "/" + strings.Join(vals, "/"), true
+}
 
-	if identity != nil {
-		if fields := identity(schema); len(fields) > 0 {
-			values, err := resourceidentity.ExtractFieldValues(rec, fields)
-			if err != nil {
-				return "", "", false
+// IdentityFallbacks maps each schema whose records were identified by the
+// name | path | id fallback to the keys used, so it is reported once per
+// schema: such records merge when they share a key.
+func IdentityFallbacks(identity IdentityResolver, desired []map[string]any, observed []ObservedRecord) map[string][]string {
+	out := map[string][]string{}
+	note := func(rec map[string]any) {
+		if fields, fallback := IdentityFields(rec, identity); fallback && len(fields) > 0 {
+			schema, _ := rec["_schema"].(string)
+			if !slices.Contains(out[schema], fields[0]) {
+				out[schema] = append(out[schema], fields[0])
 			}
-			encoded, err := resourceidentity.CanonicalIdentityJSON(values)
-			if err != nil {
-				return "", "", false
-			}
-			vals := make([]string, 0, len(fields))
-			for _, f := range fields {
-				vals = append(vals, fmt.Sprint(values[f]))
-			}
-			return schema + "|" + encoded, schemaLabel(schema) + "/" + strings.Join(vals, "/"), true
 		}
 	}
-
-	for _, k := range []string{"name", "path", "id"} {
-		if v, present := rec[k]; present {
-			return fmt.Sprintf("%s|%v", schema, v), fmt.Sprintf("%s/%v", schemaLabel(schema), v), true
-		}
+	for _, d := range desired {
+		note(d)
 	}
-	return "", "", false
+	for _, o := range observed {
+		note(o.Data)
+	}
+	return out
+}
+
+// FallbackNotes renders identity fallbacks as human lines, sorted.
+func FallbackNotes(fallbacks map[string][]string) []string {
+	notes := make([]string, 0, len(fallbacks))
+	for schema, keys := range fallbacks {
+		notes = append(notes, fmt.Sprintf("%s declares no identity_fields (or is not loaded); records matched by %s", schemaLabel(schema), strings.Join(keys, ", ")))
+	}
+	sort.Strings(notes)
+	return notes
 }
 
 func schemaLabel(s string) string {

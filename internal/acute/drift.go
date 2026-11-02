@@ -95,6 +95,10 @@ type ModelDriftResult struct {
 
 	// ObservedAt is when the compared observation was taken, when known.
 	ObservedAt *time.Time `json:"observed_at,omitempty"`
+
+	// IdentityFallbacks names the schemas whose records were matched by the
+	// name | path | id fallback rather than declared identity_fields.
+	IdentityFallbacks map[string][]string `json:"identity_fallbacks,omitempty"`
 }
 
 // StampObservedAt records when the observation behind a verdict was taken, on
