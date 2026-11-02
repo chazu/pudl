@@ -6,14 +6,15 @@ package rules
 
 // gcp_policy_noncompliant_high — a resource whose result for a policy has a
 // high or critical violation. Checks select the population with evidence, so
-// the rule needs no type filter.
+// the rule needs no type filter. The head carries the severity so a policy
+// waiver can tell which violations a finding stands for.
 gcp_policy_noncompliant_high: {
-	head: {rel: "gcp_policy_noncompliant_high", args: {resource: "$R", policy: "$P"}}
+	head: {rel: "gcp_policy_noncompliant_high", args: {resource: "$R", policy: "$P", severity: "high"}}
 	body: [{rel: "policy_noncompliant", args: {resource: "$R", policy: "$P", severity: "high"}}]
 }
 
 gcp_policy_noncompliant_critical: {
-	head: {rel: "gcp_policy_noncompliant_high", args: {resource: "$R", policy: "$P"}}
+	head: {rel: "gcp_policy_noncompliant_high", args: {resource: "$R", policy: "$P", severity: "critical"}}
 	body: [{rel: "policy_noncompliant", args: {resource: "$R", policy: "$P", severity: "critical"}}]
 }
 
