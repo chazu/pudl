@@ -94,9 +94,12 @@ func LoadDraft(file string, schemaPaths []string) (_ *Draft, resultErr error) {
 	return d, nil
 }
 
-// Select returns the named draft policies; a name the draft does not declare
-// is an error.
+// Select returns the named draft policies, or all of them when none are
+// named; a name the draft does not declare is an error.
 func (d *Draft) Select(names []string) ([]*policy.Policy, error) {
+	if len(names) == 0 {
+		return d.Policies, nil
+	}
 	var out []*policy.Policy
 	for _, name := range names {
 		p, ok := d.Evaluator.lookup(name)

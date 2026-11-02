@@ -100,25 +100,15 @@ func (e *Evaluator) Refresh(ctx context.Context, db *database.CatalogDB, load pr
 		if err != nil {
 			return err
 		}
-		for _, entry := range entries {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			p, ok := e.prepareStored(selected, scope, entry, load, &t.report)
-			if !ok {
-				continue
-			}
-			t.note(p)
+		err = e.evaluateStored(ctx, entries, selected, scope, load, t, func(p *Prepared) error {
 			change, err := Observe(tx, p, database.ProjectionObservation)
-			if err != nil {
-				return err
-			}
 			t.report.add(change)
-		}
-		if opts.DryRun {
+			return err
+		})
+		if err == nil && opts.DryRun {
 			return errDryRun
 		}
-		return nil
+		return err
 	})
 	if errors.Is(err, errDryRun) {
 		err = nil
@@ -129,36 +119,42 @@ func (e *Evaluator) Refresh(ctx context.Context, db *database.CatalogDB, load pr
 // Preview evaluates policies against every stored current resource without
 // writing anything: a what-if evaluation of a draft policy.
 func (e *Evaluator) Preview(ctx context.Context, db *database.CatalogDB, load projection.LoadFunc, policies []*policy.Policy) (Report, error) {
-	t := newTally(policies)
 	entries, err := db.CurrentResourceEntries()
 	if err != nil {
 		return Report{}, err
 	}
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return Report{}, err
-		}
-		if p, ok := e.prepareStored(policies, nil, entry, load, &t.report); ok {
-			t.note(p)
-		}
+	t := newTally(policies)
+	if err := e.evaluateStored(ctx, entries, policies, nil, load, t, func(*Prepared) error { return nil }); err != nil {
+		return Report{}, err
 	}
 	return t.finish(e.loadErrors), nil
 }
 
-// prepareStored evaluates the selected policies that apply to a stored entry.
-// The payload is read only when one applies; an unreadable payload is
-// reported and the entry's results are left as they were.
-func (e *Evaluator) prepareStored(selected []*policy.Policy, scope []string, entry database.CatalogEntry, load projection.LoadFunc, report *Report) (*Prepared, bool) {
-	applicable := intersect(e.Applicable(entry.Schema), selected)
-	var record any
-	if len(applicable) > 0 {
-		var err error
-		if record, err = load(entry); err != nil {
-			report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", entry.ID, err))
-			return nil, false
+// evaluateStored evaluates the selected policies that apply to each stored
+// entry, tallies the results and passes them to observe. The payload is read
+// only when a policy applies; an unreadable payload is reported and the
+// entry's results are left as they were.
+func (e *Evaluator) evaluateStored(ctx context.Context, entries []database.CatalogEntry, selected []*policy.Policy, scope []string, load projection.LoadFunc, t *tally, observe func(*Prepared) error) error {
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		applicable := intersect(e.Applicable(entry.Schema), selected)
+		var record any
+		if len(applicable) > 0 {
+			var err error
+			if record, err = load(entry); err != nil {
+				t.report.Errors = append(t.report.Errors, fmt.Sprintf("%s: %v", entry.ID, err))
+				continue
+			}
+		}
+		p := e.prepare(applicable, scope, entry.Schema, entry.ID, *entry.ResourceID, record)
+		t.note(p)
+		if err := observe(p); err != nil {
+			return err
 		}
 	}
-	return e.prepare(applicable, scope, entry.Schema, entry.ID, *entry.ResourceID, record), true
+	return nil
 }
 
 // intersect keeps the applicable policies (sorted by name) that are selected.
