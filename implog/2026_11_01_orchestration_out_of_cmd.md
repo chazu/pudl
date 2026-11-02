@@ -130,9 +130,9 @@ legacy-field tests, the exit-code mapping (now against `operation.Result`),
 ## Line counts
 
 `cmd/` production Go: 13,026 lines in 88 files at the merge base (`d4e0408`),
-9,732 in 67 before merging `sre-focus` again. After that merge (which brought
-`policy list`/`show`, `show` compliance and the scrub), `sre-focus` has
-13,398 in 91 and this branch 10,098 in 70.
+9,732 in 67 before merging `sre-focus` again. After the final merges (which
+brought `policy list`/`show`, `show` compliance, the scrub and the GCP pack),
+`sre-focus` has 13,399 in 91 and this branch 10,106 in 70.
 
 `git diff --numstat sre-focus HEAD`, Go files, rename-aware:
 
