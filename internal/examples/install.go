@@ -4,10 +4,12 @@ package examples
 import (
 	"bytes"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 
+	gcppack "github.com/chazu/pudl/examples/gcp"
 	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
 )
@@ -22,8 +24,10 @@ func Install(root, name string) ([]string, error) {
 		files, err = gitInventoryFiles()
 	case "gcp-network-hygiene":
 		files, err = gcpNetworkFiles()
+	case "gcp":
+		files, err = treeFiles(gcppack.Files)
 	default:
-		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene)", name)
+		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp)", name)
 	}
 	if err != nil {
 		return nil, err
@@ -110,6 +114,20 @@ func checkParents(root, relative string) error {
 		relative = filepath.Dir(relative)
 	}
 	return nil
+}
+
+// treeFiles installs every file of a bundle at its path in the bundle.
+func treeFiles(bundle fs.FS) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	err := fs.WalkDir(bundle, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(bundle, path)
+		files[path] = data
+		return err
+	})
+	return files, err
 }
 
 func gcpNetworkFiles() (map[string][]byte, error) {

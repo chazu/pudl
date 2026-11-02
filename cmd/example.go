@@ -16,7 +16,7 @@ var exampleCmd = &cobra.Command{
 var exampleInstallCmd = &cobra.Command{
 	Use:       "install <name>",
 	Short:     "Install a runnable example and its fixture data",
-	ValidArgs: []string{"git-inventory", "gcp-network-hygiene"},
+	ValidArgs: []string{"git-inventory", "gcp-network-hygiene", "gcp"},
 	Args:      cobra.ExactArgs(1),
 	Long: `Install a bundled example in the current initialized PUDL workspace.
 No source checkout or download is needed. Identical files are left alone;
@@ -28,6 +28,10 @@ with cat, so the tutorial needs nothing beyond PUDL.
 
 The gcp-network-hygiene example includes a fixture observer, saved checks,
 a corrected fixture, and a separate gcloud-based live model.
+
+The gcp content pack includes draft schemas for the core GCP inventory,
+best-practice policies, gcloud and fixture collectors, and three check
+families: network hygiene, data protection and GKE posture.
 
 Example:
     pudl init
@@ -44,6 +48,10 @@ Example:
 			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": wsPolicy.Workspace.PudlDir, "files": files})
 		}
 		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
+		if args[0] == "gcp" {
+			fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
+			return nil
+		}
 		if args[0] == "gcp-network-hygiene" {
 			fmt.Fprintln(outw(), "Next: pudl check gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
 			return nil

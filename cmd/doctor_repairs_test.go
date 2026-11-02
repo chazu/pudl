@@ -151,3 +151,60 @@ func TestDoctorFixBackfillsIdentity(t *testing.T) {
 	_, repairs = doctorRepairs(t, "--only", "identity")
 	require.Equal(t, repair.StatusOK, repairs["identity"].Status)
 }
+
+// pudl-ww1: an entry imported with an explicit --schema keeps it through a
+// plain `doctor --fix`, though inference would now choose another schema.
+func TestDoctorFixKeepsExplicitImportSchema(t *testing.T) {
+	_, db, payload := repairWorkspace(t)
+	r := runCLI(t, "import", payload, "--schema", "pudl/core.#Item", "--json")
+	require.NoError(t, r.Err, r.Stderr)
+	var imported []struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &imported), r.Stdout)
+	require.Len(t, imported, 1)
+	id := imported[0].ID
+
+	_, repairs := doctorRepairs(t)
+	require.Equal(t, repair.StatusOK, repairs["inference"].Status, "%+v", repairs["inference"])
+	_, repairs = doctorRepairs(t, "--fix")
+	require.Equal(t, repair.StatusOK, repairs["inference"].Status, "%+v", repairs["inference"])
+	stored, err := db.GetEntry(id)
+	require.NoError(t, err)
+	require.Equal(t, "pudl/core.#Item", stored.Schema, "explicit --schema survives doctor --fix")
+
+	_, repairs = doctorRepairs(t, "--fix", "--only", "inference", "--entry", id, "--include-explicit")
+	require.Equal(t, 1, repairs["inference"].Changed, "%+v", repairs["inference"])
+	stored, err = db.GetEntry(id)
+	require.NoError(t, err)
+	require.Equal(t, "user/demo.#Thing", stored.Schema, "--include-explicit may reclassify")
+}
+
+// pudl-ww1: re-importing inferred content with --schema moves the entry, and
+// the move is recorded as explicit, so doctor --fix does not move it back.
+func TestDoctorFixKeepsExplicitReassignment(t *testing.T) {
+	_, db, payload := repairWorkspace(t)
+	r := runCLI(t, "import", payload, "--json")
+	require.NoError(t, r.Err, r.Stderr)
+	var imported []struct {
+		ID string `json:"id"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &imported), r.Stdout)
+	require.Len(t, imported, 1)
+	id := imported[0].ID
+	stored, err := db.GetEntry(id)
+	require.NoError(t, err)
+	require.Equal(t, "user/demo.#Thing", stored.Schema)
+
+	r = runCLI(t, "import", payload, "--schema", "pudl/core.#Item", "--json")
+	require.NoError(t, r.Err, r.Stderr)
+	stored, err = db.GetEntry(id)
+	require.NoError(t, err)
+	require.Equal(t, "pudl/core.#Item", stored.Schema, "re-import with --schema moves the entry")
+
+	_, repairs := doctorRepairs(t, "--fix")
+	require.Equal(t, repair.StatusOK, repairs["inference"].Status, "%+v", repairs["inference"])
+	stored, err = db.GetEntry(id)
+	require.NoError(t, err)
+	require.Equal(t, "pudl/core.#Item", stored.Schema, "the explicit move survives doctor --fix")
+}

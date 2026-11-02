@@ -10,6 +10,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/validator"
@@ -125,15 +126,7 @@ func checkCatalogEntry(entry database.CatalogEntry, validation *validator.Valida
 
 // Explicit assignments are validated, never heuristically reclassified.
 func shouldVerifyInference(data interface{}, entry database.CatalogEntry) bool {
-	if entry.EntryType != nil || entry.CollectionType != nil {
-		return false
-	}
-	if record, ok := data.(map[string]interface{}); ok {
-		if declared, ok := record["_schema"].(string); ok && strings.TrimSpace(declared) != "" {
-			return false
-		}
-	}
-	return true
+	return entry.CollectionType == nil && !importer.ExplicitAssignment(entry, data)
 }
 
 func loadVerifyData(path string) (interface{}, error) {

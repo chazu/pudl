@@ -1,0 +1,41 @@
+[
+  {
+    "creation_time": "2024-01-15T10:00:00+0000",
+    "default_storage_class": "STANDARD",
+    "location": "US-CENTRAL1",
+    "location_type": "region",
+    "metageneration": 3,
+    "name": "example-project-audit-logs",
+    "public_access_prevention": "enforced",
+    "rpo": "DEFAULT",
+    "soft_delete_policy": {"effectiveTime": "2024-03-01T00:00:00+00:00", "retentionDurationSeconds": "604800"},
+    "storage_url": "gs://example-project-audit-logs/",
+    "uniform_bucket_level_access": true,
+    "versioning_enabled": true,
+    "update_time": "2024-06-01T10:00:00+0000"
+  },
+  {
+    "creation_time": "2023-05-02T10:00:00+0000",
+    "default_storage_class": "STANDARD",
+    "location": "US",
+    "location_type": "multi-region",
+    "metageneration": 9,
+    "name": "example-project-public-assets",
+    "public_access_prevention": "inherited",
+    "rpo": "DEFAULT",
+    "storage_url": "gs://example-project-public-assets/",
+    "uniform_bucket_level_access": false,
+    "website_config": {"main_page_suffix": "index.html"},
+    "update_time": "2024-02-11T10:00:00+0000"
+  },
+  {
+    "creation_time": "2019-08-20T10:00:00+0000",
+    "default_storage_class": "NEARLINE",
+    "location": "US-EAST1",
+    "location_type": "region",
+    "metageneration": 1,
+    "name": "example-project-legacy-uploads",
+    "storage_url": "gs://example-project-legacy-uploads/",
+    "update_time": "2019-08-20T10:00:00+0000"
+  }
+]
