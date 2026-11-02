@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/policyfacts"
 )
 
@@ -36,7 +37,7 @@ var policyResults = Repair{
 			return Result{Status: StatusSkipped, Message: "no schemas loaded"}, nil
 		}
 		policies := policyfacts.New(env.Inferrer)
-		report, err := policies.Refresh(ctx, env.DB, LoadPayload, policyfacts.Options{DryRun: dryRun})
+		report, err := policies.Refresh(ctx, env.DB, importer.DecodeEntry, policyfacts.Options{DryRun: dryRun})
 		if err != nil {
 			return Result{}, err
 		}
