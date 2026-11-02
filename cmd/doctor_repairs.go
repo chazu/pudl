@@ -1,54 +1,193 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/repair"
 )
 
-type repairAction struct {
-	Reason  string   `json:"reason"`
-	Preview []string `json:"preview_argv"`
+// Doctor repair flags.
+var (
+	doctorFix             bool
+	doctorDryRun          bool
+	doctorOnly            []string
+	doctorSchema          string
+	doctorOrigin          string
+	doctorIncludeExplicit bool
+	doctorSchemaRef       string
+)
+
+// maxListedChanges bounds the changes listed per repair in text output; JSON
+// lists every change.
+const maxListedChanges = 20
+
+// doctorRepair is one repair's result plus the commands that preview and
+// apply it.
+type doctorRepair struct {
+	repair.Result
+	Preview []string `json:"preview_argv,omitempty"`
 	Apply   []string `json:"apply_argv,omitempty"`
 }
 
-// suggestedRepairs only describes reviewable operations; doctor never changes
-// classification or projection as a side effect of diagnosis.
-func suggestedRepairs(catalog []catalogDiagnostic) ([]repairAction, error) {
-	actions := []repairAction{}
-	for _, entry := range catalog {
-		if entry.Status == "mismatch" {
-			actions = append(actions, repairAction{Reason: "schema inference changed for " + entry.ID, Preview: []string{"pudl", "schema", "reinfer", "--entry", entry.ID, "--dry-run"}, Apply: []string{"pudl", "schema", "reinfer", "--entry", entry.ID, "--force"}})
+// SchemaCacheRoot returns the on-disk root of pudl's schema cache.
+// Lives at <pudlDir>/schemas. Ingest paths (pudl import) register schemas into
+// the same cache the schema-refs repair resolves against.
+func SchemaCacheRoot() string {
+	return filepath.Join(effectivePudlDir(), "schemas")
+}
+
+// doctorMode names what doctor does with repairs: diagnose, dry-run or fix.
+func doctorMode() string {
+	switch {
+	case doctorFix && doctorDryRun:
+		return "dry-run"
+	case doctorFix:
+		return "fix"
+	default:
+		return "diagnose"
+	}
+}
+
+// runDoctorRepairs diagnoses the selected repairs, or applies them with --fix.
+// It never creates a catalog, and refuses to write when health checks failed.
+func runDoctorRepairs(ctx context.Context, selected []repair.Repair, healthOK bool, catalog []catalogDiagnostic, scanned bool) []doctorRepair {
+	out := make([]doctorRepair, 0, len(selected))
+	all := func(status, message string) []doctorRepair {
+		for _, r := range selected {
+			out = append(out, doctorRepair{Result: repair.Result{Name: r.Name, Condition: r.Condition, Status: status, Message: message}})
 		}
+		return out
 	}
 	if _, err := os.Stat(filepath.Join(effectivePudlDir(), "data", "sqlite", "catalog.db")); os.IsNotExist(err) {
-		return actions, nil
+		return all(repair.StatusOK, "no catalog")
 	}
-	db, err := database.OpenCatalogDBReadOnly(effectivePudlDir())
+	if doctorFix && !healthOK {
+		return all(repair.StatusSkipped, "workspace health checks failed; resolve them before applying repairs")
+	}
+	db, err := openDoctorCatalog()
 	if err != nil {
-		return actions, err
+		return all(repair.StatusError, err.Error())
 	}
 	defer db.Close()
+	env, err := repairEnv(db, catalog, scanned)
+	if err != nil {
+		return all(repair.StatusError, err.Error())
+	}
+	changed, projected := false, false
+	for _, r := range selected {
+		result := repair.Run(ctx, r, env, doctorFix, doctorDryRun)
+		changed = changed || result.Changed > 0
+		projected = projected || r.Name == "projections"
+		entry := doctorRepair{Result: result}
+		if result.Status == repair.StatusNeeded || result.Status == repair.StatusPartial {
+			entry.Preview, entry.Apply = repairArgv(r.Name, true), repairArgv(r.Name, false)
+		}
+		out = append(out, entry)
+	}
+	if changed && !projected {
+		// Changed entries leave projected facts behind, as the former
+		// standalone repair commands did.
+		syncProjectionsQuietly(ctx, db)
+	}
+	return out
+}
+
+func openDoctorCatalog() (*database.CatalogDB, error) {
+	if doctorFix {
+		return database.NewCatalogDB(effectivePudlDir())
+	}
+	return database.OpenCatalogDBReadOnly(effectivePudlDir())
+}
+
+func repairEnv(db *database.CatalogDB, catalog []catalogDiagnostic, scanned bool) (*repair.Env, error) {
+	cfg, err := loadEffectiveConfig()
+	if err != nil {
+		return nil, err
+	}
+	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
+	if err != nil {
+		return nil, err
+	}
 	reg, err := projectionRegistry()
 	if err != nil {
-		return actions, err
+		return nil, err
 	}
-	reasons, err := projection.Stale(db, reg)
-	if err != nil {
-		return actions, err
+	opts := repair.Options{
+		SchemaRef: doctorSchemaRef, DriftScanned: scanned, IncludeExplicit: doctorIncludeExplicit,
+		EntryID: doctorEntry, Schema: doctorSchema, Origin: doctorOrigin,
 	}
-	if len(reasons) > 0 {
-		actions = append(actions, repairAction{Reason: fmt.Sprintf("projected facts need review: %v", reasons), Preview: []string{"pudl", "facts", "reproject", "--dry-run"}, Apply: []string{"pudl", "facts", "reproject"}})
+	for _, entry := range catalog {
+		if entry.Status == "mismatch" {
+			opts.DriftEntryIDs = append(opts.DriftEntryIDs, entry.ID)
+		}
 	}
-	unresolved, err := db.ListUnresolvedItemSchemas("")
-	if err != nil {
-		return actions, err
+	return &repair.Env{DB: db, Inferrer: inferrer, Projections: reg, SchemaCacheRoot: SchemaCacheRoot(), Options: opts}, nil
+}
+
+// repairArgv is the doctor invocation that previews (or applies) one repair
+// with the current scope.
+func repairArgv(name string, preview bool) []string {
+	argv := []string{"pudl", "doctor", "--fix"}
+	if preview {
+		argv = append(argv, "--dry-run")
 	}
-	if len(unresolved) > 0 {
-		actions = append(actions, repairAction{Reason: fmt.Sprintf("%d item schema references remain unresolved; load the required definitions before reclassifying", len(unresolved)), Preview: []string{"pudl", "schema", "list", "--json"}, Apply: []string{"pudl", "reclassify"}})
+	argv = append(argv, "--only", name)
+	scope := [][2]string{{"--entry", doctorEntry}, {"--schema", doctorSchema}, {"--origin", doctorOrigin}, {"--schema-ref", doctorSchemaRef}}
+	for _, flag := range scope {
+		if flag[1] != "" {
+			argv = append(argv, flag[0], flag[1])
+		}
 	}
-	return actions, nil
+	if doctorIncludeExplicit {
+		argv = append(argv, "--include-explicit")
+	}
+	return argv
+}
+
+// repairsChanged reports whether any repair wrote something.
+func repairsChanged(repairs []doctorRepair) bool {
+	for _, r := range repairs {
+		if r.Changed > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// repairsFailed reports whether an applied repair could not complete.
+func repairsFailed(repairs []doctorRepair) bool {
+	for _, r := range repairs {
+		if r.Status == repair.StatusError || r.Status == repair.StatusPartial {
+			return true
+		}
+	}
+	return false
+}
+
+func printDoctorRepairs(repairs []doctorRepair) {
+	for _, r := range repairs {
+		fmt.Fprintf(outw(), "Repair %s: %s — %s\n", r.Name, r.Status, r.Message)
+		for i, change := range r.Changes {
+			if i == maxListedChanges {
+				fmt.Fprintf(outw(), "  ... %d more (see --json)\n", len(r.Changes)-maxListedChanges)
+				break
+			}
+			fmt.Fprintf(outw(), "  %s: %s -> %s\n", change.Subject, change.From, change.To)
+		}
+		for _, e := range r.Errors {
+			fmt.Fprintf(outw(), "  error: %s\n", e)
+		}
+		if len(r.Apply) > 0 {
+			fmt.Fprintf(outw(), "  preview: %s\n  apply:   %s\n", strings.Join(r.Preview, " "), strings.Join(r.Apply, " "))
+		}
+	}
+	if doctorMode() == "dry-run" {
+		fmt.Fprintln(outw(), "Dry run: no repairs written.")
+	}
 }

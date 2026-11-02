@@ -91,9 +91,6 @@ independent evidence retention, and verified portable workspace bundles.
 | `pudl schema add <package>.<name> <cue-file>` | Add a schema to the repository |
 | `pudl schema new --from <id>` | Generate CUE schema from imported data |
 | `pudl schema show <schema-name>` | Display schema details |
-| `pudl schema migrate` | Run schema migrations |
-| `pudl schema reinfer` | Re-infer schemas for existing entries |
-| `pudl reclassify` | Retry classification for items with unresolved schema references |
 
 ### Models
 
@@ -139,7 +136,7 @@ See [docs/datalog.md](docs/datalog.md) for the evaluator documentation and rule 
 
 | Command | Description |
 |---------|-------------|
-| `pudl doctor` | Workspace health, catalog validation, and inference stability |
+| `pudl doctor` | Workspace health, catalog validation, and inference stability; `--fix` applies catalog repairs |
 | `pudl example install git-inventory` | Install the bundled Git inventory model and sample observations |
 | `pudl config` | Show current configuration |
 | `pudl guide [topic]` / `pudl prime` | Quick-reference guide and agent prompt |
@@ -162,6 +159,7 @@ The overlapping command paths have been consolidated. Update existing scripts:
 | `pudl run-set MODELS...` | `pudl run set MODELS...` |
 | `pudl run-set report/resume/reject ID` | `pudl run report/resume/reject ID` |
 | `pudl list --all-workspaces` | `pudl list` (active catalog, explicit `--origin` filter) |
+| `pudl schema migrate`, `schema reinfer`, `migrate identity`, `reclassify`, `facts reproject` | `pudl doctor --fix` ([repairs](docs/retired-commands.md#catalog-repairs)) |
 
 Former paths are removed rather than retained as aliases. Git/editor/CUE wrappers
 are also retired; see [native replacements](docs/retired-commands.md). Standalone runs and exact sets

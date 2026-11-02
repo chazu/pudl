@@ -9,6 +9,7 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/fieldpath"
+	"github.com/chazu/pudl/internal/importer"
 )
 
 type payloadFields struct {
@@ -58,7 +59,7 @@ func makePayloadMatcher(ctx context.Context, where, selectFields []string) (func
 			return false, fmt.Errorf("payload inspection exceeds its 64 MiB record or 256 MiB scan budget; narrow --schema or --collection-id")
 		}
 		budget -= info.Size()
-		data, err := loadReinferData(entry.StoredPath, entry.Format)
+		data, err := importer.DecodeStoredFile(entry.StoredPath, entry.Format)
 		if err != nil {
 			return false, fmt.Errorf("read entry %s: %w", entry.ID, err)
 		}

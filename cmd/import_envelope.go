@@ -21,7 +21,7 @@ import (
 //   - declared        — (module, version) already in pudl's schema cache
 //   - auto_registered — envelope carried inline definitions, written to cache
 //   - unresolved      — declared without definitions and not cached;
-//     tag for `pudl reclassify`
+//     tag for the `pudl doctor --fix --only schema-refs` repair
 //
 // It writes through the importer's open catalog rather than opening another
 // connection per imported file.

@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Repair commands folded into `pudl doctor --fix` (2026-11-01)
+
+`pudl doctor` diagnoses schema-name normalization, unresolved schema
+references, inference drift, missing or leaf-namespaced identities, and stale
+projected facts, and names the repair for each. `pudl doctor --fix [--only
+NAME]` applies them, `--fix --dry-run` previews them, and the JSON report is
+versioned. `schema migrate`, `schema reinfer`, `migrate identity`,
+`reclassify` and `facts reproject` are retired (`pudl-4fx.2`).
+See [delivery log](../implog/2026_11_01_doctor_fix_repairs.md).
+
 ### Go and dependency vulnerabilities remediated (2026-10-10)
 
 Updated Go to 1.26.9, x/net to v0.60.0, and x/text to v0.42.0, with the
@@ -1015,6 +1025,7 @@ under the hood.
 | `git` | `internal/git/` | Git operations on schema repo |
 | `lister` | `internal/lister/` | List/query with filters |
 | `doctor` | `internal/doctor/` | Health checks, directory validation |
+| `repair` | `internal/repair/` | Catalog repairs diagnosed and applied by `pudl doctor --fix` |
 | `schema` | `internal/schema/` | Schema operations |
 | `repo` | `internal/repo/` | Repo init, skill installation |
 | `skills` | `internal/skills/` | Embedded Claude skill files |

@@ -290,7 +290,7 @@ COMMANDS
   pudl schema new --from <id> --path <package>/#<Definition>
   pudl schema add <name> <file>      Add a schema file
   Open the source path from pudl schema show NAME --json in your editor.
-  pudl schema reinfer                Re-run inference on all entries
+  pudl doctor --fix --only inference Re-infer entries whose inference drifted
 
 SCHEMA INFERENCE
 
@@ -301,7 +301,8 @@ SCHEMA INFERENCE
   3. Best-match selection — most specific schema that validates
 
   The inference result is stored on the catalog entry. Re-inference
-  can be triggered with 'pudl schema reinfer' after schema changes.
+  is diagnosed by 'pudl doctor' and repaired with
+  'pudl doctor --fix --only inference' after schema changes.
 
   Filters such as 'pudl list --schema' match whole definition names when
   the value contains '#' ('#Route' does not match '#Router'); otherwise
@@ -364,8 +365,8 @@ PROJECTED FACTS
   Schemas that declare _pudl.facts project imported records into facts
   (source "projection:<resource_id>", reserved). They track each
   resource's most recently observed record, and are kept in sync by
-  import, run, reinfer and delete. Run 'pudl facts reproject' to sync
-  explicitly; 'pudl query' warns when a sync is pending.
+  import, run, doctor repairs and delete. Run
+  'pudl doctor --fix --only projections' to sync explicitly; 'pudl query' warns when a sync is pending.
 
 SEE ALSO
 
@@ -725,7 +726,7 @@ COMMON CASES
 
   A query or check over imported data finds nothing:
     read the warnings 'pudl query' prints on stderr, then
-    pudl facts reproject --dry-run
+    pudl doctor --fix --dry-run --only projections
     pudl import <file> --schema <name> --dry-run   # identity? facts per relation?
 
   'pudl list --schema' finds nothing:

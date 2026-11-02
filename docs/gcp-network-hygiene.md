@@ -66,9 +66,11 @@ The comparison shows the source-range change. History lists distinct stored
 versions and their observation snapshots, including re-observations of identical
 content. The original report retains the original failing finding.
 
-`pudl doctor --json` includes a reviewable `repairs` list when inference,
-projection, or unresolved schema references need attention. Each item gives
-preview/inspection and apply arguments. Doctor does not apply those changes.
+`pudl doctor --json` includes a `repairs` list diagnosing schema names,
+unresolved schema references, inference drift, identities, and projected facts.
+Each repair that is needed gives preview and apply arguments. Plain `doctor`
+writes nothing; `pudl doctor --fix [--only NAME]` applies the repairs and
+`--fix --dry-run` previews them.
 
 ## Collect a real project
 

@@ -42,3 +42,24 @@ In global mode, substitute the schema path printed by
 Git history, CUE dependency declarations, or editor settings. Schema generation,
 validation, listing, and inference remain PUDL operations. There are no command
 aliases for the retired wrappers.
+
+## Catalog repairs
+
+The standalone repair commands are folded into `pudl doctor`, which diagnoses
+each condition and names its repair; `pudl doctor --fix` applies them and
+`--fix --dry-run` previews them. There are no aliases.
+
+| Retired command | Replacement |
+| --- | --- |
+| `pudl schema migrate` | `pudl doctor --fix --only schema-names` |
+| `pudl schema reinfer --all` | `pudl doctor --fix --only inference --include-explicit` |
+| `pudl schema reinfer --entry ID` | `pudl doctor --fix --only inference --entry ID --include-explicit` |
+| `pudl schema reinfer --schema S` / `--origin O` | `pudl doctor --fix --only inference --schema S` / `--origin O` (add `--include-explicit` for explicit assignments) |
+| `pudl schema reinfer --dry-run` / `--force` | `--fix --dry-run`; `--fix` needs no confirmation prompt |
+| `pudl migrate identity [--dry-run]` | `pudl doctor --fix [--dry-run] --only identity` |
+| `pudl migrate identity --recompute` | `pudl doctor --fix --only identity` (leaf-namespaced ids are detected) |
+| `pudl reclassify [--ref REF]` | `pudl doctor --fix --only schema-refs [--schema-ref REF]` |
+| `pudl facts reproject [--dry-run]` | `pudl doctor --fix [--dry-run] --only projections` |
+
+Without `--include-explicit`, the inference repair re-infers only entries the
+catalog scan found drifted, so explicit producer assignments keep their schema.

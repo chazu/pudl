@@ -203,13 +203,14 @@ identity robust regardless.
 
 ### After upgrading to family-root namespacing
 
-Family-root namespacing changes every `resource_id`. Run the recompute migration
-once after upgrading to bring existing entries onto the new scheme (it also
-re-sequences versions per resource):
+Family-root namespacing changes the `resource_id` of entries assigned to a
+non-root schema. `pudl doctor` detects entries still carrying a leaf-namespaced
+`resource_id`; the identity repair recomputes them and re-sequences the versions
+of the resources they join:
 
 ```bash
-pudl migrate identity --recompute --dry-run   # preview
-pudl migrate identity --recompute             # apply (idempotent)
+pudl doctor --fix --dry-run --only identity   # preview
+pudl doctor --fix --only identity             # apply (idempotent)
 ```
 
 ## Creating a Schema from Data
@@ -302,13 +303,16 @@ git log                        # View history
 
 ## After Adding or Changing Schemas
 
-Run `pudl schema reinfer` to re-classify existing catalog entries against the updated schemas:
+Run `pudl doctor` to find existing catalog entries whose inference now selects a
+different schema, and the inference repair to re-classify them:
 
 ```bash
-pudl schema reinfer
+pudl doctor --fix --only inference
 ```
 
-This re-runs inference on all entries and updates their schema assignments. Entries that previously fell through to the catchall may now match your new, more specific schema.
+This updates the schema assignments of inferred entries. Add
+`--include-explicit` (optionally with `--schema` or `--origin`) to re-infer
+explicit assignments too. Entries that previously fell through to the catchall may now match your new, more specific schema.
 
 You can also verify that inference is stable after changes:
 
@@ -363,13 +367,13 @@ After adding this file:
 ```bash
 pudl schema add myapi.users users.cue
 git commit -m "Add user schemas"
-pudl schema reinfer  # Re-classify existing imports
+pudl doctor --fix --only inference  # Re-classify existing imports
 ```
 
 ## Tips
 
 - **Start permissive, tighten later**: Use `...` to accept extra fields, then constrain as you learn your data shape
 - **Identity fields matter most**: Good identity fields enable version tracking and strong inference. Choose fields that uniquely identify a resource instance.
-- **Use `pudl schema reinfer`** after any schema change to re-classify existing data
+- **Run `pudl doctor --fix --only inference`** after any schema change to re-classify existing data
 - **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match -- consider adding more identity fields or refining the schema structure.
 - **Use `base_schema` for inheritance**: Policy schemas should reference their base type via `base_schema` so the validation cascade walks the inheritance chain correctly.

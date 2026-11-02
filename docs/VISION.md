@@ -89,9 +89,9 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl show` -- Show details of a catalog entry
 - `pudl export` -- Export data in various formats
 - `pudl delete` -- Remove catalog entries
-- `pudl doctor` -- Workspace health, schema validation, and inference stability
+- `pudl doctor` -- Workspace health, schema validation, inference stability, and catalog repairs (`--fix`)
 - `pudl schema list` -- Browse registered schema types
-- `pudl schema *` -- Full schema lifecycle (list, add, new, show, reinfer, migrate)
+- `pudl schema *` -- Full schema lifecycle (list, add, new, show)
 - `pudl model list/show/validate` -- Inspect and validate registered system models
 - `pudl model new` / `pudl model populator add|new` -- Scaffold models and populators
 - `pudl model deps` -- Refresh and show the cross-model dependency graph
@@ -103,13 +103,11 @@ This separation keeps pudl focused on data and knowledge while mu handles side e
 - `pudl mu ingest-observe` -- Ingest observe results and create a snapshot
 - `pudl mu ingest-manifest` -- Ingest mu build manifests
 - CUE module dependencies are managed with the native `cue mod` commands
-- `pudl migrate` -- Run database migrations
 - `pudl facts add` -- Record generic assertions under an explicit relation
 - `pudl facts list/show/retract/invalidate` -- Manage facts in the bitemporal store
 - `pudl query` -- Evaluate Datalog rules and query derived facts
 - `pudl rule add` -- Validate and install Datalog rule files
 - `pudl rule new` -- Scaffold a Datalog rule
-- `pudl reclassify` -- Retry classification for items with unresolved schema references
 - `pudl example install` -- Install bundled examples into a workspace
 - `pudl guide` / `pudl prime` -- Agent and human quick-reference output
 - `pudl help --json` -- Machine-readable command tree
