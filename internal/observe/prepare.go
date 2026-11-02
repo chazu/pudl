@@ -13,6 +13,7 @@ import (
 
 	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/ingestprep"
 	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
@@ -242,7 +243,14 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 					return err
 				}
 				entry := descriptor.CatalogEntry
-				existing, err := tx.GetLatestObserveByContentHash(*entry.Target, *entry.ContentHash)
+				// Dedup on the entry ID itself — the content hash — since that is
+				// what the catalog keys on. A byte-identical record from another
+				// target or model is the same entry: reuse it and record its
+				// membership in this snapshot.
+				existing, err := tx.GetEntry(entry.ID)
+				if errors.GetErrorCode(err) == errors.ErrCodeNotFound {
+					existing, err = nil, nil
+				}
 				if err != nil {
 					return err
 				}
