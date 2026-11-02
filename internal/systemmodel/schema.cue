@@ -1,7 +1,7 @@
 package systemmodel
 
 // #SystemModel — a packaging of the IDEA layers / ACUTE phases behind one
-// declaration. pudl owns this schema; `pudl run <model>` loads an *instance*
+// declaration. pudl owns this schema; `pudl check <model>` loads an *instance*
 // of it (the run unit) and orchestrates its phases.
 //
 // populate is #CommandObserve. A model without populate is checks-only: it
@@ -24,12 +24,6 @@ package systemmodel
 	// Quoted because this is the JSON-visible routing tag emitted when the
 	// model itself is persisted as a typed catalog resource.
 	"_schema"?: string
-
-	// INPUTS + BINDINGS are authoring-only. PUDL resolves every binding to one
-	// concrete scalar and unifies it into inputs before decoding SystemModel.
-	// Runtime models and catalog model-instance records omit both fields.
-	inputs?: {...}
-	bindings?: {[string]: #ValueBinding}
 
 	// DEPENDS_ON — NAMES of other #SystemModel instances whose output this
 	// model's desired/observed state depends on. Model names (each dependency's
@@ -64,6 +58,8 @@ package systemmodel
 	// (docs/retired-commands.md).
 	plugins?:  [...#PluginDef]
 	converge?: #PluginPlan
+	inputs?: {...}
+	bindings?: {[string]: #ValueBinding}
 
 	// FRESHNESS — loop cadence.
 	freshness?: #Freshness
@@ -130,7 +126,8 @@ package systemmodel
 	sealed_outputs?: _
 }
 
-// #ValueBinding selects one scalar field from one exact typed resource.
+// #ValueBinding is the retired value-binding shape, kept so old model files
+// compile and are rejected by name.
 #ValueBinding: {
 	source: #ResourceRef
 	path:   string & !=""

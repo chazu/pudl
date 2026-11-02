@@ -32,7 +32,7 @@ func loadEntryPayload(entry database.CatalogEntry) (any, error) {
 
 // syncProjections reconciles projected facts with the catalog and current
 // specs (see projection.Sync). Commands that change entries, schemas or
-// identity call it when they finish; `pudl run` calls it before checks.
+// identity call it when they finish; `pudl check` calls it before checks.
 func syncProjections(ctx context.Context, db *database.CatalogDB, dryRun bool) (projection.SyncReport, error) {
 	reg, err := projectionRegistry()
 	if err != nil {

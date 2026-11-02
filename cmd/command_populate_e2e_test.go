@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -44,10 +43,9 @@ func TestCommandPopulateAndChecksOnlyModels(t *testing.T) {
 	r := runCLI(t, "model", "validate", "gcp-firewalls")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
-	r = runCLI(t, "run", "gcp-firewalls", "--json")
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
 	require.Error(t, r.Err, "the open firewall fails the check")
-	var report RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report), r.Stdout+r.Stderr)
+	report := checkedModel(t, r.Stdout)
 	require.NotNil(t, report.Populate)
 	assert.Equal(t, 2, report.Populate.Records, "one record per project run")
 	require.Len(t, report.Checks, 1)
@@ -55,10 +53,9 @@ func TestCommandPopulateAndChecksOnlyModels(t *testing.T) {
 	assert.Equal(t, 2, report.Checks[0].Count, "set: project kept the two projects' firewalls distinct")
 
 	// A checks-only model evaluates the same check over the catalog as is.
-	r = runCLI(t, "run", "gcp-posture", "--json")
+	r = runCLI(t, "check", "gcp-posture", "--json")
 	require.Error(t, r.Err)
-	report = RunReport{}
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &report), r.Stdout+r.Stderr)
+	report = checkedModel(t, r.Stdout)
 	assert.Equal(t, "checks-only", report.Mode)
 	assert.Nil(t, report.Populate)
 	require.Len(t, report.Checks, 1)

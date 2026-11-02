@@ -93,7 +93,7 @@ detect deletions.
 
 ### Keeping facts in sync
 
-`pudl import` and `pudl run` project as records arrive. Afterwards they bring
+`pudl import` and `pudl check` project as records arrive. Afterwards they bring
 everything else up to date: data imported before a facts block existed,
 changed facts blocks, and deleted or reassigned entries. `delete`,
 `snapshot prune` and the `pudl doctor --fix` repairs do the same when they finish.
@@ -125,7 +125,7 @@ PUDL also reports potential projection and rule misses during exploration:
 - **Import and run summaries** list the facts projected per relation. They warn
   when a declared relation produced none (usually a path typo) and when values
   were left out.
-- **`pudl query` and `pudl run`** lint the rules a query or check depends on:
+- **`pudl query` and `pudl check`** lint the rules a query or check depends on:
   - a body relation that nothing produces (no rule, no facts block, no stored
     facts)
   - an arg that the relation's facts block does not declare

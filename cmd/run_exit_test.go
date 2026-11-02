@@ -27,7 +27,23 @@ func TestExitCodeForPrefersExplicitCodeThenPUDLError(t *testing.T) {
 		"an explicit code wins, so --detailed-exitcode's 2 is never an input error")
 }
 
-func TestDetailedRunExit(t *testing.T) {
+// singleModelCheck is the result of a check of one model that concluded with
+// report and err, as executeCheck reports it.
+func singleModelCheck(report *RunReport, err error) (*checkResult, error) {
+	if report == nil {
+		return nil, err
+	}
+	member := acute.RunSetMemberReport{Model: "m", Result: database.RunStatusSucceeded}
+	if err != nil {
+		member.Result = database.RunStatusFailed
+		member.Error = err.Error()
+		err = fmt.Errorf("check c failed: m failed: %w", err)
+	}
+	result := &checkResult{report: &acute.RunSetReport{Members: []acute.RunSetMemberReport{member}}, findings: reportHasFindings(report)}
+	return result, err
+}
+
+func TestDetailedCheckExitForOneModel(t *testing.T) {
 	clean := &RunReport{Drift: &ModelDriftResult{Clean: true, Verified: true}}
 	drifted := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: true}}
 	replayDrift := &RunReport{Drift: &ModelDriftResult{Clean: false, Verified: false}}
@@ -51,45 +67,46 @@ func TestDetailedRunExit(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.code, exitCodeFor(detailedRunExit(tc.report, tc.err)))
+			assert.Equal(t, tc.code, exitCodeFor(detailedCheckExit(singleModelCheck(tc.report, tc.err))))
 		})
 	}
 }
 
-func TestDetailedRunExitKeepsTheErrorMessage(t *testing.T) {
-	err := detailedRunExit(&RunReport{}, errFailSeverityChecks)
+func TestDetailedCheckExitKeepsTheErrorMessage(t *testing.T) {
+	result, checkErr := singleModelCheck(&RunReport{}, errFailSeverityChecks)
+	err := detailedCheckExit(result, checkErr)
 	assert.True(t, errors.Is(err, errFailSeverityChecks))
-	assert.Equal(t, errFailSeverityChecks.Error(), err.Error())
+	assert.Equal(t, checkErr.Error(), err.Error())
 }
 
-func TestDetailedRunSetExit(t *testing.T) {
-	observe := func(findings bool, members ...acute.RunSetMemberReport) *runSetResult {
-		return &runSetResult{report: &acute.RunSetReport{Mode: "observe-only", Members: members}, findings: findings}
+func TestDetailedCheckExitForSeveralModels(t *testing.T) {
+	observe := func(findings bool, members ...acute.RunSetMemberReport) *checkResult {
+		return &checkResult{report: &acute.RunSetReport{Mode: "observe-only", Members: members}, findings: findings}
 	}
 	checkFailed := acute.RunSetMemberReport{Model: "a", Result: database.RunStatusFailed, Error: errFailSeverityChecks.Error()}
 	blocked := acute.RunSetMemberReport{Model: "b", Result: database.RunStatusBlocked, Error: "blocked by unsuccessful prerequisite \"a\""}
-	broken := acute.RunSetMemberReport{Model: "c", Result: database.RunStatusFailed, Error: "mu observe: exit 1"}
-	setFailed := fmt.Errorf("run set s failed")
+	broken := acute.RunSetMemberReport{Model: "c", Result: database.RunStatusFailed, Error: "populate: exit 1"}
+	setFailed := fmt.Errorf("check s failed")
 
-	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(observe(false), nil)))
-	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(observe(true), nil)))
+	assert.Equal(t, 0, exitCodeFor(detailedCheckExit(observe(false), nil)))
+	assert.Equal(t, 2, exitCodeFor(detailedCheckExit(observe(true), nil)))
 
-	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(observe(true, checkFailed, blocked), setFailed)))
-	assert.Equal(t, 1, exitCodeFor(detailedRunSetExit(observe(true, checkFailed, broken), setFailed)))
-	assert.Equal(t, 1, exitCodeFor(detailedRunSetExit(nil, fmt.Errorf("resolve model"))))
+	assert.Equal(t, 2, exitCodeFor(detailedCheckExit(observe(true, checkFailed, blocked), setFailed)))
+	assert.Equal(t, 1, exitCodeFor(detailedCheckExit(observe(true, checkFailed, broken), setFailed)))
+	assert.Equal(t, 1, exitCodeFor(detailedCheckExit(nil, fmt.Errorf("resolve model"))))
 }
 
-func TestRunSetDetailedExitThroughRealSets(t *testing.T) {
-	h, _ := setupRunSetFixture(t)
+func TestDetailedCheckExitThroughRealChecks(t *testing.T) {
+	setupCheckFixture(t)
 
-	result, err := executeRunSet(context.Background(), []string{"producer"}, h.opts)
+	result, err := executeCheck(context.Background(), []string{"producer"}, checkOptions{})
 	assert.NoError(t, err)
-	assert.Equal(t, 0, exitCodeFor(detailedRunSetExit(result, err)), "a populate-only member finds nothing")
+	assert.Equal(t, 0, exitCodeFor(detailedCheckExit(result, err)), "a populate-only member finds nothing")
 
-	result, err = executeRunSet(context.Background(), []string{"drifter"}, h.opts)
+	result, err = executeCheck(context.Background(), []string{"drifter"}, checkOptions{})
 	assert.NoError(t, err, "observe-only drift is a result, not an error")
 	assert.True(t, result.findings)
-	assert.Equal(t, 2, exitCodeFor(detailedRunSetExit(result, err)))
+	assert.Equal(t, 2, exitCodeFor(detailedCheckExit(result, err)))
 }
 
 func TestSilenceBareExitOnlySilencesMessagelessExits(t *testing.T) {

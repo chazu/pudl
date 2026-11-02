@@ -1,9 +1,6 @@
 package systemmodel
 
 import (
-	"encoding/json"
-	"fmt"
-	"strings"
 	"testing"
 
 	"cuelang.org/go/cue"
@@ -22,136 +19,36 @@ func compileTemplate(t *testing.T, source, name string) cue.Value {
 	return instance
 }
 
-func plainTemplateSource(slot string) string {
-	return fmt.Sprintf(`
+const appTemplateSource = `
 app: #SystemModel & {
 	name: "app"
-	inputs: {subnet_id: %s}
-	bindings: subnet_id: {
-		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
-		path: "/SubnetId"
-	}
+	depends_on: ["network"]
 	populate: runs: [{argv: ["true"]}]
-	desired: [{"_schema": "example.application", name: "api", subnet_id: inputs.subnet_id}]
-}`, slot)
-}
+	desired: [{"_schema": "example.application", name: "api"}]
+}`
 
-func TestModelTemplateElaboratesPlainInput(t *testing.T) {
-	value := compileTemplate(t, plainTemplateSource(`string @pudl(binding=plain)`), "app")
+func TestModelTemplateDecodesConcreteModel(t *testing.T) {
+	value := compileTemplate(t, appTemplateSource, "app")
 	template, err := NewTemplate(value, TemplateOrigin{SchemaName: "models.#App", LoadDir: "/models"})
 	require.NoError(t, err)
 	assert.Equal(t, "app", template.Name)
 	assert.Equal(t, "/models", template.Origin.LoadDir)
+	assert.Equal(t, []string{"network"}, template.DependsOn)
 	assert.Same(t, value.Context(), template.Context())
-	require.Contains(t, template.Inputs, "subnet_id")
-	require.Contains(t, template.Bindings, "subnet_id")
 
-	model, err := template.Elaborate(map[string]any{"subnet_id": "subnet-123"})
+	model, err := template.Model()
 	require.NoError(t, err)
 	require.Len(t, model.Desired, 1)
-	assert.Equal(t, "subnet-123", model.Desired[0]["subnet_id"])
-
-	encoded, err := json.Marshal(model)
-	require.NoError(t, err)
-	assert.NotContains(t, string(encoded), "bindings")
-	assert.NotContains(t, string(encoded), "inputs")
-}
-
-func TestModelTemplateRejectsWrongPlainValueType(t *testing.T) {
-	template, err := NewTemplate(compileTemplate(t, plainTemplateSource(`string @pudl(binding=plain)`), "app"), TemplateOrigin{})
-	require.NoError(t, err)
-
-	_, err = template.Elaborate(map[string]any{"subnet_id": 42})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "conflicting values")
-}
-
-func TestModelTemplateRequiresExactInputSet(t *testing.T) {
-	template, err := NewTemplate(compileTemplate(t, plainTemplateSource(`string @pudl(binding=plain)`), "app"), TemplateOrigin{})
-	require.NoError(t, err)
-
-	_, err = template.Elaborate(nil)
-	require.ErrorContains(t, err, "missing: subnet_id")
-	_, err = template.Elaborate(map[string]any{"subnet_id": "ok", "extra": true})
-	require.ErrorContains(t, err, "extra: extra")
-}
-
-func TestModelTemplateInputContractFailures(t *testing.T) {
-	tests := []struct {
-		name string
-		src  string
-		want string
-	}{
-		{name: "unannotated", src: plainTemplateSource("string"), want: "binding=plain"},
-		{name: "optional", src: strings.Replace(plainTemplateSource(`string @pudl(binding=plain)`), `inputs: {subnet_id: string @pudl(binding=plain)}`, `inputs: {subnet_id?: string @pudl(binding=plain)}`, 1), want: "must be required"},
-		{name: "nested", src: plainTemplateSource(`{value: string} @pudl(binding=plain)`), want: "scalar constraint"},
-		{name: "invalid pointer", src: strings.Replace(plainTemplateSource(`string @pudl(binding=plain)`), `path: "/SubnetId"`, `path: "SubnetId"`, 1), want: "JSON Pointer"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := cuecontext.New()
-			root := ctx.CompileString(schemaCUE+"\n"+tt.src, cue.Filename("template.cue"))
-			if root.Err() != nil {
-				assert.Contains(t, "compile", tt.want)
-				return
-			}
-			_, err := NewTemplate(root.LookupPath(cue.ParsePath("app")), TemplateOrigin{})
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.want)
-		})
-	}
-}
-
-func TestModelTemplateHonorsInheritedPlainAnnotation(t *testing.T) {
-	const source = `
-#PlainSubnet: string @pudl(binding=plain)
-app: #SystemModel & {
-	name: "app"
-	inputs: subnet_id: #PlainSubnet
-	bindings: subnet_id: {
-		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
-		path: "/SubnetId"
-	}
-	populate: runs: [{argv: ["true"]}]
-}`
-	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
-	require.NoError(t, err)
-}
-
-func TestModelTemplateRejectsConflictingInheritedAnnotations(t *testing.T) {
-	const source = `
-#Plain: string @pudl(binding=plain)
-#Sealed: string @pudl(binding=sealed)
-app: #SystemModel & {
-	name: "app"
-	inputs: token: #Plain & #Sealed
-	bindings: token: {
-		source: {model: "producer", schema: "example.#Thing", identity: {name: "one"}}
-		path: "/name"
-	}
-	populate: runs: [{argv: ["true"]}]
-}`
-	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
-	require.ErrorContains(t, err, "conflicting")
-}
-
-func TestModelTemplateCollectsBindingProducers(t *testing.T) {
-	template, err := NewTemplate(compileTemplate(t, plainTemplateSource(`string @pudl(binding=plain)`), "app"), TemplateOrigin{})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"network"}, template.BindingProducers)
-}
-
-func TestModelTemplateRejectsSelfBinding(t *testing.T) {
-	source := strings.Replace(plainTemplateSource(`string @pudl(binding=plain)`),
-		`model: "network"`, `model: "app"`, 1)
-	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
-	require.ErrorContains(t, err, "cannot bind to itself")
+	assert.Equal(t, "api", model.Desired[0]["name"])
 }
 
 func TestModelTemplateCannotDeclareWorkspaceSecretWritePolicy(t *testing.T) {
-	source := strings.Replace(plainTemplateSource(`string @pudl(binding=plain)`),
-		`name: "app"`, `name: "app"
-	secrets: writable_refs: ["pass:untrusted/*"]`, 1)
+	source := `
+app: #SystemModel & {
+	name: "app"
+	secrets: writable_refs: ["pass:untrusted/*"]
+	populate: runs: [{argv: ["true"]}]
+}`
 	value := cuecontext.New().CompileString(schemaCUE+"\n"+source, cue.Filename("template.cue"))
 	err := value.Err()
 	require.Error(t, err)

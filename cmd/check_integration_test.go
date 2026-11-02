@@ -20,30 +20,24 @@ import (
 	"github.com/chazu/pudl/internal/workspace"
 )
 
-// Run-set fixture models observe through #CommandObserve shell runs. The
-// producer honours two switches so one fixture covers failure and empty
-// observations: PUDL_TEST_FAIL_PRODUCER and PUDL_TEST_EMPTY_PRODUCER. The
-// consumer writes its bound input to PUDL_TEST_CONSUMER_OUT, proving the
-// producer's value reached the consumer's command.
-const runSetFixtureModels = `
+// Check fixture models observe through #CommandObserve shell runs. The
+// producer fails when PUDL_TEST_FAIL_PRODUCER is set. The consumer depends on
+// the producer and touches PUDL_TEST_CONSUMER_OUT when its command runs, so a
+// test can tell whether a blocked consumer ran.
+const checkFixtureModels = `
 
 #Producer: #SystemModel & {
 	name: "producer"
 	populate: runs: [{argv: ["sh", "-c", """
 		if [ -n "$PUDL_TEST_FAIL_PRODUCER" ]; then echo 'producer observation failed' >&2; exit 1; fi
-		if [ -n "$PUDL_TEST_EMPTY_PRODUCER" ]; then echo '[]'; exit 0; fi
 		echo '[{"_schema":"resources.thing","name":"one","value":"ready"}]'
 		"""]}]
 }
 
 #Consumer: #SystemModel & {
 	name: "consumer"
-	inputs: value: string @pudl(binding=plain)
-	bindings: value: {
-		source: {model: "producer", schema: "pudl/resources.#Thing", identity: {name: "one"}}
-		path: "/value"
-	}
-	populate: runs: [{argv: ["sh", "-c", "printf '%s' \"$1\" > \"$PUDL_TEST_CONSUMER_OUT\"; echo '[{\"_schema\":\"resources.consumer\",\"name\":\"consumer\"}]'", "consumer", inputs.value]}]
+	depends_on: ["producer"]
+	populate: runs: [{argv: ["sh", "-c", "touch \"$PUDL_TEST_CONSUMER_OUT\"; echo '[{\"_schema\":\"resources.consumer\",\"name\":\"consumer\"}]'"]}]
 }
 
 #Zeta: #SystemModel & {
@@ -58,13 +52,13 @@ const runSetFixtureModels = `
 }
 `
 
-func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
+func writeCheckFixtureSchemas(t *testing.T, schemaRoot string) {
 	t.Helper()
 	require.NoError(t, os.MkdirAll(filepath.Join(schemaRoot, "cue.mod"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(schemaRoot, "cue.mod", "module.cue"), []byte("module: \"pudl.schemas\"\nlanguage: version: \"v0.14.0\"\n"), 0o644))
 	modelsDir := filepath.Join(schemaRoot, "pudl", "systemmodel")
 	require.NoError(t, os.MkdirAll(modelsDir, 0o755))
-	models := systemmodel.SchemaCUE() + runSetFixtureModels
+	models := systemmodel.SchemaCUE() + checkFixtureModels
 	require.NoError(t, os.WriteFile(filepath.Join(modelsDir, "models.cue"), []byte(models), 0o644))
 	resourcesDir := filepath.Join(schemaRoot, "pudl", "resources")
 	require.NoError(t, os.MkdirAll(resourcesDir, 0o755))
@@ -78,33 +72,28 @@ func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 		tracked_fields: ["value"]
 	}
 	name: string
-	value: string @pudl(binding=plain)
+	value: string
 	...
 }
 `
 	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "resources.cue"), []byte(resources), 0o644))
 }
 
-// runSetHarness drives run sets with explicit options.
-type runSetHarness struct {
-	opts        runSetOptions
+// checkHarness drives checks.
+type checkHarness struct {
 	consumerOut string
 }
 
-func (h *runSetHarness) run(models ...string) error {
-	return runSetForTest(models, h.opts)
-}
-
-func runSetForTest(models []string, opts runSetOptions) error {
-	_, err := executeRunSet(context.Background(), models, opts)
+func (h *checkHarness) run(models ...string) error {
+	_, err := executeCheck(context.Background(), models, checkOptions{})
 	return err
 }
 
-func setupRunSetFixture(t *testing.T) (*runSetHarness, string) {
+func setupCheckFixture(t *testing.T) (*checkHarness, string) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 	pudlDir := config.GetPudlDir()
-	writeRunSetFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
+	writeCheckFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
 	validator.ResetSharedLoaders()
 	inference.ResetShared()
 	t.Cleanup(func() {
@@ -122,10 +111,10 @@ func setupRunSetFixture(t *testing.T) (*runSetHarness, string) {
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	return &runSetHarness{consumerOut: consumerOut}, pudlDir
+	return &checkHarness{consumerOut: consumerOut}, pudlDir
 }
 
-func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
+func latestCheckReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
 	t.Helper()
 	db, err := database.NewCatalogDB(pudlDir)
 	require.NoError(t, err)
@@ -151,15 +140,14 @@ func memberRunReportForTest(t *testing.T, pudlDir, runID string) RunReport {
 	return report
 }
 
-func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing.T) {
-	h, pudlDir := setupRunSetFixture(t)
+func TestCheckRunsProducersFirstAndPersistsLinkedReports(t *testing.T) {
+	h, pudlDir := setupCheckFixture(t)
 
 	require.NoError(t, h.run("consumer", "producer"))
-	bound, err := os.ReadFile(h.consumerOut)
-	require.NoError(t, err)
-	assert.Equal(t, "ready", string(bound), "the producer's value reached the consumer's command")
+	_, err := os.Stat(h.consumerOut)
+	require.NoError(t, err, "the consumer ran")
 
-	setReport := latestRunSetReportForTest(t, pudlDir)
+	setReport := latestCheckReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, setReport.Status)
 	assert.Equal(t, []string{"producer", "consumer"}, setReport.Ordered)
 	require.Len(t, setReport.Members, 2)
@@ -167,21 +155,18 @@ func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing
 	consumerReport := memberRunReportForTest(t, pudlDir, setReport.Members[1].RunID)
 	assert.Equal(t, setReport.RunSetID, consumerReport.RunSetID)
 	assert.Equal(t, database.RunStatusSucceeded, consumerReport.CompletionStatus)
-	require.Len(t, consumerReport.Bindings, 1)
-	assert.Equal(t, "current-run", consumerReport.Bindings[0].Selection)
-	assert.Equal(t, setReport.Members[0].RunID, consumerReport.Bindings[0].ProducerRunID)
 }
 
-func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t *testing.T) {
-	h, pudlDir := setupRunSetFixture(t)
+func TestCheckBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t *testing.T) {
+	h, pudlDir := setupCheckFixture(t)
 	t.Setenv("PUDL_TEST_FAIL_PRODUCER", "1")
 
 	err := h.run("consumer", "producer", "zeta")
-	require.ErrorContains(t, err, "run set")
+	require.ErrorContains(t, err, "producer failed")
 	_, statErr := os.Stat(h.consumerOut)
 	assert.True(t, os.IsNotExist(statErr), "a blocked consumer never runs its command")
 
-	report := latestRunSetReportForTest(t, pudlDir)
+	report := latestCheckReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, report.Status)
 	results := map[string]string{}
 	for _, member := range report.Members {
@@ -189,23 +174,13 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 		memberReport := memberRunReportForTest(t, pudlDir, member.RunID)
 		assert.Equal(t, member.Result, memberReport.CompletionStatus)
 		assert.Equal(t, report.RunSetID, memberReport.RunSetID)
-		if member.Model == "consumer" {
-			require.Len(t, memberReport.BindingIssues, 1)
-			issue := memberReport.BindingIssues[0]
-			assert.Equal(t, "value", issue.Input)
-			assert.Equal(t, "producer", issue.ProducerModel)
-			assert.Equal(t, "pudl/resources.#Thing", issue.Schema)
-			assert.Equal(t, "/value", issue.Path)
-			assert.Equal(t, "producer-unsuccessful", issue.Code)
-			assert.Contains(t, issue.Message, "historical fallback is forbidden")
-		}
 	}
 	assert.Equal(t, database.RunStatusFailed, results["producer"])
 	assert.Equal(t, database.RunStatusBlocked, results["consumer"])
 	assert.Equal(t, database.RunStatusSucceeded, results["zeta"])
 }
 
-func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
+func TestReportCommandReadsStoredRunSetReportByID(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	db, err := database.NewCatalogDB(config.GetPudlDir())
 	require.NoError(t, err)
@@ -220,28 +195,32 @@ func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
-	require.NoError(t, runReportCmd.RunE(runReportCmd, []string{"set_1"}))
-	require.ErrorContains(t, runReportCmd.RunE(runReportCmd, []string{"missing"}), "not found")
+	require.NoError(t, reportCmd.RunE(reportCmd, []string{"set_1"}))
+	require.ErrorContains(t, reportCmd.RunE(reportCmd, []string{"missing"}), "not found")
 }
 
-func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource(t *testing.T) {
-	h, pudlDir := setupRunSetFixture(t)
-	t.Setenv("PUDL_TEST_EMPTY_PRODUCER", "1")
+// One model or several, a check records one report that embeds each model's
+// full report, and `pudl report` renders it with model names.
+func TestCheckOfOneModelRecordsOneReportWithTheModelEmbedded(t *testing.T) {
+	_, pudlDir := setupCheckFixture(t)
+	result, err := executeCheck(context.Background(), []string{"drifter"}, checkOptions{})
+	require.NoError(t, err)
+	require.True(t, result.findings)
 
-	err := h.run("consumer", "producer")
-	require.ErrorContains(t, err, "run set")
-	report := latestRunSetReportForTest(t, pudlDir)
-	require.Len(t, report.Members, 2)
-	consumer := report.Members[1]
-	assert.Equal(t, "consumer", consumer.Model)
-	assert.Equal(t, database.RunStatusFailed, consumer.Result)
+	report := latestCheckReportForTest(t, pudlDir)
+	assert.Equal(t, checkReportVersion, report.ReportVersion)
+	assert.True(t, strings.HasPrefix(report.RunSetID, "check_"), report.RunSetID)
+	require.Len(t, report.Members, 1)
+	var member RunReport
+	require.NoError(t, json.Unmarshal(report.Members[0].Report, &member))
+	assert.Equal(t, "drifter", member.Model)
+	require.NotNil(t, member.Drift)
+	assert.False(t, member.Drift.Clean)
 
-	memberReport := memberRunReportForTest(t, pudlDir, consumer.RunID)
-	require.Len(t, memberReport.BindingIssues, 1)
-	issue := memberReport.BindingIssues[0]
-	assert.Equal(t, "value", issue.Input)
-	assert.Equal(t, "producer", issue.ProducerModel)
-	assert.Equal(t, "source-absent", issue.Code)
-	assert.Equal(t, "/value", issue.Path)
-	assert.True(t, strings.Contains(issue.Message, "no matching"), issue.Message)
+	jsonOutput = false
+	human := captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, []string{report.RunSetID}) })
+	for _, text := range []string{"# model: drifter", "### drift", "check " + report.RunSetID + ": succeeded", "drifter: succeeded"} {
+		assert.Contains(t, human, text)
+	}
+	assert.NotContains(t, human, "//models/")
 }

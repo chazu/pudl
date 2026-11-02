@@ -1,6 +1,6 @@
 # Evidence integrity, explanations, and recovery
 
-PUDL keeps observations, imported data, facts, and run reports locally. These
+PUDL keeps observations, imported data, facts, and check reports locally. These
 features make the retained evidence inspectable and portable without granting
 execution authority to restored history.
 
@@ -56,7 +56,7 @@ evidence rather than fabricating a proof. Oversized witness values are omitted
 with an explicit marker. Human reports present drift and failed checks
 in the finding view; the existing JSON drift/check sections remain available.
 
-`pudl run report [id]` adds current evidence availability to retained findings.
+`pudl report [id]` adds current evidence availability to retained findings.
 This does not recompute their historical previous values. A pruned reference is
 visible as pruned in human and JSON output. Fields recorded by the retired
 convergence workflow (converge results, approval state, sealed bindings) appear
@@ -125,8 +125,9 @@ reports remain history. Existing workspaces are never overwritten. Unsupported
 versions, missing members, corruption, symlinks, and appended nonarchive data fail.
 
 Legacy pending approvals become rejected. Resource status becomes
-unknown. Restored observations remain readable history but cannot supply producer
-bindings until a new live successful observation is recorded. Restoring a backup
+unknown. Restored observations remain readable history, but retention does not
+count them as a model's latest successful observation until a new live
+observation is recorded. Restoring a backup
 does not claim live verification or execute an operation.
 
 These checks detect damage and incomplete backups. They do not authenticate who
@@ -134,7 +135,7 @@ created a bundle; a bundle's checksums are supplied by its own manifest.
 
 ## Check evidence diagnostics
 
-New standalone reports use `report_version: 2`. Checks add an `outcome` field
+Each model's report uses `report_version: 2`. Checks add an `outcome` field
 (`pass`, `fail`, `unknown`, `error`) and structured `diagnostics`. The existing
 `passed` field is true only for a pass. Unknown/error means the check could not
 establish its claim, independent of severity; detailed exit status is 1. A
@@ -145,11 +146,14 @@ Empty JSON arrays from command observers create valid zero-record snapshots.
 
 ## Report summaries and machine errors
 
-New standalone and set reports include a `summary` with separate `execution`,
-`conformity`, `checks`, `verification`, and `scope` fields, finding counts,
-evidence references, and `next_actions`. Each run-set member carries its own
-summary. `age_at_check` is frozen at evaluation time; reading an old report does
-not refresh its evidence. Stored version-1 reports remain readable.
+Check reports (`report_version: 3`) and each model's report include a `summary`
+with separate `execution`, `conformity`, `checks`, `verification`, and `scope`
+fields, finding counts, evidence references, and `next_actions`. Each member of
+a check carries its own summary and its full report under `members[].report`,
+so one response answers every model's result. `age_at_check` is frozen at
+evaluation time; reading an old report does not refresh its evidence. Stored
+`pudl run` and `pudl run set` reports (versions 1 and 2) remain readable with
+`pudl report`.
 
 A completed command may report drift. Inspect conformity and checks instead of
 using `ok` as a synonym for a matching system. `needs-verification` appears only
@@ -158,10 +162,10 @@ occurred without adequate confirmation.
 
 With `--json`, early command failures emit one error document when no result was
 already written, including `code`, `message`, `exit_code`, and suggestions.
-Failures after run creation retain the operation report when available. Output
+Failures after a check starts retain its report when available. Output
 failures are not retried by appending another document.
 
-`pudl run ... --progress-json` emits JSON progress events on stderr, alongside
+`pudl check ... --progress-json` emits JSON progress events on stderr, alongside
 ordinary diagnostics. Events have `type: "progress"`, `event_version`, phase,
 subject, state, and time. Stdout remains the final JSON result. Queries return
 all matching tuples; catalog lists are paginated, and `total_matched` identifies

@@ -124,19 +124,19 @@ func TestLegacyMutationEraCatalogStaysReadable(t *testing.T) {
 	}
 	require.True(t, found, "status lists the legacy target")
 
-	human := ok("run", "report", legacyRunID).Stdout
-	for _, text := range []string{"# run: web", "## legacy fields", "### converge", `"mutation_receipts"`, "### approval_status", "### sealed_bindings", "### resource_scope"} {
+	human := ok("report", legacyRunID).Stdout
+	for _, text := range []string{"# model: web", "## legacy fields", "### converge", `"mutation_receipts"`, "### approval_status", "### sealed_bindings", "### resource_scope"} {
 		require.Contains(t, human, text)
 	}
-	machine := ok("run", "report", legacyRunID, "--json").Stdout
+	machine := ok("report", legacyRunID, "--json").Stdout
 	require.Contains(t, machine, `"converge"`, "JSON reports keep every stored field")
 	require.Contains(t, machine, `"advisory_count"`)
 
-	setHuman := ok("run", "report", legacyRunSetID).Stdout
-	for _, text := range []string{"run-set " + legacyRunSetID, "### approval_id", "### members[0]", `"mutation_required": true`} {
+	setHuman := ok("report", legacyRunSetID).Stdout
+	for _, text := range []string{"check " + legacyRunSetID, "### approval_id", "### members[0]", `"mutation_required": true`} {
 		require.Contains(t, setHuman, text)
 	}
-	require.Contains(t, ok("run", "report", legacyRunSetID, "--json").Stdout, `"approval_status"`)
+	require.Contains(t, ok("report", legacyRunSetID, "--json").Stdout, `"approval_status"`)
 
 	// The legacy pudl/mu schemas still validate their stored entries.
 	doctor := runCLI(t, "doctor", "--json")

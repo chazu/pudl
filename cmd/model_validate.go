@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"cuelang.org/go/cue"
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/inference"
@@ -19,8 +18,7 @@ var modelValidateCmd = &cobra.Command{
 	Short: "Validate a registered #SystemModel without running it",
 	Long: `Resolve and validate a #SystemModel by name. It validates the authored
 CUE template and runs structural checks on its arms without touching any external
-system. Bound models remain valid templates before their catalog values exist;
-their final concrete values are validated again when pudl runs them.`,
+system.`,
 	Args:              cobra.ExactArgs(1),
 	SilenceUsage:      true,
 	ValidArgsFunction: completeModelNames,
@@ -60,27 +58,13 @@ their final concrete values are validated again when pudl runs them.`,
 }
 
 func validateModelTemplate(template *systemmodel.ModelTemplate) ([]string, error) {
-	if len(template.Inputs) == 0 {
-		model, err := template.Elaborate(map[string]any{})
-		if err != nil {
-			return nil, err
-		}
-		problems := validateModel(model)
-		if err := checkModelSchemas(model); err != nil {
-			problems = append(problems, err.Error())
-		}
-		return problems, nil
+	model, err := template.Model()
+	if err != nil {
+		return nil, err
 	}
-
-	var problems []string
-	desired := template.Value().LookupPath(cue.ParsePath("desired"))
-	if list, listErr := desired.List(); listErr == nil {
-		for index := 0; list.Next(); index++ {
-			field := list.Value().LookupPath(cue.MakePath(cue.Str("_schema")))
-			if schema, schemaErr := field.String(); schemaErr != nil || schema == "" {
-				problems = append(problems, fmt.Sprintf("desired[%d]: missing quoted \"_schema\" routing tag", index))
-			}
-		}
+	problems := validateModel(model)
+	if err := checkModelSchemas(model); err != nil {
+		problems = append(problems, err.Error())
 	}
 	return problems, nil
 }

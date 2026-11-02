@@ -36,6 +36,7 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 	}
 	var reports []walkthroughReport
 	var saved [][]byte
+	var checkIDs []string
 	for _, block := range blocks {
 		for _, line := range strings.Split(block[2], "\n") {
 			args := strings.Fields(line)
@@ -73,8 +74,8 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 				require.True(t, filepath.IsLocal(relative), "evidence must stay inside the workspace")
 				args[2] = entries.Entries[0].ID
 			}
-			if args[len(args)-1] == "BASELINE_RUN_ID" {
-				args[len(args)-1] = reports[0].RunID
+			if args[len(args)-1] == "BASELINE_CHECK_ID" {
+				args[len(args)-1] = checkIDs[0]
 			}
 			output := cli(args...)
 			if len(args) > 2 && args[1] == "model" && args[2] == "show" {
@@ -91,8 +92,15 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 				require.Contains(t, string(output), `"default_branch": "release"`)
 				require.Contains(t, string(output), "pudl/git.#GitRepository")
 			}
-			if len(args) > 2 && args[1] == "run" && args[2] == "git-inventory" {
-				data := cli("pudl", "run", "report", "--json")
+			if len(args) > 2 && args[1] == "check" && args[2] == "git-inventory" {
+				check := cli("pudl", "report", "--json")
+				var header struct {
+					ID string `json:"run_set_id"`
+				}
+				require.NoError(t, json.Unmarshal(check, &header))
+				require.True(t, strings.HasPrefix(header.ID, "check_"), header.ID)
+				checkIDs = append(checkIDs, header.ID)
+				data := checkedModelJSON(t, check)
 				var report walkthroughReport
 				require.NoError(t, json.Unmarshal(data, &report))
 				reports = append(reports, report)
@@ -109,7 +117,7 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 		require.True(t, report.Drift.Verified, "each run observes the inventory")
 		require.NotEmpty(t, report.Populate.SnapshotID)
 		require.Equal(t, "succeeded", report.CompletionStatus)
-		require.JSONEq(t, string(saved[i]), string(cli("pudl", "run", "report", report.RunID, "--json")))
+		require.JSONEq(t, string(saved[i]), withoutAvailability(t, cli("pudl", "report", report.RunID, "--json")))
 		if i > 0 {
 			require.NotEqual(t, reports[i-1].RunID, report.RunID)
 			require.False(t, report.Drift.Clean)

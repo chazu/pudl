@@ -10,9 +10,9 @@ package artifact
 		tracked_fields: ["digest"]
 	}
 
-	source: string       @pudl(binding=plain) // upstream registry/repo e.g. "ghcr.io/org/image"
-	tag:    string       @pudl(binding=plain) // version tag e.g. "v1.2.3"
-	digest: string | *"" @pudl(binding=plain) // sha256 digest, empty until locked
+	source: string // upstream registry/repo e.g. "ghcr.io/org/image"
+	tag:    string // version tag e.g. "v1.2.3"
+	digest: string | *"" // sha256 digest, empty until locked
 }
 
 // ArtifactRef represents a generic content-addressed artifact.
@@ -24,9 +24,9 @@ package artifact
 		tracked_fields: ["version", "sha256"]
 	}
 
-	name:    string @pudl(binding=plain)
-	version: string @pudl(binding=plain)
-	sha256?: string @pudl(binding=plain)
-	url?:    string @pudl(binding=plain)
+	name:    string
+	version: string
+	sha256?: string
+	url?:    string
 	...
 }

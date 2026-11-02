@@ -81,5 +81,5 @@ unobserved desired resources as uncertain for partial inventories, exits with an
 error, and cannot promote them to verified status. Existing matching resources
 can still satisfy ensure-present expectations in a partial inventory.
 
-Stored replay (`pudl run --from-catalog`) remains distinct from a new live
+Stored replay (`pudl check <model> --from-catalog`) remains distinct from a new live
 observation.

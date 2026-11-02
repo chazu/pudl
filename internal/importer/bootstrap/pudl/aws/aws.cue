@@ -11,9 +11,9 @@ package aws
 		tracked_fields: ["Arn", "Name", "Status", "Email"]
 	}
 
-	Id:      string @pudl(binding=plain) // 12-digit AWS account ID
-	Arn:     string @pudl(binding=plain)
-	Name:    string @pudl(binding=plain)
+	Id:      string // 12-digit AWS account ID
+	Arn:     string
+	Name:    string
 	Status?: "ACTIVE" | "SUSPENDED" | "PENDING_CLOSURE"
 	Email?:  string
 	...
@@ -29,14 +29,14 @@ package aws
 		tracked_fields: ["instance_type", "state", "vpc_id", "subnet_id", "private_ip", "public_ip", "image_id", "tags", "security_groups", "iam_profile"]
 	}
 
-	instance_id:   string @pudl(binding=plain)
+	instance_id:   string
 	instance_type: string
 	state:         string
-	vpc_id?:       string | null @pudl(binding=plain)
-	subnet_id?:    string | null @pudl(binding=plain)
+	vpc_id?:       string | null
+	subnet_id?:    string | null
 	private_ip?:   string | null
 	public_ip?:    string | null
-	image_id?:     string | null @pudl(binding=plain)
+	image_id?:     string | null
 	tags: [...#Tag]
 	security_groups: [...string]
 	iam_profile?: string | null
@@ -53,11 +53,11 @@ package aws
 		tracked_fields: ["CidrBlock", "State", "IsDefault", "EnableDnsSupport", "EnableDnsHostnames"]
 	}
 
-	VpcId:               string @pudl(binding=plain)
-	CidrBlock:           string @pudl(binding=plain)
+	VpcId:               string
+	CidrBlock:           string
 	State:               "available" | "pending"
 	IsDefault:           bool
-	OwnerId?:            string @pudl(binding=plain)
+	OwnerId?:            string
 	InstanceTenancy?:    "default" | "dedicated" | "host"
 	EnableDnsSupport?:   bool
 	EnableDnsHostnames?: bool
@@ -75,11 +75,11 @@ package aws
 		tracked_fields: ["VpcId", "CidrBlock", "AvailabilityZone", "MapPublicIpOnLaunch", "State"]
 	}
 
-	SubnetId:                 string @pudl(binding=plain)
-	VpcId:                    string @pudl(binding=plain)
-	CidrBlock:                string @pudl(binding=plain)
-	AvailabilityZone:         string @pudl(binding=plain)
-	AvailabilityZoneId?:      string @pudl(binding=plain)
+	SubnetId:                 string
+	VpcId:                    string
+	CidrBlock:                string
+	AvailabilityZone:         string
+	AvailabilityZoneId?:      string
 	State:                    "available" | "pending"
 	MapPublicIpOnLaunch:      bool
 	AvailableIpAddressCount?: int
@@ -98,8 +98,8 @@ package aws
 		tracked_fields: ["VpcId", "Routes", "Associations"]
 	}
 
-	RouteTableId: string @pudl(binding=plain)
-	VpcId:        string @pudl(binding=plain)
+	RouteTableId: string
+	VpcId:        string
 	Routes: [...#Route]
 	Associations: [...#RouteTableAssociation]
 	Tags?: [...#Tag]
@@ -144,9 +144,9 @@ package aws
 		tracked_fields: ["VpcId", "IpPermissions", "IpPermissionsEgress"]
 	}
 
-	GroupId:      string @pudl(binding=plain)
-	GroupName:    string @pudl(binding=plain)
-	VpcId:        string @pudl(binding=plain)
+	GroupId:      string
+	GroupName:    string
+	VpcId:        string
 	Description?: string
 	OwnerId?:     string
 	IpPermissions: [...#IpPermission]
@@ -193,7 +193,7 @@ package aws
 		tracked_fields: ["Attachments"]
 	}
 
-	InternetGatewayId: string @pudl(binding=plain)
+	InternetGatewayId: string
 	OwnerId?:          string
 	Attachments: [...{
 		VpcId: string
@@ -214,9 +214,9 @@ package aws
 		tracked_fields: ["SubnetId", "VpcId", "State", "ConnectivityType"]
 	}
 
-	NatGatewayId:     string @pudl(binding=plain)
-	SubnetId:         string @pudl(binding=plain)
-	VpcId:            string @pudl(binding=plain)
+	NatGatewayId:     string
+	SubnetId:         string
+	VpcId:            string
 	State:            "pending" | "failed" | "available" | "deleting" | "deleted"
 	ConnectivityType: "public" | "private"
 	NatGatewayAddresses?: [...{
@@ -240,8 +240,8 @@ package aws
 		tracked_fields: ["VpcId", "Entries", "IsDefault"]
 	}
 
-	NetworkAclId: string @pudl(binding=plain)
-	VpcId:        string @pudl(binding=plain)
+	NetworkAclId: string
+	VpcId:        string
 	IsDefault:    bool
 	Entries: [...#NetworkACLEntry]
 	Associations: [...{

@@ -80,7 +80,7 @@ func writeSections(b *bytes.Buffer, notes fs.FS, commands []*cobra.Command) erro
 }
 
 // NoteName is the notes file for a command: its path below the root joined
-// with underscores, e.g. "run_set.md" for `pudl run set`.
+// with underscores, e.g. "model_show.md" for `pudl model show`.
 func NoteName(c *cobra.Command) string {
 	path := strings.Fields(c.CommandPath())[1:]
 	return strings.Join(path, "_") + ".md"
@@ -316,7 +316,7 @@ func cell(s string) string {
 	return strings.Join(parts, "`")
 }
 
-// anchor reproduces GitHub's heading anchor for "## pudl run set".
+// anchor reproduces GitHub's heading anchor for "## pudl model show".
 func anchor(c *cobra.Command) string {
 	return strings.ReplaceAll(strings.ToLower(c.CommandPath()), " ", "-")
 }

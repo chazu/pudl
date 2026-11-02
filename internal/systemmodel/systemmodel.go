@@ -1,5 +1,5 @@
 // Package systemmodel defines the #SystemModel schema (pudl-owned) and loads a
-// model *instance* into a Go struct that `pudl run` orchestrates from.
+// model *instance* into a Go struct that `pudl check` orchestrates from.
 //
 // A model instance is the run unit: populate, drift, checks, report. See
 // docs/design/system-models/V1-BUILD-SPEC.md (historical).
