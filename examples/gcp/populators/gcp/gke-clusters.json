@@ -1,0 +1,145 @@
+[
+  {
+    "name": "prod-private",
+    "nodeConfig": {
+      "machineType": "e2-standard-4",
+      "diskSizeGb": 100,
+      "oauthScopes": ["https://www.googleapis.com/auth/cloud-platform"],
+      "metadata": {"disable-legacy-endpoints": "true", "startup-script": "#!/bin/bash\necho fixture-startup-script"},
+      "imageType": "COS_CONTAINERD",
+      "serviceAccount": "gke-nodes@example-project.iam.gserviceaccount.com",
+      "workloadMetadataConfig": {"mode": "GKE_METADATA"},
+      "shieldedInstanceConfig": {"enableSecureBoot": true, "enableIntegrityMonitoring": true}
+    },
+    "masterAuth": {"clusterCaCertificate": "RklYVFVSRS1DQS1OT1QtQS1SRUFMLUNFUlRJRklDQVRF"},
+    "network": "prod-vpc",
+    "subnetwork": "gke-secure",
+    "nodePools": [
+      {
+        "name": "default-pool",
+        "config": {
+          "machineType": "e2-standard-4",
+          "metadata": {"disable-legacy-endpoints": "true", "startup-script": "#!/bin/bash\necho fixture-startup-script"}
+        },
+        "initialNodeCount": 3,
+        "selfLink": "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private/nodePools/default-pool",
+        "version": "1.30.5-gke.1014001",
+        "status": "RUNNING"
+      }
+    ],
+    "networkConfig": {
+      "network": "projects/example-project/global/networks/prod-vpc",
+      "subnetwork": "projects/example-project/regions/us-central1/subnetworks/gke-secure",
+      "datapathProvider": "ADVANCED_DATAPATH"
+    },
+    "privateClusterConfig": {
+      "enablePrivateNodes": true,
+      "masterIpv4CidrBlock": "172.16.0.0/28",
+      "privateEndpoint": "172.16.0.2",
+      "publicEndpoint": "198.51.100.30"
+    },
+    "masterAuthorizedNetworksConfig": {
+      "enabled": true,
+      "cidrBlocks": [{"displayName": "corp", "cidrBlock": "192.0.2.0/24"}]
+    },
+    "workloadIdentityConfig": {"workloadPool": "example-project.svc.id.goog"},
+    "databaseEncryption": {
+      "state": "ENCRYPTED",
+      "keyName": "projects/example-project/locations/us-central1/keyRings/gke/cryptoKeys/etcd-key"
+    },
+    "selfLink": "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private",
+    "zone": "us-central1",
+    "endpoint": "198.51.100.30",
+    "currentMasterVersion": "1.30.5-gke.1014001",
+    "currentNodeVersion": "1.30.5-gke.1014001",
+    "createTime": "2024-04-01T10:00:00+00:00",
+    "status": "RUNNING",
+    "location": "us-central1"
+  },
+  {
+    "name": "legacy-public",
+    "nodeConfig": {
+      "machineType": "e2-medium",
+      "diskSizeGb": 100,
+      "oauthScopes": ["https://www.googleapis.com/auth/devstorage.read_only"],
+      "metadata": {"disable-legacy-endpoints": "true"},
+      "imageType": "COS_CONTAINERD",
+      "serviceAccount": "default"
+    },
+    "masterAuth": {"clusterCaCertificate": "RklYVFVSRS1DQS1OT1QtQS1SRUFMLUNFUlRJRklDQVRF"},
+    "network": "default",
+    "subnetwork": "default",
+    "nodePools": [
+      {
+        "name": "default-pool",
+        "config": {"machineType": "e2-medium", "metadata": {"disable-legacy-endpoints": "true"}},
+        "initialNodeCount": 2,
+        "selfLink": "https://container.googleapis.com/v1/projects/example-project/zones/us-east1-b/clusters/legacy-public/nodePools/default-pool",
+        "version": "1.29.8-gke.1031000",
+        "status": "RUNNING"
+      }
+    ],
+    "networkConfig": {
+      "network": "projects/example-project/global/networks/default",
+      "subnetwork": "projects/example-project/regions/us-east1/subnetworks/default"
+    },
+    "masterAuthorizedNetworksConfig": {},
+    "databaseEncryption": {"state": "DECRYPTED"},
+    "selfLink": "https://container.googleapis.com/v1/projects/example-project/zones/us-east1-b/clusters/legacy-public",
+    "zone": "us-east1-b",
+    "endpoint": "198.51.100.31",
+    "currentMasterVersion": "1.29.8-gke.1031000",
+    "currentNodeVersion": "1.29.8-gke.1031000",
+    "createTime": "2023-02-14T10:00:00+00:00",
+    "status": "RUNNING",
+    "location": "us-east1-b"
+  },
+  {
+    "name": "batch-private",
+    "nodeConfig": {
+      "machineType": "n2-standard-8",
+      "diskSizeGb": 200,
+      "oauthScopes": ["https://www.googleapis.com/auth/cloud-platform"],
+      "metadata": {"disable-legacy-endpoints": "true"},
+      "imageType": "COS_CONTAINERD",
+      "serviceAccount": "gke-batch@example-project.iam.gserviceaccount.com",
+      "workloadMetadataConfig": {"mode": "GKE_METADATA"}
+    },
+    "masterAuth": {"clusterCaCertificate": "RklYVFVSRS1DQS1OT1QtQS1SRUFMLUNFUlRJRklDQVRF"},
+    "network": "prod-vpc",
+    "subnetwork": "gke-nodes",
+    "nodePools": [
+      {
+        "name": "batch-pool",
+        "config": {"machineType": "n2-standard-8", "metadata": {"disable-legacy-endpoints": "true"}},
+        "initialNodeCount": 1,
+        "selfLink": "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/batch-private/nodePools/batch-pool",
+        "version": "1.30.5-gke.1014001",
+        "status": "RUNNING"
+      }
+    ],
+    "networkConfig": {
+      "network": "projects/example-project/global/networks/prod-vpc",
+      "subnetwork": "projects/example-project/regions/us-central1/subnetworks/gke-nodes"
+    },
+    "privateClusterConfig": {
+      "enablePrivateNodes": true,
+      "enablePrivateEndpoint": true,
+      "masterIpv4CidrBlock": "172.16.0.16/28",
+      "privateEndpoint": "172.16.0.18"
+    },
+    "workloadIdentityConfig": {"workloadPool": "example-project.svc.id.goog"},
+    "databaseEncryption": {
+      "state": "ENCRYPTED",
+      "keyName": "projects/example-project/locations/us-central1/keyRings/gke/cryptoKeys/old-etcd-key"
+    },
+    "selfLink": "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/batch-private",
+    "zone": "us-central1",
+    "endpoint": "172.16.0.18",
+    "currentMasterVersion": "1.30.5-gke.1014001",
+    "currentNodeVersion": "1.30.5-gke.1014001",
+    "createTime": "2024-05-20T10:00:00+00:00",
+    "status": "RUNNING",
+    "location": "us-central1"
+  }
+]

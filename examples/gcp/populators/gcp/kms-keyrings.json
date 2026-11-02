@@ -1,0 +1,4 @@
+[
+  {"name": "projects/example-project/locations/global/keyRings/app", "createTime": "2024-01-20T10:00:00.000000Z"},
+  {"name": "projects/example-project/locations/us-central1/keyRings/gke", "createTime": "2024-03-30T10:00:00.000000Z"}
+]
