@@ -41,6 +41,10 @@ func SelectCandidates(
 
 	for schemaName, meta := range metadata {
 		score, reason := scoreCandidate(schemaName, meta, dataFields, hints)
+		if score > 0 && matchesDiscriminator(meta.Discriminators, data) {
+			score += discriminatorBonus
+			reason += ", discriminator field matches"
+		}
 		if score > 0 {
 			candidates = append(candidates, CandidateScore{
 				Schema: schemaName,

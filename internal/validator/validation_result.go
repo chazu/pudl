@@ -45,6 +45,10 @@ type SchemaMetadata struct {
 	TrackedFields  []string `json:"tracked_fields"`  // Fields to monitor for changes
 	IsListType     bool     `json:"is_list_type"`    // True if schema is structurally a list/array type
 
+	// Discriminators are the required top-level fields the schema pins to a
+	// single string (e.g. kind: "compute#firewall"), read from the CUE value.
+	Discriminators map[string]string `json:"-"`
+
 	// Strictly decoded parts of `_pudl`, read separately from the best-effort
 	// decode above because a mistake in them must not be silently dropped:
 	// SensitiveFields controls redaction (a lost entry stores a secret) and
