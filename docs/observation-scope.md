@@ -86,6 +86,11 @@ B establishes A's absence within that second snapshot. Checks selecting the
 second snapshot see B alone. The first snapshot and A's historical facts remain
 available. A partial observation cannot establish that absence.
 
+Check findings follow the same rule over time: a failing match recorded by an
+earlier report is `resolved` only when the current evaluation reached a verdict
+over a complete observation of the same scope; otherwise it is `unknown`. See
+[changes over time](cli-reference.md#pudl-check).
+
 Inventory identity now uses the same nested and quoted field-path extraction as
 import. Missing declared identity fields make a record unidentifiable; the
 name/path/id fallback applies only when no fields are declared. Composite match

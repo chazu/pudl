@@ -20,6 +20,8 @@ const witnessValueLimit = 4096
 // Witness contains only projected query-head arguments, never a recursive
 // proof or hidden body row.
 type Witness struct {
+	// Key is the match's finding identity (FindingKey of its full arguments).
+	Key         string         `json:"key,omitempty"`
 	Resource    string         `json:"resource,omitempty"`
 	Arguments   map[string]any `json:"arguments"`
 	EvidenceIDs []string       `json:"evidence_ids,omitempty"`
@@ -96,7 +98,7 @@ func newWitness(tuple datalog.Tuple) Witness {
 		}
 		args[key] = value
 	}
-	witness := Witness{Arguments: args}
+	witness := Witness{Key: FindingKey(tuple.Args), Arguments: args}
 	for _, key := range []string{"resource", "target", "name"} {
 		if value, ok := args[key].(string); ok {
 			witness.Resource = value
@@ -118,8 +120,8 @@ func WriteFindings(w io.Writer, result CheckResult) {
 	if result.Passed {
 		return
 	}
-	if result.Expect == "nonempty" && !result.Passed {
-		fmt.Fprintf(w, "    - no matching evidence for relation %s in %s scope (expected nonempty)\n", result.Query, result.Scope)
+	if result.Expect == "nonempty" {
+		writeNoEvidence(w, result)
 	}
 	for _, witness := range result.Witnesses {
 		args, _ := json.Marshal(witness.Arguments)
@@ -139,4 +141,10 @@ func waiverNote(ref *waiver.Ref) string {
 		return fmt.Sprintf(" — waived by waivers[%d] (%s, until %s): %s", ref.Index, ref.Owner, ref.Expires, ref.Reason)
 	}
 	return fmt.Sprintf(" — waivers[%d] (%s) expired %s; this finding counts again", ref.Index, ref.Owner, ref.Expires)
+}
+
+// writeNoEvidence explains a failing `expect: nonempty` check, which has no
+// witnesses.
+func writeNoEvidence(w io.Writer, result CheckResult) {
+	fmt.Fprintf(w, "    - no matching evidence for relation %s in %s scope (expected nonempty)\n", result.Query, result.Scope)
 }

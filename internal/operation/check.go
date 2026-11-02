@@ -52,6 +52,11 @@ type Result struct {
 	// Findings records that a member found drift or a failing fail-severity
 	// check.
 	Findings bool
+	// Drifted records that a member found drift.
+	Drifted bool
+	// NewFailures records that a fail-severity check found a failing match
+	// no comparable earlier report recorded.
+	NewFailures bool
 }
 
 // OnlyCheckFailures reports whether every model that failed failed on its
@@ -70,6 +75,26 @@ func (r *Result) OnlyCheckFailures() bool {
 			return false
 		}
 		failed++
+	}
+	return failed > 0
+}
+
+// OnlyKnownCheckFailures reports whether every model ran and every failure
+// is a fail-severity check whose failing matches comparable earlier reports
+// already recorded: nothing new failed.
+func (r *Result) OnlyKnownCheckFailures() bool {
+	if r == nil || r.Report == nil || r.NewFailures {
+		return false
+	}
+	failed := 0
+	for _, member := range r.Report.Members {
+		switch {
+		case member.Result == database.RunStatusSucceeded:
+		case member.Result == database.RunStatusFailed && member.Error == ErrFailSeverityChecks.Error():
+			failed++
+		default:
+			return false
+		}
 	}
 	return failed > 0
 }
@@ -150,11 +175,13 @@ func (c *check) members(result *Result) error {
 	c.id = report.RunSetID
 	results := map[string]string{}
 	for _, model := range plan.Ordered {
-		member, findings, err := c.member(db, model, plan.Edges, results)
+		member, outcome, err := c.member(db, model, plan.Edges, results)
 		if err != nil {
 			return err
 		}
-		result.Findings = result.Findings || findings
+		result.Findings = result.Findings || outcome.findings
+		result.Drifted = result.Drifted || outcome.drifted
+		result.NewFailures = result.NewFailures || outcome.newFailures
 		results[model] = member.Result
 		report.Members = append(report.Members, member)
 		if err := saveCheckReport(db, report); err != nil {
@@ -181,14 +208,27 @@ func (c *check) members(result *Result) error {
 	}
 }
 
+// memberOutcome is what one member's report found.
+type memberOutcome struct {
+	findings, drifted, newFailures bool
+}
+
+func outcomeOf(r *checkreport.ModelReport) memberOutcome {
+	return memberOutcome{
+		findings:    reportHasFindings(r),
+		drifted:     r != nil && r.Drift != nil && !r.Drift.Clean,
+		newFailures: reportHasNewFailures(r),
+	}
+}
+
 // member runs one member — or records why it did not run — and returns its
 // entry in the check report. err aborts the whole check.
-func (c *check) member(db *database.CatalogDB, model string, edges []acute.RunSetEdge, results map[string]string) (acute.RunSetMemberReport, bool, error) {
-	synthetic := func(status, note string) (acute.RunSetMemberReport, bool, error) {
+func (c *check) member(db *database.CatalogDB, model string, edges []acute.RunSetEdge, results map[string]string) (acute.RunSetMemberReport, memberOutcome, error) {
+	synthetic := func(status, note string) (acute.RunSetMemberReport, memberOutcome, error) {
 		runID := acute.NewMemberRunID()
 		c.failures = append(c.failures, fmt.Errorf("%s %s: %s", model, status, note))
 		err := recordSyntheticMember(db, c.id, runID, model, status, note)
-		return acute.RunSetMemberReport{Model: model, RunID: runID, Result: status, Error: note}, false, err
+		return acute.RunSetMemberReport{Model: model, RunID: runID, Result: status, Error: note}, memberOutcome{}, err
 	}
 	if c.interrupted() != nil {
 		return synthetic(database.RunStatusCancelled, checkCancelledNote)
@@ -200,7 +240,7 @@ func (c *check) member(db *database.CatalogDB, model string, edges []acute.RunSe
 	c.nextRunID = acute.NewMemberRunID()
 	c.lastRunID = ""
 	memberReport, runErr := c.runModel(model)
-	findings := reportHasFindings(memberReport)
+	findings := outcomeOf(memberReport)
 	if c.lastRunID == "" {
 		if runErr == nil {
 			runErr = fmt.Errorf("model failed before it started")

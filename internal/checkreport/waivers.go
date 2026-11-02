@@ -12,8 +12,24 @@ import (
 // each against the model's waivers. A failed check whose every finding an
 // active waiver excuses becomes waived; one finding left unwaived — including
 // one whose waiver has expired — keeps it failed.
+//
+// It also records every failing match as a finding (see MatchFindings),
+// marked waived when an active waiver excuses each of its matches.
 func (c *CheckResult) SetFindings(tuples []datalog.Tuple, match MatchFunc) error {
-	witnesses, truncated, waived, err := WaivedWitnesses(tuples, c.Expect, match)
+	waivedKeys := map[string]bool{}
+	recording := match
+	if match != nil {
+		recording = func(args map[string]any) (*waiver.Ref, error) {
+			ref, err := match(args)
+			key := FindingKey(args)
+			waived := ref != nil && ref.State == waiver.Active
+			if prior, seen := waivedKeys[key]; !seen || prior {
+				waivedKeys[key] = waived
+			}
+			return ref, err
+		}
+	}
+	witnesses, truncated, waived, err := WaivedWitnesses(tuples, c.Expect, recording)
 	if err != nil {
 		return fmt.Errorf("check %s: match waivers: %w", c.Name, err)
 	}
@@ -21,6 +37,7 @@ func (c *CheckResult) SetFindings(tuples []datalog.Tuple, match MatchFunc) error
 	if c.Outcome == "fail" && waived > 0 && waived == c.Count {
 		c.Outcome = OutcomeWaived
 	}
+	c.Findings, c.FindingsTruncated = MatchFindings(tuples, c.Expect, c.Outcome, witnesses, waivedKeys)
 	return nil
 }
 

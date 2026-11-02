@@ -18,6 +18,7 @@ var (
 	checkCheckUpstream    bool
 	checkPopulateSpec     string
 	checkDetailedExitCode bool
+	checkFailOn           string
 )
 
 var checkCmd = &cobra.Command{
@@ -45,9 +46,15 @@ again with "pudl report [ID]".
 With --detailed-exitcode the exit status reports the result: 0 clean,
 2 drift or a failing fail-severity check, 1 error.
 
+Each check's failing matches are compared with the model's comparable
+earlier reports: new, persisting, resolved, or unknown when this observation
+cannot establish their absence. With --fail-on new, fail-severity check
+failures fail the command (or exit 2) only when one of them is new.
+
 Examples:
     pudl check github-chazu
     pudl check network app --detailed-exitcode
+    pudl check network --fail-on new --detailed-exitcode
     pudl check git-inventory --from-catalog --catalog-scope snap_...
     pudl check --populate 'command:gcloud compute networks list --format=json'`,
 	Args: func(cmd *cobra.Command, args []string) error {
@@ -56,6 +63,9 @@ Examples:
 				return fmt.Errorf("--populate is an ad-hoc check and does not take a model name")
 			}
 			return nil
+		}
+		if checkFailOn != failOnAny && checkFailOn != failOnNew {
+			return fmt.Errorf("--fail-on must be %q or %q", failOnAny, failOnNew)
 		}
 		if checkFromCatalog && len(args) != 1 {
 			return fmt.Errorf("--from-catalog replays one model's records; name exactly one model")
@@ -67,10 +77,14 @@ Examples:
 	SuggestFor: []string{"run"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		result, err := executeCheck(cmd.Context(), checkOptionsFromFlags(args))
-		if !checkDetailedExitCode {
-			return err
+		onlyNew := checkFailOn == failOnNew
+		if onlyNew && err != nil && result.OnlyKnownCheckFailures() {
+			fmt.Fprintln(errw(), "note: every failing fail-severity check failed only on findings earlier reports recorded (--fail-on new)")
 		}
-		return silenceBareExit(cmd, detailedCheckExit(result, err))
+		if !checkDetailedExitCode {
+			return failOnExit(result, err, onlyNew)
+		}
+		return silenceBareExit(cmd, detailedCheckExit(result, err, onlyNew))
 	},
 }
 
@@ -102,5 +116,6 @@ func init() {
 	checkCmd.Flags().StringVar(&checkCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	checkCmd.Flags().BoolVar(&checkCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
 	checkCmd.Flags().BoolVar(&checkDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
+	checkCmd.Flags().StringVar(&checkFailOn, "fail-on", failOnAny, "which fail-severity check failures fail the check: any, or new (a failing match no comparable earlier report recorded)")
 	checkCmd.Flags().BoolVar(&runProgressJSON, "progress-json", false, "Emit phase progress events as JSON lines on stderr (alongside diagnostics)")
 }

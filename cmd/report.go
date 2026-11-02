@@ -11,6 +11,9 @@ import (
 	"github.com/chazu/pudl/internal/database"
 )
 
+// reportSince is `pudl report --since`: the earlier report to compare with.
+var reportSince string
+
 var reportCmd = &cobra.Command{
 	Use:   "report [ID]",
 	Short: "Read the latest or named check report",
@@ -21,9 +24,15 @@ by the retired "pudl run" and "pudl run set" commands read the same way;
 fields those reports carry that current reports do not are shown as recorded
 under "legacy fields".
 
+With --since ID2 it compares instead: each check's failing matches in the
+report against the same check in report ID2, model by model, as new,
+persisting, resolved, or unknown when the report cannot establish their
+absence.
+
 Examples:
     pudl report
-    pudl report check_... --json`,
+    pudl report check_... --json
+    pudl report check_B --since check_A`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		db, err := database.OpenCatalogDBReadOnly(effectivePudlDir())
@@ -31,18 +40,23 @@ Examples:
 			return err
 		}
 		defer db.Close()
+		if reportSince != "" {
+			return compareOperationReports(db, args, reportSince)
+		}
 		return readOperationReport(db, args)
 	},
 }
 
-func readOperationReport(db *database.CatalogDB, args []string) error {
-	var stored *checkreport.Stored
-	var err error
+// findOperationReport reads the report args name, or the newest.
+func findOperationReport(db *database.CatalogDB, args []string) (*checkreport.Stored, error) {
 	if len(args) == 1 {
-		stored, err = checkreport.Find(db, args[0])
-	} else {
-		stored, err = checkreport.Latest(db)
+		return checkreport.Find(db, args[0])
 	}
+	return checkreport.Latest(db)
+}
+
+func readOperationReport(db *database.CatalogDB, args []string) error {
+	stored, err := findOperationReport(db, args)
 	if err != nil {
 		return err
 	}
@@ -55,6 +69,33 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		return nil
 	}
 	return stored.WriteText(outw())
+}
+
+// compareOperationReports writes the changes in the report args name (or
+// the newest) since the report since names.
+func compareOperationReports(db *database.CatalogDB, args []string, since string) error {
+	current, err := findOperationReport(db, args)
+	if err != nil {
+		return err
+	}
+	earlier, err := checkreport.Find(db, since)
+	if err != nil {
+		return err
+	}
+	comparison, err := checkreport.Compare(db, current, earlier)
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		payload, err := json.MarshalIndent(comparison, "", "  ")
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(outw(), string(payload))
+		return err
+	}
+	comparison.WriteText(outw())
+	return nil
 }
 
 // printCheckReport writes a check report: under --json the report itself;
@@ -74,4 +115,5 @@ func printCheckReport(report *acute.RunSetReport, members bool) error {
 
 func init() {
 	rootCmd.AddCommand(reportCmd)
+	reportCmd.Flags().StringVar(&reportSince, "since", "", "compare the report's check findings with an earlier report (check ID or run ID): new, persisting, resolved, unknown")
 }

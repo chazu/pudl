@@ -27,7 +27,11 @@ type VerdictSummary struct {
 	UnknownChecks int    `json:"unknown_checks"`
 	// WaivedChecks counts checks whose every finding is waived; they are not
 	// FailedChecks.
-	WaivedChecks int                   `json:"waived_checks,omitempty"`
-	Evidence     []ObservationEvidence `json:"evidence,omitempty"`
-	NextActions  []string              `json:"next_actions,omitempty"`
+	WaivedChecks int `json:"waived_checks,omitempty"`
+	// NewFindings and ResolvedFindings count check findings against the
+	// model's comparable earlier reports.
+	NewFindings      int                   `json:"new_findings,omitempty"`
+	ResolvedFindings int                   `json:"resolved_findings,omitempty"`
+	Evidence         []ObservationEvidence `json:"evidence,omitempty"`
+	NextActions      []string              `json:"next_actions,omitempty"`
 }

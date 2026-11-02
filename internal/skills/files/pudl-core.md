@@ -129,9 +129,11 @@ See `docs/schema-authoring.md#compliance-policies`.
 - `pudl model validate <model>` — structural validation without running
 - `pudl check <model>...` — check exactly the named models, producers first by `depends_on`: populate, drift, checks; one report for all of them; never runs a model that was not named
 - `pudl check <model>... --detailed-exitcode` — exit 0 clean, 2 drift or failing check, 1 error
+- `pudl check <model>... --fail-on new [--detailed-exitcode]` — fail (or exit 2) on fail-severity check failures only when one has a finding no comparable earlier report recorded; drift and errors still count
 - `pudl check <model> --from-catalog --catalog-scope <snapshot-or-origin>` — explicitly replay ingested records for inventory drift (one model); a normal inventory check populates and compares its own current snapshot
 - `pudl check <model>... --check-upstream` — warn if any transitive upstream (depends_on) model is `drifted`/`failed`
 - `pudl report [id]` — read a check report (or one model's report by run ID); stored `run`/`run set` reports read too, with retired fields shown as legacy JSON
+- `pudl report [id] --since <id2> [--json]` — classify each check's failing matches against an earlier report: new, persisting, resolved, unknown, with first-seen times
 - `pudl model deps` — reconcile + show the cross-model dependency graph (no check needed)
 - `pudl status [target]` — recorded verdict by catalog target (a check records each model's verdict)
 
@@ -232,6 +234,12 @@ Save a query as a check with `model new NAME --check RELATION --evidence
 scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/waived/unknown/error.
 Missing, broken, incomplete or stale required evidence cannot pass. Reports
 include separate execution/conformity/checks/verification summaries and retained
-evidence; age_at_check is frozen. `doctor --json` lists repair diagnoses with
+evidence; age_at_check is frozen. Each check result records `findings` (every
+failing match by a stable key: head arguments without evidence IDs) with a
+state — new, persisting, resolved, unknown — and `first_seen`, and `changes`
+against the model's comparable earlier reports. Only a complete observation
+resolves; a partial or failed one leaves earlier findings unknown. Waived
+findings keep their state, are marked `waived`, and never count for
+`--fail-on new`. `doctor --json` lists repair diagnoses with
 preview/apply arguments; only `doctor --fix` writes. Explicit --schema is strict; exploratory
 fallback requires --allow-schema-fallback.

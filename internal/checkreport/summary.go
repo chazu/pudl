@@ -56,6 +56,10 @@ func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 		} else if !c.Passed {
 			s.FailedChecks++
 		}
+		if c.Changes != nil {
+			s.NewFindings += c.Changes.New
+			s.ResolvedFindings += c.Changes.Resolved
+		}
 		if r.Drift == nil {
 			s.Scope = c.Scope
 			s.Verification = "recorded"
@@ -149,6 +153,8 @@ func SummarizeCheck(db *database.CatalogDB, report *acute.RunSetReport) error {
 		s.FailedChecks += m.FailedChecks
 		s.WaivedChecks += m.WaivedChecks
 		s.UnknownChecks += m.UnknownChecks
+		s.NewFindings += m.NewFindings
+		s.ResolvedFindings += m.ResolvedFindings
 		for _, e := range m.Evidence {
 			key := e.SnapshotID
 			if key == "" {
