@@ -116,28 +116,3 @@ func TestGetLatestObserve_DoesNotReturnOtherTypes(t *testing.T) {
 		t.Error("expected nil entry — non-observe entries should not be returned by GetLatestObserve")
 	}
 }
-
-func TestGetLatestObserveByContentHash(t *testing.T) {
-	db := setupTestCatalog(t)
-	defer db.Close()
-
-	addTestObserve(t, db, "obs333obs333obs333obs333obs333obs333obs333obs333obs333obs333obs3", "my_app", "abcdef1234", time.Now())
-
-	// Should find existing
-	entry, err := db.GetLatestObserveByContentHash("my_app", "abcdef1234")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if entry == nil {
-		t.Fatal("expected to find observe entry by content hash")
-	}
-
-	// Should not find non-matching hash
-	entry, err = db.GetLatestObserveByContentHash("my_app", "different_hash")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if entry != nil {
-		t.Error("expected nil for non-matching content hash")
-	}
-}

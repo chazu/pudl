@@ -58,24 +58,3 @@ func (c *CatalogDB) GetLatestObserveByOrigin(targetName, origin string) (*Catalo
 
 	return &entry, nil
 }
-
-// GetLatestObserveByContentHash checks if an observe entry with the given
-// content hash already exists for a target.
-func (c *CatalogDB) GetLatestObserveByContentHash(targetName, contentHash string) (*CatalogEntry, error) {
-	return getLatestObserveByContentHashIn(c.db, targetName, contentHash)
-}
-
-// getLatestObserveByContentHashIn is the executor-parameterized form. Inside a
-// transaction it also sees records this same step has already inserted, so a
-// batch containing the same record twice deduplicates against itself.
-func getLatestObserveByContentHashIn(q dbtx, targetName, contentHash string) (*CatalogEntry, error) {
-	entry, err := scanOptionalEntry(q.QueryRow(
-		`SELECT `+entrySelect("catalog_entries")+` FROM catalog_entries
-		 WHERE entry_type = 'observe' AND target = ? AND content_hash = ?
-		 LIMIT 1`,
-		targetName, contentHash))
-	if err != nil {
-		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to check observe dedup", err)
-	}
-	return entry, nil
-}

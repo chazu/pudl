@@ -34,14 +34,15 @@ affect what a snapshot contains.
 
 ## Public API changes
 
-None. `CatalogDB.GetLatestObserveByContentHash` and the `CatalogTx` /
-`CatalogWriter` method of the same name are left in place, but no production
-code calls them any more. Only their tests do.
+Removed `CatalogDB.GetLatestObserveByContentHash` and the `CatalogTx` /
+`CatalogWriter` method of the same name: after the fix no production code
+called them (removed at merge, with their tests; the transaction-visibility
+test now checks `GetEntry`).
 
 ## Net production line delta
 
-+8 / -0 net (`internal/observe/prepare.go`: +9, -1; 4 of the added lines are
-comments).
++9 / −1 in `internal/observe/prepare.go` (4 of the added lines are comments),
+and −27 in `internal/database` for the removed lookup: about −19 net.
 
 ## Validation
 
