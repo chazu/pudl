@@ -36,14 +36,17 @@ type Graph struct {
 
 // Meta describes the export.
 type Meta struct {
-	Origin      string   `json:"origin"`
-	Label       string   `json:"label"`
-	GeneratedAt string   `json:"generatedAt"`
-	Workspace   string   `json:"workspace,omitempty"`
+	Origin      string `json:"origin"`
+	Label       string `json:"label"`
+	GeneratedAt string `json:"generatedAt"`
+	Workspace   string `json:"workspace,omitempty"`
 	// Version is the catalog change stamp the graph was built at, when the
 	// producer knows it (pudl ui); clients compare it to /api/version.
 	Version string `json:"version,omitempty"`
-	Warnings    []string `json:"warnings,omitempty"`
+	// AsOf is set when the graph shows the catalog as recorded at a past
+	// time (RFC 3339) rather than now.
+	AsOf     string   `json:"asOf,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Resource is one cataloged resource in its current state.

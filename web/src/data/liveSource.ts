@@ -1,5 +1,5 @@
 import type { CanonicalGraph } from '../model/canonical';
-import type { GraphSource } from './source';
+import type { GraphSource, LoadOptions, SnapshotInfo } from './source';
 import { parseCanonicalGraph } from './validate';
 
 /**
@@ -10,11 +10,19 @@ export class LiveGraphSource implements GraphSource {
   readonly id = 'live';
   readonly label = 'pudl ui';
 
-  async load(): Promise<CanonicalGraph> {
-    const res = await fetch('/api/graph', { cache: 'no-store' });
+  async load(opts: LoadOptions = {}): Promise<CanonicalGraph> {
+    const url = opts.asOf ? `/api/graph?as_of=${encodeURIComponent(opts.asOf)}` : '/api/graph';
+    const res = await fetch(url, { cache: 'no-store' });
     const body = await res.json().catch(() => null);
     if (!res.ok) throw new Error(`pudl ui: ${body?.error ?? res.statusText}`);
     return parseCanonicalGraph(body, 'pudl catalog', 'live');
+  }
+
+  async snapshots(): Promise<SnapshotInfo[]> {
+    const res = await fetch('/api/snapshots', { cache: 'no-store' });
+    if (!res.ok) return [];
+    const body = await res.json();
+    return Array.isArray(body) ? body : [];
   }
 
   async version(): Promise<string | null> {

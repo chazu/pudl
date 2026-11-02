@@ -77,6 +77,8 @@ export interface GraphMeta {
   warnings?: string[];
   /** Producer's change stamp for this graph (pudl ui); compared to the source's current version. */
   version?: string;
+  /** Set when the graph is the catalog as recorded at a past time (RFC 3339). */
+  asOf?: string;
 }
 
 export interface CanonicalGraph {

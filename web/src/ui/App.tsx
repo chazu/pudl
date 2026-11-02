@@ -11,6 +11,7 @@ import { initialViewState, revealed, type ViewState } from '../visual/viewState'
 import { Inspector } from './Inspector';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
+import { TimeControl } from './TimeControl';
 import { Toolbar } from './Toolbar';
 import { useAutoRefresh } from './useAutoRefresh';
 import { usePipeline } from './usePipeline';
@@ -42,21 +43,35 @@ export function App() {
       .catch((e: unknown) => setLoadError(String(e)));
   }, []);
 
+  const [asOf, setAsOf] = useState<string | null>(null);
+
   // Reload keeps view state and selection: resource and group IDs are stable.
-  const reload = useCallback(() => {
-    if (!source) return;
-    setReloading(true);
-    loadFrom(source)
+  const reloadAt = useCallback(
+    (at: string | null) => {
+      if (!source) return;
+      setReloading(true);
+      loadFrom(source, at ? { asOf: at } : undefined)
       .then((g) => {
         setLoaded(g);
         setReloadError(null);
       })
       .catch((e: unknown) => setReloadError(String(e)))
       .finally(() => setReloading(false));
-  }, [source]);
+    },
+    [source],
+  );
+  const reload = useCallback(() => reloadAt(asOf), [reloadAt, asOf]);
+  const changeAsOf = useCallback(
+    (at: string | null) => {
+      setAsOf(at);
+      reloadAt(at);
+    },
+    [reloadAt],
+  );
 
   const [autoRefresh, setAutoRefresh] = useState(true);
-  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !reloading, reload);
+  // The past does not change: no polling while viewing a past time.
+  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !reloading && !asOf, reload);
 
   const index = useMemo(() => (loaded ? new GraphIndex(loaded.graph) : null), [loaded]);
   const views = useMemo(() => {
@@ -157,8 +172,9 @@ export function App() {
         onReload={loaded.graph.meta.origin === 'mock' ? undefined : reload}
         reloading={reloading}
         reloadError={reloadError}
-        autoRefresh={source?.version ? autoRefresh : undefined}
+        autoRefresh={source?.version && !asOf ? autoRefresh : undefined}
         onAutoRefresh={setAutoRefresh}
+        timeControl={source?.snapshots ? <TimeControl source={source} asOf={asOf} onAsOf={changeAsOf} /> : undefined}
         index={index}
         views={views}
         projectionId={projectionId}

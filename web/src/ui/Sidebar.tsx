@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import type { GraphIndex, GraphMeta, ResourceId } from '../model/canonical';
 import { resourceType } from '../model/resourceTypes';
 import { PROJECTIONS } from '../projection/registry';
@@ -17,6 +17,8 @@ interface Props {
   /** Auto-refresh toggle state; absent when the source cannot report changes. */
   autoRefresh?: boolean;
   onAutoRefresh?: (on: boolean) => void;
+  /** As-of picker, for sources with history. */
+  timeControl?: ReactNode;
   index: GraphIndex;
   views: Map<ProjectionId, SemanticView>;
   projectionId: ProjectionId;
@@ -39,15 +41,16 @@ interface BannerProps {
 }
 
 export function SourceBanner({ meta, onReload, reloading, reloadError, autoRefresh, onAutoRefresh }: BannerProps) {
-  const text =
-    meta.origin === 'live'
+  const text = meta.asOf
+    ? `AS RECORDED AT ${new Date(meta.asOf).toLocaleString()} · ${meta.label}`
+    : meta.origin === 'live'
       ? `LIVE · ${meta.label}`
       : meta.origin === 'mock'
         ? 'DEMO DATA — synthetic, not live inventory'
         : `FILE — ${meta.label} (not live inventory)`;
   const at = meta.generatedAt ? new Date(meta.generatedAt) : null;
   return (
-    <div className={`banner ${meta.origin}`} title={meta.generatedAt ? `generated ${meta.generatedAt}` : undefined}>
+    <div className={`banner ${meta.asOf ? 'history' : meta.origin}`} title={meta.generatedAt ? `generated ${meta.generatedAt}` : undefined}>
       <div className="banner-row">
         <span>{text}</span>
         {onReload && (
@@ -57,7 +60,7 @@ export function SourceBanner({ meta, onReload, reloading, reloadError, autoRefre
         )}
       </div>
       <div className="banner-row banner-sub">
-        {at && !Number.isNaN(at.getTime()) && <span>as of {at.toLocaleString()}</span>}
+        {at && !Number.isNaN(at.getTime()) && <span>{meta.asOf ? `read ${at.toLocaleString()}` : `as of ${at.toLocaleString()}`}</span>}
         {autoRefresh !== undefined && onAutoRefresh && (
           <label className="auto" title="Reload when the catalog, rules or schemas change">
             <input type="checkbox" checked={autoRefresh} onChange={(e) => onAutoRefresh(e.target.checked)} /> auto
@@ -137,6 +140,7 @@ export function Sidebar(props: Props) {
         autoRefresh={props.autoRefresh}
         onAutoRefresh={props.onAutoRefresh}
       />
+      {props.timeControl}
 
       <section>
         <h3>Views</h3>

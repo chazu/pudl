@@ -819,9 +819,14 @@
         {
           "use": "export",
           "short": "Write the current resource graph as JSON",
-          "long": "Write the current resource graph as JSON, in the canonical graph format the\nweb explorer loads (docs/frontend.md#backend-integration).\n\nResources are the catalog's current entries, one per resource. Each schema's\noptional _pudl.graph block names the fields used for name, account, region and\nzone, and the values other records use to refer to the resource.\n\nRelationships come from Datalog rules whose head is the reserved relation\n\n    graph_edge(type, source, target, basis)\n\nwhere source and target are a resource ID or a reference value such as an\nAWS ID or a GCP path. A reference that matches no cataloged resource is kept\nas \"ref:\u003cvalue\u003e\", so the graph shows the resource as unknown instead of\ndropping the edge. Problems (unreadable payloads, ambiguous references, rules\nthat fail) are listed in meta.warnings and never stop the export.\n\nOutput is always JSON; the global --json flag changes nothing.\n\nExamples:\n    pudl graph export \u003e graph.json\n    pudl graph export -o web/public/graph.json",
+          "long": "Write the current resource graph as JSON, in the canonical graph format the\nweb explorer loads (docs/frontend.md#backend-integration).\n\nResources are the catalog's current entries, one per resource. Each schema's\noptional _pudl.graph block names the fields used for name, account, region and\nzone, and the values other records use to refer to the resource.\n\nRelationships come from Datalog rules whose head is the reserved relation\n\n    graph_edge(type, source, target, basis)\n\nwhere source and target are a resource ID or a reference value such as an\nAWS ID or a GCP path. A reference that matches no cataloged resource is kept\nas \"ref:\u003cvalue\u003e\", so the graph shows the resource as unknown instead of\ndropping the edge. Problems (unreadable payloads, ambiguous references, rules\nthat fail) are listed in meta.warnings and never stop the export.\n\n--as-of exports the graph as pudl had recorded it at a past time: each\nresource's latest entry by then, the snapshots taken by then, and facts as\nbelieved then about then. Rules and schemas are always today's, and entries\ndeleted since cannot be shown.\n\nOutput is always JSON; the global --json flag changes nothing.\n\nExamples:\n    pudl graph export \u003e graph.json\n    pudl graph export -o web/public/graph.json\n    pudl graph export --as-of 2026-10-01T00:00:00Z",
           "args": "custom",
           "flags": [
+            {
+              "name": "as-of",
+              "usage": "Export the graph as recorded at this time (RFC3339 or Unix seconds)",
+              "type": "string"
+            },
             {
               "name": "global",
               "usage": "Use the personal ~/.pudl workspace explicitly",

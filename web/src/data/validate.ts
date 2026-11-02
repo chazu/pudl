@@ -93,6 +93,7 @@ export function parseCanonicalGraph(data: unknown, fallbackLabel: string, origin
       label: typeof meta.label === 'string' ? meta.label : fallbackLabel,
       generatedAt: typeof meta.generatedAt === 'string' ? meta.generatedAt : undefined,
       version: typeof meta.version === 'string' ? meta.version : undefined,
+      asOf: typeof meta.asOf === 'string' ? meta.asOf : undefined,
       warnings: Array.isArray(meta.warnings) ? meta.warnings.filter((w): w is string => typeof w === 'string') : undefined,
     },
     resources: obj.resources as CanonicalGraph['resources'],

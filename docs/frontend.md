@@ -331,6 +331,17 @@ load:
   (the change stamp), `GET /api/graph` (the same graph as `pudl graph
   export`, `meta.origin: "live"`, `meta.version`, `no-store`), and the bundle
   with an index.html fallback. It is read-only and has no write endpoints.
+- **Time travel.** `GET /api/graph?as_of=<RFC3339>` (and `pudl graph export
+  --as-of`) builds the graph as pudl had recorded it at that time. Each
+  resource gets its latest entry by then (`CatalogDB.ResourceEntriesAsOf`).
+  Evidence lists only snapshots taken by then. Edge rules see facts as
+  believed then about then (transaction and valid time both T). Rules and
+  schemas are today's, and deleted entries cannot be shown. `GET
+  /api/snapshots` lists recent snapshots. The UI's Time picker offers "Now",
+  those snapshots and any custom time. A past view has its own banner ("AS
+  RECORDED AT …") and pauses auto-refresh. View state is kept, so the same
+  layout can be compared across times. Facts are timestamped in whole
+  seconds, so snapshots taken in the same second are indistinguishable.
 - **Auto-refresh.** The change stamp combines the catalog's fact write
   sequence and its entry and snapshot counters
   (`CatalogDB.ChangeStamp`) with fingerprints of the rule and schema `.cue`

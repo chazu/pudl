@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -23,7 +24,10 @@ func testHandler(graph GraphFunc) http.Handler {
 		"assets/app-1.js": {Data: []byte(`console.log(1)`)},
 	}
 	if graph == nil {
-		graph = func(context.Context) (*graphexport.Graph, error) {
+		graph = func(_ context.Context, asOf *time.Time) (*graphexport.Graph, error) {
+			if asOf != nil {
+				return &graphexport.Graph{Meta: graphexport.Meta{AsOf: asOf.UTC().Format(time.RFC3339)}}, nil
+			}
 			return &graphexport.Graph{Meta: graphexport.Meta{Origin: "pudl", Label: "x"}, Resources: []graphexport.Resource{{ID: "r1"}}}, nil
 		}
 	}
@@ -50,7 +54,9 @@ func TestGraphIsLiveAndUncached(t *testing.T) {
 }
 
 func TestGraphErrorsAreJSON(t *testing.T) {
-	h := testHandler(func(context.Context) (*graphexport.Graph, error) { return nil, errors.New("catalog locked") })
+	h := testHandler(func(context.Context, *time.Time) (*graphexport.Graph, error) {
+		return nil, errors.New("catalog locked")
+	})
 	rec := get(t, h, "localhost:7468", "/api/graph")
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	require.Contains(t, rec.Body.String(), "catalog locked")
@@ -104,7 +110,7 @@ func TestGraphIsCachedPerStampAndVersionIsExposed(t *testing.T) {
 	stamp := "v1"
 	h := Handler(Options{
 		Assets: fstest.MapFS{"index.html": {}},
-		Graph: func(context.Context) (*graphexport.Graph, error) {
+		Graph: func(context.Context, *time.Time) (*graphexport.Graph, error) {
 			builds++
 			return &graphexport.Graph{}, nil
 		},
@@ -137,4 +143,25 @@ func TestFileTreeStamp(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("ignored"), 0o644))
 	require.Equal(t, b, FileTreeStamp(dir), "only .cue files count")
 	require.Equal(t, FileTreeStamp(dir), FileTreeStamp(dir, filepath.Join(dir, "missing")))
+}
+
+func TestGraphAsOf(t *testing.T) {
+	h := testHandler(nil)
+	rec := get(t, h, "localhost", "/api/graph?as_of=2026-10-01T12:00:00Z")
+	require.Equal(t, http.StatusOK, rec.Code)
+	var g graphexport.Graph
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &g))
+	require.Equal(t, "2026-10-01T12:00:00Z", g.Meta.AsOf)
+	require.Equal(t, "live", g.Meta.Origin)
+	require.Equal(t, http.StatusBadRequest, get(t, h, "localhost", "/api/graph?as_of=yesterday").Code)
+}
+
+func TestSnapshotsListIsNeverNull(t *testing.T) {
+	rec := get(t, testHandler(nil), "localhost", "/api/snapshots")
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.JSONEq(t, `[]`, rec.Body.String())
+	h := Handler(Options{Assets: fstest.MapFS{}, Snapshots: func(context.Context) ([]Snapshot, error) {
+		return []Snapshot{{ID: "s1", Model: "m", Complete: true}}, nil
+	}})
+	require.Contains(t, get(t, h, "localhost", "/api/snapshots").Body.String(), `"id":"s1"`)
 }
