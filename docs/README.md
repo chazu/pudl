@@ -31,6 +31,7 @@
 | [Library API](library-api.md) | Go packages `pkg/factstore` and `pkg/eval` |
 | [Datalog](datalog.md) | Writing rules, `pudl query`, built-in relations |
 | [Facts](facts.md) | The bitemporal fact store |
+| [Frontend](frontend.md) | The `web/` graph explorer: projections, visual model, ELK layout, stability |
 
 ## Content packs
 

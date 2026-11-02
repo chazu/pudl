@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Frontend graph explorer (2026-11-02)
+
+`web/` is a TypeScript/React/Vite app that shows one canonical resource graph
+through four projections: network topology, application architecture,
+resource inventory and security relationships. It uses ELK layered layout
+with nested groups, ports, orthogonal cross-hierarchy routing and
+collapse/expand with boundary-port edge aggregation, plus an inspector that
+explains how each relationship is shown. Filters are render-only, so the
+layout stays stable. It runs on a bannered demo dataset or a JSON file; there
+is no live backend yet. See [frontend.md](frontend.md) and the
+[delivery log](../implog/2026_11_02_frontend_graph_explorer.md).
+
 ### Packs discover projects, accounts and regions at run time; global example install (2026-11-02)
 
 No pack or tutorial names a project, account or region. GCP collectors list
