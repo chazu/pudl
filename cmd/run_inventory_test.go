@@ -14,7 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/errors"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 )
 
 // end-to-end against a real catalog seeded with CANNED host-style records (the
@@ -30,7 +30,7 @@ func TestRunInventoryDrift_RealCatalog(t *testing.T) {
 		{"_schema":"pudl/linux.#Package","name":"restic","state":"present"}
 	]}}]`
 	dataDir := filepath.Join(dir, "data")
-	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: dataDir, Graph: nil})
+	_, err = observe.IngestObserve(db, observe.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: dataDir, Graph: nil})
 	require.NoError(t, err)
 
 	desired := []map[string]any{
@@ -63,7 +63,7 @@ func TestRunInventoryDrift_UnidentifiableDesiredIsNotClean(t *testing.T) {
 	canned := `[{"target":"//host:odroid","current":{"records":[
 		{"_schema":"pudl/linux.#Package","state":"present"}
 	]}}]`
-	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: filepath.Join(dir, "data"), Graph: nil})
+	_, err = observe.IngestObserve(db, observe.ObserveIngest{Reader: strings.NewReader(canned), Origin: "pudl-run", DataDir: filepath.Join(dir, "data"), Graph: nil})
 	require.NoError(t, err)
 
 	res, err := runInventoryDrift(db, "pudl-run", []map[string]any{
@@ -180,7 +180,7 @@ func TestRunInventoryDriftDoesNotMatchAcrossScopes(t *testing.T) {
 	other := `[{"target":"//host:other","current":{"records":[
 		{"_schema":"pudl/linux.#Package","name":"podman","state":"present"}
 	]}}]`
-	_, err = mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(other), Origin: "other-model", DataDir: dataDir, Graph: nil})
+	_, err = observe.IngestObserve(db, observe.ObserveIngest{Reader: strings.NewReader(other), Origin: "other-model", DataDir: dataDir, Graph: nil})
 	require.NoError(t, err)
 
 	desired := []map[string]any{

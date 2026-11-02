@@ -1,4 +1,4 @@
-package mubridge
+package observe
 
 import (
 	"os"

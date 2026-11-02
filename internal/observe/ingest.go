@@ -1,16 +1,17 @@
-package mubridge
+package observe
 
 import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/chazu/pudl/internal/ingestprep"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/chazu/pudl/internal/ingestprep"
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
@@ -18,7 +19,6 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
-	"github.com/chazu/pudl/internal/schemaname"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -32,20 +32,18 @@ func identityNamespace(graph *inference.InheritanceGraph, schema string) string 
 	return graph.IdentityRoot(schema)
 }
 
-// ObserveResult matches mu's coordinator.ObserveResult exactly.
-// mu observe --json emits a JSON array of these.
+// ObserveResult is one observed target and its current records. A populate
+// phase wraps what its commands printed as a JSON array of these. The shape is
+// the historical mu `observe --json` element, so stored observations keep it.
 type ObserveResult struct {
 	Target  string         `json:"target"`
 	Current map[string]any `json:"current,omitempty"`
 	Error   string         `json:"error,omitempty"`
 }
 
-// ObserveIngest is one observation to record: the mu observe output, where to
-// stage it, and the provenance that makes the resulting snapshot a first-class
-// object rather than a timestamped convention.
-//
-// It replaces the positional IngestObserveResults* family, which had reached six
-// parameters and would have taken ten.
+// ObserveIngest is one observation to record: the wrapped observe results,
+// where to stage them, and the provenance that makes the resulting snapshot a
+// first-class object rather than a timestamped convention.
 type ObserveIngest struct {
 	Scope    string
 	Complete bool
@@ -55,18 +53,14 @@ type ObserveIngest struct {
 	Reader   io.Reader
 	DataDir  string
 	Graph    *inference.InheritanceGraph
-	// SchemaMappings maps plugin-declared _schema resource types to validated
-	// PUDL semantic schemas. It takes precedence over the legacy naming
-	// convention when present.
-	SchemaMappings map[string]string
-	// Inferrer is used when a plugin-declared resource type cannot be mapped to
-	// a loaded schema name. The declared resource type remains a strong hint,
-	// but inference is the safe fallback instead of persisting a dangling ref.
+	// Inferrer is used when a record's declared _schema resource type cannot be
+	// mapped to a loaded schema name. The declared resource type remains a
+	// strong hint, but inference is the safe fallback instead of persisting a
+	// dangling ref.
 	Inferrer *inference.SchemaInferrer
 
 	// SnapshotID is allocated by the run before it observes, so a failed ingest
-	// can still be named. Generated here when empty (the standalone
-	// `pudl mu ingest-observe` path, which has no run to allocate one).
+	// can still be named. Generated here when empty.
 	SnapshotID string
 	RunID      string
 	// Model is the #SystemModel this observation was taken for, empty for a
@@ -74,7 +68,8 @@ type ObserveIngest struct {
 	Model string
 	// Workspace is where the run stood: the repo workspace name, or "global".
 	Workspace string
-	// Origin is the catalog ingest origin; defaults to "mu-observe".
+	// Origin is the catalog ingest origin; defaults to "mu-observe" (the
+	// historical value, kept so stored origins stay comparable).
 	Origin string
 	// Source is how the observation was produced; defaults to "ingest-observe".
 	Source string
@@ -110,8 +105,8 @@ func NewSnapshotID() string {
 	return "snap_" + idgen.GenerateRandomProquint()
 }
 
-// IngestObserve processes mu observe --json output and stores it in the catalog.
-// The input is a JSON array of ObserveResult objects.
+// IngestObserve stores wrapped observe results in the catalog. The input is a
+// JSON array of ObserveResult objects.
 //
 // It creates one observe snapshot — a contract row plus the collection entry
 // holding the records — and stores each record from current.records as an
@@ -247,12 +242,11 @@ func prepareObserveRecord(
 	collectionID string,
 	graph *inference.InheritanceGraph,
 	inferrer *inference.SchemaInferrer,
-	schemaMappings map[string]string,
 	runID string,
 	route observeRoute,
 ) (database.CatalogEntry, []byte, error) {
 	// Determine schema from _schema field, falling back to generic observe result.
-	schema, err := route.resolve(record, graph, inferrer, schemaMappings)
+	schema, err := route.resolve(record, graph, inferrer)
 	if err != nil {
 		return database.CatalogEntry{}, nil, err
 	}
@@ -348,29 +342,15 @@ func prepareObserveRecord(
 
 const genericObserveSchema = "pudl/mu.#ObserveResult"
 
-// resolveObserveSchema turns a plugin-declared resource type into a schema
+// resolveObserveSchema turns a record's declared resource type into a schema
 // reference only when that reference exists in the current schema namespace.
 // If the naming convention does not identify a loaded schema, the inferrer gets
 // one chance to resolve the declared resource type by _pudl.resource_type;
 // otherwise the record is safely classified as the generic observe result.
 func resolveObserveSchema(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer) string {
-	return resolveObserveSchemaWithMappings(record, graph, inferrer, nil)
-}
-
-// resolveObserveSchemaWithMappings prefers an explicit plugin mapping over
-// the historical resource-type-to-CUE-name convention. Invalid mappings are
-// not persisted: callers validate package metadata before ingest, while this
-// function still falls back safely for library callers that bypass validation.
-func resolveObserveSchemaWithMappings(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer, schemaMappings map[string]string) string {
 	declared, ok := record["_schema"].(string)
 	if !ok || declared == "" {
 		return genericObserveSchema
-	}
-	if mapped, exists := schemaMappings[declared]; exists && graph != nil {
-		mapped = schemaname.Normalize(mapped)
-		if graph.HasSchema(mapped) {
-			return mapped
-		}
 	}
 
 	candidate := resourceTypeToSchema(declared)

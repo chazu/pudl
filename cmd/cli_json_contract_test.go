@@ -19,7 +19,6 @@ import (
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
 	"pudl model":                 "command group",
-	"pudl mu":                    "command group",
 	"pudl rule":                  "command group",
 	"pudl schema":                "command group",
 	"pudl snapshot":              "command group",
@@ -32,7 +31,6 @@ var jsonContractExempt = map[string]string{
 	"pudl rule new":              "covered by the datalog rule tests",
 	"pudl run set":               "observes live through mu",
 	"pudl snapshot current":      "needs a live observation recorded for a model",
-	"pudl mu ingest-manifest":    "needs a mu build manifest",
 	"pudl completion":            "generates shell scripts",
 	"pudl completion bash":       "generates shell scripts",
 	"pudl completion fish":       "generates shell scripts",
@@ -77,8 +75,8 @@ func TestJSONOutputContract(t *testing.T) {
 	run("version")
 	run("init")
 	run("example", "install", "git-inventory")
-	run("mu", "ingest-observe", "--path", ".pudl/populators/git-inventory/baseline-observe.json", "--origin", "git-baseline")
-	run("run", "git-inventory", "--from-catalog", "--catalog-scope", "git-baseline")
+	observed := field(run("run", "git-inventory"), "populate", "snapshot_id")
+	run("run", "git-inventory", "--from-catalog", "--catalog-scope", observed)
 	run("run", "report")
 	run("status")
 	run("model", "list")

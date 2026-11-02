@@ -20,7 +20,7 @@ func newTestRegistry() *workspaceRegistry {
 
 func TestWorkspaceRegistry_ReleaseRemovesDirAndUntracks(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"abc")
+	dir := filepath.Join(t.TempDir(), "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	release := reg.track(dir)
@@ -36,7 +36,7 @@ func TestWorkspaceRegistry_ReleaseRemovesDirAndUntracks(t *testing.T) {
 // must be a no-op.
 func TestWorkspaceRegistry_ReleaseIsIdempotent(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"abc")
+	dir := filepath.Join(t.TempDir(), "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	release := reg.track(dir)
@@ -47,7 +47,7 @@ func TestWorkspaceRegistry_ReleaseIsIdempotent(t *testing.T) {
 func TestWorkspaceRegistry_RemoveAll(t *testing.T) {
 	reg := newTestRegistry()
 	root := t.TempDir()
-	a := filepath.Join(root, workspacePrefix+"a")
+	a := filepath.Join(root, "pudl_run_a")
 	b := filepath.Join(root, "pudl_ewe_b")
 	require.NoError(t, os.MkdirAll(a, 0o755))
 	require.NoError(t, os.MkdirAll(b, 0o755))
@@ -66,7 +66,7 @@ func TestWorkspaceRegistry_RemoveAll(t *testing.T) {
 // remove nothing.
 func TestExitOnSecondSignal_ReturnsWhenCommandFinishes(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"keep")
+	dir := filepath.Join(t.TempDir(), "pudl_run_keep")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	reg.track(dir)
 
@@ -112,7 +112,7 @@ func TestExitOnSecondSignal_RemovesWorkspacesAndExits(t *testing.T) {
 	}
 
 	root := t.TempDir()
-	dir := filepath.Join(root, workspacePrefix+"abc")
+	dir := filepath.Join(root, "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	child := exec.Command(os.Args[0], "-test.run=^TestExitOnSecondSignal_RemovesWorkspacesAndExits$")

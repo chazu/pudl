@@ -64,30 +64,3 @@ func TestImportFromPipedStdin(t *testing.T) {
 	leftovers, _ := filepath.Glob(filepath.Join(os.TempDir(), "stdin.json"))
 	assert.Empty(t, leftovers, "stdin no longer stages under a fixed shared name")
 }
-
-func TestImportEnvelopeFromReadOnlyDirectoryKeepsOriginalOrigin(t *testing.T) {
-	root := consolidationWorkspace(t)
-	resetImportFlags(t)
-
-	sourceDir := t.TempDir()
-	source := filepath.Join(sourceDir, "inventory.json")
-	require.NoError(t, os.WriteFile(source,
-		[]byte(`{"schema":{"module":"mu/test","version":"v1"},"data":{"name":"x"}}`), 0o644))
-	require.NoError(t, os.Chmod(sourceDir, 0o555))
-	t.Cleanup(func() { _ = os.Chmod(sourceDir, 0o755) })
-
-	session, err := newImportSession()
-	require.NoError(t, err)
-	defer session.Close()
-
-	result, err := importOneWithEnvelope(session.imp, session.options(source, ""))
-	require.NoError(t, err)
-	assert.Equal(t, "inventory", result.DetectedOrigin, "origin comes from the user's file, not the temp payload")
-	assert.Equal(t, source, result.SourcePath)
-
-	entries, err := os.ReadDir(sourceDir)
-	require.NoError(t, err)
-	assert.Len(t, entries, 1, "nothing is written beside the source")
-	leftovers, _ := filepath.Glob(filepath.Join(root, "data", "tmp", ".envelope-*"))
-	assert.Empty(t, leftovers, "the payload temp file is removed")
-}

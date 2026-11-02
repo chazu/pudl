@@ -47,7 +47,7 @@ type CatalogEntry struct {
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
 	EntryType *string `json:"entry_type,omitempty"` // e.g. "observe", "manifest", "manifest-action"
-	Target    *string `json:"target,omitempty"`     // mu target / run target name (e.g. //models/<name>, home/odroid)
+	Target    *string `json:"target,omitempty"`     // run target name (e.g. //models/<name>:populate)
 	RunID     *string `json:"run_id,omitempty"`     // Unique run identifier
 	Tags      *string `json:"tags,omitempty"`       // JSON-encoded map[string]string
 	// Convergence status tracking

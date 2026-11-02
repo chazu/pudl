@@ -11,19 +11,12 @@ import (
 
 // Workspace represents a discovered per-repo workspace.
 type Workspace struct {
-	DependencyRoots   []string            // explicit vendored definition packages, in priority order
-	Root              string              // absolute path to repo root (parent of .pudl/)
-	PudlDir           string              // absolute path to .pudl/ directory
-	Name              string              // workspace name from workspace.cue
-	SchemaPath        string              // .pudl/schema/ (may not exist)
-	DefinitionsPath   string              // .pudl/definitions/ (may not exist)
-	ToolchainMappings []ToolchainOverride // per-repo toolchain overrides
-}
-
-// ToolchainOverride maps a schema prefix to a toolchain for this workspace.
-type ToolchainOverride struct {
-	Prefix    string
-	Toolchain string
+	DependencyRoots []string // explicit vendored definition packages, in priority order
+	Root            string   // absolute path to repo root (parent of .pudl/)
+	PudlDir         string   // absolute path to .pudl/ directory
+	Name            string   // workspace name from workspace.cue
+	SchemaPath      string   // .pudl/schema/ (may not exist)
+	DefinitionsPath string   // .pudl/definitions/ (may not exist)
 }
 
 // Discover walks up from startDir looking for .pudl/workspace.cue.
@@ -86,22 +79,6 @@ func load(root string) (*Workspace, error) {
 		ws.Name, _ = name.String()
 	} else {
 		ws.Name = filepath.Base(root)
-	}
-
-	// Extract toolchain_mappings (optional)
-	if mappings := val.LookupPath(cue.ParsePath("toolchain_mappings")); mappings.Exists() {
-		iter, _ := mappings.List()
-		for iter.Next() {
-			v := iter.Value()
-			prefix, _ := v.LookupPath(cue.ParsePath("prefix")).String()
-			toolchain, _ := v.LookupPath(cue.ParsePath("toolchain")).String()
-			if prefix != "" && toolchain != "" {
-				ws.ToolchainMappings = append(ws.ToolchainMappings, ToolchainOverride{
-					Prefix:    prefix,
-					Toolchain: toolchain,
-				})
-			}
-		}
 	}
 
 	return ws, nil

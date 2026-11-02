@@ -22,10 +22,9 @@ var exampleInstallCmd = &cobra.Command{
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 
-The git-inventory example includes a model expecting default branch main,
-baseline and changed observations, and an optional live observer. The import
-and catalog replay tutorial needs only PUDL; live observation also needs mu
-and Python 3.
+The git-inventory example includes a model expecting default branch main and
+baseline and changed inventories. The model observes the current inventory
+with cat, so the tutorial needs nothing beyond PUDL.
 
 The gcp-network-hygiene example includes a fixture observer, saved checks,
 a corrected fixture, and a separate gcloud-based live model.
@@ -49,7 +48,7 @@ Example:
 			fmt.Fprintln(outw(), "Next: pudl run gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
 			return nil
 		}
-		fmt.Fprintf(outw(), "Model: git-inventory\nObservations: .pudl/populators/git-inventory/{baseline,changed}-observe.json\n")
+		fmt.Fprintf(outw(), "Model: git-inventory\nInventories: .pudl/populators/git-inventory/{baseline,changed}.json (the model observes current.json)\n")
 		fmt.Fprintln(outw(), "Next: pudl model show git-inventory")
 		return nil
 	},

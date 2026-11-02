@@ -3,12 +3,10 @@ package examples
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
@@ -21,7 +19,7 @@ func Install(root, name string) ([]string, error) {
 	var err error
 	switch name {
 	case "git-inventory":
-		files, err = gitInventoryFiles(root)
+		files, err = gitInventoryFiles()
 	case "gcp-network-hygiene":
 		files, err = gcpNetworkFiles()
 	default:
@@ -80,7 +78,7 @@ func Install(root, name string) ([]string, error) {
 	return paths, nil
 }
 
-func gitInventoryFiles(root string) (map[string][]byte, error) {
+func gitInventoryFiles() (map[string][]byte, error) {
 	files := make(map[string][]byte)
 	model, err := gitinventory.Files.ReadFile("model.cue")
 	if err != nil {
@@ -94,21 +92,8 @@ func gitInventoryFiles(root string) (map[string][]byte, error) {
 			return nil, err
 		}
 		files[populator+name] = data
-		if strings.HasSuffix(name, ".json") {
-			observation := []map[string]any{{
-				"target":  "//git-inventory/demo",
-				"current": map[string]any{"records": json.RawMessage(data)},
-			}}
-			encoded, err := json.MarshalIndent(observation, "", "  ")
-			if err != nil {
-				return nil, err
-			}
-			files[populator+strings.TrimSuffix(name, ".json")+"-observe.json"] = append(encoded, '\n')
-		}
 	}
 	files[populator+"current.json"] = files[populator+"baseline.json"]
-	cachePath := filepath.Join(root, "data", "mu", "cache")
-	files["data/mu/mu.cue"] = []byte(fmt.Sprintf("package mu\ncache: backends: [{type: \"disk\", path: %q}]\n", cachePath))
 	return files, nil
 }
 

@@ -1,4 +1,4 @@
-package mubridge
+package observe
 
 import (
 	"os"
@@ -458,42 +458,6 @@ func TestIngestObserveResults_AWSInstanceSchema(t *testing.T) {
 	assert.Equal(t, "pudl/aws.#Instance", entries.Entries[0].Schema)
 }
 
-func TestIngestObserveResults_ExplicitPluginMappingOverridesNamingConvention(t *testing.T) {
-	db, dataDir := setupIngestTestDB(t)
-	defer db.Close()
-
-	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
-		"pudl/aws.#VPC":           {ResourceType: "aws.ec2.vpc"},
-		"pudl/custom.#AwsNetwork": {ResourceType: "aws.ec2.vpc"},
-	})
-	input := `[{"target":"//aws","current":{"records":[{"_schema":"aws.ec2.vpc","vpc_id":"vpc-123","cidr_block":"10.0.0.0/16","state":"available","is_default":false,"tags":[],"instance_tenancy":"default"}]}}]`
-	result, err := IngestObserve(db, ObserveIngest{
-		Reader: strings.NewReader(input), Origin: "mu-aws", DataDir: dataDir, Graph: graph,
-		SchemaMappings: map[string]string{"aws.ec2.vpc": "pudl/custom.#AwsNetwork"},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, 1, result.Records)
-
-	entries, err := db.QueryEntries(database.FilterOptions{EntryTypes: []string{"observe"}, CollectionType: "item"}, database.QueryOptions{Limit: 10})
-	require.NoError(t, err)
-	require.Len(t, entries.Entries, 1)
-	assert.Equal(t, "pudl/custom.#AwsNetwork", entries.Entries[0].Schema)
-}
-
-func TestResolveObserveSchemaNormalizesExplicitPluginMapping(t *testing.T) {
-	graph := inference.BuildInheritanceGraph(map[string]validator.SchemaMetadata{
-		"pudl/custom.#AwsNetwork": {ResourceType: "aws.ec2.vpc"},
-	})
-
-	got := resolveObserveSchemaWithMappings(
-		map[string]any{"_schema": "aws.ec2.vpc"},
-		graph,
-		nil,
-		map[string]string{"aws.ec2.vpc": "pudl.schemas/pudl/custom@v0:#AwsNetwork"},
-	)
-	assert.Equal(t, "pudl/custom.#AwsNetwork", got)
-}
-
 func TestResolveObserveSchemaUsesInferenceForUnknownResourceType(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "cue.mod"), 0o755))
@@ -548,13 +512,12 @@ func TestIngestObservePersistsAndEnrichesSchemaRelativeIdentity(t *testing.T) {
 		"target":"//producer",
 		"current":{"records":[{"_schema":"provider.custom","name":"thing-1","value":"ready"}]}
 	}]`
-	mapping := map[string]string{"provider.custom": "schemas.#Thing"}
 
 	// First ingest simulates an older caller that supplied the loaded namespace
 	// but not its metadata. The content row has no semantic identity yet.
 	_, err = IngestObserve(db, ObserveIngest{
 		Reader: strings.NewReader(input), DataDir: dataDir, SnapshotID: "snap_old",
-		Graph: inferrer.GetInheritanceGraph(), SchemaMappings: mapping,
+		Graph: inferrer.GetInheritanceGraph(),
 	})
 	require.NoError(t, err)
 	entry, err := db.GetLatestObserve("producer")
@@ -566,7 +529,7 @@ func TestIngestObservePersistsAndEnrichesSchemaRelativeIdentity(t *testing.T) {
 	// the schema's declared identity instead of leaving it permanently unbindable.
 	_, err = IngestObserve(db, ObserveIngest{
 		Reader: strings.NewReader(input), DataDir: dataDir, SnapshotID: "snap_new",
-		Graph: inferrer.GetInheritanceGraph(), Inferrer: inferrer, SchemaMappings: mapping,
+		Graph: inferrer.GetInheritanceGraph(), Inferrer: inferrer,
 	})
 	require.NoError(t, err)
 	entry, err = db.GetLatestObserve("producer")

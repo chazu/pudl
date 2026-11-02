@@ -1,4 +1,4 @@
-package mubridge
+package observe
 
 import (
 	"fmt"
@@ -40,9 +40,9 @@ func newObserveRoute(in ObserveIngest) (observeRoute, error) {
 
 // resolve returns the record's schema: the manual schema validated through
 // its chain (fallback requires explicit opt-in), or _schema-based routing.
-func (r observeRoute) resolve(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer, mappings map[string]string) (string, error) {
+func (r observeRoute) resolve(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer) (string, error) {
 	if r.manual == "" {
-		return resolveObserveSchemaWithMappings(record, graph, inferrer, mappings), nil
+		return resolveObserveSchema(record, graph, inferrer), nil
 	}
 	if !r.chain.HasSchema(r.manual) {
 		return "", fmt.Errorf("schema %s is not loaded", r.manual)

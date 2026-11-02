@@ -1,4 +1,4 @@
-package mubridge
+package observe
 
 import (
 	"bufio"
@@ -146,7 +146,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 			if err := in.Context.Err(); err != nil {
 				return err
 			}
-			entry, recordJSON, err := prepareObserveRecord(record, target, in.Origin, dir, now, p.snapshot.RecordCount, in.SnapshotID, in.Graph, in.Inferrer, in.SchemaMappings, in.RunID, route)
+			entry, recordJSON, err := prepareObserveRecord(record, target, in.Origin, dir, now, p.snapshot.RecordCount, in.SnapshotID, in.Graph, in.Inferrer, in.RunID, route)
 			if err != nil {
 				return err
 			}

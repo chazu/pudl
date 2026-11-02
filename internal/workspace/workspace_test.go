@@ -72,7 +72,6 @@ func TestLoad_MinimalWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ws)
 	assert.Equal(t, filepath.Base(tmp), ws.Name)
-	assert.Empty(t, ws.ToolchainMappings)
 }
 
 func TestLoad_FullWorkspace(t *testing.T) {
@@ -82,11 +81,10 @@ func TestLoad_FullWorkspace(t *testing.T) {
 
 	cueContent := `
 name: "full-project"
+// Retired settings still load; nothing reads them.
 toolchain_mappings: [
     {prefix: "aws", toolchain: "terraform"},
-    {prefix: "k8s", toolchain: "kubectl"},
 ]
-// A retired sealed-output policy still loads; nothing reads it.
 secrets: writable_refs: ["pass:full-project/*"]
 `
 	require.NoError(t, os.WriteFile(filepath.Join(pudlDir, "workspace.cue"), []byte(cueContent), 0644))
@@ -95,11 +93,6 @@ secrets: writable_refs: ["pass:full-project/*"]
 	require.NoError(t, err)
 	require.NotNil(t, ws)
 	assert.Equal(t, "full-project", ws.Name)
-	require.Len(t, ws.ToolchainMappings, 2)
-	assert.Equal(t, "aws", ws.ToolchainMappings[0].Prefix)
-	assert.Equal(t, "terraform", ws.ToolchainMappings[0].Toolchain)
-	assert.Equal(t, "k8s", ws.ToolchainMappings[1].Prefix)
-	assert.Equal(t, "kubectl", ws.ToolchainMappings[1].Toolchain)
 }
 
 func TestLoad_InvalidCUE(t *testing.T) {

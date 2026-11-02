@@ -13,18 +13,15 @@ import (
 // normal exit path, including an error return. An interrupt releases every
 // registered directory (see workspaceRegistry). Only a SIGKILL leaks.
 
-// workspacePrefix is the temp-dir prefix every generated mu workspace shares.
-const workspacePrefix = "pudl_run_"
-
 // forcedExitCode is the conventional status of a process ended by SIGINT.
 const forcedExitCode = 130
 
 // workspaceRegistry tracks every temporary directory a run is holding — the
-// populate workspaces inside the user's mu project, the staged
-// ewe project, the ad-hoc mu root — so an interrupt can take them all back out.
+// populate command's output spool — so an interrupt can take them all back out.
 //
 // An interrupt is handled in two steps. The first SIGINT/SIGTERM cancels the
-// invocation's context (main's signal.NotifyContext): mu is asked to stop, the
+// invocation's context (main's signal.NotifyContext): the running command is
+// asked to stop, the
 // run unwinds through its ordinary defers, each workspace is released, and the
 // run row records a cancelled conclusion. A second signal means the operator
 // will not wait for that; exitOnSecondSignal then removes whatever is still
@@ -92,7 +89,7 @@ func exitOnSecondSignal(ctx context.Context, done <-chan struct{}, reg *workspac
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signals)
-	fmt.Fprintln(os.Stderr, "interrupted: stopping mu and recording the run; interrupt again to exit immediately")
+	fmt.Fprintln(os.Stderr, "interrupted: stopping the run and recording it; interrupt again to exit immediately")
 	select {
 	case <-signals:
 		reg.removeAll()

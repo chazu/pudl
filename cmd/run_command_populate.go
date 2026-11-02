@@ -14,7 +14,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/fieldpath"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/proc"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
@@ -26,7 +26,7 @@ const defaultCommandTimeout = 10 * time.Minute
 const stderrTail = 4 << 10
 
 // runCommandPopulate executes a #CommandObserve populate: each run's argv
-// directly (no shell, no mu), its stdout spooled to disk, decoded as JSON
+// directly (no shell), its stdout spooled to disk, decoded as JSON
 // records, `set` applied, and every record ingested as one observation. Any
 // failing run fails the phase before anything is ingested.
 func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*PopulateReport, error) {
@@ -71,7 +71,7 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 			summary.SchemaPolicy = "permissive"
 		}
 	}
-	wrapped, err := json.Marshal([]mubridge.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
+	wrapped, err := json.Marshal([]observe.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}

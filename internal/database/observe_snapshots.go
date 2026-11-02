@@ -26,7 +26,7 @@ type ObserveSnapshot struct {
 	SnapshotID string
 	RunID      string
 	// Model is the #SystemModel this observation was taken for, empty for a
-	// standalone `pudl mu ingest-observe`.
+	// standalone ingest (the retired `pudl mu ingest-observe`).
 	Model string
 	// Workspace is where the run stood: the repo workspace name, or "global".
 	// Recorded rather than resolved on read — it is history, and reading it from
@@ -34,7 +34,8 @@ type ObserveSnapshot struct {
 	Workspace string
 	// Origin is the catalog ingest origin the records were stored under.
 	Origin string
-	// Source is how the observation was produced: mu-observe, ewe, ingest-observe.
+	// Source is how the observation was produced: command, or the legacy
+	// mu-observe, ewe and ingest-observe sources of older snapshots.
 	Source      string
 	Targets     []string
 	RecordCount int

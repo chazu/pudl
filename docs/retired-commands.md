@@ -66,7 +66,13 @@ and run-set reports, approval rows and run history remain readable.
 | `pudl model new --populate plugin:<name>` and `--input` | `pudl model new <name> --populate 'command:<cmdline>'`; without `--populate` the scaffold is a `#CommandObserve` placeholder |
 | `pudl model populator add`, `pudl model populator new` | Keep helper programs and fixtures anywhere in the repository and reference them from a `#CommandObserve` run (`dir:` is relative to the model file) |
 | `pudl model show --discover` | None. Models no longer reference mu plugins |
-| `pudl run --mu-root`, `pudl run set --mu-root`, `--mu-timeout`, `pudl mu ingest-observe --plugin-dir` | None. Bound a command with `populate.timeout` |
+| `pudl run --mu-root`, `pudl run set --mu-root`, `--mu-timeout` | None. Bound a command with `populate.timeout` |
+| `pudl mu ingest-observe` | `pudl run <model>` with a `#CommandObserve` arm that prints the records; `pudl import` for one-off data |
+| `pudl mu ingest-manifest` | None. PUDL no longer records mu build manifests |
+| Typed-envelope import (`{"schema": …, "definitions": …, "data": …}`) | `pudl import --schema <package>.#<Definition>` on the bare payload. An envelope file now imports as an ordinary JSON object |
+| `pudl doctor --fix --only schema-refs`, `--schema-ref` | None. The mu schema cache was removed; existing `item_schemas` rows are kept but no longer read |
+| `pudl doctor`'s `mu` health check | None |
+| `toolchain_mappings` in `workspace.cue` or `config.yaml` | None; the setting is ignored |
 
 ### Retired model fields
 
@@ -98,7 +104,7 @@ each condition and names its repair; `pudl doctor --fix` applies them and
 | `pudl schema reinfer --dry-run` / `--force` | `--fix --dry-run`; `--fix` needs no confirmation prompt |
 | `pudl migrate identity [--dry-run]` | `pudl doctor --fix [--dry-run] --only identity` |
 | `pudl migrate identity --recompute` | `pudl doctor --fix --only identity` (leaf-namespaced ids are detected) |
-| `pudl reclassify [--ref REF]` | `pudl doctor --fix --only schema-refs [--schema-ref REF]` |
+| `pudl reclassify [--ref REF]` | None. The schema-refs repair it became was removed with typed-envelope import (see [Convergence and mu integration](#convergence-and-mu-integration)) |
 | `pudl facts reproject [--dry-run]` | `pudl doctor --fix [--dry-run] --only projections` |
 
 Without `--include-explicit`, the inference repair re-infers only entries the

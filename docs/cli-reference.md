@@ -57,9 +57,6 @@ These flags apply to every command.
   - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
-- [pudl mu](#pudl-mu) — Bridge commands between pudl and the mu execution layer
-  - [pudl mu ingest-manifest](#pudl-mu-ingest-manifest) — Ingest mu build manifest into the catalog
-  - [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
 - [pudl rule](#pudl-rule) — Manage Datalog rules
@@ -368,7 +365,7 @@ reclassified. Use --entry ID to inspect one catalog record, or --health-only for
 
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
-  schema-refs   declared schema references now present in the schema cache
+
   policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
@@ -396,10 +393,9 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, schema-refs, policy-leaves, inference, identity, projections |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
-| `--schema-ref` | string |  | Limit the schema-refs repair to this reference (e.g. mu/aws@v1) |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
 `--entry` and `--health-only` are mutually exclusive. JSON includes
@@ -423,19 +419,13 @@ projected facts unless `projections` ran.
 repair. That repair re-infers only entries the scan found drifted; explicit
 producer assignments are never reclassified unless `--include-explicit` asks
 for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
-catalog). `--schema-ref` limits the schema-refs repair to one reference. The
-identity repair backfills missing `resource_id`s and recomputes those that
+catalog). The identity repair backfills missing `resource_id`s and recomputes those that
 still equal the leaf-schema-namespaced id, re-sequencing the versions of the
 resources they join.
 
 Health checks include schema loading (each schema package that fails to load,
 and any `base_schema` cycle) and Datalog rules (each rule that cannot be
 loaded, with its file position).
-
-The `mu` health check runs `mu version` and warns when mu is missing, its
-version cannot be read, or it is older than the minimum this PUDL is tested
-against (v0.3.5). mu is optional for imports, queries and `--from-catalog`
-replays, so these are warnings rather than failures.
 
 `--verify-payloads` checks referenced files and available SHA256 content claims, including canonical JSON items. This optional full scan never repairs or rewrites evidence.
 
@@ -460,10 +450,9 @@ Install a bundled example in the current initialized PUDL workspace.
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 
-The git-inventory example includes a model expecting default branch main,
-baseline and changed observations, and an optional live observer. The import
-and catalog replay tutorial needs only PUDL; live observation also needs mu
-and Python 3.
+The git-inventory example includes a model expecting default branch main and
+baseline and changed inventories. The model observes the current inventory
+with cat, so the tutorial needs nothing beyond PUDL.
 
 The gcp-network-hygiene example includes a fixture observer, saved checks,
 a corrected fixture, and a separate gcloud-based live model.
@@ -768,17 +757,7 @@ Schema Assignment:
 - Automatic schema inference from CUE schemas in the schema repository
 - Chained validation: type → base type → catchall; --schema must name a type, never a policy
 - Untyped imports use best-effort inference; explicit schemas must validate
-- Envelope wire format: a JSON file shaped like
-    {"schema": {"module": "mu/aws", "version": "v1"},
-     "definitions": [...],   // optional inline CUE
-     "data": <payload>}
-  is auto-detected on import. The declared CUE schema ref is recorded
-  in the item_schemas table; inline definitions are written to pudl's
-  schema cache for future imports. Raw JSON without the envelope shape
-  is imported untouched.
-- Multiple schemas per item: items can satisfy more than one schema
-  (declared, inferred, unresolved) — 'pudl doctor' reports unresolved references
-  that the schema-refs repair can upgrade.
+
 
 Compressed Input:
 - .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;
@@ -794,8 +773,6 @@ Example usage:
     pudl import --path aws-instances.json --schema aws.ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
 
-    # CUE schema reference (e.g. emitted by a mu plugin)
-    pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
     # Several files, or a shell-expanded glob
     pudl import fw-prod-a.json fw-prod-b.json
@@ -844,9 +821,6 @@ Behavior:
 - CSV rows keep every cell verbatim as text (`"00123"` stays `"00123"`).
 - `.gz` and `.zst` files are decompressed; the stored data, hash, size and
   inference all use the decompressed content.
-- Typed envelope JSON (`schema`, optional `definitions`, and `data`) is
-  unwrapped; its schema metadata is recorded and the inner payload follows
-  normal import.
 - `--schema` requires every record to satisfy that schema. Unavailable schemas
   and mismatches fail, including on dedup re-import and `--dry-run`.
 - `--allow-schema-fallback` explicitly permits base/catchall fallback. JSON
@@ -1039,9 +1013,9 @@ Subcommands:
 - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 
 A model is a registered `#SystemModel` describing a `desired` state and the
-sources that populate observed state. Catalog rows carry a `target` — the mu
-target or run target that produced them (e.g. `//models/<name>`, a populate
-phase `//models/<name>:populate`, or a standalone observe like `home/odroid`);
+sources that populate observed state. Catalog rows carry a `target` — the run
+target that produced them (e.g. `//models/<name>`, a populate
+phase `//models/<name>:populate`);
 status is recorded per target. Drift detection is a phase of `pudl run`, not a
 standalone command.
 
@@ -1150,100 +1124,6 @@ their final concrete values are validated again when pudl runs them.
 
 Models with plain bindings are valid before their catalog values exist; the
 resolved scalars and final concrete model are validated again at run time.
-
-## pudl mu
-
-Bridge commands between pudl and the mu execution layer
-
-```text
-pudl mu
-```
-
-```text
-Commands that move data across the pudl/mu boundary.
-
-pudl knows; mu acts. These subcommands ingest mu's execution results back into
-the catalog.
-
-Available subcommands:
-- ingest-observe:  Store mu observe results as live catalog state
-- ingest-manifest: Record a mu build manifest in the catalog
-
-Examples:
-    mu observe --json //home/odroid | pudl mu ingest-observe
-    mu build --emit-manifest | pudl mu ingest-manifest
-```
-
-Subcommands:
-
-- [pudl mu ingest-manifest](#pudl-mu-ingest-manifest) — Ingest mu build manifest into the catalog
-- [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
-
-## pudl mu ingest-manifest
-
-Ingest mu build manifest into the catalog
-
-```text
-pudl mu ingest-manifest [flags]
-```
-
-```text
-Read a mu build manifest (JSON) and store action results in the catalog.
-This records what mu did during convergence, enabling status tracking.
-
-Examples:
-    mu build --emit-manifest | pudl mu ingest-manifest
-    pudl mu ingest-manifest --path manifest.json
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--model` | string |  | Tag entries with this #SystemModel name so a later clean drift re-check promotes its converging resources to clean |
-| `--origin` | string | `mu-build` | Origin label for catalog entries |
-| `--path` | string |  | Path to manifest JSON file (reads stdin if omitted) |
-
-`ingest-manifest` records each applied action and sets the affected resources
-to `converging` (applied, pending verification). Passing `--model <name>` tags
-those rows with the model so a later clean `pudl run <name>` drift re-check
-promotes exactly that model's resources from `converging` to `clean`. Without
-`--model`, promotion falls back to matching the model's desired-resource names.
-
-## pudl mu ingest-observe
-
-Ingest mu observe results into the catalog
-
-```text
-pudl mu ingest-observe [flags]
-```
-
-```text
-Read mu observe --json output and store observed state in the catalog.
-The observed state becomes the "live" side for subsequent drift checks.
-
-Input format: JSON array of ObserveResult objects from mu observe --json.
-Each target's current.records are stored as individual observe entries,
-routed to the correct schema via the _schema field.
-
-Examples:
-    mu observe --json //home/odroid | pudl mu ingest-observe
-    pudl mu ingest-observe --path observe-results.json
-    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--complete` | bool |  | Assert the saved observation covers its entire declared scope |
-| `--coverage-schema` | stringArray |  | Schema covered by this population, including when empty (repeatable) |
-| `--max-decoded-bytes` | int64 | `1073741824` | Maximum observation input bytes |
-| `--max-record-bytes` | int64 | `67108864` | Maximum decoded observation target envelope size |
-| `--max-staging-bytes` | int64 | `2147483648` | Maximum prepared observation bytes |
-| `--origin` | string | `mu-observe` | Override origin |
-| `--path` | string |  | Read from file instead of stdin |
-| `--scope` | string |  | Name the population covered by this observation |
 
 ## pudl prime
 

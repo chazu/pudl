@@ -35,7 +35,7 @@ func runBatchImport(cmd *cobra.Command, filePaths []string) error {
 	for i, filePath := range filePaths {
 		progress.Progressf("📁 [%d/%d] Importing: %s", i+1, len(filePaths), filepath.Base(filePath))
 
-		result, err := importOneWithEnvelope(session.imp, session.options(filePath, origin))
+		result, err := importOne(session.imp, session.options(filePath, origin))
 		outcomes = append(outcomes, newImportOutcome(filePath, result, err))
 		if err != nil {
 			importErrors = append(importErrors, fmt.Errorf("failed to import %s: %w", filepath.Base(filePath), err))

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/chazu/pudl/internal/inference"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 )
@@ -60,7 +60,7 @@ func ingestPopulateOutput(cat *runCatalog, observeJSON []byte, in populateIngest
 	if in.observation != nil {
 		observation = *in.observation
 	}
-	result, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
+	result, err := observe.IngestObserve(db, observe.ObserveIngest{
 		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas,
 		Reader:              bytes.NewReader(observeJSON),
 		Context:             in.ctx,

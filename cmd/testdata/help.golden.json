@@ -284,7 +284,7 @@
     {
       "use": "doctor",
       "short": "Check workspace health and catalog data, and repair the catalog",
-      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n  schema-refs   declared schema references now present in the schema cache\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
       "args": "custom",
       "flags": [
         {
@@ -332,7 +332,7 @@
         },
         {
           "name": "only",
-          "usage": "Limit repairs to these names: schema-names, schema-refs, policy-leaves, inference, identity, projections",
+          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections",
           "type": "stringSlice",
           "default": "[]"
         },
@@ -344,11 +344,6 @@
         {
           "name": "schema",
           "usage": "Check and repair only entries assigned to this schema",
-          "type": "string"
-        },
-        {
-          "name": "schema-ref",
-          "usage": "Limit the schema-refs repair to this reference (e.g. mu/aws@v1)",
           "type": "string"
         },
         {
@@ -382,7 +377,7 @@
         {
           "use": "install \u003cname\u003e",
           "short": "Install a runnable example and its fixture data",
-          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main,\nbaseline and changed observations, and an optional live observer. The import\nand catalog replay tutorial needs only PUDL; live observation also needs mu\nand Python 3.\n\nThe gcp-network-hygiene example includes a fixture observer, saved checks,\na corrected fixture, and a separate gcloud-based live model.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "long": "Install a bundled example in the current initialized PUDL workspace.\nNo source checkout or download is needed. Identical files are left alone;\nexisting files with different content are preserved and reported as conflicts.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a fixture observer, saved checks,\na corrected fixture, and a separate gcloud-based live model.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
             {
@@ -757,7 +752,7 @@
     {
       "use": "import [paths...] [--path \u003cfile|dir|pattern\u003e]",
       "short": "Import data into PUDL data lake",
-      "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nPaths may be given as arguments, with --path, or both. Each accepts a single\nfile, a wildcard pattern, or a directory (an unquoted pattern the shell has\nalready expanded arrives as several arguments and is imported in full):\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Explicit schema validation with --schema (strict unless --allow-schema-fallback)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: type → base type → catchall; --schema must name a type, never a policy\n- Untyped imports use best-effort inference; explicit schemas must validate\n- Envelope wire format: a JSON file shaped like\n    {\"schema\": {\"module\": \"mu/aws\", \"version\": \"v1\"},\n     \"definitions\": [...],   // optional inline CUE\n     \"data\": \u003cpayload\u003e}\n  is auto-detected on import. The declared CUE schema ref is recorded\n  in the item_schemas table; inline definitions are written to pudl's\n  schema cache for future imports. Raw JSON without the envelope shape\n  is imported untouched.\n- Multiple schemas per item: items can satisfy more than one schema\n  (declared, inferred, unresolved) — 'pudl doctor' reports unresolved references\n  that the schema-refs repair can upgrade.\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n    # CUE schema reference (e.g. emitted by a mu plugin)\n    pudl import --path out.json --schema mu/aws@v1#EC2Instance\n\n    # Several files, or a shell-expanded glob\n    pudl import fw-prod-a.json fw-prod-b.json\n    pudl import exports/*.json\n\n    # Wildcard batch import\n    pudl import --path '*.json'\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # Check classification, identity and redaction first; nothing is written\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --dry-run\n\n    # Add a field gcloud omits, on every record\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --set project=prod-a\n\n    # From stdin\n    cat data.json | pudl import",
+      "long": "Import data from files into the PUDL data lake with automatic format detection\nand schema assignment.\n\nThis command imports data from various formats (JSON, YAML, CSV, NDJSON) and stores it\nin the PUDL data lake with full metadata tracking. Raw and metadata files use\ncontent-addressed names.\n\nPaths may be given as arguments, with --path, or both. Each accepts a single\nfile, a wildcard pattern, or a directory (an unquoted pattern the shell has\nalready expanded arrives as several arguments and is imported in full):\n- Single file: --path data.json\n- Wildcard patterns: --path *.json, --path data/*.yaml, --path logs/2024-*.json\n- Directory: --path exports/ imports its .json/.ndjson/.jsonl/.yaml/.yml/.csv\n  files (compressed .gz/.zst variants included); add --recursive to descend\n  into subdirectories. Hidden files and directories are skipped.\n\nWith --json, the command prints one JSON array with an entry per file:\nthe import result fields plus \"status\" (imported, skipped, or failed) and,\nfor a failure, \"error\". Progress lines go to stderr.\n\nData Storage:\n- In a repository workspace: .pudl/data/{raw,metadata,sqlite}/\n- Outside one: ~/.pudl/data/{raw,metadata,sqlite}/\n- The repository and global catalogs are separate; imports never cross them\n\nSchema Assignment:\n- Explicit schema validation with --schema (strict unless --allow-schema-fallback)\n- Automatic schema inference from CUE schemas in the schema repository\n- Chained validation: type → base type → catchall; --schema must name a type, never a policy\n- Untyped imports use best-effort inference; explicit schemas must validate\n\n\nCompressed Input:\n- .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;\n  the decompressed bytes are what is hashed, stored, and parsed\n\nReading from stdin:\n- Pipe data with no --path, or use --path - ; set --format when content\n  detection is ambiguous\n\nExample usage:\n    # Single file import\n    pudl import --path data.json\n    pudl import --path aws-instances.json --schema aws.ec2\n    pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods\n\n\n    # Several files, or a shell-expanded glob\n    pudl import fw-prod-a.json fw-prod-b.json\n    pudl import exports/*.json\n\n    # Wildcard batch import\n    pudl import --path '*.json'\n    pudl import --path data/*.yaml\n    pudl import --path logs/2024-01-*.json\n\n    # Check classification, identity and redaction first; nothing is written\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --dry-run\n\n    # Add a field gcloud omits, on every record\n    pudl import fw-prod-a.json --schema 'pudl/gcp.#Firewall' --set project=prod-a\n\n    # From stdin\n    cat data.json | pudl import",
       "args": "custom",
       "flags": [
         {
@@ -1181,133 +1176,6 @@
               "type": "bool",
               "default": "false",
               "persistent": true
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "use": "mu",
-      "short": "Bridge commands between pudl and the mu execution layer",
-      "long": "Commands that move data across the pudl/mu boundary.\n\npudl knows; mu acts. These subcommands ingest mu's execution results back into\nthe catalog.\n\nAvailable subcommands:\n- ingest-observe:  Store mu observe results as live catalog state\n- ingest-manifest: Record a mu build manifest in the catalog\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    mu build --emit-manifest | pudl mu ingest-manifest",
-      "flags": [
-        {
-          "name": "global",
-          "usage": "Use the personal ~/.pudl workspace explicitly",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        },
-        {
-          "name": "json",
-          "usage": "Output results as JSON for scripting",
-          "type": "bool",
-          "default": "false",
-          "persistent": true
-        }
-      ],
-      "subcommands": [
-        {
-          "use": "ingest-manifest",
-          "short": "Ingest mu build manifest into the catalog",
-          "long": "Read a mu build manifest (JSON) and store action results in the catalog.\nThis records what mu did during convergence, enabling status tracking.\n\nExamples:\n    mu build --emit-manifest | pudl mu ingest-manifest\n    pudl mu ingest-manifest --path manifest.json",
-          "flags": [
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "model",
-              "usage": "Tag entries with this #SystemModel name so a later clean drift re-check promotes its converging resources to clean",
-              "type": "string"
-            },
-            {
-              "name": "origin",
-              "usage": "Origin label for catalog entries",
-              "type": "string",
-              "default": "mu-build"
-            },
-            {
-              "name": "path",
-              "usage": "Path to manifest JSON file (reads stdin if omitted)",
-              "type": "string"
-            }
-          ]
-        },
-        {
-          "use": "ingest-observe",
-          "short": "Ingest mu observe results into the catalog",
-          "long": "Read mu observe --json output and store observed state in the catalog.\nThe observed state becomes the \"live\" side for subsequent drift checks.\n\nInput format: JSON array of ObserveResult objects from mu observe --json.\nEach target's current.records are stored as individual observe entries,\nrouted to the correct schema via the _schema field.\n\nExamples:\n    mu observe --json //home/odroid | pudl mu ingest-observe\n    pudl mu ingest-observe --path observe-results.json\n    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json",
-          "flags": [
-            {
-              "name": "complete",
-              "usage": "Assert the saved observation covers its entire declared scope",
-              "type": "bool",
-              "default": "false"
-            },
-            {
-              "name": "coverage-schema",
-              "usage": "Schema covered by this population, including when empty (repeatable)",
-              "type": "stringArray",
-              "default": "[]"
-            },
-            {
-              "name": "global",
-              "usage": "Use the personal ~/.pudl workspace explicitly",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "json",
-              "usage": "Output results as JSON for scripting",
-              "type": "bool",
-              "default": "false",
-              "persistent": true
-            },
-            {
-              "name": "max-decoded-bytes",
-              "usage": "Maximum observation input bytes",
-              "type": "int64",
-              "default": "1073741824"
-            },
-            {
-              "name": "max-record-bytes",
-              "usage": "Maximum decoded observation target envelope size",
-              "type": "int64",
-              "default": "67108864"
-            },
-            {
-              "name": "max-staging-bytes",
-              "usage": "Maximum prepared observation bytes",
-              "type": "int64",
-              "default": "2147483648"
-            },
-            {
-              "name": "origin",
-              "usage": "Override origin",
-              "type": "string",
-              "default": "mu-observe"
-            },
-            {
-              "name": "path",
-              "usage": "Read from file instead of stdin",
-              "type": "string"
-            },
-            {
-              "name": "scope",
-              "usage": "Name the population covered by this observation",
-              "type": "string"
             }
           ]
         }
