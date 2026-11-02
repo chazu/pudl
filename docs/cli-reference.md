@@ -38,13 +38,12 @@ These flags apply to every command.
   - [pudl config reset](#pudl-config-reset) — Reset configuration to defaults
   - [pudl config set](#pudl-config-set) — Set a configuration value
 - [pudl delete](#pudl-delete) — Delete a data entry from the catalog
-- [pudl doctor](#pudl-doctor) — Check workspace health, catalog validation, and inference stability
+- [pudl doctor](#pudl-doctor) — Check workspace health and catalog data, and repair the catalog
 - [pudl example](#pudl-example) — Install bundled examples into this workspace
   - [pudl example install](#pudl-example-install) — Install a runnable example and its fixture data
 - [pudl export](#pudl-export) — Export data lake entries to various formats
 - [pudl facts](#pudl-facts) — Query the bitemporal fact store
   - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
-  - [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
   - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
   - [pudl facts show](#pudl-facts-show) — Show details of a single fact
   - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
@@ -52,8 +51,6 @@ These flags apply to every command.
 - [pudl import](#pudl-import) — Import data into PUDL data lake
 - [pudl init](#pudl-init) — Initialize or repair a local PUDL workspace (--global for ~/.pudl)
 - [pudl list](#pudl-list) — List imported data in the PUDL data lake
-- [pudl migrate](#pudl-migrate) — Run data migrations
-  - [pudl migrate identity](#pudl-migrate-identity) — Backfill or recompute resource identity tracking for existing entries
 - [pudl model](#pudl-model) — Manage #SystemModel definitions
   - [pudl model deps](#pudl-model-deps) — Refresh and show the cross-model dependency graph
   - [pudl model list](#pudl-model-list) — List registered #SystemModel definitions
@@ -65,7 +62,6 @@ These flags apply to every command.
   - [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
-- [pudl reclassify](#pudl-reclassify) — Retry classification for items with unresolved schema references
 - [pudl rule](#pudl-rule) — Manage Datalog rules
   - [pudl rule add](#pudl-rule-add) — Install a Datalog rule file into the workspace
   - [pudl rule new](#pudl-rule-new) — Scaffold a Datalog rule
@@ -75,9 +71,7 @@ These flags apply to every command.
 - [pudl schema](#pudl-schema) — Manage CUE schemas for data validation
   - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
   - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
-  - [pudl schema migrate](#pudl-schema-migrate) — Migrate catalog schema names to canonical format
   - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
-  - [pudl schema reinfer](#pudl-schema-reinfer) — Re-run schema inference on existing catalog entries
   - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
 - [pudl show](#pudl-show) — Show detailed information about a specific data entry
 - [pudl snapshot](#pudl-snapshot) — Inspect and retain observation snapshots
@@ -360,7 +354,7 @@ always be deleted.
 
 ## pudl doctor
 
-Check workspace health, catalog validation, and inference stability
+Check workspace health and catalog data, and repair the catalog
 
 ```text
 pudl doctor [flags]
@@ -370,22 +364,69 @@ pudl doctor [flags]
 Check workspace structure, integrity, schemas, and retained catalog data.
 Catalog records are validated against their assigned schemas. Ordinary inferred imports
 also receive a fixed-point inference check; explicit producer assignments are never
-reclassified. This command does not repair or change retained data.
-Use --entry ID to inspect one catalog record, or --health-only for workspace checks.
+reclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.
+
+Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
+  schema-names  schema names not in canonical <package>.#<Definition> form
+  schema-refs   declared schema references now present in the schema cache
+  policy-leaves entries assigned to a policy schema instead of its type
+  inference     inferred entries whose schema inference now selects another schema
+  identity      entries missing a resource_id, or namespaced by a leaf schema
+  projections   projected facts that no longer match the catalog or facts specs
+
+Without --fix nothing is written. --fix applies every repair (or those named by
+--only) in that order; --fix --dry-run previews them.
+```
+
+Examples:
+
+```bash
+pudl doctor
+  pudl doctor --fix --dry-run
+  pudl doctor --fix --only projections
+  pudl doctor --fix --only inference --schema pudl/core.#Item --include-explicit
 ```
 
 Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--dry-run` | bool |  | With --fix, report what the repairs would change without writing |
 | `--entry` | string |  | Check one catalog entry by proquint or full ID |
+| `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
+| `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, schema-refs, policy-leaves, inference, identity, projections |
+| `--origin` | string |  | Check and repair only entries from this origin |
+| `--schema` | string |  | Check and repair only entries assigned to this schema |
+| `--schema-ref` | string |  | Limit the schema-refs repair to this reference (e.g. mu/aws@v1) |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
-`--entry` and `--health-only` are mutually exclusive. JSON includes `ok`,
-`health`, `catalog`, and any setup `error`; invalid records, inference
+`--entry` and `--health-only` are mutually exclusive. JSON includes
+`report_version` (2), `mode` (`diagnose`, `dry-run` or `fix`), `ok`, `health`,
+`catalog`, `repairs`, and any setup `error`; invalid records, inference
 mismatches, and failed health checks produce a nonzero exit status. An empty
-catalog is valid.
+catalog is valid. Version 1 reports had no `report_version` and listed repairs
+only as `reason`, `preview_argv` and `apply_argv`.
+
+Each `repairs` item has `name`, `condition`, `status` (`ok`, `needed`,
+`applied`, `partial`, `error` or `skipped`), `message`, `pending`, `changed`,
+`failed`, `changes` (`subject`, `from`, `to`), `errors`, optional `details`
+(the projections repair's sync report), and, when needed, `preview_argv` and
+`apply_argv`. Plain `doctor` writes nothing. `--fix` applies the repairs in
+registry order and re-checks the catalog afterwards; `--fix --dry-run` previews
+them. `--fix` refuses to write when a health check failed, and an `error` or
+`partial` repair fails the command. A repair that changes entries also resyncs
+projected facts unless `projections` ran.
+
+`--schema` and `--origin` scope the catalog scan and therefore the inference
+repair. That repair re-infers only entries the scan found drifted; explicit
+producer assignments are never reclassified unless `--include-explicit` asks
+for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
+catalog). `--schema-ref` limits the schema-refs repair to one reference. The
+identity repair backfills missing `resource_id`s and recomputes those that
+still equal the leaf-schema-namespaced id, re-sequencing the versions of the
+resources they join.
 
 Health checks include schema loading (each schema package that fails to load,
 and any `base_schema` cycle) and Datalog rules (each rule that cannot be
@@ -519,7 +560,6 @@ Examples:
 Subcommands:
 
 - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
-- [pudl facts reproject](#pudl-facts-reproject) — Bring schema-projected facts in line with the catalog
 - [pudl facts search](#pudl-facts-search) — Full-text search over currently-valid facts
 - [pudl facts show](#pudl-facts-show) — Show details of a single fact
 - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
@@ -576,39 +616,6 @@ believed at a moment, in whole seconds, after every write during or before that
 second. `--as-of-tx-seq` selects an exact write in the store's transaction
 sequence, which also shows facts added and retracted within one second. See
 [facts](facts.md) for the bitemporal model.
-
-## pudl facts reproject
-
-Bring schema-projected facts in line with the catalog
-
-```text
-pudl facts reproject [flags]
-```
-
-```text
-Recompute the facts schemas project from imported records (_pudl.facts).
-
-Imports and runs project facts as records arrive and sync afterwards, so this
-is rarely needed by hand. It repairs, as corrections (retractions):
-
-- resources whose facts describe an entry that was deleted, pruned,
-  re-identified or reassigned to another schema;
-- resources projected with an older facts block (the block changed);
-- resources never projected (a facts block added after the data arrived).
-
-A schema whose facts block is invalid is reported and its existing facts are
-left unchanged. pudl query warns when a reprojection is pending.
-
-Examples:
-    pudl facts reproject
-    pudl facts reproject --dry-run
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--dry-run` | bool |  | Report what would change without writing |
 
 ## pudl facts search
 
@@ -759,7 +766,7 @@ Data Storage:
 Schema Assignment:
 - Explicit schema validation with --schema (strict unless --allow-schema-fallback)
 - Automatic schema inference from CUE schemas in the schema repository
-- Chained validation: policy → base → generic → catchall
+- Chained validation: type → base type → catchall; --schema must name a type, never a policy
 - Untyped imports use best-effort inference; explicit schemas must validate
 - Envelope wire format: a JSON file shaped like
     {"schema": {"module": "mu/aws", "version": "v1"},
@@ -770,7 +777,8 @@ Schema Assignment:
   schema cache for future imports. Raw JSON without the envelope shape
   is imported untouched.
 - Multiple schemas per item: items can satisfy more than one schema
-  (declared, inferred, unresolved) — see 'pudl reclassify --help'.
+  (declared, inferred, unresolved) — 'pudl doctor' reports unresolved references
+  that the schema-refs repair can upgrade.
 
 Compressed Input:
 - .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;
@@ -783,7 +791,7 @@ Reading from stdin:
 Example usage:
     # Single file import
     pudl import --path data.json
-    pudl import --path aws-instances.json --schema aws.compliant-ec2
+    pudl import --path aws-instances.json --schema aws.ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
 
     # CUE schema reference (e.g. emitted by a mu plugin)
@@ -822,7 +830,7 @@ Flags:
 | `--origin` | string |  | Override origin detection (optional) |
 | `-p`, `--path` | string |  | Path to file or wildcard pattern to import (use '-' for stdin) |
 | `--recursive` | bool |  | When --path is a directory, also import supported files in its subdirectories |
-| `--schema` | string |  | Specify schema for validation (e.g., aws.compliant-ec2) |
+| `--schema` | string |  | Specify schema for validation (e.g., aws.ec2) |
 | `--set` | stringArray |  | Set a field on every record: path=value (repeatable; overwrites; JSON values keep their type, '"…"' forces a string) |
 
 Behavior:
@@ -1006,55 +1014,6 @@ individual records, skipping collection containers. Filtering precedes paginatio
 Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
 256 MiB total scan budget; narrow schema or collection scope for larger data.
 `--fancy` remains available and can display the filtered record set.
-
-## pudl migrate
-
-Run data migrations
-
-```text
-Run data migrations to upgrade the PUDL catalog.
-
-Available migrations:
-  identity    Backfill resource identity tracking for existing entries
-```
-
-Subcommands:
-
-- [pudl migrate identity](#pudl-migrate-identity) — Backfill or recompute resource identity tracking for existing entries
-
-## pudl migrate identity
-
-Backfill or recompute resource identity tracking for existing entries
-
-```text
-pudl migrate identity [flags]
-```
-
-```text
-Compute and populate resource_id and identity_json for catalog entries.
-
-By default this backfills entries with a NULL resource_id (e.g. data imported
-before identity tracking was added): it loads each entry's data file, extracts
-identity fields from the schema metadata, and computes resource_id.
-
-With --recompute, every entry's resource_id and identity_json are recomputed and
-versions are re-sequenced. Use this once after upgrading to root-of-family
-identity namespacing, which changes every resource_id: identity is now keyed on
-the inheritance-family root rather than the assigned leaf schema, so resources
-stay stable under reinference and policy refinement. Recompute is idempotent.
-
-Examples:
-    pudl migrate identity                  # Backfill entries with NULL resource_id
-    pudl migrate identity --recompute      # Recompute all resource_ids + versions
-    pudl migrate identity --recompute --dry-run  # Preview the recompute
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--dry-run` | bool |  | Preview changes without applying |
-| `--recompute` | bool |  | Recompute all resource_ids (family-root namespacing) and re-sequence versions |
 
 ## pudl model
 
@@ -1372,33 +1331,6 @@ fields are errors. Empty values and values containing `=` remain valid.
 Every query presentation mode returns output errors. A failed stdout consumer may
 receive a prefix; automation must check the command's exit status.
 
-## pudl reclassify
-
-Retry classification for items with unresolved schema references
-
-```text
-pudl reclassify [flags]
-```
-
-```text
-Find items in the catalog tagged with an unresolved CUE schema reference
-(schema ref declared at import time but not yet known to pudl) and
-attempt to upgrade their classification.
-
-When run without --ref, every unresolved row is considered. With --ref,
-only rows tagged with that exact "<module>@<version>" reference are
-processed.
-
-This command is part of the mu plugin output schema flow — see
-docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md (W5).
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--ref` | string |  | Only reclassify rows tagged with this schema ref (e.g. mu/aws@v1) |
-
 ## pudl rule
 
 Manage Datalog rules
@@ -1661,19 +1593,17 @@ pudl schema
 Manage CUE schemas for import validation and resource identity.
 
 Schemas come from the project and its explicit vendored dependencies, or the
-personal workspace selected by --global. Use list/show for discovery, add/new
-for authoring, and reinfer/migrate for reviewed maintenance. Inspect physical
-paths with pudl config --paths --json. Git, your editor, and cue manage the files
-directly; see docs/retired-commands.md for replacements.
+personal workspace selected by --global. Use list/show for discovery and add/new
+for authoring; pudl doctor --fix repairs schema names and inference drift.
+Inspect physical paths with pudl config --paths --json. Git, your editor, and cue
+manage the files directly; see docs/retired-commands.md for replacements.
 ```
 
 Subcommands:
 
 - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
 - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
-- [pudl schema migrate](#pudl-schema-migrate) — Migrate catalog schema names to canonical format
 - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
-- [pudl schema reinfer](#pudl-schema-reinfer) — Re-run schema inference on existing catalog entries
 - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
 
 ## pudl schema add
@@ -1731,33 +1661,6 @@ Workspace definitions shadow global definitions. JSON includes source paths,
 built-in status, and available `_pudl` metadata; verbose text includes identity
 fields, tracked fields, and list type information.
 
-## pudl schema migrate
-
-Migrate catalog schema names to canonical format
-
-```text
-pudl schema migrate
-```
-
-```text
-Migrate all schema names in the catalog database to canonical format.
-
-This command normalizes schema names from various formats to the canonical format:
-  <package>.<#Definition>  (e.g., aws/ec2.#Instance, pudl/core.#Item)
-
-Input formats that are normalized:
-  - pudl.schemas/aws/ec2@v0:#Instance  -> aws/ec2.#Instance
-  - pudl.schemas/aws/ec2:#Instance     -> aws/ec2.#Instance
-  - aws/ec2:#Instance                  -> aws/ec2.#Instance
-  - core.#Item                         -> pudl/core.#Item
-
-This migration is idempotent - running it multiple times is safe.
-
-Examples:
-    # Migrate all schema names
-    pudl schema migrate
-```
-
 ## pudl schema new
 
 Generate a new schema from imported data
@@ -1802,53 +1705,6 @@ Flags:
 | `--from` | string |  | Proquint ID of the imported data to generate schema from (required) |
 | `--infer` | stringArray |  | Field inference hints (e.g., State=enum) |
 | `--path` | string |  | Schema path in format 'package/path:#Definition' (required) |
-
-## pudl schema reinfer
-
-Re-run schema inference on existing catalog entries
-
-```text
-pudl schema reinfer [flags]
-```
-
-```text
-Re-run schema inference on data that has already been imported.
-
-This command is useful when:
-- New schemas have been added and you want existing data to match against them
-- Schema cascade priorities have been modified
-- You want to batch-update schema assignments without interactive review
-
-The command will re-analyze each matching entry and update its schema assignment
-if a better match is found.
-
-Examples:
-    # Re-infer all entries currently assigned to unknown schema
-    pudl schema reinfer --schema core.#Item
-
-    # Re-infer a specific entry
-    pudl schema reinfer --entry babod-fakak
-
-    # Preview what would change for all entries
-    pudl schema reinfer --all --dry-run
-
-    # Re-infer all entries from a specific origin
-    pudl schema reinfer --origin aws-ec2
-
-    # Force re-inference without confirmation
-    pudl schema reinfer --all --force
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--all` | bool |  | Re-infer schemas for all catalog entries |
-| `--dry-run` | bool |  | Show what would change without applying updates |
-| `--entry` | string |  | Re-infer schema for a specific entry by proquint ID |
-| `--force` | bool |  | Apply changes without confirmation prompt |
-| `--origin` | string |  | Re-infer only entries from a specific origin |
-| `--schema` | string |  | Re-infer only entries currently assigned to this schema |
 
 ## pudl schema show
 

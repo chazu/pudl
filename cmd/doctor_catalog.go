@@ -24,7 +24,7 @@ type catalogDiagnostic struct {
 	InferenceChecked bool   `json:"inference_checked"`
 }
 
-func checkCatalogEntries(entryID string) ([]catalogDiagnostic, error) {
+func checkCatalogEntries(entryID string, filter database.FilterOptions) ([]catalogDiagnostic, error) {
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func checkCatalogEntries(entryID string) ([]catalogDiagnostic, error) {
 		}
 		entries = append(entries, *entry)
 	} else {
-		result, queryErr := db.QueryEntries(database.FilterOptions{}, database.QueryOptions{Limit: 0, SortBy: "timestamp"})
+		result, queryErr := db.QueryEntries(filter, database.QueryOptions{Limit: 0, SortBy: "timestamp"})
 		if queryErr != nil {
 			return nil, queryErr
 		}

@@ -14,7 +14,7 @@ const (
 	ItemSchemaStatusDeclared       = "declared"        // ref was known in the schema cache and the item was classified against it
 	ItemSchemaStatusAutoRegistered = "auto_registered" // ref was registered from a vendored definition during import, then classified
 	ItemSchemaStatusInferred       = "inferred"        // schema was determined by pudl inference, not by a declared ref
-	ItemSchemaStatusUnresolved     = "unresolved"      // a ref was declared but could not be looked up; awaiting `pudl reclassify`
+	ItemSchemaStatusUnresolved     = "unresolved"      // a ref was declared but could not be looked up; awaiting the doctor schema-refs repair
 )
 
 // ItemSchema is one row of the item_schemas junction table: a single
@@ -84,7 +84,7 @@ ORDER BY classified_at DESC;`
 
 // ListUnresolvedItemSchemas returns all rows with status='unresolved'.
 // If schemaRef is non-empty, results are filtered to that ref.
-// Used by `pudl reclassify` to find rows awaiting a schema.
+// Used by the doctor schema-refs repair to find rows awaiting a schema.
 func (c *CatalogDB) ListUnresolvedItemSchemas(schemaRef string) ([]ItemSchema, error) {
 	if schemaRef == "" {
 		const q = `SELECT item_id, schema_ref, status, classified_at FROM item_schemas WHERE status = ? ORDER BY classified_at;`

@@ -78,7 +78,7 @@ global catalogs are independent; mutable state never falls back across them.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl facts reproject` — sync facts projected from imported records (runs automatically after import/run/reinfer/delete)
+- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, schema-refs, policy-leaves, inference, identity, projections (projected-fact sync also runs automatically after import/run/delete)
 
 ### Querying imported data
 
@@ -238,6 +238,6 @@ Save a query as a check with `model new NAME --check RELATION --evidence
 scope:POPULATION --max-age 15m`. Check outcomes are pass/fail/unknown/error.
 Missing, broken, incomplete or stale required evidence cannot pass. Reports
 include separate execution/conformity/checks/verification summaries and retained
-evidence; age_at_check is frozen. Use `doctor --json` for reviewable repair
-arguments, not automatic mutation. Explicit --schema is strict; exploratory
+evidence; age_at_check is frozen. `doctor --json` lists repair diagnoses with
+preview/apply arguments; only `doctor --fix` writes. Explicit --schema is strict; exploratory
 fallback requires --allow-schema-fallback.

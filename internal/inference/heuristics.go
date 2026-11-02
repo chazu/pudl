@@ -23,7 +23,7 @@ type CandidateScore struct {
 
 // SelectCandidates returns schemas that are likely to match the given data,
 // ordered by likelihood (highest score first). This narrows down the schemas
-// to try before expensive CUE unification.
+// to try before expensive CUE unification. Policy schemas are never candidates.
 func SelectCandidates(
 	data interface{},
 	hints InferenceHints,
@@ -67,6 +67,11 @@ func scoreCandidate(
 	dataFields map[string]bool,
 	hints InferenceHints,
 ) (float64, string) {
+	// Policies are evaluated against resources, never assigned to them.
+	if meta.IsPolicy() {
+		return 0, "policy schema (evaluated, not assigned)"
+	}
+
 	score := 0.0
 	var reasons []string
 

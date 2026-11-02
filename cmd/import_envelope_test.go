@@ -143,11 +143,11 @@ func TestEndToEnd_ReclassifyUpgradesUnresolved(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("ListUnresolved: got %d, want 1", len(rows))
 	}
-	resolved, err := tryResolveSchemaRef(cache, rows[0].SchemaRef)
+	module, version, _, err := muschemas.ParseRef(rows[0].SchemaRef)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !resolved {
+	if !cache.Has(module, version) {
 		t.Fatal("expected ref to resolve")
 	}
 	if err := db.AddItemSchema(database.ItemSchema{

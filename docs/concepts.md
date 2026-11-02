@@ -160,7 +160,7 @@ This ensures data is always accepted at some level. If the intended schema rejec
 
 ### Never-Reject Philosophy
 
-PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl schema reinfer` to re-classify existing entries.
+PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl doctor --fix --only inference` to re-classify existing entries.
 
 ## System Models
 

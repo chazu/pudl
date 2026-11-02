@@ -103,3 +103,22 @@ func TestParseErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestHasPrefix(t *testing.T) {
+	cases := []struct {
+		path, prefix string
+		want         bool
+	}{
+		{"a.b", "a.b", true},
+		{"a.b.c", "a.b", true},
+		{"a", "a.b", false},
+		{"a.c", "a.b", false},
+		{"a[*].b", "a[*]", true},
+		{"a[*].b", "a.b", false},
+	}
+	for _, c := range cases {
+		if got := MustParse(c.path).HasPrefix(MustParse(c.prefix)); got != c.want {
+			t.Errorf("%q.HasPrefix(%q) = %v, want %v", c.path, c.prefix, got, c.want)
+		}
+	}
+}

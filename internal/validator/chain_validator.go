@@ -73,9 +73,13 @@ func (cv *ChainValidator) findFallbackSchemaName() string {
 
 // ValidateChain validates data against the intended schema using CUE unification.
 // If the intended schema fails, it tries the base schema (if any), then the catchall.
+// The intended schema must be a type: naming a policy is a *PolicySchemaError.
 func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string) (*ValidationResult, error) {
 	// Normalize the intended schema to canonical format
 	intendedSchema = schemaname.Normalize(intendedSchema)
+	if err := cv.CheckAssignable(intendedSchema); err != nil {
+		return nil, err
+	}
 	result := NewValidationResult(intendedSchema)
 
 	// Build validation chain: intended → base (if any) → catchall
@@ -137,7 +141,8 @@ func (cv *ChainValidator) ValidateChain(data interface{}, intendedSchema string)
 }
 
 // buildValidationChain builds the validation chain: intended → base (if any) → catchall.
-// Uses CUE's natural inheritance via base_schema references.
+// Uses CUE's natural inheritance via base_schema references. Policy ancestors
+// are walked through but left out: a record falls back only to types.
 //
 // A base_schema cycle is an error: there is no family root to fall back to, and
 // walking the chain would never end.
@@ -158,7 +163,9 @@ func (cv *ChainValidator) buildValidationChain(intendedSchema string) ([]string,
 			return nil, fmt.Errorf("base_schema cycle: %s", FormatCycle(append(chain, meta.BaseSchema)))
 		}
 		seen[meta.BaseSchema] = true
-		chain = append(chain, meta.BaseSchema)
+		if base, ok := cv.metadata[meta.BaseSchema]; !ok || !base.IsPolicy() {
+			chain = append(chain, meta.BaseSchema)
+		}
 		current = meta.BaseSchema
 	}
 

@@ -25,10 +25,6 @@ var jsonContractExempt = map[string]string{
 	"pudl snapshot":              "command group",
 	"pudl guide":                 "prints reference documentation",
 	"pudl prime":                 "prints reference documentation",
-	"pudl schema migrate":        "maintenance command with a text report",
-	"pudl schema reinfer":        "maintenance command with a text report",
-	"pudl migrate identity":      "maintenance command with a text report",
-	"pudl reclassify":            "maintenance command with a text report",
 	"pudl schema add":            "schema authoring; text report",
 	"pudl schema new":            "schema authoring; covered by schema_new tests",
 	"pudl model new":             "scaffold authoring; needs a plugin",
@@ -116,8 +112,8 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "show", factID)
 	run("facts", "search", "h1")
 	run("facts", "stats")
-	run("facts", "reproject")
-	run("facts", "reproject", "--dry-run")
+	run("doctor", "--fix", "--dry-run")
+	run("doctor", "--fix")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)

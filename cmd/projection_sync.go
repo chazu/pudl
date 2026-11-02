@@ -7,6 +7,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
 )
@@ -26,7 +27,7 @@ func projectionRegistry() (*projection.Registry, error) {
 
 // loadEntryPayload decodes an entry's stored payload for re-projection.
 func loadEntryPayload(entry database.CatalogEntry) (any, error) {
-	return loadReinferData(entry.StoredPath, entry.Format)
+	return importer.DecodeStoredFile(entry.StoredPath, entry.Format)
 }
 
 // syncProjections reconciles projected facts with the catalog and current
@@ -45,11 +46,11 @@ func syncProjections(ctx context.Context, db *database.CatalogDB, dryRun bool) (
 
 // syncProjectionsQuietly runs a sync after a write command and reports only
 // what changed or failed, on stderr. Failure to sync never fails the command
-// that already succeeded; `pudl facts reproject` repeats it explicitly.
+// that already succeeded; `pudl doctor --fix --only projections` repeats it explicitly.
 func syncProjectionsQuietly(ctx context.Context, db *database.CatalogDB) {
 	report, err := syncProjections(ctx, db, false)
 	if err != nil {
-		fmt.Fprintf(errw(), "⚠️  projected facts not synced: %v (run: pudl facts reproject)\n", err)
+		fmt.Fprintf(errw(), "⚠️  projected facts not synced: %v (run: pudl doctor --fix --only projections)\n", err)
 		return
 	}
 	printSyncReport(errw(), report, false)
@@ -80,7 +81,7 @@ func warnProjectionHealth(db *database.CatalogDB, rules []datalog.Rule, roots []
 	}
 	if reasons, err := projection.Stale(db, reg); err == nil {
 		for _, reason := range reasons {
-			fmt.Fprintf(errw(), "⚠️  %s (run: pudl facts reproject)\n", reason)
+			fmt.Fprintf(errw(), "⚠️  %s (run: pudl doctor --fix --only projections)\n", reason)
 		}
 	}
 	lintRules(db, reg, rules, roots)
@@ -104,7 +105,7 @@ func lintRules(db *database.CatalogDB, reg *projection.Registry, rules []datalog
 func syncProjectionsAfterWrite(ctx context.Context) {
 	db, err := database.NewCatalogDB(effectivePudlDir())
 	if err != nil {
-		fmt.Fprintf(errw(), "⚠️  projected facts not synced: %v (run: pudl facts reproject)\n", err)
+		fmt.Fprintf(errw(), "⚠️  projected facts not synced: %v (run: pudl doctor --fix --only projections)\n", err)
 		return
 	}
 	defer db.Close()

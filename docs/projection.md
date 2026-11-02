@@ -95,10 +95,11 @@ detect deletions.
 
 `pudl import` and `pudl run` project as records arrive. Afterwards they bring
 everything else up to date: data imported before a facts block existed,
-changed facts blocks, and deleted or reassigned entries. `schema reinfer`,
-`delete`, `snapshot prune` and `migrate identity` do the same when they finish.
+changed facts blocks, and deleted or reassigned entries. `delete`,
+`snapshot prune` and the `pudl doctor --fix` repairs do the same when they finish.
 
-`pudl facts reproject [--dry-run]` runs this explicitly. `pudl query` writes
+`pudl doctor` reports pending reprojection, and
+`pudl doctor --fix [--dry-run] --only projections` runs it explicitly. `pudl query` writes
 nothing, but warns when a reprojection is pending.
 
 A facts block that is invalid disables projection for its schema. Existing

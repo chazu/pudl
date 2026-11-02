@@ -13,6 +13,16 @@ them as `"advanced": true`, and `docs/cli-reference.md` documents them under
 visible. `pudl prime` remains the agent entrypoint. `pkg/factstore` is unchanged.
 See [delivery log](../implog/2026_11_01_demote_fact_writes.md).
 
+### Repair commands folded into `pudl doctor --fix` (2026-11-01)
+
+`pudl doctor` diagnoses schema-name normalization, unresolved schema
+references, inference drift, missing or leaf-namespaced identities, and stale
+projected facts, and names the repair for each. `pudl doctor --fix [--only
+NAME]` applies them, `--fix --dry-run` previews them, and the JSON report is
+versioned. `schema migrate`, `schema reinfer`, `migrate identity`,
+`reclassify` and `facts reproject` are retired (`pudl-4fx.2`).
+See [delivery log](../implog/2026_11_01_doctor_fix_repairs.md).
+
 ### Go and dependency vulnerabilities remediated (2026-10-10)
 
 Updated Go to 1.26.9, x/net to v0.60.0, and x/text to v0.42.0, with the
@@ -606,6 +616,19 @@ implemented. Beads work:
   schemas, evaluated per resource with named violations, through `pudl policy
   list`, `show` and `evaluate`. "Validated" becomes a review blessing on type
   schemas. See [the compliance policy design](design/2026-11-01-compliance-policies.md).
+  - Done: `pudl-xf5.8.7` schema review status (`_pudl.review`, strict
+    decode, shown by `pudl schema list`/`show`, generated schemas start as
+    draft). See `implog/2026_11_01_schema_review_status.md`.
+  - Done: `pudl-xf5.8.2` policy evaluation engine (`internal/policy`, pure:
+    applicability, open evaluation, rule attribution, absent semantics,
+    sensitive-path load errors, digests; not yet wired into ingest). Policies
+    are written standalone and linked by `base_schema`. See
+    `implog/2026_11_01_policy_evaluation_engine.md`.
+  - Done: `pudl-xf5.8.1` policies leave classification (inference candidates
+    and validation fallback skip policies; `--schema` or `populate.schema`
+    naming a policy is an error naming its type; `pudl doctor --fix --only
+    policy-leaves` moves existing policy-leaf entries to their type with
+    identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
 
 The convergence and value-wiring sections below are historical.
 
@@ -1030,6 +1053,7 @@ under the hood.
 | `idgen` | `internal/idgen/` | Content IDs, SHA256, proquint encoding |
 | `database` | `internal/database/` | SQLite catalog CRUD and queries |
 | `validator` | `internal/validator/` | CUE validation |
+| `policy` | `internal/policy/` | Compliance policy loading and per-resource evaluation |
 | `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema and model loading |
 | `mubridge` | `internal/mubridge/` | Typed envelope, manifest, and observe-snapshot ingestion |
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
@@ -1045,6 +1069,7 @@ under the hood.
 | `git` | `internal/git/` | Git operations on schema repo |
 | `lister` | `internal/lister/` | List/query with filters |
 | `doctor` | `internal/doctor/` | Health checks, directory validation |
+| `repair` | `internal/repair/` | Catalog repairs diagnosed and applied by `pudl doctor --fix` |
 | `schema` | `internal/schema/` | Schema operations |
 | `repo` | `internal/repo/` | Repo init, skill installation |
 | `skills` | `internal/skills/` | Embedded Claude skill files |

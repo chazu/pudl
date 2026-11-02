@@ -63,7 +63,11 @@ from a policy leaf to its type does not change its identity or history.
     ...
 }
 
-#S3BucketBestPractice: #S3Bucket & {
+// Policies are written standalone and linked to their type by base_schema.
+// `#S3Bucket & {...}` does not load: _pudl.schema_type conflicts ("base" vs
+// "policy"), and the closed definition rejects the policy's added fields.
+// The engine assembles the chain from base_schema itself.
+#S3BucketBestPractice: {
     _pudl: {
         schema_type: "policy"
         base_schema: "aws.#S3Bucket"
@@ -79,7 +83,7 @@ from a policy leaf to its type does not change its identity or history.
 }
 
 // A policy may extend another policy. The chain must end at a type.
-#S3BucketPCI: #S3BucketBestPractice & {
+#S3BucketPCI: {
     _pudl: {schema_type: "policy", base_schema: "aws.#S3BucketBestPractice"}
     Versioning: Status: "Enabled" @pudl(rule="s3-versioning", severity="medium")
 }

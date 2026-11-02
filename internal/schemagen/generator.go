@@ -269,6 +269,7 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	b.WriteString("\t\tcascade_fallback: [\"pudl/core.#Item\"] // Schemas to try if this doesn't match\n")
 	fmt.Fprintf(&b, "\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields))
 	fmt.Fprintf(&b, "\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis))
+	b.WriteString("\t\treview: status: \"draft\" // Set to \"validated\" (with by/at) once reviewed as complete\n")
 	b.WriteString("\t}\n\n")
 
 	// Write field definitions
