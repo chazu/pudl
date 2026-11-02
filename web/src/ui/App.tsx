@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { loadFrom, sourceFromLocation, type LoadedGraph } from '../data/source';
+import { loadFrom, sourceFromLocation, type GraphSource, type LoadedGraph } from '../data/source';
 import { GraphIndex, type ResourceId } from '../model/canonical';
 import { project } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
@@ -27,12 +27,32 @@ export function App() {
   const [layoutNonce, setLayoutNonce] = useState(0);
   const canvas = useRef<CanvasHandle>(null);
 
+  const [source, setSource] = useState<GraphSource | null>(null);
+  const [reloading, setReloading] = useState(false);
+  const [reloadError, setReloadError] = useState<string | null>(null);
+
   useEffect(() => {
     sourceFromLocation(window.location.search)
-      .then(loadFrom)
+      .then((s) => {
+        setSource(s);
+        return loadFrom(s);
+      })
       .then(setLoaded)
       .catch((e: unknown) => setLoadError(String(e)));
   }, []);
+
+  // Reload keeps view state and selection: resource and group IDs are stable.
+  const reload = useCallback(() => {
+    if (!source) return;
+    setReloading(true);
+    loadFrom(source)
+      .then((g) => {
+        setLoaded(g);
+        setReloadError(null);
+      })
+      .catch((e: unknown) => setReloadError(String(e)))
+      .finally(() => setReloading(false));
+  }, [source]);
 
   const index = useMemo(() => (loaded ? new GraphIndex(loaded.graph) : null), [loaded]);
   const views = useMemo(() => {
@@ -130,6 +150,9 @@ export function App() {
     <div className="app">
       <Sidebar
         meta={loaded.graph.meta}
+        onReload={loaded.graph.meta.origin === 'mock' ? undefined : reload}
+        reloading={reloading}
+        reloadError={reloadError}
         index={index}
         views={views}
         projectionId={projectionId}

@@ -66,3 +66,11 @@ describe('pudl graph export documents', () => {
     expect(validateGraph(g).map((i) => i.kind)).toEqual(['dangling-target']);
   });
 });
+
+describe('origin', () => {
+  it('comes from the source, never from the document', () => {
+    const doc = { meta: { origin: 'mock', label: 'x' }, resources: [], relationships: [] };
+    expect(parseCanonicalGraph(doc, 'x').meta.origin).toBe('file');
+    expect(parseCanonicalGraph(doc, 'x', 'live').meta.origin).toBe('live');
+  });
+});

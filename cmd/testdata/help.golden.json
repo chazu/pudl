@@ -1997,6 +1997,46 @@
       ]
     },
     {
+      "use": "ui",
+      "short": "Open the graph explorer on this workspace's catalog",
+      "long": "Serve the web graph explorer, embedded in the pudl binary, and open it in\na browser. The explorer reads the workspace catalog live: every load or\nReload shows the current resources and relationships (the same graph as\n'pudl graph export').\n\nThe server is read-only and listens on the loopback interface. It answers\nonly requests addressed to that host, so other web pages cannot read the\ninventory. Serving on another interface exposes the inventory to anyone who\ncan reach it, so it needs --allow-remote.\n\nSchema changes (new types, _pudl.graph blocks) take effect after a restart;\nnew observations and rules do not need one.\n\nExamples:\n    pudl ui\n    pudl ui --addr 127.0.0.1:9000 --no-open",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "addr",
+          "usage": "Address to listen on (port 0 picks a free port)",
+          "type": "string",
+          "default": "127.0.0.1:7468"
+        },
+        {
+          "name": "allow-remote",
+          "usage": "Allow a non-loopback --addr (exposes the inventory)",
+          "type": "bool",
+          "default": "false"
+        },
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "no-open",
+          "usage": "Do not open a browser",
+          "type": "bool",
+          "default": "false"
+        }
+      ]
+    },
+    {
       "use": "version",
       "short": "Show version information",
       "long": "Display version, commit hash, and build date information for PUDL.",

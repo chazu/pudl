@@ -5,9 +5,10 @@
 with Vite, laid out by [ELK](https://eclipse.dev/elk/) (elkjs), and rendered
 as SVG. Run instructions are in [web/README.md](../web/README.md).
 
-The UI runs on a synthetic demo dataset (always labelled DEMO DATA) or on a
-canonical-graph JSON file, such as the output of `pudl graph export`. See
-[Backend integration](#backend-integration).
+`pudl ui` serves it from the pudl binary against the workspace catalog
+(labelled LIVE). It can also load a canonical-graph JSON file, such as the
+output of `pudl graph export` (labelled FILE), or a synthetic demo dataset
+(labelled DEMO DATA). See [Backend integration](#backend-integration).
 
 ## Data flow
 
@@ -38,7 +39,7 @@ each lives in its own directory:
 | Stage | Directory | Knows about |
 | --- | --- | --- |
 | Canonical model | `src/model` | resources, relationships, evidence; type registries |
-| Sources | `src/data` | loading and validating a canonical graph |
+| Sources | `src/data` | loading and validating a canonical graph (live, file, demo) |
 | Projection | `src/projection` | grouping, inclusion, relationship selection |
 | Visual model | `src/visual` | nodes, groups, ports, edges, collapse, filters |
 | Layout | `src/layout` | ELK (only `elkAdapter.ts`) |
@@ -313,8 +314,35 @@ The UI owns the edge vocabulary: `type` values are keys of
 `src/model/relationshipTypes.ts`. A pack that emits a type the UI does not
 know still shows it, under the `other` category ("meaning unknown").
 
-A file is a snapshot, so the UI labels it FILE, not LIVE. Serving the graph
-from pudl directly is the next step.
+A file is a snapshot, so the UI labels it FILE, not LIVE.
+
+### Live: `pudl ui`
+
+`pudl ui` serves the explorer from the binary and reads the catalog on every
+load:
+
+- **Embedded bundle.** `make web` runs Vite and writes the bundle to
+  `internal/webui/static`, which is committed and embedded with `go:embed`.
+  Building, installing or releasing pudl needs no Node. `make check-web`
+  rebuilds and fails if the committed bundle is stale; the build is
+  reproducible. The directory is not named `dist` because a common global
+  gitignore pattern would drop it from commits.
+- **Server** (`internal/uiserver`): `GET /api/health`, `GET /api/graph` (the
+  same graph as `pudl graph export`, `meta.origin: "live"`, `no-store`), and
+  the bundle with an index.html fallback. It is read-only and has no write
+  endpoints.
+- **Network exposure.** It listens on `127.0.0.1:7468` by default. A
+  non-loopback `--addr` needs `--allow-remote`. Requests with any other
+  `Host` header get 403, so a web page cannot read the inventory through DNS
+  rebinding.
+- **Source selection** in the UI: `?graph=<url>` loads a file; `?demo` loads
+  the demo dataset. Otherwise the UI asks `/api/health` whether pudl served
+  it and, if so, loads `/api/graph`. Reload re-reads the source and keeps
+  collapse state, filters and selection, because IDs are stable. The origin
+  label comes from the source, never from the document.
+- **Frontend development** against real data:
+  `PUDL_API=http://127.0.0.1:7468 npm run dev` proxies `/api` to a running
+  `pudl ui`.
 
 ## Extension points
 
@@ -328,7 +356,8 @@ from pudl directly is the next step.
 
 ## Known limitations
 
-- No live connection: the UI reads an exported file, not the catalog.
+- Live data is pull-only: Reload re-reads the catalog; nothing pushes changes.
+- Schema changes need a `pudl ui` restart; new observations and rules do not.
 - The packs project no IAM trust or policy facts and no security-group rules,
   so on pack data the security view shows few edges.
 - Collapse and expand still move nodes outside the toggled group (anchored,

@@ -21,6 +21,8 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
+
+.PHONY: web check-web
 .PHONY: all build install uninstall clean clean-local test fuzz test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint vulncheck test-race coverage ci generate check-skills docs check-docs
 
 all: build
@@ -66,6 +68,17 @@ check-skills:
 # Regenerate docs/cli-reference.md from the command tree and docs/cli/notes/.
 docs:
 	$(GO) run ./internal/clidocs/gen
+
+# Rebuild the web graph explorer bundle embedded by `pudl ui`
+# (internal/webui/static, committed). Only needed after editing web/; building
+# pudl itself never needs Node.
+web:
+	cd web && npm ci && npm run build
+
+# Verify the committed UI bundle matches web/src. Needs Node.
+check-web: web
+	git diff --exit-code -- internal/webui/static || (echo "internal/webui/static is stale: run make web and commit it" && exit 1)
+	@test -z "$$(git ls-files --others --exclude-standard internal/webui/static)" || (echo "internal/webui/static has uncommitted new files: run make web and commit it" && exit 1)
 
 # Verify docs/cli-reference.md is current without writing it. Fails if
 # `make docs` needs to be run and committed.

@@ -10,6 +10,10 @@ import { HierarchyTree } from './HierarchyTree';
 
 interface Props {
   meta: GraphMeta;
+  /** Re-read the source; absent for the demo dataset. */
+  onReload?: () => void;
+  reloading?: boolean;
+  reloadError?: string | null;
   index: GraphIndex;
   views: Map<ProjectionId, SemanticView>;
   projectionId: ProjectionId;
@@ -22,12 +26,33 @@ interface Props {
   onState(fn: (s: ViewState) => ViewState): void;
 }
 
-export function SourceBanner({ meta }: { meta: GraphMeta }) {
-  if (meta.origin === 'live') return <div className="banner live">LIVE · {meta.label}</div>;
-  const text = meta.origin === 'mock' ? 'DEMO DATA — synthetic, not live inventory' : `FILE — ${meta.label} (not live inventory)`;
+interface BannerProps {
+  meta: GraphMeta;
+  onReload?: () => void;
+  reloading?: boolean;
+  reloadError?: string | null;
+}
+
+export function SourceBanner({ meta, onReload, reloading, reloadError }: BannerProps) {
+  const text =
+    meta.origin === 'live'
+      ? `LIVE · ${meta.label}`
+      : meta.origin === 'mock'
+        ? 'DEMO DATA — synthetic, not live inventory'
+        : `FILE — ${meta.label} (not live inventory)`;
+  const at = meta.generatedAt ? new Date(meta.generatedAt) : null;
   return (
     <div className={`banner ${meta.origin}`} title={meta.generatedAt ? `generated ${meta.generatedAt}` : undefined}>
-      {text}
+      <div className="banner-row">
+        <span>{text}</span>
+        {onReload && (
+          <button className="reload" onClick={onReload} disabled={reloading} title="Re-read the catalog; view state is kept">
+            {reloading ? '…' : 'Reload'}
+          </button>
+        )}
+      </div>
+      {at && !Number.isNaN(at.getTime()) && <div className="banner-sub">as of {at.toLocaleString()}</div>}
+      {reloadError && <div className="banner-err">{reloadError}</div>}
     </div>
   );
 }
@@ -92,7 +117,7 @@ export function Sidebar(props: Props) {
       <div className="brand">
         PUDL <span>graph explorer</span>
       </div>
-      <SourceBanner meta={props.meta} />
+      <SourceBanner meta={props.meta} onReload={props.onReload} reloading={props.reloading} reloadError={props.reloadError} />
 
       <section>
         <h3>Views</h3>

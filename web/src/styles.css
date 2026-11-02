@@ -297,3 +297,8 @@ code, .code { font-family: var(--mono); }
 .help { display: grid; grid-template-columns: 130px 1fr; gap: 2px 8px; }
 .help dt { color: var(--muted); }
 .help dd { margin: 0; }
+.banner-row { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.banner-sub { font-weight: 400; opacity: 0.8; margin-top: 2px; }
+.banner-err { font-weight: 400; color: var(--cat-security); margin-top: 3px; }
+.banner .reload { border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 3px; padding: 1px 7px; font-size: 10.5px; cursor: pointer; }
+.banner .reload:disabled { opacity: 0.5; cursor: default; }
