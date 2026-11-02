@@ -148,6 +148,27 @@ target is null (an absent optional field) is no edge. Each rule is evaluated
 separately, so every relationship names the rule that derived it. The AWS and
 GCP packs ship their edges in `schema/pudl/rules/*_graph.cue`.
 
+Two kinds of value are not resources, so they become **external** nodes
+rather than "not in inventory" references:
+
+- an address range (anything that parses as a CIDR, such as `0.0.0.0/0`)
+  becomes an `external.cidr` node;
+- `*` becomes the `external.principal` node "Anyone".
+
+Edges can carry details through `graph_edge_property(type, source, target,
+key, value)`, with `type`, `source` and `target` naming the edge as in its
+`graph_edge` row. Values for one key collect into a sorted list, so a
+security group that allows ports 80 and 443 from the same range is one edge
+with `port: [80, 443]`. A property row whose edge no rule derived is
+reported.
+
+```cue
+aws_graph_sg_cidr_port: {
+	head: {rel: "graph_edge_property", args: {type: "allows_ingress_from", source: "$R", target: "$C", key: "port", value: "$F"}}
+	body: [{rel: "aws_sg_ingress_cidr", args: {resource_id: "$R", cidr: "$C", from_port: "$F"}}]
+}
+```
+
 ### Catalog (`catalog_entry`)
 
 The catalog is the built-in relation `catalog_entry`, read from native

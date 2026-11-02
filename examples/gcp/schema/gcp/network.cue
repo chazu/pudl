@@ -73,9 +73,23 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph
-		facts: gcp_firewall_network: args: {
-			self_link: "selfLink"
-			network: {path: "network", trim_prefix: _gcpComputeAPI}
+		facts: {
+			gcp_firewall_network: args: {
+				self_link: "selfLink"
+				network: {path: "network", trim_prefix: _gcpComputeAPI}
+			}
+			// One fact per source range, with the rule's direction and state.
+			gcp_firewall_source: args: {
+				range:     "sourceRanges[*]"
+				direction: "direction"
+				disabled: {path: "disabled", default: false}
+			}
+			// One fact per allowed protocol and port (port "*" when the rule
+			// names no ports). Deny rules have no allowed entries.
+			gcp_firewall_allow: {
+				each: "allowed[*]"
+				args: {protocol: "IPProtocol", port: {path: "ports[*]", default: "*"}}
+			}
 		}
 	}
 	kind:      "compute#firewall" @pudl(match)

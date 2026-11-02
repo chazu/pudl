@@ -60,3 +60,32 @@ gcp_graph_subscription_topic: {
 	head: {rel: "graph_edge", args: {type: "subscribed_to", source: "$R", target: "$T", basis: "observed"}}
 	body: [{rel: "gcp_subscription_topic", args: {resource_id: "$R", topic: "$T"}}]
 }
+
+// ---- Firewall rules: ingress sources ----
+// An enabled INGRESS rule with at least one allowed protocol permits traffic
+// from each source range. A permission is not observed traffic. Ranges such
+// as 0.0.0.0/0 become external "address range" nodes.
+
+gcp_graph_firewall_source: {
+	head: {rel: "graph_edge", args: {type: "allows_ingress_from", source: "$R", target: "$S", basis: "observed"}}
+	body: [
+		{rel: "gcp_firewall_source", args: {resource_id: "$R", range: "$S", direction: "INGRESS", disabled: false}},
+		{rel: "gcp_firewall_allow", args: {resource_id: "$R"}},
+	]
+}
+
+gcp_graph_firewall_port: {
+	head: {rel: "graph_edge_property", args: {type: "allows_ingress_from", source: "$R", target: "$S", key: "port", value: "$P"}}
+	body: [
+		{rel: "gcp_firewall_source", args: {resource_id: "$R", range: "$S", direction: "INGRESS", disabled: false}},
+		{rel: "gcp_firewall_allow", args: {resource_id: "$R", port: "$P"}},
+	]
+}
+
+gcp_graph_firewall_protocol: {
+	head: {rel: "graph_edge_property", args: {type: "allows_ingress_from", source: "$R", target: "$S", key: "protocol", value: "$P"}}
+	body: [
+		{rel: "gcp_firewall_source", args: {resource_id: "$R", range: "$S", direction: "INGRESS", disabled: false}},
+		{rel: "gcp_firewall_allow", args: {resource_id: "$R", protocol: "$P"}},
+	]
+}

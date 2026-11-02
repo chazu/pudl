@@ -123,7 +123,7 @@ The four views (`src/projection/views/`):
 | Network topology | AWS: account → region → VPC → subnet. GCP: org → folder → project → network → region → subnet | network, traffic, security, containment | layered, left→right |
 | Application architecture | application → service → member; "not assigned" for dependency participants without membership | dependency, traffic | layered, left→right |
 | Resource inventory | provider → account/project (GCP: org → folder → project) → region → type | none | packed |
-| Security relationships | account/project; external principals and ranges apart | iam, security | layered, top→bottom |
+| Security relationships | account/project; external principals and ranges apart | iam, security | layered, left→right |
 
 The network view is provider-aware. AWS VPCs are regional, so the region sits
 between account and VPC. GCP networks are global and subnets regional, so the
@@ -216,11 +216,19 @@ unchanged).
    filter" opts into compacting.
 3. **Selection never relays out.** Highlighting is computed from the visual
    graph.
-4. **Collapse and expand relay out, with an anchor.** The canvas keeps the
+4. **Unconnected leaves are packed in a grid.** Layered layout puts every
+   node without edges in one layer, which turns a group of IAM users into
+   one long row. The adapter (`layout/isolatedPacking.ts`) removes such leaves
+   from the ELK graph (three or more per parent), reserves a placeholder box
+   sized for a compact grid, and places them inside it afterwards. On the
+   pack fixtures this took the security view from 5314×880 to 3792×1046.
+   Left-to-right flow then took it to 1653×1494, so the security view now
+   defaults to left-to-right.
+5. **Collapse and expand relay out, with an anchor.** The canvas keeps the
    toggled group fixed on screen. Collapsing the largest VPC keeps 77% of
    sibling order; the security and application views keep 83–99%. A test pins
    these thresholds.
-5. ELK's interactive layering and crossing minimisation are not supported
+6. ELK's interactive layering and crossing minimisation are not supported
    with `INCLUDE_CHILDREN`. `semiInteractive`, `forceNodeModelOrder`,
    thoroughness and every other layering strategy made no material difference.
 
@@ -391,8 +399,8 @@ load:
 ## Known limitations
 
 - Auto-refresh polls every 3 s; there is no push channel.
-- The packs project no IAM trust or policy facts and no security-group rules,
-  so on pack data the security view shows few edges.
+- The packs do not project IAM policy attachments or policy documents (only
+  role trust), instance profiles, or egress rules.
 - Collapse and expand still move nodes outside the toggled group (anchored,
   77–99% sibling order kept). There is no pinning and no animation.
 - A refreshed inventory relays out from scratch. That is deterministic, but a

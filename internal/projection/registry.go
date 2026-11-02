@@ -170,6 +170,7 @@ func fingerprint(spec *SchemaSpec) string {
 	type relPrint struct {
 		Name, Each string
 		Args       map[string]argPrint
+		OneOrMany  bool `json:",omitempty"` // omitted when false: existing fingerprints are unchanged
 	}
 	print := struct {
 		Contract  int
@@ -179,7 +180,7 @@ func fingerprint(spec *SchemaSpec) string {
 		Owner     string `json:",omitempty"`
 	}{Contract: 2, Owner: spec.Owner.Canonical()}
 	for _, rel := range spec.Relations {
-		rp := relPrint{Name: rel.Name, Args: map[string]argPrint{}}
+		rp := relPrint{Name: rel.Name, Args: map[string]argPrint{}, OneOrMany: rel.OneOrMany}
 		if rel.Each != nil {
 			rp.Each = rel.Each.String()
 		}

@@ -37,14 +37,26 @@ type RelationSpec struct {
 	Each     *fieldpath.Path // rows; nil means the record is the only row
 	ArgNames []string        // sorted
 	Args     map[string]ArgSpec
+	// OneOrMany makes every [*] in the relation (each and args) treat a
+	// non-array value as a single element, for "one or many" documents.
+	OneOrMany bool
 	// wildcard names the one arg whose path fans out, if any.
 	wildcard string
 }
 
+// lookupAll expands a path under the relation's wildcard semantics.
+func (r RelationSpec) lookupAll(p fieldpath.Path, v any) []any {
+	if r.OneOrMany {
+		return p.LookupAllOneOrMany(v)
+	}
+	return p.LookupAll(v)
+}
+
 // rawRelation is the JSON shape of one relation in `_pudl.facts`.
 type rawRelation struct {
-	Each string                     `json:"each"`
-	Args map[string]json.RawMessage `json:"args"`
+	Each      string                     `json:"each"`
+	OneOrMany bool                       `json:"one_or_many"`
+	Args      map[string]json.RawMessage `json:"args"`
 }
 
 type rawArg struct {
@@ -88,12 +100,12 @@ func parseRelation(name string, raw json.RawMessage) (RelationSpec, error) {
 	}
 	var r rawRelation
 	if err := decodeStrict(raw, &r); err != nil {
-		return RelationSpec{}, fmt.Errorf("expected {each?: path, args: {...}}: %w", err)
+		return RelationSpec{}, fmt.Errorf("expected {each?: path, one_or_many?: bool, args: {...}}: %w", err)
 	}
 	if len(r.Args) == 0 {
 		return RelationSpec{}, fmt.Errorf("args must declare at least one arg")
 	}
-	rel := RelationSpec{Name: name, Args: map[string]ArgSpec{}}
+	rel := RelationSpec{Name: name, Args: map[string]ArgSpec{}, OneOrMany: r.OneOrMany}
 	if r.Each != "" {
 		each, err := fieldpath.Parse(r.Each)
 		if err != nil {

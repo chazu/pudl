@@ -77,6 +77,12 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		warn("no graph_edge rules are loaded; the graph has resources but no relationships")
 	}
 	g.Relationships = buildRelationships(derived, index, warn)
+	props, err := evaluateRelation(ctx, in.DB, in.Rules, PropertyRelation, scope, warn)
+	if err != nil {
+		return nil, err
+	}
+	applyProperties(g.Relationships, props, index, warn)
+	g.Resources = append(g.Resources, index.externalResources()...)
 	return g, nil
 }
 
@@ -84,9 +90,15 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 // relationship can name the rule that derived it. A rule that does not load
 // or evaluate is reported and skipped; the rest of the graph still exports.
 func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []datalog.Rule, scope datalog.TemporalScope, warn func(string)) ([]RuleTuples, error) {
+	return evaluateRelation(ctx, db, rules, EdgeRelation, scope, warn)
+}
+
+// evaluateRelation evaluates each rule deriving relation on its own (with
+// every other rule available), so each row can name its rule.
+func evaluateRelation(ctx context.Context, db *database.CatalogDB, rules []datalog.Rule, relation string, scope datalog.TemporalScope, warn func(string)) ([]RuleTuples, error) {
 	var others, edges []datalog.Rule
 	for _, r := range rules {
-		if r.Head.Rel == EdgeRelation {
+		if r.Head.Rel == relation {
 			edges = append(edges, r)
 		} else {
 			others = append(others, r)
@@ -99,7 +111,7 @@ func EvaluateEdgeRules(ctx context.Context, db *database.CatalogDB, rules []data
 			continue
 		}
 		set := append(append([]datalog.Rule{}, others...), r)
-		tuples, err := datalog.EvaluateContext(ctx, db, set, EdgeRelation, nil, scope, datalog.EvalOptions{})
+		tuples, err := datalog.EvaluateContext(ctx, db, set, relation, nil, scope, datalog.EvalOptions{})
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil, ctx.Err()

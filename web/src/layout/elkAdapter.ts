@@ -17,6 +17,7 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkExtendedEdge, ElkNode, ElkPort, LayoutOptions } from 'elkjs/lib/elk-api';
 import type { VisualGraph, VisualNode } from '../visual/types';
 import { SIZES } from '../visual/ids';
+import { ISOLATED_PREFIX, isolatedPlan, packedIds, placeBlock, type IsolatedBlock } from './isolatedPacking';
 import type { Box, EdgeRoute, LayoutConfig, LayoutEngine, LayoutHints, LayoutResult, Point } from './types';
 
 const GROUP_PADDING = '[top=34,left=12,bottom=12,right=12]';
@@ -60,6 +61,12 @@ export function stableOrder(nodes: VisualNode[]): VisualNode[] {
 
 export function toElkGraph(graph: VisualGraph, config: LayoutConfig): ElkNode {
   const layered = config.algorithm === 'layered';
+  const plan = layered ? isolatedPlan(graph) : new Map<string, IsolatedBlock>();
+  const packed = packedIds(plan);
+  const placeholder = (parentId: string | null): ElkNode[] => {
+    const block = plan.get(`${ISOLATED_PREFIX}${parentId ?? '__root__'}`);
+    return block ? [{ id: block.id, width: block.width, height: block.height }] : [];
+  };
 
   const toNode = (n: VisualNode): ElkNode => {
     const isGroup = n.kind === 'group';
@@ -85,7 +92,10 @@ export function toElkGraph(graph: VisualGraph, config: LayoutConfig): ElkNode {
         options['elk.aspectRatio'] = '1.8';
       }
     }
-    const children = stableOrder(n.children.map((c) => graph.nodes.get(c)!).filter(Boolean)).map(toNode);
+    const children = [
+      ...stableOrder(n.children.map((c) => graph.nodes.get(c)!).filter((c) => c && !packed.has(c.id))).map(toNode),
+      ...placeholder(n.id),
+    ];
     return {
       id: n.id,
       ...(isGroup ? {} : { width: n.width, height: n.height }),
@@ -95,7 +105,10 @@ export function toElkGraph(graph: VisualGraph, config: LayoutConfig): ElkNode {
     };
   };
 
-  const roots = stableOrder(graph.roots.map((id) => graph.nodes.get(id)!)).map(toNode);
+  const roots = [
+    ...stableOrder(graph.roots.map((id) => graph.nodes.get(id)!).filter((n) => !packed.has(n.id))).map(toNode),
+    ...placeholder(null),
+  ];
   const edges: ElkExtendedEdge[] = layered
     ? graph.edges.map((e) => ({
         id: e.id,
@@ -107,11 +120,18 @@ export function toElkGraph(graph: VisualGraph, config: LayoutConfig): ElkNode {
   return { id: '__root__', layoutOptions: rootOptions(config), children: roots, edges };
 }
 
-export function fromElkGraph(out: ElkNode, graph: VisualGraph, durationMs: number): LayoutResult {
+export function fromElkGraph(out: ElkNode, graph: VisualGraph, durationMs: number, config?: LayoutConfig): LayoutResult {
   const nodes = new Map<string, Box>();
   const ports = new Map<string, Box>();
+  const plan = !config || config.algorithm === 'layered' ? isolatedPlan(graph) : new Map<string, IsolatedBlock>();
   const walk = (n: ElkNode) => {
     for (const c of n.children ?? []) {
+      const block = plan.get(c.id);
+      if (block) {
+        const at = { x: c.x ?? 0, y: c.y ?? 0, width: c.width ?? 0, height: c.height ?? 0 };
+        for (const [id, box] of placeBlock(block, at)) nodes.set(id, box);
+        continue;
+      }
       nodes.set(c.id, { x: c.x ?? 0, y: c.y ?? 0, width: c.width ?? 0, height: c.height ?? 0 });
       for (const p of c.ports ?? []) {
         ports.set(p.id, { x: p.x ?? 0, y: p.y ?? 0, width: p.width ?? 0, height: p.height ?? 0 });
@@ -159,6 +179,6 @@ export class ElkLayoutEngine implements LayoutEngine {
   async layout(graph: VisualGraph, config: LayoutConfig, _hints: LayoutHints): Promise<LayoutResult> {
     const t0 = performance.now();
     const out = await this.elk.layout(toElkGraph(graph, config));
-    return fromElkGraph(out, graph, performance.now() - t0);
+    return fromElkGraph(out, graph, performance.now() - t0, config);
   }
 }
