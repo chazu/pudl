@@ -6,8 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
@@ -15,7 +13,7 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	run, ok := helpChild(tree, "run [<model>]")
 	require.True(t, ok, "root help must expose the run command")
 	assert.True(t, hasHelpFlag(run, "populate"))
-	assert.True(t, hasHelpFlag(run, "require-approval"))
+	assert.True(t, hasHelpFlag(run, "detailed-exitcode"))
 	report, ok := helpChild(run, "report [operation-id]")
 	require.True(t, ok, "run help must expose durable reports")
 	assert.Equal(t, "custom", report.Args)
@@ -25,28 +23,6 @@ func TestCommandTreeJSONExposesParitySurface(t *testing.T) {
 	describe, ok := helpChild(model, "show <name>")
 	require.True(t, ok)
 	assert.Equal(t, "custom", describe.Args)
-}
-
-func TestScaffoldInputAndModelText(t *testing.T) {
-	plugin, err := parsePluginSpec(" plugin:k8s ")
-	require.NoError(t, err)
-	assert.Equal(t, "k8s", plugin)
-	_, err = parsePluginSpec("k8s")
-	require.Error(t, err)
-
-	input, err := parseKeyValueInputs([]string{"namespace=default", `kinds=["pods","services"]`, "all_namespaces=true"})
-	require.NoError(t, err)
-	assert.Equal(t, "default", input["namespace"])
-	assert.Equal(t, []any{"pods", "services"}, input["kinds"])
-	assert.Equal(t, true, input["all_namespaces"])
-
-	source, err := renderModelScaffold("cluster pods", systemmodel.PluginDef{Name: "k8s", Digest: "sha256:abc"}, input)
-	require.NoError(t, err)
-	assert.Contains(t, source, "package models")
-	assert.Contains(t, source, `import sm "pudl.schemas/pudl/systemmodel@v0"`)
-	assert.Contains(t, source, `name: "cluster pods"`)
-	assert.Contains(t, source, `plugin: "k8s"`)
-	assert.Contains(t, source, `plugins: [{"name":"k8s","digest":"sha256:abc"}]`)
 }
 
 func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {
@@ -66,34 +42,6 @@ func TestPersistRunReportUsesTheRunCatalog(t *testing.T) {
 	require.NotNil(t, stored)
 	assert.Equal(t, "pods", stored.Model)
 	assert.Contains(t, string(stored.Report), "observer failed after startup")
-}
-
-func TestDescribeSystemModelIncludesRuntimeContract(t *testing.T) {
-	m := &systemmodel.SystemModel{
-		Name:      "pods",
-		Populate:  systemmodel.Populate{Plugin: "k8s", Input: map[string]any{"inventory": true}, Differential: false},
-		Plugins:   []systemmodel.PluginDef{{Name: "k8s", Digest: "sha256:abc"}},
-		Desired:   []map[string]any{{"name": "web"}},
-		Checks:    []systemmodel.Check{{Name: "healthy"}},
-		DependsOn: []string{"network"},
-		Converge:  &systemmodel.PluginPlan{Plugin: "k8s", Input: map[string]any{"namespace": "default"}},
-		Freshness: &systemmodel.Freshness{Every: "10m", Drift: true},
-	}
-
-	discovery := discoverModelPlugins(m, func(name string) (map[string]any, error) {
-		return map[string]any{"name": name, "capabilities": []any{"observe", "plan"}}, nil
-	})
-	view := modelInspection{SystemModel: m, PluginDiscovery: discovery}
-	assert.Equal(t, "pods", view.Name)
-	assert.Equal(t, "k8s", view.Populate.Plugin)
-	assert.Len(t, view.Desired, 1)
-	assert.Len(t, view.Checks, 1)
-	assert.Equal(t, []string{"network"}, view.DependsOn)
-	assert.NotNil(t, view.Converge)
-	assert.NotNil(t, view.Freshness)
-	require.Len(t, view.PluginDiscovery, 1)
-	assert.NotNil(t, view.PluginDiscovery[0].Info)
-
 }
 
 func helpChild(parent commandHelpJSON, use string) (commandHelpJSON, bool) {
@@ -117,4 +65,19 @@ func hasHelpFlag(command commandHelpJSON, name string) bool {
 func TestRunReportMarkdownShowsFailureContext(t *testing.T) {
 	text := (&RunReport{Model: "pods", RunID: "run_1", Mode: "observe-only", OK: false, Error: "boom"}).markdown()
 	assert.True(t, strings.Contains(text, "status: FAILED"))
+}
+
+func TestModelScaffoldDefaultsToCommandObserve(t *testing.T) {
+	source, err := renderCommandScaffold("cluster pods", nil)
+	require.NoError(t, err)
+	assert.Contains(t, source, "package models")
+	assert.Contains(t, source, `import sm "pudl.schemas/pudl/systemmodel@v0"`)
+	assert.Contains(t, source, `name: "cluster pods"`)
+	assert.Contains(t, source, `runs: [{argv: ["echo","[]"]}]`)
+	assert.Contains(t, source, "Replace with a command that prints JSON records")
+
+	source, err = renderCommandScaffold("fw", []string{"gcloud", "list"})
+	require.NoError(t, err)
+	assert.Contains(t, source, `runs: [{argv: ["gcloud","list"]}]`)
+	assert.NotContains(t, source, "Replace with")
 }

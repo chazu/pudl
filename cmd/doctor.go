@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -28,7 +27,7 @@ naming the entry or fact, path and kind, never the value.
 
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
-  schema-refs   declared schema references now present in the schema cache
+
   policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
@@ -179,10 +178,7 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 			Name:      "Schema Repository",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(pudlDir) },
 		},
-		{
-			Name:      "mu",
-			CheckFunc: func() *doctor.CheckResult { return doctor.CheckMu(context.Background()) },
-		},
+
 		{
 			Name:      "Git Repository",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckGitRepositoryAt(pudlDir) },
@@ -219,14 +215,14 @@ func init() {
 	doctorCmd.Flags().StringVar(&doctorSchema, "schema", "", "Check and repair only entries assigned to this schema")
 	doctorCmd.Flags().StringVar(&doctorOrigin, "origin", "", "Check and repair only entries from this origin")
 	doctorCmd.Flags().BoolVar(&doctorIncludeExplicit, "include-explicit", false, "Re-infer every entry in scope, including explicit assignments and invalid entries")
-	doctorCmd.Flags().StringVar(&doctorSchemaRef, "schema-ref", "", "Limit the schema-refs repair to this reference (e.g. mu/aws@v1)")
+
 	doctorCmd.MarkFlagsMutuallyExclusive("entry", "health-only")
 	doctorCmd.MarkFlagsMutuallyExclusive("entry", "schema")
 	doctorCmd.MarkFlagsMutuallyExclusive("entry", "origin")
 	doctorCmd.RegisterFlagCompletionFunc("entry", completeProquintIDs)
 	doctorCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
 	doctorCmd.RegisterFlagCompletionFunc("origin", completeOrigins)
-	doctorCmd.RegisterFlagCompletionFunc("schema-ref", completeSchemaNames)
+
 	doctorCmd.RegisterFlagCompletionFunc("only", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return repair.Names(), cobra.ShellCompDirectiveNoFileComp
 	})

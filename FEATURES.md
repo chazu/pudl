@@ -22,7 +22,6 @@ Designations:
 - Content-based deduplication via SHA256 → proquint IDs
 - Streaming parser with backpressure and memory monitoring
 - Collection support: NDJSON files are split into individual items, with normalized many-to-many collection memberships
-- Envelope JSON: typed `{schema, definitions?, data}` imports preserve schema refs and optionally cache inline CUE definitions
 - Reclassification of items with unresolved schema refs (`pudl doctor --fix --only schema-refs`)
 
 See [collections.md](docs/collections.md), [concepts.md](docs/concepts.md)
@@ -72,20 +71,11 @@ See [architecture.md](docs/architecture.md)
 
 ## Run & Drift — CORE
 
-- `pudl run <name>` drives the observe-only ACUTE loop: populate → drift → checks → report
-- Drift is a phase of `pudl run`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed)
-- `pudl run <name> --converge` closes drift: pudl renders desired → sources and the mu plugin reconciles
-- Convergence status tracking per model instance: unknown → drifted → converging → clean (or failed); a run records its verdict on the instance row, read back via `pudl status`
-
-## Mu Integration — CORE
-
-- pudl declares desired/observed state; mu executes — pudl shells out to mu, with no execution layer of its own
-- Ingest mu build manifests (`pudl mu ingest-manifest`)
-- Ingest mu observe results as live state for drift detection (`pudl mu ingest-observe`)
-- Envelope JSON import with schema sidecar from mu plugins
-- Schema cache for mu plugin output
-
-See [mu-integration.md](docs/mu-integration.md)
+- `pudl run <name>` drives the observe-only loop: populate → drift → checks → report
+- Populate runs plain commands that print JSON records (`#CommandObserve`), with no shell
+- Drift is a phase of `pudl run`: JSON deep diff comparing declared desired vs observed (catalog) state, with field-level diffing (added, removed, changed). PUDL reports drift and changes nothing
+- Status tracking per model instance: unknown, drifted or clean; a run records its verdict on the instance row, read back via `pudl status`
+- Convergence and the mu integration were removed on 2026-11-01; see [retired commands](docs/retired-commands.md#convergence-and-mu-integration)
 
 ## Bitemporal Fact Store — CORE
 

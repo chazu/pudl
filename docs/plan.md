@@ -4,6 +4,24 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Convergence and mu integration removed (2026-11-01)
+
+PUDL discovers, catalogs and governs infrastructure; it no longer changes it
+(`pudl-z87`, steps `.1`–`.5`). Removed: `run --converge` and its flags,
+approvals (`run resume`/`reject`), mutating run sets, apply budgets, mutation
+intents and receipts, sealed values, `#PluginObserve`, `#EweTarget`,
+`plugins:`, differential drift, drift observations, `pudl mu
+ingest-manifest`/`ingest-observe`, typed-envelope import, the mu schema cache,
+the doctor mu check and schema-refs repair, `--mu-root`/`--mu-timeout`, `model
+populator`, and `make test-kick-tires`. `#CommandObserve` is the only populate
+arm and `pudl model new` scaffolds it by default; the observation ingest moved
+to `internal/observe`. Models using retired fields fail to load with an error
+naming the field. Old catalogs open unchanged: approval tables stay, `converging`
+reads as `unknown`, legacy report fields render as JSON, and the `pudl/mu`
+schemas are kept as legacy. The Git walkthrough observes with `pudl run`. See
+[retired commands](retired-commands.md#convergence-and-mu-integration) and the
+[delivery log](../implog/2026_11_01_remove_convergence_and_mu.md).
+
 ### Fact-store writes demoted from everyday help (2026-11-01)
 
 `pudl facts add/retract/invalidate` are now advanced commands (`pudl-4fx.3`).
@@ -15,8 +33,8 @@ See [delivery log](../implog/2026_11_01_demote_fact_writes.md).
 
 ### Repair commands folded into `pudl doctor --fix` (2026-11-01)
 
-`pudl doctor` diagnoses schema-name normalization, unresolved schema
-references, inference drift, missing or leaf-namespaced identities, and stale
+`pudl doctor` diagnoses schema-name normalization, inference drift, missing or
+leaf-namespaced identities, and stale
 projected facts, and names the repair for each. `pudl doctor --fix [--only
 NAME]` applies them, `--fix --dry-run` previews them, and the JSON report is
 versioned. `schema migrate`, `schema reinfer`, `migrate identity`,
@@ -598,15 +616,17 @@ and the second-round implementation log for acceptance results and limitations.
 
 ## What's Next
 
-### Remove convergence and mu integration (decided 2026-11-01)
+### After the convergence and mu removal (decided 2026-11-01)
 
 PUDL narrows to discovering, cataloging and governing infrastructure. The
-convergence workflow and all mu integration are being removed. Observation is
-`#CommandObserve` only. See
-[the removal design](design/2026-11-01-remove-convergence-and-mu.md). Not yet
-implemented. Beads work:
+convergence workflow and all mu integration were removed (see What's Built).
+Observation is `#CommandObserve` only. See
+[the removal design](design/2026-11-01-remove-convergence-and-mu.md). Open
+follow-ups: the fate of observe-only `run set` and plain value bindings, and
+dropping the legacy approval tables and `pudl/mu` schemas after a release.
+Beads work:
 
-- `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5`.
+- `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5` (done).
 - `pudl-4fx`: simplify the everyday command surface (`pudl check`,
   `doctor --fix`, demoting fact-store writes, moving orchestration out of `cmd/`).
 - `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,

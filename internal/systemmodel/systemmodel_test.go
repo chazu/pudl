@@ -34,14 +34,13 @@ func loadModel(src []byte, name string) (*SystemModel, error) {
 	return m, nil
 }
 
-// observe-only k8s model — the V1 demo-path populate case.
-const k8sObserveModel = `
-k8sPolicy: #SystemModel & {
-	name: "k8s-policy"
-	plugins: [{name: "k8s", script: "./plugins/k8s/plugin.bb"}]
-	populate: #PluginObserve & {
-		plugin: "k8s"
-		input: {namespace: "default", context: "prod"}
+// observe-only command model with a check.
+const commandObserveModel = `
+pods: #SystemModel & {
+	name: "pods"
+	populate: {
+		timeout: "2m"
+		runs: [{argv: ["kubectl", "get", "pods", "-o", "json"], set: cluster: "prod"}]
 	}
 	checks: [{
 		name:     "pdb_present"
@@ -53,105 +52,25 @@ k8sPolicy: #SystemModel & {
 }
 `
 
-func TestDifferentialDrift(t *testing.T) {
-	// #PluginObserve without `differential` defaults to true (k8s differential path).
-	m, err := loadModel([]byte(k8sConvergeModel), "k8sConverge")
-	require.NoError(t, err)
-	assert.True(t, m.Populate.Differential, "differential should default to true")
-	assert.True(t, m.DifferentialDrift())
-
-	// #PluginObserve with differential:false → inventory.
-	const hostInv = `
-inv: #SystemModel & {
-	name: "inv"
-	populate: #PluginObserve & {plugin: "host", differential: false}
-	desired: [{_schema: "pudl/linux.#Package", name: "podman"}]
-}`
-	mi, err := loadModel([]byte(hostInv), "inv")
-	require.NoError(t, err)
-	assert.False(t, mi.Populate.Differential)
-	assert.False(t, mi.DifferentialDrift())
-
-	// EweTarget populate → always inventory, regardless of any field.
-	const eweModel = `
-e: #SystemModel & {
-	name: "e"
-	populate: #EweTarget & {eweSource: "p.cue", outputs: ["recs"]}
-	desired: [{_schema: "git.repo", name: "r"}]
-}`
-	me, err := loadModel([]byte(eweModel), "e")
-	require.NoError(t, err)
-	assert.False(t, me.DifferentialDrift(), "ewe populate is inventory")
-}
-
-// convergence k8s model — adds desired + a #PluginPlan converge arm.
-const k8sConvergeModel = `
-k8sConverge: #SystemModel & {
-	name: "k8s-converge"
-	populate: #PluginObserve & {
-		plugin: "k8s"
-		input: {namespace: "default"}
-	}
-	desired: [
-		{apiVersion: "policy/v1", kind: "PodDisruptionBudget", metadata: {name: "web"}},
-	]
-	converge: #PluginPlan & {
-		plugin: "k8s"
-		input: {namespace: "default", apply: ["PodDisruptionBudget"]}
-	}
-}
-`
-
 func TestLoadModel_ObserveOnly(t *testing.T) {
-	m, err := loadModel([]byte(k8sObserveModel), "k8sPolicy")
+	m, err := loadModel([]byte(commandObserveModel), "pods")
 	require.NoError(t, err)
 
-	assert.Equal(t, "k8s-policy", m.Name)
+	assert.Equal(t, "pods", m.Name)
+	assert.Equal(t, KindCommand, m.Populate.Kind())
+	assert.Equal(t, "2m", m.Populate.Timeout)
+	require.Len(t, m.Populate.Runs, 1)
+	assert.Equal(t, "prod", m.Populate.Runs[0].Set["cluster"])
 
-	// plugins: block decodes; the arm's plugin resolves to a declared source.
-	require.Len(t, m.Plugins, 1)
-	def, ok := m.PluginByName("k8s")
-	require.True(t, ok)
-	assert.Equal(t, "./plugins/k8s/plugin.bb", def.Script)
-
-	// populate dispatches to the observe arm.
-	assert.Equal(t, KindPluginObserve, m.Populate.Kind())
-	assert.Equal(t, "k8s", m.Populate.Plugin)
-	assert.Equal(t, "default", m.Populate.Input["namespace"])
-	assert.Equal(t, "prod", m.Populate.Input["context"])
-
-	// one check, decoded.
 	require.Len(t, m.Checks, 1)
 	assert.Equal(t, "pdb_present", m.Checks[0].Name)
 	assert.Equal(t, "missing_pdb", m.Checks[0].Query)
 	assert.Equal(t, "empty", m.Checks[0].Expect)
 	assert.Equal(t, "warn", m.Checks[0].Severity)
-
-	// observe-only: no converge arm.
-	assert.False(t, m.Convergent())
-	assert.Nil(t, m.Converge)
-}
-
-func TestLoadModel_Convergent(t *testing.T) {
-	m, err := loadModel([]byte(k8sConvergeModel), "k8sConverge")
-	require.NoError(t, err)
-
-	assert.Equal(t, "k8s-converge", m.Name)
-	assert.Equal(t, KindPluginObserve, m.Populate.Kind())
-
-	// desired is present and decoded.
-	require.Len(t, m.Desired, 1)
-	assert.Equal(t, "PodDisruptionBudget", m.Desired[0]["kind"])
-
-	// convergence: the #PluginPlan arm decodes.
-	require.True(t, m.Convergent())
-	require.NotNil(t, m.Converge)
-	assert.Equal(t, "k8s", m.Converge.Plugin)
-	assert.Equal(t, "default", m.Converge.Input["namespace"])
 }
 
 func TestLoadModel_MissingInstance(t *testing.T) {
-	_, err := loadModel([]byte(k8sObserveModel), "nope")
+	_, err := loadModel([]byte(commandObserveModel), "nope")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -172,7 +91,6 @@ func TestLoadModel_ChecksOnlyAndCommandArms(t *testing.T) {
 	m, err = loadModel([]byte(`m: #SystemModel & {name: "fw", populate: {schema: "pudl/gcp.#Firewall", runs: [{argv: ["gcloud", "list"], set: project: "p"}]}}`), "m")
 	require.NoError(t, err)
 	require.Equal(t, KindCommand, m.Populate.Kind())
-	require.False(t, m.DifferentialDrift())
 	require.Equal(t, []string{"gcloud", "list"}, m.Populate.Runs[0].Argv)
 	require.Equal(t, "p", m.Populate.Runs[0].Set["project"])
 

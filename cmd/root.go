@@ -55,8 +55,8 @@ Key features:
 - Version-controlled schema repository with git integration
 - Data import from multiple sources and formats (JSON, YAML, CSV, NDJSON)
 - Schema generation from imported data
-- Observe-only and converging #SystemModel runs through mu
-- Exact producer/consumer run-sets with strict sealed action routing and approval`,
+- Observe-only #SystemModel runs: discovery, desired-state comparison and checks
+- Exact producer/consumer run-sets with value bindings`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Resolve the workspace policy (global mode when no repo workspace).
 		var err error
@@ -119,7 +119,7 @@ func ExecuteContext(ctx context.Context) {
 
 func shouldAutoInitializeGlobal(command string) bool {
 	switch command {
-	case "help", "version", "init", "example", "prime", "guide", "completion", "report", "resume", "reject", "--help", "-h", "--version", "-v":
+	case "help", "version", "init", "example", "prime", "guide", "completion", "report", "--help", "-h", "--version", "-v":
 		return false
 	default:
 		return true

@@ -28,9 +28,8 @@ func TestParsePopulateSpec(t *testing.T) {
 	p, err := parsePopulateSpec("command:gcloud sql instances list --format=json")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"gcloud", "sql", "instances", "list", "--format=json"}, p.argv)
-	p, err = parsePopulateSpec("plugin:k8s")
-	require.NoError(t, err)
-	assert.Equal(t, "k8s", p.plugin)
+	_, err = parsePopulateSpec("plugin:k8s")
+	require.ErrorContains(t, err, "retired")
 	_, err = parsePopulateSpec("k8s")
 	require.Error(t, err)
 }

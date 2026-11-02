@@ -10,7 +10,7 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 )
@@ -31,7 +31,7 @@ func recordModelInstance(cat *runCatalog, m *systemmodel.SystemModel, runID stri
 	rec["name"] = m.Name
 	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
 
-	results := []mubridge.ObserveResult{{
+	results := []observe.ObserveResult{{
 		Target:  modelTarget(m.Name),
 		Current: map[string]any{"records": []any{rec}},
 	}}
@@ -56,8 +56,8 @@ func recordModelInstance(cat *runCatalog, m *systemmodel.SystemModel, runID stri
 func modelTarget(name string) string { return "//models/" + name }
 
 // modelTargetKey is the catalog `target`-column key for a model's instance row:
-// the mu target with its "//" prefix stripped, matching how the observe ingester
-// stores it (mubridge normalizeTarget). Status reads/writes MUST use this form —
+// the run target with its "//" prefix stripped, matching how the observe
+// ingester stores it (internal/observe). Status reads/writes MUST use this form —
 // keying on modelTarget (with "//") silently misses the row, so run verdicts
 // never persist.
 func modelTargetKey(name string) string { return strings.TrimPrefix(modelTarget(name), "//") }

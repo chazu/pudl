@@ -14,8 +14,8 @@ var modelNewCheck, modelNewExpect, modelNewMaxAge string
 var modelNewEvidence []string
 
 func newCheckModel(cmd *cobra.Command, name string) error {
-	if modelNewPopulate != "" || len(modelNewInputs) > 0 {
-		return fmt.Errorf("--check saves a checks-only model; omit --populate and --input")
+	if modelNewPopulate != "" {
+		return fmt.Errorf("--check saves a checks-only model; omit --populate")
 	}
 	if modelNewExpect != "empty" && modelNewExpect != "nonempty" {
 		return fmt.Errorf("--expect must be empty or nonempty")

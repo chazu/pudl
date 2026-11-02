@@ -281,7 +281,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listItemsOnly, "items-only", false, "Show only individual items")
 
 	// Entry type flags
-	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only run outputs (manifest, manifest-action)")
+	listCmd.Flags().BoolVar(&listArtifacts, "artifacts", false, "Show only legacy run artifacts (mu manifests and manifest actions)")
 
 	// UI flags
 	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")

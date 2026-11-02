@@ -1,5 +1,7 @@
 # Design: closing the utility gap with swamp
 
+> **Historical.** This document describes the convergence workflow and mu integration that were removed on 2026-11-01. PUDL now observes, catalogs and reports; it changes nothing. See [the removal design](../design/2026-11-01-remove-convergence-and-mu.md) and [retired commands](../retired-commands.md#convergence-and-mu-integration).
+
 **Date:** 2026-07-27
 **Scope:** pudl + mu, jointly
 **Status:** execution plan, hardened after adversarial review (§8) and the

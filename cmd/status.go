@@ -20,17 +20,16 @@ type StatusOutput struct {
 
 var statusCmd = &cobra.Command{
 	Use:   "status [target]",
-	Short: "Show convergence status of models and targets",
-	Long: `Display the convergence status recorded in the catalog — the per-target
-status the run loop writes (a model run's verdict is recorded on its instance row,
+	Short: "Show the verified status of models and targets",
+	Long: `Display the status recorded in the catalog — the per-target verdict
+pudl run writes (a model run's verdict is recorded on its instance row,
 "//models/<name>").
 
 Status values:
-  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted
-  clean       — observed == desired, drift re-check confirmed (in sync)
-  drifted     — observed != desired
-  converging  — actions applied, pending re-verification
-  failed      — a converge run failed (cap exhausted or execute error)
+  unknown     — no verified status recorded yet (the retired "converging" value also reads as unknown)
+  clean       — observed == desired, confirmed by a live observation
+  drifted     — observed != desired, or a fail-severity check did not pass
+  failed      — recorded by the retired convergence workflow; re-run the model to replace it
 
 Examples:
     pudl status
@@ -54,7 +53,7 @@ func colorForStatus(status string) lipgloss.Style {
 	switch status {
 	case "clean":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("2")) // green
-	case "drifted", "converging":
+	case "drifted":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")) // yellow
 	case "failed":
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("1")) // red

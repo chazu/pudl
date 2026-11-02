@@ -59,16 +59,6 @@ type Policy struct {
 	ModelSearchPaths []string
 }
 
-// SecretsWritablePolicy returns the workspace-owned sealed-output policy. The
-// boolean is false when no policy was authored; an authored empty slice is an
-// explicit deny-all and therefore returns true.
-func (p *Policy) SecretsWritablePolicy() (refs []string, configured bool) {
-	if p == nil || p.Workspace == nil {
-		return nil, false
-	}
-	return append([]string(nil), p.Workspace.SecretsWritableRefs...), p.Workspace.SecretsWritableConfigured
-}
-
 // Resolve discovers the workspace for a working directory and assembles every
 // search path from it.
 func Resolve(cwd, globalDir string) (*Policy, error) {
@@ -174,24 +164,6 @@ func (p *Policy) RulePathsForModel(modelDir string) []string {
 	}
 	if !inserted {
 		paths = append(paths, modelRules)
-	}
-	return paths
-}
-
-// PopulatorPathsFor is where an #EweTarget's eweSource is looked for, in order.
-//
-// Deliberately *not* a flat repo-then-global list like the others: a populator
-// is resolved relative to the pudl root that owns the model, so a model
-// registered globally cannot silently pick up a repo's populator of the same
-// name, and vice versa. ownerRoot is that root; modelDir is the co-located
-// fallback.
-func (p *Policy) PopulatorPathsFor(ownerRoot, modelDir string) []string {
-	var paths []string
-	if ownerRoot != "" {
-		paths = append(paths, filepath.Join(ownerRoot, "populators"), ownerRoot)
-	}
-	if modelDir != "" {
-		paths = append(paths, modelDir)
 	}
 	return paths
 }

@@ -25,17 +25,13 @@ type runSetExecutionContext struct {
 	// starts: the rest of the set is recorded cancelled.
 	ctx              context.Context
 	runSetID         string
-	mu               muRunner
 	successfulRuns   map[string]wiring.ProducerRun
 	successfulModels map[string]*systemmodel.SystemModel
 	snapshotIDs      map[string]string
 	modelDirs        map[string]string
 	bindingEvidence  map[string][]wiring.BindingEvidence
-	sealedEvidence   map[string][]wiring.SealedBindingEvidence
-	aliases          map[string][]string
 	nextRunID        string
 	lastModel        *systemmodel.SystemModel
-	lastSealed       []wiring.SealedBindingEvidence
 	lastSnapshotID   string
 	lastModelDir     string
 	lastRunID        string
@@ -78,37 +74,6 @@ func (c *runSetExecutionContext) memberRunID() string {
 	return c.nextRunID
 }
 
-// resolveSealedModel resolves sealed sources for the current member against
-// the members that already succeeded; a standalone run has none to resolve.
-func (c *runSetExecutionContext) resolveSealedModel(model *systemmodel.SystemModel) (*systemmodel.SystemModel, []wiring.SealedBindingEvidence, error) {
-	if c == nil {
-		return model, nil, nil
-	}
-	members := make([]wiring.SealedMember, 0, len(c.successfulModels)+1)
-	for name, successful := range c.successfulModels {
-		producer := c.successfulRuns[name]
-		members = append(members, wiring.SealedMember{
-			Model: successful, Aliases: c.aliases[name], RunID: producer.RunID,
-		})
-	}
-	members = append(members, wiring.SealedMember{
-		Model: model, Aliases: c.aliases[model.Name], RunID: c.nextRunID,
-	})
-	refs, configured := wsPolicy.SecretsWritablePolicy()
-	resolved, err := wiring.ResolveSealedSources(members, wiring.SealedPolicy{
-		WritableRefs: refs, WritableConfigured: configured,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, member := range resolved {
-		if member.Model.Name == model.Name {
-			return member.Model, member.Evidence, nil
-		}
-	}
-	return nil, nil, fmt.Errorf("sealed resolution omitted current model %q", model.Name)
-}
-
 // registerMemberRunID records the run ID the member actually used.
 func (c *runSetExecutionContext) registerMemberRunID(runID string) {
 	if c != nil {
@@ -116,14 +81,13 @@ func (c *runSetExecutionContext) registerMemberRunID(runID string) {
 	}
 }
 
-// retainMember keeps the elaborated member so downstream members and mutation
-// planning can use it once the member succeeds.
-func (c *runSetExecutionContext) retainMember(model *systemmodel.SystemModel, sealed []wiring.SealedBindingEvidence, snapshotID, modelDir string) {
+// retainMember keeps the elaborated member so downstream members can use it
+// once the member succeeds.
+func (c *runSetExecutionContext) retainMember(model *systemmodel.SystemModel, snapshotID, modelDir string) {
 	if c == nil {
 		return
 	}
 	c.lastModel = model
-	c.lastSealed = sealed
 	c.lastSnapshotID = snapshotID
 	c.lastModelDir = modelDir
 }
@@ -135,30 +99,18 @@ func (c *runSetExecutionContext) emitOutput() bool {
 
 var (
 	runSetMaxObservationAge time.Duration
-	runSetMuRoot            string
-	runSetConverge          bool
-	runSetRequireApproval   bool
-	runSetMaxIters          int
-	runSetMaxApplies        int
 	runSetDetailedExitCode  bool
 )
 
 // runSetOptions is the complete input of one `pudl run set`, read once from
 // its flags.
 type runSetOptions struct {
-	muRoot               string
-	converge             bool
-	requireApproval      bool
-	maxIters             int
-	maxApplies           int
 	maxObservationAge    time.Duration
 	maxObservationAgeSet bool
 }
 
 func runSetOptionsFromFlags(cmd *cobra.Command) runSetOptions {
 	return runSetOptions{
-		muRoot: runSetMuRoot, converge: runSetConverge, requireApproval: runSetRequireApproval,
-		maxIters: runSetMaxIters, maxApplies: runSetMaxApplies,
 		maxObservationAge:    runSetMaxObservationAge,
 		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
 	}
@@ -170,30 +122,18 @@ var runSetCmd = &cobra.Command{
 	Long: `Run exactly the named models in dependency order.
 
 The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Without
---converge, every member is observe-only and successful producer snapshots are
-pinned for downstream plain bindings.
-
-With --converge, pudl completes read-only preflight and exact mu planning for
-the whole set before the first mutation. --require-approval persists and pauses
-any exact plan. A set that can write a sealed output is always approval-gated,
-even without the flag. Generated targets use strict sealed routing, so unused
-declarations, undeclared action claims, and ambiguous output writers fail during
-planning before mutation or provider traffic. Resume rebuilds and revalidates
-the exact plan before producer-first execution.
+whose producer is not named fails preflight before any member runs. Every
+member is observe-only, and successful producer snapshots are pinned for
+downstream plain bindings.
 
 Examples:
   pudl run set network app
   pudl run set network app --max-observation-age 15m
-  pudl run set network app --converge
-  pudl run set network app --converge --require-approval
   pudl run set network app --detailed-exitcode
-  pudl run report
-  pudl run resume <run-set-id>
-  pudl run reject <run-set-id>`,
+  pudl run report`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd), defaultRunDeps(cmd.Context(), runMuTimeout))
+		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd))
 		if !runSetDetailedExitCode {
 			return err
 		}
@@ -210,21 +150,19 @@ type runSetResult struct {
 }
 
 // executeRunSet runs exactly the named models in dependency order. Each member
-// is an observe-only executeRun with its own options; a converging set then
-// plans and executes mutations across the whole set. The result is nil when
+// is an observe-only executeRun with its own options. The result is nil when
 // the set failed before it had a report.
-func executeRunSet(ctx context.Context, args []string, opts runSetOptions, deps runDeps) (*runSetResult, error) {
+func executeRunSet(ctx context.Context, args []string, opts runSetOptions) (*runSetResult, error) {
 	result := &runSetResult{}
-	err := runSetMembers(ctx, args, opts, deps, result)
+	err := runSetMembers(ctx, args, opts, result)
 	if result.report == nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps runDeps, result *runSetResult) error {
+func runSetMembers(ctx context.Context, args []string, opts runSetOptions, result *runSetResult) error {
 	selected := make([]acute.RunSetModel, 0, len(args))
-	hasSealedOutputs := false
 	for _, requested := range args {
 		template, _, _, err := resolveModelTemplate(requested)
 		if err != nil {
@@ -234,16 +172,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 			Template: template,
 			Aliases:  []string{requested, shortDefName(template.Origin.SchemaName)},
 		})
-		hasSealedOutputs = hasSealedOutputs || template.HasSealedOutputs()
-	}
-	if opts.requireApproval && !opts.converge {
-		return fmt.Errorf("--require-approval requires --converge")
-	}
-	if opts.converge && opts.maxIters < 1 {
-		return fmt.Errorf("--max-iters must be >= 1")
-	}
-	if opts.maxApplies < 0 {
-		return fmt.Errorf("--max-applies must be >= 0")
 	}
 	plan, err := acute.NewRunSetPlan(selected)
 	if err != nil {
@@ -257,9 +185,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 		agePolicy = opts.maxObservationAge.String()
 	}
 	mode := "observe-only"
-	if opts.converge {
-		mode = "converge"
-	}
 	digest, err := plan.Digest(mode, agePolicy)
 	if err != nil {
 		return err
@@ -279,20 +204,15 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 	}
 	result.report = report
 
-	aliases := make(map[string][]string, len(plan.Models))
-	for name, member := range plan.Models {
-		aliases[name] = append([]string(nil), member.Aliases...)
-	}
 	context := &runSetExecutionContext{
 		ctx:      ctx,
-		runSetID: report.RunSetID, mu: deps.mu, successfulRuns: map[string]wiring.ProducerRun{},
+		runSetID: report.RunSetID, successfulRuns: map[string]wiring.ProducerRun{},
 		successfulModels: map[string]*systemmodel.SystemModel{},
 		snapshotIDs:      map[string]string{}, modelDirs: map[string]string{},
 		bindingEvidence: map[string][]wiring.BindingEvidence{},
-		sealedEvidence:  map[string][]wiring.SealedBindingEvidence{}, aliases: aliases,
-		suppressOutput: jsonOutput,
+		suppressOutput:  jsonOutput,
 	}
-	memberDeps := runDeps{mu: deps.mu, set: context}
+	memberDeps := runDeps{set: context}
 
 	results := map[string]string{}
 	for _, model := range plan.Ordered {
@@ -326,7 +246,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 		context.nextRunID = acute.NewMemberRunID()
 		context.lastRunID = ""
 		context.lastModel = nil
-		context.lastSealed = nil
 		context.lastSnapshotID = ""
 		context.lastModelDir = ""
 		memberReport, runErr := executeRun(ctx, memberRunOptions(model, opts), memberDeps)
@@ -359,7 +278,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 			context.successfulModels[model] = context.lastModel
 			context.snapshotIDs[model] = context.lastSnapshotID
 			context.modelDirs[model] = context.lastModelDir
-			context.sealedEvidence[model] = append([]wiring.SealedBindingEvidence(nil), context.lastSealed...)
 			for _, alias := range plan.Models[model].Aliases {
 				context.successfulRuns[alias] = producerRun
 			}
@@ -371,13 +289,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, deps 
 	}
 
 	report.Status = runSetStatus(ctx, report)
-	if report.Status == database.RunStatusSucceeded && opts.converge {
-		return continueMutatingRunSet(db, plan, report, context, runSetMutationRequest{
-			Models: append([]string(nil), args...), MaxObservationAge: agePolicy,
-			MaxIterations: opts.maxIters, MaxApplies: opts.maxApplies,
-			MuRoot: opts.muRoot, RequireApproval: opts.requireApproval || hasSealedOutputs,
-		})
-	}
 	if err := saveRunSetReport(db, report); err != nil {
 		return err
 	}
@@ -511,10 +422,27 @@ func printRunSetReport(report *acute.RunSetReport) error {
 func init() {
 	runCmd.AddCommand(runSetCmd)
 	runSetCmd.Flags().DurationVar(&runSetMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
-	runSetCmd.Flags().StringVar(&runSetMuRoot, "mu-root", "", "mu project root for member runs (default: discover per model)")
-	runSetCmd.Flags().BoolVar(&runSetConverge, "converge", false, "plan and execute mutations only after every member completes read-only preflight")
-	runSetCmd.Flags().BoolVar(&runSetRequireApproval, "require-approval", false, "persist the exact run-set plan and wait for approval before mutation")
-	runSetCmd.Flags().IntVar(&runSetMaxIters, "max-iters", defaultRunMaxIters, "maximum apply iterations per mutating member")
-	runSetCmd.Flags().IntVar(&runSetMaxApplies, "max-applies", defaultRunMaxApplies, "durable apply budget per mutating member (0 disables)")
+
 	runSetCmd.Flags().BoolVar(&runSetDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
+}
+
+// runSetStatus is a finished set's status: succeeded only when every member
+// succeeded, cancelled when an interrupt is why it did not, failed otherwise.
+func runSetStatus(ctx context.Context, report *acute.RunSetReport) string {
+	for _, member := range report.Members {
+		if member.Result != database.RunStatusSucceeded {
+			if ctx != nil && ctx.Err() != nil {
+				return database.RunStatusCancelled
+			}
+			return database.RunStatusFailed
+		}
+	}
+	return database.RunStatusSucceeded
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }

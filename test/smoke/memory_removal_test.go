@@ -13,7 +13,7 @@ import (
 )
 
 func TestSmoke_AgentMemoryRemovedGenericFactsRetained(t *testing.T) {
-	root, _, env := exampleWorkspace(t, "git")
+	root, _, env := exampleWorkspace(t, "git", "cat")
 	cli := func(args ...string) []byte {
 		t.Helper()
 		command := exec.Command(pudlBin, args...)

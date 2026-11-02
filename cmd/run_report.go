@@ -15,30 +15,25 @@ import (
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
-	Summary          *acute.VerdictSummary          `json:"summary,omitempty"`
-	ResourceScope    []string                       `json:"resource_scope,omitempty"`
-	ReportVersion    int                            `json:"report_version"`
-	RunSetID         string                         `json:"run_set_id,omitempty"`
-	RunID            string                         `json:"run_id"`
-	Model            string                         `json:"model"`
-	Mode             string                         `json:"mode"` // observe-only | converge | dry-run
-	CompletionStatus string                         `json:"completion_status"`
-	Populate         *PopulateReport                `json:"populate,omitempty"`
-	Drift            *ModelDriftResult              `json:"drift,omitempty"`
-	Checks           []CheckResult                  `json:"checks,omitempty"`
-	Converge         *ConvergeReport                `json:"converge,omitempty"`
-	OK               bool                           `json:"ok"` // overall: no fail-severity check failed, converge not failed
-	Error            string                         `json:"error,omitempty"`
-	PendingApproval  bool                           `json:"pending_approval,omitempty"`
-	ApprovalStatus   string                         `json:"approval_status,omitempty"`
-	Bindings         []wiring.BindingEvidence       `json:"bindings,omitempty"`
-	BindingIssues    []wiring.BindingIssue          `json:"unresolved_bindings,omitempty"`
-	SealedBindings   []wiring.SealedBindingEvidence `json:"sealed_bindings,omitempty"`
+	Summary          *acute.VerdictSummary    `json:"summary,omitempty"`
+	ReportVersion    int                      `json:"report_version"`
+	RunSetID         string                   `json:"run_set_id,omitempty"`
+	RunID            string                   `json:"run_id"`
+	Model            string                   `json:"model"`
+	Mode             string                   `json:"mode"` // observe-only | observe-only (inventory) | checks-only
+	CompletionStatus string                   `json:"completion_status"`
+	Populate         *PopulateReport          `json:"populate,omitempty"`
+	Drift            *ModelDriftResult        `json:"drift,omitempty"`
+	Checks           []CheckResult            `json:"checks,omitempty"`
+	OK               bool                     `json:"ok"` // overall: no phase error, no fail-severity check failed
+	Error            string                   `json:"error,omitempty"`
+	Bindings         []wiring.BindingEvidence `json:"bindings,omitempty"`
+	BindingIssues    []wiring.BindingIssue    `json:"unresolved_bindings,omitempty"`
 }
 
 // applyRunError copies a phase error into the report before it is rendered or
-// persisted. Convergence reports are persisted before RunE returns, so relying
-// only on the deferred named-return finalizer would lose the error details.
+// persisted. Reports are persisted before RunE returns, so relying only on the
+// deferred named-return finalizer would lose the error details.
 func applyRunError(report *RunReport, err error) {
 	if report == nil || err == nil {
 		return
@@ -48,13 +43,8 @@ func applyRunError(report *RunReport, err error) {
 	report.CompletionStatus = failureStatus(err)
 }
 
-func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, flags runFlags, err error) *RunReport {
+func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, err error) *RunReport {
 	mode := "observe-only"
-	if flags.dryRun {
-		mode = "dry-run"
-	} else if flags.converge {
-		mode = "converge"
-	}
 	model := ""
 	if template != nil {
 		model = template.Name
@@ -74,25 +64,6 @@ type PopulateReport struct {
 	Target           string `json:"target"`
 	Records          int    `json:"records"`
 	SnapshotID       string `json:"snapshot_id,omitempty"`
-}
-
-// ConvergeReport summarizes a convergence loop.
-type ConvergeReport struct {
-	Observation *ModelDriftResult `json:"observation,omitempty"`
-	Outcome     string            `json:"outcome"` // clean | failed (cap_exhausted) | failed (execute_error) | dry-run …
-	Iterations  int               `json:"iterations"`
-
-	// NeedsVerification is orthogonal to Outcome: the run mutated the system but
-	// cannot prove the result, whichever way the loop ended. It dominates the
-	// status verdict.
-	NeedsVerification bool              `json:"needs_verification,omitempty"`
-	MutationReceipts  []MutationReceipt `json:"mutation_receipts,omitempty"`
-}
-
-type MutationReceipt struct {
-	Iteration      int    `json:"iteration"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-	Status         string `json:"status"`
 }
 
 // render emits the report as JSON when machine output is requested, else markdown.
@@ -131,9 +102,6 @@ func (r *RunReport) markdown() string {
 		status = "FAILED"
 	}
 	fmt.Fprintf(&b, "- status: %s\n", status)
-	if r.ApprovalStatus != "" {
-		fmt.Fprintf(&b, "- approval: %s\n", r.ApprovalStatus)
-	}
 	if r.Error != "" {
 		fmt.Fprintf(&b, "- error: %s\n", r.Error)
 	}
@@ -151,16 +119,6 @@ func (r *RunReport) markdown() string {
 			fmt.Fprintf(&b, "- %s <- %s %s%s (%s): %s\n",
 				issue.Input, issue.ProducerModel, issue.Schema, issue.Path,
 				issue.Code, issue.Message)
-		}
-	}
-	if len(r.SealedBindings) > 0 {
-		fmt.Fprintf(&b, "\n## sealed bindings\n")
-		for _, binding := range r.SealedBindings {
-			if binding.Direction == "input" {
-				fmt.Fprintf(&b, "- %s.%s <- %s (%s, %s, actions %v)\n", binding.ConsumerPhase, binding.Input, binding.SourceKind, binding.ProviderScheme, binding.LifecycleStatus, binding.ClaimingActionIDs)
-				continue
-			}
-			fmt.Fprintf(&b, "- %s.%s -> %s (%s, %s, action %s)\n", binding.ProducerPhase, binding.Output, binding.StoreMode, binding.ProviderScheme, binding.LifecycleStatus, binding.ProducingActionID)
 		}
 	}
 
@@ -187,28 +145,12 @@ func (r *RunReport) markdown() string {
 				}
 				continue
 			}
-			// Advisory matches are rendered even on a pass: a check that only
-			// matched outside the run's --only scope did not gate, and saying so is
-			// what keeps a silent exit-code drop from looking like a clean check.
-			outside := ""
-			if c.AdvisoryCount > 0 {
-				outside = fmt.Sprintf(" (%d match(es) outside --only scope)", c.AdvisoryCount)
-			}
 			if c.Passed {
-				fmt.Fprintf(&b, "  - ✓ %s (%s)%s\n", c.Name, c.Severity, outside)
+				fmt.Fprintf(&b, "  - ✓ %s (%s)\n", c.Name, c.Severity)
 			} else {
-				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es)%s: %s\n", c.Name, c.Severity, c.Count, outside, c.Message)
+				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es): %s\n", c.Name, c.Severity, c.Count, c.Message)
 			}
 			writeCheckFindings(&b, c)
-		}
-	}
-	if r.Converge != nil {
-		fmt.Fprintf(&b, "\n## converge\n- iterations: %d\n- outcome: %s\n", r.Converge.Iterations, r.Converge.Outcome)
-		if r.Converge.NeedsVerification {
-			fmt.Fprintf(&b, "- needs_verification: true\n")
-		}
-		for _, receipt := range r.Converge.MutationReceipts {
-			fmt.Fprintf(&b, "- mutation receipt: iteration %d, %s, manifest %s\n", receipt.Iteration, receipt.Status, receipt.ManifestSHA256)
 		}
 	}
 	return b.String()

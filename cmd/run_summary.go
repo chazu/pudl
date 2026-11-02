@@ -12,12 +12,6 @@ import (
 
 func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 	s := &acute.VerdictSummary{Execution: r.CompletionStatus, Conformity: "not-checked", Checks: "not-checked", Verification: "not-verified", Scope: "model"}
-	if len(r.ResourceScope) > 0 {
-		s.Scope = "selected-resources"
-	}
-	if r.PendingApproval {
-		s.Execution = "pending-approval"
-	}
 	if r.Drift != nil {
 		s.Conformity = "clean"
 		if !r.Drift.Clean {
@@ -30,16 +24,6 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		s.Verification = "recorded"
 		if r.Drift.Verified {
 			s.Verification = "live"
-		}
-	}
-	if r.Converge != nil {
-		s.Conformity = "unknown"
-		if r.Converge.Outcome == string(outcomeClean) {
-			s.Conformity = "clean"
-			s.Verification = "live"
-		}
-		if r.Converge.NeedsVerification {
-			s.Verification = "needs-verification"
 		}
 	}
 	seen := map[string]bool{}
@@ -66,7 +50,7 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		} else if !c.Passed {
 			s.FailedChecks++
 		}
-		if r.Drift == nil && r.Converge == nil {
+		if r.Drift == nil {
 			s.Scope = c.Scope
 			s.Verification = "recorded"
 		}
@@ -77,7 +61,7 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 			add(e)
 		}
 	}
-	if allLiveChecks && r.Drift == nil && r.Converge == nil {
+	if allLiveChecks && r.Drift == nil {
 		s.Verification = "live"
 	}
 	if s.FailedChecks > 0 {
@@ -85,9 +69,7 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 	}
 	if s.UnknownChecks > 0 {
 		s.Checks = "unknown"
-		if s.Verification != "needs-verification" {
-			s.Verification = "not-verified"
-		}
+		s.Verification = "not-verified"
 	}
 	var snapshotIDs []string
 	if r.Populate != nil {
@@ -107,9 +89,6 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 		}
 	}
 	observation := r.Drift
-	if r.Converge != nil && r.Converge.Observation != nil {
-		observation = r.Converge.Observation
-	}
 	if observation != nil && observation.ObservationID != "" && observation.ObservedAt != nil {
 		add(acute.ObservationEvidence{ObservationID: observation.ObservationID, Source: "differential-observe", Scope: s.Scope, ObservedAt: *observation.ObservedAt, Age: time.Since(*observation.ObservedAt).String(), Complete: true})
 	}

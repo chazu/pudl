@@ -119,3 +119,22 @@ func (s *importSession) finish() {
 	}
 	syncProjectionsQuietly(s.ctx, s.imp.CatalogDB())
 }
+
+// importOne is the single import path shared by regular, batch, and stdin
+// imports, so all three behave identically: a dry run previews, otherwise the
+// file is imported with friendly IDs.
+func importOne(imp *importer.EnhancedImporter, opts importer.ImportOptions) (*importer.ImportResult, error) {
+	var (
+		result *importer.ImportResult
+		err    error
+	)
+	if opts.DryRun {
+		result, err = imp.Preview(opts)
+	} else {
+		result, err = imp.ImportFileWithFriendlyIDs(opts)
+	}
+	if result != nil {
+		result.SourcePath = opts.SourcePath
+	}
+	return result, err
+}

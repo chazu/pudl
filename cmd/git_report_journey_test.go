@@ -12,7 +12,7 @@ import (
 )
 
 // This journey uses the installed example and literal public commands throughout.
-// The saved observations need neither a mu executable nor a live repository service.
+// The example observes a fixture file, so it needs no live repository service.
 func TestGitInventoryReportJourney(t *testing.T) {
 	root := cliWorkspace(t)
 	successful := func(args ...string) cliResult {
@@ -31,32 +31,33 @@ func TestGitInventoryReportJourney(t *testing.T) {
 		return report
 	}
 	successful("example", "install", "git-inventory", "--json")
-	ingest := func(fixture, origin string) string {
+	// observe points the example at one fixture and runs the model live.
+	observe := func(fixture string) RunReport {
 		t.Helper()
-		result := successful("mu", "ingest-observe", "--path", filepath.Join(root, "populators/git-inventory", fixture+"-observe.json"), "--origin", origin, "--json")
-		var recorded struct {
-			SnapshotID string `json:"snapshot_id"`
-			Records    int    `json:"records"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(result.Stdout), &recorded))
-		require.NotEmpty(t, recorded.SnapshotID)
-		require.Equal(t, 1, recorded.Records)
-		return recorded.SnapshotID
+		populators := filepath.Join(root, "populators/git-inventory")
+		data, err := os.ReadFile(filepath.Join(populators, fixture+".json"))
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(filepath.Join(populators, "current.json"), data, 0o644))
+		report := decodeReport(successful("run", "git-inventory", "--json").Stdout)
+		require.NotNil(t, report.Populate)
+		require.Equal(t, 1, report.Populate.Records)
+		require.NotEmpty(t, report.Populate.SnapshotID)
+		return report
 	}
-	baselineID := ingest("baseline", "git-baseline")
-	baseline := decodeReport(successful("run", "git-inventory", "--from-catalog", "--catalog-scope", baselineID, "--json").Stdout)
+	baseline := observe("baseline")
+	baselineID := baseline.Populate.SnapshotID
 	require.NotEmpty(t, baseline.RunID)
 	require.True(t, baseline.OK)
 	require.Equal(t, database.RunStatusSucceeded, baseline.CompletionStatus)
 	require.NotNil(t, baseline.Drift)
 	require.True(t, baseline.Drift.Clean)
-	require.False(t, baseline.Drift.Verified)
+	require.True(t, baseline.Drift.Verified)
 	require.Equal(t, baselineID, baseline.Drift.SnapshotID)
-	changedID := ingest("changed", "git-changed")
-	changed := decodeReport(successful("run", "git-inventory", "--from-catalog", "--catalog-scope", changedID, "--json").Stdout)
+	changed := observe("changed")
+	changedID := changed.Populate.SnapshotID
 	require.True(t, changed.OK, "drift is an observation; a fail-severity assertion is a distinct failure")
 	require.False(t, changed.Drift.Clean)
-	require.False(t, changed.Drift.Verified)
+	require.True(t, changed.Drift.Verified)
 	require.Equal(t, changedID, changed.Drift.SnapshotID)
 	require.Len(t, changed.Drift.Drifted, 1)
 	finding := changed.Drift.Drifted[0]
@@ -67,7 +68,8 @@ func TestGitInventoryReportJourney(t *testing.T) {
 	require.Equal(t, "main", finding.Fields[0].Expected)
 	require.Equal(t, "release", finding.Fields[0].Observed)
 	require.NotNil(t, finding.Fields[0].Previous)
-	require.Equal(t, "no-baseline", finding.Fields[0].Previous.Status, "standalone imports have no model-owned successful prior observation")
+	require.Equal(t, "available", finding.Fields[0].Previous.Status, "the baseline run is the model's prior successful observation")
+	require.Equal(t, baselineID, finding.Fields[0].Previous.SnapshotID)
 
 	// The operator authors a check against the exact changed inventory evidence.
 	// Project only the resource and evidence identifiers needed to investigate it.
@@ -91,14 +93,12 @@ func TestGitInventoryReportJourney(t *testing.T) {
 git_changed_inventory: {
  head: {rel: "git_changed_inventory", args: {
   resource: "git.repository/local/demo"
-  origin: "git-changed"
   entry_id: "$E"
-  snapshot_id: "$S"
+  snapshot_id: "`+changedID+`"
  }}
  body: [{rel: "catalog_entry", args: {
   id: "$E"
-  collection_id: "$S"
-  origin: "git-changed"
+  collection_id: "`+changedID+`"
   schema: "pudl/git.#GitRepository"
   collection_type: "item"
  }}]
@@ -117,13 +117,11 @@ git_changed_inventory: {
 	require.Equal(t, "fail", check.Severity)
 	require.False(t, check.Passed)
 	require.Equal(t, 1, check.Count)
-	require.Zero(t, check.AdvisoryCount)
 	require.Equal(t, checkScopeGlobal, check.Scope)
 	require.Len(t, check.Witnesses, 1)
 	require.False(t, check.WitnessesTruncated)
 	witness := check.Witnesses[0]
 	require.Equal(t, "git.repository/local/demo", witness.Resource)
-	require.False(t, witness.Advisory)
 	require.Equal(t, changedID, witness.Arguments["snapshot_id"])
 	entryID, ok := witness.Arguments["entry_id"].(string)
 	require.True(t, ok)
@@ -133,7 +131,7 @@ git_changed_inventory: {
 
 	humanResult := runCLI(t, "run", "git-inventory", "--from-catalog", "--catalog-scope", changedID)
 	require.ErrorIs(t, humanResult.Err, errFailSeverityChecks)
-	for _, text := range []string{"## findings", "### drift", "### checks", `expected "main", observed "release", previous (no-baseline)`, "review-changed-inventory", entryID, changedID} {
+	for _, text := range []string{"## findings", "### drift", "### checks", `expected "main", observed "release", previous "main" (snapshot ` + baselineID + `)`, "review-changed-inventory", entryID, changedID} {
 		require.Contains(t, humanResult.Stdout, text)
 	}
 
@@ -147,7 +145,7 @@ git_changed_inventory: {
 		Availability []database.ReportEvidence `json:"evidence_availability"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(storedResult.Stdout), &evidence))
-	require.Equal(t, []database.ReportEvidence{{SnapshotID: changedID, Status: "available"}}, evidence.Availability)
+	require.ElementsMatch(t, []database.ReportEvidence{{SnapshotID: baselineID, Status: "available"}, {SnapshotID: changedID, Status: "available"}}, evidence.Availability, "the report cites the changed snapshot and the baseline its previous values came from")
 	baselineStored := decodeReport(successful("run", "report", baseline.RunID, "--json").Stdout)
 	require.True(t, baselineStored.Drift.Clean)
 	require.Empty(t, baselineStored.Checks)

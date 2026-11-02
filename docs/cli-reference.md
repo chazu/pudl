@@ -51,27 +51,19 @@ These flags apply to every command.
 - [pudl import](#pudl-import) — Import data into PUDL data lake
 - [pudl init](#pudl-init) — Initialize or repair a local PUDL workspace (--global for ~/.pudl)
 - [pudl list](#pudl-list) — List imported data in the PUDL data lake
-- [pudl model](#pudl-model) — Manage #SystemModel definitions and their assets
+- [pudl model](#pudl-model) — Manage #SystemModel definitions
   - [pudl model deps](#pudl-model-deps) — Refresh and show the cross-model dependency graph
   - [pudl model list](#pudl-model-list) — List registered #SystemModel definitions
   - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
-  - [pudl model populator](#pudl-model-populator) — Manage populator programs for #EweTarget models
-    - [pudl model populator add](#pudl-model-populator-add) — Install a populator program into the repo for a model
-    - [pudl model populator new](#pudl-model-populator-new) — Scaffold an #EweTarget populator
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
-- [pudl mu](#pudl-mu) — Bridge commands between pudl and the mu execution layer
-  - [pudl mu ingest-manifest](#pudl-mu-ingest-manifest) — Ingest mu build manifest into the catalog
-  - [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
 - [pudl rule](#pudl-rule) — Manage Datalog rules
   - [pudl rule add](#pudl-rule-add) — Install a Datalog rule file into the workspace
   - [pudl rule new](#pudl-rule-new) — Scaffold a Datalog rule
-- [pudl run](#pudl-run) — Run a #SystemModel instance (observe-only, or --converge)
-  - [pudl run reject](#pudl-run-reject) — Reject a pending run or exact set plan
+- [pudl run](#pudl-run) — Run a #SystemModel instance: observe, compare and check
   - [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-  - [pudl run resume](#pudl-run-resume) — Approve and continue a pending run or exact set plan
   - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
 - [pudl schema](#pudl-schema) — Manage CUE schemas for data validation
   - [pudl schema add](#pudl-schema-add) — Add a new schema to the repository
@@ -85,7 +77,7 @@ These flags apply to every command.
   - [pudl snapshot prune](#pudl-snapshot-prune) — Remove snapshots a retention policy no longer wants
   - [pudl snapshot retain](#pudl-snapshot-retain) — Pin a snapshot against pruning (--release to unpin)
   - [pudl snapshot show](#pudl-snapshot-show) — Show one snapshot's provenance and contents
-- [pudl status](#pudl-status) — Show convergence status of models and targets
+- [pudl status](#pudl-status) — Show the verified status of models and targets
 - [pudl version](#pudl-version) — Show version information
 
 ## pudl completion
@@ -375,7 +367,7 @@ naming the entry or fact, path and kind, never the value.
 
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
-  schema-refs   declared schema references now present in the schema cache
+
   policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
@@ -403,10 +395,9 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, schema-refs, policy-leaves, inference, identity, projections |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
-| `--schema-ref` | string |  | Limit the schema-refs repair to this reference (e.g. mu/aws@v1) |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
 `--entry` and `--health-only` are mutually exclusive. JSON includes
@@ -443,19 +434,13 @@ scan did not run (`--health-only`, or a failed health check).
 repair. That repair re-infers only entries the scan found drifted; explicit
 producer assignments are never reclassified unless `--include-explicit` asks
 for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
-catalog). `--schema-ref` limits the schema-refs repair to one reference. The
-identity repair backfills missing `resource_id`s and recomputes those that
+catalog). The identity repair backfills missing `resource_id`s and recomputes those that
 still equal the leaf-schema-namespaced id, re-sequencing the versions of the
 resources they join.
 
 Health checks include schema loading (each schema package that fails to load,
 and any `base_schema` cycle) and Datalog rules (each rule that cannot be
 loaded, with its file position).
-
-The `mu` health check runs `mu version` and warns when mu is missing, its
-version cannot be read, or it is older than the minimum this PUDL is tested
-against (v0.3.5). mu is optional for imports, queries and `--from-catalog`
-replays, so these are warnings rather than failures.
 
 `--verify-payloads` checks referenced files and available SHA256 content claims, including canonical JSON items. This optional full scan never repairs or rewrites evidence.
 
@@ -480,10 +465,9 @@ Install a bundled example in the current initialized PUDL workspace.
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 
-The git-inventory example includes a model expecting default branch main,
-baseline and changed observations, and an optional live observer. The import
-and catalog replay tutorial needs only PUDL; live observation also needs mu
-and Python 3.
+The git-inventory example includes a model expecting default branch main and
+baseline and changed inventories. The model observes the current inventory
+with cat, so the tutorial needs nothing beyond PUDL.
 
 The gcp-network-hygiene example includes a fixture observer, saved checks,
 a corrected fixture, and a separate gcloud-based live model.
@@ -493,14 +477,14 @@ Example:
     pudl example install git-inventory
 ```
 
-Available example: `git-inventory`. It includes the model, saved observations,
-and optional live observer; no checkout or download is needed. Identical files
+Available examples: `git-inventory` and `gcp-network-hygiene`. Each includes
+its model and fixture data; no checkout or download is needed. Identical files
 are left alone. Conflicting edits or symlinked destinations cause an error before
 installation writes files. This command does not initialize global state.
 
 `--json` returns `example`, the workspace `root`, and relative `files` paths.
-See [getting started](getting-started.md) for the PUDL-only catalog replay
-tutorial. Live observation additionally requires mu and Python 3.
+See [getting started](getting-started.md) for the Git inventory tutorial; it
+needs only PUDL, Git, `cat` and `cp`.
 
 ## pudl export
 
@@ -788,17 +772,7 @@ Schema Assignment:
 - Automatic schema inference from CUE schemas in the schema repository
 - Chained validation: type → base type → catchall; --schema must name a type, never a policy
 - Untyped imports use best-effort inference; explicit schemas must validate
-- Envelope wire format: a JSON file shaped like
-    {"schema": {"module": "mu/aws", "version": "v1"},
-     "definitions": [...],   // optional inline CUE
-     "data": <payload>}
-  is auto-detected on import. The declared CUE schema ref is recorded
-  in the item_schemas table; inline definitions are written to pudl's
-  schema cache for future imports. Raw JSON without the envelope shape
-  is imported untouched.
-- Multiple schemas per item: items can satisfy more than one schema
-  (declared, inferred, unresolved) — 'pudl doctor' reports unresolved references
-  that the schema-refs repair can upgrade.
+
 
 Compressed Input:
 - .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;
@@ -814,8 +788,6 @@ Example usage:
     pudl import --path aws-instances.json --schema aws.ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
 
-    # CUE schema reference (e.g. emitted by a mu plugin)
-    pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
     # Several files, or a shell-expanded glob
     pudl import fw-prod-a.json fw-prod-b.json
@@ -864,9 +836,6 @@ Behavior:
 - CSV rows keep every cell verbatim as text (`"00123"` stays `"00123"`).
 - `.gz` and `.zst` files are decompressed; the stored data, hash, size and
   inference all use the decompressed content.
-- Typed envelope JSON (`schema`, optional `definitions`, and `data`) is
-  unwrapped; its schema metadata is recorded and the inner payload follows
-  normal import.
 - `--schema` requires every record to satisfy that schema. Unavailable schemas
   and mismatches fail, including on dedup re-import and `--dry-run`.
 - `--allow-schema-fallback` explicitly permits base/catchall fallback. JSON
@@ -923,7 +892,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | bool |  | Replace authored workspace configuration |
-| `--from-bundle` | string |  | Restore verified history into a new local workspace; approvals require replanning |
+| `--from-bundle` | string |  | Restore verified history into a new local workspace; legacy pending approvals are rejected |
 | `--max-bundle-bytes` | int64 | `17179869184` | Maximum uncompressed restored bundle bytes |
 
 Initialization installs configuration, a local CUE module and built-in schemas,
@@ -933,7 +902,7 @@ configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
 
-`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Pending approvals require replanning and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
+`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots cannot authorize producer bindings. See [backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -984,7 +953,7 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--all` | bool |  | Return all matching entries in one result (still respects --limit) |
-| `--artifacts` | bool |  | Show only run outputs (manifest, manifest-action) |
+| `--artifacts` | bool |  | Show only legacy run artifacts (mu manifests and manifest actions) |
 | `--collection-id` | string |  | Filter by collection ID |
 | `--collections-only` | bool |  | Show only collections |
 | `--fancy` | bool |  | Use interactive bubbletea interface with filtering |
@@ -1038,20 +1007,17 @@ Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
 
 ## pudl model
 
-Manage #SystemModel definitions and their assets
+Manage #SystemModel definitions
 
 ```text
 pudl model
 ```
 
 ```text
-Manage registered #SystemModel definitions and the assets they reference.
+Manage registered #SystemModel definitions.
 
 A #SystemModel is registered as a CUE definition inheriting #SystemModel in the
-schema repository (project .pudl/schema or global ~/.pudl/schema). An
-#EweTarget populate arm references a populator program (eweSource), stored under
-the repo's populators/ directory — kept out of the schema CUE module so it is
-not (mis)loaded as a schema.
+schema repository (project .pudl/schema or global ~/.pudl/schema).
 ```
 
 Subcommands:
@@ -1059,14 +1025,13 @@ Subcommands:
 - [pudl model deps](#pudl-model-deps) — Refresh and show the cross-model dependency graph
 - [pudl model list](#pudl-model-list) — List registered #SystemModel definitions
 - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
-- [pudl model populator](#pudl-model-populator) — Manage populator programs for #EweTarget models
 - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
 - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 
 A model is a registered `#SystemModel` describing a `desired` state and the
-sources that populate observed state. Catalog rows carry a `target` — the mu
-target or run target that produced them (e.g. `//models/<name>`, a populate
-phase `//models/<name>:populate`, or a standalone observe like `home/odroid`);
+sources that populate observed state. Catalog rows carry a `target` — the run
+target that produced them (e.g. `//models/<name>`, a populate
+phase `//models/<name>:populate`);
 status is recorded per target. Drift detection is a phase of `pudl run`, not a
 standalone command.
 
@@ -1102,7 +1067,7 @@ pudl model list
 ```text
 List every #SystemModel-derived definition registered in the schema
 repository (project definitions precede explicitly vendored packages), with its
-populate kind, converge arm, and desired/check counts.
+populate kind and desired/check counts.
 
 This is the static registry of runnable models — what 'pudl run <name>' can
 resolve — independent of whether a model has been run yet.
@@ -1118,15 +1083,16 @@ pudl model new <name> [flags]
 
 ```text
 Create a registered #SystemModel scaffold in the project schema (or the
-global schema outside a workspace). Always edit the returned file to add desired
-state, checks, or a converge arm.
+global schema outside a workspace). The scaffold observes with #CommandObserve:
+commands that print JSON records, run directly by pudl (no shell). Always edit
+the returned file to add desired state or checks.
 
---populate takes plugin:<name> (a cached mu plugin) or command:<cmdline>, a
-command printing JSON records, run directly by pudl (no shell, no mu).
+--populate command:<cmdline> sets the command. Without it the scaffold runs a
+placeholder command that prints no records; replace it before relying on it.
 
 Examples:
-    pudl model new pods --populate plugin:k8s --input namespace=default
     pudl model new gcp-firewalls --populate 'command:gcloud compute firewall-rules list --format=json'
+    pudl model new inventory
 ```
 
 Flags:
@@ -1137,81 +1103,25 @@ Flags:
 | `--evidence` | stringArray |  | Saved check evidence selector (snapshot ID, model:name or scope:name; repeatable) |
 | `--expect` | string | `empty` | Saved check expectation: empty or nonempty |
 | `--force` | bool |  | Replace an existing scaffold file |
-| `--input` | stringArray |  | Populate input key=value (repeatable; JSON values are decoded) |
 | `--max-age` | string |  | Maximum age for the saved check's selected observations |
-| `--populate` | string |  | Populate arm: plugin:&lt;name&gt; or command:&lt;cmdline&gt; |
-
-## pudl model populator
-
-Manage populator programs for #EweTarget models
-
-Subcommands:
-
-- [pudl model populator add](#pudl-model-populator-add) — Install a populator program into the repo for a model
-- [pudl model populator new](#pudl-model-populator-new) — Scaffold an #EweTarget populator
-
-## pudl model populator add
-
-Install a populator program into the repo for a model
-
-```text
-pudl model populator add <model> <populator.cue> [flags]
-```
-
-```text
-Copy a populator (.cue) program into the pudl repo's populators/<model>/
-directory so a registered #SystemModel can reference it as a repo-relative
-eweSource. By default it goes in the project repo (.pudl) when one is found by
-walking up from the cwd, else the global ~/.pudl; use --global to force global.
-
-After installing, set the model's eweSource to the printed value.
-```
-
-## pudl model populator new
-
-Scaffold an #EweTarget populator
-
-```text
-pudl model populator new <model> [flags]
-```
-
-```text
-Create a minimal ewe populator under populators/<model>/.
-The generated program writes a records array and already uses a quoted
-"_schema" field, so its output can be ingested by pudl without the hidden-CUE
-field trap. Edit the TODO before running the model.
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--force` | bool |  | Replace an existing populator scaffold |
+| `--populate` | string |  | Populate command: command:&lt;cmdline&gt; (default: a placeholder printing no records) |
 
 ## pudl model show
 
 Show a registered #SystemModel definition
 
 ```text
-pudl model show <name> [flags]
+pudl model show <name>
 ```
 
 ```text
 Show the details of a registered #SystemModel by name (the instance's
 'name:' field or its short definition name): populate arm, desired state,
-converge arm, checks, and declared plugins.
+and checks.
 ```
 
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--discover` | bool |  | Include live Mu plugin capability discovery |
-
 Human output resolves desired resource-type tags to retrievable schema names;
-JSON retains the model's original routing tags. `--discover` explicitly queries
-mu for plugin capabilities and includes results or discovery errors under
-`plugin_discovery`. Ordinary inspection does not need mu.
+JSON retains the model's original routing tags.
 
 ## pudl model validate
 
@@ -1230,101 +1140,6 @@ their final concrete values are validated again when pudl runs them.
 
 Models with plain bindings are valid before their catalog values exist; the
 resolved scalars and final concrete model are validated again at run time.
-
-## pudl mu
-
-Bridge commands between pudl and the mu execution layer
-
-```text
-pudl mu
-```
-
-```text
-Commands that move data across the pudl/mu boundary.
-
-pudl knows; mu acts. These subcommands ingest mu's execution results back into
-the catalog.
-
-Available subcommands:
-- ingest-observe:  Store mu observe results as live catalog state
-- ingest-manifest: Record a mu build manifest in the catalog
-
-Examples:
-    mu observe --json //home/odroid | pudl mu ingest-observe
-    mu build --emit-manifest | pudl mu ingest-manifest
-```
-
-Subcommands:
-
-- [pudl mu ingest-manifest](#pudl-mu-ingest-manifest) — Ingest mu build manifest into the catalog
-- [pudl mu ingest-observe](#pudl-mu-ingest-observe) — Ingest mu observe results into the catalog
-
-## pudl mu ingest-manifest
-
-Ingest mu build manifest into the catalog
-
-```text
-pudl mu ingest-manifest [flags]
-```
-
-```text
-Read a mu build manifest (JSON) and store action results in the catalog.
-This records what mu did during convergence, enabling status tracking.
-
-Examples:
-    mu build --emit-manifest | pudl mu ingest-manifest
-    pudl mu ingest-manifest --path manifest.json
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--model` | string |  | Tag entries with this #SystemModel name so a later clean drift re-check promotes its converging resources to clean |
-| `--origin` | string | `mu-build` | Origin label for catalog entries |
-| `--path` | string |  | Path to manifest JSON file (reads stdin if omitted) |
-
-`ingest-manifest` records each applied action and sets the affected resources
-to `converging` (applied, pending verification). Passing `--model <name>` tags
-those rows with the model so a later clean `pudl run <name>` drift re-check
-promotes exactly that model's resources from `converging` to `clean`. Without
-`--model`, promotion falls back to matching the model's desired-resource names.
-
-## pudl mu ingest-observe
-
-Ingest mu observe results into the catalog
-
-```text
-pudl mu ingest-observe [flags]
-```
-
-```text
-Read mu observe --json output and store observed state in the catalog.
-The observed state becomes the "live" side for subsequent drift checks.
-
-Input format: JSON array of ObserveResult objects from mu observe --json.
-Each target's current.records are stored as individual observe entries,
-routed to the correct schema via the _schema field.
-
-Examples:
-    mu observe --json //home/odroid | pudl mu ingest-observe
-    pudl mu ingest-observe --path observe-results.json
-    pudl mu ingest-observe --plugin-dir ./plugins/aws --path observe-results.json
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--complete` | bool |  | Assert the saved observation covers its entire declared scope |
-| `--coverage-schema` | stringArray |  | Schema covered by this population, including when empty (repeatable) |
-| `--max-decoded-bytes` | int64 | `1073741824` | Maximum observation input bytes |
-| `--max-record-bytes` | int64 | `67108864` | Maximum decoded observation target envelope size |
-| `--max-staging-bytes` | int64 | `2147483648` | Maximum prepared observation bytes |
-| `--origin` | string | `mu-observe` | Override origin |
-| `--path` | string |  | Read from file instead of stdin |
-| `--plugin-dir` | string |  | Local mu plugin directory containing mu.cue and optional pudl.cue |
-| `--scope` | string |  | Name the population covered by this observation |
 
 ## pudl prime
 
@@ -1404,7 +1219,7 @@ Rules are loaded from `.pudl/schema/pudl/rules/` (repo-scoped) and
 depends on a rule that cannot be loaded; `pudl doctor` lists such rules. See
 [datalog](datalog.md) for evaluation and rule authoring.
 
-`--timeout` bounds SQL evaluation, recursion, and writer contention independently of Mu subprocess timeouts. Cancellation returns an error and never a successful partial answer.
+`--timeout` bounds SQL evaluation, recursion, and writer contention. Cancellation returns an error and never a successful partial answer.
 Every positional constraint must be `field=value` with a nonblank field; repeated
 fields are errors. Empty values and values containing `=` remain valid.
 `--list` accepts no positional arguments and cannot be combined with `--topo`.
@@ -1481,7 +1296,7 @@ Flags:
 
 ## pudl run
 
-Run a #SystemModel instance (observe-only, or --converge)
+Run a #SystemModel instance: observe, compare and check
 
 ```text
 pudl run [<model>] [flags]
@@ -1493,24 +1308,20 @@ Run a #SystemModel instance through the ACUTE cycle.
 <model> is a registered #SystemModel — a definition inheriting #SystemModel,
 resolved by name (its name field or short definition name) from the project
 .pudl/schema and explicitly vendored packages. Register one with
-"pudl schema add". Default is OBSERVE-ONLY: populate -> drift -> checks ->
-report, no mutation. Pass --converge to close drift; see the V1 build spec.
+"pudl schema add". A run is observe-only: populate -> drift -> checks ->
+report. It reports differences and changes nothing.
 
 A model without a populate arm is checks-only: it syncs projected facts and
 evaluates its checks over what the catalog already holds (e.g. data brought in
 with pudl import). A #CommandObserve populate runs plain commands that print
-JSON records (gcloud, kubectl, aws ... --format=json) — no mu, no plugin.
+JSON records (gcloud, kubectl, aws ... --format=json).
 
 With --detailed-exitcode the exit status reports the result: 0 clean,
-2 drift, pending changes (--dry-run) or a failing fail-severity check,
-1 error.
+2 drift or a failing fail-severity check, 1 error.
 
 Examples:
     pudl run github-chazu
     pudl run github-chazu --detailed-exitcode
-    pudl run k8sPolicy --converge
-    pudl run k8sConverge --converge --only web,api
-    pudl run k8sConverge --converge --dry-run
     pudl run --populate 'command:gcloud compute networks list --format=json'
 ```
 
@@ -1520,134 +1331,61 @@ Flags:
 |------|------|---------|-------------|
 | `--catalog-scope` | string |  | which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under |
 | `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
-| `--converge` | bool |  | opt into the convergence loop (mutates the target) |
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error |
-| `--dry-run` | bool |  | print the plan, execute nothing (requires --converge) |
+| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
-| `--input` | stringArray |  | Ad-hoc populate input key=value (repeatable) |
-| `--max-applies` | int | `20` | durable cap on applies since this model was last verified clean; 0 disables (requires --converge) |
-| `--max-iters` | int | `5` | loop iteration cap (requires --converge) |
 | `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
-| `--mu-root` | string |  | mu project root to run within (default: discover mu.cue from the model dir) |
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--only` | stringSlice |  | converge only these resource selectors (requires --converge) |
-| `--populate` | string |  | Run an unregistered observer: plugin:&lt;name&gt;, or command:&lt;cmdline&gt; (a command printing JSON records) |
+| `--populate` | string |  | Run an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-| `--require-approval` | bool |  | persist the converge request and wait for `pudl run resume <run-id>` |
 
 Subcommands:
 
-- [pudl run reject](#pudl-run-reject) — Reject a pending run or exact set plan
 - [pudl run report](#pudl-run-report) — Read the latest or named standalone/set operation report
-- [pudl run resume](#pudl-run-resume) — Approve and continue a pending run or exact set plan
 - [pudl run set](#pudl-run-set) — Run an explicit producer/consumer model set in dependency order
+
+**A run observes and reports; it never changes anything.** It populates the
+catalog, compares `desired` with what was observed, evaluates checks and
+records a report. Apply changes with the tool that owns them, then run again to
+verify.
 
 **Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
 against records already in the catalog, so its verdict describes what was
-*recorded*, not what is live — the records may predate the last apply. A replay
-therefore never promotes resources to `clean` and never writes a model status;
-the model keeps the verdict of its last real observation. The scope is mandatory
-because there is no way to infer which ingested records belong to a model:
-records ingested by `pudl mu ingest-observe` carry whatever target their observer
-reported. Inventory observers — `#EweTarget` or `#PluginObserve` with
-`differential: false` — route to inventory drift without `--from-catalog`, and
-populate their own snapshot to compare against.
-
-> **Host credentials for converge plugins.** mu runs converge actions with a
-> hermetic environment — it does **not** inherit your shell's `HOME` or
-> `KUBECONFIG`. A plugin that needs host credentials must get them through the
-> model's `converge.input`, since pudl carries no domain knowledge to inject
-> them. For the **k8s** plugin set `input.kubeconfig` to an absolute path:
->
-> ```cue
-> converge: #PluginPlan & {
->     plugin: "k8s"
->     input: {namespace: "...", context: "...", kubeconfig: "/abs/path/kubeconfig"}
-> }
-> ```
->
-> Without it, apply fails with `context "…" does not exist` (kubectl falls back
-> to an empty config because it can't find `~/.kube/config`). Observe is
-> unaffected — it runs inside the plugin process, which keeps the full env.
+*recorded*, not what is live. A replay therefore never writes a model status;
+the model keeps the verdict of its last real observation. The scope is
+mandatory because there is no way to infer which ingested records belong to a
+model. A model with `desired` state populates its own snapshot and compares
+against it without `--from-catalog`.
 
 **Interrupting a run.** The first Ctrl-C (SIGINT or SIGTERM) stops the run
-cleanly: mu receives SIGTERM and has 10 seconds to finish (then it is killed),
-temporary workspaces are removed, and the run is recorded with completion status
-`cancelled`. If an apply may have been in flight, the run is also marked
-needs-verification, exactly as a lost receipt is. A second Ctrl-C exits
-immediately (status 130), still removing temporary workspaces. There is no
-resume: re-run the model. A `--mu-timeout` expiry is recorded as `failed`, not
-`cancelled`.
+cleanly: the running command receives SIGTERM and has 10 seconds to finish
+(then it is killed), temporary workspaces are removed, and the run is recorded
+with completion status `cancelled`. A second Ctrl-C exits immediately (status
+130), still removing temporary workspaces. Re-run the model to continue. A
+populate `timeout` expiry is recorded as `failed`, not `cancelled`.
 
 **Exit status.** By default `pudl run` exits 0 whenever the run completed,
 including when it found drift; the report says what it found. A failing
-fail-severity check, a convergence failure, or any other error exits nonzero.
+fail-severity check or any other error exits nonzero.
 
 With `--detailed-exitcode` the exit status is the result, so a script or CI job
 can gate on it without parsing the report:
 
 | Exit | Meaning |
 |------|---------|
-| `0` | Clean: no drift, no pending changes, every fail-severity check passed |
-| `2` | Findings: drift (including a `--from-catalog` replay's), changes a `--dry-run` would apply, or a failing fail-severity check — and nothing else went wrong |
-| `1` | Error: the run could not establish the answer (bad flags, unknown model, observe or convergence failure) |
+| `0` | Clean: no drift, every fail-severity check passed |
+| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check — and nothing else went wrong |
+| `1` | Error: the run could not establish the answer (bad flags, unknown model, populate failure) |
 
-A successful `--converge` that ended clean exits 0. A run paused by
-`--require-approval` exits 0. Under this flag every error exits 1, so `2`
-always means findings.
+Under this flag every error exits 1, so `2` always means findings.
 
 **Producers.** A standalone `pudl run` never starts another model
 automatically. If the model has a plain binding, PUDL reuses the latest eligible
 successful producer snapshot in the same workspace; use `pudl run set` to
 observe and pin producers in the current operation.
 
-**Apply budgets.** `--max-iters` bounds the applies inside one process;
-`--max-applies` bounds them across processes. Without the second, a model that
-cannot converge applies `--max-iters` times on every scheduled run — and a
-crash-loop supervisor grants a fresh cap on every restart — so the apply rate is
-unbounded. The durable budget counts every successful apply the moment it
-happens, and resets to full the first time an **unscoped** run observes the
-model clean. A model that drifts and is fixed on each run therefore ends every
-run clean and never approaches it; only a model that applies and *still* is not
-clean accumulates. An exhausted budget still observes (that is how it resets)
-and refuses only the apply, reporting `failed (apply_budget_exhausted)`. A
-scoped (`--only`) clean does not reset it, for the same reason a scoped ∅ does
-not write `clean` to the model row.
-
-**Selecting resources with `--only`.** `--only` accepts one or more
-comma-separated exact selectors. A selector may be an **identity** key — the
-desired resource `name`, `id`, `path`, or `target`, or `metadata.name` — which
-names exactly one resource, or a **type** key — `_schema`, `schema`,
-`definition`, or `kind` — which selects every resource of that type. The short
-name after a schema's `#` is also accepted.
-
-A selector must resolve unambiguously. It is an error for one selector to match
-some resources by identity and others by type (for example `--only nginx` where
-one resource is *named* `nginx` and another has `kind: nginx`), or to match
-several resources by identity. Both cases would otherwise pull resources the
-operator never named into converge scope.
-
-Declared resource dependencies are included transitively. A dependency must
-resolve to exactly one resource, so a dependency naming a type is an error.
-The selector set is validated before convergence side effects begin.
-
-The scoped model is what every phase consumes — planning, execution, report
-scope, resource promotion and checks all see the selected resources, not the
-model's full desired set.
-
-A scoped run does not write `clean` to the model's own status row. A ∅ over the
-named resources is a statement about those resources; the ones left out of scope
-were never observed, so generalizing it would let `pudl status`, `pudl model
-list` and `--check-upstream` read whole-model "in sync" off a partial run. The
-model row is left `unknown` instead, and the run row records the real verdict
-plus a note naming the scope. `drifted` and `failed` *are* written: a defect
-found in a subset is a defect in the model. Re-run without `--only` to establish
-a whole-model `clean`.
-
 **Command populate.** A `#CommandObserve` arm runs plain commands that print
 JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
-`aws … --format=json` — directly, with no shell, no mu and no plugin protocol.
-Fan out with a CUE comprehension and stamp fields the tool omits with `set`:
+`aws … --format=json` — directly, with no shell. Fan out with a CUE
+comprehension and stamp fields the tool omits with `set`:
 
 ```cue
 populate: {
@@ -1666,23 +1404,13 @@ its stderr. argv and `set` are recorded with the model: keep secrets out.
 
 **Checks-only models.** A model without `populate` evaluates its checks over
 the catalog as it is — e.g. data brought in with `pudl import` — after syncing
-projected facts ([projection](projection.md)). It cannot declare
-`desired` or `converge`.
+projected facts ([projection](projection.md)). It cannot declare `desired`.
 
-## pudl run reject
-
-Reject a pending run or exact set plan
-
-```text
-pudl run reject <operation-id>
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
+**Retired fields and flags.** `--converge` and its flags, and the model fields
+`converge`, `plugins`, `sealed_inputs` and `sealed_outputs`, and the
+`#PluginObserve` and `#EweTarget` populate arms were removed. A model that uses
+one fails to load with an error naming the field; see
+[retired commands](retired-commands.md#convergence-and-mu-integration).
 
 ## pudl run report
 
@@ -1696,32 +1424,14 @@ Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
-Standalone runs and exact sets share `report`, `resume` and `reject`. With no
-ID, `report` selects the newest persisted standalone or aggregate set report.
-With an ID, it reads that exact report. The JSON payload retains its existing
-standalone or set representation. `resume` and `reject` look up the stored
-operation kind; set approvals rebuild and validate the exact plan, while
-standalone approvals retain their request-level behavior.
+Standalone runs and run sets share `report`. With no ID, `report` selects the
+newest persisted standalone or aggregate set report. With an ID, it reads that
+exact report. The JSON payload retains its existing standalone or set
+representation.
 
 Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
-
-## pudl run resume
-
-Approve and continue a pending run or exact set plan
-
-```text
-pudl run resume <operation-id>
-```
-
-Flags:
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
-| `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 ## pudl run set
 
@@ -1735,74 +1445,37 @@ pudl run set <model> [<model>...] [flags]
 Run exactly the named models in dependency order.
 
 The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Without
---converge, every member is observe-only and successful producer snapshots are
-pinned for downstream plain bindings.
-
-With --converge, pudl completes read-only preflight and exact mu planning for
-the whole set before the first mutation. --require-approval persists and pauses
-any exact plan. A set that can write a sealed output is always approval-gated,
-even without the flag. Generated targets use strict sealed routing, so unused
-declarations, undeclared action claims, and ambiguous output writers fail during
-planning before mutation or provider traffic. Resume rebuilds and revalidates
-the exact plan before producer-first execution.
+whose producer is not named fails preflight before any member runs. Every
+member is observe-only, and successful producer snapshots are pinned for
+downstream plain bindings.
 
 Examples:
   pudl run set network app
   pudl run set network app --max-observation-age 15m
-  pudl run set network app --converge
-  pudl run set network app --converge --require-approval
   pudl run set network app --detailed-exitcode
   pudl run report
-  pudl run resume <run-set-id>
-  pudl run reject <run-set-id>
 ```
 
 Flags:
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--converge` | bool |  | plan and execute mutations only after every member completes read-only preflight |
-| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error |
-| `--max-applies` | int | `20` | durable apply budget per mutating member (0 disables) |
-| `--max-iters` | int | `5` | maximum apply iterations per mutating member |
+| `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
-| `--mu-root` | string |  | mu project root for member runs (default: discover per model) |
-| `--mu-timeout` | duration |  | stop any single mu invocation that runs longer than this (e.g. 10m); 0 means no limit |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
-| `--require-approval` | bool |  | persist the exact run-set plan and wait for approval before mutation |
 
-Observe-only sets continue independent branches after a member failure while
-blocking its dependents. Mutating sets complete read-only preflight for every
-member before the first mutation and stop new mutations after the first apply
-failure. Non-sealed sets can pause with `--require-approval`; resume revalidates
-the immutable request and plan digest before execution.
-
-Mu's version-2 `build --plan --json` output includes each action's complete
-execution identity, resolved plugin identities, and sealed input/output claims.
-PUDL validates those claims under strict routing before persisting an exact
-approval. Unused declarations, undeclared claims, mismatched refs/modes, and
-ambiguous output writers fail before mutation or provider traffic. Any run-set
-that can write a sealed output is approval-gated automatically;
-`--require-approval` adds the same gate to other mutating sets. Resume rebuilds
-and compares the normalized exact plan; immediately before every apply, mu
-compares the raw same-workspace digest before provider access and executes that
-same in-memory graph.
-
-Each mutating member concludes as a standalone converge does: its checks run,
-its verdict is written to the model's status row, and a verified clean promotes
-its `converging` resources. A failing fail-severity check fails the member, which
-stops the set's later mutations.
+Every member of a set is observe-only. A set continues independent branches
+after a member failure while blocking that member's dependents; a blocked
+member records the binding it could not resolve.
 
 An interrupted set starts no further member: the member in progress concludes
-`cancelled` (with needs-verification if it was applying), the remaining members
-are recorded `cancelled`, and the set's status is `cancelled`.
+`cancelled`, the remaining members are recorded `cancelled`, and the set's
+status is `cancelled`.
 
-With `--detailed-exitcode`, an observe-only set exits 2 when any member found
-drift, pending changes or a failing fail-severity check. A converging set exits
-0 once every member converged clean. A failed set exits 2 only when every
-failed member failed on its checks alone (members blocked or cancelled behind
-them do not count as separate errors); otherwise it exits 1.
+With `--detailed-exitcode`, a set exits 2 when any member found drift or a
+failing fail-severity check. A failed set exits 2 only when every failed member
+failed on its checks alone (members blocked or cancelled behind them do not
+count as separate errors); otherwise it exits 1.
 
 ## pudl schema
 
@@ -2084,7 +1757,7 @@ pudl snapshot retain <snapshot-id> [flags]
 
 ```text
 Add a manual pin so no retention policy removes this snapshot.
---release removes only the manual pin; approval and retained-report owners remain.
+--release removes only the manual pin; legacy approval and retained-report owners remain.
 Reports preserve referenced snapshot evidence for 30 days after their last save.
 
 Snapshots recorded before snapshot provenance existed cannot be pinned — they
@@ -2113,23 +1786,22 @@ Flags:
 
 ## pudl status
 
-Show convergence status of models and targets
+Show the verified status of models and targets
 
 ```text
 pudl status [target]
 ```
 
 ```text
-Display the convergence status recorded in the catalog — the per-target
-status the run loop writes (a model run's verdict is recorded on its instance row,
+Display the status recorded in the catalog — the per-target verdict
+pudl run writes (a model run's verdict is recorded on its instance row,
 "//models/<name>").
 
 Status values:
-  unknown     — no verified status recorded yet, including an apply whose receipt could not be persisted
-  clean       — observed == desired, drift re-check confirmed (in sync)
-  drifted     — observed != desired
-  converging  — actions applied, pending re-verification
-  failed      — a converge run failed (cap exhausted or execute error)
+  unknown     — no verified status recorded yet (the retired "converging" value also reads as unknown)
+  clean       — observed == desired, confirmed by a live observation
+  drifted     — observed != desired, or a fail-severity check did not pass
+  failed      — recorded by the retired convergence workflow; re-run the model to replace it
 
 Examples:
     pudl status
@@ -2137,16 +1809,15 @@ Examples:
     pudl status --json
 ```
 
-`unknown` means there is no verified terminal status, including when an
-external apply completed but PUDL could not persist its manifest receipt, and
-when the only clean observation came from an `--only` run that covered part of
-the model. The run row (`runs`) distinguishes these: it carries the run's real
-verdict and a note.
+`unknown` means there is no verified terminal status: the model has not been
+observed, its last run could not establish a verdict (an incomplete inventory or
+a check without evidence), or the row still holds the `converging` value written
+by the retired convergence workflow. The run row (`runs`) carries each run's
+real verdict and a note.
 
-Lifecycle: `drifted → converging` (apply, via `ingest-manifest`) `→ clean`
-(verified ∅ by the drift re-check) `| failed`. `clean` is the single in-sync
-state (drift == ∅), written only off an actual observation with successful
-receipt persistence — never a bare apply.
+`clean` is the single in-sync state (drift == ∅), written only off a live
+observation, never off a `--from-catalog` replay. `failed` appears only on rows
+written by the retired convergence workflow; the next run replaces it.
 
 ## pudl version
 

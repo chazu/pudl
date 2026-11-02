@@ -72,6 +72,9 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		if err := printRunSetReport(&report); err != nil {
 			return err
 		}
+		if err := printSetLegacyFields(set.Report); err != nil {
+			return err
+		}
 		printEvidenceAvailability(evidence)
 		return nil
 	}
@@ -102,6 +105,9 @@ func readOperationReport(db *database.CatalogDB, args []string) error {
 		return err
 	}
 	fmt.Fprint(outw(), text)
+	if err := printLegacyFields(single.Report, report); err != nil {
+		return err
+	}
 	printEvidenceAvailability(evidence)
 	return nil
 }

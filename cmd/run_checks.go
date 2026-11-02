@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/checks"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/evidence"
@@ -20,13 +19,8 @@ const (
 )
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated
-// over the catalog, asserted empty/nonempty).
-//
-// Count is the number of result rows the verdict is *about*: under `--only`, an
-// `expect: empty` check excuses rows that name only excluded resources, and
-// those are counted in AdvisoryCount instead. Without `--only` — and for
-// `expect: nonempty` checks, which count evidence rather than violations —
-// AdvisoryCount is zero and Count is the full result size.
+// over the catalog, asserted empty/nonempty). Count is the number of result
+// rows.
 type CheckResult struct {
 	Evidence           []evidence.Reference    `json:"evidence,omitempty"`
 	Outcome            string                  `json:"outcome,omitempty"`
@@ -38,14 +32,13 @@ type CheckResult struct {
 	Query              string                  `json:"query"`
 	Severity           string                  `json:"severity"`
 	Count              int                     `json:"count"`
-	AdvisoryCount      int                     `json:"advisory_count,omitempty"`
 	Scope              string                  `json:"scope"`
 	Passed             bool                    `json:"passed"`
 	Message            string                  `json:"message,omitempty"`
 }
 
 // checkContext is what a run knows that scopes its checks: the run's own ID,
-// whether it observed anything under that ID, and its `--only` selection.
+// and whether it observed anything under that ID.
 type checkContext struct {
 	currentSnapshot string
 	runID           string
@@ -53,7 +46,6 @@ type checkContext struct {
 	// carries its run ID; binding the constraint would make every `expect: empty`
 	// check pass trivially.
 	fromCatalog bool
-	scope       *acute.TupleScope
 }
 
 // checkPasses is the pure expect-vs-count verdict: "empty" passes on no tuples,
@@ -92,28 +84,20 @@ func runChecksContext(evalCtx context.Context, cat *runCatalog, m *systemmodel.S
 	if err != nil {
 		return nil, err
 	}
-	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: rulePathsForModel(modelDir), Load: loadEntryPayload, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, Scope: ctx.scope, Redact: func(value string) string { return redactSealedText(value, m) }, OnProgress: emitCheckProgress})
+	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: rulePathsForModel(modelDir), Load: loadEntryPayload, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, OnProgress: emitCheckProgress})
 	if err != nil {
 		return nil, err
 	}
 	results := make([]CheckResult, 0, len(evaluated))
 	for _, e := range evaluated {
-		witnesses, truncated := checkWitnesses(e.Tuples, e.Expect, ctx.scope, m)
-		results = append(results, CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, AdvisoryCount: e.AdvisoryCount, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated})
+		witnesses, truncated := checkWitnesses(e.Tuples, e.Expect)
+		results = append(results, CheckResult{Name: e.Name, Query: e.Query, Expect: e.Expect, Severity: e.Severity, Message: e.Message, Scope: e.Scope, Outcome: e.Outcome, Passed: e.Passed, Count: e.Count, Evidence: e.Evidence, Diagnostics: e.Diagnostics, Witnesses: witnesses, WitnessesTruncated: truncated})
 	}
 	return results, nil
 }
 
-func partitionCheckTuples(tuples []datalog.Tuple, expect string, scope *acute.TupleScope) (int, int) {
-	return checks.Partition(tuples, expect, scope)
-}
-
 // printChecks renders the check results and reports whether any check with
 // severity "fail" did not pass (the caller turns that into a non-zero exit).
-//
-// A check that failed only outside the run's scope is rendered as advisory
-// rather than FAIL: rendering FAIL while the exit code silently stayed zero is
-// what trains people to ignore checks.
 func printChecks(results []CheckResult) (failedFail bool) {
 	for _, r := range results {
 		switch {
@@ -123,21 +107,14 @@ func printChecks(results []CheckResult) (failedFail bool) {
 				fmt.Fprintf(outw(), "    %s: %s\n", d.Code, d.Message)
 			}
 			failedFail = true
-		case r.Passed && r.AdvisoryCount > 0:
-			fmt.Fprintf(outw(), "  ⚠ %s [%s] advisory — %d match(es) outside --only scope: %s\n",
-				r.Name, r.Severity, r.AdvisoryCount, r.Message)
 		case r.Passed:
 			fmt.Fprintf(outw(), "  ✓ %s (%s)\n", r.Name, r.Severity)
 		default:
 			if r.Severity == "fail" {
 				failedFail = true
 			}
-			outside := ""
-			if r.AdvisoryCount > 0 {
-				outside = fmt.Sprintf(" (+%d outside --only scope)", r.AdvisoryCount)
-			}
-			fmt.Fprintf(outw(), "  ✗ %s [%s] FAIL — %d match(es)%s: %s\n",
-				r.Name, r.Severity, r.Count, outside, r.Message)
+			fmt.Fprintf(outw(), "  ✗ %s [%s] FAIL — %d match(es): %s\n",
+				r.Name, r.Severity, r.Count, r.Message)
 		}
 		writeCheckFindings(outw(), r)
 	}

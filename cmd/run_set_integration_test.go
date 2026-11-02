@@ -2,10 +2,7 @@ package cmd
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,151 +17,46 @@ import (
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
-	"github.com/chazu/pudl/internal/wiring"
 	"github.com/chazu/pudl/internal/workspace"
 )
 
-type runSetMu struct {
-	configs         map[string]string
-	planConfigs     map[string]string
-	failProducer    bool
-	producerEmpty   bool
-	applied         map[string]int
-	operations      []string
-	failApply       string
-	invalidManifest string
-	planSuffix      string
-	expectDigests   []string
+// Run-set fixture models observe through #CommandObserve shell runs. The
+// producer honours two switches so one fixture covers failure and empty
+// observations: PUDL_TEST_FAIL_PRODUCER and PUDL_TEST_EMPTY_PRODUCER. The
+// consumer writes its bound input to PUDL_TEST_CONSUMER_OUT, proving the
+// producer's value reached the consumer's command.
+const runSetFixtureModels = `
+
+#Producer: #SystemModel & {
+	name: "producer"
+	populate: runs: [{argv: ["sh", "-c", """
+		if [ -n "$PUDL_TEST_FAIL_PRODUCER" ]; then echo 'producer observation failed' >&2; exit 1; fi
+		if [ -n "$PUDL_TEST_EMPTY_PRODUCER" ]; then echo '[]'; exit 0; fi
+		echo '[{"_schema":"resources.thing","name":"one","value":"ready"}]'
+		"""]}]
 }
 
-func signedMuPlan(raw string) []byte {
-	var document map[string]any
-	if err := json.Unmarshal([]byte(raw), &document); err != nil {
-		panic(err)
+#Consumer: #SystemModel & {
+	name: "consumer"
+	inputs: value: string @pudl(binding=plain)
+	bindings: value: {
+		source: {model: "producer", schema: "pudl/resources.#Thing", identity: {name: "one"}}
+		path: "/value"
 	}
-	if _, ok := document["targets"]; !ok {
-		document["targets"] = []any{}
-	}
-	if _, ok := document["plugins"]; !ok {
-		document["plugins"] = []any{}
-	}
-	actions, _ := document["actions"].([]any)
-	for index, item := range actions {
-		action := item.(map[string]any)
-		if _, ok := action["action_key"]; !ok {
-			action["action_key"] = fmt.Sprintf("sha256:test-%d", index)
-		}
-		if _, ok := action["command"]; !ok {
-			action["command"] = []any{}
-		}
-		if _, ok := action["inputs"]; !ok {
-			action["inputs"] = map[string]any{}
-		}
-		if _, ok := action["outputs"]; !ok {
-			action["outputs"] = []any{}
-		}
-		if _, ok := action["depends_on"]; !ok {
-			action["depends_on"] = []any{}
-		}
-	}
-	if _, ok := document["summary"]; !ok {
-		document["summary"] = map[string]any{"total": len(actions)}
-	}
-	payload, err := json.Marshal(document)
-	if err != nil {
-		panic(err)
-	}
-	digest := sha256.Sum256(payload)
-	document["plan_sha256"] = hex.EncodeToString(digest[:])
-	payload, err = json.Marshal(document)
-	if err != nil {
-		panic(err)
-	}
-	return payload
+	populate: runs: [{argv: ["sh", "-c", "printf '%s' \"$1\" > \"$PUDL_TEST_CONSUMER_OUT\"; echo '[{\"_schema\":\"resources.consumer\",\"name\":\"consumer\"}]'", "consumer", inputs.value]}]
 }
 
-func generatedRunSetConfig(configPath string) string {
-	root := filepath.Dir(configPath)
-	generated, _ := filepath.Glob(filepath.Join(root, "pudl_run_*", "mu.cue"))
-	if len(generated) == 0 {
-		return ""
-	}
-	data, _ := os.ReadFile(generated[len(generated)-1])
-	return string(data)
+#Zeta: #SystemModel & {
+	name: "zeta"
+	populate: runs: [{argv: ["sh", "-c", "echo '[{\"_schema\":\"resources.consumer\",\"name\":\"zeta\"}]'"]}]
 }
 
-func (m *runSetMu) Observe(configPath, target string) ([]byte, error) {
-	m.configs[target] = generatedRunSetConfig(configPath)
-	if m.failProducer && strings.Contains(target, "producer") {
-		return nil, fmt.Errorf("producer observation failed")
-	}
-	if strings.Contains(target, "mutator") {
-		m.operations = append(m.operations, "observe "+target)
-		exists := m.applied[target] > 0
-		return []byte(fmt.Sprintf(`[{"target":%q,"current":{"resources":[{"resource":"Config/%s","exists":%t,"matches":%t}]}}]`, target, strings.TrimPrefix(target, "//models/"), exists, exists)), nil
-	}
-	switch {
-	case strings.Contains(target, "producer"):
-		if m.producerEmpty {
-			return []byte(fmt.Sprintf(`[{"target":%q,"current":{"records":[]}}]`, target)), nil
-		}
-		return []byte(`[{
-			"target":"//models/producer:populate",
-			"current":{"records":[{"_schema":"resources.thing","name":"one","value":"ready"}]}
-		}]`), nil
-	case strings.Contains(target, "consumer"):
-		return []byte(`[{
-			"target":"//models/consumer:populate",
-			"current":{"records":[{"_schema":"resources.consumer","name":"consumer"}]}
-		}]`), nil
-	case strings.Contains(target, "zeta"):
-		return []byte(`[{
-			"target":"//models/zeta:populate",
-			"current":{"records":[{"_schema":"resources.consumer","name":"zeta"}]}
-		}]`), nil
-	default:
-		return nil, fmt.Errorf("unexpected target %q", target)
-	}
+#Drifter: #SystemModel & {
+	name: "drifter"
+	populate: runs: [{argv: ["sh", "-c", "echo '[{\"_schema\":\"resources.thing\",\"name\":\"two\",\"value\":\"live\"}]'"]}]
+	desired: [{"_schema": "pudl/resources.#Thing", name: "two", value: "wanted"}]
 }
-
-func (m *runSetMu) Build(configPath, target string, flags ...string) ([]byte, error) {
-	for index, flag := range flags {
-		if flag == "--expect-plan-sha256" && index+1 < len(flags) {
-			m.expectDigests = append(m.expectDigests, flags[index+1])
-		}
-	}
-	for _, flag := range flags {
-		if flag == "--plan" {
-			if m.planConfigs == nil {
-				m.planConfigs = map[string]string{}
-			}
-			m.planConfigs[target] = generatedRunSetConfig(configPath)
-			m.operations = append(m.operations, "plan "+target)
-			if strings.Contains(target, "mutator-secret-producer") || strings.Contains(target, "sealed-mutator") {
-				return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_outputs":{"TOKEN":"pass:apps/token"},"sealed_output_modes":{"TOKEN":"create_if_absent"}}]}`, target, target+":write-token", "sha256:sealed"+m.planSuffix)), nil
-			}
-			if strings.Contains(target, "mutator-secret-consumer") {
-				return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"action_key":%q,"sealed_inputs":{"TOKEN":"pass:apps/token"},"sealed_input_modes":{"TOKEN":"env"}}]}`, target, target+":read-token", "sha256:sealed-input"+m.planSuffix)), nil
-			}
-			return signedMuPlan(fmt.Sprintf(`{"version":2,"targets":[%q],"actions":[{"id":%q,"command":["apply"],"env":{"PLAN_SUFFIX":%q}}]}`, target, target+":apply", m.planSuffix)), nil
-		}
-		if flag == "--emit-manifest" {
-			m.operations = append(m.operations, "apply "+target)
-			if m.failApply != "" && strings.Contains(target, m.failApply) {
-				if m.failApply == "sealed-mutator" {
-					return nil, fmt.Errorf("provider pass:apps/token rejected the write for %s", target)
-				}
-				return nil, fmt.Errorf("scripted apply failure for %s", target)
-			}
-			m.applied[target]++
-			if m.invalidManifest != "" && strings.Contains(target, m.invalidManifest) {
-				return []byte(`not a manifest`), nil
-			}
-			return []byte(`{"actions":[]}`), nil
-		}
-	}
-	return nil, fmt.Errorf("unexpected build flags %v for %q", flags, target)
-}
+`
 
 func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 	t.Helper()
@@ -172,101 +64,7 @@ func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 	require.NoError(t, os.WriteFile(filepath.Join(schemaRoot, "cue.mod", "module.cue"), []byte("module: \"pudl.schemas\"\nlanguage: version: \"v0.14.0\"\n"), 0o644))
 	modelsDir := filepath.Join(schemaRoot, "pudl", "systemmodel")
 	require.NoError(t, os.MkdirAll(modelsDir, 0o755))
-	models := systemmodel.SchemaCUE() + `
-
-#Producer: #SystemModel & {
-	name: "producer"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: false}
-}
-
-#Consumer: #SystemModel & {
-	name: "consumer"
-	plugins: [{name: "fake", command: ["true"]}]
-	inputs: value: string @pudl(binding=plain)
-	bindings: value: {
-		source: {model: "producer", schema: "pudl/resources.#Thing", identity: {name: "one"}}
-		path: "/value"
-	}
-	populate: #PluginObserve & {plugin: "fake", input: {bound: inputs.value}, differential: false}
-}
-
-#Zeta: #SystemModel & {
-	name: "zeta"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: false}
-}
-
-#SealedMutator: #SystemModel & {
-	name: "sealed-mutator"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "sealed-mutator"}]
-	converge: #PluginPlan & {
-		plugin: "fake"
-		input: {}
-		sealed_outputs: TOKEN: {
-			ref: "pass:apps/token"
-			store_mode: "create_if_absent"
-		} @pudl(binding=sealed)
-	}
-}
-
-#SecretProducer: #SystemModel & {
-	name: "mutator-secret-producer"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "mutator-secret-producer"}]
-	converge: #PluginPlan & {
-		plugin: "fake"
-		input: {}
-		sealed_outputs: TOKEN: {
-			ref: "pass:apps/token"
-			store_mode: "create_if_absent"
-		} @pudl(binding=sealed)
-	}
-}
-
-#SecretConsumer: #SystemModel & {
-	name: "mutator-secret-consumer"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "mutator-secret-consumer"}]
-	converge: #PluginPlan & {
-		plugin: "fake"
-		input: {}
-		sealed_inputs: TOKEN: {
-			source: {model: "mutator-secret-producer", output: "TOKEN"}
-			delivery_mode: "env"
-		} @pudl(binding=sealed)
-	}
-}
-
-#MutatorA: #SystemModel & {
-	name: "mutator-a"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "mutator-a"}]
-	converge: #PluginPlan & {plugin: "fake", input: {}}
-}
-
-#MutatorB: #SystemModel & {
-	name: "mutator-b"
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "mutator-b"}]
-	converge: #PluginPlan & {plugin: "fake", input: {}}
-}
-
-#MutatorDependent: #SystemModel & {
-	name: "mutator-dependent"
-	depends_on: ["mutator-a"]
-	plugins: [{name: "fake", command: ["true"]}]
-	populate: #PluginObserve & {plugin: "fake", input: {}, differential: true}
-	desired: [{_schema: "pudl/resources.#Consumer", name: "mutator-dependent"}]
-	converge: #PluginPlan & {plugin: "fake", input: {}}
-}
-`
+	models := systemmodel.SchemaCUE() + runSetFixtureModels
 	require.NoError(t, os.WriteFile(filepath.Join(modelsDir, "models.cue"), []byte(models), 0o644))
 	resourcesDir := filepath.Join(schemaRoot, "pudl", "resources")
 	require.NoError(t, os.MkdirAll(resourcesDir, 0o755))
@@ -287,67 +85,24 @@ func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "resources.cue"), []byte(resources), 0o644))
 }
 
-func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	pudlDir := config.GetPudlDir()
-	schemaRoot := filepath.Join(pudlDir, "schema")
-	writeRunSetFixtureSchemas(t, schemaRoot)
-	validator.ResetSharedLoaders()
-	inference.ResetShared()
-	t.Cleanup(func() {
-		validator.ResetSharedLoaders()
-		inference.ResetShared()
-	})
-	policy, err := workspace.Resolve(t.TempDir(), pudlDir)
-	require.NoError(t, err)
-	previousPolicy := wsPolicy
-	wsPolicy = policy
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-
-	muRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
-	runner := &runSetMu{configs: map[string]string{}}
-	deps := runDeps{mu: runner}
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-
-	err = runSetForTest([]string{"consumer", "producer"}, opts, deps)
-	require.NoError(t, err)
-	consumerConfig := runner.configs["//models/consumer:populate"]
-	assert.Contains(t, consumerConfig, `"bound":"ready"`)
-	assert.NotContains(t, consumerConfig, `"bindings"`)
-	assert.NotContains(t, consumerConfig, `"inputs"`)
-
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	record, err := db.LatestRunSetReport()
-	require.NoError(t, err)
-	require.NotNil(t, record)
-	var setReport acute.RunSetReport
-	require.NoError(t, json.Unmarshal(record.Report, &setReport))
-	assert.Equal(t, database.RunStatusSucceeded, setReport.Status)
-	assert.Equal(t, []string{"producer", "consumer"}, setReport.Ordered)
-	require.Len(t, setReport.Members, 2)
-
-	consumerRecord, err := db.GetRunReport(setReport.Members[1].RunID)
-	require.NoError(t, err)
-	require.NotNil(t, consumerRecord)
-	var consumerReport RunReport
-	require.NoError(t, json.Unmarshal(consumerRecord.Report, &consumerReport))
-	assert.Equal(t, setReport.RunSetID, consumerReport.RunSetID)
-	assert.Equal(t, database.RunStatusSucceeded, consumerReport.CompletionStatus)
-	require.Len(t, consumerReport.Bindings, 1)
-	assert.Equal(t, "current-run", consumerReport.Bindings[0].Selection)
-	assert.Equal(t, setReport.Members[0].RunID, consumerReport.Bindings[0].ProducerRunID)
+// runSetHarness drives run sets with explicit options.
+type runSetHarness struct {
+	opts        runSetOptions
+	consumerOut string
 }
 
-func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+func (h *runSetHarness) run(models ...string) error {
+	return runSetForTest(models, h.opts)
+}
+
+func runSetForTest(models []string, opts runSetOptions) error {
+	_, err := executeRunSet(context.Background(), models, opts)
+	return err
+}
+
+func setupRunSetFixture(t *testing.T) (*runSetHarness, string) {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	pudlDir := config.GetPudlDir()
 	writeRunSetFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
 	validator.ResetSharedLoaders()
@@ -362,20 +117,16 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 	wsPolicy = policy
 	t.Cleanup(func() { wsPolicy = previousPolicy })
 
-	muRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
-	runner := &runSetMu{configs: map[string]string{}, failProducer: true}
-	deps := runDeps{mu: runner}
+	consumerOut := filepath.Join(t.TempDir(), "consumer-input")
+	t.Setenv("PUDL_TEST_CONSUMER_OUT", consumerOut)
 	previousJSON := jsonOutput
 	jsonOutput = true
 	t.Cleanup(func() { jsonOutput = previousJSON })
+	return &runSetHarness{consumerOut: consumerOut}, pudlDir
+}
 
-	err = runSetForTest([]string{"consumer", "producer", "zeta"}, opts, deps)
-	require.ErrorContains(t, err, "run set")
-	assert.NotContains(t, runner.configs, "//models/consumer:populate")
-	assert.Contains(t, runner.configs, "//models/zeta:populate")
-
+func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
+	t.Helper()
 	db, err := database.NewCatalogDB(pudlDir)
 	require.NoError(t, err)
 	defer db.Close()
@@ -384,15 +135,58 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 	require.NotNil(t, record)
 	var report acute.RunSetReport
 	require.NoError(t, json.Unmarshal(record.Report, &report))
+	return report
+}
+
+func memberRunReportForTest(t *testing.T, pudlDir, runID string) RunReport {
+	t.Helper()
+	db, err := database.NewCatalogDB(pudlDir)
+	require.NoError(t, err)
+	defer db.Close()
+	record, err := db.GetRunReport(runID)
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	var report RunReport
+	require.NoError(t, json.Unmarshal(record.Report, &report))
+	return report
+}
+
+func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing.T) {
+	h, pudlDir := setupRunSetFixture(t)
+
+	require.NoError(t, h.run("consumer", "producer"))
+	bound, err := os.ReadFile(h.consumerOut)
+	require.NoError(t, err)
+	assert.Equal(t, "ready", string(bound), "the producer's value reached the consumer's command")
+
+	setReport := latestRunSetReportForTest(t, pudlDir)
+	assert.Equal(t, database.RunStatusSucceeded, setReport.Status)
+	assert.Equal(t, []string{"producer", "consumer"}, setReport.Ordered)
+	require.Len(t, setReport.Members, 2)
+
+	consumerReport := memberRunReportForTest(t, pudlDir, setReport.Members[1].RunID)
+	assert.Equal(t, setReport.RunSetID, consumerReport.RunSetID)
+	assert.Equal(t, database.RunStatusSucceeded, consumerReport.CompletionStatus)
+	require.Len(t, consumerReport.Bindings, 1)
+	assert.Equal(t, "current-run", consumerReport.Bindings[0].Selection)
+	assert.Equal(t, setReport.Members[0].RunID, consumerReport.Bindings[0].ProducerRunID)
+}
+
+func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t *testing.T) {
+	h, pudlDir := setupRunSetFixture(t)
+	t.Setenv("PUDL_TEST_FAIL_PRODUCER", "1")
+
+	err := h.run("consumer", "producer", "zeta")
+	require.ErrorContains(t, err, "run set")
+	_, statErr := os.Stat(h.consumerOut)
+	assert.True(t, os.IsNotExist(statErr), "a blocked consumer never runs its command")
+
+	report := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusFailed, report.Status)
 	results := map[string]string{}
 	for _, member := range report.Members {
 		results[member.Model] = member.Result
-		memberRecord, reportErr := db.GetRunReport(member.RunID)
-		require.NoError(t, reportErr)
-		require.NotNil(t, memberRecord)
-		var memberReport RunReport
-		require.NoError(t, json.Unmarshal(memberRecord.Report, &memberReport))
+		memberReport := memberRunReportForTest(t, pudlDir, member.RunID)
 		assert.Equal(t, member.Result, memberReport.CompletionStatus)
 		assert.Equal(t, report.RunSetID, memberReport.RunSetID)
 		if member.Model == "consumer" {
@@ -431,9 +225,8 @@ func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
 }
 
 func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	h.runner.producerEmpty = true
-	h.opts.converge = false
+	h, pudlDir := setupRunSetFixture(t)
+	t.Setenv("PUDL_TEST_EMPTY_PRODUCER", "1")
 
 	err := h.run("consumer", "producer")
 	require.ErrorContains(t, err, "run set")
@@ -443,529 +236,12 @@ func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource
 	assert.Equal(t, "consumer", consumer.Model)
 	assert.Equal(t, database.RunStatusFailed, consumer.Result)
 
-	db, openErr := database.NewCatalogDB(pudlDir)
-	require.NoError(t, openErr)
-	defer db.Close()
-	record, reportErr := db.GetRunReport(consumer.RunID)
-	require.NoError(t, reportErr)
-	require.NotNil(t, record)
-	var memberReport RunReport
-	require.NoError(t, json.Unmarshal(record.Report, &memberReport))
+	memberReport := memberRunReportForTest(t, pudlDir, consumer.RunID)
 	require.Len(t, memberReport.BindingIssues, 1)
 	issue := memberReport.BindingIssues[0]
 	assert.Equal(t, "value", issue.Input)
 	assert.Equal(t, "producer", issue.ProducerModel)
 	assert.Equal(t, "source-absent", issue.Code)
 	assert.Equal(t, "/value", issue.Path)
-	assert.Contains(t, issue.Message, "no matching")
-}
-
-func TestObserveOnlyRunSetDoesNotExecuteDormantConvergeSealedOutput(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	h.opts.converge = false
-
-	require.NoError(t, h.run("sealed-mutator"))
-	assert.Equal(t, []string{"observe //models/sealed-mutator:drift"}, h.runner.operations)
-	assert.Empty(t, h.runner.applied)
-	report := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, "observe-only", report.Mode)
-	assert.Equal(t, database.RunStatusSucceeded, report.Status)
-}
-
-func TestMutatingRunSetPlansAllMembersBeforeApplyingAndPersistsReceipts(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	pudlDir := config.GetPudlDir()
-	writeRunSetFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
-	validator.ResetSharedLoaders()
-	inference.ResetShared()
-	t.Cleanup(func() {
-		validator.ResetSharedLoaders()
-		inference.ResetShared()
-	})
-	policy, err := workspace.Resolve(t.TempDir(), pudlDir)
-	require.NoError(t, err)
-	previousPolicy := wsPolicy
-	wsPolicy = policy
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-
-	muRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
-	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}}
-	deps := runDeps{mu: runner}
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-	opts.converge, opts.requireApproval = true, false
-	opts.maxIters, opts.maxApplies = 3, 10
-
-	require.NoError(t, runSetForTest([]string{"mutator-a"}, opts, deps))
-	assert.Equal(t, []string{
-		"observe //models/mutator-a:drift",
-		"plan //models/mutator-a:drift",
-		"observe //models/mutator-a:drift",
-		"plan //models/mutator-a:drift",
-		"apply //models/mutator-a:drift",
-		"observe //models/mutator-a:drift",
-	}, runner.operations)
-
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	setRecord, err := db.LatestRunSetReport()
-	require.NoError(t, err)
-	require.NotNil(t, setRecord)
-	var setReport acute.RunSetReport
-	require.NoError(t, json.Unmarshal(setRecord.Report, &setReport))
-	assert.Equal(t, database.RunStatusSucceeded, setReport.Status)
-	assert.Equal(t, "converge", setReport.Mode)
-	assert.Len(t, setReport.PlanDigest, 64)
-	require.Len(t, setReport.Members, 1)
-	assert.True(t, setReport.Members[0].MutationRequired)
-
-	memberRecord, err := db.GetRunReport(setReport.Members[0].RunID)
-	require.NoError(t, err)
-	require.NotNil(t, memberRecord)
-	var memberReport RunReport
-	require.NoError(t, json.Unmarshal(memberRecord.Report, &memberReport))
-	assert.Equal(t, database.RunStatusSucceeded, memberReport.CompletionStatus)
-	require.NotNil(t, memberReport.Converge)
-	require.Len(t, memberReport.Converge.MutationReceipts, 1)
-	assert.Equal(t, "completed", memberReport.Converge.MutationReceipts[0].Status)
-}
-
-func TestMutatingRunSetFailureBlocksDependentsAndCancelsIndependentMutations(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	pudlDir := config.GetPudlDir()
-	writeRunSetFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
-	validator.ResetSharedLoaders()
-	inference.ResetShared()
-	t.Cleanup(func() {
-		validator.ResetSharedLoaders()
-		inference.ResetShared()
-	})
-	policy, err := workspace.Resolve(t.TempDir(), pudlDir)
-	require.NoError(t, err)
-	previousPolicy := wsPolicy
-	wsPolicy = policy
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-
-	muRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
-	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}, failApply: "mutator-a"}
-	deps := runDeps{mu: runner}
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-	opts.converge, opts.requireApproval = true, false
-	opts.maxIters, opts.maxApplies = 3, 10
-
-	err = runSetForTest([]string{"mutator-dependent", "mutator-b", "mutator-a"}, opts, deps)
-	require.ErrorContains(t, err, "run set")
-	planA := indexOfString(runner.operations, "plan //models/mutator-a:drift")
-	planB := indexOfString(runner.operations, "plan //models/mutator-b:drift")
-	planDependent := indexOfString(runner.operations, "plan //models/mutator-dependent:drift")
-	applyA := indexOfString(runner.operations, "apply //models/mutator-a:drift")
-	assert.Greater(t, applyA, planA)
-	assert.Greater(t, applyA, planB)
-	assert.Greater(t, applyA, planDependent, "every read-only plan must finish before the first mutation")
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-b:drift"))
-	assert.Equal(t, -1, indexOfString(runner.operations, "apply //models/mutator-dependent:drift"))
-
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	record, err := db.LatestRunSetReport()
-	require.NoError(t, err)
-	require.NotNil(t, record)
-	var setReport acute.RunSetReport
-	require.NoError(t, json.Unmarshal(record.Report, &setReport))
-	assert.Equal(t, database.RunStatusFailed, setReport.Status)
-	results := map[string]string{}
-	for _, member := range setReport.Members {
-		results[member.Model] = member.Result
-	}
-	assert.Equal(t, database.RunStatusFailed, results["mutator-a"])
-	assert.Equal(t, database.RunStatusCancelled, results["mutator-b"])
-	assert.Equal(t, database.RunStatusBlocked, results["mutator-dependent"])
-}
-
-func TestMutatingRunSetLostReceiptNeedsVerificationAndStopsLaterMutations(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	h.runner.invalidManifest = "mutator-a"
-
-	err := h.run("mutator-a", "mutator-b")
-	require.ErrorContains(t, err, "run set")
-	assert.NotEqual(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
-	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-b:drift"))
-
-	report := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusFailed, report.Status)
-	results := map[string]string{}
-	for _, member := range report.Members {
-		results[member.Model] = member.Result
-	}
-	assert.Equal(t, database.RunStatusFailed, results["mutator-a"])
-	assert.Equal(t, database.RunStatusCancelled, results["mutator-b"])
-
-	db, openErr := database.NewCatalogDB(pudlDir)
-	require.NoError(t, openErr)
-	defer db.Close()
-	record, reportErr := db.GetRunReport(report.Members[0].RunID)
-	require.NoError(t, reportErr)
-	require.NotNil(t, record)
-	var memberReport RunReport
-	require.NoError(t, json.Unmarshal(record.Report, &memberReport))
-	require.NotNil(t, memberReport.Converge)
-	assert.True(t, memberReport.Converge.NeedsVerification)
-	assert.Equal(t, string(outcomeNeedsVerification), memberReport.Converge.Outcome)
-	assert.Empty(t, memberReport.Converge.MutationReceipts)
-	assert.Equal(t, "unknown", runVerdict(&memberReport, runFlags{converge: true}))
-}
-
-func indexOfString(values []string, wanted string) int {
-	for index, value := range values {
-		if value == wanted {
-			return index
-		}
-	}
-	return -1
-}
-
-// runSetHarness drives run sets with explicit options and an injected mu.
-type runSetHarness struct {
-	opts   runSetOptions
-	deps   runDeps
-	runner *runSetMu
-}
-
-func (h *runSetHarness) run(models ...string) error {
-	return runSetForTest(models, h.opts, h.deps)
-}
-
-func runSetForTest(models []string, opts runSetOptions, deps runDeps) error {
-	_, err := executeRunSet(context.Background(), models, opts, deps)
-	return err
-}
-
-func (h *runSetHarness) resume(operationID string) error {
-	return resumeOperation(context.Background(), operationID, h.deps)
-}
-
-func setupMutatingRunSetFixture(t *testing.T, requireApproval bool) (*runSetHarness, string) {
-	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	pudlDir := config.GetPudlDir()
-	writeRunSetFixtureSchemas(t, filepath.Join(pudlDir, "schema"))
-	validator.ResetSharedLoaders()
-	inference.ResetShared()
-	t.Cleanup(func() {
-		validator.ResetSharedLoaders()
-		inference.ResetShared()
-	})
-	policy, err := workspace.Resolve(t.TempDir(), pudlDir)
-	require.NoError(t, err)
-	previousPolicy := wsPolicy
-	wsPolicy = policy
-	t.Cleanup(func() { wsPolicy = previousPolicy })
-
-	muRoot := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(muRoot, "mu.cue"), []byte("package mu\n"), 0o644))
-	opts := runSetOptions{muRoot: muRoot, maxIters: defaultRunMaxIters, maxApplies: defaultRunMaxApplies}
-	runner := &runSetMu{configs: map[string]string{}, applied: map[string]int{}}
-	deps := runDeps{mu: runner}
-	previousJSON := jsonOutput
-	jsonOutput = true
-	t.Cleanup(func() { jsonOutput = previousJSON })
-	opts.converge, opts.requireApproval = true, requireApproval
-	opts.maxIters, opts.maxApplies = 3, 10
-	return &runSetHarness{opts: opts, deps: deps, runner: runner}, pudlDir
-}
-
-func latestRunSetReportForTest(t *testing.T, pudlDir string) acute.RunSetReport {
-	t.Helper()
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	record, err := db.LatestRunSetReport()
-	require.NoError(t, err)
-	require.NotNil(t, record)
-	var report acute.RunSetReport
-	require.NoError(t, json.Unmarshal(record.Report, &report))
-	return report
-}
-
-func TestMutatingRunSetExactApprovalRevalidatesBeforeApplying(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, h.run("mutator-a"))
-	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, "pending-approval", pending.Status)
-	assert.Equal(t, "pending", pending.ApprovalStatus)
-	require.Len(t, pending.Members, 1)
-	assert.Equal(t, database.RunStatusRunning, pending.Members[0].Result)
-
-	require.NoError(t, h.resume(pending.RunSetID))
-	assert.NotEqual(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
-	require.Len(t, h.runner.expectDigests, 1, "apply must be guarded by the raw same-workspace mu plan identity")
-	assert.Len(t, h.runner.expectDigests[0], 64)
-	completed := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
-	assert.Equal(t, "approved", completed.ApprovalStatus)
-
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	approval, err := db.GetRunSetApproval(pending.RunSetID)
-	require.NoError(t, err)
-	require.NotNil(t, approval)
-	assert.Equal(t, "approved", approval.Status)
-}
-
-func TestMutatingRunSetChangedPlanInvalidatesApprovalWithoutApplying(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, h.run("mutator-a"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	h.runner.planSuffix = " changed"
-
-	err := h.resume(pending.RunSetID)
-	require.ErrorContains(t, err, "approval is stale")
-	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
-	stale := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusFailed, stale.Status)
-	assert.Equal(t, "stale", stale.ApprovalStatus)
-	assert.Equal(t, database.RunStatusCancelled, stale.Members[0].Result)
-}
-
-func TestMutatingRunSetRejectionPerformsNoMutation(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, true)
-	require.NoError(t, h.run("mutator-a"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-
-	require.NoError(t, runRejectCmd.RunE(runRejectCmd, []string{pending.RunSetID}))
-	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/mutator-a:drift"))
-	rejected := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusFailed, rejected.Status)
-	assert.Equal(t, "rejected", rejected.ApprovalStatus)
-	assert.Equal(t, database.RunStatusCancelled, rejected.Members[0].Result)
-}
-
-func TestSealedOutputForcesExactApprovalAndRecordsStrictActionRouting(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
-
-	require.NoError(t, h.run("sealed-mutator"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, "pending-approval", pending.Status)
-	assert.Equal(t, "pending", pending.ApprovalStatus)
-	assert.Equal(t, -1, indexOfString(h.runner.operations, "apply //models/sealed-mutator:drift"))
-
-	generated := h.runner.planConfigs["//models/sealed-mutator:drift"]
-	assert.Contains(t, generated, `sealed_routing: "strict"`)
-	assert.Contains(t, generated, `"TOKEN":"pass:apps/token"`)
-	assert.Contains(t, generated, `writable_refs: ["pass:apps/*"]`)
-	assert.NotContains(t, h.runner.configs["//models/sealed-mutator:drift"], "sealed_outputs",
-		"read-only preflight must not activate converge-owned sealed outputs")
-
-	db, err := database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	approval, err := db.GetRunSetApproval(pending.RunSetID)
-	require.NoError(t, err)
-	require.NotNil(t, approval)
-	assert.NotContains(t, string(approval.Plan), "pass:apps/token", "durable exact plan must redact provider paths")
-	require.NoError(t, db.Close())
-
-	require.NoError(t, h.resume(pending.RunSetID))
-	completed := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusSucceeded, completed.Status)
-	require.Len(t, completed.Members, 1)
-	db, err = database.NewCatalogDB(pudlDir)
-	require.NoError(t, err)
-	defer db.Close()
-	record, err := db.GetRunReport(completed.Members[0].RunID)
-	require.NoError(t, err)
-	require.NotNil(t, record)
-	var member RunReport
-	require.NoError(t, json.Unmarshal(record.Report, &member))
-	require.Len(t, member.SealedBindings, 1)
-	assert.Equal(t, "//models/sealed-mutator:drift:write-token", member.SealedBindings[0].ProducingActionID)
-	assert.Equal(t, "stored", member.SealedBindings[0].LifecycleStatus)
-	assert.NotContains(t, string(record.Report), "pass:apps/token")
-}
-
-func TestSealedMutationFailureRedactsProviderPathFromReportAndError(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
-
-	require.NoError(t, h.run("sealed-mutator"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	h.runner.failApply = "sealed-mutator"
-	err := h.resume(pending.RunSetID)
-	require.Error(t, err)
-	assert.NotContains(t, err.Error(), "apps/token")
-
-	completed := latestRunSetReportForTest(t, pudlDir)
-	require.Len(t, completed.Members, 1)
-	db, openErr := database.NewCatalogDB(pudlDir)
-	require.NoError(t, openErr)
-	defer db.Close()
-	record, reportErr := db.GetRunReport(completed.Members[0].RunID)
-	require.NoError(t, reportErr)
-	require.NotNil(t, record)
-	assert.NotContains(t, string(record.Report), "apps/token")
-	assert.Contains(t, string(record.Report), "sealed-ref:pass")
-}
-
-func TestCrossModelSealedReferencePlansAndExecutesWithoutPUDLValueAccess(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
-
-	require.NoError(t, h.run("mutator-secret-consumer", "mutator-secret-producer"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, []string{"mutator-secret-producer", "mutator-secret-consumer"}, pending.Ordered)
-	assert.Equal(t, "pending-approval", pending.Status)
-	assert.Contains(t, h.runner.planConfigs["//models/mutator-secret-consumer:drift"], `"TOKEN":"pass:apps/token"`)
-	assert.Contains(t, h.runner.planConfigs["//models/mutator-secret-consumer:drift"], `sealed_routing: "strict"`)
-	assert.NotContains(t, h.runner.configs["//models/mutator-secret-consumer:drift"], "sealed_inputs",
-		"read-only preflight must not resolve converge-owned sealed inputs")
-
-	require.NoError(t, h.resume(pending.RunSetID))
-	producerApply := indexOfString(h.runner.operations, "apply //models/mutator-secret-producer:drift")
-	consumerApply := indexOfString(h.runner.operations, "apply //models/mutator-secret-consumer:drift")
-	assert.Greater(t, producerApply, -1)
-	assert.Greater(t, consumerApply, producerApply)
-
-	completed := latestRunSetReportForTest(t, pudlDir)
-	db, openErr := database.NewCatalogDB(pudlDir)
-	require.NoError(t, openErr)
-	defer db.Close()
-	for _, member := range completed.Members {
-		record, reportErr := db.GetRunReport(member.RunID)
-		require.NoError(t, reportErr)
-		require.NotNil(t, record)
-		assert.NotContains(t, string(record.Report), "pass:apps/token")
-		var memberReport RunReport
-		require.NoError(t, json.Unmarshal(record.Report, &memberReport))
-		require.Len(t, memberReport.SealedBindings, 1)
-		if member.Model == "mutator-secret-consumer" {
-			assert.Equal(t, "delivered", memberReport.SealedBindings[0].LifecycleStatus)
-			assert.Equal(t, "mutator-secret-producer", memberReport.SealedBindings[0].ProducerModel)
-			assert.Equal(t, []string{"//models/mutator-secret-consumer:drift:read-token"}, memberReport.SealedBindings[0].ClaimingActionIDs)
-		} else {
-			assert.Equal(t, "stored", memberReport.SealedBindings[0].LifecycleStatus)
-		}
-	}
-}
-
-func TestCompletedSealedWriteRemainsRecordedWhenLaterConsumerFails(t *testing.T) {
-	h, pudlDir := setupMutatingRunSetFixture(t, false)
-	wsPolicy.Workspace = &workspace.Workspace{PudlDir: pudlDir,
-		SecretsWritableRefs: []string{"pass:apps/*"}, SecretsWritableConfigured: true}
-
-	require.NoError(t, h.run("mutator-secret-consumer", "mutator-secret-producer"))
-	pending := latestRunSetReportForTest(t, pudlDir)
-	h.runner.failApply = "mutator-secret-consumer"
-	err := h.resume(pending.RunSetID)
-	require.ErrorContains(t, err, "run set")
-
-	completed := latestRunSetReportForTest(t, pudlDir)
-	assert.Equal(t, database.RunStatusFailed, completed.Status)
-	db, openErr := database.NewCatalogDB(pudlDir)
-	require.NoError(t, openErr)
-	defer db.Close()
-	record, reportErr := db.GetRunReport(completed.Members[0].RunID)
-	require.NoError(t, reportErr)
-	require.NotNil(t, record)
-	var producer RunReport
-	require.NoError(t, json.Unmarshal(record.Report, &producer))
-	require.NotNil(t, producer.Converge)
-	require.Len(t, producer.Converge.MutationReceipts, 1)
-	assert.Equal(t, "completed", producer.Converge.MutationReceipts[0].Status)
-	require.Len(t, producer.SealedBindings, 1)
-	assert.Equal(t, "stored", producer.SealedBindings[0].LifecycleStatus)
-	assert.Equal(t, database.RunStatusSucceeded, completed.Members[0].Result)
-	assert.Equal(t, database.RunStatusFailed, completed.Members[1].Result)
-}
-
-func TestAnnotateSealedActionClaimsRecordsExactRouting(t *testing.T) {
-	report := RunReport{SealedBindings: []wiring.SealedBindingEvidence{
-		{Direction: "input", ConsumerPhase: "converge", Input: "TOKEN"},
-		{Direction: "output", ProducerPhase: "converge", Output: "RESULT"},
-		{Direction: "input", ConsumerPhase: "populate", ProducerPhase: "converge", Input: "POPULATE_TOKEN"},
-	}}
-	plan := []byte(`{
-		"actions": [
-			{"id":"//models/app:converge:write","sealed_inputs":{"TOKEN":"env:TOKEN"},"sealed_outputs":{"RESULT":"pass:result"}},
-			{"id":"//models/app:converge:read","sealed_inputs":{"TOKEN":"env:TOKEN"}}
-		]
-	}`)
-	require.NoError(t, annotateSealedActionClaims(&report, plan, &systemmodel.SystemModel{}))
-	assert.Equal(t, []string{"//models/app:converge:read", "//models/app:converge:write"}, report.SealedBindings[0].ClaimingActionIDs)
-	assert.Equal(t, "//models/app:converge:write", report.SealedBindings[1].ProducingActionID)
-	assert.Empty(t, report.SealedBindings[2].ClaimingActionIDs, "populate input is not claimed by the converge plan")
-}
-
-func TestAnnotateSealedActionClaimsRejectsMissingAndAmbiguousRouting(t *testing.T) {
-	input := RunReport{SealedBindings: []wiring.SealedBindingEvidence{{
-		Direction: "input", ConsumerPhase: "converge", Input: "TOKEN",
-	}}}
-	assert.ErrorContains(t, annotateSealedActionClaims(&input, []byte(`{"actions":[]}`), &systemmodel.SystemModel{}), "no claiming action")
-
-	output := RunReport{SealedBindings: []wiring.SealedBindingEvidence{{
-		Direction: "output", ProducerPhase: "converge", Output: "RESULT",
-	}}}
-	plan := []byte(`{"actions":[
-		{"id":"a","sealed_outputs":{"RESULT":"pass:result"}},
-		{"id":"b","sealed_outputs":{"RESULT":"pass:result"}}
-	]}`)
-	assert.ErrorContains(t, annotateSealedActionClaims(&output, plan, &systemmodel.SystemModel{}), "multiple producing actions")
-}
-
-func TestCanonicalMutationPlanNormalizesOnlyEphemeralWorkspaceIdentity(t *testing.T) {
-	left, err := canonicalMutationPlan(signedMuPlan(`{
-		"version":2,
-		"actions":[{"id":"apply","action_key":"sha256:left","work_dir":"/tmp/left","inputs":{"/tmp/left/desired.json":"sha256:content"},"sealed_output_modes":{"TOKEN":"create"}}]
-	}`), "/tmp/left")
-	require.NoError(t, err)
-	right, err := canonicalMutationPlan(signedMuPlan(`{
-		"actions":[{"sealed_output_modes":{"TOKEN":"create"},"inputs":{"/tmp/right/desired.json":"sha256:content"},"work_dir":"/tmp/right","action_key":"sha256:right","id":"apply"}],
-		"version":2
-	}`), "/tmp/right")
-	require.NoError(t, err)
-	assert.Equal(t, string(left), string(right))
-	assert.NotContains(t, string(left), "action_key")
-	assert.Contains(t, string(left), "pudl-reconcile-workspace")
-
-	changed, err := canonicalMutationPlan(signedMuPlan(`{
-		"version":2,
-		"actions":[{"id":"apply","work_dir":"/tmp/changed","inputs":{"/tmp/changed/desired.json":"sha256:content"},"sealed_output_modes":{"TOKEN":"overwrite"}}]
-	}`), "/tmp/changed")
-	require.NoError(t, err)
-	assert.NotEqual(t, string(left), string(changed), "store mode remains exact plan identity")
-}
-
-func TestCanonicalMutationPlanRejectsIncompleteOrTamperedPlanV2(t *testing.T) {
-	_, err := canonicalMutationPlan([]byte(`{"version":1,"actions":[]}`), "")
-	assert.ErrorContains(t, err, "version must be exactly 2")
-
-	valid := signedMuPlan(`{"version":2,"actions":[{"id":"apply","command":["true"]}]}`)
-	var tampered map[string]any
-	require.NoError(t, json.Unmarshal(valid, &tampered))
-	tampered["targets"] = []any{"//changed"}
-	payload, marshalErr := json.Marshal(tampered)
-	require.NoError(t, marshalErr)
-	_, err = canonicalMutationPlan(payload, "")
-	assert.ErrorContains(t, err, "does not match")
-}
-
-func TestAnnotateSealedActionClaimsRejectsReferenceInActionID(t *testing.T) {
-	model := &systemmodel.SystemModel{Converge: &systemmodel.PluginPlan{
-		SealedOutputs: map[string]systemmodel.SealedOutput{"TOKEN": {Ref: "pass:apps/token"}},
-	}}
-	err := annotateSealedActionClaims(&RunReport{}, []byte(`{"actions":[{"id":"write-pass:apps/token"}]}`), model)
-	assert.ErrorContains(t, err, "contains a sealed provider reference")
+	assert.True(t, strings.Contains(issue.Message, "no matching"), issue.Message)
 }

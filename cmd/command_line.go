@@ -78,11 +78,9 @@ func splitCommandLine(line string) ([]string, error) {
 	return argv, nil
 }
 
-// populateSpec is a parsed `--populate` value: plugin:<name> or
-// command:<cmdline>.
+// populateSpec is a parsed `--populate command:<cmdline>` value.
 type populateSpec struct {
-	plugin string
-	argv   []string
+	argv []string
 }
 
 func parsePopulateSpec(spec string) (populateSpec, error) {
@@ -94,9 +92,8 @@ func parsePopulateSpec(spec string) (populateSpec, error) {
 		}
 		return populateSpec{argv: argv}, nil
 	}
-	plugin, err := parsePluginSpec(spec)
-	if err != nil {
-		return populateSpec{}, fmt.Errorf("populate must use plugin:<name> or command:<cmdline> (got %q)", spec)
+	if strings.HasPrefix(spec, "plugin:") {
+		return populateSpec{}, fmt.Errorf("--populate plugin:<name> was retired with mu observers; run the program as command:<cmdline> (see docs/retired-commands.md)")
 	}
-	return populateSpec{plugin: plugin}, nil
+	return populateSpec{}, fmt.Errorf("populate must use command:<cmdline> (got %q)", spec)
 }

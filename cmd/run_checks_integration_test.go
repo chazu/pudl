@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/stretchr/testify/assert"
@@ -80,13 +79,11 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 	seedFailedEntry(t, db, "e1", "old-resource", "run_previous")
 
 	modelDir := checksRulesDir(t)
-	unscopedRun := acute.NewTupleScope(nil, nil)
 
 	// The run-scoped rule sees only this run's rows, so the earlier failure does
 	// not gate it.
 	scoped, err := runChecks(cat, checksModel("failed_this_run", "empty"), modelDir, checkContext{
 		runID: "run_current",
-		scope: unscopedRun,
 	})
 	require.NoError(t, err)
 	require.Len(t, scoped, 1)
@@ -98,7 +95,6 @@ func TestRunChecks_RunIDConstraintScopesToThisRun(t *testing.T) {
 	// is legible rather than silent.
 	global, err := runChecks(cat, checksModel("failed_anywhere", "empty"), modelDir, checkContext{
 		runID: "run_current",
-		scope: unscopedRun,
 	})
 	require.NoError(t, err)
 	require.Len(t, global, 1)
@@ -120,7 +116,6 @@ func TestRunChecks_RunIDConstraintSeesThisRunsOwnRows(t *testing.T) {
 
 	results, err := runChecks(cat, checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
 		runID: "run_current",
-		scope: acute.NewTupleScope(nil, nil),
 	})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
@@ -144,84 +139,10 @@ func TestRunChecks_ReplayNeverBindsRunID(t *testing.T) {
 	results, err := runChecks(cat, checksModel("failed_this_run", "empty"), checksRulesDir(t), checkContext{
 		runID:       "run_replay",
 		fromCatalog: true,
-		scope:       acute.NewTupleScope(nil, nil),
 	})
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, checkScopeGlobal, results[0].Scope, "a replay reports its checks as unscoped")
 	assert.Equal(t, 1, results[0].Count, "the earlier failure is still seen")
 	assert.False(t, results[0].Passed)
-}
-
-func TestRunChecks_OnlyPartitionsResultTuples(t *testing.T) {
-	dir := t.TempDir()
-	cat := newRunCatalog(dir)
-	t.Cleanup(func() { _ = cat.Close() })
-	db, err := cat.required()
-	require.NoError(t, err)
-
-	seedFailedEntry(t, db, "e1", "db", "run_current")
-
-	model := &systemmodel.SystemModel{
-		Name: "m",
-		Desired: []map[string]any{
-			{"name": "app", "kind": "Deployment"},
-			{"name": "db", "kind": "StatefulSet"},
-		},
-		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
-		Checks: []systemmodel.Check{{
-			Name: "no-failures", Query: "failed_anywhere", Expect: "empty",
-			Severity: "fail", Message: "a resource is in failed status",
-		}},
-	}
-	effective, err := acute.ScopeModelForRun(model, []string{"app"})
-	require.NoError(t, err)
-
-	results, err := runChecks(cat, effective, checksRulesDir(t), checkContext{
-		runID: "run_current",
-		scope: acute.NewTupleScope(model, effective),
-	})
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, 0, results[0].Count, "the failure is on the excluded resource")
-	assert.Equal(t, 1, results[0].AdvisoryCount)
-	assert.True(t, results[0].Passed, "an out-of-scope failure does not gate a scoped run")
-	assert.False(t, anyFailSeverityFailed(results))
-}
-
-func TestRunChecks_OnlyStillGatesOnInScopeFailure(t *testing.T) {
-	dir := t.TempDir()
-	cat := newRunCatalog(dir)
-	t.Cleanup(func() { _ = cat.Close() })
-	db, err := cat.required()
-	require.NoError(t, err)
-
-	seedFailedEntry(t, db, "e1", "app", "run_current")
-	seedFailedEntry(t, db, "e2", "db", "run_current")
-
-	model := &systemmodel.SystemModel{
-		Name: "m",
-		Desired: []map[string]any{
-			{"name": "app", "kind": "Deployment"},
-			{"name": "db", "kind": "StatefulSet"},
-		},
-		Converge: &systemmodel.PluginPlan{Plugin: "k8s"},
-		Checks: []systemmodel.Check{{
-			Name: "no-failures", Query: "failed_anywhere", Expect: "empty",
-			Severity: "fail", Message: "a resource is in failed status",
-		}},
-	}
-	effective, err := acute.ScopeModelForRun(model, []string{"app"})
-	require.NoError(t, err)
-
-	results, err := runChecks(cat, effective, checksRulesDir(t), checkContext{
-		runID: "run_current",
-		scope: acute.NewTupleScope(model, effective),
-	})
-	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, 1, results[0].Count)
-	assert.Equal(t, 1, results[0].AdvisoryCount)
-	assert.False(t, results[0].Passed)
-	assert.True(t, anyFailSeverityFailed(results))
 }

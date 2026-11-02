@@ -4,7 +4,9 @@
 value-equality dependency derivation was retired on 2026-10-10; see
 [retired commands](retired-commands.md). `pudl model deps` refreshes authoritative
 edges without running models. Historical implementation details below describe
-the original delivery.
+the original delivery. Convergence and the mu integration referred to below were
+removed on 2026-11-01 ([retired commands](retired-commands.md#convergence-and-mu-integration));
+dependency facts, `pudl run set` and plain value bindings remain.
 
 > **Supersession note (2026-08-05):** The dependency fact substrate in this
 > document remains authoritative. The claims below that cross-model value flow

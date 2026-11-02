@@ -35,8 +35,8 @@ type CatalogWriter interface {
 // the moment it begins (BEGIN IMMEDIATE), and reads see the transaction's own
 // uncommitted writes.
 //
-// The unit is deliberately the *step*, not the run. A converge run shells out to
-// mu for minutes at a time; a transaction spanning the run would hold the
+// The unit is deliberately the *step*, not the run. A populate phase can run
+// commands for minutes at a time; a transaction spanning the run would hold the
 // catalog locked for its whole duration, against other pudl invocations and
 // against the run's own other handles. What wants to be atomic is each step that
 // records a result — an observation with its snapshot and memberships, or a
@@ -173,7 +173,7 @@ func getTargetStatusesIn(q dbtx) ([]TargetStatus, error) {
 			return nil, fmt.Errorf("failed to scan target status: %w", err)
 		}
 		if statusVal != nil {
-			ds.Status = *statusVal
+			ds.Status = readStatus(*statusVal)
 		} else {
 			ds.Status = "unknown"
 		}

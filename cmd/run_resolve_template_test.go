@@ -31,7 +31,7 @@ func TestResolveModelTemplateInRetainsIncompleteBindingModel(t *testing.T) {
 		source: {model: "producer", schema: "resources.#Thing", identity: {name: "one"}}
 		path: "/value"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [{"_schema": "example.consumer", value: inputs.value}]
 }
 `
@@ -55,13 +55,13 @@ func TestResolveModelTemplateInRetainsIncompleteBindingModel(t *testing.T) {
 	_, err = template.Elaborate(map[string]any{})
 	require.ErrorContains(t, err, "missing: value")
 
-	diagnostic := resolutionDiagnosticReport(template, runFlags{dryRun: true}, &wiring.ResolutionError{
+	diagnostic := resolutionDiagnosticReport(template, &wiring.ResolutionError{
 		Input: "value",
 		Code:  "source-absent",
 		Cause: errors.New("no matching resource"),
 	})
 	assert.Equal(t, "consumer", diagnostic.Model)
-	assert.Equal(t, "dry-run", diagnostic.Mode)
+	assert.Equal(t, "observe-only", diagnostic.Mode)
 	assert.Equal(t, "failed", diagnostic.CompletionStatus)
 	assert.False(t, diagnostic.OK)
 	require.Len(t, diagnostic.BindingIssues, 1)
@@ -92,7 +92,7 @@ func TestResolveModelTemplateInReportsRequestedInvalidTemplate(t *testing.T) {
 		source: {model: "producer", schema: "resources.#Thing", identity: {name: "one"}}
 		path: "value"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }
 `
 	require.NoError(t, os.WriteFile(filepath.Join(modelsDir, "models.cue"), []byte(source), 0o644))

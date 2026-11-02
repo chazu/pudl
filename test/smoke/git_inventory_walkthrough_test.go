@@ -15,7 +15,7 @@ import (
 )
 
 func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
-	root, sandbox, env := exampleWorkspace(t, "git")
+	root, sandbox, env := exampleWorkspace(t, "git", "cat", "cp")
 	repo, err := repoRoot()
 	require.NoError(t, err)
 	doc, err := os.ReadFile(filepath.Join(repo, "docs/getting-started.md"))
@@ -49,6 +49,9 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 					continue
 				}
 				require.Equal(t, []string{"git", "init", "pudl-tutorial"}, args)
+			} else if block[1] == "change" && args[0] == "cp" {
+				// The one non-PUDL step swaps in the changed inventory fixture.
+				require.Equal(t, []string{"cp", ".pudl/populators/git-inventory/changed.json", ".pudl/populators/git-inventory/current.json"}, args)
 			} else {
 				require.Equal(t, "pudl", args[0], "tutorial steps must be PUDL commands: %s", line)
 				require.NotContains(t, line, "$")
@@ -62,7 +65,7 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 						StoredPath string `json:"stored_path"`
 					}
 				}
-				require.NoError(t, json.Unmarshal(cli("pudl", "list", "--origin", "git-changed", "--items-only", "--json"), &entries))
+				require.NoError(t, json.Unmarshal(cli("pudl", "list", "--where", "default_branch=release", "--items-only", "--json"), &entries))
 				require.Len(t, entries.Entries, 1)
 				require.Equal(t, "pudl/git.#GitRepository", entries.Entries[0].Schema)
 				relative, err := filepath.Rel(filepath.Join(root, ".pudl/data"), entries.Entries[0].StoredPath)
@@ -103,8 +106,8 @@ func TestSmoke_GitInventoryWalkthrough(t *testing.T) {
 	require.Len(t, reports, 3)
 	require.True(t, reports[0].Drift.Clean)
 	for i, report := range reports {
-		require.False(t, report.Drift.Verified, "imported evidence is not a live observation")
-		require.Empty(t, report.Populate.SnapshotID)
+		require.True(t, report.Drift.Verified, "each run observes the inventory")
+		require.NotEmpty(t, report.Populate.SnapshotID)
 		require.Equal(t, "succeeded", report.CompletionStatus)
 		require.JSONEq(t, string(saved[i]), string(cli("pudl", "run", "report", report.RunID, "--json")))
 		if i > 0 {

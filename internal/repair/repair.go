@@ -45,7 +45,7 @@ type Repair struct {
 // identity is computed from it, and projected facts follow the final entries.
 // Policy leaves move to their types before inference re-checks classification.
 func Registry() []Repair {
-	return []Repair{schemaNames, schemaRefs, policyLeaves, inferenceDrift, identities, projections}
+	return []Repair{schemaNames, policyLeaves, inferenceDrift, identities, projections}
 }
 
 // Names returns the registered repair names in order.
@@ -86,16 +86,11 @@ type Env struct {
 	DB          *database.CatalogDB
 	Inferrer    *inference.SchemaInferrer
 	Projections *projection.Registry
-	// SchemaCacheRoot is the on-disk root of pudl's schema cache, which
-	// unresolved schema references are resolved against.
-	SchemaCacheRoot string
-	Options         Options
+	Options     Options
 }
 
 // Options are the low-level recovery controls of individual repairs.
 type Options struct {
-	// SchemaRef limits schema-refs to rows tagged with this exact reference.
-	SchemaRef string
 	// DriftEntryIDs are the entries doctor's catalog scan found whose
 	// inferred schema differs from the assigned one. DriftScanned reports
 	// whether that scan ran.

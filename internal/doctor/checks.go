@@ -326,7 +326,7 @@ func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 		"schema":        true,
 		"config.yaml":   true,
 		"workspace.cue": true,
-		"mu.cue":        true, // optional authored Mu workspace
+		"mu.cue":        true, // legacy mu workspace file; tolerated, unused
 	}
 	unexpectedEntries := []string{}
 	if entries, err := os.ReadDir(pudlDir); err == nil {

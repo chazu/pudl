@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/stretchr/testify/require"
 )
 
@@ -15,7 +15,7 @@ func TestInventoryPreviousEvidenceFrozenAcrossNewObservationsAndReplay(t *testin
 	ingest := func(id, number string) {
 		runID := "run_" + id
 		require.NoError(t, db.StartRun(runID, "m", "observe-only"))
-		_, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{Reader: strings.NewReader(`[{"target":"//m:observe","current":{"name":"x","count":` + number + `}}]`), DataDir: dataDir, SnapshotID: id, Model: "m", RunID: runID, Workspace: "repo", Origin: "pudl-run", Source: database.SnapshotSourceMuObserve})
+		_, err := observe.IngestObserve(db, observe.ObserveIngest{Reader: strings.NewReader(`[{"target":"//m:observe","current":{"name":"x","count":` + number + `}}]`), DataDir: dataDir, SnapshotID: id, Model: "m", RunID: runID, Workspace: "repo", Origin: "pudl-run", Source: database.SnapshotSourceMuObserve})
 		require.NoError(t, err)
 		require.NoError(t, db.FinishRun(runID, database.RunConclusion{CompletionStatus: database.RunStatusSucceeded}))
 	}

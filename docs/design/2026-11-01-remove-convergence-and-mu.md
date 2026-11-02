@@ -2,8 +2,8 @@
 
 **Date:** 2026-11-01
 
-**Status:** Accepted, not yet implemented. Tracked by beads epic `pudl-z87`
-(steps `pudl-z87.1` through `pudl-z87.5`).
+**Status:** Implemented 2026-11-01 (beads epic `pudl-z87`, steps `pudl-z87.1`
+through `pudl-z87.5`); see `implog/2026_11_01_remove_convergence_and_mu.md`.
 
 **Supersedes:** the 2026-10-10 decision to keep convergence as an advanced,
 optional workflow ([scope reduction](2026-10-10-scope-reduction-and-improvement-order.md),

@@ -29,8 +29,8 @@ func init() {
 const primeText = `# PUDL for humans and agents
 
 PUDL retains typed observations of systems, compares them with declared
-expectations, and records evidence. Mu performs external actions and handles
-secrets. Ordinary runs observe; --converge explicitly enables mutation.
+expectations, and records evidence. It never changes the systems it observes:
+a run reports drift, and the tools that own those systems apply changes.
 
 ## Start with the existing workspace
 
@@ -43,23 +43,28 @@ Create local state with pudl init; use pudl init --global for ~/.pudl.
 Repository catalogs and mutable state remain isolated beneath .pudl/.
 Use pudl help <command> --json or pudl guide <topic> for targeted instructions.
 
-## Exact sets and convergence
+## Observe with commands
+
+pudl model new <name> --populate 'command:<cmdline printing JSON>'
+pudl run --populate 'command:gcloud compute networks list --format=json'
+pudl run <name> --detailed-exitcode
+
+A model's populate arm (#CommandObserve) runs commands that print JSON records,
+such as gcloud, kubectl or aws with JSON output, and ingests them as one
+snapshot. A model with desired state reports drift against that snapshot.
+
+## Exact sets
 
 pudl run set <producer> <consumer>
-pudl run set <models...> --converge --require-approval
-pudl run resume <operation-id>
-pudl run reject <operation-id>
 
 An exact set runs only the named models in dependency order. Missing binding
 producers are errors. Standalone runs can reuse eligible recorded producer
 snapshots; they never start a producer automatically. Plain bindings pin scoped
-snapshots. Sealed values stay inside Mu, and sets that can write sealed outputs
-require exact-plan approval. Resume rejects a changed set plan.
+snapshots.
 
 Report completion, resource conformity, checks, and evidence verification are
 separate dimensions. Successful execution can still find drift. Stored replay
-does not establish fresh live verification. An uncertain mutation needs
-verification; a scoped clean result does not prove the whole model is clean.
+does not establish fresh live verification.
 
 ## Investigate and retain evidence
 
@@ -91,8 +96,8 @@ pudl schema new --from <id> --path <package>/#<Definition>
 pudl doctor --json
 
 Formats and schemas are inferred on import. --origin is an explicit list filter.
-Saved Mu observations are ingested with pudl mu ingest-observe; replay requires
-run --from-catalog --catalog-scope <snapshot-or-origin> and remains unverified.
+Replaying a stored run snapshot requires run --from-catalog --catalog-scope
+<snapshot-id> and remains unverified.
 Use Git, your editor, and cue on the paths from pudl config --paths --json.
 
 ## Facts and rules

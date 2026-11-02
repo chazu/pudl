@@ -13,7 +13,6 @@ import (
 type SnapshotCatalog interface {
 	LatestSuccessfulObserveSnapshot(model, workspace string) (*Snapshot, error)
 	SuccessfulObserveSnapshotForRun(model, workspace, runID string) (*Snapshot, error)
-	ObserveSnapshotByIDForRun(snapshotID, model, workspace, runID string) (*Snapshot, error)
 	SnapshotRecordEntries(snapshotID string) ([]CatalogEntry, error)
 }
 
@@ -24,22 +23,15 @@ type CatalogEntry = databaseEntry
 
 // ResolveRequest supplies run policy rather than binding-level configuration.
 type ResolveRequest struct {
-	Workspace               string
-	MaxObservationAge       *time.Duration
-	EvaluationTime          time.Time
-	CurrentProducerRuns     map[string]ProducerRun
-	PinnedProducerSnapshots map[string]PinnedProducerSnapshot
+	Workspace           string
+	MaxObservationAge   *time.Duration
+	EvaluationTime      time.Time
+	CurrentProducerRuns map[string]ProducerRun
 }
 
 type ProducerRun struct {
 	Model string
 	RunID string
-}
-
-type PinnedProducerSnapshot struct {
-	Model      string
-	RunID      string
-	SnapshotID string
 }
 
 // Elaboration is the concrete runtime model plus reproducible plain-binding

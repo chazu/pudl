@@ -46,11 +46,11 @@ type CatalogEntry struct {
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
 	EntryType *string `json:"entry_type,omitempty"` // e.g. "observe", "manifest", "manifest-action"
-	Target    *string `json:"target,omitempty"`     // mu target / run target name (e.g. //models/<name>, home/odroid)
+	Target    *string `json:"target,omitempty"`     // run target name (e.g. //models/<name>:populate)
 	RunID     *string `json:"run_id,omitempty"`     // Unique run identifier
 	Tags      *string `json:"tags,omitempty"`       // JSON-encoded map[string]string
 	// Convergence status tracking
-	Status    *string   `json:"status,omitempty"` // Convergence status (unknown/clean/drifted/converging/failed)
+	Status    *string   `json:"status,omitempty"` // Verification status (unknown/clean/drifted/failed); legacy converging reads as unknown
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

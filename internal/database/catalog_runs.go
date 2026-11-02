@@ -8,11 +8,13 @@ import (
 
 // RunRecord is the durable audit row for one `pudl run` invocation.
 //
-// Its purpose is to make an incomplete run *visible*. Before it existed, a run
-// only ever wrote its verdict at the end, so a process that died mid-converge —
-// or one whose re-observation failed after a successful apply — left the model
-// instance row holding the previous run's status. A stale `clean` could survive
-// a converge that had already mutated infrastructure.
+// Its purpose is to make an incomplete run *visible*: a run that dies before
+// writing its verdict leaves an unfinished row, so the model's recorded status
+// is known to predate it.
+//
+// Outcome, NeedsVerification, Applies and Scoped are legacy columns written
+// only by the retired convergence workflow; they are read so old rows stay
+// inspectable, and new runs leave them at their defaults.
 type RunRecord struct {
 	RunID      string
 	Model      string
@@ -127,17 +129,10 @@ func (c *CatalogDB) StartRun(runID, model, mode string) error {
 }
 
 // RunConclusion is what a terminated run concluded, recorded on its audit row.
-// The apply count is deliberately absent: it is written per apply by RecordApply
-// so it survives a run that never reaches here.
 type RunConclusion struct {
-	CompletionStatus  string
-	Verdict           string
-	Outcome           string
-	NeedsVerification bool
-	Note              string
-	// Scoped records that `--only` restricted the run, so a `clean` verdict here
-	// covers a subset and must not reset the model's apply budget.
-	Scoped bool
+	CompletionStatus string
+	Verdict          string
+	Note             string
 }
 
 // FinishRun marks a run terminal and records what it concluded. A run that
@@ -151,10 +146,9 @@ func (c *CatalogDB) FinishRun(runID string, conclusion RunConclusion) error {
 		return fmt.Errorf("finish run %q: invalid terminal completion status %q", runID, conclusion.CompletionStatus)
 	}
 	result, err := c.db.Exec(
-		`UPDATE runs SET finished_at = ?, completion_status = ?, verdict = ?, outcome = ?, needs_verification = ?, note = ?, scoped = ?
+		`UPDATE runs SET finished_at = ?, completion_status = ?, verdict = ?, note = ?
 		 WHERE run_id = ?`,
-		time.Now().UTC(), conclusion.CompletionStatus, conclusion.Verdict, conclusion.Outcome,
-		boolToInt(conclusion.NeedsVerification), conclusion.Note, boolToInt(conclusion.Scoped), runID,
+		time.Now().UTC(), conclusion.CompletionStatus, conclusion.Verdict, conclusion.Note, runID,
 	)
 	if err != nil {
 		return fmt.Errorf("finish run %q: %w", runID, err)
@@ -165,36 +159,6 @@ func (c *CatalogDB) FinishRun(runID string, conclusion RunConclusion) error {
 	}
 	if affected == 0 {
 		return fmt.Errorf("finish run %q: no such run", runID)
-	}
-	return nil
-}
-
-// PrepareRunMutation reopens a successfully completed read-only member under
-// the same reserved run identity for its approved mutation phase. Only a
-// succeeded member may cross this boundary; failed/blocked/cancelled evidence
-// can never be promoted into a mutation run.
-func (c *CatalogDB) PrepareRunMutation(runID string) error {
-	return prepareRunMutationIn(c.db, runID)
-}
-
-func prepareRunMutationIn(q dbtx, runID string) error {
-	if runID == "" {
-		return fmt.Errorf("prepare run mutation: empty run id")
-	}
-	result, err := q.Exec(`UPDATE runs SET mode = 'converge', finished_at = NULL,
-		completion_status = ?, verdict = '', outcome = '', needs_verification = 0,
-		note = '', applies = 0, scoped = 0
-		WHERE run_id = ? AND completion_status = ?`,
-		RunStatusRunning, runID, RunStatusSucceeded)
-	if err != nil {
-		return fmt.Errorf("prepare run mutation %q: %w", runID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("prepare run mutation %q: %w", runID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("prepare run mutation %q: run is not successfully preflighted", runID)
 	}
 	return nil
 }
@@ -279,120 +243,6 @@ func scanRunRecord(row rowScanner) (RunRecord, error) {
 	record.NeedsVerification = needsVer != 0
 	record.Scoped = scoped != 0
 	return record, nil
-}
-
-// RecordApply increments the run's durable apply count.
-//
-// Called the moment an apply succeeds, before its manifest is recorded and
-// before anything else in the iteration can fail. Writing the count only at
-// FinishRun would leave it at zero for a run killed mid-converge — precisely the
-// case the apply budget exists to bound, since the supervisor's next restart
-// would then be granted a full budget again.
-func (c *CatalogDB) RecordApply(runID string) error {
-	if runID == "" {
-		return fmt.Errorf("record apply: empty run id")
-	}
-	result, err := c.db.Exec(`UPDATE runs SET applies = applies + 1 WHERE run_id = ?`, runID)
-	if err != nil {
-		return fmt.Errorf("record apply for run %q: %w", runID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("record apply for run %q: %w", runID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("record apply for run %q: no such run", runID)
-	}
-	return nil
-}
-
-// BeginRunMutationAttempt writes the crash marker before an external apply may
-// start. A process death after this commit is therefore read as
-// needs-verification even if it dies before mu returns or RecordApply runs.
-func (c *CatalogDB) BeginRunMutationAttempt(runID string) error {
-	if runID == "" {
-		return fmt.Errorf("begin mutation attempt: empty run id")
-	}
-	result, err := c.db.Exec(`UPDATE runs SET verdict = 'unknown',
-		outcome = 'needs-verification', needs_verification = 1,
-		note = 'external mutation attempt started; receipt not recorded'
-		WHERE run_id = ? AND finished_at IS NULL AND completion_status = ?`, runID, RunStatusRunning)
-	if err != nil {
-		return fmt.Errorf("begin mutation attempt for run %q: %w", runID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("begin mutation attempt for run %q: %w", runID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("begin mutation attempt for run %q: run is not active", runID)
-	}
-	return nil
-}
-
-// CompleteRunMutationReceipt clears the crash marker only after the apply's
-// manifest receipt has committed. The run remains active and unknown until a
-// later observation proves its terminal verdict.
-func (c *CatalogDB) CompleteRunMutationReceipt(runID string) error {
-	if runID == "" {
-		return fmt.Errorf("complete mutation receipt: empty run id")
-	}
-	result, err := c.db.Exec(`UPDATE runs SET outcome = '', needs_verification = 0, note = ''
-		WHERE run_id = ? AND finished_at IS NULL AND completion_status = ?
-		AND needs_verification = 1`, runID, RunStatusRunning)
-	if err != nil {
-		return fmt.Errorf("complete mutation receipt for run %q: %w", runID, err)
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("complete mutation receipt for run %q: %w", runID, err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("complete mutation receipt for run %q: no unreceipted active attempt", runID)
-	}
-	return nil
-}
-
-// AppliesSinceLastClean sums the applies a model has performed since it was last
-// verified clean without a scope restriction.
-//
-// It walks the model's runs newest-first and stops at the first unscoped `clean`
-// verdict. Unfinished rows are counted: a run that died after two applies
-// contributes two, which is why RecordApply increments per apply rather than at
-// the end.
-//
-// A *scoped* clean does not stop the walk. It does not generalize onto the model
-// (modelRowVerdict degrades it to `unknown` for the same reason), and treating it
-// as a reset would let a scheduler alternating a converging `--only` scope with
-// an oscillating one refill the budget every other run.
-func (c *CatalogDB) AppliesSinceLastClean(model string) (int, error) {
-	rows, err := c.db.Query(
-		`SELECT verdict, scoped, applies FROM runs WHERE model = ? ORDER BY started_at DESC, rowid DESC`,
-		model)
-	if err != nil {
-		return 0, fmt.Errorf("query apply history for %q: %w", model, err)
-	}
-	defer rows.Close()
-
-	total := 0
-	for rows.Next() {
-		var (
-			verdict string
-			scoped  int
-			applies int
-		)
-		if err := rows.Scan(&verdict, &scoped, &applies); err != nil {
-			return 0, fmt.Errorf("scan apply history for %q: %w", model, err)
-		}
-		if verdict == "clean" && scoped == 0 {
-			break
-		}
-		total += applies
-	}
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("read apply history for %q: %w", model, err)
-	}
-	return total, nil
 }
 
 func boolToInt(b bool) int {

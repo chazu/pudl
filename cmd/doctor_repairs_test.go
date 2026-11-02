@@ -2,16 +2,13 @@ package cmd
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/muschemas"
 	"github.com/chazu/pudl/internal/repair"
 )
 
@@ -153,32 +150,4 @@ func TestDoctorFixBackfillsIdentity(t *testing.T) {
 
 	_, repairs = doctorRepairs(t, "--only", "identity")
 	require.Equal(t, repair.StatusOK, repairs["identity"].Status)
-}
-
-// Former `pudl reclassify [--ref]`.
-func TestDoctorFixResolvesCachedSchemaRefs(t *testing.T) {
-	_, db, _ := repairWorkspace(t)
-	for item, ref := range map[string]string{"item-a": "mu/aws@v1", "item-b": "mu/gcp@v1"} {
-		require.NoError(t, db.AddItemSchema(database.ItemSchema{ItemID: item, SchemaRef: ref, Status: database.ItemSchemaStatusUnresolved}))
-	}
-	_, repairs := doctorRepairs(t, "--only", "schema-refs")
-	require.Equal(t, repair.StatusNeeded, repairs["schema-refs"].Status)
-	require.Equal(t, 0, repairs["schema-refs"].Pending, "nothing resolves before the schemas are cached")
-	_, err := os.Stat(SchemaCacheRoot())
-	require.True(t, os.IsNotExist(err), "diagnosis does not create the schema cache")
-
-	cache, err := muschemas.New(SchemaCacheRoot())
-	require.NoError(t, err)
-	for _, module := range []string{"mu/aws", "mu/gcp"} {
-		require.NoError(t, cache.Insert(module, "v1", []muschemas.File{{RelPath: "x.cue", Content: []byte("package x\n")}}))
-	}
-	_, repairs = doctorRepairs(t, "--only", "schema-refs", "--schema-ref", "mu/aws@v1")
-	require.Equal(t, 1, repairs["schema-refs"].Pending)
-	require.Contains(t, strings.Join(repairs["schema-refs"].Apply, " "), "--schema-ref mu/aws@v1")
-	_, repairs = doctorRepairs(t, "--fix", "--only", "schema-refs", "--schema-ref", "mu/aws@v1")
-	require.Equal(t, 1, repairs["schema-refs"].Changed)
-	rows, err := db.ListUnresolvedItemSchemas("")
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	require.Equal(t, "item-b", rows[0].ItemID)
 }

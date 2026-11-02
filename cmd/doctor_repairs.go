@@ -20,7 +20,6 @@ var (
 	doctorSchema          string
 	doctorOrigin          string
 	doctorIncludeExplicit bool
-	doctorSchemaRef       string
 )
 
 // maxListedChanges bounds the changes listed per repair in text output; JSON
@@ -33,13 +32,6 @@ type doctorRepair struct {
 	repair.Result
 	Preview []string `json:"preview_argv,omitempty"`
 	Apply   []string `json:"apply_argv,omitempty"`
-}
-
-// SchemaCacheRoot returns the on-disk root of pudl's schema cache.
-// Lives at <pudlDir>/schemas. Ingest paths (pudl import) register schemas into
-// the same cache the schema-refs repair resolves against.
-func SchemaCacheRoot() string {
-	return filepath.Join(effectivePudlDir(), "schemas")
 }
 
 // doctorMode names what doctor does with repairs: diagnose, dry-run or fix.
@@ -119,7 +111,7 @@ func repairEnv(db *database.CatalogDB, catalog []catalogDiagnostic, scanned bool
 		return nil, err
 	}
 	opts := repair.Options{
-		SchemaRef: doctorSchemaRef, DriftScanned: scanned, IncludeExplicit: doctorIncludeExplicit,
+		DriftScanned: scanned, IncludeExplicit: doctorIncludeExplicit,
 		EntryID: doctorEntry, Schema: doctorSchema, Origin: doctorOrigin,
 	}
 	for _, entry := range catalog {
@@ -127,7 +119,7 @@ func repairEnv(db *database.CatalogDB, catalog []catalogDiagnostic, scanned bool
 			opts.DriftEntryIDs = append(opts.DriftEntryIDs, entry.ID)
 		}
 	}
-	return &repair.Env{DB: db, Inferrer: inferrer, Projections: reg, SchemaCacheRoot: SchemaCacheRoot(), Options: opts}, nil
+	return &repair.Env{DB: db, Inferrer: inferrer, Projections: reg, Options: opts}, nil
 }
 
 // repairArgv is the doctor invocation that previews (or applies) one repair
@@ -138,7 +130,7 @@ func repairArgv(name string, preview bool) []string {
 		argv = append(argv, "--dry-run")
 	}
 	argv = append(argv, "--only", name)
-	scope := [][2]string{{"--entry", doctorEntry}, {"--schema", doctorSchema}, {"--origin", doctorOrigin}, {"--schema-ref", doctorSchemaRef}}
+	scope := [][2]string{{"--entry", doctorEntry}, {"--schema", doctorSchema}, {"--origin", doctorOrigin}}
 	for _, flag := range scope {
 		if flag[1] != "" {
 			argv = append(argv, flag[0], flag[1])

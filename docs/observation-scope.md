@@ -30,7 +30,7 @@ checks: [{
 `complete` is an explicit collector assertion. The collector must successfully
 finish every required page and fan-out member before asserting it. A successful
 exit or a JSON array alone does not imply completeness. Command failure publishes
-no replacement observation; reported plugin errors prevent complete status.
+no replacement observation; reported target errors prevent complete status.
 Omitted completeness defaults to false, including for older stored snapshots.
 An explicitly permitted schema mismatch also makes the observation incomplete.
 Command observers can opt into exploratory fallback with
@@ -81,7 +81,5 @@ unobserved desired resources as uncertain for partial inventories, exits with an
 error, and cannot promote them to verified status. Existing matching resources
 can still satisfy ensure-present expectations in a partial inventory.
 
-For saved observation envelopes, `pudl mu ingest-observe --scope NAME --complete`
-records an explicit completeness assertion. `--coverage-schema` declares a
-covered schema even for an empty population. Stored replay remains distinct
-from a new live observation.
+Stored replay (`pudl run --from-catalog`) remains distinct from a new live
+observation.

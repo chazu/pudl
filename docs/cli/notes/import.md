@@ -9,9 +9,6 @@ Behavior:
 - CSV rows keep every cell verbatim as text (`"00123"` stays `"00123"`).
 - `.gz` and `.zst` files are decompressed; the stored data, hash, size and
   inference all use the decompressed content.
-- Typed envelope JSON (`schema`, optional `definitions`, and `data`) is
-  unwrapped; its schema metadata is recorded and the inner payload follows
-  normal import.
 - `--schema` requires every record to satisfy that schema. Unavailable schemas
   and mismatches fail, including on dedup re-import and `--dry-run`.
 - `--allow-schema-fallback` explicitly permits base/catchall fallback. JSON

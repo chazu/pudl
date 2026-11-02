@@ -26,7 +26,7 @@ type ObserveSnapshot struct {
 	SnapshotID string
 	RunID      string
 	// Model is the #SystemModel this observation was taken for, empty for a
-	// standalone `pudl mu ingest-observe`.
+	// standalone ingest (the retired `pudl mu ingest-observe`).
 	Model string
 	// Workspace is where the run stood: the repo workspace name, or "global".
 	// Recorded rather than resolved on read — it is history, and reading it from
@@ -34,7 +34,8 @@ type ObserveSnapshot struct {
 	Workspace string
 	// Origin is the catalog ingest origin the records were stored under.
 	Origin string
-	// Source is how the observation was produced: mu-observe, ewe, ingest-observe.
+	// Source is how the observation was produced: command, or the legacy
+	// mu-observe, ewe and ingest-observe sources of older snapshots.
 	Source      string
 	Targets     []string
 	RecordCount int
@@ -197,38 +198,6 @@ func (c *CatalogDB) SuccessfulObserveSnapshotForRun(model, workspace, runID stri
 		return nil, fmt.Errorf("successful observe snapshot for run: empty run id")
 	}
 	return c.successfulObserveSnapshot(model, workspace, runID)
-}
-
-// ObserveSnapshotByIDForRun reloads one already-pinned observation during
-// exact-plan approval revalidation. The owning run may be in the deliberate
-// running/pending-approval state, so eligibility was established before pinning
-// and is not re-derived from its current completion status here.
-func (c *CatalogDB) ObserveSnapshotByIDForRun(snapshotID, model, workspace, runID string) (*ObserveSnapshot, error) {
-	if snapshotID == "" || model == "" || workspace == "" || runID == "" {
-		return nil, fmt.Errorf("pinned observe snapshot requires snapshot, model, workspace, and run ids")
-	}
-	args := []any{snapshotID, model, workspace, runID}
-	placeholders := make([]string, len(observationSources))
-	for i, source := range observationSources {
-		placeholders[i] = "?"
-		args = append(args, source)
-	}
-	query := `SELECT ` + c.snapshotSelectColumns("observe_snapshots") + ` FROM observe_snapshots
-		WHERE snapshot_id = ? AND model = ? AND workspace = ? AND run_id = ?
-		AND source IN (` + strings.Join(placeholders, ", ") + `)`
-	condition, err := c.snapshotReuseCondition("observe_snapshots")
-	if err != nil {
-		return nil, err
-	}
-	query += condition + " LIMIT 1"
-	snapshot, err := scanObserveSnapshot(c.db.QueryRow(query, args...))
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("pinned observe snapshot %q for run %q: %w", snapshotID, runID, err)
-	}
-	return &snapshot, nil
 }
 
 func (c *CatalogDB) successfulObserveSnapshot(model, workspace, runID string) (*ObserveSnapshot, error) {

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/mubridge"
+	"github.com/chazu/pudl/internal/observe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +17,7 @@ import (
 // a run's populate phase does.
 func ingestSnapshot(t *testing.T, db *database.CatalogDB, dataDir, snapshotID, model, observeJSON string) {
 	t.Helper()
-	_, err := mubridge.IngestObserve(db, mubridge.ObserveIngest{
+	_, err := observe.IngestObserve(db, observe.ObserveIngest{
 		Reader:     strings.NewReader(observeJSON),
 		DataDir:    dataDir,
 		SnapshotID: snapshotID,

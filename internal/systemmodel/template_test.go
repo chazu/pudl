@@ -31,7 +31,7 @@ app: #SystemModel & {
 		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
 		path: "/SubnetId"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [{"_schema": "example.application", name: "api", subnet_id: inputs.subnet_id}]
 }`, slot)
 }
@@ -112,7 +112,7 @@ app: #SystemModel & {
 		source: {model: "network", schema: "pudl/aws.#Subnet", identity: {SubnetId: "private"}}
 		path: "/SubnetId"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }`
 	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
 	require.NoError(t, err)
@@ -129,111 +129,16 @@ app: #SystemModel & {
 		source: {model: "producer", schema: "example.#Thing", identity: {name: "one"}}
 		path: "/name"
 	}
-	populate: #PluginObserve & {plugin: "host", differential: false}
+	populate: runs: [{argv: ["true"]}]
 }`
 	_, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
 	require.ErrorContains(t, err, "conflicting")
 }
 
-func TestModelTemplateDecodesAndRedactsSealedDeclarations(t *testing.T) {
-	const source = `
-app: #SystemModel & {
-	name: "app"
-	populate: #PluginObserve & {
-		plugin: "host"
-		differential: false
-		sealed_inputs: API_TOKEN: {
-			ref: "env:API_TOKEN"
-			delivery_mode: "env"
-		} @pudl(binding=sealed)
-	}
-	converge: #PluginPlan & {
-		plugin: "host"
-		sealed_inputs: GENERATED: {
-			source: {model: "producer", output: "TOKEN"}
-			delivery_mode: "file"
-		} @pudl(binding=sealed)
-		sealed_outputs: LOCAL: {
-			ref: "pass:services/generated"
-			store_mode: "create_if_absent"
-		} @pudl(binding=sealed)
-	}
-}`
-	template, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
+func TestModelTemplateCollectsBindingProducers(t *testing.T) {
+	template, err := NewTemplate(compileTemplate(t, plainTemplateSource(`string @pudl(binding=plain)`), "app"), TemplateOrigin{})
 	require.NoError(t, err)
-	assert.True(t, template.HasSealedOutputs())
-	model, err := template.Elaborate(map[string]any{})
-	require.NoError(t, err)
-	assert.Equal(t, "env:API_TOKEN", model.Populate.SealedInputs["API_TOKEN"].Ref)
-	assert.Equal(t, "create_if_absent", model.Converge.SealedOutputs["LOCAL"].StoreMode)
-	require.NotNil(t, model.Converge.SealedInputs["GENERATED"].Source)
-	assert.Equal(t, "producer", model.Converge.SealedInputs["GENERATED"].Source.Model)
-
-	encoded, err := json.Marshal(model)
-	require.NoError(t, err)
-	assert.NotContains(t, string(encoded), "env:API_TOKEN")
-	assert.NotContains(t, string(encoded), "pass:services/generated")
-}
-
-func TestModelTemplateSealedContractFailures(t *testing.T) {
-	const unannotated = `
-app: #SystemModel & {
-	name: "app"
-	populate: #PluginObserve & {
-		plugin: "host"
-		sealed_inputs: TOKEN: {ref: "env:TOKEN", delivery_mode: "env"}
-	}
-}`
-	_, err := NewTemplate(compileTemplate(t, unannotated, "app"), TemplateOrigin{})
-	require.ErrorContains(t, err, "binding=sealed")
-
-}
-
-func TestSystemModelSchemaRejectsPopulateSealedOutputs(t *testing.T) {
-	tests := map[string]string{
-		"plugin observe": `
-app: #SystemModel & {
-	name: "app"
-	populate: #PluginObserve & {
-		plugin: "host"
-		sealed_outputs: TOKEN: {ref: "env:A", store_mode: "create"} @pudl(binding=sealed)
-	}
-}`,
-		"ewe": `
-app: #SystemModel & {
-	name: "app"
-	populate: #EweTarget & {
-		eweSource: "populate.cue"
-		outputs: ["records.json"]
-		sealed_outputs: TOKEN: {ref: "env:A", store_mode: "create"} @pudl(binding=sealed)
-	}
-}`,
-	}
-	for name, source := range tests {
-		t.Run(name, func(t *testing.T) {
-			root := cuecontext.New().CompileString(schemaCUE+"\n"+source, cue.Filename("template.cue"))
-			require.Error(t, root.Err(), "populate sealed outputs must be rejected structurally")
-		})
-	}
-}
-
-func TestModelTemplateCollectsPlainAndSealedDependencyProducers(t *testing.T) {
-	source := strings.Replace(plainTemplateSource(`string @pudl(binding=plain)`),
-		`populate: #PluginObserve & {plugin: "host", differential: false}`,
-		`populate: #PluginObserve & {
-			plugin: "host", differential: false
-			sealed_inputs: TOKEN: {
-				source: {model: "secrets", output: "TOKEN"}
-				delivery_mode: "env"
-			} @pudl(binding=sealed)
-			sealed_inputs: DIRECT: {
-				ref: "env:DIRECT_TOKEN"
-				delivery_mode: "env"
-			} @pudl(binding=sealed)
-		}`, 1)
-	template, err := NewTemplate(compileTemplate(t, source, "app"), TemplateOrigin{})
-	require.NoError(t, err)
-	assert.Equal(t, []string{"network", "secrets"}, template.BindingProducers)
+	assert.Equal(t, []string{"network"}, template.BindingProducers)
 }
 
 func TestModelTemplateRejectsSelfBinding(t *testing.T) {
