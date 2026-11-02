@@ -12,6 +12,8 @@
 //	GET /api/summary  resource and relationship counts (?as_of too)
 //	GET /api/search   ?q=&limit= lightweight resource matches (?as_of too)
 //	GET /api/snapshots  recent observation snapshots, newest first (as-of quick picks)
+//	GET /api/events   Server-Sent Events: "version" with the change stamp on
+//	                  connect and whenever it changes (checked every second)
 //	GET /*            the UI bundle; unknown paths fall back to index.html
 //
 // Requests whose Host header is not the loopback address the server was
@@ -59,8 +61,10 @@ type Options struct {
 	Graph     GraphFunc
 	Stamp     StampFunc
 	Snapshots SnapshotsFunc
-	Workspace string
-	Version   string
+	// EventInterval is how often /api/events checks the stamp (default 1s).
+	EventInterval time.Duration
+	Workspace     string
+	Version       string
 	// AllowedHosts are the Host header values accepted (host[:port]). Empty
 	// accepts only loopback names.
 	AllowedHosts []string
@@ -84,6 +88,13 @@ func Handler(opts Options) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"version": v})
+	})
+	mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {
+		if opts.Stamp == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "change tracking unavailable"})
+			return
+		}
+		streamVersions(w, r, opts.Stamp, opts.EventInterval)
 	})
 	mux.HandleFunc("GET /api/snapshots", func(w http.ResponseWriter, r *http.Request) {
 		list := []Snapshot{}
@@ -272,7 +283,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // Serve serves h on ln until ctx is cancelled, then shuts down gracefully.
 func Serve(ctx context.Context, ln net.Listener, h http.Handler) error {
-	srv := &http.Server{Handler: h}
+	// Requests derive from ctx, so long-lived event streams end when it is
+	// cancelled and Shutdown does not wait on them forever.
+	srv := &http.Server{Handler: h, BaseContext: func(net.Listener) context.Context { return ctx }}
 	go func() {
 		<-ctx.Done()
 		_ = srv.Shutdown(context.Background())

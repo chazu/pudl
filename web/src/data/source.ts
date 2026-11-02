@@ -43,6 +43,12 @@ export interface GraphSource {
   load(opts?: LoadOptions): Promise<CanonicalGraph>;
   /** Current change stamp, for sources that can tell when to reload (live only). */
   version?(): Promise<string | null>;
+  /**
+   * Push: call onVersion with the change stamp on connect and on every change;
+   * onFail if the stream is unavailable (callers fall back to version()).
+   * Returns an unsubscribe function.
+   */
+  subscribe?(onVersion: (version: string) => void, onFail: () => void): () => void;
   /** Recent snapshots, newest first, for sources with history (live only). */
   snapshots?(): Promise<SnapshotInfo[]>;
   /** Size of the whole graph, without loading it (live only). */

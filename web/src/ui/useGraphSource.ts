@@ -83,7 +83,7 @@ export function useGraphSource() {
   );
 
   // The past does not change: no polling while viewing a past time.
-  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !reloading && !asOf, reload);
+  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !asOf, reloading, reload);
 
   /** Load the neighbourhoods of `ids` and merge them in (partial mode only). */
   const expand = useCallback(

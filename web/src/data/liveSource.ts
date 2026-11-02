@@ -49,6 +49,21 @@ export class LiveGraphSource implements GraphSource {
     return Array.isArray(body) ? body : [];
   }
 
+  subscribe(onVersion: (version: string) => void, onFail: () => void): () => void {
+    if (typeof EventSource === 'undefined') {
+      onFail();
+      return () => {};
+    }
+    const es = new EventSource('/api/events');
+    es.addEventListener('version', (e) => onVersion((e as MessageEvent<string>).data));
+    // EventSource retries transient errors itself; CLOSED means it gave up
+    // (for example an older pudl ui without /api/events).
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) onFail();
+    };
+    return () => es.close();
+  }
+
   async version(): Promise<string | null> {
     try {
       const res = await fetch('/api/version', { cache: 'no-store' });
