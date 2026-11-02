@@ -123,10 +123,14 @@ func (si *SchemaInferrer) infer(data interface{}, hints InferenceHints, explain 
 	// Get candidate schemas using heuristics
 	candidates := SelectCandidates(data, hints, si.metadata, si.graph)
 
-	// If no candidates from heuristics, use all schemas sorted by specificity
+	// If no candidates from heuristics, use all type schemas sorted by
+	// specificity. Policies are never candidates: classification assigns types.
 	if len(candidates) == 0 {
 		allSchemas := si.graph.GetMostSpecificFirst()
 		for _, schema := range allSchemas {
+			if si.metadata[schema].IsPolicy() {
+				continue
+			}
 			candidates = append(candidates, CandidateScore{Schema: schema, Score: 0.1, Reason: "all loaded schemas ordered by specificity"})
 		}
 	}

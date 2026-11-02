@@ -78,7 +78,7 @@ global catalogs are independent; mutable state never falls back across them.
   (positional `key=value` constraints, not `--where`); `pudl rule` manages rules
 - `pudl query --list` — list queryable relations (rule heads + EDB facts) and their arg keys
 - `pudl query --topo <relation>` — read a relation's `from`/`to` edges as a topological order (errors on a cycle)
-- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, schema-refs, inference, identity, projections (projected-fact sync also runs automatically after import/run/delete)
+- `pudl doctor --fix [--dry-run] [--only NAME]` — apply catalog repairs: schema-names, schema-refs, policy-leaves, inference, identity, projections (projected-fact sync also runs automatically after import/run/delete)
 
 ### Querying imported data
 

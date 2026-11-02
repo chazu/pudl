@@ -12,7 +12,7 @@ import (
 )
 
 // SchemaTypePolicy is the `_pudl.schema_type` of a policy schema.
-const SchemaTypePolicy = "policy"
+const SchemaTypePolicy = validator.SchemaTypePolicy
 
 // Source is the loaded schema set the engine reads. *inference.SchemaInferrer
 // satisfies it.

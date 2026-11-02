@@ -374,6 +374,7 @@ reclassified. Use --entry ID to inspect one catalog record, or --health-only for
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
   schema-refs   declared schema references now present in the schema cache
+  policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
   projections   projected facts that no longer match the catalog or facts specs
@@ -400,7 +401,7 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, schema-refs, inference, identity, projections |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, schema-refs, policy-leaves, inference, identity, projections |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
 | `--schema-ref` | string |  | Limit the schema-refs repair to this reference (e.g. mu/aws@v1) |
@@ -770,7 +771,7 @@ Data Storage:
 Schema Assignment:
 - Explicit schema validation with --schema (strict unless --allow-schema-fallback)
 - Automatic schema inference from CUE schemas in the schema repository
-- Chained validation: policy → base → generic → catchall
+- Chained validation: type → base type → catchall; --schema must name a type, never a policy
 - Untyped imports use best-effort inference; explicit schemas must validate
 - Envelope wire format: a JSON file shaped like
     {"schema": {"module": "mu/aws", "version": "v1"},
@@ -795,7 +796,7 @@ Reading from stdin:
 Example usage:
     # Single file import
     pudl import --path data.json
-    pudl import --path aws-instances.json --schema aws.compliant-ec2
+    pudl import --path aws-instances.json --schema aws.ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
 
     # CUE schema reference (e.g. emitted by a mu plugin)
@@ -834,7 +835,7 @@ Flags:
 | `--origin` | string |  | Override origin detection (optional) |
 | `-p`, `--path` | string |  | Path to file or wildcard pattern to import (use '-' for stdin) |
 | `--recursive` | bool |  | When --path is a directory, also import supported files in its subdirectories |
-| `--schema` | string |  | Specify schema for validation (e.g., aws.compliant-ec2) |
+| `--schema` | string |  | Specify schema for validation (e.g., aws.ec2) |
 | `--set` | stringArray |  | Set a field on every record: path=value (repeatable; overwrites; JSON values keep their type, '"…"' forces a string) |
 
 Behavior:

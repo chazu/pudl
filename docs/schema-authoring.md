@@ -45,7 +45,7 @@ Declares the role of this schema in the validation hierarchy.
 | Value | Purpose |
 |-------|---------|
 | `"base"` | Type recognition -- matches any valid instance of this resource type |
-| `"policy"` | Compliance checking -- adds constraints beyond type recognition |
+| `"policy"` | Compliance rules for a type -- evaluated against resources, never inferred or assigned as a record's schema |
 | `"custom"` | User-defined schemas outside the type/policy hierarchy |
 | `"catchall"` | Universal fallback that accepts anything |
 | `"collection"` | Schema for collection entries (not individual items) |
@@ -122,6 +122,8 @@ covered in [projection.md](projection.md).
 ### `base_schema` (optional)
 
 Reference to a parent schema. This builds an inheritance graph used for specificity ordering -- child schemas (more specific) are tried before parent schemas (more generic).
+A policy schema also names its type through `base_schema`, but policies are never
+tried during classification: only types are assigned.
 
 ```cue
 // A compliant EC2 instance inherits from the base EC2 instance schema
@@ -142,7 +144,7 @@ When data is imported, PUDL determines which schema to assign using a two-phase 
 
 ### Phase 1: Candidate Selection (Heuristic Scoring)
 
-Candidate schemas are scored based on:
+Candidate schemas are scored based on the following (policy schemas are never candidates):
 - **Identity field presence**: +0.5 if all `identity_fields` exist in the data
 - **Tracked field presence**: +0.1 x (ratio of `tracked_fields` found)
 - **Origin keyword matching**: +0.15 if two or more `resource_type` keywords match the origin
@@ -152,12 +154,13 @@ Candidate schemas are scored based on:
 
 Starting with the most specific candidate, PUDL attempts CUE unification (`tryUnify`) against the data. The first schema that successfully unifies is assigned.
 
-If no candidate passes unification, PUDL walks the `base_schema` chain -- trying progressively less specific schemas. If the entire chain fails, the catchall schema (`pudl/core.#Item`) is assigned.
+If no candidate passes unification, PUDL walks the `base_schema` chain -- trying progressively less specific schemas, skipping policies. If the entire chain fails, the catchall schema (`pudl/core.#Item`) is assigned.
 
 This means:
 - **No priority numbers** -- ordering comes from the inheritance graph and heuristic scores
 - **No explicit fallback lists** -- the `base_schema` chain provides natural fallback
 - **Exploratory imports use the catchall**; explicit schema requests are strict unless `--allow-schema-fallback` is supplied.
+- **Explicit schemas must be types**: `--schema` or a model's `populate.schema` naming a policy is an error that names the policy's type.
 
 ## Resource Identity and Schema Families
 
@@ -176,7 +179,7 @@ resource_id = SHA256( normalize(family_root) + "\x00" + identity_component )
 
 where `identity_component` is the canonical JSON of the identity field values
 (or, for catchall schemas with no identity fields, the content hash). Because the
-family root is invariant under reinference and policy/specialization refinement
+family root is invariant under reinference and specialization refinement
 (those move the assigned leaf, never the root), a resource's identity stays
 stable even as its classification changes.
 
@@ -314,6 +317,13 @@ This updates the schema assignments of inferred entries. Add
 `--include-explicit` (optionally with `--schema` or `--origin`) to re-infer
 explicit assignments too. Entries that previously fell through to the catchall may now match your new, more specific schema.
 
+Entries classified to a policy schema before policies left classification are
+moved to the policy's type, keeping their `resource_id` and version history:
+
+```bash
+pudl doctor --fix --only policy-leaves
+```
+
 You can also verify that inference is stable after changes:
 
 ```bash
@@ -350,7 +360,8 @@ import "list"
     ...
 }
 
-// AdminUser is a policy schema -- a User with admin-specific requirements
+// AdminUser is a policy schema -- admin-specific requirements evaluated
+// against Users; it is never assigned as a record's schema
 #AdminUser: #User & {
     _pudl: {
         schema_type:  "policy"
@@ -376,4 +387,4 @@ pudl doctor --fix --only inference  # Re-classify existing imports
 - **Identity fields matter most**: Good identity fields enable version tracking and strong inference. Choose fields that uniquely identify a resource instance.
 - **Run `pudl doctor --fix --only inference`** after any schema change to re-classify existing data
 - **Check inference results**: After importing, look at the confidence score. Low confidence (< 0.5) means the schema is a weak match -- consider adding more identity fields or refining the schema structure.
-- **Use `base_schema` for inheritance**: Policy schemas should reference their base type via `base_schema` so the validation cascade walks the inheritance chain correctly.
+- **Use `base_schema` for inheritance**: Policy schemas reference their type via `base_schema`; the chain must end at a type. Classification and validation fallback skip policies.
