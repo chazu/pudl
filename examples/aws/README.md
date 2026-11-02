@@ -226,6 +226,8 @@ A waiver can instead target a cross-resource check's witness, for example
 `{check: "internet-exposed-instance", witness: {instance: "i-0123456789abcdef0"}, ...}`.
 The `policy-high` rules carry `severity`, so a waiver covers only the high and
 critical violations that check reports.
+See [governance](../../docs/governance.md) for how waivers match and expire,
+finding changes (`--fail-on new`), owners and CI exit codes.
 
 ## Run against live accounts
 

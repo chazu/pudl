@@ -1,11 +1,10 @@
-# Querying imported data: fact projection and sensitive fields
+# Projection: facts, sensitive fields and secret warnings
 
-Imported records live in the catalog as payload files. Datalog rules,
-`pudl query` and model `#Check`s read **facts**. A schema bridges the two
-by declaring which of its records' fields become facts. It can also declare
-fields that must never be stored at all.
-
-Design and review history: `docs/design/2026-10-08-gcp-cataloging-ux.md`.
+Imported and observed records live in the catalog as payload files. Datalog
+rules, `pudl query` and model checks read **facts**. A type schema bridges the
+two by declaring which of its records' fields become facts (`_pudl.facts`). It
+can also declare fields that must never be stored (`_pudl.sensitive_fields`)
+and paths the secret scan should not report (`_pudl.secret_scan_ignore`).
 
 ## Declaring facts (`_pudl.facts`)
 
@@ -56,7 +55,8 @@ Rules for args:
   `resource_id`. To join a relation to the catalog, use
   `catalog_entry(id: $E)` with `entry_id: $E`.
 - **Values.** Numbers keep their exact text. A value the query layer cannot
-  represent, such as an integer beyond int64, is left out and reported.
+  represent, such as an integer beyond int64, is left out and reported, and
+  checks that read that relation are `unknown`.
 - **Inheritance.** Relations are inherited along `base_schema`; when names
   collide, the nearer schema wins.
 
@@ -72,7 +72,7 @@ All `_pudl` paths use one syntax: identity fields, facts, sensitive fields, and
 ### What stays current
 
 A resource's facts always describe its **most recently observed** entry,
-whether that entry came from `pudl import` or a model run. That includes
+whether that entry came from `pudl import` or a `pudl check` observation. That includes
 re-importing content that is already cataloged, so a resource that changes and
 then changes back reports its current state.
 
@@ -103,7 +103,7 @@ changed facts blocks, and deleted or reassigned entries. `delete`,
 nothing, but warns when a reprojection is pending.
 
 A facts block that is invalid disables projection for its schema. Existing
-facts are left unchanged and every import, run and query says so. Invalid
+facts are left unchanged and every import, check and query says so. Invalid
 blocks include:
 
 - a relation or arg name that is not an identifier
@@ -114,15 +114,13 @@ blocks include:
 
 ### Silent misses are reported
 
-Checks carry `outcome: pass|fail|unknown|error`. A missing relation, invalid
-required projection, or failed required synchronization produces `unknown`,
-never a pass. Evaluation failures produce `error`. Both are persisted with
-structured diagnostics and exit 1 under `--detailed-exitcode`. A declared empty
-relation remains valid; unrelated broken schemas do not disable a check.
+A check whose relation nothing produces, or whose projection is invalid or
+failed to sync, is `unknown`, never a pass. A declared relation that is simply
+empty is valid, and an unrelated broken schema does not disable a check.
 
-PUDL also reports potential projection and rule misses during exploration:
+pudl also reports likely misses while you explore:
 
-- **Import and run summaries** list the facts projected per relation. They warn
+- **Import and check summaries** list the facts projected per relation. They warn
   when a declared relation produced none (usually a path typo) and when values
   were left out.
 - **`pudl query` and `pudl check`** lint the rules a query or check depends on:
@@ -131,34 +129,21 @@ PUDL also reports potential projection and rule misses during exploration:
   - an arg that the relation's facts block does not declare
   - a projected relation that is also a rule head
 
-Projected facts carry no `run_id`, so checks over them evaluate current state
-across the whole catalog.
+Projected facts carry no `run_id`. A check without `evidence` reads them
+across the whole catalog; a check with `evidence` rebuilds them from the
+selected snapshots (see [observation](observation-scope.md#select-evidence)).
 
 ### Writing rules over projected facts
 
-```cue
-package rules
-
-open_ssh: {
-	head: {rel: "open_ssh", args: {project: "$P", name: "$N"}}
-	body: [
-		{rel: "gcp_firewall", args: {entry_id: "$E", project: "$P", name: "$N", direction: "INGRESS", disabled: false}},
-		{rel: "gcp_firewall_source", args: {entry_id: "$E", range: "0.0.0.0/0"}},
-		{rel: "gcp_firewall_allow", args: {entry_id: "$E", proto: "tcp", port: "22"}},
-	]
-}
-```
-
-From the command line, booleans and numbers are typed:
-`pudl query gcp_firewall disabled=false`. Use `name='"123"'` to force a string.
-
-The datalog has no negation. To express "has no X", project `{exists: "X"}` or
-give a `default`, then match on that value.
+Join a resource's relations on `entry_id`; [Datalog](datalog.md#write-a-rule)
+has a rule over the firewall relations above. Datalog has no negation: to
+express "has no X", project `{exists: "X"}` or give a `default`, then match
+on that value.
 
 ## Resource ownership
 
 A schema that declares `_pudl.owner` (see
-[schema-authoring.md](schema-authoring.md#owner-optional)) projects one more
+[schema authoring](schema-authoring.md#owner)) projects one more
 fact per resource, kept current exactly like its facts block:
 
 - `resource_owner(entry_id, resource_id, type, owner, via)` when a path, the
@@ -188,16 +173,8 @@ violation_owner: {
 
 A facts block cannot declare these two relation names. Changing a type's
 `owner` block or its mapping table re-derives every owner on the next sync.
-
-`pudl check` attributes each finding to the owner of the resource its
-arguments reference: a resource ID (`resource_id`, `resource`, `target` or
-`name`), else a catalog entry ID (`entry_id`, `evidence_id`,
-`observation_id`). Report JSON carries `owner` on every witness and every
-finding (`""` when none was resolved), human output groups each check's
-findings by owner, and `--owner TEAM` prints only TEAM's findings. A finding
-that references neither, such as one keyed by a selfLink, has no owner, and
-neither has a finding recorded without arguments (past the 20 witnesses a
-check keeps). A resolved finding keeps the owner its earlier report recorded.
+How check findings are attributed to owners is described in
+[governance](governance.md#attribute-findings-to-owners).
 
 ## Sensitive fields (`_pudl.sensitive_fields`)
 
@@ -207,7 +184,7 @@ _pudl: sensitive_fields: ["spec.template.spec.containers[*].env[*].value"]
 
 Each matching value is replaced with `"[REDACTED]"` before the record is
 hashed, identified, stored or projected. This applies to `pudl import` and to
-model runs alike. Fields are inherited along `base_schema`.
+model observations alike. Fields are inherited along `base_schema`.
 
 Redaction **fails closed**. The record is not stored when any of these hold:
 
@@ -229,7 +206,9 @@ Limits:
 - **Temp files.** Decompressed, envelope and stdin temporary files can hold
   plaintext while an import runs.
 - **Retroactive.** Payloads stored before a field was declared sensitive are
-  not rewritten. Projection still redacts them in memory.
+  not rewritten on import. Projection still redacts them in memory, and
+  `pudl doctor --fix --only sensitive-scrub` rewrites them (see
+  [doctor](cli-reference.md#pudl-doctor)).
 - **Drift.** Redacted values never equal plaintext `desired` values, so do not
   declare desired state on sensitive paths.
 
@@ -255,11 +234,7 @@ A listed path covers itself and everything below it. The list is inherited
 along `base_schema`. A list that is not concrete, not a list of strings, or
 holds an unparsable path is a schema load error and suppresses nothing.
 
-`pudl facts add` warns the same way on its args. Facts are never redacted.
+`pudl doctor` scans stored payloads and current facts the same way. The
+advanced `pudl facts add` warns on its args; facts are never redacted.
 `pkg/factstore` callers can opt in to rejecting such facts with
 `Open(dir, factstore.WithSecretRejection())`.
-
-Projection records an incomplete status when values fall outside the query
-numeric domain. Dependent latest-known checks become unknown, just as selected
-snapshot checks do. Projection contract version 2 refreshes older projection
-state on the next synchronization; source payloads and fact history are retained.

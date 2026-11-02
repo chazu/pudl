@@ -10,9 +10,9 @@ and hand-written notes in `docs/cli/notes/`, then run `make docs`.
 
 Use `--help` for inline documentation. Under the global `--json` flag, a
 command writes exactly one JSON document to stdout; warnings, progress and
-other diagnostics go to stderr, and empty lists are written as `[]`. Commands
-without structured output (scaffolding, editors, Git and CUE wrappers) still
-print text under `--json`.
+other diagnostics go to stderr, and empty lists are written as `[]`. A few
+commands without structured output, such as scaffolding, still print text
+under `--json`.
 
 Errors exit nonzero. `pudl check` can also report its findings in the exit
 status with `--detailed-exitcode`; see [pudl check](#pudl-check).
@@ -146,182 +146,51 @@ Flags:
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 **A check observes and reports; it never changes anything.** For each named
-model it populates the catalog, compares `desired` with what was observed,
-evaluates checks and records the result. Apply changes with the tool that owns
-them, then check again to verify.
+model it runs `populate`, compares `desired` with what was observed, evaluates
+the checks and records the result. [Governance](governance.md) is the guide to
+checks, findings, policies, waivers, changes over time, owners and CI use.
+[Observation](observation-scope.md) covers collectors, fan-out and evidence
+selection.
 
 **Exactly the named models.** `pudl check a b c` runs `a`, `b` and `c` and
 nothing else. A model runs after every named model it lists in `depends_on`;
 dependencies that are not named add no ordering and are never run. When a
-named producer does not succeed, its dependents are recorded `blocked` and do
-not run; independent models continue. The order and the edges are recorded in
-the report (`ordered_members`, `edges`, `plan_digest`).
+named producer does not succeed, its dependents are recorded `blocked`;
+independent models continue. The report records the order and the edges
+(`ordered_members`, `edges`, `plan_digest`).
 
-**One report.** A check records one report whether it names one model or
-several: an aggregate `summary` (execution, conformity, checks, verification),
-and one entry per model under `members` with its result, run ID, summary and
-full `report` (populate, drift, checks). Read it again with
-[`pudl report`](#pudl-report). Under `--json` the check writes that report as
-its only output. Human output shows each model's findings as it concludes, then
-the summary; internal catalog keys such as `//models/<name>` appear only in the
-JSON evidence.
+**One report.** Each invocation records one report: an aggregate `summary`
+(execution, conformity, checks, verification, finding counts, evidence), and
+one entry per model under `members` with its result, run ID, summary and full
+`report`. Under `--json` that report is the only stdout document. Human output
+shows each model's findings as it concludes, then the summary. Read it again
+with [`pudl report`](#pudl-report).
 
-**Catalog replay is not an observation.** `--from-catalog` set-diffs `desired`
-against records already in the catalog, so its verdict describes what was
-*recorded*, not what is live. A replay therefore never writes a model status;
-the model keeps the verdict of its last real observation. The scope is
-mandatory because there is no way to infer which ingested records belong to a
-model, and a replay names exactly one model. A model with `desired` state
-populates its own snapshot and compares against it without `--from-catalog`.
-
-**Interrupting a check.** The first Ctrl-C (SIGINT or SIGTERM) stops the check
-cleanly: the running command receives SIGTERM and has 10 seconds to finish
-(then it is killed), temporary workspaces are removed, the model in progress
-concludes `cancelled`, the remaining models are recorded `cancelled`, and the
-check's status is `cancelled`. A second Ctrl-C exits immediately (status 130),
-still removing temporary workspaces. Check again to continue. A populate
-`timeout` expiry is recorded as `failed`, not `cancelled`.
-
-**Exit status.** By default `pudl check` exits 0 whenever every model
-completed, including when it found drift; the report says what it found. A
-failing fail-severity check or any other error exits nonzero.
-
-With `--detailed-exitcode` the exit status is the result, so a script or CI job
-can gate on it without parsing the report:
-
-| Exit | Meaning |
-|------|---------|
-| `0` | Clean: no drift, every fail-severity check passed or is waived |
-| `2` | Findings: drift (including a `--from-catalog` replay's) or a failing fail-severity check (with `--fail-on new`, one with a new unwaived finding) — and nothing else went wrong |
-| `1` | Error: the check could not establish the answer (bad flags, unknown model, populate failure) |
-
-Under this flag every error exits 1, so `2` always means findings. When several
-models fail, the check exits 2 only when every failed model failed on its
-fail-severity checks alone; models blocked or cancelled behind them do not
-count as separate errors.
-
-**Waivers.** A model's `waivers` list declares accepted, time-boxed
-exceptions to its checks' findings, reviewed and versioned with the checks.
-Each names an `owner`, a `reason`, a `created` date and an `expires` date
-(`YYYY-MM-DD`, all required), and one target: a check's witnesses, or one
-compliance-policy violation.
-
-```cue
-waivers: [{
-	check:   "nat-ip-not-in-use"   // an expect: "empty" check of this model
-	witness: {address: "https://.../addresses/nat-ip-2"}  // values the witness must carry
-	owner: "network-team", reason: "held for failover"
-	created: "2026-11-01", expires: "2027-01-31"
-}, {
-	policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingress"
-	resource: "<resource ID from pudl policy show>"
-	owner: "security", reason: "public bastion until the VPN lands"
-	created: "2026-11-01", expires: "2026-12-31"
-}]
-```
-
-A policy waiver applies to any check of the model whose witnesses carry
-`resource` and `policy` arguments (such as `policy_noncompliant`): a witness is
-waived when every violation it stands for — narrowed by any `rule`, `severity`,
-`path` or `kind` argument it also carries — has a waiver. Loading fails on a
-missing field, an invalid date, `expires` before `created`, or a check the model
-does not have.
-
-A waived finding stays in the report with its waiver (`witnesses[].waiver`).
-A check whose every finding is waived has outcome `waived` (not a pass; the
-summary counts it in `waived_checks`) and does not fail the check or
-`--detailed-exitcode`. A waiver applies through its `expires` date (UTC); after
-that its findings count again and the report flags it as `expired`. A waiver
-that matches no finding is reported `stale`. The model report's `waivers` list
-gives each waiver's state and how many findings it matched. `pudl policy show`
-and `pudl show` do not mark waived violations: waivers belong to a model's
-checks.
-**Changes over time.** Each check's failing matches are compared with the
-model's earlier reports of the same check over the same scope (same mode,
-query, expectation, check scope and observation scope). A check result
-records `findings` — every failing match by a stable `key`, with a `state`
-and `first_seen` time — and `changes`, the counts by state and the report
-compared with (`since`):
-
-| State | Meaning |
-|-------|---------|
-| `new` | Failing now; no comparable report since the last complete one recorded it |
-| `persisting` | Failing now and recorded before; `first_seen` is the earliest record |
-| `resolved` | Recorded before, not failing now, and this observation is complete |
-| `unknown` | Recorded before and not seen now, but this observation cannot establish its absence |
-
-The key is a digest of the check relation's head arguments without evidence
-identifiers (`entry_id`, `evidence_id`, `observation_id`, `snapshot_id`,
-`run_id`), so a re-observed resource keeps its key and row order never
-matters. Project identifying fields in the head: a
-`policy_noncompliant(resource, policy, severity)` violation is one finding per
-resource and policy. Only a complete observation resolves: a partial
-snapshot, a run-scoped check over an incomplete observation, a check that
-reached no verdict (for example because an input failed), or more failing
-matches than the 1000 recorded leaves earlier findings `unknown`. Earlier
-reports without a verdict are skipped; incomplete ones still count as having
-seen what they recorded. The baseline is the stored reports, not earlier
-snapshots evaluated again: they are the findings pudl recorded under the rules
-in force then, and they survive snapshot retention, so changing a rule can
-show as resolved and new findings. A waived finding keeps its state and is
-marked `waived` (`changes.waived` counts them); waiving never resolves a
-finding, and once its waiver expires it counts again. The summary counts
-`new_findings` and `resolved_findings`. Compare two named reports with
-[`pudl report ID --since ID2`](#pudl-report).
-
-**Failing only on new findings.** `--fail-on new` makes fail-severity check
-failures fail the command only when one of them has a `new` finding that no
-active waiver excuses (the
-first report of a check has nothing to compare with, so its failures are
-new). A check whose only failures are known exits 0 and says so on stderr.
-With `--detailed-exitcode` it exits 0 instead of 2; drift still exits 2, and
-errors, checks without a verdict, and blocked or cancelled models still exit
-1 or 2 as above. The report still records every failure.
-
-**Command populate.** A `#CommandObserve` arm runs plain commands that print
-JSON (an array of records, or a stream of objects) — `gcloud`, `kubectl`,
-`aws … --format=json` — directly, with no shell. Fan out with a CUE
-comprehension and stamp fields the tool omits with `set`:
-
-```cue
-populate: {
-	schema: "pudl/gcp.#Firewall"     // optional; routes records like import --schema
-	runs: [for p in ["prod-a", "prod-b"] {
-		argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
-		set: project: p
-	}]
-}
-```
-
-The environment is inherited (cloud CLI credentials work). A failing run is a
-failed input: the other runs' records are ingested, the observation is
-incomplete, the report lists each failed run (`populate.failed_inputs`: argv,
-exit status, stderr tail), its checks are unknown, and the model fails. If
-every run fails, nothing is ingested. `fail_fast: true` restores
-all-or-nothing. argv and `set` are recorded with the model: keep secrets out.
-`pudl check --populate 'command:<cmdline>'` checks one ad hoc.
-
-To enumerate the inputs at run time, give `each` a command that prints a JSON
-list of strings, or of objects with `select` naming the field. Every run is
-repeated per input with `{{item}}` replaced in its argv and `set`, and the
-report records the inputs (`populate.inputs`):
-
-```cue
-populate: {
-	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
-	runs: [{argv: ["gcloud", "compute", "firewall-rules", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
-}
-```
+**Exit status.** Without `--detailed-exitcode`, a check exits 0 when every
+model completed, including when it found drift, and nonzero on a failing
+fail-severity check or any error. With it: 0 clean, 2 findings, 1 error. See
+[run in CI](governance.md#run-in-ci) for the full rules and `--fail-on new`.
 
 **Checks-only models.** A model without `populate` evaluates its checks over
-the catalog as it is — e.g. data brought in with `pudl import` — after syncing
-projected facts ([projection](projection.md)). It cannot declare `desired`.
+the catalog as it is, after syncing projected facts. It cannot declare
+`desired`.
 
-**Retired commands, fields and flags.** `pudl check` replaces `pudl run` and
-`pudl run set`. `--converge` and its flags, `--max-observation-age`, and the
-model fields `converge`, `plugins`, `sealed_inputs`, `sealed_outputs`, `inputs`
-and `bindings`, and the `#PluginObserve` and `#EweTarget` populate arms were
-removed. A model that uses one fails to load with an error naming the field; see
+**Catalog replay is not an observation.** `--from-catalog` compares `desired`
+with records already in the catalog, selected by `--catalog-scope` (a
+snapshot ID or an import origin). It names exactly one model and never
+updates the model's status.
+
+**Interrupting.** The first Ctrl-C (SIGINT or SIGTERM) sends SIGTERM to the
+running command and gives it 10 seconds, removes temporary workspaces, and
+records the current and remaining models `cancelled`. A second Ctrl-C exits
+at once with status 130. A populate `timeout` is recorded as `failed`.
+
+**`--check-upstream`** warns when a model this one transitively depends on is
+recorded `drifted` or `failed`; see
+[cross-model dependencies](cross-model-dependencies.md).
+
+A model that declares a retired field (`converge`, `plugins`, `inputs`,
+`bindings`, sealed values) fails to load with an error naming it; see
 [retired commands](retired-commands.md).
 
 ## pudl completion
@@ -653,65 +522,51 @@ Flags:
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
-`--entry` and `--health-only` are mutually exclusive. JSON includes
-`report_version` (3), `mode` (`diagnose`, `dry-run` or `fix`), `ok`, `health`,
-`catalog`, `secrets`, `repairs`, and any setup `error`; invalid records, inference
-mismatches, and failed health checks produce a nonzero exit status. An empty
-catalog is valid. Version 1 reports had no `report_version` and listed repairs
-only as `reason`, `preview_argv` and `apply_argv`; version 2 had no `secrets`.
+**Diagnose, then repair.** Plain `doctor` writes nothing. It checks
+workspace health (schema packages that fail to load, `base_schema` cycles,
+invalid Datalog rules with their file positions), validates catalog records
+against their schemas, scans for likely secrets, and lists each repair that is
+needed. `--fix` applies the needed repairs in the order listed in `--help` and
+re-checks the catalog; `--fix --only NAME` limits them; `--fix --dry-run`
+previews them. `--fix` refuses to write when a health check failed. A repair
+that changes entries also resyncs projected facts.
 
-Each `repairs` item has `name`, `condition`, `status` (`ok`, `needed`,
-`applied`, `partial`, `error` or `skipped`), `message`, `pending`, `changed`,
-`failed`, `changes` (`subject`, `from`, `to`), `errors`, optional `details`
-(the projections repair's sync report), and, when needed, `preview_argv` and
-`apply_argv`. Plain `doctor` writes nothing. `--fix` applies the repairs in
-registry order and re-checks the catalog afterwards; `--fix --dry-run` previews
-them. `--fix` refuses to write when a health check failed, and an `error` or
-`partial` repair fails the command. A repair that changes entries also resyncs
-projected facts unless `projections` ran.
+**Scope.** `--entry` checks one record and cannot be combined with
+`--health-only`. `--schema` and `--origin` scope the catalog scan and the
+inference repair. The inference repair reclassifies only inferred entries the
+scan found drifted; `--include-explicit` re-infers every entry in scope,
+explicit assignments included. The identity repair backfills missing
+`resource_id`s and recomputes those an older release namespaced by the leaf
+schema.
 
-The catalog scan also looks for likely secrets (known token formats and a
-conservative entropy heuristic) in each stored payload outside its schema's
-`_pudl.sensitive_fields` and `_pudl.secret_scan_ignore`, and in the args of
-current facts. Projection-owned facts are skipped: they copy values from
-payloads already scanned. `secrets` has `entries` and `facts` (counts scanned),
-`facts_scanned` (false when `--entry`, `--schema` or `--origin` limit the scan
-to catalog entries), `total`, and up to 500 `findings` with `subject` (`entry`
-or `fact`), `id`, `proquint` and `schema` (entries), `relation` (facts),
-`path`, `kind` and `fix`. Findings never carry the value. They are warnings:
-detection is heuristic, so they do not change `ok` or the exit status. Text
-output lists the first 20 with the total. `secrets` is absent when the catalog
-scan did not run (`--health-only`, or a failed health check).
+**Likely secrets.** The scan reports likely secrets (known token formats and
+a conservative entropy check) in stored payloads outside `sensitive_fields`
+and `secret_scan_ignore`, and in the args of current facts, skipping facts
+projection copied from payloads. Findings name the entry or fact, path and
+kind, never the value. They are warnings and do not change `ok` or the exit
+status.
 
-`--schema` and `--origin` scope the catalog scan and therefore the inference
-repair. That repair re-infers only entries the scan found drifted; explicit
-producer assignments are never reclassified unless `--include-explicit` asks
-for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
-catalog). The identity repair backfills missing `resource_id`s and recomputes those that
-still equal the leaf-schema-namespaced id, re-sequencing the versions of the
-resources they join.
+**`sensitive-scrub`** removes plaintext stored before a schema declared the
+path in `_pudl.sensitive_fields`, from payloads, collection and metadata
+files, snapshot files, stored reports and legacy files. It runs only when
+named: `--fix --only sensitive-scrub` (with `--dry-run` to preview). It
+rewrites each artifact as a fresh import would store it, re-derives the ID of
+each changed entry (old IDs and proquints still resolve), re-projects facts,
+and compacts SQLite. Non-JSON or compressed payloads are listed as
+unsupported: delete and re-import them. Fact history and exported bundles keep
+the plaintext, so rotate every credential the scrub redacts.
 
-The `sensitive-scrub` repair finds plaintext stored before a schema declared
-the path in `_pudl.sensitive_fields`: payloads, collection files, `.meta`
-files, and (by searching for the collected values of 8 bytes or more) legacy
-mu files, observe snapshot files and stored reports. It is opt-in: plain
-`--fix` reports it `skipped`, and only `--fix --only sensitive-scrub` applies
-it (`--dry-run` previews). Apply rewrites each artifact to what a fresh import
-would store, re-derives the ID of each entry whose content changes and
-rewrites every reference to it (an ID that already exists is merged into),
-re-projects current facts, unlinks the superseded files and compacts SQLite
-(`VACUUM`). Old IDs and proquints still resolve in `pudl show` and other entry
-lookups. Its `details` list `subjects` (kind, `id`, `new_id`, `paths`,
-`merged`), `unsupported` payloads (non-JSON or compressed: delete and
-re-import as JSON), `superseded_files`, `compaction_pending` and
-`short_values_skipped`; values never appear. Fact history and exported bundles
-keep the plaintext: rotate every credential the scrub redacts.
+**JSON.** `report_version` 3 with `mode` (`diagnose`, `dry-run` or `fix`),
+`ok`, `health`, `catalog`, `secrets` (absent when the catalog was not
+scanned), `repairs` and any setup `error`. Each repair has `name`,
+`condition`, `status` (`ok`, `needed`, `applied`, `partial`, `error` or
+`skipped`), `message`, `pending`, `changed`, `failed`, `changes`, `errors`,
+optional `details`, and, when needed, `preview_argv` and `apply_argv`.
+Invalid records, inference mismatches, failed health checks, and an `error`
+or `partial` repair exit nonzero. An empty catalog is valid.
 
-Health checks include schema loading (each schema package that fails to load,
-and any `base_schema` cycle) and Datalog rules (each rule that cannot be
-loaded, with its file position).
-
-`--verify-payloads` checks referenced files and available SHA256 content claims, including canonical JSON items. This optional full scan never repairs or rewrites evidence.
+`--verify-payloads` checks referenced files and their SHA256 content claims.
+It never repairs evidence.
 
 ## pudl example
 
@@ -936,8 +791,9 @@ Flags:
 | `--limit` | int | `20` | Maximum results (0 = no limit) |
 | `--relation` | string |  | Limit search to a relation |
 
-Search uses SQLite FTS5 query syntax over currently valid facts, ordered by text
-relevance. Ranking has no maturity or decay policy.
+Search uses SQLite FTS5 query syntax over the values of currently valid facts,
+best matches first. Punctuation such as `.` is FTS5 syntax: quote a phrase
+that contains it.
 
 ## pudl facts show
 
@@ -1189,7 +1045,10 @@ configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
 
-`--from-bundle FILE` restores verified history into a new local workspace. Existing state is never overwritten. Legacy pending approvals are rejected and restored snapshots do not count as a model's latest live observation until it is observed again. See [backup and restore](evidence.md#backup-and-restore).
+`--from-bundle FILE` restores a verified bundle into a new workspace and never
+overwrites existing state. Restored snapshots do not count as a model's latest
+observation until the model is observed again. See
+[backup and restore](evidence.md#backup-and-restore).
 
 ## pudl list
 
@@ -1315,12 +1174,12 @@ Subcommands:
 - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
 - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 
-A model is a registered `#SystemModel` describing a `desired` state and the
-sources that populate observed state. Catalog rows carry a `target` — the run
-target that produced them (e.g. `//models/<name>`, a populate
-phase `//models/<name>:populate`);
-status is recorded per target. Drift detection is a phase of `pudl check`, not a
-standalone command.
+A model is a registered `#SystemModel` in `.pudl/schema/models/`: a
+`populate` collector, its `observation` scope, optional `desired` state,
+`checks`, `waivers` and `depends_on`. A model without `populate` is
+checks-only. `pudl check MODEL...` runs models; nothing here changes
+infrastructure. See [observation](observation-scope.md) for collectors and
+[governance](governance.md) for checks and waivers.
 
 ## pudl model deps
 
@@ -1342,6 +1201,12 @@ Examples:
     pudl model deps
     pudl model deps --json
 ```
+
+`deps` records each registered model's declared `depends_on` as
+`model_depends_on` facts without running any model, so impact queries
+(`pudl query impacted_by changed=MODEL`) cover models that were never
+checked. Edges recorded by retired features are labeled by their source,
+such as `binding`. See [dependencies and impact](cross-model-dependencies.md).
 
 ## pudl model list
 
@@ -1455,6 +1320,15 @@ Subcommands:
 - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
 - [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
 - [pudl policy show](#pudl-policy-show) — Show a policy's rules, inheritance and failing resources
+
+Policies are written in CUE ([Compliance Policies](schema-authoring.md#compliance-policies)).
+pudl evaluates them after every import and observation; these commands
+inspect the stored results and re-evaluate them. Results are facts
+(`policy_status`, `policy_violation`), so `pudl query` and checks read them;
+the built-in rule `policy_noncompliant` is the usual check query (see
+[governance](governance.md#use-policies-in-checks)). A result is stale when
+the policy or its type changed since it was evaluated; `pudl policy evaluate`
+or `pudl doctor --fix --only policy-results` refreshes it.
 
 ## pudl policy evaluate
 
@@ -1636,18 +1510,19 @@ Flags:
 | `--timeout` | duration |  | Maximum query duration (0 disables deadline) |
 | `--topo` | bool |  | Read the relation's from/to edges as a topological run order (errors on a cycle) |
 
-Rules are loaded from `.pudl/schema/pudl/rules/` (repo-scoped) and
-`~/.pudl/schema/pudl/rules/` (global). A query fails when the queried relation
-depends on a rule that cannot be loaded; `pudl doctor` lists such rules. See
-[datalog](datalog.md) for evaluation and rule authoring.
+In a project, rules come from `.pudl/schema/pudl/rules/` and the rules of
+vendored dependencies; in global mode, from `~/.pudl/schema/pudl/rules/`. A
+query fails when the queried relation depends on a rule that cannot be loaded;
+`pudl doctor` lists such rules. See [Datalog](datalog.md) for rules,
+built-in relations and time travel.
 
-`--timeout` bounds SQL evaluation, recursion, and writer contention. Cancellation returns an error and never a successful partial answer.
-Every positional constraint must be `field=value` with a nonblank field; repeated
-fields are errors. Empty values and values containing `=` remain valid.
-`--list` accepts no positional arguments and cannot be combined with `--topo`.
-`--max-iterations` must be nonnegative; zero uses the default recursion cap.
-Every query presentation mode returns output errors. A failed stdout consumer may
-receive a prefix; automation must check the command's exit status.
+Every positional constraint must be `field=value` with a nonblank field;
+repeated fields are errors. Empty values and values containing `=` are valid.
+`--list` takes no positional arguments and cannot be combined with `--topo`.
+`--max-iterations` must be nonnegative; zero uses the default.
+`--timeout` bounds evaluation and waiting for writers; a cancelled query
+returns an error, never a partial answer. If stdout fails mid-write, a
+consumer may receive a prefix, so automation must check the exit status.
 
 ## pudl report
 
@@ -1682,28 +1557,24 @@ Flags:
 |------|------|---------|-------------|
 | `--since` | string |  | compare the report's check findings with an earlier report (check ID or run ID): new, persisting, resolved, unknown |
 
-`report` reads every stored report: check reports, the report of one model
-within a check (by its run ID), and reports recorded by the retired `pudl run`
-and `pudl run set` commands. With no ID it selects the newest stored report.
-With an ID it reads that exact report. The JSON payload is the report as stored.
+With no ID, `report` reads the newest stored report; with an ID, that report:
+a check ID, or the run ID of one model within a check. `--json` prints the
+report as stored. Reports keep their historical values and witnesses; reading
+one adds whether its evidence snapshots are still available, without
+recomputing findings (see
+[evidence lifetime](evidence.md#reports-and-evidence-lifetime)).
 
-Check reports from `report_version` 3 embed each model's full report under
-`members[].report`, and the human rendering shows each model's findings before
-the check summary. Older run-set reports (versions 1 and 2) carry only member
-summaries; read a member's findings with `pudl report <run_id>`. Fields a stored
-report has that current reports do not, such as those from the retired
-convergence workflow, are shown as recorded under "legacy fields".
+`--since ID2` compares instead of printing: each check's findings are
+classified against the same check in ID2, models paired by name, as `new`,
+`persisting`, `resolved` or `unknown`. A check is skipped when ID2 lacks it,
+reached no verdict for it, or evaluated it differently. `--json` writes
+`report`, `since`, and per model each check's `changes` and `findings`. See
+[changes over time](governance.md#track-changes-over-time).
 
-`--since ID2` compares instead of printing the report: each check's failing
-matches in the report (or the newest) are classified against the same check
-in report ID2, models paired by name, as `new`, `persisting`, `resolved` or
-`unknown` with their first-seen times; see
-[changes over time](#pudl-check). A check is not compared when ID2 does not
-have it, reached no verdict for it, or evaluated it differently (mode, query,
-expectation or scope). `--json` writes the comparison: `report`, `since`, and
-per model its checks' `changes` and `findings`.
-
-Reports preserve historical previous/current/expected values and bounded check witnesses. Reading a report adds current snapshot evidence availability without recomputing its findings. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
+Reports recorded by the retired `pudl run` and `pudl run set` read the same
+way. Older run-set reports (versions 1 and 2) carry only member summaries;
+read a member with `pudl report RUN_ID`. Fields current reports no longer
+have are shown under "legacy fields".
 
 ## pudl rule
 
@@ -1994,6 +1865,14 @@ Subcommands:
 - [pudl snapshot retain](#pudl-snapshot-retain) — Pin a snapshot against pruning (--release to unpin)
 - [pudl snapshot show](#pudl-snapshot-show) — Show one snapshot's provenance and contents
 
+Each observation is one snapshot with a scope and a completeness flag (see
+[observation](observation-scope.md)). `snapshot show NEW --compare OLD`
+compares two snapshots of one scope: a resource missing from NEW is `removed`
+only when NEW is complete, and `not-observed` otherwise. A snapshot can be
+pinned by reports (for 30 days), by `snapshot retain`, or by legacy
+approvals; `prune` removes none of them, nor a model's latest successful
+observation. See [evidence lifetime](evidence.md#reports-and-evidence-lifetime).
+
 ## pudl snapshot current
 
 Show the newest observation snapshot for a model
@@ -2109,15 +1988,14 @@ Examples:
     pudl status --json
 ```
 
-`unknown` means there is no verified terminal status: the model has not been
-observed, its last run could not establish a verdict (an incomplete inventory or
-a check without evidence), or the row still holds the `converging` value written
-by the retired convergence workflow. The run row (`runs`) carries each run's
-real verdict and a note.
-
-`clean` is the single in-sync state (drift == ∅), written only off a live
-observation, never off a `--from-catalog` replay. `failed` appears only on rows
-written by the retired convergence workflow; the next check replaces it.
+Status is recorded per model target by `pudl check`. `clean` means a live
+observation matched `desired` and no fail-severity check failed; it is never
+written by a `--from-catalog` replay. `drifted` means drift or a failing
+fail-severity check. `unknown` means no verdict: the model has no `desired`
+state, has not been observed, or its last check could not establish one (an
+incomplete inventory, a check without evidence). `failed` and the value
+`converging` appear only on rows written by retired commands; `converging`
+reads as `unknown`, and the next check replaces both.
 
 ## pudl version
 
