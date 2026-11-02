@@ -10,40 +10,10 @@ import (
 	"unicode"
 
 	"github.com/chazu/pudl/internal/config"
-	"github.com/chazu/pudl/internal/systemmodel"
 )
 
 var modelNewPopulate string
-var modelNewInputs []string
 var modelNewForce bool
-
-// parsePluginSpec accepts the intentionally explicit ad-hoc/scaffold form
-// plugin:<name>. Keeping the prefix makes accidental use of a model name in
-// the populate slot an actionable error.
-func parsePluginSpec(spec string) (string, error) {
-	name, ok := strings.CutPrefix(strings.TrimSpace(spec), "plugin:")
-	name = strings.TrimSpace(name)
-	if !ok || name == "" {
-		return "", fmt.Errorf("populate must use plugin:<name> (got %q)", spec)
-	}
-	return name, nil
-}
-
-// parseKeyValueInputs turns repeated --input key=value flags into the open
-// #PluginObserve input object. Values are typed by parseCLIValue: valid JSON
-// keeps its type (numbers exactly), anything else remains a string.
-func parseKeyValueInputs(args []string) (map[string]any, error) {
-	out := make(map[string]any, len(args))
-	for _, arg := range args {
-		key, value, ok := strings.Cut(arg, "=")
-		key = strings.TrimSpace(key)
-		if !ok || key == "" {
-			return nil, fmt.Errorf("input must use key=value (got %q)", arg)
-		}
-		out[key] = parseCLIValue(value)
-	}
-	return out, nil
-}
 
 var nonIdentifier = regexp.MustCompile(`[^[:alnum:]]+`)
 
@@ -75,32 +45,6 @@ func modelFileName(name string) string {
 	return slug + ".cue"
 }
 
-func renderModelScaffold(name string, plugin systemmodel.PluginDef, input map[string]any) (string, error) {
-	inputJSON, err := json.MarshalIndent(input, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("marshal model input: %w", err)
-	}
-	// The plugins block is what makes the unedited scaffold runnable: a
-	// registered run renders only the plugins the model itself declares.
-	pluginsJSON, err := json.Marshal([]systemmodel.PluginDef{plugin})
-	if err != nil {
-		return "", fmt.Errorf("marshal model plugins: %w", err)
-	}
-	return fmt.Sprintf(`package models
-
-import sm "pudl.schemas/pudl/systemmodel@v0"
-
-#%s: sm.#SystemModel & {
-	name: %q
-	plugins: %s
-	populate: {
-		plugin: %q
-		input: %s
-	}
-}
-`, modelDefinitionName(name), name, pluginsJSON, plugin.Name, inputJSON), nil
-}
-
 func modelWriteRoot(global bool) (string, error) {
 	if !global && wsPolicy != nil && wsPolicy.InWorkspace() {
 		return wsPolicy.Workspace.PudlDir, nil
@@ -108,24 +52,16 @@ func modelWriteRoot(global bool) (string, error) {
 	return config.GetPudlDir(), nil
 }
 
-func writeModelScaffold(name string, spec populateSpec, input map[string]any, global, force bool) (string, error) {
-	var src string
-	if spec.argv != nil {
-		if len(input) > 0 {
-			return "", fmt.Errorf("--input applies to plugin populate arms; a command takes its arguments in the command line")
-		}
-		var err error
-		if src, err = renderCommandScaffold(name, spec.argv); err != nil {
-			return "", err
-		}
-	} else {
-		plugin, err := cachedPluginDefinition(spec.plugin)
-		if err != nil {
-			return "", err
-		}
-		if src, err = renderModelScaffold(name, plugin, input); err != nil {
-			return "", err
-		}
+// defaultScaffoldArgv is the command an unconfigured scaffold runs: it prints
+// an empty record list, so the scaffold registers and runs before it is edited.
+var defaultScaffoldArgv = []string{"echo", "[]"}
+
+// writeModelScaffold writes a #CommandObserve model running argv, or the
+// default scaffold command when argv is empty.
+func writeModelScaffold(name string, argv []string, global, force bool) (string, error) {
+	src, err := renderCommandScaffold(name, argv)
+	if err != nil {
+		return "", err
 	}
 	root, err := modelWriteRoot(global)
 	if err != nil {
@@ -149,8 +85,15 @@ func writeModelScaffold(name string, spec populateSpec, input map[string]any, gl
 	return path, nil
 }
 
-// renderCommandScaffold scaffolds a #CommandObserve model running argv.
+// renderCommandScaffold scaffolds a #CommandObserve model running argv. An
+// empty argv scaffolds the default command with a note to replace it.
 func renderCommandScaffold(name string, argv []string) (string, error) {
+	note := ""
+	if len(argv) == 0 {
+		argv = defaultScaffoldArgv
+		note = "\t\t// Replace with a command that prints JSON records, e.g.\n" +
+			"\t\t// [\"gcloud\", \"compute\", \"instances\", \"list\", \"--format=json\"]\n"
+	}
 	argvJSON, err := json.Marshal(argv)
 	if err != nil {
 		return "", fmt.Errorf("marshal command: %w", err)
@@ -163,8 +106,8 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 	name: %q
 	populate: {
 		// schema: "pudl/<package>.#<Definition>"  // route records like import --schema
-		runs: [{argv: %s}]
+%s		runs: [{argv: %s}]
 	}
 }
-`, modelDefinitionName(name), name, argvJSON), nil
+`, modelDefinitionName(name), name, note, argvJSON), nil
 }

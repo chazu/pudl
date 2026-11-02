@@ -2,7 +2,6 @@ package proc
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,22 +20,9 @@ func fakeTool(t *testing.T, body string) string {
 	return path
 }
 
-func TestOutputReturnsStdoutAndFoldsStderr(t *testing.T) {
-	ok := fakeTool(t, "echo out; echo diag >&2\n")
-	out, err := Output(context.Background(), 0, ok)
-	require.NoError(t, err)
-	assert.Equal(t, "out\n", string(out))
-
-	failing := fakeTool(t, "echo broken >&2; exit 4\n")
-	_, err = Output(context.Background(), 0, failing)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "broken")
-	assert.False(t, Cancelled(err))
-}
-
 // A cancelled tool is asked to stop with SIGTERM, so it can finish what it is
-// writing; the caller sees context.Canceled.
-func TestOutputCancelSendsSIGTERM(t *testing.T) {
+// writing; Stopped reports the caller's cancellation.
+func TestCommandCancelSendsSIGTERM(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "terminated")
 	tool := fakeTool(t, "trap 'echo term > "+marker+"; exit 143' TERM\nwhile :; do sleep 0.05; done\n")
 
@@ -46,9 +32,10 @@ func TestOutputCancelSendsSIGTERM(t *testing.T) {
 		cancel()
 	}()
 	start := time.Now()
-	_, err := Output(ctx, 0, tool)
+	err := Command(ctx, DefaultGrace, tool).Run()
 	require.Error(t, err)
-	assert.True(t, Cancelled(err), "cancellation is reported as context.Canceled: %v", err)
+	stopped := Stopped(ctx, ctx)
+	assert.True(t, Cancelled(stopped), "cancellation is reported as context.Canceled: %v", stopped)
 	assert.Less(t, time.Since(start), DefaultGrace, "a tool that honours SIGTERM ends well within the grace period")
 
 	data, readErr := os.ReadFile(marker)
@@ -70,11 +57,13 @@ func TestCommandKillsAfterGrace(t *testing.T) {
 	assert.Less(t, time.Since(start), 5*time.Second, "the grace period bounds the wait")
 }
 
-func TestOutputTimeoutIsNotACancellation(t *testing.T) {
-	tool := fakeTool(t, "while :; do sleep 0.05; done\n")
-	_, err := Output(context.Background(), 200*time.Millisecond, tool)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, context.DeadlineExceeded), "%v", err)
-	assert.False(t, Cancelled(err), "a timeout is a failure, not an operator cancellation")
-	assert.Contains(t, err.Error(), "timed out after 200ms")
+// A per-run timeout is a failure, not an operator cancellation.
+func TestStoppedTimeoutIsNotACancellation(t *testing.T) {
+	parent := context.Background()
+	run, cancel := context.WithTimeout(parent, time.Millisecond)
+	defer cancel()
+	<-run.Done()
+	stopped := Stopped(parent, run)
+	require.Error(t, stopped)
+	assert.False(t, Cancelled(stopped))
 }

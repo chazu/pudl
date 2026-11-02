@@ -1,5 +1,7 @@
 # pudl + mu Integration
 
+> **Historical.** This document describes the convergence workflow and mu integration that were removed on 2026-11-01. PUDL now observes, catalogs and reports; it changes nothing. See [the removal design](design/2026-11-01-remove-convergence-and-mu.md) and [retired commands](retired-commands.md#convergence-and-mu-integration).
+
 The two tools collaborate in two directions:
 
 - **pudl → mu** (drift convergence): pudl declares desired state in a
@@ -256,7 +258,7 @@ schema_ref) pair, each with its own status and timestamp.
 ### Reclassification
 
 When a schema reference is unknown at import time, pudl tags the item
-with the unresolved ref. `pudl reclassify` rescans these rows and
+with the unresolved ref. The `pudl doctor --fix --only schema-refs` repair rescans these rows and
 upgrades them once the schema becomes resolvable. See the W4/W5
 sections of `docs/plans/2026-05-04-feat-plugin-output-schemas-plan.md`
 in the mu repo for the full design.

@@ -23,6 +23,7 @@ type spooledAssignment struct {
 	Reason     string                      `json:"reason,omitempty"`
 	SourcePath string                      `json:"source_path,omitempty"`
 	Trace      *inference.InferenceTrace   `json:"trace,omitempty"`
+	Intended   string                      `json:"intended,omitempty"`
 	Validation *validator.ValidationResult `json:"validation,omitempty"`
 	Validated  bool                        `json:"validated,omitempty"`
 }

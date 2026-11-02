@@ -260,9 +260,9 @@ Available fields (view columns):
 | `schema` | CUE schema name |
 | `origin` | Data origin / workspace |
 | `format` | File format |
-| `status` | Convergence status |
-| `entry_type` | import, observe, manifest, manifest-action |
-| `target` | mu target / run target name (e.g. `//models/<name>`, `home/odroid`) |
+| `status` | Recorded verdict (`unknown`, `clean`, `drifted`; legacy `converging` reads as `unknown`) |
+| `entry_type` | import, observe; legacy manifest, manifest-action, drift-observation |
+| `target` | run target name (e.g. `//models/<name>:populate`) |
 | `run_id` | Run identifier |
 | `resource_id` | Stable resource identity |
 | `content_hash` | SHA256 of stored data |

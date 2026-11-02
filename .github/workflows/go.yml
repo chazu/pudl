@@ -10,8 +10,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: '1.26.9'
-  MU_VERSION: 'v0.3.5'
+  GO_VERSION: '1.26.10'
 
 jobs:
   test:
@@ -75,20 +74,9 @@ jobs:
           cache: true
       - run: make fuzz FUZZTIME=30s
 
-  kick-tires:
-    name: repository kick-the-tires
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-      - run: go install github.com/chazu/mu/cmd/mu@${MU_VERSION}
-      - run: make test-kick-tires
 
   smoke:
-    name: smoke (external tools/infrastructure)
+    name: smoke (all end-to-end smoke tests)
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:

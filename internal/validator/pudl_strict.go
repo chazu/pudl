@@ -10,8 +10,11 @@ import (
 // rather than vanish: sensitive_fields (redaction) and facts (projection).
 // Anything present but not concrete and well-typed is recorded as an error on
 // the metadata; consumers fail closed (redaction) or disable the feature with a
-// warning (projection).
+// warning (projection). review is decoded strictly too (see review.go).
 func decodeStrictPudlParts(pudl cue.Value, meta *SchemaMetadata) {
+	decodeReview(pudl, meta)
+	decodeSecretScanIgnore(pudl, meta)
+	decodeOwner(pudl, meta)
 	if v := pudl.LookupPath(cue.ParsePath("sensitive_fields")); v.Exists() {
 		var fields []string
 		if err := v.Validate(cue.Concrete(true)); err != nil {

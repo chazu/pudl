@@ -27,9 +27,10 @@ func (c *collectionStream) reobserve(tx *database.CatalogTx, existing *database.
 	}
 	if moved {
 		c.reassigned++
+		c.reassignedMeta = append(c.reassignedMeta, reassignedMeta{path: existing.MetadataPath, info: item.Metadata.SchemaInfo})
 	}
 	if moved || existing.Schema == item.Entry.Schema {
-		return projection.Observe(tx, item.Projection)
+		return observeFacts(tx, item.Projection, item.Policies)
 	}
 	return nil
 }
@@ -77,7 +78,21 @@ func (c *collectionStream) reobserveAll() (int, error) {
 			}
 		}
 	})
+	if err == nil {
+		err = c.recordReassignments()
+	}
 	return c.reassigned, err
+}
+
+// recordReassignments rewrites the .meta of every entry this import moved to
+// its explicit schema. Call after the catalog transaction commits.
+func (c *collectionStream) recordReassignments() error {
+	for _, r := range c.reassignedMeta {
+		if err := recordReassignment(r); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // reobserveDocument handles a re-import of a single document that is already
@@ -108,12 +123,17 @@ func (e *EnhancedImporter) reobserveDocument(opts ImportOptions, existing *datab
 			return nil
 		}
 		prepared, _ := projection.Prepare(e.projector, want.Schema, existing.ID, *want.ResourceID, resolved, data)
-		return projection.Observe(tx, prepared)
+		return observeFacts(tx, prepared, e.policies.Prepare(want.Schema, existing.ID, *want.ResourceID, resolved, data))
 	})
-	if moved {
-		return 1, err
+	if !moved {
+		return 0, err
 	}
-	return 0, err
+	if err == nil {
+		info := SchemaInfo{CuePackage: extractPackage(want.Schema), CueDefinition: want.Schema, ValidationStatus: validationStatus(assigned), SchemaVersion: "v1.0"}
+		enrichAssignment(&info, nil, assigned)
+		err = recordReassignment(reassignedMeta{path: existing.MetadataPath, info: info})
+	}
+	return 1, err
 }
 
 // identifiedEntry is the schema and identity the importer derives for data

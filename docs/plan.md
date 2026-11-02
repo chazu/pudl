@@ -4,6 +4,136 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Go 1.26.10 for GO-2026-6809 (2026-11-02)
+
+Raised the Go toolchain pins from 1.26.9 to 1.26.10 for a `crypto/x509`
+standard-library advisory found by the pre-merge vulnerability scan
+(`pudl-pps`). `make vulncheck` reports no affecting vulnerabilities. See
+[delivery log](../implog/2026_11_02_go_1_26_10.md).
+
+### AWS content pack, relationship rules and impact queries (2026-11-02)
+
+`pudl example install aws` installs a pack written in CUE (`pudl-xf5.2`):
+draft schemas for VPCs, subnets, security groups, EC2 instances, EBS volumes,
+S3 buckets, RDS instances, KMS keys and IAM users and roles, with identity,
+ownership by account, redacted user data and fact projection; the VPC, subnet
+and security group types specialize the built-in `pudl/aws` types. Live
+(`aws-<type>`, aws CLI fanned out over accounts and regions) and fixture
+(`aws-fixture-<type>`) collectors; eight best-practice policies (open
+security groups, IMDSv2, EBS and RDS encryption, RDS public access and
+backups, S3 public access block and versioning, KMS rotation, console users
+without MFA, roles anyone can assume); and three checks-only families
+(network exposure, data protection, identity posture). The AWS part of
+`pudl-xf5.7` ships relationship rules (EC2 → subnet → VPC, EC2 → security
+group, RDS → subnet group/VPC), checks that use them (internet-exposed
+instance, instance in the default VPC, database on an unusable key) and impact
+queries: `aws_depends_on_vpc` and the recursive `aws_depends_on` for AWS, and
+`gcp_depends_on_network` for GCP. See the [pack README](../examples/aws/README.md)
+and the [delivery log](../implog/2026_11_02_aws_content_pack.md).
+
+### Ownership attribution (2026-11-02)
+
+Schemas declare `_pudl.owner` (label or tag paths, a mapping table such as
+project to team, a fallback), inherited along `base_schema` (`pudl-xf5.6`).
+Ownership is projected as `resource_owner` and `resource_unowned`; check
+findings and `pudl policy show` name each resource's owner, human check output
+groups findings by owner, and `--owner TEAM` shows one owner's. The GCP pack
+declares it on every type. See the
+[delivery log](../implog/2026_11_02_ownership_attribution.md).
+
+### Multi-project fan-out: failed inputs and enumeration (2026-11-02)
+
+A failing `#CommandRun` is a failed input (`pudl-xf5.3`). The other runs'
+records are ingested, and the snapshot is incomplete, so no scope is closed.
+The report lists each failure under `populate.failed_inputs` (argv, exit
+status, stderr tail). Checks over the observation are unknown, not passing,
+and the model fails. If every run fails, nothing is ingested;
+`populate.fail_fast: true` restores all-or-nothing. `populate.each` runs a
+command whose JSON list supplies the inputs, and repeats every run per item
+with `{{item}}` substituted. The report records the items as
+`populate.inputs`. See the
+[delivery log](../implog/2026_11_02_fanout_failed_inputs.md).
+
+### GCP content pack (2026-11-02)
+
+`pudl example install gcp` installs a pack written in CUE (`pudl-xf5.1`):
+draft schemas for 15 GCP resource types with identity, sensitive fields and
+fact projection; live (`gcp-<type>`, gcloud with project fan-out) and fixture
+(`gcp-fixture-<type>`) collectors; best-practice policies for firewalls,
+addresses, buckets, Cloud SQL, KMS keys and GKE; cross-resource rules; and
+three checks-only families (network hygiene, data protection, GKE posture)
+that fail on high-severity noncompliance. See the
+[pack README](../examples/gcp/README.md) and the
+[delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
+five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
+(`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see
+`implog/2026_11_02_policy_engine_pack_fixes.md`.
+
+### Check and report orchestration moved out of `cmd/` (2026-11-01)
+
+`cmd/` now parses flags, renders and maps exit codes (`pudl-4fx.4`). Check
+execution lives in `internal/operation` (`Check` over an injected `Workspace`
+and `Output`), the recorded report and its reading and rendering in
+`internal/checkreport`, inventory drift and snapshot comparison in
+`internal/inventory`, `#CommandObserve` execution in `internal/populate`, the
+`model_depends_on` graph in `internal/modeldeps`, doctor's catalog checks in
+`internal/doctor` and the repair pass in `internal/repair`. Their tests run
+without the CLI. No behavior change: help, `--json` output and the golden
+files are unchanged. `cmd/` production code went from 13,026 to 9,732 lines.
+See the [delivery log](../implog/2026_11_01_orchestration_out_of_cmd.md).
+
+### `pudl check MODEL...`: one command and one report (2026-11-01)
+
+`pudl check MODEL...` replaces `pudl run` and `pudl run set` (`pudl-4fx.1`).
+It observes and evaluates exactly the named models, producers first by
+`depends_on` within the named set, and records one report (`report_version` 3)
+for one model or many, embedding each model's full report under
+`members[].report`. `pudl report [ID]` replaces `pudl run report` and still
+reads stored run and run-set reports. `--detailed-exitcode`, `--from-catalog`,
+`--check-upstream` and `--populate` carry over. Value bindings (`inputs`,
+`bindings`, `@pudl(binding=...)`, `internal/wiring`) and `--max-observation-age`
+were removed; nothing shipped used them. `pudl status` stays. See
+[retired commands](retired-commands.md#run-and-run-set) and the
+[delivery log](../implog/2026_11_01_pudl_check.md).
+
+### Convergence and mu integration removed (2026-11-01)
+
+PUDL discovers, catalogs and governs infrastructure; it no longer changes it
+(`pudl-z87`, steps `.1`–`.5`). Removed: `run --converge` and its flags,
+approvals (`run resume`/`reject`), mutating run sets, apply budgets, mutation
+intents and receipts, sealed values, `#PluginObserve`, `#EweTarget`,
+`plugins:`, differential drift, drift observations, `pudl mu
+ingest-manifest`/`ingest-observe`, typed-envelope import, the mu schema cache,
+the doctor mu check and schema-refs repair, `--mu-root`/`--mu-timeout`, `model
+populator`, and `make test-kick-tires`. `#CommandObserve` is the only populate
+arm and `pudl model new` scaffolds it by default; the observation ingest moved
+to `internal/observe`. Models using retired fields fail to load with an error
+naming the field. Old catalogs open unchanged: approval tables stay, `converging`
+reads as `unknown`, legacy report fields render as JSON, and the `pudl/mu`
+schemas are kept as legacy. The Git walkthrough observes with `pudl run` (now
+`pudl check`). See
+[retired commands](retired-commands.md#convergence-and-mu-integration) and the
+[delivery log](../implog/2026_11_01_remove_convergence_and_mu.md).
+
+### Fact-store writes demoted from everyday help (2026-11-01)
+
+`pudl facts add/retract/invalidate` are now advanced commands (`pudl-4fx.3`).
+They are hidden from `--help` and completion but still run. `help --json` flags
+them as `"advanced": true`, and `docs/cli-reference.md` documents them under
+"Advanced commands". The `facts list/show/search/stats` inspection commands stay
+visible. `pudl prime` remains the agent entrypoint. `pkg/factstore` is unchanged.
+See [delivery log](../implog/2026_11_01_demote_fact_writes.md).
+
+### Repair commands folded into `pudl doctor --fix` (2026-11-01)
+
+`pudl doctor` diagnoses schema-name normalization, inference drift, missing or
+leaf-namespaced identities, and stale
+projected facts, and names the repair for each. `pudl doctor --fix [--only
+NAME]` applies them, `--fix --dry-run` previews them, and the JSON report is
+versioned. `schema migrate`, `schema reinfer`, `migrate identity`,
+`reclassify` and `facts reproject` are retired (`pudl-4fx.2`).
+See [delivery log](../implog/2026_11_01_doctor_fix_repairs.md).
+
 ### Go and dependency vulnerabilities remediated (2026-10-10)
 
 Updated Go to 1.26.9, x/net to v0.60.0, and x/text to v0.42.0, with the
@@ -579,6 +709,151 @@ and the second-round implementation log for acceptance results and limitations.
 
 ## What's Next
 
+### After the convergence and mu removal (decided 2026-11-01)
+
+PUDL narrows to discovering, cataloging and governing infrastructure. The
+convergence workflow and all mu integration were removed (see What's Built).
+Observation is `#CommandObserve` only. See
+[the removal design](design/2026-11-01-remove-convergence-and-mu.md). Open
+follow-up: dropping the legacy approval tables and `pudl/mu` schemas after a
+release. (Observe-only `run set` and value bindings were removed with
+`pudl check`.)
+Beads work:
+
+- `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5` (done).
+- `pudl-4fx`: simplify the everyday command surface (`pudl check` — done in
+  `pudl-4fx.1`; `doctor --fix`, demoting fact-store writes; moving
+  orchestration out of `cmd/` — done in `pudl-4fx.4`).
+- `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
+  multi-project fan-out, waivers, finding changes over time, ownership,
+  relationship rules).
+  - Done: `pudl-xf5.1` GCP content pack (`pudl example install gcp`). See
+    `implog/2026_11_02_gcp_content_pack.md`.
+  - Done: `pudl-xf5.6` ownership attribution (`_pudl.owner`: label/tag paths,
+    a mapping table, a fallback; inherited along `base_schema`; projected as
+    `resource_owner`/`resource_unowned`; check findings and `policy show`
+    carry `owner`; `pudl check --owner`, `pudl policy show --owner`; the GCP
+    pack declares it on every type). See
+    `implog/2026_11_02_ownership_attribution.md`.
+  - Done: `pudl-xf5.3` multi-project fan-out (failed inputs ingest the rest
+    as an incomplete observation with unknown checks; `populate.each`
+    enumeration; `populate.fail_fast`). See
+    `implog/2026_11_02_fanout_failed_inputs.md`.
+  - Done: `pudl-xf5.4` check waivers: a `waivers` list on `#SystemModel`
+    (check + witness selector, or policy + rule + resource; owner, reason,
+    created and expires required, validated at load). Fully waived checks
+    report outcome `waived`, stay visible with their waivers and do not fail
+    `pudl check` or `--detailed-exitcode`; expired waivers stop applying and
+    are flagged; unmatched waivers are reported stale. Marking waivers in
+    `pudl policy show`/`pudl show` is deferred. See
+    `implog/2026_11_02_check_waivers.md`.
+  - Done: `pudl-opz` policy annotations survive comprehensions the bare
+    policy cannot decide (an annotation that still cannot be read fails the
+    load), and evaluation ignores closedness at every depth; `pudl-pob` the
+    doctor identity_fields family check and fact projection skip policies.
+    GCP pack workarounds removed. See
+    `implog/2026_11_02_policy_engine_pack_fixes.md`.
+  - Done: `pudl-xf5.5` finding changes over time: each check records its
+    failing matches as findings with stable keys, classified new, persisting,
+    resolved or unknown with first-seen times against the model's comparable
+    stored reports (only a complete observation resolves); `pudl report ID
+    --since ID2`; `pudl check --fail-on new` (composes with
+    `--detailed-exitcode`). See `implog/2026_11_02_finding_changes.md`.
+- `pudl-xf5.8`: compliance policies. Policy schemas are specializations of type
+  schemas, evaluated per resource with named violations, through `pudl policy
+  list`, `show` and `evaluate`. "Validated" becomes a review blessing on type
+  schemas. See [the compliance policy design](design/2026-11-01-compliance-policies.md).
+  - Done: `pudl-xf5.8.7` schema review status (`_pudl.review`, strict
+    decode, shown by `pudl schema list`/`show`, generated schemas start as
+    draft). See `implog/2026_11_01_schema_review_status.md`.
+  - Done: `pudl-xf5.8.2` policy evaluation engine (`internal/policy`, pure:
+    applicability, open evaluation, rule attribution, absent semantics,
+    sensitive-path load errors, digests; not yet wired into ingest). Policies
+    are written standalone and linked by `base_schema`. See
+    `implog/2026_11_01_policy_evaluation_engine.md`.
+  - Done: `pudl-xf5.8.1` policies leave classification (inference candidates
+    and validation fallback skip policies; `--schema` or `populate.schema`
+    naming a policy is an error naming its type; `pudl doctor --fix --only
+    policy-leaves` moves existing policy-leaf entries to their type with
+    identity kept). See `implog/2026_11_01_policies_leave_classification.md`.
+  - Done: `pudl-xf5.8.3` policy results persisted as facts at every import and
+    observation (`policy_status`, `policy_violation` under
+    `policy:<policy>:<resource>`, reconciled like projection; reserved names;
+    complete-scope exits closed), `pudl policy evaluate [POLICY...] [--dry-run]
+    [--what-if FILE]`, the built-in `policy_noncompliant` rule, and stale
+    detection as the `policy-results` doctor repair. See
+    `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-xf5.8.4` `pudl policy list [--type T]` (type, extends, rule
+    count, type review, last evaluated, compliant/noncompliant/unknown/stale
+    counts), `pudl policy show POLICY [--limit N]` (chain, rules with severity,
+    doc and declaring policy, failing counts per rule, resources failing most)
+    and the compliance section of `pudl show ID`, all with `--json`, read from
+    stored results. See `implog/2026_11_02_policy_list_show.md`.
+  - Done: `pudl-4fx.6` simplification pass over the policy code, no behavior
+    change: stored results filtered in SQL (violations joined on their policy
+    source), current resource entries picked in SQL, one stored-resource loop
+    for `evaluate` and `--what-if`, shared status counting and payload loader
+    type, one-pass CUE error paths. `policy_state` is kept: fact provenance
+    and `tx_start` do not track the latest evaluated entry and time. See
+    `implog/2026_11_02_policy_simplification.md`.
+  - Done: `pudl-xf5.8.9` policy documentation: the Compliance Policies
+    section of `docs/schema-authoring.md` (standalone policies, rule
+    attributes, absent/unknown semantics, review status, extension, sensitive
+    paths, CUE gotchas, workflow commands, checks and doctor repairs), the
+    `pudl-core` skill, and the design marked Implemented. The
+    `gcp-network-hygiene` example's firewall rule is now a policy
+    (`#FirewallNoInternetIngress`) and its check queries
+    `policy_noncompliant`; `rules.cue` and the schema's projection metadata
+    are gone. See `implog/2026_11_02_policy_docs.md`.
+- `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
+  paths (and broken sensitive declarations), and a `populate.schema` naming a
+  policy, before any command runs. See
+  `implog/2026_11_02_model_load_schema_contracts.md`.
+- `pudl-167` (done): the `name|path|id` inventory identity fallback is one
+  function (`acute.IdentityFields`), and inventory drift and snapshot
+  comparison report each schema that used it (`identity_fallbacks`). Not fail
+  closed. See `implog/2026_11_02_identity_fallback_reported.md`.
+- `pudl-udi`: likely-secret detection outside sensitive-field coverage.
+  - Done: pure detector (`internal/secrets`), `_pudl.secret_scan_ignore`
+    allowlist, import and `--dry-run` warnings (`secret_warnings` in `--json`),
+    `pudl facts add` warning and opt-in `factstore.WithSecretRejection`. See
+    `implog/2026_11_01_secret_pattern_detection.md`.
+  - Done: `pudl doctor` scan of stored payloads and current (non-projection)
+    facts, reported as warnings in text and the `secrets` section of the
+    version 3 JSON report. See `implog/2026_11_01_doctor_secret_scan.md`.
+  - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
+    kind, in the run's stderr and the populate report's `secret_warnings`.
+    See `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-zxq` re-importing an already-cataloged document still scans
+    it and reports `secret_warnings` (dedup used to skip before decoding).
+    See `implog/2026_11_02_reimport_secret_scan.md`.
+- `pudl-m10` (done): `pudl doctor` diagnoses plaintext stored before a schema
+  declared the path in `_pudl.sensitive_fields`, and the opt-in repair
+  `pudl doctor --fix --only sensitive-scrub` redacts payloads, collection
+  files, `.meta`, legacy and snapshot files and stored reports, re-derives the
+  IDs of rewritten entries (every reference rewritten, collisions merged, old
+  IDs redirect), re-projects current facts and compacts SQLite. Fact history
+  and exported bundles keep the plaintext. See
+  [the design](design/2026-11-01-sensitive-data-scrub.md) and
+  `implog/2026_11_02_sensitive_scrub.md`.
+- `pudl-ww1` (done): a plain `pudl doctor --fix` no longer reclassifies
+  entries imported with an explicit `--schema`. Explicitness is recorded in
+  `.meta` (`intended_schema`) by every import path, including re-import
+  moves. Doctor's scan and the `inference` repair both read it through
+  `importer.ExplicitAssignment`. See
+  `implog/2026_11_02_doctor_fix_keeps_explicit_schema.md`.
+- `pudl-qhx` (done): a checks-only model's catalog instance is recorded
+  without `populate`, so it satisfies `#SystemModel` and `pudl doctor` stays
+  ok. Doctor validates instances older versions stored with `populate: {}`
+  without that key. See `implog/2026_11_02_checks_only_instance_populate.md`.
+- Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
+  observe snapshots, staging files and the SQLite catalog are written 0600
+  under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix
+  --only data-permissions` tightens older data. Schemas, rules, models and
+  config keep their modes. See `implog/2026_11_01_owner_only_data.md`.
+
+The convergence and value-wiring sections below are historical.
+
 ### Thirty-candidate follow-up review (2026-10-05)
 
 Five demonstrated gaps retained after evaluating thirty candidates. See
@@ -1000,13 +1275,22 @@ under the hood.
 | `idgen` | `internal/idgen/` | Content IDs, SHA256, proquint encoding |
 | `database` | `internal/database/` | SQLite catalog CRUD and queries |
 | `validator` | `internal/validator/` | CUE validation |
-| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema and model loading |
+| `policy` | `internal/policy/` | Compliance policy loading and per-resource evaluation |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema, model loading and resolution by name, ad-hoc `--populate` models |
 | `mubridge` | `internal/mubridge/` | Typed envelope, manifest, and observe-snapshot ingestion |
 | `workspace` | `internal/workspace/` | Per-repo workspace discovery, context resolution |
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |
 | `datalog` | `internal/datalog/` | Rule loading, SQL compilation, SCC-based evaluation |
 | `acute` | `internal/acute/` | Run plans, reports, drift comparison and findings |
+| `operation` | `internal/operation/` | `pudl check` execution: model resolution, ordering, populate and ingest, inventory drift, checks, verdicts, one check report |
+| `checkreport` | `internal/checkreport/` | A check's recorded report: model reports, summaries, rendering, reading stored reports back |
+| `inventory` | `internal/inventory/` | Inventory drift against a snapshot, snapshot comparison, identity policy |
+| `populate` | `internal/populate/` | `#CommandObserve` execution: run commands, spool and decode their JSON records |
+| `modeldeps` | `internal/modeldeps/` | `model_depends_on` graph: declared edges, reconcile, upstream-freshness advisory |
+| `checks` | `internal/checks/` | Model check evaluation over the catalog or selected evidence |
+| `waiver` | `internal/waiver/` | Check waivers: validation, matching findings and policy violations, active/expired/stale outcomes |
+| `observe` | `internal/observe/` | Observation ingest into catalog entries and snapshots |
 | `proc` | `internal/proc/` | Context-bound subprocesses (mu, cue) with graceful cancellation |
 | `clidocs` | `internal/clidocs/` | Generated CLI reference |
 | `testenv` | `internal/testenv/` | Test isolation helpers (HOME guard) |
@@ -1014,10 +1298,11 @@ under the hood.
 | `init` | `internal/init/` | Workspace initialization |
 | `git` | `internal/git/` | Git operations on schema repo |
 | `lister` | `internal/lister/` | List/query with filters |
-| `doctor` | `internal/doctor/` | Health checks, directory validation |
+| `doctor` | `internal/doctor/` | Health checks, directory validation, catalog entry checks and secret scan |
+| `repair` | `internal/repair/` | Catalog repairs diagnosed and applied by `pudl doctor --fix`, and the repair pass that runs them |
 | `schema` | `internal/schema/` | Schema operations |
 | `repo` | `internal/repo/` | Repo init, skill installation |
 | `skills` | `internal/skills/` | Embedded Claude skill files |
 | `ui` | `internal/ui/` | Output formatting |
 | `errors` | `internal/errors/` | Typed error codes |
-| `cmd` | `cmd/` | CLI command definitions (Cobra) |
+| `cmd` | `cmd/` | CLI command definitions (Cobra): flags, rendering, exit codes |

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/importer"
+	"github.com/chazu/pudl/internal/secretscan"
 )
 
 // importNotes are the lines an import summary adds after its counts: anything
@@ -28,7 +29,7 @@ func importNotes(result *importer.ImportResult) []string {
 	if result.Redacted > 0 {
 		notes = append(notes, fmt.Sprintf("🔒 %d sensitive values redacted before storage", result.Redacted))
 	}
-	return notes
+	return append(notes, secretscan.Notes(result.SecretWarnings, result.SecretWarningsTotal)...)
 }
 
 // printImportNotes writes importNotes to the result stream.

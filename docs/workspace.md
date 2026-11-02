@@ -50,7 +50,7 @@ Built-in schemas and rules are installed locally by `pudl init`.
 Workspace-local schemas and model files are project-owned and should be
 committed with the repository. Mutable runtime state is isolated beneath
 `<repo>/.pudl/data/`: raw imports, metadata, SQLite catalog rows, facts,
-snapshots, run reports, and approval records never share the global catalog.
+snapshots, check reports, and legacy approval records never share the global catalog.
 The generated `.pudl/.gitignore` keeps runtime data and the machine-local path
 configuration out of Git.
 Repository `schema_path` and `data_path` are fixed to `.pudl/schema` and

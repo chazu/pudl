@@ -21,7 +21,7 @@ ifeq ($(strip $(INSTALL_PATH)),)
 INSTALL_PATH := $(shell $(GO) env GOPATH)/bin
 endif
 
-.PHONY: all build install uninstall clean clean-local test fuzz test-kick-tires test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint vulncheck test-race coverage ci generate check-skills docs check-docs
+.PHONY: all build install uninstall clean clean-local test fuzz test-git-walkthrough release snapshot bench bench-cpu bench-mem bench-save bench-compare lint vulncheck test-race coverage ci generate check-skills docs check-docs
 
 all: build
 
@@ -39,26 +39,19 @@ clean:
 	rm -f $(BINARY_NAME)
 	$(GO) clean
 
-# Remove large local caches left behind by manual kick-tires and walkthrough
-# runs. Only ignored runtime state under .pudl/data/ is touched.
+# Remove large local caches left behind by smoke and walkthrough runs. Only
+# ignored runtime state under .pudl/data/ is touched.
 clean-local:
-	rm -rf .pudl/data/kick-tires/ci-* .pudl/data/kick-tires/bin .pudl/data/git-walkthrough
+	rm -rf .pudl/data/kick-tires .pudl/data/smoke .pudl/data/git-walkthrough
 
 test:
 	$(GO) test ./...
 
-# Hermetic repository-local PUDL + real-mu matrix. Every durable artifact stays
-# under .pudl/data/; CI installs the documented mu compatibility version first.
-test-kick-tires:
-	@command -v git >/dev/null 2>&1 || (echo "git is required for test-kick-tires" && exit 1)
-	@command -v mu >/dev/null 2>&1 || (echo "mu is required for test-kick-tires" && exit 1)
-	@command -v python3 >/dev/null 2>&1 || (echo "python3 is required for test-kick-tires" && exit 1)
-	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(RepositoryKickTires|GitInventoryObservation)' -v -count=1 -timeout 5m
-
-# Execute the getting-started guide's command blocks against a fresh workspace.
+# Execute the getting-started guide's command blocks against a fresh workspace,
+# and run the example's observation journey. Needs git; no mu or network.
 test-git-walkthrough:
 	@command -v git >/dev/null 2>&1 || (echo "git is required for test-git-walkthrough" && exit 1)
-	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(GitInventoryWalkthrough|ExampleInstall.*)$$' -v -count=1 -timeout 5m
+	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(GitInventoryWalkthrough|GitInventoryObservation|ExampleInstall.*)$$' -v -count=1 -timeout 5m
 
 # Sync embedded skill copies (internal/skills/files/*.md) from their canonical
 # sources in skills/<name>/SKILL.md.
@@ -79,9 +72,8 @@ docs:
 check-docs:
 	$(GO) run ./internal/clidocs/gen -check
 
-# Gated end-to-end smoke tests (convergence + cross-model deps). They skip
-# cleanly when docker/k3d/kubectl/mu/bb/jq are missing and clean up after
-# themselves. Set PUDL_SMOKE_MU_ROOT to point the infra tests at a mu project.
+# Every gated end-to-end smoke test, against a freshly built binary in
+# sandboxed workspaces. They clean up after themselves.
 smoke:
 	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -v -timeout 20m
 

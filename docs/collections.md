@@ -25,24 +25,13 @@ pudl import --path cloud-inventory.json
 # Created collection with 832 items
 ```
 
-## Typed envelopes
+## Typed envelopes (retired)
 
-Typed JSON emitted by mu or another producer can carry schema metadata around a
-payload:
-
-```json
-{
-  "schema": {"module": "mu/aws", "version": "v1", "definition": "#Instance"},
-  "definitions": [{"path": "aws.cue", "content": "..."}],
-  "data": {"id": "i-abc", "type": "ec2"}
-}
-```
-
-PUDL recognizes an envelope only when `schema.module`, `schema.version`, and `data`
-are present. It records the canonical schema reference in `item_schemas`, caches
-inline definitions, and imports the inner `data` value. An envelope is metadata
-around a payload; it is not inferred to be a collection. Use NDJSON when each line
-should become a collection item.
+Typed-envelope unwrapping (`{"schema": …, "definitions": …, "data": …}`) was
+removed with the mu integration. Such a file now imports as an ordinary JSON
+object; import the bare payload with `--schema` instead. Existing `item_schemas`
+rows are kept but no longer read. An object is never inferred to be a
+collection; use NDJSON when each line should become a collection item.
 
 ## Collection Structure
 

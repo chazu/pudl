@@ -16,19 +16,27 @@ var exampleCmd = &cobra.Command{
 var exampleInstallCmd = &cobra.Command{
 	Use:       "install <name>",
 	Short:     "Install a runnable example and its fixture data",
-	ValidArgs: []string{"git-inventory", "gcp-network-hygiene"},
+	ValidArgs: []string{"git-inventory", "gcp-network-hygiene", "gcp", "aws"},
 	Args:      cobra.ExactArgs(1),
 	Long: `Install a bundled example in the current initialized PUDL workspace.
 No source checkout or download is needed. Identical files are left alone;
 existing files with different content are preserved and reported as conflicts.
 
-The git-inventory example includes a model expecting default branch main,
-baseline and changed observations, and an optional live observer. The import
-and catalog replay tutorial needs only PUDL; live observation also needs mu
-and Python 3.
+The git-inventory example includes a model expecting default branch main and
+baseline and changed inventories. The model observes the current inventory
+with cat, so the tutorial needs nothing beyond PUDL.
 
-The gcp-network-hygiene example includes a fixture observer, saved checks,
-a corrected fixture, and a separate gcloud-based live model.
+The gcp-network-hygiene example includes a firewall type and policy, a
+fixture observer, a check over policy results, a corrected fixture, and a
+separate gcloud-based live model.
+
+The gcp content pack includes draft schemas for the core GCP inventory,
+best-practice policies, gcloud and fixture collectors, and three check
+families: network hygiene, data protection and GKE posture.
+
+The aws content pack does the same for AWS, with aws CLI and fixture
+collectors and three check families: network exposure, data protection and
+identity posture.
 
 Example:
     pudl init
@@ -45,11 +53,19 @@ Example:
 			return GetOutputWriter().WriteJSON(map[string]any{"example": args[0], "root": wsPolicy.Workspace.PudlDir, "files": files})
 		}
 		fmt.Fprintf(outw(), "Installed %s in %s\n", args[0], wsPolicy.Workspace.PudlDir)
-		if args[0] == "gcp-network-hygiene" {
-			fmt.Fprintln(outw(), "Next: pudl run gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
+		if args[0] == "aws" {
+			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
 			return nil
 		}
-		fmt.Fprintf(outw(), "Model: git-inventory\nObservations: .pudl/populators/git-inventory/{baseline,changed}-observe.json\n")
+		if args[0] == "gcp" {
+			fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
+			return nil
+		}
+		if args[0] == "gcp-network-hygiene" {
+			fmt.Fprintln(outw(), "Next: pudl check gcp-network-hygiene --detailed-exitcode (fixture; no cloud access)")
+			return nil
+		}
+		fmt.Fprintf(outw(), "Model: git-inventory\nInventories: .pudl/populators/git-inventory/{baseline,changed}.json (the model observes current.json)\n")
 		fmt.Fprintln(outw(), "Next: pudl model show git-inventory")
 		return nil
 	},

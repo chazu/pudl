@@ -17,10 +17,10 @@ var schemaCmd = &cobra.Command{
 	Long: `Manage CUE schemas for import validation and resource identity.
 
 Schemas come from the project and its explicit vendored dependencies, or the
-personal workspace selected by --global. Use list/show for discovery, add/new
-for authoring, and reinfer/migrate for reviewed maintenance. Inspect physical
-paths with pudl config --paths --json. Git, your editor, and cue manage the files
-directly; see docs/retired-commands.md for replacements.`,
+personal workspace selected by --global. Use list/show for discovery and add/new
+for authoring; pudl doctor --fix repairs schema names and inference drift.
+Inspect physical paths with pudl config --paths --json. Git, your editor, and cue
+manage the files directly; see docs/retired-commands.md for replacements.`,
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Default behavior: show help

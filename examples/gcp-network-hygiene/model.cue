@@ -4,7 +4,7 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 
 _checks: [{
 	name: "internet-ingress-allow"
-	query: "gcp_internet_ingress_allow"
+	query: "policy_noncompliant"
 	expect: "empty"
 	severity: "fail"
 	message: "Review enabled ingress ALLOW rules with source 0.0.0.0/0"

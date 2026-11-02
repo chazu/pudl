@@ -3,12 +3,15 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/cliadvanced"
 )
 
 // jsonContractExempt lists runnable commands the JSON output contract test
@@ -17,28 +20,18 @@ import (
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
 	"pudl model":                 "command group",
-	"pudl mu":                    "command group",
+	"pudl policy":                "command group",
 	"pudl rule":                  "command group",
 	"pudl schema":                "command group",
 	"pudl snapshot":              "command group",
 	"pudl guide":                 "prints reference documentation",
 	"pudl prime":                 "prints reference documentation",
-	"pudl schema migrate":        "maintenance command with a text report",
-	"pudl schema reinfer":        "maintenance command with a text report",
-	"pudl migrate identity":      "maintenance command with a text report",
-	"pudl reclassify":            "maintenance command with a text report",
 	"pudl schema add":            "schema authoring; text report",
 	"pudl schema new":            "schema authoring; covered by schema_new tests",
 	"pudl model new":             "scaffold authoring; needs a plugin",
-	"pudl model populator add":   "scaffold authoring; needs a populator",
-	"pudl model populator new":   "scaffold authoring",
 	"pudl rule add":              "covered by the datalog rule tests",
 	"pudl rule new":              "covered by the datalog rule tests",
-	"pudl run set":               "observes live through mu",
-	"pudl run resume":            "needs a pending approval",
-	"pudl run reject":            "needs a pending approval",
 	"pudl snapshot current":      "needs a live observation recorded for a model",
-	"pudl mu ingest-manifest":    "needs a mu build manifest",
 	"pudl completion":            "generates shell scripts",
 	"pudl completion bash":       "generates shell scripts",
 	"pudl completion fish":       "generates shell scripts",
@@ -50,7 +43,7 @@ var jsonContractExempt = map[string]string{
 // seeded workspace and requires stdout to be exactly one JSON document: no
 // banners, progress or warnings mixed in, and no top-level null.
 func TestJSONOutputContract(t *testing.T) {
-	cliWorkspace(t)
+	pudlDir := cliWorkspace(t)
 	require.NoError(t, os.WriteFile("widget.json", []byte(`{"kind":"Widget","name":"w1"}`), 0o644))
 
 	run := func(args ...string) []byte {
@@ -83,9 +76,9 @@ func TestJSONOutputContract(t *testing.T) {
 	run("version")
 	run("init")
 	run("example", "install", "git-inventory")
-	run("mu", "ingest-observe", "--path", ".pudl/populators/git-inventory/baseline-observe.json", "--origin", "git-baseline")
-	run("run", "git-inventory", "--from-catalog", "--catalog-scope", "git-baseline")
-	run("run", "report")
+	observed := field(run("check", "git-inventory"), "members", "report", "populate", "snapshot_id")
+	run("check", "git-inventory", "--from-catalog", "--catalog-scope", observed)
+	run("report")
 	run("status")
 	run("model", "list")
 	run("model", "show", "git-inventory")
@@ -118,8 +111,16 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "show", factID)
 	run("facts", "search", "h1")
 	run("facts", "stats")
-	run("facts", "reproject")
-	run("facts", "reproject", "--dry-run")
+	run("doctor", "--fix", "--dry-run")
+	run("doctor", "--fix")
+	run("policy", "list")
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "bucket.cue"), policyTypes)
+	writeFile(t, filepath.Join(pudlDir, "schema", "pudl", "aws", "policies.cue"), strings.Replace(policyBP, "%s", "medium", 1))
+	reloadSchemas()
+	run("policy", "evaluate", "--dry-run")
+	run("policy", "evaluate")
+	run("policy", "list", "--type", "pudl/aws.#Bucket")
+	run("policy", "show", "pudl/aws.#BucketBestPractice")
 	run("query", "host")
 	run("query", "nothing-here")
 	run("facts", "invalidate", factID)
@@ -144,7 +145,7 @@ func TestJSONOutputContractClassifiesEveryCommand(t *testing.T) {
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
 		for _, sub := range c.Commands() {
-			if sub.Hidden || sub.Name() == "help" {
+			if (sub.Hidden && !cliadvanced.Is(sub)) || sub.Name() == "help" {
 				continue
 			}
 			path := sub.CommandPath()

@@ -26,7 +26,7 @@ var snapshotCmd = &cobra.Command{
 
 Each populate or observe ingest records one snapshot: which model it was taken
 for, by which run, in which workspace, from which source, and how many records it
-holds. A snapshot ID is what "pudl run --from-catalog --catalog-scope <id>"
+holds. A snapshot ID is what "pudl check <model> --from-catalog --catalog-scope <id>"
 replays against.
 
 Snapshots accumulate — one per run, plus one raw file per record — so they need
@@ -186,7 +186,7 @@ var snapshotRetainCmd = &cobra.Command{
 	Use:   "retain <snapshot-id>",
 	Short: "Pin a snapshot against pruning (--release to unpin)",
 	Long: `Add a manual pin so no retention policy removes this snapshot.
---release removes only the manual pin; approval and retained-report owners remain.
+--release removes only the manual pin; legacy approval and retained-report owners remain.
 Reports preserve referenced snapshot evidence for 30 days after their last save.
 
 Snapshots recorded before snapshot provenance existed cannot be pinned — they

@@ -4,13 +4,22 @@ package checks
 import (
 	"context"
 	"fmt"
-	"github.com/chazu/pudl/internal/acute"
+	"time"
+
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/evidence"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/systemmodel"
-	"time"
+)
+
+// Scopes recorded on a check result. ScopeRun means the check was evaluated
+// with the run's ID bound as a constraint; ScopeLatestKnown means it saw the
+// whole catalog; ScopeSnapshots means it saw only the evidence it selected.
+const (
+	ScopeRun         = "run"
+	ScopeLatestKnown = "latest-known"
+	ScopeSnapshots   = "snapshots"
 )
 
 type Progress struct {
@@ -26,14 +35,12 @@ type Request struct {
 	Checks                 []systemmodel.Check
 	RunID, CurrentSnapshot string
 	FromCatalog            bool
-	Scope                  *acute.TupleScope
-	Redact                 func(string) string
 	OnProgress             func(Progress)
 }
 type Result struct {
 	Name, Query, Expect, Severity, Message, Scope, Outcome string
 	Passed                                                 bool
-	Count, AdvisoryCount                                   int
+	Count                                                  int
 	Evidence                                               []evidence.Reference
 	Diagnostics                                            []projection.Diagnostic
 	Tuples                                                 []datalog.Tuple
@@ -47,9 +54,6 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 	}
 	if req.Catalog == nil || req.Registry == nil || req.Load == nil {
 		return nil, fmt.Errorf("check evaluation requires catalog, schemas, and payload reader")
-	}
-	if req.Redact == nil {
-		req.Redact = func(s string) string { return s }
 	}
 	db, reg := req.Catalog, req.Registry
 	rules, err := datalog.LoadRulesFromPaths(req.RulePaths...)
@@ -68,18 +72,18 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 		if req.OnProgress != nil {
 			req.OnProgress(Progress{Phase: "checks", Check: c.Name, State: "started"})
 		}
-		scope := "latest-known"
+		scope := ScopeLatestKnown
 		var constraints map[string]interface{}
 		if !req.FromCatalog && req.RunID != "" && HeadExposesRunID(rules, c.Query) {
-			scope = "run"
+			scope = ScopeRun
 			constraints = map[string]interface{}{"run_id": req.RunID}
 		}
 
-		result := Result{Name: c.Name, Query: c.Query, Expect: c.Expect, Severity: c.Severity, Scope: scope, Message: req.Redact(c.Message)}
+		result := Result{Name: c.Name, Query: c.Query, Expect: c.Expect, Severity: c.Severity, Scope: scope, Message: c.Message}
 		queryDB := db
 		var view *evidence.View
 		if len(c.Evidence) > 0 {
-			result.Scope = "snapshots"
+			result.Scope = ScopeSnapshots
 			constraints = nil // snapshot membership scopes catalog joins as well
 			maxAge, err := parseEvidenceAge(c.MaxAge)
 			if err == nil {
@@ -101,9 +105,6 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 		} else {
 			result.Diagnostics = projection.CheckDiagnostics(db, reg, rules, c.Query, syncReport, syncErr)
 		}
-		for i := range result.Diagnostics {
-			result.Diagnostics[i].Message = req.Redact(result.Diagnostics[i].Message)
-		}
 		if len(result.Diagnostics) > 0 {
 			result.Outcome = "unknown"
 			results = append(results, result)
@@ -121,10 +122,9 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 			continue
 		}
 
-		gating, advisory := Partition(tuples, c.Expect, req.Scope)
-		result.Passed = Passes(c.Expect, gating)
+		result.Count = len(tuples)
+		result.Passed = Passes(c.Expect, result.Count)
 		result.Outcome = checkOutcome(result.Passed)
-		result.Count, result.AdvisoryCount = gating, advisory
 		result.Tuples = tuples
 		results = append(results, result)
 	}
@@ -147,28 +147,6 @@ func checkOutcome(passed bool) string {
 		return "pass"
 	}
 	return "fail"
-}
-
-// Partition splits a check's result rows into the ones its verdict is
-// about and the ones `--only` excused.
-//
-// Only `expect: empty` checks partition. Such a check counts violations, so
-// excusing violations on resources the run excluded is the point. An
-// `expect: nonempty` check counts *evidence*, and dropping evidence could only
-// manufacture a failure that nothing in scope can fix — so it gates on the full
-// result set, as it did before scoping existed.
-func Partition(tuples []datalog.Tuple, expect string, scope *acute.TupleScope) (gating, advisory int) {
-	if expect != "empty" || !scope.Restricted() {
-		return len(tuples), 0
-	}
-	for _, t := range tuples {
-		if scope.Advisory(acute.ArgValues(t.Args)) {
-			advisory++
-			continue
-		}
-		gating++
-	}
-	return gating, advisory
 }
 
 func Passes(expect string, count int) bool {

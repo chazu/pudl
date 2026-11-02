@@ -1,12 +1,12 @@
-// Package smoke contains end-to-end smoke tests for repository-local run-sets,
-// convergence, and cross-model dependencies. The tests are gated behind the
-// `smoke` build tag, so `go test ./...` compiles this package (via this untagged
-// file) but runs no tests. Run the smoke tests explicitly:
+// Package smoke contains end-to-end smoke tests that drive a freshly built
+// pudl binary: the Git walkthrough, example installation and observation, and
+// command-surface checks. The tests are gated behind the `smoke` build tag, so
+// `go test ./...` compiles this package (via this untagged file) but runs no
+// tests. Run them explicitly:
 //
-//	make test-kick-tires # real mu, repository-local fixtures
-//	make smoke          # complete external-tools/infrastructure suite
+//	make test-git-walkthrough # the getting-started walkthrough and examples
+//	make smoke                # every smoke test
 //
-// Each test cleans up its clusters, containers, and workspaces via t.Cleanup.
-// The generic smoke target skips cases whose tools are absent; the named
-// kick-the-tires target requires git, mu, and python3.
+// Each test works in a sandboxed workspace under .pudl/data and cleans up via
+// t.Cleanup. None needs network access or external services.
 package smoke

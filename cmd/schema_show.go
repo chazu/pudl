@@ -9,6 +9,7 @@ import (
 
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/schema"
+	"github.com/chazu/pudl/internal/validator"
 )
 
 // schemaShowCmd represents the schema show command
@@ -77,14 +78,20 @@ func runSchemaShowCommand(schemaArg string) error {
 			fmt.Sprintf("Failed to read schema file: %s", schemaInfo.FilePath), err)
 	}
 
+	review := schemaReview(effectiveSchemaPaths(cfg), schemaInfo.FullName)
+
 	if jsonOutput {
-		return printJSON(map[string]any{
+		out := map[string]any{
 			"schema":     schemaInfo.FullName,
 			"package":    schemaInfo.Package,
 			"file":       schemaInfo.FilePath,
 			"size_bytes": schemaInfo.Size,
 			"source":     string(content),
-		})
+		}
+		if review != nil {
+			out["review"] = review
+		}
+		return printJSON(out)
 	}
 
 	// Display metadata
@@ -92,6 +99,9 @@ func runSchemaShowCommand(schemaArg string) error {
 	fmt.Fprintf(outw(), "   Package: %s\n", schemaInfo.Package)
 	fmt.Fprintf(outw(), "   File: %s\n", schemaInfo.FilePath)
 	fmt.Fprintf(outw(), "   Size: %s\n", formatBytes(schemaInfo.Size))
+	if review != nil {
+		fmt.Fprintf(outw(), "   Review: %s\n", review.Describe())
+	}
 	fmt.Fprintln(outw())
 	fmt.Fprintln(outw(), "─────────────────────────────────────────────────────────")
 	fmt.Fprintln(outw())
@@ -105,4 +115,19 @@ func runSchemaShowCommand(schemaArg string) error {
 	}
 
 	return nil
+}
+
+// schemaReview returns the review metadata of a registered schema, or nil for a
+// definition that is not a registered schema (a component) or when schemas do
+// not load.
+func schemaReview(paths []string, fullName string) *validator.SchemaReview {
+	schemas, err := validator.NewChainValidator(paths...)
+	if err != nil {
+		return nil
+	}
+	meta, ok := schemas.GetSchemaMetadata(fullName)
+	if !ok {
+		return nil
+	}
+	return &meta.Review
 }

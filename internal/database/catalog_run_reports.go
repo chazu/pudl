@@ -79,3 +79,22 @@ func (c *CatalogDB) LatestRunReport() (*RunReportRecord, error) {
 	}
 	return &out, nil
 }
+
+// ModelRunReports returns up to limit of model's stored reports, newest first.
+func (c *CatalogDB) ModelRunReports(model string, limit int) ([]RunReportRecord, error) {
+	rows, err := c.db.Query(`SELECT run_id, model, report_json, created_at FROM run_reports
+		WHERE model = ? ORDER BY created_at DESC, run_id DESC LIMIT ?`, model, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list run reports of %q: %w", model, err)
+	}
+	defer rows.Close()
+	var out []RunReportRecord
+	for rows.Next() {
+		var record RunReportRecord
+		if err := rows.Scan(&record.RunID, &record.Model, &record.Report, &record.CreatedAt); err != nil {
+			return nil, fmt.Errorf("list run reports of %q: %w", model, err)
+		}
+		out = append(out, record)
+	}
+	return out, rows.Err()
+}

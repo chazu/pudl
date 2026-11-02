@@ -1,0 +1,40 @@
+[
+  {
+    "User": {
+      "Path": "/",
+      "UserName": "alice",
+      "UserId": "AIDAEXAMPLEUSER000001",
+      "Arn": "arn:aws:iam::123456789012:user/alice",
+      "CreateDate": "2023-01-09T15:22:10+00:00",
+      "PasswordLastUsed": "2026-10-30T08:01:44+00:00",
+      "Tags": [{"Key": "Team", "Value": "platform"}]
+    },
+    "MFADevices": [
+      {"UserName": "alice", "SerialNumber": "arn:aws:iam::123456789012:mfa/alice-phone", "EnableDate": "2023-01-09T15:30:00+00:00"}
+    ],
+    "LoginProfile": {"UserName": "alice", "CreateDate": "2023-01-09T15:22:11+00:00", "PasswordResetRequired": false}
+  },
+  {
+    "User": {
+      "Path": "/",
+      "UserName": "bob",
+      "UserId": "AIDAEXAMPLEUSER000002",
+      "Arn": "arn:aws:iam::123456789012:user/bob",
+      "CreateDate": "2021-03-04T09:00:00+00:00",
+      "PasswordLastUsed": "2026-10-12T19:40:03+00:00"
+    },
+    "MFADevices": [],
+    "LoginProfile": {"UserName": "bob", "CreateDate": "2021-03-04T09:00:01+00:00", "PasswordResetRequired": false}
+  },
+  {
+    "User": {
+      "Path": "/automation/",
+      "UserName": "ci-deployer",
+      "UserId": "AIDAEXAMPLEUSER000003",
+      "Arn": "arn:aws:iam::123456789012:user/automation/ci-deployer",
+      "CreateDate": "2024-04-02T12:00:00+00:00",
+      "Tags": [{"Key": "Owner", "Value": "release-engineering"}]
+    },
+    "MFADevices": []
+  }
+]

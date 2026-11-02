@@ -13,7 +13,7 @@ import (
 )
 
 func TestSmoke_ExampleInstall(t *testing.T) {
-	root, _, env := exampleWorkspace(t, "git")
+	root, _, env := exampleWorkspace(t, "git", "cat")
 	cli := func(args ...string) string {
 		t.Helper()
 		command := exec.Command(pudlBin, args...)

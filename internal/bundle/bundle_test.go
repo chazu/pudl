@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -86,8 +87,11 @@ func bundleFixture(t *testing.T) bundleFixtureState {
 	report := []byte(`{"report_version":1,"run_id":"historical-run","model":"demo","ok":true,"expected":{"serial":9007199254740993}}`)
 	require.NoError(t, db.SaveRunReport("historical-run", "demo", report))
 	require.NoError(t, db.SaveRunSetReport("historical-set", []byte(`{"run_set_id":"historical-set","status":"succeeded"}`)))
-	require.NoError(t, db.SaveRunApproval("pending-run", "demo", []byte(`{"instruction":"requires fresh approval"}`)))
-	require.NoError(t, db.SaveRunSetApproval("pending-set", "digest", []byte(`{"instruction":"requires fresh approval"}`), []byte(`{"plan":"history"}`)))
+	// Legacy approval rows from the retired convergence workflow.
+	_, err = db.DB().Exec(`INSERT INTO run_approvals (run_id, model, request_json, status, created_at) VALUES ('pending-run', 'demo', '{"instruction":"requires fresh approval"}', 'pending', ?)`, now)
+	require.NoError(t, err)
+	_, err = db.DB().Exec(`INSERT INTO run_set_approvals (run_set_id, plan_digest, request_json, plan_json, status, created_at) VALUES ('pending-set', 'digest', '{"instruction":"requires fresh approval"}', '{"plan":"history"}', 'pending', ?)`, now)
+	require.NoError(t, err)
 	// The approval-only snapshot has no manual owner and must not acquire one on restore.
 	kind := "collection"
 	snapshotRaw := write("data/raw/snapshot.json", `{"snapshot_id":"approval-snapshot"}`)
@@ -154,30 +158,27 @@ func TestBundleMovedRootRoundTripPreservesEvidenceAndHistory(t *testing.T) {
 	set, err := db.GetRunSetReport("historical-set")
 	require.NoError(t, err)
 	require.JSONEq(t, `{"run_set_id":"historical-set","status":"succeeded"}`, string(set.Report))
-	approval, err := db.GetRunApproval("pending-run")
-	require.NoError(t, err)
-	require.Equal(t, "rejected", approval.Status)
-	require.NotNil(t, approval.ResolvedAt)
-	require.Error(t, db.ResolveRunApproval("pending-run", "approved"))
-	exact, err := db.GetRunSetApproval("pending-set")
-	require.NoError(t, err)
-	require.Equal(t, "rejected", exact.Status)
-	require.Error(t, db.ResolveRunSetApproval("pending-set", "digest", "approved"))
+	var approvalStatus string
+	var approvalResolved sql.NullTime
+	require.NoError(t, db.DB().QueryRow(`SELECT status, resolved_at FROM run_approvals WHERE run_id = 'pending-run'`).Scan(&approvalStatus, &approvalResolved))
+	require.Equal(t, "rejected", approvalStatus)
+	require.True(t, approvalResolved.Valid)
+	var setApprovalStatus string
+	require.NoError(t, db.DB().QueryRow(`SELECT status FROM run_set_approvals WHERE run_set_id = 'pending-set'`).Scan(&setApprovalStatus))
+	require.Equal(t, "rejected", setApprovalStatus)
 	pins, err := db.SnapshotPins("approval-snapshot")
 	require.NoError(t, err)
 	require.Empty(t, pins, "restore must release only stale approval ownership without manufacturing manual pins")
 	snapshot, err := db.GetObserveSnapshot("approval-snapshot")
 	require.NoError(t, err)
 	require.False(t, snapshot.Retained)
-	live, err := db.LatestSuccessfulObserveSnapshot("demo", "original")
-	require.NoError(t, err)
-	require.Nil(t, live, "restored successful history must not authorize producer snapshot reuse")
+	var blocked int
+	require.NoError(t, db.DB().QueryRow(`SELECT COUNT(*) FROM snapshot_reuse_blocks`).Scan(&blocked))
+	require.Positive(t, blocked, "restored history must not count as the latest live observation")
 	historicalRun, err := db.GetRun("historical-run")
 	require.NoError(t, err)
 	require.Equal(t, database.RunStatusSucceeded, historicalRun.CompletionStatus)
-	pinned, err := db.ObserveSnapshotByIDForRun("approval-snapshot", "demo", "original", "historical-run")
-	require.NoError(t, err)
-	require.Nil(t, pinned, "pinned historical snapshots must require replanning after restore")
+
 	require.NoError(t, db.StartRun("live-after-restore", "demo", "observe"))
 	kind := "collection"
 	freshPath := filepath.Join(root, "data/raw/fresh-snapshot.json")
@@ -185,10 +186,9 @@ func TestBundleMovedRootRoundTripPreservesEvidenceAndHistory(t *testing.T) {
 	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "fresh-snapshot", StoredPath: freshPath, Schema: "pudl/mu.#ObserveSnapshot", Format: "json", Origin: "new-observation", ImportTimestamp: time.Now(), CollectionType: &kind}))
 	require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: "fresh-snapshot", RunID: "live-after-restore", Model: "demo", Workspace: "original", Source: database.SnapshotSourceMuObserve, CreatedAt: time.Now()}))
 	require.NoError(t, db.FinishRun("live-after-restore", database.RunConclusion{CompletionStatus: database.RunStatusSucceeded}))
-	live, err = db.LatestSuccessfulObserveSnapshot("demo", "original")
-	require.NoError(t, err)
-	require.NotNil(t, live)
-	require.Equal(t, "fresh-snapshot", live.SnapshotID)
+	var freshBlocked int
+	require.NoError(t, db.DB().QueryRow(`SELECT COUNT(*) FROM snapshot_reuse_blocks WHERE snapshot_id='fresh-snapshot'`).Scan(&freshBlocked))
+	require.Zero(t, freshBlocked, "a live observation after restore is eligible again")
 
 	for _, rel := range []string{"schema/user/resource.cue", "definitions/checks.cue", "models/demo.cue", "populators/demo.cue", "schema/pudl/rules/demo.cue"} {
 		_, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))

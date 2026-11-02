@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/skills"
@@ -103,7 +104,7 @@ func Init(opts InitOptions) error {
 		filepath.Join(pudlDir, "data", "sqlite"),
 	}
 	for _, dataDir := range dataDirs {
-		if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		if err := artifacts.MkdirPrivate(dataDir); err != nil {
 			return fmt.Errorf("creating local data directory %s: %w", dataDir, err)
 		}
 	}
@@ -131,7 +132,7 @@ func Init(opts InitOptions) error {
 		fmt.Fprintf(opts.output(), "  schema/        (project-specific CUE schemas)\n")
 		fmt.Fprintf(opts.output(), "  schema/models/ (registered #SystemModel definitions)\n")
 		fmt.Fprintf(opts.output(), "  definitions/   (desired state definitions)\n")
-		fmt.Fprintf(opts.output(), "  populators/    (#EweTarget programs and local model plugins)\n")
+		fmt.Fprintf(opts.output(), "  populators/    (local observation fixtures and helper programs)\n")
 		fmt.Fprintf(opts.output(), "  data/          (repo-local raw data, metadata, and catalog)\n")
 	}
 
@@ -161,16 +162,6 @@ func generateWorkspaceCue(name string) string {
 // Workspace name — used as the origin for catalog entries in this repo's
 // .pudl/data/sqlite/catalog.db.
 name: %q
-
-// Optional: override toolchain mappings for this workspace.
-// These take priority over global config and built-in defaults.
-// toolchain_mappings: [
-//     {prefix: "myapp", toolchain: "shell"},
-// ]
-
-// Optional: restrict provider references that sealed outputs may write.
-// Omit for mu compatibility mode; set [] for explicit deny-all.
-// secrets: writable_refs: ["pass:myproject/*"]
 `, name)
 }
 

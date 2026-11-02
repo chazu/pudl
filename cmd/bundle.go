@@ -15,7 +15,7 @@ var exportBundleMaxBytes, initBundleMaxBytes int64
 func init() {
 	exportCmd.Flags().StringVar(&exportBundle, "bundle", "", "Write a verified portable workspace bundle")
 	exportCmd.Flags().Int64Var(&exportBundleMaxBytes, "max-bundle-bytes", bundle.DefaultMaxBytes, "Maximum uncompressed bundle bytes")
-	initCmd.Flags().StringVar(&initBundle, "from-bundle", "", "Restore verified history into a new local workspace; approvals require replanning")
+	initCmd.Flags().StringVar(&initBundle, "from-bundle", "", "Restore verified history into a new local workspace; legacy pending approvals are rejected")
 	initCmd.Flags().Int64Var(&initBundleMaxBytes, "max-bundle-bytes", bundle.DefaultMaxBytes, "Maximum uncompressed restored bundle bytes")
 }
 
@@ -49,6 +49,6 @@ func runRestoreBundle(cmd *cobra.Command) error {
 	if jsonOutput {
 		return printJSON(map[string]any{"path": root, "mode": "workspace", "restored": true, "approvals_require_replanning": true})
 	}
-	fmt.Fprintf(outw(), "Workspace restored: %s\nPending approvals require replanning; live status is unknown until re-observed.\n", root)
+	fmt.Fprintf(outw(), "Workspace restored: %s\nLive status is unknown until re-observed.\n", root)
 	return nil
 }

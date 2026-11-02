@@ -83,6 +83,9 @@ func parseRelation(name string, raw json.RawMessage) (RelationSpec, error) {
 	if database.IsReservedRelation(name) {
 		return RelationSpec{}, fmt.Errorf("relation name %q is reserved", name)
 	}
+	if _, ownership := ownerRelationArgs[name]; ownership {
+		return RelationSpec{}, fmt.Errorf("relation name %q is reserved for ownership; declare _pudl.owner instead", name)
+	}
 	var r rawRelation
 	if err := decodeStrict(raw, &r); err != nil {
 		return RelationSpec{}, fmt.Errorf("expected {each?: path, args: {...}}: %w", err)

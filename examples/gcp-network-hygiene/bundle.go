@@ -3,5 +3,5 @@ package gcpnetwork
 
 import "embed"
 
-//go:embed schema.cue rules.cue model.cue baseline.json fixed.json
+//go:embed schema.cue model.cue baseline.json fixed.json
 var Files embed.FS

@@ -3,13 +3,14 @@ package examples
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
+	awspack "github.com/chazu/pudl/examples/aws"
+	gcppack "github.com/chazu/pudl/examples/gcp"
 	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
 )
@@ -21,11 +22,15 @@ func Install(root, name string) ([]string, error) {
 	var err error
 	switch name {
 	case "git-inventory":
-		files, err = gitInventoryFiles(root)
+		files, err = gitInventoryFiles()
 	case "gcp-network-hygiene":
 		files, err = gcpNetworkFiles()
+	case "gcp":
+		files, err = treeFiles(gcppack.Files)
+	case "aws":
+		files, err = treeFiles(awspack.Files)
 	default:
-		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene)", name)
+		return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp, aws)", name)
 	}
 	if err != nil {
 		return nil, err
@@ -80,7 +85,7 @@ func Install(root, name string) ([]string, error) {
 	return paths, nil
 }
 
-func gitInventoryFiles(root string) (map[string][]byte, error) {
+func gitInventoryFiles() (map[string][]byte, error) {
 	files := make(map[string][]byte)
 	model, err := gitinventory.Files.ReadFile("model.cue")
 	if err != nil {
@@ -88,27 +93,14 @@ func gitInventoryFiles(root string) (map[string][]byte, error) {
 	}
 	files["schema/models/git_inventory.cue"] = model
 	const populator = "populators/git-inventory/"
-	for _, name := range []string{"observe.py", "baseline.json", "changed.json"} {
+	for _, name := range []string{"baseline.json", "changed.json"} {
 		data, err := gitinventory.Files.ReadFile(name)
 		if err != nil {
 			return nil, err
 		}
 		files[populator+name] = data
-		if strings.HasSuffix(name, ".json") {
-			observation := []map[string]any{{
-				"target":  "//git-inventory/demo",
-				"current": map[string]any{"records": json.RawMessage(data)},
-			}}
-			encoded, err := json.MarshalIndent(observation, "", "  ")
-			if err != nil {
-				return nil, err
-			}
-			files[populator+strings.TrimSuffix(name, ".json")+"-observe.json"] = append(encoded, '\n')
-		}
 	}
 	files[populator+"current.json"] = files[populator+"baseline.json"]
-	cachePath := filepath.Join(root, "data", "mu", "cache")
-	files["data/mu/mu.cue"] = []byte(fmt.Sprintf("package mu\ncache: backends: [{type: \"disk\", path: %q}]\n", cachePath))
 	return files, nil
 }
 
@@ -127,9 +119,23 @@ func checkParents(root, relative string) error {
 	return nil
 }
 
+// treeFiles installs every file of a bundle at its path in the bundle.
+func treeFiles(bundle fs.FS) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	err := fs.WalkDir(bundle, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := fs.ReadFile(bundle, path)
+		files[path] = data
+		return err
+	})
+	return files, err
+}
+
 func gcpNetworkFiles() (map[string][]byte, error) {
 	files := map[string][]byte{}
-	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "rules.cue": "schema/pudl/rules/gcp_hygiene.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
+	for source, destination := range map[string]string{"schema.cue": "schema/pudl/gcphygiene/firewall.cue", "model.cue": "schema/models/gcp_network_hygiene.cue", "baseline.json": "populators/gcp-network-hygiene/baseline.json", "fixed.json": "populators/gcp-network-hygiene/fixed.json"} {
 		data, err := gcpnetwork.Files.ReadFile(source)
 		if err != nil {
 			return nil, err

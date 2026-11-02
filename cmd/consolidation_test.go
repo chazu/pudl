@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
@@ -41,7 +42,7 @@ func TestConsolidatedReportsSelectBothKindsAndLatest(t *testing.T) {
 	db, err := database.NewCatalogDB(root)
 	require.NoError(t, err)
 	defer db.Close()
-	single, err := json.Marshal(RunReport{RunID: "single", Model: "demo", OK: true})
+	single, err := json.Marshal(checkreport.ModelReport{RunID: "single", Model: "demo", OK: true})
 	require.NoError(t, err)
 	set, err := json.Marshal(acute.RunSetReport{RunSetID: "arbitrary-id", Status: "succeeded"})
 	require.NoError(t, err)
@@ -52,7 +53,7 @@ func TestConsolidatedReportsSelectBothKindsAndLatest(t *testing.T) {
 		return err
 	}())
 	for _, args := range [][]string{nil, {"arbitrary-id"}, {"single"}} {
-		output := captureQueryOutput(t, func() error { return runReportCmd.RunE(runReportCmd, args) })
+		output := captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, args) })
 		expected := set
 		if len(args) > 0 && args[0] == "single" {
 			expected = single
@@ -61,15 +62,10 @@ func TestConsolidatedReportsSelectBothKindsAndLatest(t *testing.T) {
 	}
 	_, err = db.DB().Exec("UPDATE run_reports SET created_at = ?", time.Now().UTC().Add(time.Hour))
 	require.NoError(t, err)
-	output := captureQueryOutput(t, func() error { return runReportCmd.RunE(runReportCmd, nil) })
+	output := captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, nil) })
 	require.JSONEq(t, string(single), output, "latest must also select a newer standalone report")
-	isSet, err := isRunSetOperation("arbitrary-id")
-	require.NoError(t, err)
-	require.True(t, isSet, "routing must use stored operation identity, not a prefix")
 	require.NoError(t, db.SaveRunReport("arbitrary-id", "collision", single))
-	require.ErrorContains(t, runReportCmd.RunE(runReportCmd, []string{"arbitrary-id"}), "ambiguous")
-	_, err = isRunSetOperation("arbitrary-id")
-	require.ErrorContains(t, err, "ambiguous")
+	require.ErrorContains(t, reportCmd.RunE(reportCmd, []string{"arbitrary-id"}), "ambiguous")
 }
 
 func TestDoctorEmptyWorkspaceDoesNotCreateCatalog(t *testing.T) {

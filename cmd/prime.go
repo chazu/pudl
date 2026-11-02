@@ -29,37 +29,40 @@ func init() {
 const primeText = `# PUDL for humans and agents
 
 PUDL retains typed observations of systems, compares them with declared
-expectations, and records evidence. Mu performs external actions and handles
-secrets. Ordinary runs observe; --converge explicitly enables mutation.
+expectations, and records evidence. It never changes the systems it observes:
+a check reports drift, and the tools that own those systems apply changes.
 
 ## Start with the existing workspace
 
 pudl model list
 pudl model show <name> --json
-pudl run <name>
-pudl run report --json
+pudl check <name>
+pudl report --json
 
 Create local state with pudl init; use pudl init --global for ~/.pudl.
 Repository catalogs and mutable state remain isolated beneath .pudl/.
 Use pudl help <command> --json or pudl guide <topic> for targeted instructions.
 
-## Exact sets and convergence
+## Observe with commands
 
-pudl run set <producer> <consumer>
-pudl run set <models...> --converge --require-approval
-pudl run resume <operation-id>
-pudl run reject <operation-id>
+pudl model new <name> --populate 'command:<cmdline printing JSON>'
+pudl check --populate 'command:gcloud compute networks list --format=json'
+pudl check <name> --detailed-exitcode
 
-An exact set runs only the named models in dependency order. Missing binding
-producers are errors. Standalone runs can reuse eligible recorded producer
-snapshots; they never start a producer automatically. Plain bindings pin scoped
-snapshots. Sealed values stay inside Mu, and sets that can write sealed outputs
-require exact-plan approval. Resume rejects a changed set plan.
+A model's populate arm (#CommandObserve) runs commands that print JSON records,
+such as gcloud, kubectl or aws with JSON output, and ingests them as one
+snapshot. A model with desired state reports drift against that snapshot.
+
+## Several models
+
+pudl check <producer> <consumer>
+
+A check runs only the named models, producers first by depends_on, and records
+one report for all of them. It never starts a model that was not named.
 
 Report completion, resource conformity, checks, and evidence verification are
 separate dimensions. Successful execution can still find drift. Stored replay
-does not establish fresh live verification. An uncertain mutation needs
-verification; a scoped clean result does not prove the whole model is clean.
+does not establish fresh live verification.
 
 ## Investigate and retain evidence
 
@@ -91,26 +94,28 @@ pudl schema new --from <id> --path <package>/#<Definition>
 pudl doctor --json
 
 Formats and schemas are inferred on import. --origin is an explicit list filter.
-Saved Mu observations are ingested with pudl mu ingest-observe; replay requires
-run --from-catalog --catalog-scope <snapshot-or-origin> and remains unverified.
+Replaying a stored snapshot requires check <model> --from-catalog
+--catalog-scope <snapshot-id> and remains unverified.
 Use Git, your editor, and cue on the paths from pudl config --paths --json.
 
-## Generic facts and rules
+## Facts and rules
 
-pudl facts add --relation <name> --args '<json-object>' --source <origin>
+pudl query <relation> key=value --json
 pudl facts list --relation <name> --json
 pudl facts search "<text>" --json
 pudl facts show <id> --json
-pudl facts retract <id>
-pudl facts invalidate <id>
-pudl query <relation> key=value --json
 pudl rule add <file.cue>
 
-Facts are arbitrary JSON assertions with valid-time and transaction-time
-history. --schema on facts add explicitly validates against an authored CUE
-schema. Retraction withdraws an assertion; invalidation records that reality
-changed. --as-of-valid and --as-of-tx select historical facts. Datalog supports
-joins and recursion, including model dependency and impact queries.
+Read the fact store through pudl query; facts list/search/show inspect stored
+facts directly. Facts are arbitrary JSON assertions with valid-time and
+transaction-time history; --as-of-valid and --as-of-tx select historical facts.
+Datalog supports joins and recursion, including model dependency and impact
+queries.
+
+Fact writes are advanced commands, hidden from everyday help: facts add
+--relation <name> --args '<json-object>' --source <origin> records an assertion
+(--schema validates it against an authored CUE schema), facts retract withdraws
+one, and facts invalidate records that reality changed. See pudl guide facts.
 
 Use --json for supported structured views. Attribute fact writes with --source.
 Use retained IDs to inspect evidence; content hashes and provenance remain

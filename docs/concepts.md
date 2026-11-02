@@ -28,11 +28,9 @@ PUDL handles multi-record data in two ways:
 becomes an individual catalog entry linked to a parent collection entry. Observe
 ingestion uses the same membership mechanism for a timestamped snapshot collection.
 
-**Typed envelopes** use the shape `{"schema": {"module": ..., "version": ...},
-"definitions": [...], "data": ...}`. The envelope metadata is recorded in
-`item_schemas`; inline CUE definitions are cached when present, and only the inner
-`data` payload is passed to normal import and inference. Ordinary JSON objects are
-not guessed to be collection wrappers.
+Ordinary JSON objects are not guessed to be collection wrappers. (Typed-envelope
+unwrapping was retired with the mu integration; such a file now imports as an
+ordinary object.)
 
 Collection items get their own schema assignment, resource identity, and content hash.
 Memberships are stored separately, so a content-addressed item can belong to more than
@@ -160,7 +158,7 @@ This ensures data is always accepted at some level. If the intended schema rejec
 
 ### Never-Reject Philosophy
 
-PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl schema reinfer` to re-classify existing entries.
+PUDL never rejects data. If your data does not match any schema, it is assigned to the catchall with low confidence. You can always write a more specific schema later and run `pudl doctor --fix --only inference` to re-classify existing entries.
 
 ## System Models
 
@@ -171,43 +169,24 @@ unit: it declares the intended state for one thing the model is responsible for.
 
 Use `pudl model list` to see available models, `pudl model show <name>` to inspect one, and `pudl model validate <name>` to check that a model parses and conforms to `#SystemModel`.
 
-## Running a Model
+## Checking Models
 
-`pudl run <name>` drives a model through an observe-only ACUTE loop:
+`pudl check <name>...` drives each named model through an observe-only loop:
 
-1. **Populate** -- imports the model's declared sources into the catalog, refreshing observations.
-2. **Drift** -- compares the model's `desired` state against observed state. The mode is auto-detected from the observer: a *differential* observer (k8s) reads `desired` as sources and reports per-resource exists/matches, while an *inventory* observer (a `host`-style plugin or an `#EweTarget` fetcher) dumps records that pudl set-diffs against `desired`. A `#PluginObserve` arm defaults to differential; set `differential: false` for inventory observers. `--from-catalog` forces inventory drift from already-ingested records.
+1. **Populate** -- runs the model's `#CommandObserve` commands and ingests the JSON records they print as one observation snapshot.
+2. **Drift** -- set-diffs the model's `desired` state against the records it just observed. `--from-catalog` replays an already-ingested snapshot instead.
 3. **Checks** -- evaluates the model's invariants against current facts.
-4. **Report** -- records a verdict for the run.
+4. **Report** -- records the model's verdict in the check's report.
 
-By default `pudl run` observes only: it computes drift but changes nothing in the world.
+A check runs exactly the models it names, producers first: a model runs after
+every named model it lists in `depends_on`. Dependencies that are not named are
+never run; a model whose named producer did not succeed is recorded `blocked`.
+Each check records one report for one model or many, embedding every model's
+full report; `pudl report [id]` reads it again.
 
-### Convergence
+`pudl check` never changes anything in the world: it reports drift, and the tools that own a system apply changes. (Convergence through mu was removed on 2026-11-01; see [retired commands](retired-commands.md#convergence-and-mu-integration).)
 
-`pudl run <name> --converge` closes drift instead of merely reporting it. pudl renders the model's `desired` state to sources, and the mu plugin reconciles those sources against the real system. pudl declares state; mu executes. There is no separate export step.
-
-`pudl status` reads convergence status from the catalog -- each model run records its verdict (`unknown | drifted | converging | clean | failed`), so `pudl status` reflects whether the system is in sync (`clean`) or drifted. `clean` is the single in-sync state, written only when a drift re-check observes ∅ and the apply receipt was persisted; an out-of-band apply (`mu build --emit-manifest | pudl mu ingest-manifest --model <name>`) records `converging` until that re-check confirms it. `unknown` also covers an apply whose receipt could not be persisted and therefore needs verification.
-
-### Cross-model value wiring
-
-A model template can declare required scalar `inputs` and `bindings` that name
-a producer model, resource schema and identity, and RFC 6901 field path. Plain
-projection is fail-closed: the consumer slot and source schema field must both
-carry `@pudl(binding=plain)`. PUDL selects a successful observation snapshot,
-projects one scalar, type-checks the elaborated model, and records snapshot/run
-provenance plus a value digest in the run report.
-
-`pudl run set <models...>` coordinates exactly the named set. It validates
-completeness and cycles before execution, orders producers first, and pins each
-successful producer observation for its consumers. It never starts an omitted
-producer implicitly. Without `--converge` the set is observe-only. Mutating
-run-sets complete read-only preflight and exact planning before any apply.
-Sealed values stay in mu's provider channel, and durable PUDL evidence retains
-only schemes and fingerprints. Generated targets require explicit per-action
-claims; invalid or ambiguous routing fails during planning. A set that can write
-a sealed output always pauses for approval of the exact version-2 mu plan. The
-plan commits resolved plugin identities; every apply is guarded by mu's raw
-plan SHA-256 comparison before provider access.
+`pudl status` reads each model's recorded verdict (`unknown | drifted | clean`). `clean` is the single in-sync state, written only when a live observation shows no drift. Rows written by the retired convergence workflow may still hold `failed`, and their `converging` value reads as `unknown`.
 
 ## Fixed-Point Verification
 

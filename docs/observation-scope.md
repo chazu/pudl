@@ -29,8 +29,25 @@ checks: [{
 
 `complete` is an explicit collector assertion. The collector must successfully
 finish every required page and fan-out member before asserting it. A successful
-exit or a JSON array alone does not imply completeness. Command failure publishes
-no replacement observation; reported plugin errors prevent complete status.
+exit or a JSON array alone does not imply completeness. Reported target errors
+prevent complete status.
+
+A failing `#CommandRun` is a failed input. The records of the runs that
+succeeded are ingested, and each failed run is recorded as a target error, so
+the snapshot is incomplete. Its scope is not closed: resources the failed input
+covered are `not-observed`, never `removed`, and their policy results stay
+open. Checks that select the snapshot are unknown (`incomplete_observation`);
+the model's own checks that read the catalog directly are unknown too
+(`failed_inputs`), and the model fails. The report lists each failed input
+under `populate.failed_inputs` (argv, exit status, stderr tail, and the
+enumerated item when `each` produced it). If every run fails, no replacement
+observation is published. `populate.fail_fast: true` makes any failure fail
+the populate with nothing ingested.
+
+Verdicts are per check, not per input, so the failed input's slice is not
+partitioned out of the check: the whole check is unknown. A run therefore
+needs no label of the input it covers. The failure is named by its
+enumerated item, or by its argv for a static run.
 Omitted completeness defaults to false, including for older stored snapshots.
 An explicitly permitted schema mismatch also makes the observation incomplete.
 Command observers can opt into exploratory fallback with
@@ -69,6 +86,11 @@ B establishes A's absence within that second snapshot. Checks selecting the
 second snapshot see B alone. The first snapshot and A's historical facts remain
 available. A partial observation cannot establish that absence.
 
+Check findings follow the same rule over time: a failing match recorded by an
+earlier report is `resolved` only when the current evaluation reached a verdict
+over a complete observation of the same scope; otherwise it is `unknown`. See
+[changes over time](cli-reference.md#pudl-check).
+
 Inventory identity now uses the same nested and quoted field-path extraction as
 import. Missing declared identity fields make a record unidentifiable; the
 name/path/id fallback applies only when no fields are declared. Composite match
@@ -81,7 +103,5 @@ unobserved desired resources as uncertain for partial inventories, exits with an
 error, and cannot promote them to verified status. Existing matching resources
 can still satisfy ensure-present expectations in a partial inventory.
 
-For saved observation envelopes, `pudl mu ingest-observe --scope NAME --complete`
-records an explicit completeness assertion. `--coverage-schema` declares a
-covered schema even for an empty population. Stored replay remains distinct
-from a new live observation.
+Stored replay (`pudl check <model> --from-catalog`) remains distinct from a new live
+observation.

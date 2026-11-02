@@ -1,6 +1,6 @@
 module github.com/chazu/pudl
 
-go 1.26.9
+go 1.26.10
 
 require (
 	cuelang.org/go v0.16.0

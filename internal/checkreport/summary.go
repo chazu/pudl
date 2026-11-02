@@ -1,0 +1,208 @@
+package checkreport
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/database"
+)
+
+// Summarize computes a model report's verdict summary: execution,
+// conformity, checks and verification as separate axes, the observations it
+// rests on, and the commands that inspect them. With a catalog, the snapshots
+// the report names are looked up for their scope, source and age.
+func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
+	s := &acute.VerdictSummary{Execution: r.CompletionStatus, Conformity: "not-checked", Checks: "not-checked", Verification: "not-verified", Scope: "model"}
+	if r.Drift != nil {
+		s.Conformity = "clean"
+		if !r.Drift.Clean {
+			s.Conformity = "drifted"
+		}
+		if r.Drift.Uncertain {
+			s.Conformity = "unknown"
+		}
+		s.DriftCount = len(r.Drift.Drifted)
+		s.Verification = "recorded"
+		if r.Drift.Verified {
+			s.Verification = "live"
+		}
+	}
+	seen := map[string]bool{}
+	add := func(e acute.ObservationEvidence) {
+		key := e.SnapshotID
+		if key == "" {
+			key = e.ObservationID
+		}
+		if !seen[key] {
+			s.Evidence = append(s.Evidence, e)
+			seen[key] = true
+		}
+	}
+	if len(r.Checks) > 0 {
+		s.Checks = "pass"
+	}
+	allLiveChecks := len(r.Checks) > 0
+	for _, c := range r.Checks {
+		if len(c.Evidence) == 0 {
+			allLiveChecks = false
+		}
+		if c.Uncertain() {
+			s.UnknownChecks++
+		} else if c.IsWaived() {
+			s.WaivedChecks++
+		} else if !c.Passed {
+			s.FailedChecks++
+		}
+		if c.Changes != nil {
+			s.NewFindings += c.Changes.New
+			s.ResolvedFindings += c.Changes.Resolved
+		}
+		if r.Drift == nil {
+			s.Scope = c.Scope
+			s.Verification = "recorded"
+		}
+		for _, e := range c.Evidence {
+			if r.Populate == nil || e.SnapshotID != r.Populate.SnapshotID {
+				allLiveChecks = false
+			}
+			add(e)
+		}
+	}
+	if allLiveChecks && r.Drift == nil {
+		s.Verification = "live"
+	}
+	if s.WaivedChecks > 0 {
+		s.Checks = "waived"
+	}
+	if s.FailedChecks > 0 {
+		s.Checks = "fail"
+	}
+	if s.UnknownChecks > 0 {
+		s.Checks = "unknown"
+		s.Verification = "not-verified"
+	}
+	var snapshotIDs []string
+	if r.Populate != nil {
+		snapshotIDs = append(snapshotIDs, r.Populate.SnapshotID)
+	}
+	if r.Drift != nil {
+		snapshotIDs = append(snapshotIDs, r.Drift.SnapshotID)
+	}
+	for _, id := range snapshotIDs {
+		if db != nil && id != "" {
+			if snapshot, err := db.GetObserveSnapshot(id); err == nil && snapshot != nil {
+				add(acute.ObservationEvidence{SnapshotID: snapshot.SnapshotID, Scope: snapshot.Scope, Source: snapshot.Source, ObservedAt: snapshot.CreatedAt, Age: time.Since(snapshot.CreatedAt).String(), Complete: snapshot.Complete})
+			}
+		}
+	}
+	observation := r.Drift
+	if observation != nil && observation.ObservationID != "" && observation.ObservedAt != nil {
+		add(acute.ObservationEvidence{ObservationID: observation.ObservationID, Source: "differential-observe", Scope: s.Scope, ObservedAt: *observation.ObservedAt, Age: time.Since(*observation.ObservedAt).String(), Complete: true})
+	}
+	if r.RunID != "" {
+		s.NextActions = append(s.NextActions, "pudl report "+r.RunID+" --json")
+	}
+	for _, e := range s.Evidence {
+		if e.SnapshotID != "" {
+			s.NextActions = append(s.NextActions, "pudl snapshot show "+e.SnapshotID+" --json")
+		} else if e.ObservationID != "" {
+			s.NextActions = append(s.NextActions, "pudl show "+e.ObservationID+" --json")
+		}
+	}
+	if s.UnknownChecks > 0 {
+		s.NextActions = append(s.NextActions, "pudl doctor --json")
+	}
+	return s
+}
+
+// SummarizeCheck embeds each member's stored report and summary into a check
+// report and computes the check's own summary across them.
+func SummarizeCheck(db *database.CatalogDB, report *acute.RunSetReport) error {
+	s := &acute.VerdictSummary{Execution: report.Status, Conformity: "not-checked", Checks: "not-checked", Verification: "not-verified", Scope: "exact-set"}
+	conformity, checks, verification := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	seen := map[string]bool{}
+	for i := range report.Members {
+		member := &report.Members[i]
+		stored, err := db.GetRunReport(member.RunID)
+		if err != nil {
+			return err
+		}
+		if stored != nil {
+			member.Report = stored.Report
+			r, err := DecodeModelReport(stored.Report)
+			if err != nil {
+				return fmt.Errorf("read member %s summary: %w", member.Model, err)
+			}
+			member.Summary = r.Summary
+			if member.Summary == nil {
+				member.Summary = Summarize(r, db)
+			}
+		}
+		if member.Summary == nil {
+			member.Summary = &acute.VerdictSummary{Conformity: "unknown", Checks: "unknown", Verification: "not-verified", Scope: "model"}
+		}
+		m := member.Summary
+		m.Execution = member.Result
+		conformity[m.Conformity] = true
+		checks[m.Checks] = true
+		verification[m.Verification] = true
+		s.DriftCount += m.DriftCount
+		s.FailedChecks += m.FailedChecks
+		s.WaivedChecks += m.WaivedChecks
+		s.UnknownChecks += m.UnknownChecks
+		s.NewFindings += m.NewFindings
+		s.ResolvedFindings += m.ResolvedFindings
+		for _, e := range m.Evidence {
+			key := e.SnapshotID
+			if key == "" {
+				key = e.ObservationID
+			}
+			if !seen[key] {
+				s.Evidence = append(s.Evidence, e)
+				seen[key] = true
+			}
+		}
+	}
+	if conformity["drifted"] {
+		s.Conformity = "drifted"
+	} else if conformity["unknown"] || (conformity["clean"] && conformity["not-checked"]) {
+		s.Conformity = "unknown"
+	} else if conformity["clean"] {
+		s.Conformity = "clean"
+	}
+	if checks["unknown"] {
+		s.Checks = "unknown"
+	} else if checks["fail"] {
+		s.Checks = "fail"
+	} else if checks["waived"] {
+		s.Checks = "waived"
+	} else if checks["pass"] {
+		s.Checks = "pass"
+	}
+	if verification["needs-verification"] {
+		s.Verification = "needs-verification"
+	} else if verification["not-verified"] {
+		s.Verification = "not-verified"
+	} else if verification["recorded"] {
+		s.Verification = "recorded"
+	} else if verification["live"] {
+		s.Verification = "live"
+	}
+	s.NextActions = []string{"pudl report " + report.RunSetID + " --json"}
+	report.Summary = s
+	return nil
+}
+
+// DecodeModelReport decodes a stored model report, keeping numbers exact.
+func DecodeModelReport(payload []byte) (*ModelReport, error) {
+	var r ModelReport
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.UseNumber()
+	if err := decoder.Decode(&r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}

@@ -1,13 +1,14 @@
 # Getting started: Git inventory and drift
 
-Import a sample Git inventory, compare it with a declared expectation, and
-inspect a drift finding. This tutorial takes about five minutes and uses only
-PUDL commands after you create the repository. The example ships inside PUDL;
-you do not need a source checkout, scripts, mu, Python, or external credentials.
+Observe a sample Git inventory, compare it with a declared expectation, and
+inspect a drift finding. This tutorial takes about five minutes and uses PUDL
+commands plus one `cp` after you create the repository. The example ships
+inside PUDL; you do not need a source checkout, scripts, Python, or external
+credentials.
 
 ## 1. Install PUDL
 
-With Go 1.26.9 or newer installed, install the current development version, which
+With Go 1.26.10 or newer installed, install the current development version, which
 includes the bundled example command:
 
 ```bash
@@ -56,34 +57,28 @@ resource type is the model's `_schema` routing tag. `schema show` prints the
 containing file; look for `#GitRepository` and its remote and branch types.
 Use `pudl model show git-inventory --json` to inspect the model's desired values.
 
-## 3. Import and check the baseline
+## 3. Observe and check the baseline
 
 <!-- walkthrough:baseline -->
 ```bash
-pudl mu ingest-observe --path .pudl/populators/git-inventory/baseline-observe.json --origin git-baseline
-pudl list --origin git-baseline --items-only
-pudl run git-inventory --from-catalog --catalog-scope git-baseline
+pudl check git-inventory
 ```
 
-The report says the desired resources exist and match: the imported default
-branch and the model's expectation are both `main`. Keep the printed `run_id`
-if you want to return to this exact report later.
+The model's populate step runs `cat` over the supplied inventory
+(`.pudl/populators/git-inventory/current.json`) and records what it prints as
+an observation snapshot. Any command that prints JSON records works the same
+way; a real model would run a Git or forge CLI instead. The report says the
+desired resources exist and match: the observed default branch and the model's
+expectation are both `main`. The last lines summarize the check: its ID
+(`check_...`) and, for each model, its result and run ID. Keep the printed check
+ID if you want to return to this exact report later.
 
-`pudl mu ingest-observe` imports a saved observation and records its snapshot in
-PUDL's catalog. Despite the command's name, the mu executable is not required.
-The example observation is supplied with PUDL.
-
-`--from-catalog` checks observations you already imported. `--catalog-scope` selects
-which inventory to use; here it is the `git-baseline` origin supplied during
-import. This is a check of stored evidence, so it does not claim to have observed
-a live Git server.
-
-## 4. Import the changed inventory and find drift
+## 4. Change the inventory and find drift
 
 <!-- walkthrough:change -->
 ```bash
-pudl mu ingest-observe --path .pudl/populators/git-inventory/changed-observe.json --origin git-changed
-pudl run git-inventory --from-catalog --catalog-scope git-changed
+cp .pudl/populators/git-inventory/changed.json .pudl/populators/git-inventory/current.json
+pudl check git-inventory
 ```
 
 The changed inventory has default branch `release`. The model still expects
@@ -91,7 +86,7 @@ The changed inventory has default branch `release`. The model still expects
 
 ```text
 - ~ git.repository/local/demo (changed): default_branch: release → want main
-  - default_branch: expected "main", observed "release"
+  - default_branch: expected "main", observed "release", previous "main" (snapshot snap_...)
   - observed_at: 2026-10-05T19:16:47Z
 ```
 
@@ -99,52 +94,63 @@ Each finding names the resource and a reason: `missing` (nothing observed with
 that identity), `changed` (a desired field differs), `unidentifiable` (the
 desired record has no identity to match), or `ambiguous` (several differing
 observed records share its identity). Every differing field is listed with its
-expected and observed values, and `observed_at` says when the compared record
-was recorded. The JSON report carries the same finding under `drift.drifted`,
-with the field differences in `fields`.
+expected and observed values, the value from the previous observation, and
+`observed_at` says when the compared record was recorded. The JSON report
+carries one entry per checked model under `members`; this model's finding is
+under `members[0].report.drift.drifted`, with the field differences in
+`fields`.
 
-The two origins keep the baseline and changed inventories separate. Importing
-the changed data preserves the earlier evidence.
+PUDL reports the difference and changes nothing. Each check keeps its own
+snapshot, so the baseline evidence is preserved.
 
 ## 5. Repeat the check
 
 <!-- walkthrough:repeat -->
 ```bash
-pudl run git-inventory --from-catalog --catalog-scope git-changed
-pudl run report
-pudl run report --json
+pudl check git-inventory
+pudl report
+pudl report --json
 ```
 
-The same mismatch appears under a new run ID. In JSON, `drift.clean` is `false`;
-`drift.verified` is also `false` because this is catalog replay. `ok: true` means
-the check ran successfully, even though it found drift. For automation, inspect
-`drift.clean` to determine whether the inventory matches.
+The same mismatch appears under a new check ID. `pudl report` reads the newest
+check again. In JSON, the check's `summary.conformity` is `drifted`; the model's
+own report under `members[0].report` has `drift.clean: false` and
+`drift.verified: true` because the check observed the inventory. Its
+`ok: true` means the check ran successfully, even though it found drift. For
+automation, inspect `summary.conformity` or use
+`pudl check git-inventory --detailed-exitcode`.
 
 ## 6. Inspect the evidence
 
-List the changed inventory's records, then replace `RECORD_ID` below with the
-record ID printed by the list command. Replace `BASELINE_RUN_ID` with the run ID
-from step 3 to reopen the original clean report.
+List the changed record, then replace `RECORD_ID` below with the record ID
+printed by the list command. Replace `BASELINE_CHECK_ID` with the check ID from
+step 3 to reopen the original clean report.
 
 <!-- walkthrough:evidence -->
 ```bash
-pudl list --origin git-changed --items-only
+pudl list --where default_branch=release --items-only
 pudl show RECORD_ID --raw
-pudl run report BASELINE_RUN_ID
+pudl report BASELINE_CHECK_ID
 ```
 
 The raw record shows `default_branch: "release"` and the assigned
-`pudl/git.#GitRepository` schema. The baseline report remains clean. Catalog
-replay creates a durable run report; it does not create a new observation
-snapshot. Your catalogs, imported records, models, and reports stay inside this
-repository's `.pudl/` directory.
+`pudl/git.#GitRepository` schema. The baseline report remains clean. Your
+catalogs, records, models, and reports stay inside this repository's `.pudl/`
+directory.
 
-You can keep the repository to experiment with your own data. For live
-observation and model authoring, continue with [mu integration](mu-integration.md).
-See the [CLI reference](cli-reference.md) for import and report options, or
+You can keep the repository to experiment with your own data. To observe a
+real system, point a model's `populate.runs` at a command that prints JSON
+records, such as `gcloud … --format=json` or `kubectl get … -o json`; see the
+[GCP network hygiene example](gcp-network-hygiene.md). See the
+[CLI reference](cli-reference.md) for import and report options, or
 [concepts](concepts.md) for schemas, identity, and drift.
 
 The [automated acceptance check](TESTING.md#git-inventory-walkthrough) executes
-these tutorial commands with only PUDL and Git on `PATH`.
+these tutorial commands with only PUDL, Git, `cat` and `cp` on `PATH`.
 
-Live observations can also report previous/current/expected values and failed-check witnesses. A catalog replay without an eligible prior snapshot records an explicit unavailable baseline; it does not invent observation history. See [evidence and recovery](evidence.md) for report retention, faithful exports, and portable backups.
+Reports keep previous/current/expected values and failed-check witnesses. A
+catalog replay (`pudl check <model> --from-catalog`) re-checks a stored snapshot without
+observing; without an eligible prior snapshot it records an explicit
+unavailable baseline rather than inventing observation history. See
+[evidence and recovery](evidence.md) for report retention, faithful exports,
+and portable backups.

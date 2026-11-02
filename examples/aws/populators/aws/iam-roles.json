@@ -1,0 +1,76 @@
+[
+  {
+    "Path": "/",
+    "RoleName": "app-ec2-role",
+    "RoleId": "AROAEXAMPLEROLE000001",
+    "Arn": "arn:aws:iam::123456789012:role/app-ec2-role",
+    "CreateDate": "2025-11-02T08:55:00+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}
+      ]
+    },
+    "Description": "Instance role for the application tier",
+    "MaxSessionDuration": 3600
+  },
+  {
+    "Path": "/",
+    "RoleName": "partner-audit",
+    "RoleId": "AROAEXAMPLEROLE000002",
+    "Arn": "arn:aws:iam::123456789012:role/partner-audit",
+    "CreateDate": "2024-02-14T10:00:00+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": {
+        "Effect": "Allow",
+        "Principal": {"AWS": "arn:aws:iam::111122223333:root"},
+        "Action": "sts:AssumeRole",
+        "Condition": {"StringEquals": {"sts:ExternalId": "example-external-id"}}
+      }
+    },
+    "MaxSessionDuration": 3600
+  },
+  {
+    "Path": "/",
+    "RoleName": "legacy-cross-account",
+    "RoleId": "AROAEXAMPLEROLE000003",
+    "Arn": "arn:aws:iam::123456789012:role/legacy-cross-account",
+    "CreateDate": "2021-03-04T09:30:00+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {"Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"},
+        {"Effect": "Allow", "Principal": {"AWS": ["arn:aws:iam::111122223333:root", "*"]}, "Action": "sts:AssumeRole"}
+      ]
+    },
+    "MaxSessionDuration": 43200
+  },
+  {
+    "Path": "/aws-service-role/support.amazonaws.com/",
+    "RoleName": "AWSServiceRoleForSupport",
+    "RoleId": "AROAEXAMPLEROLE000004",
+    "Arn": "arn:aws:iam::123456789012:role/aws-service-role/support.amazonaws.com/AWSServiceRoleForSupport",
+    "CreateDate": "2021-03-04T08:00:00+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": [
+        {"Effect": "Allow", "Principal": {"Service": "support.amazonaws.com"}, "Action": "sts:AssumeRole"}
+      ]
+    },
+    "Description": "Enables resource access for AWS to provide billing, administrative and support services",
+    "MaxSessionDuration": 3600
+  },
+  {
+    "Path": "/",
+    "RoleName": "open-trust-test",
+    "RoleId": "AROAEXAMPLEROLE000005",
+    "Arn": "arn:aws:iam::123456789012:role/open-trust-test",
+    "CreateDate": "2022-08-08T08:08:08+00:00",
+    "AssumeRolePolicyDocument": {
+      "Version": "2012-10-17",
+      "Statement": {"Effect": "Allow", "Principal": "*", "Action": "sts:AssumeRole"}
+    },
+    "MaxSessionDuration": 3600
+  }
+]

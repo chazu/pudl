@@ -27,7 +27,7 @@ CREATE TABLE facts (
     valid_end   INTEGER,             -- unix timestamp: when it stopped being true (NULL = still true)
     tx_start    INTEGER NOT NULL,    -- unix timestamp: when we recorded this fact
     tx_end      INTEGER,             -- unix timestamp: when this belief ended (retracted or superseded; NULL = current)
-    source      TEXT,                -- who asserted this: agent name, "human", "operator", "mu"
+    source      TEXT,                -- who asserted this: agent name, "human", "operator", a tool
     provenance  TEXT,                -- JSON: additional context (agent, activity, etc.)
     supersedes  TEXT,                -- ID of the version an invalidation replaced (migration 19)
     tx_seq      INTEGER,             -- store-wide sequence of the write that recorded this row

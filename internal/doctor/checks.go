@@ -326,7 +326,7 @@ func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 		"schema":        true,
 		"config.yaml":   true,
 		"workspace.cue": true,
-		"mu.cue":        true, // optional authored Mu workspace
+		"mu.cue":        true, // legacy mu workspace file; tolerated, unused
 	}
 	unexpectedEntries := []string{}
 	if entries, err := os.ReadDir(pudlDir); err == nil {
@@ -522,7 +522,8 @@ func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
 // schema's identity_fields must match its base schema's; they are declared at
 // the family root and inherited unchanged (CUE unification enforces this when
 // families are built with `#Child: #Base & {...}`; this check backstops
-// base_schema references that bypass CUE inheritance). See docs/schema-authoring.md.
+// base_schema references that bypass CUE inheritance). Policies are skipped:
+// a record is never classified under one. See docs/schema-authoring.md.
 func CheckIdentityFieldConsistency() *CheckResult {
 	return CheckIdentityFieldConsistencyAt(config.GetPudlDir())
 }
@@ -562,6 +563,9 @@ func CheckIdentityFieldConsistencyAt(pudlDir string) *CheckResult {
 		parentMeta, parentOK := inferrer.GetSchemaMetadata(parentName)
 		if !childOK || !parentOK {
 			continue
+		}
+		if childMeta.IsPolicy() {
+			continue // policies are never assigned to records, so they identify nothing
 		}
 
 		if !sameStringSet(childMeta.IdentityFields, parentMeta.IdentityFields) {

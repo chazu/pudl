@@ -12,9 +12,11 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/secretscan"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -34,6 +36,8 @@ type EnhancedImporter struct {
 	chain       *validator.ChainValidator // built on first manual-schema import
 	redactor    *redact.Registry          // sensitive-field paths per schema
 	projector   *projection.Registry      // schema-declared fact projections
+	secretScan  *secretscan.Scanner       // likely-secret warnings outside sensitive coverage
+	policies    *policyfacts.Evaluator    // compliance policies evaluated per resource
 }
 
 // NewEnhancedImporter creates a new enhanced importer with content-based ID support.
@@ -160,7 +164,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	dateDir := timestamp.Format("2006/01/02")
 	rawDir := filepath.Join(e.dataPath, "raw", dateDir)
 	metadataDir := filepath.Join(e.dataPath, "metadata")
-	if err := os.MkdirAll(metadataDir, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(metadataDir); err != nil {
 		return nil, fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
@@ -204,6 +208,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	if err != nil {
 		return nil, err
 	}
+	catalogedDocument := false
 	err = artifacts.WithLock(opts.Context, e.catalogDB.Root(), func() error {
 		existing, err := e.catalogDB.FindByContentHash(contentHash)
 		if err != nil {
@@ -211,6 +216,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 		}
 		if existing != nil {
 			result = existingImportResult(existing, opts.originPath())
+			catalogedDocument = stream == nil
 			if opts.Explain {
 				result.Explanation = loadOriginalExplanation(existing.MetadataPath)
 			}
@@ -220,7 +226,7 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 			if stream != nil {
 				result.Reassigned, err = stream.reobserveAll()
 				applyTally(result, stream.tally)
-			} else if opts.ManualSchema != "" || e.projector.For(existing.Schema) != nil {
+			} else if opts.ManualSchema != "" || e.projector.For(existing.Schema) != nil || len(e.policies.Applicable(existing.Schema)) > 0 {
 				result.Reassigned, err = e.reobserveDocument(opts, existing, staged.Path(storedPath), format, origin)
 			}
 			return err
@@ -251,6 +257,10 @@ func (e *EnhancedImporter) ImportFileWithFriendlyIDs(opts ImportOptions) (result
 	})
 	if result != nil && stream != nil {
 		result.SchemaMismatches = stream.schemaMismatches
+		stream.secrets.apply(result)
+	}
+	if err == nil && catalogedDocument {
+		err = e.scanCatalogedDocument(result, staged.Path(storedPath), format, intendedSchema(opts))
 	}
 	if result != nil && transformed != nil {
 		result.Redacted = transformed.redacted
@@ -270,7 +280,7 @@ func (e *EnhancedImporter) CatalogDB() *database.CatalogDB {
 // user's source file and keeps them on the same filesystem as raw storage.
 func (e *EnhancedImporter) TempDir() (string, error) {
 	dir := filepath.Join(e.dataPath, "tmp")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := artifacts.MkdirPrivate(dir); err != nil {
 		return "", fmt.Errorf("create import temp directory: %w", err)
 	}
 	return dir, nil

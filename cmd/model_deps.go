@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/modeldeps"
 )
 
 var modelDepsCmd = &cobra.Command{
@@ -39,16 +40,12 @@ Examples:
 
 		var warnings []string
 
-		// 1. Declared and authoritative binding edges for every retained model
-		// template (no successful value resolution or run needed).
+		// 1. Declared edges for every retained model template (no run needed).
 		for _, model := range models {
-			declared, warns := declaredDepsOfTemplate(model.Template)
+			declared, warns := modeldeps.Declared(model.Template.Name, model.Template.DependsOn, modeldeps.RegisteredIn(modelSearchDirs()))
 			warnings = append(warnings, warns...)
-			if rerr := reconcileEdges(db, model.Name, declaredSource(model.Name), declared); rerr != nil {
+			if rerr := modeldeps.Reconcile(db, model.Name, modeldeps.DeclaredSource(model.Name), declared); rerr != nil {
 				return fmt.Errorf("reconcile declared deps for %s: %w", model.Name, rerr)
-			}
-			if rerr := reconcileBindingDependencies(db, model.Template); rerr != nil {
-				return fmt.Errorf("reconcile binding deps for %s: %w", model.Name, rerr)
 			}
 		}
 
@@ -66,13 +63,13 @@ type depEdge struct {
 // printDepGraph reads the current model_depends_on facts and prints them grouped
 // by model, annotated declared/derived.
 func printDepGraph(db *database.CatalogDB, warnings []string) error {
-	facts, err := db.QueryFacts(database.FactFilter{Relation: modelDependsRelation})
+	facts, err := db.QueryFacts(database.FactFilter{Relation: modeldeps.Relation})
 	if err != nil {
 		return err
 	}
 	edgesByPair := map[string]*depEdge{}
 	for _, f := range facts {
-		from, to := edgeArgs(f.Args)
+		from, to := modeldeps.EdgeArgs(f.Args)
 		if from == "" || to == "" {
 			continue
 		}
@@ -137,7 +134,7 @@ func sourceLabel(source string) string {
 	case len(source) >= 8 && source[:8] == "derived:":
 		return "derived"
 	case len(source) >= 8 && source[:8] == "binding:":
-		return "binding"
+		return "binding" // recorded by the retired value bindings
 	default:
 		return source
 	}

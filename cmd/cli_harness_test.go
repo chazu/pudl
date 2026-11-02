@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/repo"
 	"github.com/chazu/pudl/internal/validator"
@@ -88,4 +90,26 @@ func cliWorkspace(t *testing.T) string {
 		resetShared()
 	})
 	return filepath.Join(root, ".pudl")
+}
+
+// checkedModel decodes the JSON report of a one-model `pudl check` and returns
+// that model's embedded report.
+func checkedModel(t *testing.T, stdout string) checkreport.ModelReport {
+	t.Helper()
+	var check struct {
+		Members []struct {
+			Report json.RawMessage `json:"report"`
+		} `json:"members"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(stdout), &check), "check stdout must be one JSON report: %s", stdout)
+	require.Len(t, check.Members, 1)
+	// Compact so raw values compare equal to a stored report's whatever the
+	// indentation they were written with.
+	var compact bytes.Buffer
+	require.NoError(t, json.Compact(&compact, check.Members[0].Report))
+	var report checkreport.ModelReport
+	decoder := json.NewDecoder(&compact)
+	decoder.UseNumber()
+	require.NoError(t, decoder.Decode(&report))
+	return report
 }

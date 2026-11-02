@@ -58,18 +58,9 @@ Data Storage:
 Schema Assignment:
 - Explicit schema validation with --schema (strict unless --allow-schema-fallback)
 - Automatic schema inference from CUE schemas in the schema repository
-- Chained validation: policy → base → generic → catchall
+- Chained validation: type → base type → catchall; --schema must name a type, never a policy
 - Untyped imports use best-effort inference; explicit schemas must validate
-- Envelope wire format: a JSON file shaped like
-    {"schema": {"module": "mu/aws", "version": "v1"},
-     "definitions": [...],   // optional inline CUE
-     "data": <payload>}
-  is auto-detected on import. The declared CUE schema ref is recorded
-  in the item_schemas table; inline definitions are written to pudl's
-  schema cache for future imports. Raw JSON without the envelope shape
-  is imported untouched.
-- Multiple schemas per item: items can satisfy more than one schema
-  (declared, inferred, unresolved) — see 'pudl reclassify --help'.
+
 
 Compressed Input:
 - .gz and .zst files (or gzip/zstd magic bytes) are decompressed before import;
@@ -82,11 +73,9 @@ Reading from stdin:
 Example usage:
     # Single file import
     pudl import --path data.json
-    pudl import --path aws-instances.json --schema aws.compliant-ec2
+    pudl import --path aws-instances.json --schema aws.ec2
     pudl import --path k8s-pods.yaml --schema k8s.pod --origin k8s-get-pods
 
-    # CUE schema reference (e.g. emitted by a mu plugin)
-    pudl import --path out.json --schema mu/aws@v1#EC2Instance
 
     # Several files, or a shell-expanded glob
     pudl import fw-prod-a.json fw-prod-b.json
@@ -170,7 +159,7 @@ func runImportCommand(cmd *cobra.Command, args []string) error {
 	opts := session.options(absPath, workspaceImportOrigin())
 
 	// Perform the import with friendly IDs
-	result, err := importOneWithEnvelope(session.imp, opts)
+	result, err := importOne(session.imp, opts)
 	if jsonOutput {
 		if writeErr := writeImportJSON([]importOutcome{newImportOutcome(absPath, result, err)}); writeErr != nil {
 			return writeErr
@@ -198,7 +187,7 @@ func init() {
 	importCmd.Flags().StringP("path", "p", "", "Path to file or wildcard pattern to import (use '-' for stdin)")
 	importCmd.Flags().StringVar(&importOrigin, "origin", "", "Override origin detection (optional)")
 	importCmd.Flags().BoolVar(&importAllowSchemaFallback, "allow-schema-fallback", false, "Explicitly allow records that do not satisfy --schema (reports fallback)")
-	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.compliant-ec2)")
+	importCmd.Flags().StringVar(&importSchema, "schema", "", "Specify schema for validation (e.g., aws.ec2)")
 	importCmd.Flags().StringVar(&importFormat, "format", "", "Specify format for stdin data (json, yaml, csv, ndjson)")
 	importCmd.Flags().BoolVar(&importRecursive, "recursive", false, "When --path is a directory, also import supported files in its subdirectories")
 

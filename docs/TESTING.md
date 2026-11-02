@@ -10,19 +10,18 @@ Overview of the testing strategy for PUDL.
 | Importer | `internal/importer/` | Format detection, schema assignment, collections, streaming, error handling |
 | Inference | `internal/inference/` | Heuristic scoring, CUE unification, inheritance graph |
 | Validator | `internal/validator/` | CUE validation, validation service |
-| Run/CLI | `cmd/` | Run flags, scoped convergence, inventory snapshots, CLI orchestration |
-| Mubridge | `internal/mubridge/` | Observe snapshots, envelopes, and manifest ingest |
+| Run/CLI | `cmd/` | Run flags, inventory snapshots, CLI orchestration, legacy catalog readability |
+| Observe | `internal/observe/` | Observe snapshots, schema routing, and redaction |
 | Identity | `internal/identity/` | Resource identity extraction, content hashing |
 | Schema Name | `internal/schemaname/` | Normalization, canonical format |
 | Integration | `test/integration/` | End-to-end import-to-catalog workflows |
 | System | `test/system/` | Reliability, config, edge cases, stress tests |
-| Repository smoke | `test/smoke/repository_kick_tires*_test.go` | Real-mu run-sets, approvals, sealed boundaries, and concurrency |
 | Getting-started smoke | `test/smoke/git_inventory_walkthrough_test.go` | Documented Git inventory commands, drift, snapshot evidence, and isolation |
-| Example smoke | `test/smoke/example_install_test.go`, `test/smoke/git_inventory_observation_test.go` | Embedded example installation, conflict preservation, and optional real-mu observation |
+| Example smoke | `test/smoke/example_install_test.go`, `test/smoke/git_inventory_observation_test.go` | Embedded example installation, conflict preservation, and live command observation |
 
 ## Running Tests
 
-The repository targets Go 1.26.9, pinned in `mise.toml` and CI. Run
+The repository targets Go 1.26.10, pinned in `mise.toml` and CI. Run
 `mise install` once, then use `mise exec --` before the Go and Make commands
 below to select the project toolchain. With mise activated in your shell,
 the toolchain is selected automatically inside this checkout.
@@ -54,47 +53,25 @@ no-leak boundary. `repo init` is safe to repeat and should repair missing
 PUDL-owned files without replacing an authored `workspace.cue` unless
 `--force` is passed.
 
-### Repository kick-the-tires matrix
-
-```bash
-make test-kick-tires
-```
-
-This checked-in matrix requires `git`, `python3`, and `mu` on `PATH`. CI pins
-mu v0.3.5 and runs the target on every push and pull request. It exercises the
-tracked `.pudl/schema` and `.pudl/populators` fixtures through the public CLI:
-plain producer/consumer ordering and reuse, fail-fast validation, projection
-authorization, failed-producer propagation, approval/resume/reject and stale
-plans, single-model and producer/consumer sealed provider I/O, strict-routing
-rejection for unused/undeclared/ambiguous claims, catalog/output redaction,
-write-policy denial, and simultaneous run-sets.
-It also checks baseline/change/repeat live observation from the installed
-Git inventory example, including typed snapshot members and retained evidence.
-
-Each test initializes a nested repository beneath
-`.pudl/data/kick-tires/test-runs/`; the fresh PUDL binary is built beneath
-`.pudl/data/smoke/bin/`. Cleanup removes individual test workspaces, and no
-PUDL catalog or provider state is written outside the checkout.
-
 ### Git inventory walkthrough
 
 ```bash
 mise exec -- make test-git-walkthrough
 ```
 
-Requires Git. The test builds a fresh PUDL binary, places it and Git on an
-otherwise empty `PATH`, and executes the marked commands from
+Requires Git. The test builds a fresh PUDL binary, places it, Git, `cat` and
+`cp` on an otherwise empty `PATH`, and executes the marked commands from
 [getting-started.md](getting-started.md). No shell scripts or copied source
 fixtures are used. Printed ID placeholders are filled from CLI results as the
 guide instructs the reader. It verifies the clean baseline, changed inventory,
 repeat finding, durable report replay, typed evidence, and absence of global
-PUDL/mu state. Installer checks cover idempotence, conflicts, and use outside an
-initialized workspace. Paths include spaces, and test workspaces below
+PUDL state. The observation journey repeats baseline/change/repeat runs of the
+installed example and checks typed snapshot members and retained evidence.
+Installer checks cover idempotence, conflicts, and use outside an initialized
+workspace. Paths include spaces, and test workspaces below
 `.pudl/data/git-walkthrough/test-runs/` are removed afterward.
 
-CI runs this check in the ordinary test job without installing mu or Python.
-The optional live observation path remains in `make test-kick-tires`, whose CI
-job pins mu v0.3.5.
+CI runs this check in the ordinary test job; it needs no mu or Python.
 
 ### By category
 ```bash
@@ -110,8 +87,8 @@ go test ./internal/inference -v
 # Validator
 go test ./internal/validator -v
 
-# Mu bridge
-go test ./internal/mubridge -v
+# Observation ingest
+go test ./internal/observe -v
 
 # Integration
 go test ./test/integration/... -v
@@ -176,7 +153,7 @@ test/
 - Schema inference assignment and confidence scoring
 - Large file streaming and memory efficiency
 - Collection imports fail atomically when an item cannot be stored
-- Typed envelope detection, schema metadata, and inline definition caching
+
 - Error handling for corrupted and malformed input
 
 ### Inference Tests
@@ -186,25 +163,27 @@ test/
 
 ### System Model Tests
 - `#SystemModel` schema decode + structural validation (`internal/systemmodel`)
-- Run verdict mapping, `--only` scope selection, and the `pudl run` phase plan (`cmd` run tests)
-- Plain/sealed binding classification, exact run-set ordering, producer snapshot
-  pinning, approval/resume/reject, and durable linked reports. Unit tests cover
-  synthetic claims; the required repository smoke also runs strict sealed
-  planning, provider I/O, approval resume, and redaction through a real mu.
+- Run verdict mapping and the per-model phase plan of `pudl check` (`cmd` run tests)
+- Retired model fields fail to load with an error naming the field
+  (`internal/systemmodel`)
+- `pudl check` ordering over `#CommandObserve` members (producers first by
+  `depends_on`, blocked dependents), the one versioned check report with
+  embedded member reports, and durable linked reports
+  (`cmd/check_integration_test.go`)
+- A catalog written before the convergence/mu removal still lists, shows,
+  reports and validates (`cmd/legacy_catalog_test.go`)
 - Bootstrap installation and repair derived from the complete embedded schema
-  tree, including built-in `@pudl(binding=plain)` projections
+  tree
 
 ### Environment-sensitive tests
 
 The database initialization test intentionally exercises an unwritable path;
 its assertion is about returning an error, not a particular host `errno` string.
-The generic `make smoke` suite skips cases whose external tools are unavailable.
-`make test-kick-tires` is a required named contract and fails immediately when
-`git`, `mu`, or `python3` is missing; its CI job installs pinned mu v0.3.5.
+The `make smoke` suite skips cases whose external tools are unavailable.
 
-### Mubridge Tests
+### Observe Tests
 - Observe-result ingestion into the catalog (content-hash dedup, schema routing)
-- Build-manifest ingestion + per-action catalog entries and status
+- Sensitive-field redaction before storage
 
 ### Integration Tests
 - End-to-end file-to-database import workflows

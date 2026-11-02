@@ -48,7 +48,6 @@ var guideTopics = map[string]func(){
 	"facts":           printGuideFacts,
 	"datalog":         printGuideDatalog,
 	"models":          printGuideModels,
-	"mu":              printGuideMu,
 	"agents":          printGuideAgents,
 	"troubleshooting": printGuideTroubleshooting,
 }
@@ -74,10 +73,9 @@ Reasoning and state:
   pudl guide facts          Bitemporal assertions, retraction, and historical queries
   pudl guide datalog        Datalog query engine: rules, recursive evaluation
 
-Convergence:
+Observation and checks:
 
-  pudl guide models         #SystemModels: list, show, run, converge
-  pudl guide mu             How pudl drives mu (the ACUTE loop)
+  pudl guide models         #SystemModels: observe with commands, compare, check
 
 For agents:
 
@@ -104,7 +102,7 @@ THE MENTAL MODEL
 
   - catalog.db       stores all imported entries with metadata
   - schemas          CUE files that define structure and validation
-  - models           #SystemModels: declared shape + populate/converge
+  - models           #SystemModels: populate commands, desired state, checks
   - fact store       bitemporal assertions (valid-time + transaction-time)
   - datalog rules    CUE-defined rules for derived queries
   - workspace        one durable state root: repo .pudl/ or global ~/.pudl/
@@ -116,15 +114,15 @@ THE DAY-TO-DAY VERBS
   pudl show <id>              Inspect an entry's content and metadata.
   pudl facts list --relation depends   Query assertions in the fact store.
   pudl query <relation>       Run Datalog queries over derived facts.
-  pudl facts add --relation <name> --args '<json-object>'   Record an assertion.
-  pudl run <model>            Run a #SystemModel (observe-only, or --converge).
-  pudl status                 Show recorded convergence status.
+  pudl check <model>...       Observe, compare with desired state, run checks.
+  pudl report [id]            Read a check's report again.
+  pudl status                 Show each model's recorded verdict.
   pudl doctor                 Health check the workspace.
 
 WHERE DATA LIVES
 
   Inside a repo initialized with pudl init, all durable state is local:
-  .pudl/data/sqlite/catalog.db    Catalog, reports, approvals, and facts.
+  .pudl/data/sqlite/catalog.db    Catalog, reports, and facts.
   .pudl/data/{raw,metadata}/      Imported content and provenance.
   .pudl/schema/                   Local CUE module, built-ins, models, rules.
   .pudl/config.yaml               Local path configuration.
@@ -136,8 +134,7 @@ WHAT TO READ NEXT
 
   Getting started:     pudl guide import → pudl guide schemas
   Recording state:     pudl guide facts → pudl guide datalog
-  Convergence:         pudl guide models → pudl guide mu
-  Integration with mu: pudl guide mu
+  Observation:         pudl guide models
   For AI agents:       pudl guide agents
 `)
 }
@@ -208,14 +205,6 @@ CONTENT-ADDRESSED IDS
   Records whose schema identity_fields cannot be extracted are reported:
   they fall back to content-hash identity and form no version chain.
 
-ENVELOPES
-
-  pudl auto-detects envelope JSON with shape:
-
-    {"schema": {...}, "definitions": [...], "data": <payload>}
-
-  This is how mu plugins emit typed output. The schema metadata
-  routes classification automatically.
 
 WILDCARDS
 
@@ -290,7 +279,7 @@ COMMANDS
   pudl schema new --from <id> --path <package>/#<Definition>
   pudl schema add <name> <file>      Add a schema file
   Open the source path from pudl schema show NAME --json in your editor.
-  pudl schema reinfer                Re-run inference on all entries
+  pudl doctor --fix --only inference Re-infer entries whose inference drifted
 
 SCHEMA INFERENCE
 
@@ -301,7 +290,8 @@ SCHEMA INFERENCE
   3. Best-match selection — most specific schema that validates
 
   The inference result is stored on the catalog entry. Re-inference
-  can be triggered with 'pudl schema reinfer' after schema changes.
+  is diagnosed by 'pudl doctor' and repaired with
+  'pudl doctor --fix --only inference' after schema changes.
 
   Filters such as 'pudl list --schema' match whole definition names when
   the value contains '#' ('#Route' does not match '#Router'); otherwise
@@ -346,6 +336,8 @@ WRITE AND QUERY
 
   Args are arbitrary JSON objects. Use --schema to validate against an authored
   CUE definition; no relation has a built-in maturity or scoring policy.
+  facts add, retract and invalidate are advanced commands: hidden from --help,
+  documented under "Advanced commands" in docs/cli-reference.md.
 
 LIFECYCLE AND HISTORY
 
@@ -364,8 +356,8 @@ PROJECTED FACTS
   Schemas that declare _pudl.facts project imported records into facts
   (source "projection:<resource_id>", reserved). They track each
   resource's most recently observed record, and are kept in sync by
-  import, run, reinfer and delete. Run 'pudl facts reproject' to sync
-  explicitly; 'pudl query' warns when a sync is pending.
+  import, check, doctor repairs and delete. Run
+  'pudl doctor --fix --only projections' to sync explicitly; 'pudl query' warns when a sync is pending.
 
 SEE ALSO
 
@@ -487,154 +479,74 @@ SEE ALSO
 }
 
 func printGuideModels() {
-	fmt.Fprint(outw(), `pudl guide models — declaring and running #SystemModels
+	fmt.Fprint(outw(), `pudl guide models — declaring and checking #SystemModels
 
 OVERVIEW
 
-  A #SystemModel packages a system's shape, how to populate it (observe
-  live state), optional desired state, and how to converge — in one
-  declaration. 'pudl run <model>' drives it through the ACUTE cycle:
-  populate → drift → checks → report (and, with --converge, applies
-  changes via mu).
+  A #SystemModel packages how to observe a system (commands that print JSON
+  records), optional desired state, and checks — in one declaration.
+  'pudl check <model>...' drives it: populate → drift → checks → report. A
+  check reports differences and changes nothing; the tools that own the
+  system apply changes.
 
 COMMANDS
 
-  pudl model list                      List registered models (+ last-run status)
-  pudl model show <name>               Show populate/converge/desired/checks
+  pudl model list                      List registered models (+ last status)
+  pudl model show <name>               Show populate/desired/checks
   pudl model validate <name>           Structurally validate without running
-  pudl run <name>                      Observe-only run (populate → drift → checks)
-  pudl run <name> --converge           Close drift (mutates the target via mu)
-  pudl run set <models...>             Observe an exact dependency set
-  pudl run set <models...> --converge  Plan the whole set, then mutate
-  pudl run report [id]             Read a durable run-set report
-  pudl run resume|reject <id>      Decide a pending exact plan
-  pudl status                          Show recorded convergence status
+  pudl check <name>...                 Observe, compare and check the named models
+  pudl report [id]                     Read a check report again
+  pudl status                          Show each model's recorded verdict
 
 WHAT A MODEL DECLARES
 
   A model is a CUE definition inheriting #SystemModel, registered in the
-  schema repo (project .pudl/schema and explicitly vendored dependencies):
+  schema repo (project .pudl/schema and explicitly vendored dependencies).
+  Its populate arm (#CommandObserve) runs plain commands that print JSON
+  records — no shell:
 
-    githubChazu: #SystemModel & {
-        name: "github-chazu"
-        populate: { eweSource: "github-chazu/populate.cue", outputs: ["repos.json"] }
-        // optional: desired: [...], converge: { plugin: "k8s" }, checks: [...]
-    }
-
-  Populate arms: plugin (a mu observer), eweSource (an ewe fetch), or
-  runs — plain commands that print JSON records, run by pudl itself:
-
-    populate: {
-        schema: "pudl/gcp.#Firewall"            // optional, like import --schema
-        runs: [for p in ["prod-a", "prod-b"] {
-            argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
-            set: project: p
-        }]
+    #Firewalls: sm.#SystemModel & {
+        name: "firewalls"
+        populate: {
+            schema: "pudl/gcp.#Firewall"        // optional, like import --schema
+            runs: [for p in ["prod-a", "prod-b"] {
+                argv: ["gcloud", "compute", "firewall-rules", "list", "--project=\(p)", "--format=json"]
+                set: project: p
+            }]
+        }
+        // optional: desired: [...], checks: [...]
     }
 
   A model with no populate is checks-only. It runs its checks over the
   catalog as it stands, for example over data from 'pudl import'.
 
-  Register with 'pudl schema add'; resolve and run it by name (its 'name'
-  field or short definition name).
+  Register with 'pudl schema add'; resolve and check it by name (its 'name'
+  field or short definition name). Retired fields (converge, plugins,
+  sealed_inputs, sealed_outputs, inputs, bindings, #PluginObserve,
+  #EweTarget) fail to load with an error naming the field; see
+  docs/retired-commands.md.
 
 SCAFFOLD FIRST
 
-  pudl model new pods --populate plugin:k8s --input namespace=default
   pudl model new fw --populate 'command:gcloud compute firewall-rules list --format=json'
-  pudl model show pods --json
-  pudl run --populate plugin:k8s --input inventory='{"kinds":["pods"]}'
-  pudl run --populate 'command:gcloud compute networks list --format=json'
+  pudl model new inventory              # placeholder command to replace
+  pudl model show fw --json
+  pudl check --populate 'command:gcloud compute networks list --format=json'
 
-  The ad-hoc form writes no model definition and is observe-only. For a durable
-  model, edit the path printed by 'model new' rather than authoring registration
-  boilerplate by hand. Use 'pudl run report [run-id]' after a run; use
-  '--require-approval' plus 'run resume'/'run reject' before convergence.
+  The ad-hoc form writes no model definition. For a durable model, edit the
+  path printed by 'model new' rather than authoring registration boilerplate
+  by hand. Use 'pudl report [id]' after a check.
 
-CROSS-MODEL VALUES
+SEVERAL MODELS
 
-  Required scalar inputs can bind to a producer observation. Both the consumer
-  input and source schema field must declare @pudl(binding=plain). 'run set'
-  runs exactly the named models, rejects omitted producers/cycles in preflight,
-  orders producers first, and pins their successful snapshots. It never expands
-  the set implicitly.
-
-  Sealed values stay inside mu's provider channel. PUDL-generated targets use
-  strict action routing, and a run-set that can write a sealed output always
-  pauses for exact-plan approval. Invalid or ambiguous claims fail during
-  whole-set planning before mutation or provider traffic. Each approved apply
-  passes mu the raw plan digest; mu compares before provider access and executes
-  that same in-memory graph.
+  'pudl check a b c' runs exactly the named models, producers first by
+  depends_on, rejects cycles before anything runs, and records one report.
+  A model whose named producer did not succeed is blocked. It never runs a
+  model that was not named.
 
 SEE ALSO
 
   pudl guide schemas       The schema system models build on
-  pudl guide mu            How pudl drives mu (the ACUTE loop)
-`)
-}
-
-func printGuideMu() {
-	fmt.Fprint(outw(), `pudl guide mu — how pudl and mu work together
-
-OVERVIEW
-
-  pudl and mu are decoupled tools. pudl declares desired state, observes
-  actual state, and computes drift; mu takes desired-state targets and
-  converges them using plugins. Neither imports the other — they
-  communicate through a generated mu.cue and JSON results.
-
-THE ACUTE LOOP (driven by 'pudl run')
-
-  populate → drift → checks → report, repeated under --converge until
-  observed == desired (or an iteration cap):
-
-  1. populate: pudl runs 'mu observe' (or an ewe fetch) and ingests the
-               records into the catalog. A command populate arm
-               ('runs:') needs no mu: pudl runs the commands itself.
-  2. drift:    pudl compares the model's desired state against the latest
-               observation.
-  3. converge: (--converge) pudl renders desired → sources and runs
-               'mu build'; the plugin reconciles. pudl re-observes to
-               verify, looping to a fixed point.
-
-  pudl run github-chazu                 # observe-only
-  pudl run k8sPolicy --converge         # close drift via mu
-  pudl run set network k8sPolicy        # exact producer/consumer set
-
-VALUE ROUTING
-
-  Plain scalar bindings come from PUDL catalog snapshots and carry durable
-  producer/run/snapshot/path evidence. Sealed values stay in mu's provider
-  channel and PUDL records only schemes and fingerprints. Generated targets use
-  strict per-action claims. Sealed-output run-sets pause for exact approval;
-  resume rebuilds the plan before producer-first execution.
-
-INGESTING MU RESULTS
-
-  pudl mu ingest-observe  <results.json>   Store observe results as live state
-  pudl mu ingest-manifest <manifest.json>  Record a build manifest
-
-  These understand mu's output formats natively. 'pudl run' calls them
-  for you, but they're also usable standalone.
-
-DISTRIBUTION
-
-  mu plugins are published and discovered through mu's OCI path:
-    mu plugin push <name>
-    mu plugin list --remote
-    mu plugin info <name> --json
-
-  PUDL schemas and model contracts remain CUE modules:
-    cue mod get <module@version>
-    cue mod tidy
-
-  Compose the two by declaring the resolved mu plugin in a model's plugins:
-  block and keeping the PUDL schema/model in the CUE module. Do not create a
-  second registry format for a plugin bundle.
-
-SEE ALSO
-
-  pudl guide models        Declaring and running #SystemModels
   pudl guide datalog       Querying the catalog and derived facts
 `)
 }
@@ -646,29 +558,24 @@ START WITH THE PROJECT
 
   pudl model list --json
   pudl model show <name> --json
-  pudl run <name>
-  pudl run report --json
+  pudl check <name>
+  pudl report --json
 
   Existing repository state lives under .pudl/. Create it with pudl init if
   needed; use --global explicitly for global initialization.
 
 EXECUTION SCOPE
 
-  pudl run set <producer> <consumer>   Observe exactly the named set
-  pudl run set <models...> --converge --require-approval
-  pudl run resume <operation-id>
-  pudl run reject <operation-id>
+  pudl check <producer> <consumer>   Observe exactly the named models
 
-  Ordinary runs observe. --converge enables mutation through Mu. Missing
-  producers are not started implicitly. Set approval covers an exact plan;
-  changed plans are rejected. Sealed values stay inside Mu's provider path.
+  Every check observes; nothing changes the systems PUDL catalogs. Models
+  that were not named are never started.
 
 INTERPRET THE RESULT
 
   Operation completion, resource conformity, check results, and verification
   are distinct. Read the stored report by ID for provenance and findings.
-  Stored replay is not fresh live verification. Uncertain mutation outcomes
-  require verification, and partial scope cannot prove a whole model clean.
+  Stored replay is not fresh live verification.
 
 DATA AND RULES
 
@@ -676,10 +583,10 @@ DATA AND RULES
   pudl list --json                                 count with .total_matched
   pudl export --id <proquint> --format json        exact payload, pipeable
   pudl query <relation> key=value --json
-  pudl facts add --relation <name> --args '<json-object>' --source <origin>
 
-  Schema inference is automatic. Generic fact writes should name their source;
-  use explicit --schema validation when an assertion has an authored contract.
+  Schema inference is automatic. Fact writes (facts add, an advanced command)
+  should name their --source and use --schema when an assertion has an
+  authored contract.
   facts list --as-of-valid/--as-of-tx supports historical evidence queries.
   To query imported fields, declare _pudl.facts in the schema instead of
   post-processing payloads (pudl guide datalog).
@@ -699,47 +606,38 @@ DISCOVER THE ACTUAL SURFACE
 
   pudl help --json                 command tree and flags
   pudl model show <name> --json
-  mu plugin info <name> --json     plugin capabilities/config schema
 
 RUN DIAGNOSTICS
 
-  pudl run report [<run-id>] --json   retrieve the most recent/stored report
+  pudl report [<id>] --json           retrieve the most recent/stored report
   pudl status                         model verdicts
-  pudl list --artifacts               run and manifest artifacts
+  pudl snapshot list --json           observation snapshots
 
 COMMON CASES
 
   No model found:
     pudl model list
-    pudl model new <name> --populate plugin:<name>
+    pudl model new <name> --populate 'command:<cmdline>'
 
-  Plugin cannot be resolved:
-    mu plugin list --cached
-    mu plugin info <name> --json
-    pudl run <model> --mu-root <directory-containing-mu.cue>
+  A model fails to load with "retired field(s)":
+    remove the named field; docs/retired-commands.md lists replacements.
 
-  Observe records have an unexpected schema:
-    inspect the plugin's _schema field, then use `+"`pudl mu ingest-observe`"+`
-    with the current schema repository. PUDL only persists references present
-    in the loaded schema namespace; unresolved declarations fall back safely.
+  The populate command fails:
+    the check error quotes the end of its stderr. Run the argv by hand from the
+    model file's directory; set populate.timeout for slow commands.
+
+  Observed records have an unexpected schema:
+    set populate.schema to route every record like import --schema, or tag
+    each record with a quoted "_schema" resource type. PUDL only persists
+    references present in the loaded schema namespace.
 
   A query or check over imported data finds nothing:
     read the warnings 'pudl query' prints on stderr, then
-    pudl facts reproject --dry-run
+    pudl doctor --fix --dry-run --only projections
     pudl import <file> --schema <name> --dry-run   # identity? facts per relation?
 
   'pudl list --schema' finds nothing:
     a value with '#' must name a whole definition ('gcp.#Route');
     drop the '#' for a substring match.
-
-  Convergence stopped after mutation:
-    inspect `+"`pudl run report <run-id> --json`"+`. A needs_verification/unknown
-    result means receipt or re-observation proof was incomplete; do not blindly
-    re-apply.
-
-  Approval pending:
-    pudl run report <run-id> --json
-    pudl run resume <run-id>       # approve and execute
-    pudl run reject <run-id>       # terminal no-op
 `)
 }

@@ -6,6 +6,5 @@ other diagnostics go to stderr, and empty lists are written as `[]`. Commands
 without structured output (scaffolding, editors, Git and CUE wrappers) still
 print text under `--json`.
 
-Errors exit nonzero. `pudl run` and `pudl run set` can also report their
-findings in the exit status with `--detailed-exitcode`; see
-[pudl run](#pudl-run).
+Errors exit nonzero. `pudl check` can also report its findings in the exit
+status with `--detailed-exitcode`; see [pudl check](#pudl-check).

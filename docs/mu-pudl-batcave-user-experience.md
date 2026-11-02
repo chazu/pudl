@@ -1,5 +1,7 @@
 # Mu and PUDL: experience operating the Batcave fleet
 
+> **Historical.** This document describes the convergence workflow and mu integration that were removed on 2026-11-01. PUDL now observes, catalogs and reports; it changes nothing. See [the removal design](design/2026-11-01-remove-convergence-and-mu.md) and [retired commands](retired-commands.md#convergence-and-mu-integration).
+
 Date: September 10, 2026.
 
 This is feedback from Codex as an operator and integration author, based on

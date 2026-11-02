@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/filelock"
 	"github.com/chazu/pudl/internal/idgen"
@@ -47,11 +47,11 @@ type CatalogEntry struct {
 	Version      *int    `json:"version,omitempty"`       // Monotonic version per resource_id
 	// Artifact tracking fields
 	EntryType *string `json:"entry_type,omitempty"` // e.g. "observe", "manifest", "manifest-action"
-	Target    *string `json:"target,omitempty"`     // mu target / run target name (e.g. //models/<name>, home/odroid)
+	Target    *string `json:"target,omitempty"`     // run target name (e.g. //models/<name>:populate)
 	RunID     *string `json:"run_id,omitempty"`     // Unique run identifier
 	Tags      *string `json:"tags,omitempty"`       // JSON-encoded map[string]string
 	// Convergence status tracking
-	Status    *string   `json:"status,omitempty"` // Convergence status (unknown/clean/drifted/converging/failed)
+	Status    *string   `json:"status,omitempty"` // Verification status (unknown/clean/drifted/failed); legacy converging reads as unknown
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -124,7 +124,7 @@ func OpenCatalogDBReadOnly(configDir string) (*CatalogDB, error) {
 func (c *CatalogDB) initialize() (err error) {
 	// Ensure sqlite directory exists under config/data/sqlite/
 	sqliteDir := filepath.Join(c.configDir, "data", "sqlite")
-	if err := os.MkdirAll(sqliteDir, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(sqliteDir); err != nil {
 		return fmt.Errorf("failed to create sqlite directory: %w", err)
 	}
 	initLock, err := filelock.Acquire(filepath.Join(sqliteDir, "catalog.init.lock"))
@@ -142,6 +142,9 @@ func (c *CatalogDB) initialize() (err error) {
 
 	// Open database connection
 	dbPath := filepath.Join(sqliteDir, "catalog.db")
+	if err := artifacts.CreateFileExclPrivate(dbPath); err != nil {
+		return fmt.Errorf("failed to create database file: %w", err)
+	}
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=cache_size(10000)")
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
@@ -371,48 +374,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 
 // QueryEntriesContext binds counts and row scanning to ctx.
 func (c *CatalogDB) QueryEntriesContext(ctx context.Context, filters FilterOptions, options QueryOptions) (*QueryResult, error) {
-	// Build WHERE clause
-	var whereConditions []string
-	var args []interface{}
-
-	if filters.Schema != "" {
-		cond, condArgs := SchemaFilterCondition(filters.Schema)
-		whereConditions = append(whereConditions, cond)
-		args = append(args, condArgs...)
-	}
-	if filters.Origin != "" {
-		whereConditions = append(whereConditions, `origin LIKE ? ESCAPE '\'`)
-		args = append(args, "%"+EscapeLike(filters.Origin)+"%")
-	}
-	if filters.Format != "" {
-		whereConditions = append(whereConditions, `format LIKE ? ESCAPE '\'`)
-		args = append(args, "%"+EscapeLike(filters.Format)+"%")
-	}
-	if filters.CollectionID != "" {
-		whereConditions = append(whereConditions, "id IN (SELECT item_id FROM collection_memberships WHERE collection_id = ?)")
-		args = append(args, filters.CollectionID)
-	}
-	if filters.CollectionType != "" {
-		whereConditions = append(whereConditions, "collection_type = ?")
-		args = append(args, filters.CollectionType)
-	}
-	if filters.ItemID != "" {
-		whereConditions = append(whereConditions, "item_id = ?")
-		args = append(args, filters.ItemID)
-	}
-	if len(filters.EntryTypes) > 0 {
-		placeholders := make([]string, len(filters.EntryTypes))
-		for i, t := range filters.EntryTypes {
-			placeholders[i] = "?"
-			args = append(args, t)
-		}
-		whereConditions = append(whereConditions, "entry_type IN ("+strings.Join(placeholders, ",")+")")
-	}
-
-	whereClause := ""
-	if len(whereConditions) > 0 {
-		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
-	}
+	whereClause, args := entryFilterClause(filters)
 
 	// Get total count (without filters)
 	var totalCount int
@@ -676,47 +638,51 @@ func (c *CatalogDB) DeleteEntry(id string) error {
 	return err
 }
 
-// MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
-// Returns the number of entries updated.
-func (c *CatalogDB) MigrateSchemaNames() (int, error) {
-	// Get all entries with their current schema names
+// SchemaNameChange is one catalog entry whose schema name is not canonical.
+type SchemaNameChange struct {
+	ID   string
+	From string
+	To   string
+}
+
+// PendingSchemaNameMigrations lists, without writing, the entries whose schema
+// names schemaname.Normalize would change.
+func (c *CatalogDB) PendingSchemaNameMigrations() ([]SchemaNameChange, error) {
 	rows, err := c.db.Query("SELECT id, schema FROM catalog_entries")
 	if err != nil {
-		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to query catalog entries", err)
 	}
 	defer rows.Close()
 
-	// Collect entries that need updating
-	type update struct {
-		id        string
-		newSchema string
-	}
-	var updates []update
-
+	var updates []SchemaNameChange
 	for rows.Next() {
 		var id, schema string
 		if err := rows.Scan(&id, &schema); err != nil {
-			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan row", err)
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to scan row", err)
 		}
-
-		normalized := schemaname.Normalize(schema)
-		if normalized != schema {
-			updates = append(updates, update{id: id, newSchema: normalized})
+		if normalized := schemaname.Normalize(schema); normalized != schema {
+			updates = append(updates, SchemaNameChange{ID: id, From: schema, To: normalized})
 		}
 	}
-
 	if err := rows.Err(); err != nil {
-		return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating rows", err)
+		return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Error iterating rows", err)
 	}
+	return updates, nil
+}
 
-	// Update entries that need normalization
+// MigrateSchemaNames normalizes all existing schema names in the database to canonical format.
+// Returns the entries updated.
+func (c *CatalogDB) MigrateSchemaNames() ([]SchemaNameChange, error) {
+	updates, err := c.PendingSchemaNameMigrations()
+	if err != nil {
+		return nil, err
+	}
 	for _, u := range updates {
 		_, err := c.db.Exec("UPDATE catalog_entries SET schema = ?, updated_at = ? WHERE id = ?",
-			u.newSchema, time.Now(), u.id)
+			u.To, time.Now(), u.ID)
 		if err != nil {
-			return 0, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update entry schema", err)
+			return nil, errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update entry schema", err)
 		}
 	}
-
-	return len(updates), nil
+	return updates, nil
 }

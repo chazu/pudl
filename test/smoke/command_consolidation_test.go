@@ -13,7 +13,7 @@ import (
 )
 
 func TestSmoke_ConsolidatedCommandSurface(t *testing.T) {
-	root, sandbox, env := exampleWorkspace(t, "git")
+	root, sandbox, env := exampleWorkspace(t, "git", "cat")
 	cli := func(args ...string) []byte {
 		t.Helper()
 		command := exec.Command(pudlBin, args...)

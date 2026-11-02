@@ -9,7 +9,7 @@ import (
 
 func TestJSONEarlyFailuresAreSingleDocuments(t *testing.T) {
 	cliWorkspace(t)
-	for _, args := range [][]string{{"run", "missing-model", "--json"}, {"run", "--json"}, {"query", "bad", "missing_equals", "--json"}, {"not-a-command", "--json"}} {
+	for _, args := range [][]string{{"check", "missing-model", "--json"}, {"check", "--json"}, {"query", "bad", "missing_equals", "--json"}, {"not-a-command", "--json"}} {
 		r := runCLI(t, args...)
 		require.Error(t, r.Err)
 		var document map[string]any

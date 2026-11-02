@@ -6,9 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/database"
 	pudlerrors "github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/operation"
 )
 
 // Exit codes under --detailed-exitcode, after `terraform plan -detailed-exitcode`
@@ -20,7 +19,13 @@ const (
 	exitFindings = 2
 )
 
-const detailedExitCodeUsage = "exit 0 when clean, 2 when drift, pending changes or a failing fail-severity check was found, 1 on error"
+// --fail-on values: which fail-severity check failures fail a check.
+const (
+	failOnAny = "any"
+	failOnNew = "new"
+)
+
+const detailedExitCodeUsage = "exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error"
 
 // exitCodeError carries a specific process exit code out of a command. A nil
 // err exits with the code and prints nothing.
@@ -55,70 +60,41 @@ func exitCodeFor(err error) int {
 	return exitError
 }
 
-// reportHasFindings reports whether a concluded run found something an
-// operator must act on: drift, changes a dry run would apply, or a failing
-// fail-severity check.
-func reportHasFindings(r *RunReport) bool {
-	if r == nil {
-		return false
-	}
-	if r.Drift != nil && !r.Drift.Clean {
-		return true
-	}
-	if r.Converge != nil && r.Converge.Outcome == string(outcomeDryRun) {
-		return true
-	}
-	return anyFailSeverityFailed(r.Checks)
-}
-
-// detailedRunExit maps a finished `pudl run` to the --detailed-exitcode
-// contract. A run that fails only because a fail-severity check did not pass
-// found something (2); any other error is 1, whatever its own code would be,
-// so 2 always means findings.
-func detailedRunExit(report *RunReport, err error) error {
-	switch {
-	case err == nil && !reportHasFindings(report):
-		return nil
-	case err == nil || errors.Is(err, errFailSeverityChecks):
-		return &exitCodeError{code: exitFindings, err: err}
-	default:
-		return &exitCodeError{code: exitError, err: err}
-	}
-}
-
-// detailedRunSetExit maps a finished `pudl run set` to the same contract. An
-// observe-only set exits 2 when any member found drift or a failing check; a
-// converging set succeeds only once every member converged clean. A failed set
-// exits 2 only when every failed member failed on its checks alone — blocked
-// and cancelled members are consequences of those failures, not new errors.
-func detailedRunSetExit(result *runSetResult, err error) error {
+// detailedCheckExit maps a finished `pudl check` to the --detailed-exitcode
+// contract. A check exits 2 when any model found drift or a failing check. A
+// failed check exits 2 only when every failed model failed on its
+// fail-severity checks alone — blocked and cancelled models are consequences
+// of those failures, not new errors. Any other error is 1, whatever its own
+// code would be, so 2 always means findings.
+//
+// With onlyNew (--fail-on new), fail-severity check failures whose matches
+// earlier reports already recorded are not findings; drift still is.
+func detailedCheckExit(result *operation.Result, err error, onlyNew bool) error {
 	if err == nil {
-		if result != nil && result.findings && result.report.Mode == "observe-only" {
+		if result != nil && result.Findings {
 			return &exitCodeError{code: exitFindings}
 		}
 		return nil
 	}
-	if result != nil && onlyCheckFailures(result.report) {
+	if onlyNew && result.OnlyKnownCheckFailures() {
+		if result.Drifted {
+			return &exitCodeError{code: exitFindings}
+		}
+		return nil
+	}
+	if result.OnlyCheckFailures() {
 		return &exitCodeError{code: exitFindings, err: err}
 	}
 	return &exitCodeError{code: exitError, err: err}
 }
 
-func onlyCheckFailures(report *acute.RunSetReport) bool {
-	if report == nil {
-		return false
+// failOnExit is a check's error without --detailed-exitcode: with onlyNew,
+// a check that failed only on known fail-severity check failures succeeds.
+func failOnExit(result *operation.Result, err error, onlyNew bool) error {
+	if onlyNew && err != nil && result.OnlyKnownCheckFailures() {
+		return nil
 	}
-	failed := 0
-	for _, member := range report.Members {
-		if member.Result != database.RunStatusFailed {
-			continue
-		}
-		if member.Error != errFailSeverityChecks.Error() {
-			return false
-		}
-		failed++
-	}
-	return failed > 0
+	return err
 }
 
 // silenceBareExit stops cobra printing "Error:" for an exit that carries no

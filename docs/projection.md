@@ -93,12 +93,13 @@ detect deletions.
 
 ### Keeping facts in sync
 
-`pudl import` and `pudl run` project as records arrive. Afterwards they bring
+`pudl import` and `pudl check` project as records arrive. Afterwards they bring
 everything else up to date: data imported before a facts block existed,
-changed facts blocks, and deleted or reassigned entries. `schema reinfer`,
-`delete`, `snapshot prune` and `migrate identity` do the same when they finish.
+changed facts blocks, and deleted or reassigned entries. `delete`,
+`snapshot prune` and the `pudl doctor --fix` repairs do the same when they finish.
 
-`pudl facts reproject [--dry-run]` runs this explicitly. `pudl query` writes
+`pudl doctor` reports pending reprojection, and
+`pudl doctor --fix [--dry-run] --only projections` runs it explicitly. `pudl query` writes
 nothing, but warns when a reprojection is pending.
 
 A facts block that is invalid disables projection for its schema. Existing
@@ -124,7 +125,7 @@ PUDL also reports potential projection and rule misses during exploration:
 - **Import and run summaries** list the facts projected per relation. They warn
   when a declared relation produced none (usually a path typo) and when values
   were left out.
-- **`pudl query` and `pudl run`** lint the rules a query or check depends on:
+- **`pudl query` and `pudl check`** lint the rules a query or check depends on:
   - a body relation that nothing produces (no rule, no facts block, no stored
     facts)
   - an arg that the relation's facts block does not declare
@@ -153,6 +154,50 @@ From the command line, booleans and numbers are typed:
 
 The datalog has no negation. To express "has no X", project `{exists: "X"}` or
 give a `default`, then match on that value.
+
+## Resource ownership
+
+A schema that declares `_pudl.owner` (see
+[schema-authoring.md](schema-authoring.md#owner-optional)) projects one more
+fact per resource, kept current exactly like its facts block:
+
+- `resource_owner(entry_id, resource_id, type, owner, via)` when a path, the
+  mapping table or the fallback names an owner. `via` is `path:<path>`,
+  `map:<path>` or `fallback`.
+- `resource_unowned(entry_id, resource_id, type)` otherwise.
+
+Because unowned is a positive fact, a check can list unowned resources without
+negation:
+
+```cue
+{name: "unowned", query: "resource_unowned", expect: "empty", severity: "warn",
+ message: "Label these resources with a team or map their project"}
+```
+
+and a rule can join any resource-keyed relation to its owner:
+
+```cue
+violation_owner: {
+	head: {rel: "violation_owner", args: {resource: "$R", policy: "$P", owner: "$O"}}
+	body: [
+		{rel: "policy_violation", args: {resource: "$R", policy: "$P"}},
+		{rel: "resource_owner", args: {resource_id: "$R", owner: "$O"}},
+	]
+}
+```
+
+A facts block cannot declare these two relation names. Changing a type's
+`owner` block or its mapping table re-derives every owner on the next sync.
+
+`pudl check` attributes each finding to the owner of the resource its
+arguments reference: a resource ID (`resource_id`, `resource`, `target` or
+`name`), else a catalog entry ID (`entry_id`, `evidence_id`,
+`observation_id`). Report JSON carries `owner` on every witness and every
+finding (`""` when none was resolved), human output groups each check's
+findings by owner, and `--owner TEAM` prints only TEAM's findings. A finding
+that references neither, such as one keyed by a selfLink, has no owner, and
+neither has a finding recorded without arguments (past the 20 witnesses a
+check keeps). A resolved finding keeps the owner its earlier report recorded.
 
 ## Sensitive fields (`_pudl.sensitive_fields`)
 
@@ -187,6 +232,32 @@ Limits:
   not rewritten. Projection still redacts them in memory.
 - **Drift.** Redacted values never equal plaintext `desired` values, so do not
   declare desired state on sensitive paths.
+
+## Likely-secret warnings (`_pudl.secret_scan_ignore`)
+
+Redaction only covers what a schema declares. After schema assignment and
+redaction, `pudl import` scans every record for likely secrets elsewhere: AWS
+access key IDs and secret keys, GCP service-account keys and API keys, GitHub,
+GitLab and Slack tokens, PEM private keys, JWTs, URLs with `user:password@`,
+and long random-looking strings. Each finding is reported by record, path and
+kind, never by value — under `--dry-run`, in the import summary and as
+`secret_warnings` (plus `secret_warnings_total`) in `--json`. Nothing is
+rewritten: the record, its hash and its storage are unchanged.
+
+Resolve a finding by adding the path to `sensitive_fields`, which redacts it,
+or, if the value is not a secret, by listing it in `secret_scan_ignore`:
+
+```cue
+_pudl: secret_scan_ignore: ["spec.nonce", "status.conditions[*].token"]
+```
+
+A listed path covers itself and everything below it. The list is inherited
+along `base_schema`. A list that is not concrete, not a list of strings, or
+holds an unparsable path is a schema load error and suppresses nothing.
+
+`pudl facts add` warns the same way on its args. Facts are never redacted.
+`pkg/factstore` callers can opt in to rejecting such facts with
+`Open(dir, factstore.WithSecretRejection())`.
 
 Projection records an incomplete status when values fall outside the query
 numeric domain. Dependent latest-known checks become unknown, just as selected

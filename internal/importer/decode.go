@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/chazu/pudl/internal/database"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,6 +35,27 @@ func DecodeFile(path, format string) (interface{}, int, error) {
 	}
 	defer file.Close()
 	return decodeDocument(file, format)
+}
+
+// DecodeStoredFile decodes a stored catalog payload with the decoder its import
+// used, so YAML, CSV and NDJSON entries yield their parsed records rather than
+// raw text. Entries stored compressed by older imports are decompressed first.
+func DecodeStoredFile(storedPath, format string) (interface{}, error) {
+	plainPath, err := DecompressFile(storedPath)
+	if err != nil {
+		return nil, err
+	}
+	if plainPath != storedPath {
+		defer os.Remove(plainPath)
+	}
+	data, _, err := DecodeFile(plainPath, format)
+	return data, err
+}
+
+// DecodeEntry decodes a catalog entry's stored payload (see
+// DecodeStoredFile).
+func DecodeEntry(entry database.CatalogEntry) (any, error) {
+	return DecodeStoredFile(entry.StoredPath, entry.Format)
 }
 
 // decodeDocument parses r according to format. It returns the parsed value and

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/chazu/pudl/internal/config"
+	"github.com/chazu/pudl/internal/operation"
 )
 
 // effectivePudlDir is the one persistence root for the current invocation.
@@ -97,4 +98,17 @@ func rulePathsForModel(modelDir string) []string {
 		candidates = append(candidates, filepath.Join(modelDir, "rules"))
 	}
 	return candidates
+}
+
+// invocationWorkspace is the invocation's workspace as the internal packages take
+// it: its persistence root, search paths and configuration.
+func invocationWorkspace() operation.Workspace {
+	pudlDir := effectivePudlDir()
+	return operation.Workspace{
+		PudlDir: pudlDir, Name: effectiveWorkspaceName(),
+		ModelDirs: modelSearchDirs(), RulePaths: queryRulePaths(pudlDir),
+		ModelRulePaths: rulePathsForModel,
+		LoadConfig:     loadEffectiveConfig, SchemaPaths: effectiveSchemaPaths,
+		IngestLimits: importIngestLimits(), TrackTempDir: workspaces.track,
+	}
 }

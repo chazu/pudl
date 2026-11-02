@@ -15,6 +15,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/policyfacts"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/schemaname"
 )
@@ -37,7 +38,9 @@ type collectionStream struct {
 	truncated           bool
 	identity            identityTally
 	reassigned          int
+	reassignedMeta      []reassignedMeta
 	tally               *projection.Tally
+	secrets             secretTally
 }
 type preparedItem struct {
 	Entry    database.CatalogEntry
@@ -46,6 +49,8 @@ type preparedItem struct {
 	Validated bool
 	// Projection holds the record's facts, if its schema declares any.
 	Projection *projection.Prepared `json:",omitempty"`
+	// Policies holds the record's compliance policy results.
+	Policies *policyfacts.Prepared `json:",omitempty"`
 }
 
 func (c *collectionStream) close() {
@@ -68,7 +73,7 @@ func (c *collectionStream) prepare(sourcePath, format string) (resultErr error) 
 			c.close()
 		}
 	}()
-	c.spool, err = os.Create(filepath.Join(c.dir, "entries.ndjson"))
+	c.spool, err = artifacts.CreatePrivate(filepath.Join(c.dir, "entries.ndjson"))
 	if err != nil {
 		return err
 	}
@@ -151,7 +156,7 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 			if err := tx.AddEntry(entry); err != nil {
 				return err
 			}
-			if err := projection.Observe(tx, item.Projection); err != nil {
+			if err := observeFacts(tx, item.Projection, item.Policies); err != nil {
 				return err
 			}
 		}
@@ -159,6 +164,9 @@ func (c *collectionStream) commit(origin, storedPath string, sizeBytes int64, jo
 		result, err = c.importer.createCollectionEntryIn(tx, c.opts, c.timestamp, origin, c.collectionID, storedPath, c.metadataDir, sizeBytes, c.recordCount)
 		return err
 	})
+	if err == nil {
+		err = c.recordReassignments()
+	}
 	if result != nil {
 		result.ItemExplanations = c.explanations
 		result.ExplanationsTruncated = c.truncated
@@ -204,7 +212,7 @@ func (c *collectionStream) prepareItem(index int, raw json.RawMessage) error {
 	if c.stagedBytes+int64(len(stored)) > c.opts.Limits.StagingBytes {
 		return fmt.Errorf("collection exceeds staging byte limit")
 	}
-	if err := os.WriteFile(itemPath, stored, 0o644); err != nil {
+	if err := artifacts.WriteFilePrivate(itemPath, stored); err != nil {
 		return fmt.Errorf("write item %d: %w", index, err)
 	}
 
@@ -230,6 +238,7 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 	if c.opts.ManualSchema != "" && !assigned.Validated {
 		c.schemaMismatches++
 	}
+	e.scanSecrets(&c.secrets, itemData, index, intendedSchema(c.opts), schemaname.Normalize(schema))
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
 	if extractErr != nil {
@@ -263,7 +272,7 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 		SchemaInfo: SchemaInfo{
 			CuePackage:       extractPackage(schema),
 			CueDefinition:    schema,
-			ValidationStatus: "auto-assigned",
+			ValidationStatus: validationStatus(assigned),
 			SchemaVersion:    "v1.0",
 		},
 		ResourceTracking: ResourceTracking{
@@ -306,7 +315,8 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 	}
 	projected, projectedRes := projection.Prepare(e.projector, schema, itemID, resourceID, len(identityValues) > 0, itemData)
 	c.tally.Note(e.projector, schema, projectedRes)
-	prepared := preparedItem{Entry: entry, Metadata: itemMetadata, Validated: assigned.Validated, Projection: projected}
+	prepared := preparedItem{Entry: entry, Metadata: itemMetadata, Validated: assigned.Validated, Projection: projected,
+		Policies: e.policies.Prepare(schema, itemID, resourceID, len(identityValues) > 0, itemData)}
 	descriptor, err := json.Marshal(prepared)
 	if err != nil {
 		return err

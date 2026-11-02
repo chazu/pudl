@@ -4,17 +4,11 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 
 #GitInventory: sm.#SystemModel & {
 	name: "git-inventory"
-	plugins: [{
-		name: "git-inventory"
-		// mu resolves command paths from the generated package, one directory
-		// beneath .pudl/data/mu. This observer needs no global plugin install.
-		command: ["python3", "../../../populators/git-inventory/observe.py"]
-	}]
 	populate: {
-		plugin:       "git-inventory"
-		differential: false
-		// Relative to the mu root at .pudl/data/mu.
-		input: inventory: "../../populators/git-inventory/current.json"
+		// The walkthrough's supplied inventory stands in for a real Git
+		// observer: any command that prints JSON records works here. The path
+		// is relative to this model file.
+		runs: [{argv: ["cat", "../../populators/git-inventory/current.json"]}]
 	}
 	desired: [{
 		"_schema":     "git.repository"

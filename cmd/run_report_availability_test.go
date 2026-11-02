@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func TestRunReportEvidenceAvailabilityKeepsExactFrozenValues(t *testing.T) {
 	payload := []byte(`{"run_id":"r","model":"m","report_version":1,"drift":{"clean":false,"verified":false,"snapshot_id":"current","drifted":[{"resource":"x","reason":"changed","fields":[{"path":"count","expected":9007199254740993,"observed":1,"previous":{"status":"available","snapshot_id":"previous","value":9007199254740993}}]}]},"future_field":{"exact":9007199254740995}}`)
 	require.NoError(t, db.SaveRunReport("r", "m", payload))
 	capture := func() string {
-		return captureQueryOutput(t, func() error { return runReportCmd.RunE(runReportCmd, []string{"r"}) })
+		return captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, []string{"r"}) })
 	}
 	available := capture()
 	require.Contains(t, available, `"evidence_availability"`)
@@ -66,12 +67,12 @@ func TestRunSetReportAggregatesMemberEvidenceAndPreservesUnknownFields(t *testin
 	require.NoError(t, db.SaveRunReport("member-run", "m", []byte(`{"run_id":"member-run","populate":{"snapshot_id":"gone"}}`)))
 	require.NoError(t, db.SaveRunSetReport("set", []byte(`{"run_set_id":"set","status":"succeeded","members":[{"model":"m","run_id":"member-run","result":"succeeded"}],"future_field":9007199254740993}`)))
 	capture := func() string {
-		return captureQueryOutput(t, func() error { return runReportCmd.RunE(runReportCmd, []string{"set"}) })
+		return captureQueryOutput(t, func() error { return reportCmd.RunE(reportCmd, []string{"set"}) })
 	}
 	output := capture()
 	var document struct {
-		Availability []operationEvidence `json:"evidence_availability"`
-		Future       json.RawMessage     `json:"future_field"`
+		Availability []checkreport.Evidence `json:"evidence_availability"`
+		Future       json.RawMessage        `json:"future_field"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(output), &document))
 	require.Len(t, document.Availability, 1)

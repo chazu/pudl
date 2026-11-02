@@ -55,7 +55,7 @@ func TestModelShowSchemaReferences(t *testing.T) {
 	model := strings.Replace(systemmodel.SchemaCUE(), "package systemmodel", "package models", 1) + `
 #Demo: #SystemModel & {
 	name: "demo"
-	populate: {plugin: "demo", differential: false}
+	populate: runs: [{argv: ["true"]}]
 	desired: [
 		{"_schema": "custom.project", name: "one"},
 		{"_schema": "user/resources.#Project", name: "two"},

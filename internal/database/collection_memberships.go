@@ -86,3 +86,23 @@ func (c *CatalogDB) RemoveCollectionMemberships(collectionID string) error {
 	}
 	return nil
 }
+
+// ItemCollections returns each collection holding itemID, with the item's
+// index in it.
+func (c *CatalogDB) ItemCollections(itemID string) (map[string]int, error) {
+	rows, err := c.db.Query(`SELECT collection_id, item_index FROM collection_memberships WHERE item_id = ?`, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("item collections: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var collectionID string
+		var index int
+		if err := rows.Scan(&collectionID, &index); err != nil {
+			return nil, err
+		}
+		out[collectionID] = index
+	}
+	return out, rows.Err()
+}

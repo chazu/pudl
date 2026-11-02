@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/chazu/pudl/internal/inventory"
 	"github.com/chazu/pudl/internal/ui"
 	"github.com/stretchr/testify/require"
 )
@@ -16,13 +17,13 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	r = runCLI(t, "example", "install", "gcp-network-hygiene", "--json")
 	require.NoError(t, r.Err, "identical install is idempotent")
-	r = runCLI(t, "run", "gcp-network-hygiene", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "gcp-network-hygiene", "--json", "--detailed-exitcode")
 	require.Equal(t, 2, exitCodeFor(r.Err), r.Stdout+r.Stderr)
-	var before RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &before))
+	before := checkedModel(t, r.Stdout)
 	require.Equal(t, 1, before.Checks[0].Count, "DENY and private-source rules are not internet ALLOW findings")
 	require.Len(t, before.Checks[0].Witnesses, 1)
-	require.NotEmpty(t, before.Checks[0].Witnesses[0].EvidenceIDs)
+	require.Equal(t, "pudl/gcphygiene.#FirewallNoInternetIngress", before.Checks[0].Witnesses[0].Arguments["policy"])
+	require.Equal(t, "high", before.Checks[0].Witnesses[0].Arguments["severity"])
 	r = runCLI(t, "list", "--collection-id", before.Populate.SnapshotID, "--where", "name=public-ssh", "--select", "name", "--select", "sourceRanges[*]", "--all", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var listing ui.ListOutput
@@ -33,25 +34,24 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	r = runCLI(t, "show", entryID, "--field", "sourceRanges[*]")
 	require.NoError(t, r.Err)
 	require.JSONEq(t, `["0.0.0.0/0"]`, r.Stdout)
-	r = runCLI(t, "model", "new", "saved-firewall-check", "--check", "gcp_internet_ingress_allow", "--evidence", "scope:fixture/example-project/firewalls", "--max-age", "15m", "--json")
+	r = runCLI(t, "model", "new", "saved-firewall-check", "--check", "policy_noncompliant", "--evidence", "scope:fixture/example-project/firewalls", "--max-age", "15m", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	reloadSchemas()
-	r = runCLI(t, "run", "saved-firewall-check", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "saved-firewall-check", "--json", "--detailed-exitcode")
 	require.Equal(t, 2, exitCodeFor(r.Err))
 	fixed, err := os.ReadFile(filepath.Join(pudlDir, "populators", "gcp-network-hygiene", "fixed.json"))
 	require.NoError(t, err)
 	writeFile(t, filepath.Join(pudlDir, "populators", "gcp-network-hygiene", "current.json"), string(fixed))
-	r = runCLI(t, "run", "gcp-network-hygiene", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "gcp-network-hygiene", "--json", "--detailed-exitcode")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	var after RunReport
-	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &after))
+	after := checkedModel(t, r.Stdout)
 	require.Equal(t, "pass", after.Checks[0].Outcome)
-	r = runCLI(t, "run", "saved-firewall-check", "--json", "--detailed-exitcode")
+	r = runCLI(t, "check", "saved-firewall-check", "--json", "--detailed-exitcode")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	r = runCLI(t, "snapshot", "show", after.Populate.SnapshotID, "--compare", before.Populate.SnapshotID, "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var compared struct {
-		Changes []snapshotChange `json:"changes"`
+		Changes []inventory.Change `json:"changes"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &compared))
 	require.Len(t, compared.Changes, 1)
@@ -60,7 +60,7 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Contains(t, r.Stdout, before.Populate.SnapshotID)
 	require.Contains(t, r.Stdout, after.Populate.SnapshotID)
-	r = runCLI(t, "run", "report", before.RunID, "--json")
+	r = runCLI(t, "report", before.RunID, "--json")
 	require.NoError(t, r.Err)
 	require.Contains(t, r.Stdout, "0.0.0.0/0", "original evidence remains inspectable")
 }

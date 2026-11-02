@@ -18,6 +18,10 @@ type schemaAssignment struct {
 	Reason     string
 	SourcePath string
 	Trace      *inference.InferenceTrace
+	// Intended is the explicitly requested --schema, normalized; empty for
+	// inferred assignments. It is recorded in the .meta so inference repairs
+	// can tell explicit assignments from inferred ones.
+	Intended string
 	// Validation is set when the schema came from --schema and was checked by
 	// the chain validator. Nil for inferred assignments.
 	Validation *validator.ValidationResult
@@ -56,7 +60,7 @@ func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hi
 		if !opts.AllowSchemaFallback {
 			return schemaAssignment{}, fmt.Errorf("requested schema %s is unavailable; load it before importing or explicitly allow schema fallback", intended)
 		}
-		assigned := schemaAssignment{Schema: intended, Confidence: 0.5, Reason: "explicit schema unavailable; assignment retained without validation"}
+		assigned := schemaAssignment{Schema: intended, Intended: intended, Confidence: 0.5, Reason: "explicit schema unavailable; assignment retained without validation"}
 		if opts.Explain {
 			assigned.Trace = &inference.InferenceTrace{Selected: intended, Reason: assigned.Reason, ScoreKind: "heuristic score, not a calibrated probability", Attempts: []inference.CandidateAttempt{{Schema: intended, Reason: "schema unavailable"}}}
 		}
@@ -82,6 +86,7 @@ func (e *EnhancedImporter) assignSchema(data interface{}, opts ImportOptions, hi
 	assigned := schemaAssignment{
 		Reason: reason, SourcePath: source,
 		Schema:     schemaname.Normalize(result.AssignedSchema),
+		Intended:   intended,
 		Confidence: confidence,
 		Validation: result,
 		Validated:  result.Valid,
@@ -145,21 +150,27 @@ func enrichAssignment(info *SchemaInfo, result *ImportResult, assigned schemaAss
 		info.AssignmentReason = assigned.Reason
 		info.SourcePath = assigned.SourcePath
 		info.Explanation = assigned.Trace
+		info.IntendedSchema = assigned.Intended
 	}
 	if result != nil {
 		result.Explanation = assigned.Trace
 	}
 }
 
+// validateExplicitSchema rejects an explicit schema up front: one that names a
+// policy (always), or one that is not loaded (unless fallback is allowed).
 func (e *EnhancedImporter) validateExplicitSchema(opts ImportOptions) error {
-	if opts.ManualSchema == "" || opts.AllowSchemaFallback {
+	if opts.ManualSchema == "" {
 		return nil
 	}
 	chain, err := e.chainValidator(opts)
 	if err != nil {
 		return err
 	}
-	if !chain.HasSchema(schemaname.Normalize(opts.ManualSchema)) {
+	if err := chain.CheckAssignable(opts.ManualSchema); err != nil {
+		return err
+	}
+	if !opts.AllowSchemaFallback && !chain.HasSchema(schemaname.Normalize(opts.ManualSchema)) {
 		return fmt.Errorf("requested schema %s is unavailable", opts.ManualSchema)
 	}
 	return nil

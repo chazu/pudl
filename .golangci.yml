@@ -37,7 +37,7 @@ linters:
         - (*database/sql.DB).Close
         - (*os.File).Close
         - (*github.com/chazu/pudl/internal/database.CatalogDB).Close
-        - (*github.com/chazu/pudl/cmd.runCatalog).Close
+        - (*github.com/chazu/pudl/internal/operation.runCatalog).Close
         - (*github.com/chazu/pudl/internal/lister.Lister).Close
         - (*github.com/chazu/pudl/internal/importer.EnhancedImporter).Close
         - (*github.com/chazu/pudl/internal/filelock.Lock).Release

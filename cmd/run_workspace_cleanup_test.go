@@ -20,7 +20,7 @@ func newTestRegistry() *workspaceRegistry {
 
 func TestWorkspaceRegistry_ReleaseRemovesDirAndUntracks(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"abc")
+	dir := filepath.Join(t.TempDir(), "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	release := reg.track(dir)
@@ -36,7 +36,7 @@ func TestWorkspaceRegistry_ReleaseRemovesDirAndUntracks(t *testing.T) {
 // must be a no-op.
 func TestWorkspaceRegistry_ReleaseIsIdempotent(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"abc")
+	dir := filepath.Join(t.TempDir(), "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	release := reg.track(dir)
@@ -47,7 +47,7 @@ func TestWorkspaceRegistry_ReleaseIsIdempotent(t *testing.T) {
 func TestWorkspaceRegistry_RemoveAll(t *testing.T) {
 	reg := newTestRegistry()
 	root := t.TempDir()
-	a := filepath.Join(root, workspacePrefix+"a")
+	a := filepath.Join(root, "pudl_run_a")
 	b := filepath.Join(root, "pudl_ewe_b")
 	require.NoError(t, os.MkdirAll(a, 0o755))
 	require.NoError(t, os.MkdirAll(b, 0o755))
@@ -66,7 +66,7 @@ func TestWorkspaceRegistry_RemoveAll(t *testing.T) {
 // remove nothing.
 func TestExitOnSecondSignal_ReturnsWhenCommandFinishes(t *testing.T) {
 	reg := newTestRegistry()
-	dir := filepath.Join(t.TempDir(), workspacePrefix+"keep")
+	dir := filepath.Join(t.TempDir(), "pudl_run_keep")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	reg.track(dir)
 
@@ -112,7 +112,7 @@ func TestExitOnSecondSignal_RemovesWorkspacesAndExits(t *testing.T) {
 	}
 
 	root := t.TempDir()
-	dir := filepath.Join(root, workspacePrefix+"abc")
+	dir := filepath.Join(root, "pudl_run_abc")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 
 	child := exec.Command(os.Args[0], "-test.run=^TestExitOnSecondSignal_RemovesWorkspacesAndExits$")
@@ -145,46 +145,4 @@ func TestExitOnSecondSignal_RemovesWorkspacesAndExits(t *testing.T) {
 	var exitErr *exec.ExitError
 	require.ErrorAs(t, err, &exitErr)
 	assert.Equal(t, forcedExitCode, exitErr.ExitCode(), "a forced exit uses the conventional SIGINT status")
-}
-
-func TestSweepStaleWorkspaces(t *testing.T) {
-	muRoot := t.TempDir()
-
-	mkdir := func(name string, age time.Duration) string {
-		path := filepath.Join(muRoot, name)
-		require.NoError(t, os.MkdirAll(path, 0o755))
-		when := time.Now().Add(-age)
-		require.NoError(t, os.Chtimes(path, when, when))
-		return path
-	}
-
-	stale := mkdir(workspacePrefix+"old", 48*time.Hour)
-	fresh := mkdir(workspacePrefix+"live", time.Minute)
-	unrelated := mkdir("src", 48*time.Hour)
-
-	// A file, not a directory, that happens to share the prefix.
-	strayFile := filepath.Join(muRoot, workspacePrefix+"notadir")
-	require.NoError(t, os.WriteFile(strayFile, []byte("x"), 0o644))
-	old := time.Now().Add(-48 * time.Hour)
-	require.NoError(t, os.Chtimes(strayFile, old, old))
-
-	removed := sweepStaleWorkspaces(muRoot, staleWorkspaceAge)
-
-	require.Len(t, removed, 1, "only the stale workspace is collected")
-	assert.Equal(t, stale, removed[0])
-
-	assertExists := func(path, why string) {
-		_, err := os.Stat(path)
-		assert.NoError(t, err, why)
-	}
-	assertExists(fresh, "a concurrent run's workspace must survive the sweep")
-	assertExists(unrelated, "a directory that is not a workspace is not touched")
-	assertExists(strayFile, "a non-directory sharing the prefix is not touched")
-
-	_, err := os.Stat(stale)
-	assert.True(t, os.IsNotExist(err), "the abandoned workspace is gone")
-}
-
-func TestSweepStaleWorkspaces_MissingRootIsNotAnError(t *testing.T) {
-	assert.Nil(t, sweepStaleWorkspaces(filepath.Join(t.TempDir(), "absent"), staleWorkspaceAge))
 }

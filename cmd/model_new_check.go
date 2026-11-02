@@ -14,8 +14,8 @@ var modelNewCheck, modelNewExpect, modelNewMaxAge string
 var modelNewEvidence []string
 
 func newCheckModel(cmd *cobra.Command, name string) error {
-	if modelNewPopulate != "" || len(modelNewInputs) > 0 {
-		return fmt.Errorf("--check saves a checks-only model; omit --populate and --input")
+	if modelNewPopulate != "" {
+		return fmt.Errorf("--check saves a checks-only model; omit --populate")
 	}
 	if modelNewExpect != "empty" && modelNewExpect != "nonempty" {
 		return fmt.Errorf("--expect must be empty or nonempty")
@@ -66,9 +66,9 @@ func newCheckModel(cmd *cobra.Command, name string) error {
 		return closeErr
 	}
 	if jsonOutput {
-		return printJSON(map[string]any{"path": path, "name": name, "query": modelNewCheck, "evidence": modelNewEvidence, "next_action": "pudl run " + name + " --detailed-exitcode"})
+		return printJSON(map[string]any{"path": path, "name": name, "query": modelNewCheck, "evidence": modelNewEvidence, "next_action": "pudl check " + name + " --detailed-exitcode"})
 	}
-	_, err = fmt.Fprintf(outw(), "Saved check: %s\nNext: pudl run %s --detailed-exitcode\n", path, name)
+	_, err = fmt.Fprintf(outw(), "Saved check: %s\nNext: pudl check %s --detailed-exitcode\n", path, name)
 	return err
 }
 

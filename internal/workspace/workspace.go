@@ -11,24 +11,12 @@ import (
 
 // Workspace represents a discovered per-repo workspace.
 type Workspace struct {
-	DependencyRoots   []string            // explicit vendored definition packages, in priority order
-	Root              string              // absolute path to repo root (parent of .pudl/)
-	PudlDir           string              // absolute path to .pudl/ directory
-	Name              string              // workspace name from workspace.cue
-	SchemaPath        string              // .pudl/schema/ (may not exist)
-	DefinitionsPath   string              // .pudl/definitions/ (may not exist)
-	ToolchainMappings []ToolchainOverride // per-repo toolchain overrides
-	// SecretsWritableRefs is the workspace-owned mu sealed-output allow-list.
-	// The configured bit preserves the security-significant distinction between
-	// an omitted policy (mu compatibility mode) and an explicit empty deny-all.
-	SecretsWritableRefs       []string
-	SecretsWritableConfigured bool
-}
-
-// ToolchainOverride maps a schema prefix to a toolchain for this workspace.
-type ToolchainOverride struct {
-	Prefix    string
-	Toolchain string
+	DependencyRoots []string // explicit vendored definition packages, in priority order
+	Root            string   // absolute path to repo root (parent of .pudl/)
+	PudlDir         string   // absolute path to .pudl/ directory
+	Name            string   // workspace name from workspace.cue
+	SchemaPath      string   // .pudl/schema/ (may not exist)
+	DefinitionsPath string   // .pudl/definitions/ (may not exist)
 }
 
 // Discover walks up from startDir looking for .pudl/workspace.cue.
@@ -91,31 +79,6 @@ func load(root string) (*Workspace, error) {
 		ws.Name, _ = name.String()
 	} else {
 		ws.Name = filepath.Base(root)
-	}
-
-	// Extract toolchain_mappings (optional)
-	if mappings := val.LookupPath(cue.ParsePath("toolchain_mappings")); mappings.Exists() {
-		iter, _ := mappings.List()
-		for iter.Next() {
-			v := iter.Value()
-			prefix, _ := v.LookupPath(cue.ParsePath("prefix")).String()
-			toolchain, _ := v.LookupPath(cue.ParsePath("toolchain")).String()
-			if prefix != "" && toolchain != "" {
-				ws.ToolchainMappings = append(ws.ToolchainMappings, ToolchainOverride{
-					Prefix:    prefix,
-					Toolchain: toolchain,
-				})
-			}
-		}
-	}
-
-	if secrets := val.LookupPath(cue.ParsePath("secrets")); secrets.Exists() {
-		if writable := secrets.LookupPath(cue.ParsePath("writable_refs")); writable.Exists() {
-			ws.SecretsWritableConfigured = true
-			if err := writable.Decode(&ws.SecretsWritableRefs); err != nil {
-				return nil, fmt.Errorf("parsing workspace.cue secrets.writable_refs: %w", err)
-			}
-		}
 	}
 
 	return ws, nil

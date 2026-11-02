@@ -97,16 +97,10 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 			if summaryErr != nil {
 				continue
 			}
-			// Preserve the existing concrete projection for commands that inspect
-			// models without bindings. Bound models remain discoverable through their
-			// retained template and summary until run-time elaboration.
-			var m *systemmodel.SystemModel
-			if len(template.Bindings) == 0 {
-				m, _ = systemmodel.DecodeValue(val)
-			}
+			m, _ := systemmodel.DecodeValue(val)
 			out = append(out, ModelInfo{
 				Name:       template.Name,
-				DefName:    shortDefName(schemaName),
+				DefName:    systemmodel.ShortDefName(schemaName),
 				SchemaName: schemaName,
 				Dir:        mod.LoadPath,
 				Model:      m,
@@ -118,16 +112,8 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 	return out, nil
 }
 
-// convergeName returns the converge plugin name, or "-" for observe-only models.
-func (mi ModelInfo) convergeName() string {
-	if mi.Summary.ConvergePlugin != "" {
-		return mi.Summary.ConvergePlugin
-	}
-	return "-"
-}
-
 // modelRunStatuses returns the latest run verdict keyed by model target
-// (modelTargetKey(name)) — the catalog target key, best-effort — an empty map if the catalog is unavailable.
+// (systemmodel.InstanceTarget(name)) — the catalog target key, best-effort — an empty map if the catalog is unavailable.
 func modelRunStatuses() map[string]string {
 	out := map[string]string{}
 	db, err := database.NewCatalogDB(effectivePudlDir())
@@ -150,10 +136,10 @@ var modelListCmd = &cobra.Command{
 	Short: "List registered #SystemModel definitions",
 	Long: `List every #SystemModel-derived definition registered in the schema
 repository (project definitions precede explicitly vendored packages), with its
-populate kind, converge arm, and desired/check counts.
+populate kind and desired/check counts.
 
-This is the static registry of runnable models — what 'pudl run <name>' can
-resolve — independent of whether a model has been run yet.`,
+This is the static registry of runnable models — what 'pudl check <name>' can
+resolve — independent of whether a model has been checked yet.`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -174,16 +160,15 @@ resolve — independent of whether a model has been run yet.`,
 		}
 		statuses := modelRunStatuses()
 		fmt.Fprintf(outw(), "Registered models (%d):\n\n", len(models))
-		fmt.Fprintf(outw(), "  %-24s %-9s %-12s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "CONVERGE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
+		fmt.Fprintf(outw(), "  %-24s %-9s %-8s %-7s %-10s %s\n", "NAME", "POPULATE", "DESIRED", "CHECKS", "STATUS", "DEFINITION")
 		for _, mi := range models {
-			status := statuses[modelTargetKey(mi.Name)]
+			status := statuses[systemmodel.InstanceTarget(mi.Name)]
 			if status == "" {
 				status = "-"
 			}
-			fmt.Fprintf(outw(), "  %-24s %-9s %-12s %-8d %-7d %-10s %s\n",
+			fmt.Fprintf(outw(), "  %-24s %-9s %-8d %-7d %-10s %s\n",
 				mi.Name,
 				string(mi.Summary.PopulateKind),
-				mi.convergeName(),
 				mi.Summary.DesiredCount,
 				mi.Summary.CheckCount,
 				status,
@@ -199,24 +184,19 @@ type modelSummary struct {
 	Name       string `json:"name"`
 	Definition string `json:"definition"`
 	Populate   string `json:"populate"`
-	Converge   string `json:"converge,omitempty"`
 	Desired    int    `json:"desired"`
 	Checks     int    `json:"checks"`
 	Status     string `json:"status,omitempty"`
 }
 
 func (mi ModelInfo) summary() modelSummary {
-	s := modelSummary{
+	return modelSummary{
 		Name:       mi.Name,
 		Definition: mi.SchemaName,
 		Populate:   string(mi.Summary.PopulateKind),
 		Desired:    mi.Summary.DesiredCount,
 		Checks:     mi.Summary.CheckCount,
 	}
-	if mi.Summary.ConvergePlugin != "" {
-		s.Converge = mi.Summary.ConvergePlugin
-	}
-	return s
 }
 
 func printModelsJSON(models []ModelInfo) error {
@@ -224,7 +204,7 @@ func printModelsJSON(models []ModelInfo) error {
 	out := make([]modelSummary, 0, len(models))
 	for _, mi := range models {
 		s := mi.summary()
-		s.Status = statuses[modelTargetKey(mi.Name)]
+		s.Status = statuses[systemmodel.InstanceTarget(mi.Name)]
 		out = append(out, s)
 	}
 	b, err := json.MarshalIndent(out, "", "  ")

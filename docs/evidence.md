@@ -1,6 +1,6 @@
 # Evidence integrity, explanations, and recovery
 
-PUDL keeps observations, imported data, facts, and run reports locally. These
+PUDL keeps observations, imported data, facts, and check reports locally. These
 features make the retained evidence inspectable and portable without granting
 execution authority to restored history.
 
@@ -25,9 +25,9 @@ commit removes only artifacts newly published by that operation. A killed proces
 may leave inert private files or unreferenced bytes; it cannot authorize a partial
 snapshot. Resource versions and deduplication are decided atomically at commit.
 
-Import and `mu ingest-observe` expose byte limits. Defaults are 64 MiB per JSON
-record (per target envelope for observations), 1 GiB decoded input, and 2 GiB
-preparation storage. Nonstreamed documents, including CSV/YAML documents, use the
+Import exposes byte limits. Defaults are 64 MiB per JSON record, 1 GiB decoded
+input, and 2 GiB preparation storage; a populate command's output counts against
+the same staging limit. Nonstreamed documents, including CSV/YAML documents, use the
 record limit for their complete input. Compressed imports count decoded bytes and
 their temporary copies. Limits fail explicitly; records are never truncated.
 Increase `--max-record-bytes`, `--max-decoded-bytes`, or `--max-staging-bytes` for
@@ -51,17 +51,18 @@ incompatible identity contracts, and pruned evidence. JSON null remains a value.
 Catalog replay without a single observation scope cannot invent a prior baseline.
 
 Failed checks include the expectation, query scope, total count, and at most 20
-deterministically ordered witnesses. Outside `--only` violations remain advisory.
-A failed nonempty check reports missing evidence rather than fabricating a proof.
-Oversized witness values are omitted with an explicit marker, and sealed-reference
-redaction applies before persistence. Human reports present drift and failed checks
+deterministically ordered witnesses. A failed nonempty check reports missing
+evidence rather than fabricating a proof. Oversized witness values are omitted
+with an explicit marker. Human reports present drift and failed checks
 in the finding view; the existing JSON drift/check sections remain available.
 
-`pudl run report [id]` adds current evidence availability to retained findings.
+`pudl report [id]` adds current evidence availability to retained findings.
 This does not recompute their historical previous values. A pruned reference is
-visible as pruned in human and JSON output.
+visible as pruned in human and JSON output. Fields recorded by the retired
+convergence workflow (converge results, approval state, sealed bindings) appear
+under "legacy fields" in human output and unchanged in JSON.
 
-Snapshot pins have independent manual, approval, and retained-report owners.
+Snapshot pins have independent manual, legacy approval, and retained-report owners.
 Releasing one owner does not release another. Report evidence is protected for
 30 days by default; reports themselves remain after their evidence expires.
 Use `pudl snapshot retain ID` to pin important evidence indefinitely and
@@ -74,9 +75,8 @@ Cleanup resolves raw/metadata paths through directory handles and refuses escapi
 parent symlinks. An explicitly configured external prune data directory remains
 its own removal boundary.
 
-`pudl query RELATION --timeout 10s` bounds a query independently of `--mu-timeout`.
-SQL evaluation, recursive rounds, transaction acquisition, and generated-project
-locks honor cancellation. The recursion-round cap remains a separate bound.
+`pudl query RELATION --timeout 10s` bounds a query. SQL evaluation, recursive
+rounds and transaction acquisition honor cancellation. The recursion-round cap remains a separate bound.
 Public Go consumers can use `Store.QueryContext` without changing existing callers.
 
 ## Backup and restore
@@ -91,7 +91,7 @@ configuration, schemas, rules, models, definitions, and populators. Exact byte
 checksums protect every archive member. Authored files changing during capture
 fail the operation. Generated execution workspaces and private temporary files are
 excluded. References outside the state root and symlinks are rejected; external
-executables, Mu projects, providers, and personal global schemas are not bundled.
+executables, providers, and personal global schemas are not bundled.
 Explicit vendored definition packages are included.
 Use a self-contained workspace when those dependencies need to travel together.
 
@@ -124,9 +124,10 @@ Storage/configuration paths are rebased; original source paths and historical
 reports remain history. Existing workspaces are never overwritten. Unsupported
 versions, missing members, corruption, symlinks, and appended nonarchive data fail.
 
-Pending approvals become rejected and require replanning. Resource status becomes
-unknown. Restored observations remain readable history but cannot supply producer
-bindings until a new live successful observation is recorded. Restoring a backup
+Legacy pending approvals become rejected. Resource status becomes
+unknown. Restored observations remain readable history, but retention does not
+count them as a model's latest successful observation until a new live
+observation is recorded. Restoring a backup
 does not claim live verification or execute an operation.
 
 These checks detect damage and incomplete backups. They do not authenticate who
@@ -134,36 +135,40 @@ created a bundle; a bundle's checksums are supplied by its own manifest.
 
 ## Check evidence diagnostics
 
-New standalone reports use `report_version: 2`. Checks add an `outcome` field
+Each model's report uses `report_version: 2`. Checks add an `outcome` field
 (`pass`, `fail`, `unknown`, `error`) and structured `diagnostics`. The existing
 `passed` field is true only for a pass. Unknown/error means the check could not
 establish its claim, independent of severity; detailed exit status is 1. A
-fail-severity assertion violation still uses detailed status 2. Historical
-version-1 reports remain readable without being reinterpreted as fresh evidence.
+fail-severity assertion violation still uses detailed status 2. A failed check
+whose every finding a model waiver excuses has outcome `waived` (`passed` stays
+false); it does not fail the check or count toward status 2. See
+[waivers](cli-reference.md#pudl-check). Historical version-1 reports remain
+readable without being reinterpreted as fresh evidence.
 
 Empty JSON arrays from command observers create valid zero-record snapshots.
 
 ## Report summaries and machine errors
 
-New standalone and set reports include a `summary` with separate `execution`,
-`conformity`, `checks`, `verification`, and `scope` fields, finding counts,
-evidence references, and `next_actions`. Each run-set member carries its own
-summary. `age_at_check` is frozen at evaluation time; reading an old report does
-not refresh its evidence. Stored version-1 reports remain readable.
+Check reports (`report_version: 3`) and each model's report include a `summary`
+with separate `execution`, `conformity`, `checks`, `verification`, and `scope`
+fields, finding counts, evidence references, and `next_actions`. Each member of
+a check carries its own summary and its full report under `members[].report`,
+so one response answers every model's result. `age_at_check` is frozen at
+evaluation time; reading an old report does not refresh its evidence. Stored
+`pudl run` and `pudl run set` reports (versions 1 and 2) remain readable with
+`pudl report`.
 
 A completed command may report drift. Inspect conformity and checks instead of
-using `ok` as a synonym for a matching system. `needs-verification` means a
-mutation may have occurred without adequate confirmation. Snapshot checks using
-`current` cannot reuse a run-set's pre-apply inventory after convergence;
-differential convergence observations are a different evidence shape. Run the
-inventory observer again to establish a new complete snapshot for those checks.
+using `ok` as a synonym for a matching system. `needs-verification` appears only
+in reports from the retired convergence workflow, where a mutation may have
+occurred without adequate confirmation.
 
 With `--json`, early command failures emit one error document when no result was
 already written, including `code`, `message`, `exit_code`, and suggestions.
-Failures after run creation retain the operation report when available. Output
+Failures after a check starts retain its report when available. Output
 failures are not retried by appending another document.
 
-`pudl run ... --progress-json` emits JSON progress events on stderr, alongside
+`pudl check ... --progress-json` emits JSON progress events on stderr, alongside
 ordinary diagnostics. Events have `type: "progress"`, `event_version`, phase,
 subject, state, and time. Stdout remains the final JSON result. Queries return
 all matching tuples; catalog lists are paginated, and `total_matched` identifies

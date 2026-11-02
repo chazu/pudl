@@ -1,8 +1,8 @@
 // Package systemmodel defines the #SystemModel schema (pudl-owned) and loads a
-// model *instance* into a Go struct that `pudl run` orchestrates from.
+// model *instance* into a Go struct that `pudl check` orchestrates from.
 //
-// A model instance is the run unit (one ACUTE loop); its `desired` entries are
-// the per-status / --only unit. See docs/design/system-models/V1-BUILD-SPEC.md.
+// A model instance is the run unit: populate, drift, checks, report. See
+// docs/design/system-models/V1-BUILD-SPEC.md (historical).
 package systemmodel
 
 import (
@@ -10,6 +10,8 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+
+	"github.com/chazu/pudl/internal/waiver"
 )
 
 // schemaCUE is the canonical #SystemModel schema, compiled into every load so a
@@ -26,60 +28,32 @@ func SchemaCUE() string { return schemaCUE }
 // SystemModel is the decoded run unit. Orchestration-relevant fields only;
 // `schema`/`relations` are carried by the CUE layer and decoded as needed.
 type SystemModel struct {
-	Observation *Observation     `json:"observation,omitempty"`
-	Name        string           `json:"name"`
-	Plugins     []PluginDef      `json:"plugins,omitempty"`
-	Populate    Populate         `json:"populate"`
-	Checks      []Check          `json:"checks,omitempty"`
-	Desired     []map[string]any `json:"desired,omitempty"`
-	Converge    *PluginPlan      `json:"converge,omitempty"`
-	Freshness   *Freshness       `json:"freshness,omitempty"`
+	Observation *Observation `json:"observation,omitempty"`
+	Name        string       `json:"name"`
+	Populate    Populate     `json:"populate,omitzero"`
+	Checks      []Check      `json:"checks,omitempty"`
+	// Waivers are accepted, time-boxed exceptions to the checks' findings.
+	Waivers   []waiver.Waiver  `json:"waivers,omitempty"`
+	Desired   []map[string]any `json:"desired,omitempty"`
+	Freshness *Freshness       `json:"freshness,omitempty"`
 	// DependsOn names other #SystemModel instances this model depends on (by
 	// their `name:`). Drives the model_depends_on facts + cross-model reasoning;
 	// see docs/cross-model-dependencies.md.
 	DependsOn []string `json:"depends_on,omitempty"`
 }
 
-// PluginDef is a plugin source declared in the model, mirroring mu's #PluginDef
-// (one of script / digest / url+sha256). pudl emits these into the generated
-// mu.cue so mu's resolver can find the plugin an arm references by name.
-type PluginDef struct {
-	Name    string   `json:"name"`
-	Command []string `json:"command,omitempty"`
-	Script  string   `json:"script,omitempty"`
-	Digest  string   `json:"digest,omitempty"`
-	URL     string   `json:"url,omitempty"`
-	SHA256  string   `json:"sha256,omitempty"`
-}
-
-// PluginByName returns the declared plugin source for an arm's `plugin:` name.
-func (m *SystemModel) PluginByName(name string) (PluginDef, bool) {
-	for _, p := range m.Plugins {
-		if p.Name == name {
-			return p, true
-		}
-	}
-	return PluginDef{}, false
-}
-
-// Populate carries both populate kinds (the #PluginObserve | #EweTarget union);
-// Kind() reports which one this instance is, by which fields are set.
+// Populate is the #CommandObserve arm. Absent marks a checks-only model.
 type Populate struct {
-	// #PluginObserve
-	Plugin       string         `json:"plugin,omitempty"`
-	Input        map[string]any `json:"input,omitempty"`
-	Differential bool           `json:"differential,omitempty"` // observer reports per-resource exists/matches (k8s); false → inventory set-diff
-	// #EweTarget
-	EweSource    string                 `json:"eweSource,omitempty"`
-	Outputs      []string               `json:"outputs,omitempty"`
-	Network      bool                   `json:"network,omitempty"`
-	Impure       bool                   `json:"impure,omitempty"`
-	SealedInputs map[string]SealedInput `json:"-"`
-	// #CommandObserve
 	AllowSchemaFallback bool         `json:"allow_schema_fallback,omitempty"`
 	Runs                []CommandRun `json:"runs,omitempty"`
 	Schema              string       `json:"schema,omitempty"`
 	Timeout             string       `json:"timeout,omitempty"`
+	// Each enumerates the inputs every run is repeated for; nil runs Runs as
+	// declared.
+	Each *Enumeration `json:"each,omitempty"`
+	// FailFast fails the populate phase at the first failing run, so nothing
+	// is ingested; otherwise a failing run is a failed input.
+	FailFast bool `json:"fail_fast,omitempty"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }
@@ -91,49 +65,27 @@ type CommandRun struct {
 	Dir  string         `json:"dir,omitempty"`
 }
 
-// PopulateKind enumerates the populate union arms.
+// PopulateKind names the populate arm a model declares.
 type PopulateKind string
 
 const (
-	KindPluginObserve PopulateKind = "observe"
-	KindEweTarget     PopulateKind = "ewe"
-	KindCommand       PopulateKind = "command"
-	KindNone          PopulateKind = "none" // no populate arm: checks-only
+	KindCommand PopulateKind = "command"
+	KindNone    PopulateKind = "none" // no populate arm: checks-only
 )
 
-// Kind reports which populate arm this is: none when the model declares no
-// populate, ewe when eweSource is set, command when runs are, else observe.
+// Kind reports the populate arm: none for a checks-only model, else command.
 func (p Populate) Kind() PopulateKind {
-	switch {
-	case p.Absent:
+	if p.Absent {
 		return KindNone
-	case p.EweSource != "":
-		return KindEweTarget
-	case len(p.Runs) > 0:
-		return KindCommand
 	}
-	return KindPluginObserve
+	return KindCommand
 }
 
-// DifferentialDrift reports whether drift should be computed from a differential
-// observe (the observer reads `desired` as sources and reports per-resource
-// exists/matches, k8s-style) rather than an inventory set-diff. EweTarget populate
-// always produces a record set → inventory; a #PluginObserve uses its
-// `differential` field (default true). Observe-only models (no desired) never reach
-// a drift path, so the value is moot there.
-func (m *SystemModel) DifferentialDrift() bool {
-	if m.Populate.Kind() != KindPluginObserve {
-		return false
-	}
-	return m.Populate.Differential
-}
-
-// PluginPlan is the converge arm: a declarative-apply plugin + its input.
-type PluginPlan struct {
-	Plugin        string                  `json:"plugin"`
-	Input         map[string]any          `json:"input,omitempty"`
-	SealedInputs  map[string]SealedInput  `json:"-"`
-	SealedOutputs map[string]SealedOutput `json:"-"`
+// IsZero reports that the model declares no populate arm, so JSON encoding
+// omits the field (omitzero). An emitted `populate: {}` would not satisfy
+// #CommandObserve, which requires runs.
+func (p Populate) IsZero() bool {
+	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast)
 }
 
 // Check is an observe-only flag over a Datalog relation.
@@ -153,20 +105,24 @@ type Freshness struct {
 	Drift bool   `json:"drift,omitempty"`
 }
 
-// Convergent reports whether the model declares a convergence target (a converge
-// arm). Observe-only models return false.
-func (m *SystemModel) Convergent() bool {
-	return m.Converge != nil && m.Converge.Plugin != ""
-}
-
 // DecodeValue validates and decodes a CUE value (a #SystemModel instance or a
 // #SystemModel-derived definition) into a SystemModel. It re-extracts `desired`
 // with hidden fields preserved so each record's `_schema` identity survives the
 // Decode (which drops hidden fields). Used by LoadModel and the registry
 // resolver.
 func DecodeValue(inst cue.Value) (*SystemModel, error) {
+	if err := rejectRetiredFields(inst); err != nil {
+		return nil, err
+	}
 	if err := inst.Validate(cue.Concrete(false)); err != nil {
 		return nil, fmt.Errorf("validate: %w", err)
+	}
+	// Waivers must be complete: a missing owner or date fails here, naming
+	// the field, rather than as an opaque decode error.
+	if w := inst.LookupPath(cue.ParsePath("waivers")); w.Exists() {
+		if err := w.Validate(cue.Concrete(true)); err != nil {
+			return nil, fmt.Errorf("waivers: %w", err)
+		}
 	}
 	var m SystemModel
 	if err := inst.Decode(&m); err != nil {
@@ -175,6 +131,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 	if m.Name == "" {
 		return nil, fmt.Errorf("model has no name")
 	}
+	if err := validateWaivers(&m); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
 	desired, err := decodeDesired(inst)
 	if err != nil {
 		return nil, fmt.Errorf("decode desired: %w", err)
@@ -182,16 +141,33 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 	if desired != nil {
 		m.Desired = desired
 	}
-	if err := decodeSealedDeclarations(inst, &m); err != nil {
-		return nil, err
-	}
 	if !inst.LookupPath(cue.ParsePath("populate")).Exists() {
 		m.Populate.Absent = true
-		if len(m.Desired) > 0 || m.Converge != nil {
-			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired or converge", m.Name)
+		if len(m.Desired) > 0 {
+			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired", m.Name)
 		}
 	}
+	if err := m.Populate.validateItemPlaceholders(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
 	return &m, nil
+}
+
+// validateWaivers rejects a model whose waivers are incomplete, carry a bad
+// date, or target a check the model does not have. Waivers only apply to
+// checks, so a model without checks cannot declare any.
+func validateWaivers(m *SystemModel) error {
+	if len(m.Waivers) == 0 {
+		return nil
+	}
+	if len(m.Checks) == 0 {
+		return fmt.Errorf("waivers: the model declares no checks to waive")
+	}
+	expects := make(map[string]string, len(m.Checks))
+	for _, c := range m.Checks {
+		expects[c.Name] = c.Expect
+	}
+	return waiver.Validate(m.Waivers, expects)
 }
 
 // decodeDesired extracts the `desired` list with hidden fields (e.g. `_schema`)

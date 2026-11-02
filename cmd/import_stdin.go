@@ -51,7 +51,7 @@ func importFromStdin(cmd *cobra.Command) error {
 		origin = "stdin"
 	}
 
-	result, err := importOneWithEnvelope(session.imp, session.options(finalPath, origin))
+	result, err := importOne(session.imp, session.options(finalPath, origin))
 	if jsonOutput {
 		if writeErr := writeImportJSON([]importOutcome{newImportOutcome("-", result, err)}); writeErr != nil {
 			return writeErr

@@ -16,7 +16,7 @@ The module path is `github.com/chazu/pudl`, so imports are
 catalog listing.
 
 ```go
-func Open(pudlDir string) (*Store, error)
+func Open(pudlDir string, opts ...Option) (*Store, error)
 func (s *Store) Close() error
 
 // Bitemporal fact store
@@ -39,7 +39,24 @@ func (s *Store) ListCatalog(filter CatalogFilter, query CatalogQuery) (*CatalogR
 ```
 
 Re-exported types: `Fact`, `FactFilter`, `Rule`, `Tuple`, `Tx`, `CatalogEntry`,
-`CatalogFilter`, `CatalogQuery`, `CatalogResult`.
+`CatalogFilter`, `CatalogQuery`, `CatalogResult`, `SecretFinding`.
+
+### Likely-secret rejection (opt-in)
+
+```go
+func WithSecretRejection() Option
+func ScanFactArgs(args string) ([]SecretFinding, error)
+type SecretError struct {
+    Relation string
+    Findings []SecretFinding // {Path, Kind}; never the value
+}
+```
+
+Facts are stored unredacted. A store opened with `WithSecretRejection()`
+refuses an `AddFact` whose args contain a likely secret (a token format, a
+private key, a URL with credentials, or a long random-looking string) and
+returns `*SecretError`; nothing is written. It is off by default. `Tx.AddFact`
+inside `Transact` is not checked; call `ScanFactArgs` there.
 
 `AddFact` and `Tx.AddFact` return the stored fact on an identical-ID replay,
 including original provenance and terminal temporal bounds. They reject reuse

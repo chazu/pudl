@@ -9,6 +9,7 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // documentImport is the already-staged state of a single-document import.
@@ -46,6 +47,8 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		return nil, err
 	}
 	schema := assigned.Schema
+	var secretsFound secretTally
+	e.scanSecrets(&secretsFound, data, 0, intendedSchema(opts), schemaname.Normalize(schema))
 
 	// Identity comes from the schema's identity fields; a record they cannot be
 	// extracted from is identified by content hash (catchall identity).
@@ -122,6 +125,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 	tally := projection.NewTally()
 	projected, projectedRes := projection.Prepare(e.projector, schema, doc.id, resourceID, len(identityValues) > 0, data)
 	tally.Note(e.projector, schema, projectedRes)
+	results := e.policies.Prepare(schema, doc.id, resourceID, len(identityValues) > 0, data)
 
 	var existing *database.CatalogEntry
 	err = e.catalogDB.WithCatalogTxContext(opts.Context, func(tx *database.CatalogTx) error {
@@ -145,7 +149,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		if err := tx.AddEntry(entry); err != nil {
 			return err
 		}
-		return projection.Observe(tx, projected)
+		return observeFacts(tx, projected, results)
 	})
 	if err != nil {
 		return nil, fmt.Errorf("commit document: %w", err)
@@ -158,6 +162,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		if existing.ResourceID != nil {
 			result.ResourceID = *existing.ResourceID
 		}
+		secretsFound.apply(result)
 		return result, nil
 	}
 
@@ -182,18 +187,23 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 	}
 	idTally.apply(result)
 	applyTally(result, tally)
+	secretsFound.apply(result)
 	return result, nil
 }
 
 // validationStatus describes how a schema assignment was reached, for the
-// import metadata.
+// import metadata: inferred (auto-assigned), or for an explicit --schema
+// validated, fallen back to another schema in its chain, or retained
+// unverified because the schema was unavailable.
 func validationStatus(assigned schemaAssignment) string {
 	switch {
-	case assigned.Validation == nil:
+	case assigned.Intended == "":
 		return "auto-assigned"
-	case assigned.Validation.Valid:
+	case assigned.Validated:
 		return "validated"
-	default:
+	case assigned.Schema != assigned.Intended:
 		return "fallback"
+	default:
+		return "unverified"
 	}
 }

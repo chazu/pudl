@@ -23,7 +23,7 @@ The active root is `<repo>/.pudl/` inside an initialized repository and
     |   +-- core/core.cue          # Catchall and collection schemas
     |   +-- systemmodel/           # Built-in #SystemModel contract
     |   +-- rules/                 # Datalog rules (*.cue)
-    |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, mu, etc.
+    |   +-- <built-in packages>/   # AWS, Git, Kubernetes, Linux, legacy mu, etc.
     +-- models/                    # #SystemModel instances
 ```
 
@@ -72,11 +72,11 @@ catalog_entries (
     item_index        INTEGER,           -- Position in collection (NULL for collections)
     collection_type   TEXT,              -- 'collection', 'item', or NULL
     item_id           TEXT,              -- Unique item identifier within collection
-    entry_type        TEXT,              -- e.g. 'observe', 'manifest', 'manifest-action' (run artifacts)
-    target            TEXT,              -- mu target that produced a run artifact
-    run_id            TEXT,              -- pudl run identifier (run artifacts)
+    entry_type        TEXT,              -- e.g. 'observe'; legacy 'manifest', 'manifest-action', 'drift-observation'
+    target            TEXT,              -- run target that produced an observation
+    run_id            TEXT,              -- model run identifier within a pudl check
     tags              TEXT,              -- JSON-encoded key-value tags
-    status            TEXT,              -- Convergence status (unknown/clean/drifted/converging/failed); unknown may require verification
+    status            TEXT,              -- Verdict (unknown/clean/drifted; legacy failed); legacy converging reads as unknown
     created_at        DATETIME,
     updated_at        DATETIME
 )
@@ -151,10 +151,7 @@ ImportFileWithFriendlyIDs(opts)
     |
     +-- analyzeData() -> decodeDocument (encoding/json, yaml.v3, encoding/csv)
     |
-    +-- CLI envelope detection (regular, batch, stdin share one path)
-    |       +-- import inner data
-    |       +-- record inferred + declared/inline schema metadata
-    |
+
     +-- SchemaInferrer.Infer(data, hints)
     |       +-- SelectCandidates() -> heuristic scoring
     |       +-- Sort by specificity (most-specific-first)
@@ -176,7 +173,7 @@ ImportFileWithFriendlyIDs(opts)
 | `config` | `internal/config/` | YAML configuration loading and defaults |
 | `database` | `internal/database/` | SQLite catalog + bitemporal fact store: CRUD, migrations, queries |
 | `datalog` | `internal/datalog/` | Datalog engine: rule loader, SQL compiler, recursive fixpoint, `Evaluate` orchestrator, `catalog_entry` built-in relation |
-| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema (pudl-owned) and model instance loading for `pudl run`/`pudl model` |
+| `systemmodel` | `internal/systemmodel/` | `#SystemModel` schema (pudl-owned) and model instance loading for `pudl check`/`pudl model` |
 | `doctor` | `internal/doctor/` | Workspace health checks |
 | `errors` | `internal/errors/` | Typed error codes for CLI error handling |
 | `git` | `internal/git/` | Git operations on schema repository |
@@ -187,8 +184,7 @@ ImportFileWithFriendlyIDs(opts)
 | `inference` | `internal/inference/` | Schema inference: heuristic scoring + CUE unification |
 | `init` | `internal/init/` | Workspace initialization and auto-init |
 | `lister` | `internal/lister/` | List/query with filters and display options |
-| `mubridge` | `internal/mubridge/` | mu/pudl interchange: typed envelopes and manifest ingest for `pudl run` |
-| `muschemas` | `internal/muschemas/` | Cache of mu-provided schemas |
+| `observe` | `internal/observe/` | Observation ingest for `pudl check`: snapshots, schema routing, redaction |
 | `repo` | `internal/repo/` | Repository-level init |
 | `workspace` | `internal/workspace/` | Workspace discovery and schema-path resolution |
 | `schema` | `internal/schema/` | Schema file management and discovery |
@@ -254,41 +250,29 @@ PUDL is a data import, cataloging, and validation system. The core flow is:
 System-model orchestration is a second, bounded flow over the same catalog:
 
 ```text
-exact named run-set
-  -> preflight dependencies and binding shapes
-  -> observe producers and pin successful snapshots
-  -> project authorized plain scalars into consumer templates
-  -> complete whole-set read-only planning
-  -> optionally execute through mu
-  -> persist linked run-set/member reports and redacted evidence
+pudl check <models...> (exactly the named models)
+  -> order producers first by depends_on within the named set; reject cycles
+  -> observe each model with its #CommandObserve runs; block dependents of a
+     producer that did not succeed
+  -> persist one check report embedding each model's report, plus the
+     member reports and redacted evidence
 ```
 
-PUDL owns selection, catalog provenance, plan approval, and reports. Mu owns
-action planning/execution and secret-provider I/O. The sealed run-set contract
-treats target declarations as availability bounds, not implicit action grants.
-Mu's version-2 JSON plan projects the full executable action identity, resolved
-plugin identities, and sealed claims, so PUDL validates strict routing before
-persisting an exact approval. Each apply rechecks the normalized approved plan,
-then mu compares its raw digest before provider access and executes that same
-in-memory graph.
-Read-only observation activates a sealed-free converge target; planning and
-apply activate its full converge-owned sealed projection.
-PUDL also serializes its generated subprojects per mu root: mu recursively
-merges non-hidden project directories, so overlapping PUDL workspaces would
-otherwise expose duplicate targets or remove files from a live invocation.
+PUDL owns selection, observation, catalog provenance, and reports. It changes
+nothing it observes.
 
 After import, data can be:
 - **Queried** via `pudl list` with filters on schema, origin, format, collection membership
 - **Validated** against assigned schemas via `pudl doctor`
 - **Exported** in various formats via `pudl export`
-- **Reconciled** by `pudl run <model>`: a `#SystemModel` declares desired and observed
-  state, `pudl run` computes drift as one phase (and converges with `--converge`, with
-  mu executing the actions); inspect status via `pudl status`
-- **Re-classified** when schemas change via `pudl schema reinfer`
+- **Compared** by `pudl check <model>...`: a `#SystemModel` declares how to observe a system
+  and its desired state, `pudl check` observes and computes drift as one phase and
+  reports it; inspect status via `pudl status`
+- **Re-classified** when schemas change via the `pudl doctor --fix` inference repair
 
 ## Technology Stack
 
-- **Go 1.26.9** -- core application
+- **Go 1.26.10** -- core application
 - **Cobra** -- CLI framework
 - **CUE** (`cuelang.org/go v0.16`) -- schema definition, validation, unification
 - **SQLite** (`modernc.org/sqlite`, pure Go) -- catalog database

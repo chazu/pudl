@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/skills"
@@ -58,7 +59,7 @@ func Initialize(opts InitOptions) error {
 	}
 
 	// Create data directory
-	if err := os.MkdirAll(cfg.DataPath, 0755); err != nil {
+	if err := artifacts.MkdirPrivate(cfg.DataPath); err != nil {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -218,8 +219,8 @@ See the **examples/** directory for more usage patterns.
 
 ` + "`pudl/systemmodel.#SystemModel`" + ` is installed with the other built-ins.
 Repository models normally live under ` + "`.pudl/schema/models/`" + ` and can be inspected
-with ` + "`pudl model list`" + `. Run one model with ` + "`pudl run <model>`" + ` or an
-explicit producer/consumer set with ` + "`pudl run set <models...>`" + `.
+with ` + "`pudl model list`" + `. Check one or more models with ` + "`pudl check <model>...`" + `
+and read the result again with ` + "`pudl report`" + `.
 `
 
 	if err := os.WriteFile(readmePath, []byte(readmeContent), 0644); err != nil {
@@ -431,7 +432,7 @@ import "cue.dev/x/gitlab/gitlabci"
 
 // Example pipeline definition
 examplePipeline: #GitLabPipeline & {
-	default: image: "golang:1.26.9"
+	default: image: "golang:1.26.10"
 
 	stages: ["build", "test", "deploy"]
 
