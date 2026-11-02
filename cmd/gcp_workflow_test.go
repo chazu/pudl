@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/chazu/pudl/internal/inventory"
 	"github.com/chazu/pudl/internal/ui"
 	"github.com/stretchr/testify/require"
 )
@@ -49,7 +50,7 @@ func TestGCPNetworkHygieneWorkflow(t *testing.T) {
 	r = runCLI(t, "snapshot", "show", after.Populate.SnapshotID, "--compare", before.Populate.SnapshotID, "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var compared struct {
-		Changes []snapshotChange `json:"changes"`
+		Changes []inventory.Change `json:"changes"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &compared))
 	require.Len(t, compared.Changes, 1)

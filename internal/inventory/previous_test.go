@@ -1,10 +1,11 @@
-package cmd
+package inventory
 
 import (
 	"encoding/json"
 	"strings"
 	"testing"
 
+	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/observe"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestInventoryPreviousEvidenceFrozenAcrossNewObservationsAndReplay(t *testin
 	require.Equal(t, "available", previous.Status)
 	require.Equal(t, "previous", previous.SnapshotID)
 	require.Equal(t, "9007199254740993", string(previous.Value))
-	report := RunReport{RunID: "reported", Model: "m", Drift: &result}
+	report := storedReport{RunID: "reported", Model: "m", Drift: &result}
 	encoded, err := json.Marshal(report)
 	require.NoError(t, err)
 	require.NoError(t, db.SaveRunReport("reported", "m", encoded))
@@ -38,9 +39,16 @@ func TestInventoryPreviousEvidenceFrozenAcrossNewObservationsAndReplay(t *testin
 	stored, err := db.GetRunReport("reported")
 	require.NoError(t, err)
 	require.Equal(t, encoded, stored.Report)
-	var replay RunReport
+	var replay storedReport
 	decoder := json.NewDecoder(strings.NewReader(string(stored.Report)))
 	decoder.UseNumber()
 	require.NoError(t, decoder.Decode(&replay))
 	require.Equal(t, "9007199254740993", string(replay.Drift.Drifted[0].Fields[0].Previous.Value))
+}
+
+// storedReport is the part of a stored model report that carries drift.
+type storedReport struct {
+	RunID string                  `json:"run_id"`
+	Model string                  `json:"model"`
+	Drift *acute.ModelDriftResult `json:"drift,omitempty"`
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/inventory"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
@@ -203,7 +204,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		// Inventory: populate, then set-diff desired against the records it
 		// produced; --from-catalog replays already-ingested records instead.
 		report.Mode = "observe-only (inventory)"
-		identity, namespace, err := inventoryIdentityPolicy()
+		policy, err := inventoryPolicy()
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +234,7 @@ func executeRunPhases(in runPhaseInput, report *RunReport) (runErr error, err er
 		if err != nil {
 			return nil, err
 		}
-		res, err := runInventoryDriftContext(in.ctx, db, scope, model.Desired, identity, namespace)
+		res, err := inventory.Drift(in.ctx, db, scope, model.Desired, policy)
 		if err != nil {
 			return nil, err
 		}
