@@ -1,4 +1,7 @@
-package cmd
+// Package populate runs a model's #CommandObserve populate: plain commands
+// whose stdout is a stream of JSON records. It spools and decodes their
+// output; ingesting the records into the catalog is the caller's.
+package populate
 
 import (
 	"bytes"
@@ -12,27 +15,38 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chazu/pudl/internal/checkreport"
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/fieldpath"
-	"github.com/chazu/pudl/internal/observe"
+	"github.com/chazu/pudl/internal/ingestprep"
 	"github.com/chazu/pudl/internal/proc"
 	"github.com/chazu/pudl/internal/systemmodel"
 )
 
-// defaultCommandTimeout bounds each #CommandRun without a timeout.
-const defaultCommandTimeout = 10 * time.Minute
+// DefaultTimeout bounds each #CommandRun of a populate without a timeout.
+const DefaultTimeout = 10 * time.Minute
 
 // stderrTail is how much of a failed run's stderr its error quotes.
 const stderrTail = 4 << 10
 
-// runCommandPopulate executes a #CommandObserve populate: each run's argv
-// directly (no shell), its stdout spooled to disk, decoded as JSON
-// records, `set` applied, and every record ingested as one observation. Any
-// failing run fails the phase before anything is ingested.
-func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.SystemModel, modelDir, runID, snapshotID string) (*checkreport.Populate, error) {
-	p := m.Populate
-	timeout := defaultCommandTimeout
+// Request is how a model's commands run: where relative paths resolve, how
+// much stdout they may spool, and where their stderr goes.
+type Request struct {
+	// ModelDir is the base for a relative run dir and a relative program path.
+	ModelDir string
+	// Limits bounds the spooled stdout of every run together (StagingBytes).
+	Limits ingestprep.Limits
+	// Stderr receives each command's stderr as it runs.
+	Stderr io.Writer
+	// TrackTempDir registers the spool directory so an interrupt can remove
+	// it, and returns its release. Nil removes it on return only.
+	TrackTempDir func(dir string) (release func())
+}
+
+// Run executes a #CommandObserve populate: each run's argv directly (no
+// shell), its stdout spooled to disk, decoded as JSON records, and `set`
+// applied. Any failing run fails the populate; the caller ingests the records
+// only when every run succeeded.
+func Run(ctx context.Context, p systemmodel.Populate, req Request) ([]any, error) {
+	timeout := DefaultTimeout
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
 		if err != nil {
@@ -40,7 +54,7 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 		}
 		timeout = d
 	}
-	limits, err := importIngestLimits().Resolve()
+	limits, err := req.Limits.Resolve()
 	if err != nil {
 		return nil, err
 	}
@@ -48,13 +62,17 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 	if err != nil {
 		return nil, fmt.Errorf("create populate workspace: %w", err)
 	}
-	defer workspaces.track(dir)()
+	defer req.track(dir)()
 
+	stderr := req.Stderr
+	if stderr == nil {
+		stderr = io.Discard
+	}
 	records := make([]any, 0)
 	budget := &byteBudget{remaining: limits.StagingBytes}
 	for i, run := range p.Runs {
 		out := filepath.Join(dir, fmt.Sprintf("run-%d.json", i))
-		if err := executeCommandRun(ctx, run, modelDir, out, timeout, budget); err != nil {
+		if err := executeCommandRun(ctx, run, req.ModelDir, out, timeout, budget, stderr); err != nil {
 			return nil, fmt.Errorf("populate run %d (%s): %w", i, strings.Join(run.Argv, " "), err)
 		}
 		got, err := decodeCommandRecords(out, run.Set)
@@ -63,39 +81,19 @@ func runCommandPopulate(cat *runCatalog, ctx context.Context, m *systemmodel.Sys
 		}
 		records = append(records, got...)
 	}
+	return records, nil
+}
 
-	target := populateTargetName(m.Name)
-	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema}
-	if p.Schema != "" {
-		summary.SchemaPolicy = "strict"
-		if p.AllowSchemaFallback {
-			summary.SchemaPolicy = "permissive"
-		}
+func (r Request) track(dir string) func() {
+	if r.TrackTempDir != nil {
+		return r.TrackTempDir(dir)
 	}
-	wrapped, err := json.Marshal([]observe.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
-	if err != nil {
-		return nil, fmt.Errorf("marshal observe results: %w", err)
-	}
-	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
-		summary:             summary,
-		ctx:                 ctx,
-		snapshotID:          snapshotID,
-		runID:               runID,
-		model:               m.Name,
-		source:              database.SnapshotSourceCommand,
-		manualSchema:        p.Schema,
-		allowSchemaFallback: p.AllowSchemaFallback,
-	})
-	if err != nil {
-		return nil, err
-	}
-	summary.Records, summary.SnapshotID = count, snapshotID
-	return summary, nil
+	return func() { _ = os.RemoveAll(dir) }
 }
 
 // executeCommandRun runs one command with stdout spooled to out and stderr
 // passed through, keeping its tail for the error.
-func executeCommandRun(ctx context.Context, run systemmodel.CommandRun, modelDir, out string, timeout time.Duration, budget *byteBudget) error {
+func executeCommandRun(ctx context.Context, run systemmodel.CommandRun, modelDir, out string, timeout time.Duration, budget *byteBudget, stderr io.Writer) error {
 	workDir := modelDir
 	if run.Dir != "" {
 		workDir = run.Dir
@@ -119,7 +117,7 @@ func executeCommandRun(ctx context.Context, run systemmodel.CommandRun, modelDir
 	command := proc.Command(runCtx, proc.DefaultGrace, program, run.Argv[1:]...)
 	command.Dir = workDir
 	command.Stdout = &budgetWriter{w: file, budget: budget}
-	command.Stderr = io.MultiWriter(errw(), tail)
+	command.Stderr = io.MultiWriter(stderr, tail)
 	if err := command.Run(); err != nil {
 		if stopped := proc.Stopped(ctx, runCtx); stopped != nil {
 			err = fmt.Errorf("%w (%v)", err, stopped)

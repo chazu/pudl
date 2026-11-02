@@ -3,11 +3,14 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/chazu/pudl/internal/checkreport"
+	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/observe"
+	"github.com/chazu/pudl/internal/populate"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 )
@@ -24,7 +27,41 @@ func runPopulate(ctx context.Context, cat *runCatalog, m *systemmodel.SystemMode
 	if m.Populate.Kind() == systemmodel.KindNone {
 		return nil, fmt.Errorf("model %q has no populate arm (checks-only)", m.Name)
 	}
-	return runCommandPopulate(cat, ctx, m, modelDir, runID, snapshotID)
+	p := m.Populate
+	records, err := populate.Run(ctx, p, populate.Request{
+		ModelDir: modelDir, Limits: importIngestLimits(), Stderr: errw(), TrackTempDir: workspaces.track,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	target := populateTargetName(m.Name)
+	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema}
+	if p.Schema != "" {
+		summary.SchemaPolicy = "strict"
+		if p.AllowSchemaFallback {
+			summary.SchemaPolicy = "permissive"
+		}
+	}
+	wrapped, err := json.Marshal([]observe.ObserveResult{{Target: target, Current: map[string]any{"records": records}}})
+	if err != nil {
+		return nil, fmt.Errorf("marshal observe results: %w", err)
+	}
+	count, snapshotID, err := ingestPopulateOutput(cat, wrapped, populateIngest{observation: m.Observation,
+		summary:             summary,
+		ctx:                 ctx,
+		snapshotID:          snapshotID,
+		runID:               runID,
+		model:               m.Name,
+		source:              database.SnapshotSourceCommand,
+		manualSchema:        p.Schema,
+		allowSchemaFallback: p.AllowSchemaFallback,
+	})
+	if err != nil {
+		return nil, err
+	}
+	summary.Records, summary.SnapshotID = count, snapshotID
+	return summary, nil
 }
 
 // ingestPopulateOutput feeds wrapped observe results into the catalog as
