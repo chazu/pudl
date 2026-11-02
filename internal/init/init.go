@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"strings"
 	"path/filepath"
+	"strings"
 
 	"github.com/chazu/pudl/internal/artifacts"
 	"github.com/chazu/pudl/internal/config"
