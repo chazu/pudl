@@ -1,33 +1,34 @@
-# Getting started: Git inventory and drift
+# Getting started
 
-Observe a sample Git inventory, compare it with a declared expectation, and
-inspect a drift finding. This tutorial takes about five minutes and uses PUDL
-commands plus one `cp` after you create the repository. The example ships
-inside PUDL; you do not need a source checkout, scripts, Python, or external
-credentials.
+This tutorial teaches pudl by doing. Part 1 observes a small Git inventory,
+compares it with what you expect and follows a drift finding back to its
+evidence. Part 2 governs a GCP inventory with policies, checks, owners and a
+waiver. Both parts run offline from data bundled in pudl: you need no source
+checkout, scripts or cloud credentials. Each part takes about ten minutes.
 
-## 1. Install PUDL
+[Concepts](concepts.md) defines the terms used here.
 
-With Go 1.26.10 or newer installed, install the current development version, which
-includes the bundled example command:
+## 1. Install pudl
+
+With Go 1.26.10 or newer installed, install the current development version:
 
 ```bash
 go install github.com/chazu/pudl@main
 ```
 
-Put Go's binary directory on your shell's `PATH` if it is not already there.
-The default is `~/go/bin`; a configured `GOBIN` overrides it. Open a new terminal
-after changing your shell settings, then confirm that PUDL is available:
+Put Go's binary directory on your `PATH` if it is not already there. The
+default is `~/go/bin`, and a configured `GOBIN` overrides it. Then confirm that
+pudl runs:
 
 ```bash
 pudl version
-pudl example install --help
 ```
 
-You also need Git. The remaining steps work from any directory where you want
-to keep a new repository.
+You also need Git.
 
-## 2. Create the repository and install the example
+## Part 1: observe, catalog and find drift
+
+### 2. Create a workspace and install the example
 
 <!-- walkthrough:repository -->
 ```bash
@@ -44,36 +45,42 @@ pudl schema show pudl/git.#GitRepository
 pudl model validate git-inventory
 ```
 
-The model expects `local/demo` to have default branch `main`. The supplied
-inventories describe that fictional repository; they do not inspect or change
-your new repository's branches. PUDL installs the model and data under `.pudl/`.
-Reinstalling is safe: identical files are left alone, and edited files are
-preserved with a conflict message.
+`pudl init` creates the workspace in `.pudl/`. Everything this tutorial
+records stays there. The example installs a **model**, `git-inventory`, and
+two inventories of a fictional repository, `local/demo`. They do not inspect
+your own repository. Reinstalling is safe: identical files are left alone, and
+files you edited are kept and reported as conflicts.
 
-`model show` lists one desired resource with schema `pudl/git.#GitRepository`
-and resource type `git.repository`. Schema names use `package.#Definition`;
-pass the full name to `pudl schema show` to inspect the CUE data shape. The
-resource type is the model's `_schema` routing tag. `schema show` prints the
-containing file; look for `#GitRepository` and its remote and branch types.
-Use `pudl model show git-inventory --json` to inspect the model's desired values.
+A model says how to observe a system and what to expect of it.
+`git-inventory` observes by running `cat` on
+`.pudl/populators/git-inventory/current.json`. A real model runs a Git or
+forge CLI instead; any command that prints JSON records works. Its **desired
+state** is one resource: `local/demo` with default branch `main`.
 
-## 3. Observe and check the baseline
+`model show` lists that resource with its **type schema**,
+`pudl/git.#GitRepository`, and its resource type, `git.repository`. A type
+schema is a CUE definition of what a resource is. `schema show` prints the file
+that contains it. Its `_pudl` block declares `identity_fields: ["name"]`: the
+repository name identifies the resource, so pudl can follow it across
+observations.
+
+### 3. Observe and check the baseline
 
 <!-- walkthrough:baseline -->
 ```bash
 pudl check git-inventory
 ```
 
-The model's populate step runs `cat` over the supplied inventory
-(`.pudl/populators/git-inventory/current.json`) and records what it prints as
-an observation snapshot. Any command that prints JSON records works the same
-way; a real model would run a Git or forge CLI instead. The report says the
-desired resources exist and match: the observed default branch and the model's
-expectation are both `main`. The last lines summarize the check: its ID
-(`check_...`) and, for each model, its result and run ID. Keep the printed check
-ID if you want to return to this exact report later.
+`pudl check` runs the model's collector and stores what it printed as an
+**observation snapshot** (`snap_...`). It classifies each record as
+`pudl/git.#GitRepository`, catalogs it, and compares it with the desired
+state. The observed default branch is `main`, as expected, so the report is
+clean.
 
-## 4. Change the inventory and find drift
+The last lines summarize the **check**: its ID (`check_...`) and, for each
+model, its result and run ID. Note the check ID; step 6 reopens this report.
+
+### 4. Change the inventory and find drift
 
 <!-- walkthrough:change -->
 ```bash
@@ -82,7 +89,7 @@ pudl check git-inventory
 ```
 
 The changed inventory has default branch `release`. The model still expects
-`main`, so the report identifies the mismatch:
+`main`, so the report shows **drift**:
 
 ```text
 - ~ git.repository/local/demo (changed): default_branch: release → want main
@@ -90,20 +97,16 @@ The changed inventory has default branch `release`. The model still expects
   - observed_at: 2026-10-05T19:16:47Z
 ```
 
-Each finding names the resource and a reason: `missing` (nothing observed with
-that identity), `changed` (a desired field differs), `unidentifiable` (the
-desired record has no identity to match), or `ambiguous` (several differing
-observed records share its identity). Every differing field is listed with its
-expected and observed values, the value from the previous observation, and
-`observed_at` says when the compared record was recorded. The JSON report
-carries one entry per checked model under `members`; this model's finding is
-under `members[0].report.drift.drifted`, with the field differences in
-`fields`.
+A drift finding names the resource and a reason. The reason is `changed` (a
+desired field differs), `missing` (nothing observed has that identity),
+`unidentifiable` (the desired record has no identity) or `ambiguous` (several
+different records share the identity). Each differing field shows the
+expected, observed and previous values.
 
-PUDL reports the difference and changes nothing. Each check keeps its own
-snapshot, so the baseline evidence is preserved.
+pudl reports the difference and changes nothing. The baseline snapshot is
+kept, so the earlier evidence is still there.
 
-## 5. Repeat the check
+### 5. Read the report
 
 <!-- walkthrough:repeat -->
 ```bash
@@ -112,19 +115,17 @@ pudl report
 pudl report --json
 ```
 
-The same mismatch appears under a new check ID. `pudl report` reads the newest
-check again. In JSON, the check's `summary.conformity` is `drifted`; the model's
-own report under `members[0].report` has `drift.clean: false` and
-`drift.verified: true` because the check observed the inventory. Its
-`ok: true` means the check ran successfully, even though it found drift. For
-automation, inspect `summary.conformity` or use
-`pudl check git-inventory --detailed-exitcode`.
+The drift appears again under a new check ID. `pudl report` prints the newest
+report, and `--json` prints the same report as a versioned JSON document. Its
+`summary.conformity` is `drifted`. The model's own report is under
+`members[0].report`, with the finding in `drift.drifted`. `ok: true` means the
+check ran, not that the system is clean. For scripts, read
+`summary.conformity` or use `--detailed-exitcode` (exit 2 on drift).
 
-## 6. Inspect the evidence
+### 6. Follow the evidence
 
-List the changed record, then replace `RECORD_ID` below with the record ID
-printed by the list command. Replace `BASELINE_CHECK_ID` with the check ID from
-step 3 to reopen the original clean report.
+List the changed record. Then replace `RECORD_ID` below with the ID that the
+list command prints, and `BASELINE_CHECK_ID` with the check ID from step 3.
 
 <!-- walkthrough:evidence -->
 ```bash
@@ -133,24 +134,120 @@ pudl show RECORD_ID --raw
 pudl report BASELINE_CHECK_ID
 ```
 
-The raw record shows `default_branch: "release"` and the assigned
-`pudl/git.#GitRepository` schema. The baseline report remains clean. Your
-catalogs, records, models, and reports stay inside this repository's `.pudl/`
-directory.
+Each record is a **catalog entry**. Its ID comes from its content, so the same
+record always gets the same ID. The raw record shows
+`default_branch: "release"` and its type. The baseline report is still clean:
+reports are stored, not recomputed. `pudl show RECORD_ID --history` lists
+every stored version and snapshot of that resource.
 
-You can keep the repository to experiment with your own data. To observe a
-real system, point a model's `populate.runs` at a command that prints JSON
-records, such as `gcloud … --format=json` or `kubectl get … -o json`; see the
-[GCP network hygiene example](gcp-network-hygiene.md). See the
-[CLI reference](cli-reference.md) for import and report options, or
-[concepts](concepts.md) for schemas, identity, and drift.
+The [automated walkthrough test](TESTING.md#git-inventory-walkthrough) runs
+the commands in Part 1 with only pudl, Git, `cat` and `cp` on `PATH`.
 
-The [automated acceptance check](TESTING.md#git-inventory-walkthrough) executes
-these tutorial commands with only PUDL, Git, `cat` and `cp` on `PATH`.
+## Part 2: policies, checks and waivers
 
-Reports keep previous/current/expected values and failed-check witnesses. A
-catalog replay (`pudl check <model> --from-catalog`) re-checks a stored snapshot without
-observing; without an eligible prior snapshot it records an explicit
-unavailable baseline rather than inventing observation history. See
-[evidence and recovery](evidence.md) for report retention, faithful exports,
-and portable backups.
+Continue in the same workspace. Install the GCP content pack. It contains draft
+GCP type schemas, best-practice **policies**, collectors and **check
+families**, plus gcloud-shaped fixtures:
+
+```bash
+pudl example install gcp
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks
+```
+
+A check names its models exactly. The three collectors run first because the
+family lists them in `depends_on`. The family has no `populate`: it is
+**checks-only** and reads the collectors' newest snapshots.
+
+### 7. Policies
+
+Every observation evaluates the policies that apply to each resource:
+
+```bash
+pudl policy list
+pudl policy show gcp.#FirewallBestPractice
+pudl query policy_noncompliant
+```
+
+A policy is a CUE schema that describes a good instance of a type. Here
+`#FirewallBestPractice` says that no enabled ingress rule allows `0.0.0.0/0`.
+Each resource is `compliant`, `noncompliant` or `unknown` (a field the rule
+needs is missing), and each violation names its rule and severity. The results
+are stored as facts, so `pudl query` reads them like any other Datalog
+relation. The types are drafts, so results are marked provisional until
+someone sets `review: status: "validated"` on the type.
+
+### 8. Checks and findings
+
+The family's checks are Datalog queries that are expected to return nothing.
+Each row they return is a **finding**. `policy-high` (severity `fail`) and
+`nat-ip-not-in-use` fail, so the command exits 1. `policy-any` has severity
+`warn`, so it is reported but does not fail the command. Run the same check
+again:
+
+```bash
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks --fail-on new --detailed-exitcode
+```
+
+Each finding is now `persisting`. A finding that disappears from a complete
+observation becomes `resolved`. If the observation is incomplete, it is
+`unknown` instead, because missing evidence never resolves a finding. With
+`--fail-on new` only new failures fail the command, so this run exits 0.
+
+### 9. Owners
+
+Findings name the owner of each resource. A type's `_pudl.owner` sets it from
+labels or from a table of projects. Map the fixture project to a team by
+creating `.pudl/schema/gcp/owners_local.cue`:
+
+```cue
+package gcp
+
+_gcpProjectOwners: {"example-project": "platform"}
+```
+
+### 10. Waivers
+
+Accept the open firewall until a date. Create
+`.pudl/schema/models/waivers.cue`; its resource ID is the one that
+`pudl policy show` printed:
+
+```cue
+package models
+
+#GCPFixtureNetworkHygieneChecks: waivers: [{
+	policy:   "gcp.#FirewallBestPractice"
+	rule:     "gcp-firewall-world-ingress"
+	resource: "d7bd91db579e44e82d630a47af35f25fc9b084aeb1c5715bee139b2aa9524744"
+	owner:    "security"
+	reason:   "Public bastion until the VPN lands"
+	created:  "2026-11-01"
+	expires:  "2030-12-31"
+}]
+```
+
+Validate the model and check again, showing only the platform team's findings:
+
+```bash
+pudl model validate gcp-fixture-network-hygiene-checks
+pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+  gcp-fixture-network-hygiene-checks --owner platform
+```
+
+Findings are grouped under `owner platform`, and `policy-high` is `waived`,
+citing the waiver's owner, expiry and reason. A waived finding keeps its state.
+It is not resolved. When the waiver expires, the finding counts again.
+`nat-ip-not-in-use` still fails, so the command still exits 1.
+
+## Next steps
+
+- Collect from a real project with the [GCP pack](../examples/gcp/README.md)
+  or the [AWS pack](../examples/aws/README.md).
+- Write your own collector with
+  `pudl model new NAME --populate 'command:...'`, or import files with
+  `pudl import --path FILE`.
+- Write types and policies with the [schema authoring guide](schema-authoring.md),
+  and rules with the [Datalog guide](datalog.md).
+- See [evidence and recovery](evidence.md) for retention, exports and
+  portable bundles.
