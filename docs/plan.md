@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Import fall-through made visible (2026-11-02)
+
+The generic `pudl/infra.#Organization` and `#Service` are removed. Changed
+built-ins now reach existing workspaces automatically (a digest stamp), and
+doctor re-infers entries whose schema was removed. `pudl import --dry-run
+--explain` prints each record's candidate trace, and the guide, skill and
+prime tell users and agents to run it on every new source. See the
+[delivery log](../implog/2026_11_02_import_fallthrough.md).
+
 ### Bootstrap cleanup: brick retired, observe schemas moved (2026-11-02)
 
 `pudl/brick` (mu build targets) is removed, and unmodified copies of retired

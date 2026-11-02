@@ -114,3 +114,24 @@ func TestBrickIsRetired(t *testing.T) {
 	require.False(t, BootstrapPackages()["pudl/brick"])
 	require.Len(t, retiredBootstrapFiles["pudl/brick/brick.cue"], 2)
 }
+
+// A workspace without the current stamp (an older pudl's built-ins) is
+// refreshed by the next importer: a changed built-in is rewritten.
+func TestEnsureBasicSchemasRefreshesStaleBuiltins(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "cue.mod"), 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "cue.mod", "module.cue"), []byte("module: \"pudl.schemas\"\n"), 0644))
+	require.NoError(t, CopyBootstrapSchemas(root))
+	infra := filepath.Join(root, "pudl", "infra", "infra.cue")
+	stale := "package infra\n\n#Service: {_pudl: {schema_type: \"base\", identity_fields: [\"name\"]}, name: string, ...}\n"
+	require.NoError(t, os.WriteFile(infra, []byte(stale), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, filepath.FromSlash(bootstrapStampFile)), []byte("older\n"), 0644))
+	require.False(t, bootstrapCurrent(root))
+
+	e := &EnhancedImporter{schemaPath: root}
+	require.NoError(t, e.ensureBasicSchemas())
+	data, err := os.ReadFile(infra)
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "#Service:")
+	require.True(t, bootstrapCurrent(root))
+}

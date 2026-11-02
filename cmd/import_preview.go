@@ -34,7 +34,7 @@ func displayImportPreview(result *importer.ImportResult) {
 		}
 	}
 	if p.Ambiguous > 0 {
-		fmt.Fprintf(outw(), "   ⚠️  %d records matched more than one schema family (e.g. %s); route them with --schema or pin a discriminating field in the schema\n", p.Ambiguous, p.AmbiguousExample)
+		fmt.Fprintf(outw(), "   ⚠️  %d records matched more than one schema family (e.g. %s); route them with --schema, or mark the fields that identify the intended type with @pudl(match)\n", p.Ambiguous, p.AmbiguousExample)
 	}
 	printImportNotes(result)
 }

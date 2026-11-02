@@ -53,14 +53,21 @@ SCOPE AND COMPLETENESS
 
 IMPORT A FILE
 
+  pudl import fw.json --dry-run --explain       check first; writes nothing
   pudl import fw.json --schema gcp.#Firewall --set project=prod-a --dry-run
   pudl import fw.json --schema gcp.#Firewall --set project=prod-a
   pudl import exports/ --recursive
   gcloud compute networks list --format=json | pudl import --format json
 
   Formats: JSON, YAML, CSV, NDJSON (gzip and zstd too). Without --schema the
-  type is inferred; --explain shows why. --dry-run writes nothing and reports
-  classification, identity, redactions and projected facts.
+  type is inferred, and a record that matches no type still imports, as the
+  catch-all pudl/core.#Item. So check every new source with --dry-run
+  --explain first: it reports how many records land on each schema
+  (identity, redactions and projected facts too) and, per record, the
+  candidates tried and the fields that failed. Records on pudl/core.#Item or
+  on a type you did not expect have fallen through: name the type with
+  --schema, supply what the type needs (--set project=...), or write a type
+  (pudl guide schemas). --json puts the counts in preview.schemas.
 
 SNAPSHOTS
 

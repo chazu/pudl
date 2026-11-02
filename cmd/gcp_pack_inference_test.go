@@ -24,8 +24,8 @@ var gcpPackSchemas = map[string]string{
 // TestGCPPackFixturesInferTheirType imports each fixture without --schema.
 // Without a valid project ID every fixture is rejected; with the project
 // injected as the collectors do, inference must pick the pack type rather than
-// a generic schema that shares field names (pudl/infra.#Service matches any
-// record with `name` and `kind`).
+// a generic schema that shares field names (the removed pudl/infra.#Service
+// matched any record with `name` and `kind`).
 func TestGCPPackFixturesInferTheirType(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	r := runCLI(t, "example", "install", "gcp", "--json")
