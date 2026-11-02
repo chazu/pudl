@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: instance metadata redacted; external-IP facts (2026-11-02)
+
+`gcp.#ComputeInstance` now redacts `metadata.items[*].value` (startup
+scripts, user-data, and GKE `kube-env` with its bootstrap credentials), and
+it skips the Shielded VM Secure Boot certificates in the secret scan. It also
+projects `gcp_instance_external_ip`. The implog describes how to move a
+workspace from a hand-written `gcp.#Instance` to the pack. See
+`implog/2026_11_02_gcp_instance_redaction.md`.
+Follow-ups: `pudl-gvh`, `pudl-bpy`, `pudl-qaw`.
+
 ### Incremental layout: collapse, expand and refresh keep the picture (2026-11-02)
 
 The default layout engine now lays out each group separately, splitting

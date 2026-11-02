@@ -87,6 +87,20 @@
   "labels": {
    "team": "orders"
   },
+  "metadata": {
+   "kind": "compute#metadata",
+   "fingerprint": "xyz",
+   "items": [
+    {
+     "key": "startup-script",
+     "value": "#!/bin/sh\necho fixture-instance-startup-script"
+    },
+    {
+     "key": "kube-env",
+     "value": "KUBELET_CERT: fixture-kube-env-not-a-real-cert"
+    }
+   ]
+  },
   "disks": [
    {
     "boot": true,

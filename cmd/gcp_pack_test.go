@@ -201,6 +201,19 @@ func TestGCPContentPack(t *testing.T) {
 	r = runCLI(t, "list", "--schema", "gcp.#GKECluster", "--select", "nodeConfig.metadata", "--all", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.NotContains(t, r.Stdout, "fixture-startup-script")
+	r = runCLI(t, "list", "--schema", "gcp.#ComputeInstance", "--select", "metadata.items", "--all", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.Contains(t, r.Stdout, "kube-env", "metadata keys are kept")
+	require.Contains(t, r.Stdout, "[REDACTED]")
+	require.NotContains(t, r.Stdout, "fixture-kube-env-not-a-real-cert")
+	require.NotContains(t, r.Stdout, "fixture-instance-startup-script")
+
+	// One external-IP fact per address, on the network it is attached on.
+	r = runCLI(t, "query", "gcp_instance_external_ip")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.Contains(t, r.Stdout, `"address":"203.0.113.50"`)
+	require.Contains(t, r.Stdout, `"network":"projects/example-project/global/networks/prod-vpc"`)
+	require.Equal(t, 1, strings.Count(r.Stdout, `"address":`), r.Stdout)
 
 	// Remove every noncompliant resource: each family passes.
 	dropFixtureRecords(t, pudlDir, map[string][]string{
