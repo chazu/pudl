@@ -2,8 +2,11 @@ package datalog
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
+
+	"github.com/chazu/pudl/internal/database"
 )
 
 // checkRule validates a single rule that was read successfully: its shape and
@@ -28,6 +31,9 @@ func checkRule(r Rule) error {
 		}
 		for _, key := range sortedArgKeys(atom.Args) {
 			term := atom.Args[key]
+			if atom.Rel == database.CatalogEntryRelation && !slices.Contains(database.CatalogEntryColumns, key) {
+				return fmt.Errorf("body atom %d (%s): no argument %q; arguments are %s", i, atom.Rel, key, strings.Join(database.CatalogEntryColumns, ", "))
+			}
 			if term.IsAggregate() {
 				return fmt.Errorf("body atom %d (%s): aggregate %s() is only allowed in a rule head", i, atom.Rel, term.Agg)
 			}

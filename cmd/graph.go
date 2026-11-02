@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -92,7 +91,7 @@ func runGraphExport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var w io.Writer = outw()
+	w := outw()
 	if graphExportOutput != "" {
 		f, err := os.Create(graphExportOutput)
 		if err != nil {

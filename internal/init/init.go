@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"path/filepath"
 
 	"github.com/chazu/pudl/internal/artifacts"
@@ -234,10 +235,10 @@ and read the result again with ` + "`pudl report`" + `.
 		return fmt.Errorf("failed to add files to git: %w", err)
 	}
 
-	commitCmd := exec.Command("git", "commit", "-m", "Initial PUDL schema repository")
+	commitCmd := exec.Command("git", append(commitIdentityArgs(dir), "commit", "-m", "Initial PUDL schema repository")...)
 	commitCmd.Dir = dir
-	if err := commitCmd.Run(); err != nil {
-		return fmt.Errorf("failed to create initial commit: %w", err)
+	if output, err := commitCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to create initial commit: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 
 	if verbose {
@@ -245,6 +246,19 @@ and read the result again with ` + "`pudl report`" + `.
 	}
 
 	return nil
+}
+
+// commitIdentityArgs makes the initial commit work where git has no
+// identity configured (a fresh machine, a CI runner): git then refuses to
+// commit. With no user.email in effect the commit is attributed to pudl;
+// otherwise the user's own identity is used.
+func commitIdentityArgs(dir string) []string {
+	cmd := exec.Command("git", "config", "user.email")
+	cmd.Dir = dir
+	if out, err := cmd.Output(); err == nil && strings.TrimSpace(string(out)) != "" {
+		return nil
+	}
+	return []string{"-c", "user.name=pudl", "-c", "user.email=pudl@localhost"}
 }
 
 // initCUEModule initializes a CUE module in the schema directory

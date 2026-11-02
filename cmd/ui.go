@@ -69,17 +69,17 @@ func runUI(cmd *cobra.Command, args []string) error {
 	if remote && !uiAllowRemote {
 		return fmt.Errorf("--addr %s is not a loopback address; pass --allow-remote to expose the inventory on it", uiAddr)
 	}
+	// Open the catalog before listening, so a failure leaves nothing to undo.
+	src, err := newUIGraphSource()
+	if err != nil {
+		return err
+	}
+	defer src.close()
 	ln, err := net.Listen("tcp", uiAddr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w (another pudl ui? try --addr 127.0.0.1:0)", uiAddr, err)
 	}
 
-	src, err := newUIGraphSource()
-	if err != nil {
-		ln.Close()
-		return err
-	}
-	defer src.close()
 	opts := uiserver.Options{
 		Assets:    webui.Assets(),
 		Graph:     src.graph,
