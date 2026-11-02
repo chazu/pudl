@@ -5,8 +5,8 @@ topology, application architecture, resource inventory, security
 relationships) of the same resources. Architecture, data flow and design
 rules are in [docs/frontend.md](../docs/frontend.md).
 
-There is no live backend yet. The app loads a synthetic demo dataset, which
-is always bannered as DEMO DATA, or a canonical-graph JSON file.
+The app loads a synthetic demo dataset (bannered DEMO DATA) or a graph file
+exported from a pudl workspace (bannered FILE).
 
 ## Run
 
@@ -18,12 +18,17 @@ npm install
 npm run dev          # http://localhost:5178
 ```
 
-Load a JSON file instead of the demo data (put it under `web/public/` or serve it
-from anywhere the browser can fetch):
+View your own pudl catalog: export it into `web/public/` (git-ignored) and
+point the app at it:
 
+```bash
+pudl graph export -o web/public/graph.json     # from your workspace
+open 'http://localhost:5178/?graph=/graph.json'
 ```
-http://localhost:5178/?graph=/my-graph.json
-```
+
+Any URL the browser can fetch works for `?graph=`. To try it without real
+infrastructure, install the AWS or GCP pack and run its fixture collectors
+(see the pack READMEs), then export.
 
 ## Check
 

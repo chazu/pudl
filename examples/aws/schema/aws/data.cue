@@ -16,6 +16,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["Name"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: {name: "Name", account: "AccountId"}
 	}
 	AccountId:     string
 	Name:          string
@@ -41,6 +42,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["DBInstanceArn"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: _awsGraph & {name: "DBInstanceIdentifier", refs: ["DBInstanceIdentifier"]}
 		facts: {
 			aws_db_instance: args: {
 				arn:          "DBInstanceArn"
@@ -90,6 +92,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["KeyMetadata.Arn"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: _awsGraph & {name: "KeyMetadata.KeyId", refs: ["KeyMetadata.KeyId"]}
 		facts: aws_kms_key: args: {
 			arn:     "KeyMetadata.Arn"
 			key_id:  "KeyMetadata.KeyId"

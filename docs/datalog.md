@@ -122,6 +122,32 @@ pudl rule add standards.cue --global
 
 Every projected fact also carries `entry_id` and `resource_id`.
 
+### Resource graph edges (`graph_edge`)
+
+`pudl graph export` derives relationships from rules whose head is
+`graph_edge`, with four arguments:
+
+| Argument | Value |
+| --- | --- |
+| `type` | Relationship type, from the web explorer's vocabulary (`in_subnet`, `protected_by`, `encrypted_by`, ...) |
+| `source`, `target` | A `resource_id`, or a reference value such as an AWS ID or a GCP path |
+| `basis` | `observed`, `declared`, `inferred` or `unknown` |
+
+```cue
+aws_graph_instance_sg: {
+	head: {rel: "graph_edge", args: {type: "protected_by", source: "$R", target: "$G", basis: "observed"}}
+	body: [{rel: "aws_instance_sg", args: {resource_id: "$R", group_id: "$G"}}]
+}
+```
+
+A reference resolves through each resource's identity value and its
+`_pudl.graph.refs`. If nothing matches, the edge points at `ref:<value>`, and
+the explorer shows that resource as not in the inventory. A reference that
+matches several resources is left unresolved and reported. A row whose
+target is null (an absent optional field) is no edge. Each rule is evaluated
+separately, so every relationship names the rule that derived it. The AWS and
+GCP packs ship their edges in `schema/pudl/rules/*_graph.cue`.
+
 ### Catalog (`catalog_entry`)
 
 The catalog is the built-in relation `catalog_entry`, read from native

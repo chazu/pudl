@@ -19,6 +19,7 @@ import (
 // TestJSONOutputContract, so a new command is classified deliberately.
 var jsonContractExempt = map[string]string{
 	"pudl facts":                 "command group",
+	"pudl graph":                 "command group",
 	"pudl model":                 "command group",
 	"pudl policy":                "command group",
 	"pudl rule":                  "command group",
@@ -104,6 +105,7 @@ func TestJSONOutputContract(t *testing.T) {
 	proquint := field(run("show", entryID), "entry", "proquint")
 	run("show", proquint, "--raw", "--metadata")
 	run("export", "--id", proquint)
+	run("graph", "export")
 
 	factID := field(run("facts", "add", "--relation", "host", "--args", `{"name":"h1"}`), "id")
 	run("facts", "list", "--relation", "host")

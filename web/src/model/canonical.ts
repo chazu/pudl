@@ -31,7 +31,8 @@ export interface Evidence {
   detail?: string;
 }
 
-export type Provider = 'aws' | 'gcp' | 'k8s' | 'external' | 'logical';
+/** First segment of the resource type ('aws', 'gcp', 'k8s', ...), or 'external' / 'logical'. */
+export type Provider = string;
 
 export interface Resource {
   /** Stable identity. Views and selection key on this. */
@@ -49,6 +50,9 @@ export interface Resource {
   properties: Record<string, unknown>;
   tags?: Record<string, string>;
   evidence?: Evidence[];
+  /** pudl schema and catalog entry the resource was read from (live exports). */
+  schema?: string;
+  entryId?: string;
 }
 
 export interface Relationship {
@@ -69,6 +73,8 @@ export interface GraphMeta {
   /** Human label for the data source, shown in the UI. */
   label: string;
   generatedAt?: string;
+  /** Problems the producer reported (unreadable payloads, ambiguous references). */
+  warnings?: string[];
 }
 
 export interface CanonicalGraph {
@@ -87,10 +93,14 @@ export class GraphIndex {
   private readonly relById = new Map<RelationshipId, Relationship>();
   private readonly outgoing = new Map<ResourceId, Relationship[]>();
   private readonly incoming = new Map<ResourceId, Relationship[]>();
+  private readonly byTypeNative = new Map<string, Resource>();
 
   constructor(graph: CanonicalGraph) {
     this.graph = graph;
-    for (const r of graph.resources) this.byId.set(r.id, r);
+    for (const r of graph.resources) {
+      this.byId.set(r.id, r);
+      if (r.nativeId) this.byTypeNative.set(`${r.type}\u0000${r.nativeId}`, r);
+    }
     for (const rel of graph.relationships) {
       this.relById.set(rel.id, rel);
       push(this.outgoing, rel.source, rel);
@@ -100,6 +110,11 @@ export class GraphIndex {
 
   resource(id: ResourceId): Resource | undefined {
     return this.byId.get(id);
+  }
+
+  /** The resource of `type` whose native identifier is `nativeId`, if collected. */
+  byNative(type: string, nativeId: string): Resource | undefined {
+    return this.byTypeNative.get(`${type}\u0000${nativeId}`);
   }
 
   has(id: ResourceId): boolean {

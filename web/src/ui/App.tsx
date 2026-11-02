@@ -175,7 +175,7 @@ export function App() {
           )}
           {error && <div className="canvas-error">Layout failed: {error}</div>}
         </div>
-        <StatusBar rendered={rendered} view={view} issues={loaded.issues} engineName={engineName} />
+        <StatusBar rendered={rendered} view={view} issues={loaded.issues} warnings={loaded.graph.meta.warnings} engineName={engineName} />
       </main>
       <Inspector
         index={index}

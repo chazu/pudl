@@ -1,6 +1,6 @@
 // Placement helpers shared by the projection definitions.
 
-import type { Resource } from '../../model/canonical';
+import type { GraphIndex, Resource } from '../../model/canonical';
 import { resourceType } from '../../model/resourceTypes';
 import type { ParentRef, ProjectionContext, SyntheticGroupSpec } from '../types';
 
@@ -11,6 +11,12 @@ export const EXTERNAL_GROUP: SyntheticGroupSpec = {
   parent: null,
   basis: 'Address ranges and principals outside any collected account. Not resources PUDL observes.',
 };
+
+/** The collected AWS account or GCP project resource named by `r.account`. */
+export function ownerResource(index: GraphIndex, r: Resource): Resource | undefined {
+  if (!r.account) return undefined;
+  return index.byNative(r.provider === 'gcp' ? 'gcp.project' : 'aws.account', r.account);
+}
 
 export function isExternal(r: Resource): boolean {
   return r.provider === 'external';
@@ -23,8 +29,8 @@ export function isExternal(r: Resource): boolean {
  */
 export function ownerRef(r: Resource, ctx: ProjectionContext): ParentRef | null {
   if (!r.account) return null;
-  const id = r.provider === 'gcp' ? `gcp:project:${r.account}` : `aws:account:${r.account}`;
-  if (ctx.index.has(id)) return { resource: id, via: 'account attribute' };
+  const owner = ownerResource(ctx.index, r);
+  if (owner) return { resource: owner.id, via: 'account attribute' };
   return {
     synthetic: {
       key: `owner:${r.provider}:${r.account}`,

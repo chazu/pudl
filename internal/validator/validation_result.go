@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/chazu/pudl/internal/graphspec"
 	"github.com/chazu/pudl/internal/ownership"
 )
 
@@ -78,6 +79,12 @@ type SchemaMetadata struct {
 	// the schema and CheckModuleIntegrity reports a load error.
 	Owner      *ownership.Spec `json:"-"`
 	OwnerError string          `json:"-"`
+
+	// Graph is the strictly decoded `_pudl.graph`: graph labels and reference
+	// values (nil when absent; see the graphspec package). GraphError carries
+	// a decode failure, reported by CheckModuleIntegrity.
+	Graph      *graphspec.Spec `json:"-"`
+	GraphError string          `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result

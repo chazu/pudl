@@ -795,6 +795,58 @@
       ]
     },
     {
+      "use": "graph",
+      "short": "Export the resource graph",
+      "long": "Work with the resource graph: cataloged resources and the relationships\nbetween them, as read by the web graph explorer (web/).\n\nAvailable subcommands:\n- export:  Write the current resource graph as JSON",
+      "args": "custom",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "export",
+          "short": "Write the current resource graph as JSON",
+          "long": "Write the current resource graph as JSON, in the canonical graph format the\nweb explorer loads (docs/frontend.md#backend-integration).\n\nResources are the catalog's current entries, one per resource. Each schema's\noptional _pudl.graph block names the fields used for name, account, region and\nzone, and the values other records use to refer to the resource.\n\nRelationships come from Datalog rules whose head is the reserved relation\n\n    graph_edge(type, source, target, basis)\n\nwhere source and target are a resource ID or a reference value such as an\nAWS ID or a GCP path. A reference that matches no cataloged resource is kept\nas \"ref:\u003cvalue\u003e\", so the graph shows the resource as unknown instead of\ndropping the edge. Problems (unreadable payloads, ambiguous references, rules\nthat fail) are listed in meta.warnings and never stop the export.\n\nOutput is always JSON; the global --json flag changes nothing.\n\nExamples:\n    pudl graph export \u003e graph.json\n    pudl graph export -o web/public/graph.json",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "output",
+              "shorthand": "o",
+              "usage": "Output file (default: stdout)",
+              "type": "string"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "use": "guide [topic]",
       "short": "Quick-reference guide for agents and humans",
       "long": "Print usage guides for pudl features and concepts.\n\nRun 'pudl guide' with no arguments to see all available topics.\nRun 'pudl guide \u003ctopic\u003e' to read a specific guide.",

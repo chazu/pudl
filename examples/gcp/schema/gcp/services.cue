@@ -18,6 +18,7 @@ package gcp
 		]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["metadata.labels.team"]}
+		graph: _gcpGraph & {name: "metadata.name", region: "metadata.labels.\"cloud.googleapis.com/location\""}
 		sensitive_fields: [
 			"spec.template.spec.containers[*].env[*].value",
 			"metadata.annotations.\"serving.knative.dev/creator\"",
@@ -50,6 +51,7 @@ package gcp
 		identity_fields: ["project", "name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpGraph
 		facts: {
 			gcp_dns_zone: args: {project: "project", name: "name"}
 			// One fact per network a private zone is visible to.
@@ -76,6 +78,7 @@ package gcp
 		identity_fields: ["name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 	}
 	project: _gcpProjectID
 	name:    =~"^projects/[^/]+/topics/[^/]+$" @pudl(match)
@@ -91,6 +94,8 @@ package gcp
 		identity_fields: ["name"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
+		facts: gcp_subscription_topic: args: topic: "topic"
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
 	project: _gcpProjectID

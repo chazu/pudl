@@ -112,6 +112,8 @@ const TYPES: RelationshipTypeInfo[] = [
   T('endpoint_for', 'network', 'endpoint for', 'Private endpoint to this service. Access still governed by IAM and endpoint policy.'),
   T('private_ip_in', 'network', 'private IP in', 'Has a private address allocated from this network.'),
   T('nat_via', 'network', 'NAT via', 'Outbound NAT is configured through this gateway.'),
+  T('nat_ip', 'network', 'NAT IP', 'NAT is configured to use this address. Says nothing about which workloads egress through it.'),
+  T('private_zone_for', 'network', 'private zone', 'Private DNS zone is visible from this network. Name resolution only; not connectivity.'),
   // traffic
   T('observed_flow', 'traffic', 'flow seen', 'Flow logs recorded traffic in the window. Absence of a flow is not proof of no traffic.'),
   // dependency

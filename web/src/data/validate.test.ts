@@ -50,3 +50,19 @@ describe('graph validation', () => {
     expect(() => parseCanonicalGraph({ resources: 'nope' }, 'x')).toThrow(/resources array/);
   });
 });
+
+describe('pudl graph export documents', () => {
+  it('keep producer warnings, schema and entry, and are still labelled as files', () => {
+    const g = parseCanonicalGraph(
+      {
+        meta: { origin: 'pudl', label: 'pudl catalog · demo', warnings: ['ref ambiguous', 3] },
+        resources: [{ id: 'r1', type: 'aws.ec2.instance', name: 'i-1', provider: 'aws', schema: 'aws.#EC2Instance', entryId: 'babod-fakak' }],
+        relationships: [{ id: 'x', type: 'protected_by', source: 'r1', target: 'ref:sg-1', basis: 'observed' }],
+      },
+      'graph.json',
+    );
+    expect(g.meta).toMatchObject({ origin: 'file', label: 'pudl catalog · demo', warnings: ['ref ambiguous'] });
+    expect(g.resources[0]).toMatchObject({ schema: 'aws.#EC2Instance', entryId: 'babod-fakak' });
+    expect(validateGraph(g).map((i) => i.kind)).toEqual(['dangling-target']);
+  });
+});

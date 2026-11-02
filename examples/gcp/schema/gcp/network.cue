@@ -19,6 +19,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpComputeGraph
 		// Network references are joined in path form
 		// (projects/P/global/networks/N), see gcp_depends_on_network.
 		facts: gcp_network: args: {
@@ -43,6 +44,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
 		facts: gcp_subnet: args: {
 			project: "project"
 			name:    "name"
@@ -70,6 +72,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpComputeGraph
 		facts: gcp_firewall_network: args: {
 			self_link: "selfLink"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
@@ -95,6 +98,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpComputeGraph
 		facts: gcp_route_network: args: {
 			self_link: "selfLink"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
@@ -117,6 +121,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner
+		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
 		facts: {
 			gcp_router: args: {
 				project:   "project"
@@ -145,6 +150,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		identity_fields: ["selfLink"]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
+		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
 		facts: gcp_address: args: {
 			project:   "project"
 			name:      "name"

@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl graph export feeds the web explorer real data (2026-11-02)
+
+`pudl graph export` writes the catalog's current resources and their
+relationships in the explorer's JSON format. Relationships are Datalog rules
+for `graph_edge`, which the AWS and GCP packs now ship. A new `_pudl.graph`
+schema block names display fields and the references that resolve edges.
+Unresolved references stay visible as "not in inventory". See the
+[delivery log](../implog/2026_11_02_graph_export.md).
+
 ### Frontend graph explorer (2026-11-02)
 
 `web/` is a TypeScript/React/Vite app that shows one canonical resource graph

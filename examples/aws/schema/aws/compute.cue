@@ -20,6 +20,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["InstanceId"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: _awsGraph & {zone: "Placement.AvailabilityZone"}
 		sensitive_fields: ["UserData"]
 		facts: {
 			aws_instance: args: {
@@ -58,6 +59,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		identity_fields: ["VolumeId"]
 		review: status: "draft"
 		owner: _#AWSOwner
+		graph: _awsGraph & {zone: "AvailabilityZone"}
 		facts: {
 			aws_volume: args: {
 				volume_id: "VolumeId"

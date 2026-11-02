@@ -37,7 +37,11 @@ const LEAF_TYPES = new Set([
   'aws.sqs.queue',
   'gcp.compute.firewall',
   'gcp.compute.router',
+  'gcp.compute.route',
+  'gcp.compute.address',
   'gcp.compute.instance',
+  'gcp.container.cluster',
+  'gcp.dns.managed_zone',
   'gcp.sql.instance',
   'external.cidr',
 ]);
@@ -50,6 +54,7 @@ const SUBNET_PLACED = new Set([
   'aws.elbv2.load_balancer',
   'aws.rds.db_instance',
   'gcp.compute.instance',
+  'gcp.container.cluster',
 ]);
 
 function place(r: Resource, ctx: ProjectionContext): Placement {
@@ -87,8 +92,12 @@ function place(r: Resource, ctx: ProjectionContext): Placement {
       return { parents: ctx.via(r, 'in_folder', 'in_organization'), basis: 'Resource hierarchy.' };
     case 'gcp.project':
       return { parents: ctx.via(r, 'in_folder', 'in_organization'), basis: 'Resource hierarchy.' };
-    case 'gcp.compute.network':
-      return { parents: ctx.via(r, 'in_project'), basis: 'Network owned by project (global).' };
+    case 'gcp.compute.network': {
+      // A pack export has no project records; place by the project attribute.
+      const viaProject = ctx.via(r, 'in_project');
+      const owner = ownerRef(r, ctx);
+      return { parents: viaProject.length ? viaProject : owner ? [owner] : [], basis: 'Network owned by project (global).' };
+    }
     case 'gcp.compute.subnetwork':
     case 'gcp.compute.router': {
       const net = ctx.via(r, 'in_network')[0] ?? null;
@@ -99,6 +108,15 @@ function place(r: Resource, ctx: ProjectionContext): Placement {
     }
     case 'gcp.compute.firewall':
       return { parents: ctx.via(r, 'in_network'), basis: 'Firewall rules belong to a network.' };
+    case 'gcp.compute.route':
+      return { parents: ctx.via(r, 'in_network'), basis: 'Routes belong to a network.' };
+    case 'gcp.compute.address': {
+      const owner = ownerRef(r, ctx);
+      return {
+        parents: r.region ? [regionRef(owner, r.region, 'Regional address.')] : owner ? [owner] : [],
+        basis: 'Reserved address in its project; not attached to a network by this record.',
+      };
+    }
     case 'gcp.sql.instance': {
       const owner = ownerRef(r, ctx);
       return {

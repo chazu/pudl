@@ -49,10 +49,11 @@ unify with.
 | `facts` | Relations the records project into the fact store |
 | `sensitive_fields` | Paths redacted before anything is stored |
 | `secret_scan_ignore` | Paths the likely-secret scan does not report |
+| `graph` | How records are labelled in the resource graph, and what refers to them |
 | `description` | A free-text note; pudl does not read it |
 
-`review`, `owner`, `facts`, `sensitive_fields` and `secret_scan_ignore` are
-read strictly: a mistake is a schema load error that `pudl doctor` reports, and
+`review`, `owner`, `facts`, `sensitive_fields`, `secret_scan_ignore` and
+`graph` are read strictly: a mistake is a schema load error that `pudl doctor` reports, and
 the feature fails closed (redaction refuses to store, projection is disabled)
 rather than being silently ignored.
 
@@ -203,6 +204,35 @@ kind, never by value. List a path here when its value is not a secret; it
 covers everything below it. To redact a real secret, add it to
 `sensitive_fields` instead. See
 [projection](projection.md#likely-secret-warnings-_pudlsecret_scan_ignore).
+
+### `graph`
+
+```cue
+graph: {
+	name:    "name"
+	account: "project"
+	region:  {path: "region", last_segment: true}
+	refs: [{path: "selfLink", trim_prefix: "https://www.googleapis.com/compute/v1/"}]
+}
+```
+
+`pudl graph export` reads this block to label each resource and resolve
+relationships to it. Every key is optional. A value is a field path, or
+`{path, trim_prefix?, last_segment?}`. Wildcards are not allowed.
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Display name; defaults to a top-level `name`/`Name` field, then the identity values |
+| `account` | Owning AWS account or GCP project |
+| `region`, `zone` | Location |
+| `refs` | Values other records use to refer to this resource, in addition to a single identity field's value |
+
+`refs` matters when a type's identity and the references other records hold
+are spelled differently. A GCP network's identity is its full `selfLink`, but
+a subnet's `network` fact holds the path with the API prefix trimmed.
+Relationships are Datalog rules for the `graph_edge` relation; see
+[datalog](datalog.md#resource-graph-edges-graph_edge). The block is inherited
+along `base_schema`, and the nearest one wins.
 
 ## Claiming records: `@pudl(match)`
 

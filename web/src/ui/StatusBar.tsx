@@ -6,10 +6,12 @@ interface Props {
   rendered: Rendered | null;
   view: SemanticView;
   issues: GraphIssue[];
+  /** Warnings the graph's producer reported (pudl graph export). */
+  warnings?: string[];
   engineName: string;
 }
 
-export function StatusBar({ rendered, view, issues, engineName }: Props) {
+export function StatusBar({ rendered, view, issues, warnings, engineName }: Props) {
   if (!rendered) return <div className="statusbar">—</div>;
   const { graph, layout } = rendered;
   const counts: Record<string, number> = {};
@@ -28,6 +30,11 @@ export function StatusBar({ rendered, view, issues, engineName }: Props) {
       <span title="Relationships hidden by category or resource filters">{hidden} filtered</span>
       <span>{view.excluded.length} resources not in this view</span>
       {dangling > 0 && <span className="warn">{dangling} unresolved reference(s)</span>}
+      {warnings && warnings.length > 0 && (
+        <span className="warn" title={warnings.join('\n')}>
+          {warnings.length} export warning(s)
+        </span>
+      )}
       <span className="right">
         {engineName} · {Math.round(layout.durationMs)} ms
       </span>
