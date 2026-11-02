@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/chazu/pudl/internal/inference"
@@ -134,6 +135,12 @@ func (e *EnhancedImporter) assignItemSchemaDetailed(data any, opts ImportOptions
 		return assigned, nil
 	}
 	if opts.ManualSchema != "" && !opts.AllowSchemaFallback {
+		return schemaAssignment{}, err
+	}
+	// A record that claims a type and fails it is rejected, never stored as
+	// the catchall.
+	var claimErr *inference.ClaimError
+	if errors.As(err, &claimErr) {
 		return schemaAssignment{}, err
 	}
 	// Inference failure retains the existing collection catchall behavior.

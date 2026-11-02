@@ -14,8 +14,8 @@ var schemaListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List schema definitions and resource metadata",
 	Long: `List schemas using full package.#Definition names accepted by 'pudl schema show'.
-The listing includes resource types. Use --verbose for source paths, identity fields,
-tracked fields, and collection metadata, or --json for the complete representation.`,
+The listing includes resource types. Use --verbose for source paths, identity fields
+and collection metadata, or --json for the complete representation.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error { return runSchemaListCommand() },
 }
@@ -76,7 +76,7 @@ func runSchemaListCommand() error {
 		if schemaVerbose {
 			fmt.Fprintf(outw(), "    File: %s\n    Size: %s\n", entry.FilePath, formatBytes(entry.Size))
 			if entry.Metadata != nil {
-				fmt.Fprintf(outw(), "    identity_fields: %v\n    tracked_fields: %v\n    list_type: %t\n", entry.Metadata.IdentityFields, entry.Metadata.TrackedFields, entry.Metadata.IsListType)
+				fmt.Fprintf(outw(), "    identity_fields: %v\n    list_type: %t\n", entry.Metadata.IdentityFields, entry.Metadata.IsListType)
 			}
 		}
 	}

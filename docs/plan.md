@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP records must carry a valid project ID (2026-11-02)
+
+GCP pack types require `project` to be a project ID, not the project number
+or display name, and claim their records by marking identifying body fields
+with `@pudl(match)`. A record that claims a type but fails it is rejected
+rather than stored under a generic schema, by import and by observe.
+`tracked_fields` is removed. CLI errors now print their cause. See the
+[delivery log](../implog/2026_11_02_gcp_project_required.md).
+
 ### Bugs from the docs rewrite fixed (2026-11-02)
 
 Five bugs found while running the rewritten docs' examples are fixed. A JSON

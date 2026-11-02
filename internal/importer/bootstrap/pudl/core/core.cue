@@ -8,7 +8,6 @@ package core
 		schema_type:   "catchall"
 		resource_type: "unknown"
 		identity_fields: []
-		tracked_fields: []
 	}
 
 	// Accept any structure
@@ -22,7 +21,6 @@ package core
 		schema_type:   "collection"
 		resource_type: "generic.collection"
 		identity_fields: ["collection_id"]
-		tracked_fields: ["item_count", "item_schemas", "collection_metadata"]
 	}
 
 	// Core collection fields

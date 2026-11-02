@@ -279,8 +279,8 @@ func (loader *CUEModuleLoader) createModuleFromInstance(inst *build.Instance, va
 
 		// Set the IsListType field based on structural detection
 		meta.IsListType = isListType
-		if !isListType {
-			meta.Discriminators = literalStringFields(schemaValue)
+		if !isListType && !meta.IsPolicy() {
+			decodeMatch(schemaValue, &meta)
 		}
 		metadata[canonicalName] = meta
 	}
@@ -368,7 +368,7 @@ func (loader *CUEModuleLoader) CheckModuleIntegrity(modules map[string]*LoadedMo
 				})
 			}
 			meta := module.Metadata[schemaName]
-			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError, meta.OwnerError} {
+			for _, metaErr := range []string{meta.ReviewError, meta.SecretScanIgnoreError, meta.OwnerError, meta.MatchError} {
 				if metaErr != "" {
 					problems = append(problems, SchemaLoadError{
 						Path:    loader.schemaPath,

@@ -19,7 +19,6 @@ package aws
 		schema_type:     "base"
 		resource_type:   "aws.ec2.instance"
 		identity_fields: ["InstanceId"]
-		tracked_fields:  ["State", "InstanceType"]
 		review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
 		owner: {paths: ["OwnerTag"], fallback: "platform"}
 		sensitive_fields: ["UserData"]
@@ -44,7 +43,6 @@ unify with.
 | `schema_type` | The schema's role: `base`, `custom`, `policy`, `catchall` or `collection` |
 | `resource_type` | Dotted resource kind, such as `gcp.compute.firewall`; helps inference |
 | `identity_fields` | Fields that identify one resource across observations |
-| `tracked_fields` | Fields that mark the type during inference |
 | `base_schema` | The parent schema: a more general type, or a policy's type |
 | `review` | Whether someone has validated the type as complete |
 | `owner` | How to derive a resource's owning team |
@@ -93,11 +91,6 @@ A record whose identity fields do not resolve falls back to content-hash
 identity: it forms no version history and projects no facts. `pudl import`
 and `--dry-run` report such records. Choose globally unique fields where you
 can: selfLinks, ARNs, UUIDs. See [Resource identity](#resource-identity).
-
-### `tracked_fields`
-
-Fields characteristic of the type. Their presence raises the inference score
-a little.
 
 ### `base_schema`
 
@@ -211,15 +204,49 @@ covers everything below it. To redact a real secret, add it to
 `sensitive_fields` instead. See
 [projection](projection.md#likely-secret-warnings-_pudlsecret_scan_ignore).
 
+## Claiming records: `@pudl(match)`
+
+Mark the fields that only this type's records carry with `@pudl(match)` in
+the schema body. The schema's own constraint on the field is the test, so
+nothing is stated twice:
+
+```cue
+#Firewall: {
+	_pudl: {...}
+	kind:    "compute#firewall" @pudl(match)
+	project: _gcpProjectID
+	...
+}
+#PubSubTopic: {
+	_pudl: {...}
+	name: =~"^projects/[^/]+/topics/[^/]+$" @pudl(match)
+	...
+}
+```
+
+A record whose values at every marked field satisfy those constraints
+**claims** the type. Inference then assigns it this type or one of its
+specializations, or rejects the import with the type's validation error. It
+never falls back to a generic schema. Mark required fields (an optional field
+is ignored), at any depth; with several marks, all must match. Mark fields
+that identify the kind of record, such as a provider's `kind`, not ones a
+generic record shares (`name: string` would claim everything with a name). The
+rest of the body says what a claimed record must satisfy. For example, the GCP pack requires a valid
+project ID, so gcloud output imported without `--set project=<id>` is
+rejected instead of being cataloged without a project. Observe collectors that
+name no schema apply the same rule. A malformed `@pudl(match)` is a schema
+load error that `pudl doctor` reports.
+
 ## How classification works
 
 Without `--schema`, pudl infers each record's type in two steps:
 
 1. **Score candidates.** Every type is a candidate; policies never are. A
-   schema scores when all its `identity_fields` are present (+0.5), when its
-   `tracked_fields` are present (up to +0.1), and when its `resource_type`
-   matches the origin (+0.15). Candidates are ordered most specific first
-   along `base_schema`.
+   schema scores when all its `identity_fields` are present (+0.5) and when
+   its `resource_type` matches the origin (+0.15). Candidates are ordered most
+   specific first along `base_schema`. A record that claims types by
+   [`@pudl(match)`](#claiming-records-pudlmatch) considers only
+   those types and their specializations, and is rejected if none unifies.
 2. **Unify.** pudl tries CUE unification against each candidate, most specific
    first. The first that unifies is assigned. If none does, it walks up the
    `base_schema` chain, and finally assigns the catchall `pudl/core.#Item`.

@@ -350,7 +350,6 @@ func (e *EnhancedImporter) createCollectionEntryIn(w database.CatalogWriter, opt
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: []string{},
-			TrackedFields:  []string{"item_count", "item_schemas"},
 			ResourceID:     resourceID,
 			ContentHash:    contentHash,
 			Version:        version,

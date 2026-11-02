@@ -267,7 +267,6 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	fmt.Fprintf(&b, "\t\tschema_type: \"%s\" // Valid: \"base\", \"collection\", \"policy\", \"catchall\"\n", g.schemaType(opts))
 	fmt.Fprintf(&b, "\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName))
 	fmt.Fprintf(&b, "\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields))
-	fmt.Fprintf(&b, "\t\ttracked_fields: %s\n", g.formatTrackedFields(analysis))
 	b.WriteString("\t\treview: status: \"draft\" // Set to \"validated\" (with by/at) once reviewed as complete\n")
 	b.WriteString("\t}\n\n")
 
@@ -376,22 +375,6 @@ func (g *Generator) formatStringSlice(slice []string) string {
 		quoted[i] = fmt.Sprintf("\"%s\"", s)
 	}
 	return fmt.Sprintf("[%s]", strings.Join(quoted, ", "))
-}
-
-// formatTrackedFields returns tracked fields (all non-identity fields).
-func (g *Generator) formatTrackedFields(analysis *FieldAnalysis) string {
-	tracked := make([]string, 0)
-	identitySet := make(map[string]bool)
-	for _, f := range analysis.IdentityFields {
-		identitySet[f] = true
-	}
-	for name := range analysis.Fields {
-		if !identitySet[name] {
-			tracked = append(tracked, name)
-		}
-	}
-	sort.Strings(tracked)
-	return g.formatStringSlice(tracked)
 }
 
 // SchemaExistsError is returned when a schema file already exists and force is not set.

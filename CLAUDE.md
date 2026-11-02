@@ -39,7 +39,7 @@ Pudl has a bitemporal fact store and a datalog query engine:
 - All SQL SELECT/Scan operations must be kept in sync when adding columns
 - Database migrations are idempotent (safe to run on every DB open)
 - `internal/identity/` — pure functions, no DB/importer deps
-- Schema metadata fields: `SchemaType`, `ResourceType`, `BaseSchema`, `IdentityFields`, `TrackedFields`, `IsListType`
+- Schema metadata fields: `SchemaType`, `ResourceType`, `BaseSchema`, `IdentityFields`, `IsListType`, `Match` (from `@pudl(match)` field attributes)
 
 ## Testing
 

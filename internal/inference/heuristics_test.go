@@ -87,7 +87,6 @@ func TestScoreCandidate(t *testing.T) {
 			schemaName: "aws.#EC2Instance",
 			meta: validator.SchemaMetadata{
 				IdentityFields: []string{"InstanceId"},
-				TrackedFields:  []string{"State", "InstanceType", "Tags"},
 			},
 			hints:    InferenceHints{},
 			minScore: 0.5, // identity field match
@@ -98,7 +97,6 @@ func TestScoreCandidate(t *testing.T) {
 			schemaName: "aws.#S3Bucket",
 			meta: validator.SchemaMetadata{
 				IdentityFields: []string{"Name"},
-				TrackedFields:  []string{"CreationDate"},
 			},
 			hints:    InferenceHints{},
 			minScore: 0.0,
@@ -153,7 +151,6 @@ func TestSelectCandidates(t *testing.T) {
 			ResourceType:   "aws.ec2.instance",
 			BaseSchema:     "aws.#Resource",
 			IdentityFields: []string{"InstanceId"},
-			TrackedFields:  []string{"State", "InstanceType"},
 		},
 		"k8s.#Pod": {
 			ResourceType:   "k8s.pod",

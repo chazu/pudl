@@ -277,7 +277,6 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 		},
 		ResourceTracking: ResourceTracking{
 			IdentityFields: schemaIdentityFields,
-			TrackedFields:  []string{},
 			ResourceID:     resourceID,
 			ContentHash:    itemContentHash,
 			IdentityValues: identityValues,

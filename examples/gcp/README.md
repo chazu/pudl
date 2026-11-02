@@ -55,9 +55,10 @@ unknown, not passing.
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
 
-To import gcloud output by hand, inject the project as the collectors do and
-inference picks the pack type. Every type requires `project`, so without it a
-record falls back to a generic schema:
+To import gcloud output by hand, inject the project ID as the collectors do.
+Every type requires `project` to be a project ID (not the project number or
+display name), and claims its records with `@pudl(match)`, so gcloud output
+without a valid project ID is rejected rather than cataloged:
 
 ```bash
 gcloud compute firewall-rules list --format=json > fw.json

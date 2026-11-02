@@ -8,7 +8,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.account"
 		identity_fields: ["Id"]
-		tracked_fields: ["Arn", "Name", "Status", "Email"]
 	}
 
 	Id:      string // 12-digit AWS account ID
@@ -26,7 +25,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.instance"
 		identity_fields: ["instance_id"]
-		tracked_fields: ["instance_type", "state", "vpc_id", "subnet_id", "private_ip", "public_ip", "image_id", "tags", "security_groups", "iam_profile"]
 	}
 
 	instance_id:   string
@@ -50,7 +48,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.vpc"
 		identity_fields: ["VpcId"]
-		tracked_fields: ["CidrBlock", "State", "IsDefault", "EnableDnsSupport", "EnableDnsHostnames"]
 	}
 
 	VpcId:               string
@@ -72,7 +69,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.subnet"
 		identity_fields: ["SubnetId"]
-		tracked_fields: ["VpcId", "CidrBlock", "AvailabilityZone", "MapPublicIpOnLaunch", "State"]
 	}
 
 	SubnetId:                 string
@@ -95,7 +91,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.route_table"
 		identity_fields: ["RouteTableId"]
-		tracked_fields: ["VpcId", "Routes", "Associations"]
 	}
 
 	RouteTableId: string
@@ -141,7 +136,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.security_group"
 		identity_fields: ["GroupId"]
-		tracked_fields: ["VpcId", "IpPermissions", "IpPermissionsEgress"]
 	}
 
 	GroupId:      string
@@ -190,7 +184,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.internet_gateway"
 		identity_fields: ["InternetGatewayId"]
-		tracked_fields: ["Attachments"]
 	}
 
 	InternetGatewayId: string
@@ -211,7 +204,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.nat_gateway"
 		identity_fields: ["NatGatewayId"]
-		tracked_fields: ["SubnetId", "VpcId", "State", "ConnectivityType"]
 	}
 
 	NatGatewayId:     string
@@ -237,7 +229,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.network_acl"
 		identity_fields: ["NetworkAclId"]
-		tracked_fields: ["VpcId", "Entries", "IsDefault"]
 	}
 
 	NetworkAclId: string
@@ -275,7 +266,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.vpc_peering"
 		identity_fields: ["VpcPeeringConnectionId"]
-		tracked_fields: ["RequesterVpcInfo", "AccepterVpcInfo", "Status"]
 	}
 
 	VpcPeeringConnectionId: string
@@ -309,7 +299,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.vpc_endpoint"
 		identity_fields: ["VpcEndpointId"]
-		tracked_fields: ["ServiceName", "VpcId", "VpcEndpointType", "State"]
 	}
 
 	VpcEndpointId:   string
@@ -338,7 +327,6 @@ package aws
 		schema_type:   "base"
 		resource_type: "aws.ec2.elastic_ip"
 		identity_fields: ["AllocationId"]
-		tracked_fields: ["PublicIp", "AssociationId", "Domain", "InstanceId", "NetworkInterfaceId"]
 	}
 
 	AllocationId:        string

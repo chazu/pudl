@@ -74,7 +74,6 @@ source: kind: "self"
 		schema_type:      "catchall"
 		resource_type:    "unknown"
 		identity_fields: []
-		tracked_fields: []
 	}
 	...
 }

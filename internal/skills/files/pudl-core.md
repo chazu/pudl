@@ -130,6 +130,9 @@ waivers: [{policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingres
 - Ownership projects `resource_owner` / `resource_unowned`.
 - Policy results against a draft type are provisional.
 - `secret_scan_ignore: [paths]` silences doctor's secret warning for a path.
+- `@pudl(match)` on a body field (`kind: "compute#firewall" @pudl(match)`)
+  claims records for the type: a claimed record that fails the type is
+  rejected, not stored as a generic type.
 - Explicit `--schema` is strict; `--allow-schema-fallback` permits fallback.
 
 ## Compliance policies

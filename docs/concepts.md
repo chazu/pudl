@@ -106,6 +106,7 @@ no type falls back to `pudl/core.#Item`. Type metadata:
 | `review` | `draft` or `validated`: whether a person or agent has confirmed the type fully represents the resource |
 | `base_schema` | The parent type, for specialization |
 | `secret_scan_ignore` | Paths the likely-secret scan skips |
+| `@pudl(match)` | On a body field: records satisfying it claim the type, and are rejected if they fail it |
 
 A **policy schema** (`schema_type: "policy"`) says what a **good** instance
 looks like. It names its type with `base_schema` and is never assigned to a

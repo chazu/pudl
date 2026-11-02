@@ -73,9 +73,10 @@ type InferenceHints struct {
    For each schema with metadata:
    a. Check collection type compatibility (list vs item)
    b. Score identity_fields matches (+0.5 if all present)
-   c. Score tracked_fields matches (+0.1 × ratio)
-   d. Score origin hints vs resource_type (+0.15)
-   e. Include catchall with minimal score (+0.01)
+   c. Score origin hints vs resource_type (+0.15)
+   d. Include catchall with minimal score (+0.01)
+   e. A record that claims schemas by @pudl(match) keeps only those (and
+      their specializations); if none unifies, inference fails
 
 3. SORT candidates by:
    a. Heuristic score (descending)
@@ -124,7 +125,6 @@ type SchemaMetadata struct {
 | Field | Purpose | Example |
 |-------|---------|---------|
 | `identity_fields` | Uniquely identify a resource; strong inference signal | `["InstanceId"]` |
-| `tracked_fields` | Monitor for changes (future use); weak inference signal | `["State", "Tags"]` |
 | `resource_type` | Match against origin hints | `"aws.ec2.instance"` |
 | `base_schema` | Build inheritance graph for specificity | `"aws.#BaseResource"` |
 | (alphabetical) | Deterministic tiebreaker when scores/depth are equal | N/A |

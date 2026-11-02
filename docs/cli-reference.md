@@ -1707,8 +1707,8 @@ pudl schema list [flags]
 
 ```text
 List schemas using full package.#Definition names accepted by 'pudl schema show'.
-The listing includes resource types. Use --verbose for source paths, identity fields,
-tracked fields, and collection metadata, or --json for the complete representation.
+The listing includes resource types. Use --verbose for source paths, identity fields
+and collection metadata, or --json for the complete representation.
 ```
 
 Flags:
@@ -1721,7 +1721,7 @@ Flags:
 Full `package.#Definition` names can be passed directly to `schema show`.
 Workspace definitions shadow global definitions. JSON includes source paths,
 built-in status, and available `_pudl` metadata; verbose text includes identity
-fields, tracked fields, and list type information.
+fields and list type information.
 
 ## pudl schema new
 

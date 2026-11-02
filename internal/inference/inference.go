@@ -122,6 +122,11 @@ func (si *SchemaInferrer) infer(data interface{}, hints InferenceHints, explain 
 
 	// Get candidate schemas using heuristics
 	candidates := SelectCandidates(data, hints, si.metadata, si.graph)
+	claimed := claimedOnly(candidates)
+	if claimed != nil {
+		candidates = claimed
+	}
+	var claimErr *ClaimError
 
 	// If no candidates from heuristics, use all type schemas sorted by
 	// specificity. Policies are never candidates: classification assigns types.
@@ -165,6 +170,9 @@ func (si *SchemaInferrer) infer(data interface{}, hints InferenceHints, explain 
 
 		// Attempt CUE unification
 		unifyErr := si.unifyError(schema, jsonBytes, dataByCtx)
+		if unifyErr != nil && claimed != nil && (claimErr == nil || si.metadata[candidate.Schema].Claims(data)) {
+			claimErr = &ClaimError{Schema: candidate.Schema, Err: unifyErr}
+		}
 		if trace != nil {
 			attempt := CandidateAttempt{Schema: schemaname.Normalize(candidate.Schema), Score: candidate.Score, Reason: candidate.Reason, Matched: unifyErr == nil, SourcePath: si.sources[candidate.Schema], ShadowedPaths: si.shadowed[candidate.Schema]}
 			if unifyErr != nil {
@@ -189,6 +197,10 @@ func (si *SchemaInferrer) infer(data interface{}, hints InferenceHints, explain 
 				Reason:      candidate.Reason,
 			})
 		}
+	}
+
+	if claimErr != nil {
+		return nil, claimErr
 	}
 
 	// No schema matched - return appropriate fallback based on collection type

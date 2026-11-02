@@ -27,6 +27,7 @@ THE _pudl BLOCK
             owner: {paths: ["labels.team"], map: {path: "project", owners: _owners}, fallback: "platform"}
             review: {status: "validated", by: "sre-platform", at: "2026-11-01"}
         }
+        kind:     "compute#firewall" @pudl(match)
         name:     string
         selfLink: string
         ...
@@ -43,6 +44,10 @@ THE _pudl BLOCK
                     is a complete representation; policy results against a
                     draft type are provisional
   secret_scan_ignore  paths 'pudl doctor' should not flag as likely secrets
+
+  @pudl(match) on a body field claims records for the type: a record whose
+  marked fields satisfy the schema is assigned the type or rejected, never
+  stored under a generic type. Mark fields only this type's records carry.
 
   Policies (schema_type: "policy") are separate: pudl guide policies.
 

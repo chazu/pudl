@@ -64,8 +64,9 @@ func (h *CLIErrorHandler) displayError(err *PUDLError) {
 // writeError formats a PUDL error: its message, then its suggestions, plus
 // context, cause and code in verbose mode.
 func (h *CLIErrorHandler) writeError(w io.Writer, err *PUDLError) {
-	// Main error message
-	fmt.Fprintf(w, "Error: %s\n", err.Message)
+	// Main error message, with its cause: a wrapped error's message alone
+	// ("Failed to import file") does not say what to fix.
+	fmt.Fprintf(w, "Error: %s\n", err.Error())
 
 	// Show context in verbose mode
 	if h.Verbose && len(err.Context) > 0 {
@@ -81,11 +82,6 @@ func (h *CLIErrorHandler) writeError(w io.Writer, err *PUDLError) {
 		for _, suggestion := range err.Suggestions {
 			fmt.Fprintf(w, "  • %s\n", suggestion)
 		}
-	}
-
-	// Show underlying cause in verbose mode
-	if h.Verbose && err.Cause != nil {
-		fmt.Fprintf(w, "\nUnderlying cause: %v\n", err.Cause)
 	}
 
 	// Show error code in verbose mode

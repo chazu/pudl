@@ -52,6 +52,15 @@ func newObserveRoute(in ObserveIngest) (observeRoute, error) {
 // its chain (fallback requires explicit opt-in), or _schema-based routing.
 func (r observeRoute) resolve(record map[string]any, graph *inference.InheritanceGraph, inferrer *inference.SchemaInferrer) (string, error) {
 	if r.manual == "" {
+		// A record that claims a type by @pudl(match) is assigned that type or
+		// rejected, never routed to the generic observe schema.
+		if inferrer != nil && inferrer.Claims(record) {
+			result, err := inferrer.Infer(record, inference.InferenceHints{CollectionType: "item"})
+			if err != nil {
+				return "", err
+			}
+			return schemaname.Normalize(result.Schema), nil
+		}
 		return resolveObserveSchema(record, graph, inferrer), nil
 	}
 	if !r.chain.HasSchema(r.manual) {

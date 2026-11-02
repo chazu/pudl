@@ -8,8 +8,10 @@ import "list"
 		resource_type: "gcp.firewall"
 		identity_fields: ["project", "name"]
 	}
-	kind: "compute#firewall"
-	project: string
+	kind: "compute#firewall" @pudl(match)
+	// The project ID passed to gcloud --project, never the project number or
+	// display name (see the gcp pack's _gcpProjectID).
+	project: =~#"^([a-z0-9][a-z0-9.-]*[a-z0-9]:)?[a-z][a-z0-9-]{4,28}[a-z0-9]$"#
 	name: string
 	direction?: "INGRESS" | "EGRESS"
 	disabled?: bool

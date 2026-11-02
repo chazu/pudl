@@ -7,7 +7,6 @@ package artifact
 		schema_type:   "base"
 		resource_type: "artifact.image"
 		identity_fields: ["source", "tag"]
-		tracked_fields: ["digest"]
 	}
 
 	source: string // upstream registry/repo e.g. "ghcr.io/org/image"
@@ -21,7 +20,6 @@ package artifact
 		schema_type:   "base"
 		resource_type: "artifact"
 		identity_fields: ["name"]
-		tracked_fields: ["version", "sha256"]
 	}
 
 	name:    string

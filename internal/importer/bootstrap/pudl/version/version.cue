@@ -6,7 +6,6 @@ package version
 		schema_type:    "base"
 		resource_type:  "version"
 		identity_fields: ["name"]
-		tracked_fields: ["version"]
 	}
 
 	name:        string
@@ -20,7 +19,6 @@ package version
 		schema_type:    "base"
 		resource_type:  "version.tool"
 		identity_fields: ["name"]
-		tracked_fields: ["version", "sha256"]
 	}
 
 	name:        string
@@ -46,7 +44,6 @@ package version
 		schema_type:    "base"
 		resource_type:  "version.tracked"
 		identity_fields: ["name"]
-		tracked_fields: ["version"]
 	}
 
 	name:        string

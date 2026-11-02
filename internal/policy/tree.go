@@ -118,13 +118,16 @@ func (b *treeBuilder) annotate(n *node, v cue.Value, segs []string, member strin
 				rule.Severity = Severity(val)
 			case "doc":
 				rule.Doc = val
+			case "match":
+				// Marks a type's claiming field (validator.decodeMatch);
+				// policies do not use it.
 			case "absent":
 				if val != "violation" {
 					return fmt.Errorf("%s: @pudl(absent=%q): the only value is \"violation\"", path, val)
 				}
 				n.absentViolation = true
 			default:
-				return fmt.Errorf("%s: unknown @pudl key %q (allowed: rule, severity, doc, absent)", path, key)
+				return fmt.Errorf("%s: unknown @pudl key %q (allowed: rule, severity, doc, absent, match)", path, key)
 			}
 		}
 		if rule.Name == "" {
