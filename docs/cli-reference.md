@@ -884,8 +884,9 @@ moves those entries to that schema. A re-import is also an observation: the
 records' projected facts become current again.
 
 Records of schemas declaring `sensitive_fields` are redacted before storage;
-schemas declaring `facts` project into the fact store. See
-[projection](projection.md).
+schemas declaring `facts` project into the fact store. Likely secrets outside
+the sensitive fields are reported by record, path and kind (never the value)
+and are not rewritten. See [projection](projection.md).
 
 ## pudl init
 

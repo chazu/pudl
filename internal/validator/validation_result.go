@@ -58,6 +58,13 @@ type SchemaMetadata struct {
 	// draft and CheckModuleIntegrity reports a load error.
 	Review      SchemaReview `json:"review"`
 	ReviewError string       `json:"-"`
+
+	// SecretScanIgnore is the strictly decoded `_pudl.secret_scan_ignore`:
+	// paths the likely-secret scan does not report. SecretScanIgnoreError
+	// carries a decode failure; nothing is then suppressed and
+	// CheckModuleIntegrity reports a load error.
+	SecretScanIgnore      []string `json:"-"`
+	SecretScanIgnoreError string   `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result
