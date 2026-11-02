@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/projection"
 )
@@ -30,7 +29,7 @@ var projections = Repair{
 		return Result{Pending: len(reasons), Message: strings.Join(reasons, "; ")}, nil
 	},
 	Apply: func(ctx context.Context, env *Env, dryRun bool) (Result, error) {
-		report, err := projection.Sync(ctx, env.DB, env.Projections, LoadPayload, dryRun)
+		report, err := projection.Sync(ctx, env.DB, env.Projections, importer.DecodeEntry, dryRun)
 		if err != nil {
 			return Result{}, err
 		}
@@ -47,9 +46,4 @@ var projections = Repair{
 		result.Failed = len(report.Errors)
 		return result, nil
 	},
-}
-
-// LoadPayload decodes an entry's stored payload for projection.
-func LoadPayload(entry database.CatalogEntry) (any, error) {
-	return importer.DecodeStoredFile(entry.StoredPath, entry.Format)
 }

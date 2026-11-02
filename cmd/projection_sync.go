@@ -8,26 +8,12 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
 	"github.com/chazu/pudl/internal/importer"
-	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
 )
 
 // projectionRegistry resolves `_pudl.facts` specs over the active schema paths.
 func projectionRegistry() (*projection.Registry, error) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
-	}
-	inferrer, err := inference.Shared(effectiveSchemaPaths(cfg)...)
-	if err != nil {
-		return nil, fmt.Errorf("init schema inferrer: %w", err)
-	}
-	return projection.NewRegistry(inferrer, nil), nil
-}
-
-// loadEntryPayload decodes an entry's stored payload for re-projection.
-func loadEntryPayload(entry database.CatalogEntry) (any, error) {
-	return importer.DecodeStoredFile(entry.StoredPath, entry.Format)
+	return invocationWorkspace().Projections()
 }
 
 // syncProjections reconciles projected facts with the catalog and current
@@ -41,7 +27,7 @@ func syncProjections(ctx context.Context, db *database.CatalogDB, dryRun bool) (
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return projection.Sync(ctx, db, reg, loadEntryPayload, dryRun)
+	return projection.Sync(ctx, db, reg, importer.DecodeEntry, dryRun)
 }
 
 // syncProjectionsQuietly runs a sync after a write command and reports only

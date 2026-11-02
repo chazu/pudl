@@ -11,6 +11,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/chazu/pudl/internal/database"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,6 +50,12 @@ func DecodeStoredFile(storedPath, format string) (interface{}, error) {
 	}
 	data, _, err := DecodeFile(plainPath, format)
 	return data, err
+}
+
+// DecodeEntry decodes a catalog entry's stored payload (see
+// DecodeStoredFile).
+func DecodeEntry(entry database.CatalogEntry) (any, error) {
+	return DecodeStoredFile(entry.StoredPath, entry.Format)
 }
 
 // decodeDocument parses r according to format. It returns the parsed value and

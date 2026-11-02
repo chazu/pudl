@@ -3,12 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/doctor"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/repair"
 )
@@ -47,63 +45,29 @@ func doctorMode() string {
 	}
 }
 
-// runDoctorRepairs diagnoses the selected repairs, or applies them with --fix.
-// It never creates a catalog, and refuses to write when health checks failed.
-func runDoctorRepairs(ctx context.Context, selected []repair.Repair, healthOK bool, catalog []catalogDiagnostic, scanned bool) []doctorRepair {
-	out := make([]doctorRepair, 0, len(selected))
-	all := func(status, message string) []doctorRepair {
-		for _, r := range selected {
-			out = append(out, doctorRepair{Result: repair.Result{Name: r.Name, Condition: r.Condition, Status: status, Message: message}})
-		}
-		return out
-	}
-	if _, err := os.Stat(filepath.Join(effectivePudlDir(), "data", "sqlite", "catalog.db")); os.IsNotExist(err) {
-		return all(repair.StatusOK, "no catalog")
-	}
-	if doctorFix && !healthOK {
-		return all(repair.StatusSkipped, "workspace health checks failed; resolve them before applying repairs")
-	}
-	db, err := openDoctorCatalog()
-	if err != nil {
-		return all(repair.StatusError, err.Error())
-	}
-	defer db.Close()
-	env, err := repairEnv(db, catalog, scanned)
-	if err != nil {
-		return all(repair.StatusError, err.Error())
-	}
-	changed, projected := false, false
-	for _, r := range selected {
-		if doctorFix && r.OptIn && !slices.Contains(doctorOnly, r.Name) {
-			out = append(out, doctorRepair{Result: repair.Result{Name: r.Name, Condition: r.Condition, Status: repair.StatusSkipped,
-				Message: "opt-in: name it with --only " + r.Name}})
-			continue
-		}
-		result := repair.Run(ctx, r, env, doctorFix, doctorDryRun)
-		changed = changed || result.Changed > 0
-		projected = projected || r.Name == "projections"
+// runDoctorRepairs diagnoses the selected repairs, or applies them with --fix,
+// and names the commands that preview and apply each one still needed.
+func runDoctorRepairs(ctx context.Context, selected []repair.Repair, healthOK bool, catalog []doctor.CatalogDiagnostic, scanned bool) []doctorRepair {
+	results := repair.RunPass(ctx, repair.Pass{
+		Selected: selected, PudlDir: effectivePudlDir(),
+		Fix: doctorFix, DryRun: doctorDryRun, Only: doctorOnly, HealthOK: healthOK,
+		Env: func(db *database.CatalogDB) (*repair.Env, error) {
+			return repairEnv(db, catalog, scanned)
+		},
+		AfterChange: syncProjectionsQuietly,
+	})
+	out := make([]doctorRepair, 0, len(results))
+	for _, result := range results {
 		entry := doctorRepair{Result: result}
 		if result.Status == repair.StatusNeeded || result.Status == repair.StatusPartial {
-			entry.Preview, entry.Apply = repairArgv(r.Name, true), repairArgv(r.Name, false)
+			entry.Preview, entry.Apply = repairArgv(result.Name, true), repairArgv(result.Name, false)
 		}
 		out = append(out, entry)
-	}
-	if changed && !projected {
-		// Changed entries leave projected facts behind, as the former
-		// standalone repair commands did.
-		syncProjectionsQuietly(ctx, db)
 	}
 	return out
 }
 
-func openDoctorCatalog() (*database.CatalogDB, error) {
-	if doctorFix {
-		return database.NewCatalogDB(effectivePudlDir())
-	}
-	return database.OpenCatalogDBReadOnly(effectivePudlDir())
-}
-
-func repairEnv(db *database.CatalogDB, catalog []catalogDiagnostic, scanned bool) (*repair.Env, error) {
+func repairEnv(db *database.CatalogDB, catalog []doctor.CatalogDiagnostic, scanned bool) (*repair.Env, error) {
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, err
@@ -119,11 +83,7 @@ func repairEnv(db *database.CatalogDB, catalog []catalogDiagnostic, scanned bool
 	opts := repair.Options{
 		DriftScanned: scanned, IncludeExplicit: doctorIncludeExplicit,
 		EntryID: doctorEntry, Schema: doctorSchema, Origin: doctorOrigin,
-	}
-	for _, entry := range catalog {
-		if entry.Status == "mismatch" {
-			opts.DriftEntryIDs = append(opts.DriftEntryIDs, entry.ID)
-		}
+		DriftEntryIDs: doctor.DriftEntryIDs(catalog),
 	}
 	return &repair.Env{DB: db, Inferrer: inferrer, Projections: reg, Options: opts}, nil
 }

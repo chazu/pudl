@@ -1,66 +1,13 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"cuelang.org/go/cue"
-
-	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/observe"
 	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/validator"
 )
-
-// recordModelInstance upserts the run's #SystemModel instance into the catalog
-// (schema pudl/systemmodel.#SystemModel, identity = name) so every model that
-// has been run is inventoriable via `pudl list`/`query`. It reuses the shipped
-// observe ingester — the instance lands as an ordinary catalog record.
-func recordModelInstance(cat *runCatalog, m *systemmodel.SystemModel, runID string) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	var rec map[string]any
-	if err := json.Unmarshal(b, &rec); err != nil {
-		return err
-	}
-	rec["name"] = m.Name
-	rec["_schema"] = "systemmodel.system_model" // -> pudl/systemmodel.#SystemModel
-
-	results := []observe.ObserveResult{{
-		Target:  modelTarget(m.Name),
-		Current: map[string]any{"records": []any{rec}},
-	}}
-	wrapped, err := json.Marshal(results)
-	if err != nil {
-		return err
-	}
-	// Recorded under its own source: this is a registration, not an observation
-	// of the live system, and it must not be picked up as the model's current
-	// snapshot in place of what populate actually observed.
-	_, _, err = ingestPopulateOutput(cat, wrapped, populateIngest{
-		runID:  runID,
-		model:  m.Name,
-		source: database.SnapshotSourceModelInstance,
-	})
-	return err
-}
-
-// modelTarget is the catalog `definition` key for a model instance row — the
-// same string recordModelInstance ingests under, so run-status writes (and the
-// `pudl model list` / `pudl status` reads) all address that one row.
-func modelTarget(name string) string { return "//models/" + name }
-
-// modelTargetKey is the catalog `target`-column key for a model's instance row:
-// the run target with its "//" prefix stripped, matching how the observe
-// ingester stores it (internal/observe). Status reads/writes MUST use this form —
-// keying on modelTarget (with "//") silently misses the row, so run verdicts
-// never persist.
-func modelTargetKey(name string) string { return strings.TrimPrefix(modelTarget(name), "//") }
 
 // resolveModel finds a registered #SystemModel-derived schema by name. It
 // searches the project-level .pudl/schema first (if a workspace is found by
@@ -93,67 +40,10 @@ func resolveModel(name string) (m *systemmodel.SystemModel, modelDir, pudlRoot s
 	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it locally or vendor its definition package in .pudl/workspace.cue (inspect: pudl config --legacy-dependencies)", name, strings.Join(searched, ", "))
 }
 
-// resolveModelTemplate is the binding-aware discovery path. Unlike
-// resolveModel it retains the authored cue.Value and therefore admits models
-// whose desired/config projection cannot become concrete until catalog values
-// are injected.
-func resolveModelTemplate(name string) (template *systemmodel.ModelTemplate, modelDir, pudlRoot string, err error) {
-	var searched []string
-	for _, dir := range modelSearchDirs() {
-		if st, statErr := os.Stat(dir); statErr != nil || !st.IsDir() {
-			continue
-		}
-		searched = append(searched, dir)
-		found, rerr := resolveModelTemplateIn(dir, name)
-		if rerr != nil {
-			return nil, "", "", rerr
-		}
-		if found != nil {
-			return found, found.Origin.LoadDir, found.Origin.PUDLRoot, nil
-		}
-	}
-	if len(searched) == 0 {
-		return nil, "", "", fmt.Errorf("system model %q not found: no schema repository (run `pudl init`)", name)
-	}
-	return nil, "", "", fmt.Errorf("system model %q not found in %s — register it locally or vendor its definition package in .pudl/workspace.cue (inspect: pudl config --legacy-dependencies)", name, strings.Join(searched, ", "))
-}
-
-func resolveModelTemplateIn(dir, name string) (*systemmodel.ModelTemplate, error) {
-	modules, err := validator.SharedLoader(dir).LoadAllModules()
-	if err != nil {
-		return nil, fmt.Errorf("load schemas in %s: %w", dir, err)
-	}
-	var match *systemmodel.ModelTemplate
-	for _, mod := range modules {
-		for schemaName, meta := range mod.Metadata {
-			if meta.ResourceType != "system_model" {
-				continue
-			}
-			value, ok := mod.Schemas[schemaName]
-			if !ok {
-				continue
-			}
-			template, templateErr := systemmodel.NewTemplate(value, systemmodel.TemplateOrigin{
-				Definition: schemaName, SchemaName: schemaName, LoadDir: mod.LoadPath,
-				PUDLRoot: filepath.Dir(dir),
-			})
-			if templateErr != nil {
-				authoredName, _ := value.LookupPath(cue.ParsePath("name")).String()
-				if authoredName == name || shortDefName(schemaName) == name {
-					return nil, fmt.Errorf("system model %q is invalid: %w", name, templateErr)
-				}
-				continue
-			}
-			if template.Name != name && shortDefName(schemaName) != name {
-				continue
-			}
-			if match != nil && match.Origin.SchemaName != template.Origin.SchemaName {
-				return nil, fmt.Errorf("system model %q is ambiguous in %s (matches %s and %s)", name, dir, match.Origin.SchemaName, template.Origin.SchemaName)
-			}
-			match = template
-		}
-	}
-	return match, nil
+// resolveModelTemplate resolves a registered model from the invocation's
+// model search dirs (see systemmodel.ResolveTemplate).
+func resolveModelTemplate(name string) (*systemmodel.ModelTemplate, error) {
+	return systemmodel.ResolveTemplate(modelSearchDirs(), name)
 }
 
 // resolveModelIn searches one schema directory for a system-model definition
@@ -184,13 +74,4 @@ func resolveModelIn(dir, name string) (*systemmodel.SystemModel, string, error) 
 		return nil, "", fmt.Errorf("system model %q is invalid: %w", name, err)
 	}
 	return match.Model, match.Dir, nil
-}
-
-// shortDefName strips the package prefix and leading '#' from a canonical schema
-// name: "models.#GithubChazu" -> "GithubChazu".
-func shortDefName(canonical string) string {
-	if i := strings.LastIndex(canonical, "#"); i >= 0 {
-		return canonical[i+1:]
-	}
-	return canonical
 }

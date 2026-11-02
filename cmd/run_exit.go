@@ -6,9 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/acute"
-	"github.com/chazu/pudl/internal/database"
 	pudlerrors "github.com/chazu/pudl/internal/errors"
+	"github.com/chazu/pudl/internal/operation"
 )
 
 // Exit codes under --detailed-exitcode, after `terraform plan -detailed-exitcode`
@@ -55,52 +54,23 @@ func exitCodeFor(err error) int {
 	return exitError
 }
 
-// reportHasFindings reports whether a concluded run found something an
-// operator must act on: drift or a failing fail-severity check.
-func reportHasFindings(r *RunReport) bool {
-	if r == nil {
-		return false
-	}
-	if r.Drift != nil && !r.Drift.Clean {
-		return true
-	}
-	return anyFailSeverityFailed(r.Checks)
-}
-
 // detailedCheckExit maps a finished `pudl check` to the --detailed-exitcode
 // contract. A check exits 2 when any model found drift or a failing check. A
 // failed check exits 2 only when every failed model failed on its
 // fail-severity checks alone — blocked and cancelled models are consequences
 // of those failures, not new errors. Any other error is 1, whatever its own
 // code would be, so 2 always means findings.
-func detailedCheckExit(result *checkResult, err error) error {
+func detailedCheckExit(result *operation.Result, err error) error {
 	if err == nil {
-		if result != nil && result.findings {
+		if result != nil && result.Findings {
 			return &exitCodeError{code: exitFindings}
 		}
 		return nil
 	}
-	if result != nil && onlyCheckFailures(result.report) {
+	if result.OnlyCheckFailures() {
 		return &exitCodeError{code: exitFindings, err: err}
 	}
 	return &exitCodeError{code: exitError, err: err}
-}
-
-func onlyCheckFailures(report *acute.RunSetReport) bool {
-	if report == nil {
-		return false
-	}
-	failed := 0
-	for _, member := range report.Members {
-		if member.Result != database.RunStatusFailed {
-			continue
-		}
-		if member.Error != errFailSeverityChecks.Error() {
-			return false
-		}
-		failed++
-	}
-	return failed > 0
 }
 
 // silenceBareExit stops cobra printing "Error:" for an exit that carries no

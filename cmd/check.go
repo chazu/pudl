@@ -1,9 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/chazu/pudl/internal/acute"
+	"github.com/chazu/pudl/internal/operation"
 )
 
 // Flag variables for `pudl check`. They are read exactly once, by
@@ -62,7 +66,7 @@ Examples:
 	// The retired `pudl run` and `pudl run set` point here.
 	SuggestFor: []string{"run"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := executeCheck(cmd.Context(), args, checkOptionsFromFlags())
+		result, err := executeCheck(cmd.Context(), checkOptionsFromFlags(args))
 		if !checkDetailedExitCode {
 			return err
 		}
@@ -70,25 +74,25 @@ Examples:
 	},
 }
 
-// checkOptions is the complete input of one `pudl check`, read once from its
-// flags. Every member run receives the same options.
-type checkOptions struct {
-	runFlags
-	populateSpec  string
-	checkUpstream bool
-}
-
-func checkOptionsFromFlags() checkOptions {
-	return checkOptions{
-		runFlags:      runFlags{fromCatalog: checkFromCatalog, catalogScope: checkCatalogScope},
-		populateSpec:  checkPopulateSpec,
-		checkUpstream: checkCheckUpstream,
+// checkOptionsFromFlags is the complete input of one `pudl check`, read once
+// from its flags.
+func checkOptionsFromFlags(models []string) operation.Options {
+	return operation.Options{
+		Models:       models,
+		PopulateSpec: checkPopulateSpec,
+		FromCatalog:  checkFromCatalog, CatalogScope: checkCatalogScope,
+		CheckUpstream: checkCheckUpstream,
 	}
 }
 
-// memberRunOptions is the observe-only run one member of a check performs.
-func (o checkOptions) memberRunOptions(model string) runOptions {
-	return runOptions{runFlags: o.runFlags, model: model, populateSpec: o.populateSpec, checkUpstream: o.checkUpstream}
+// executeCheck runs a check in the invocation's workspace, printing each
+// model as it concludes (human output) and the check report at the end.
+func executeCheck(ctx context.Context, opts operation.Options) (*operation.Result, error) {
+	return operation.Check(ctx, invocationWorkspace(), operation.Output{
+		Out: outw(), Err: errw(), Live: !jsonOutput,
+		Progress:  emitRunProgress,
+		Concluded: func(report *acute.RunSetReport) error { return printCheckReport(report, false) },
+	}, opts)
 }
 
 func init() {
