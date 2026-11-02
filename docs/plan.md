@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### `pudl check MODEL...`: one command and one report (2026-11-01)
+
+`pudl check MODEL...` replaces `pudl run` and `pudl run set` (`pudl-4fx.1`).
+It observes and evaluates exactly the named models, producers first by
+`depends_on` within the named set, and records one report (`report_version` 3)
+for one model or many, embedding each model's full report under
+`members[].report`. `pudl report [ID]` replaces `pudl run report` and still
+reads stored run and run-set reports. `--detailed-exitcode`, `--from-catalog`,
+`--check-upstream` and `--populate` carry over. Value bindings (`inputs`,
+`bindings`, `@pudl(binding=...)`, `internal/wiring`) and `--max-observation-age`
+were removed; nothing shipped used them. `pudl status` stays. See
+[retired commands](retired-commands.md#run-and-run-set) and the
+[delivery log](../implog/2026_11_01_pudl_check.md).
+
 ### Convergence and mu integration removed (2026-11-01)
 
 PUDL discovers, catalogs and governs infrastructure; it no longer changes it
@@ -18,7 +32,8 @@ arm and `pudl model new` scaffolds it by default; the observation ingest moved
 to `internal/observe`. Models using retired fields fail to load with an error
 naming the field. Old catalogs open unchanged: approval tables stay, `converging`
 reads as `unknown`, legacy report fields render as JSON, and the `pudl/mu`
-schemas are kept as legacy. The Git walkthrough observes with `pudl run`. See
+schemas are kept as legacy. The Git walkthrough observes with `pudl run` (now
+`pudl check`). See
 [retired commands](retired-commands.md#convergence-and-mu-integration) and the
 [delivery log](../implog/2026_11_01_remove_convergence_and_mu.md).
 
@@ -622,13 +637,15 @@ PUDL narrows to discovering, cataloging and governing infrastructure. The
 convergence workflow and all mu integration were removed (see What's Built).
 Observation is `#CommandObserve` only. See
 [the removal design](design/2026-11-01-remove-convergence-and-mu.md). Open
-follow-ups: the fate of observe-only `run set` and plain value bindings, and
-dropping the legacy approval tables and `pudl/mu` schemas after a release.
+follow-up: dropping the legacy approval tables and `pudl/mu` schemas after a
+release. (Observe-only `run set` and value bindings were removed with
+`pudl check`.)
 Beads work:
 
 - `pudl-z87`: removal, in steps `pudl-z87.1` to `pudl-z87.5` (done).
-- `pudl-4fx`: simplify the everyday command surface (`pudl check`,
-  `doctor --fix`, demoting fact-store writes, moving orchestration out of `cmd/`).
+- `pudl-4fx`: simplify the everyday command surface (`pudl check` — done in
+  `pudl-4fx.1`; `doctor --fix`, demoting fact-store writes, moving
+  orchestration out of `cmd/`).
 - `pudl-xf5`: governance for SRE cloud estates (GCP and AWS content packs,
   multi-project fan-out, waivers, finding changes over time, ownership,
   relationship rules).
