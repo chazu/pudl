@@ -38,6 +38,7 @@ type collectionStream struct {
 	identity            identityTally
 	reassigned          int
 	tally               *projection.Tally
+	secrets             secretTally
 }
 type preparedItem struct {
 	Entry    database.CatalogEntry
@@ -230,6 +231,7 @@ func (c *collectionStream) prepareAssigned(index int, itemData any, itemPath str
 	if c.opts.ManualSchema != "" && !assigned.Validated {
 		c.schemaMismatches++
 	}
+	e.scanSecrets(&c.secrets, itemData, index, intendedSchema(c.opts), schemaname.Normalize(schema))
 	schemaIdentityFields := e.getSchemaIdentityFields(schema)
 	identityValues, extractErr := identity.ExtractFieldValues(itemData, schemaIdentityFields)
 	if extractErr != nil {

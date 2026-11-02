@@ -189,6 +189,32 @@ Limits:
 - **Drift.** Redacted values never equal plaintext `desired` values, so do not
   declare desired state on sensitive paths.
 
+## Likely-secret warnings (`_pudl.secret_scan_ignore`)
+
+Redaction only covers what a schema declares. After schema assignment and
+redaction, `pudl import` scans every record for likely secrets elsewhere: AWS
+access key IDs and secret keys, GCP service-account keys and API keys, GitHub,
+GitLab and Slack tokens, PEM private keys, JWTs, URLs with `user:password@`,
+and long random-looking strings. Each finding is reported by record, path and
+kind, never by value — under `--dry-run`, in the import summary and as
+`secret_warnings` (plus `secret_warnings_total`) in `--json`. Nothing is
+rewritten: the record, its hash and its storage are unchanged.
+
+Resolve a finding by adding the path to `sensitive_fields`, which redacts it,
+or, if the value is not a secret, by listing it in `secret_scan_ignore`:
+
+```cue
+_pudl: secret_scan_ignore: ["spec.nonce", "status.conditions[*].token"]
+```
+
+A listed path covers itself and everything below it. The list is inherited
+along `base_schema`. A list that is not concrete, not a list of strings, or
+holds an unparsable path is a schema load error and suppresses nothing.
+
+`pudl facts add` warns the same way on its args. Facts are never redacted.
+`pkg/factstore` callers can opt in to rejecting such facts with
+`Open(dir, factstore.WithSecretRejection())`.
+
 Projection records an incomplete status when values fall outside the query
 numeric domain. Dependent latest-known checks become unknown, just as selected
 snapshot checks do. Projection contract version 2 refreshes older projection

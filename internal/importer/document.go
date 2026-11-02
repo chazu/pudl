@@ -9,6 +9,7 @@ import (
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
+	"github.com/chazu/pudl/internal/schemaname"
 )
 
 // documentImport is the already-staged state of a single-document import.
@@ -46,6 +47,8 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		return nil, err
 	}
 	schema := assigned.Schema
+	var secretsFound secretTally
+	e.scanSecrets(&secretsFound, data, 0, intendedSchema(opts), schemaname.Normalize(schema))
 
 	// Identity comes from the schema's identity fields; a record they cannot be
 	// extracted from is identified by content hash (catchall identity).
@@ -158,6 +161,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 		if existing.ResourceID != nil {
 			result.ResourceID = *existing.ResourceID
 		}
+		secretsFound.apply(result)
 		return result, nil
 	}
 
@@ -182,6 +186,7 @@ func (e *EnhancedImporter) importDocument(opts ImportOptions, doc documentImport
 	}
 	idTally.apply(result)
 	applyTally(result, tally)
+	secretsFound.apply(result)
 	return result, nil
 }
 

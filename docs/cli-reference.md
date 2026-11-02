@@ -362,6 +362,8 @@ Check workspace structure, integrity, schemas, and retained catalog data.
 Catalog records are validated against their assigned schemas. Ordinary inferred imports
 also receive a fixed-point inference check; explicit producer assignments are never
 reclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.
+The catalog scan also warns of likely secrets in stored payloads and current facts,
+naming the entry or fact, path and kind, never the value.
 
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
@@ -399,11 +401,11 @@ Flags:
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
 
 `--entry` and `--health-only` are mutually exclusive. JSON includes
-`report_version` (2), `mode` (`diagnose`, `dry-run` or `fix`), `ok`, `health`,
-`catalog`, `repairs`, and any setup `error`; invalid records, inference
+`report_version` (3), `mode` (`diagnose`, `dry-run` or `fix`), `ok`, `health`,
+`catalog`, `secrets`, `repairs`, and any setup `error`; invalid records, inference
 mismatches, and failed health checks produce a nonzero exit status. An empty
 catalog is valid. Version 1 reports had no `report_version` and listed repairs
-only as `reason`, `preview_argv` and `apply_argv`.
+only as `reason`, `preview_argv` and `apply_argv`; version 2 had no `secrets`.
 
 Each `repairs` item has `name`, `condition`, `status` (`ok`, `needed`,
 `applied`, `partial`, `error` or `skipped`), `message`, `pending`, `changed`,
@@ -414,6 +416,19 @@ registry order and re-checks the catalog afterwards; `--fix --dry-run` previews
 them. `--fix` refuses to write when a health check failed, and an `error` or
 `partial` repair fails the command. A repair that changes entries also resyncs
 projected facts unless `projections` ran.
+
+The catalog scan also looks for likely secrets (known token formats and a
+conservative entropy heuristic) in each stored payload outside its schema's
+`_pudl.sensitive_fields` and `_pudl.secret_scan_ignore`, and in the args of
+current facts. Projection-owned facts are skipped: they copy values from
+payloads already scanned. `secrets` has `entries` and `facts` (counts scanned),
+`facts_scanned` (false when `--entry`, `--schema` or `--origin` limit the scan
+to catalog entries), `total`, and up to 500 `findings` with `subject` (`entry`
+or `fact`), `id`, `proquint` and `schema` (entries), `relation` (facts),
+`path`, `kind` and `fix`. Findings never carry the value. They are warnings:
+detection is heuristic, so they do not change `ok` or the exit status. Text
+output lists the first 20 with the total. `secrets` is absent when the catalog
+scan did not run (`--health-only`, or a failed health check).
 
 `--schema` and `--origin` scope the catalog scan and therefore the inference
 repair. That repair re-infers only entries the scan found drifted; explicit
@@ -853,8 +868,9 @@ moves those entries to that schema. A re-import is also an observation: the
 records' projected facts become current again.
 
 Records of schemas declaring `sensitive_fields` are redacted before storage;
-schemas declaring `facts` project into the fact store. See
-[projection](projection.md).
+schemas declaring `facts` project into the fact store. Likely secrets outside
+the sensitive fields are reported by record, path and kind (never the value)
+and are not rewritten. See [projection](projection.md).
 
 ## pudl init
 

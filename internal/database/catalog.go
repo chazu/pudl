@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/chazu/pudl/internal/errors"
@@ -371,48 +370,7 @@ func (c *CatalogDB) QueryEntries(filters FilterOptions, options QueryOptions) (*
 
 // QueryEntriesContext binds counts and row scanning to ctx.
 func (c *CatalogDB) QueryEntriesContext(ctx context.Context, filters FilterOptions, options QueryOptions) (*QueryResult, error) {
-	// Build WHERE clause
-	var whereConditions []string
-	var args []interface{}
-
-	if filters.Schema != "" {
-		cond, condArgs := SchemaFilterCondition(filters.Schema)
-		whereConditions = append(whereConditions, cond)
-		args = append(args, condArgs...)
-	}
-	if filters.Origin != "" {
-		whereConditions = append(whereConditions, `origin LIKE ? ESCAPE '\'`)
-		args = append(args, "%"+EscapeLike(filters.Origin)+"%")
-	}
-	if filters.Format != "" {
-		whereConditions = append(whereConditions, `format LIKE ? ESCAPE '\'`)
-		args = append(args, "%"+EscapeLike(filters.Format)+"%")
-	}
-	if filters.CollectionID != "" {
-		whereConditions = append(whereConditions, "id IN (SELECT item_id FROM collection_memberships WHERE collection_id = ?)")
-		args = append(args, filters.CollectionID)
-	}
-	if filters.CollectionType != "" {
-		whereConditions = append(whereConditions, "collection_type = ?")
-		args = append(args, filters.CollectionType)
-	}
-	if filters.ItemID != "" {
-		whereConditions = append(whereConditions, "item_id = ?")
-		args = append(args, filters.ItemID)
-	}
-	if len(filters.EntryTypes) > 0 {
-		placeholders := make([]string, len(filters.EntryTypes))
-		for i, t := range filters.EntryTypes {
-			placeholders[i] = "?"
-			args = append(args, t)
-		}
-		whereConditions = append(whereConditions, "entry_type IN ("+strings.Join(placeholders, ",")+")")
-	}
-
-	whereClause := ""
-	if len(whereConditions) > 0 {
-		whereClause = "WHERE " + strings.Join(whereConditions, " AND ")
-	}
+	whereClause, args := entryFilterClause(filters)
 
 	// Get total count (without filters)
 	var totalCount int

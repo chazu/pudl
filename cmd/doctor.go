@@ -22,6 +22,8 @@ var doctorCmd = &cobra.Command{
 Catalog records are validated against their assigned schemas. Ordinary inferred imports
 also receive a fixed-point inference check; explicit producer assignments are never
 reclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.
+The catalog scan also warns of likely secrets in stored payloads and current facts,
+naming the entry or fact, path and kind, never the value.
 
 Doctor also diagnoses catalog conditions that a repair fixes, and names the repair:
   schema-names  schema names not in canonical <package>.#<Definition> form
@@ -50,8 +52,8 @@ type healthDiagnostic struct {
 }
 
 // doctorReportVersion 2 replaced argv-only repair suggestions with repair
-// results; reports without report_version are version 1.
-const doctorReportVersion = 2
+// results; 3 added secrets. Reports without report_version are version 1.
+const doctorReportVersion = 3
 
 type doctorReport struct {
 	ReportVersion int                 `json:"report_version"`
@@ -60,7 +62,10 @@ type doctorReport struct {
 	OK            bool                `json:"ok"`
 	Health        []healthDiagnostic  `json:"health"`
 	Catalog       []catalogDiagnostic `json:"catalog"`
-	Error         string              `json:"error,omitempty"`
+	// Secrets is present when stored data was scanned. Findings warn: they
+	// never fail doctor, because detection is heuristic.
+	Secrets *doctor.SecretReport `json:"secrets,omitempty"`
+	Error   string               `json:"error,omitempty"`
 }
 
 func runDoctorCommand(cmd *cobra.Command, args []string) error {
@@ -93,13 +98,13 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 		if doctorHealthOnly || !healthOK {
 			return
 		}
-		entries, err := checkCatalogEntries(doctorEntry, database.FilterOptions{Schema: doctorSchema, Origin: doctorOrigin})
-		report.OK, report.Error, report.Catalog = healthOK, "", []catalogDiagnostic{}
+		entries, secrets, err := checkCatalogEntries(cmd.Context(), doctorEntry, database.FilterOptions{Schema: doctorSchema, Origin: doctorOrigin})
+		report.OK, report.Error, report.Catalog, report.Secrets = healthOK, "", []catalogDiagnostic{}, nil
 		if err != nil {
 			report.OK, report.Error = false, err.Error()
 			return
 		}
-		report.Catalog = entries
+		report.Catalog, report.Secrets = entries, secrets
 		for _, entry := range entries {
 			if entry.Status != "ok" {
 				report.OK = false
@@ -145,6 +150,7 @@ func printDoctorReport(report doctorReport) {
 	if report.Error != "" {
 		fmt.Fprintln(outw(), report.Error)
 	}
+	printDoctorSecrets(report.Secrets)
 	printDoctorRepairs(report.Repairs)
 	fmt.Fprintf(outw(), "Catalog: %d entries checked\n", len(report.Catalog))
 	if report.OK {
