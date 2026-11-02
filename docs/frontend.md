@@ -39,7 +39,7 @@ each lives in its own directory:
 | Stage | Directory | Knows about |
 | --- | --- | --- |
 | Canonical model | `src/model` | resources, relationships, evidence; type registries |
-| Sources | `src/data` | loading and validating a canonical graph (live, file, demo) |
+| Sources | `src/data` | loading, validating and merging graphs (live, file, demo; partial) |
 | Projection | `src/projection` | grouping, inclusion, relationship selection |
 | Visual model | `src/visual` | nodes, groups, ports, edges, collapse, filters |
 | Layout | `src/layout` | ELK (only `elkAdapter.ts`) |
@@ -342,6 +342,21 @@ load:
   RECORDED AT …") and pauses auto-refresh. View state is kept, so the same
   layout can be compared across times. Facts are timestamped in whole
   seconds, so snapshots taken in the same second are indistinguishable.
+- **Large inventories: neighbourhoods on demand.** When `/api/summary`
+  reports more than 500 resources (`?partialAbove=N` changes the threshold;
+  `?full` disables partial loading), the UI starts empty and loads
+  neighbourhoods as you go. Search runs on the server (`/api/search`).
+  Picking a hit loads it and its neighbours. A `⋯N` badge on a node or group
+  header, or "Load neighbours" in the inspector, loads more.
+  `/api/graph?focus=&depth=&closure=` (`graphexport.Subgraph`) returns the
+  focus, its N-hop neighbourhood, and the containment closure. The closure
+  types come from the UI's vocabulary (`CONTAINMENT_TYPES`), so loaded
+  resources still nest correctly. Only relationships whose two ends are
+  loaded are returned, plus real `ref:` references. `meta.degree` gives each
+  resource's full relationship count, so the UI shows "not loaded" counts and
+  never mistakes an unloaded resource for one that is not in the inventory.
+  Loaded neighbourhoods merge (`mergeGraphs`). Reload and auto-refresh
+  re-fetch every neighbourhood loaded so far; time travel works the same way.
 - **Auto-refresh.** The change stamp combines the catalog's fact write
   sequence and its entry and snapshot counters
   (`CatalogDB.ChangeStamp`) with fingerprints of the rule and schema `.cue`

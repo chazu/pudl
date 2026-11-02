@@ -21,6 +21,22 @@ export interface SnapshotInfo {
   complete: boolean;
 }
 
+/** A lightweight search result from a source that can search without loading. */
+export interface SearchHit {
+  id: string;
+  name: string;
+  type: string;
+  provider: string;
+  account?: string;
+  region?: string;
+  nativeId?: string;
+}
+
+export interface GraphSummary {
+  resources: number;
+  relationships: number;
+}
+
 export interface GraphSource {
   readonly id: string;
   readonly label: string;
@@ -29,6 +45,12 @@ export interface GraphSource {
   version?(): Promise<string | null>;
   /** Recent snapshots, newest first, for sources with history (live only). */
   snapshots?(): Promise<SnapshotInfo[]>;
+  /** Size of the whole graph, without loading it (live only). */
+  summary?(opts?: LoadOptions): Promise<GraphSummary>;
+  /** A partial graph around `ids`, following `closure` types outward (live only). */
+  neighbourhood?(ids: string[], closure: string[], opts?: LoadOptions): Promise<CanonicalGraph>;
+  /** Search the whole graph without loading it (live only). */
+  search?(q: string, opts?: LoadOptions): Promise<SearchHit[]>;
 }
 
 export interface LoadedGraph {

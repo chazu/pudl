@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { loadFrom, sourceFromLocation, type GraphSource, type LoadedGraph } from '../data/source';
 import { GraphIndex, type ResourceId } from '../model/canonical';
 import { project } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
@@ -13,14 +12,12 @@ import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { TimeControl } from './TimeControl';
 import { Toolbar } from './Toolbar';
-import { useAutoRefresh } from './useAutoRefresh';
+import { useGraphSource } from './useGraphSource';
 import { usePipeline } from './usePipeline';
 
 type ViewStates = Partial<Record<ProjectionId, ViewState>>;
 
 export function App() {
-  const [loaded, setLoaded] = useState<LoadedGraph | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [projectionId, setProjectionId] = useState<ProjectionId>('network');
   const [viewStates, setViewStates] = useState<ViewStates>({});
   const [selection, setSelection] = useState<Selection>(null);
@@ -29,49 +26,8 @@ export function App() {
   const [layoutNonce, setLayoutNonce] = useState(0);
   const canvas = useRef<CanvasHandle>(null);
 
-  const [source, setSource] = useState<GraphSource | null>(null);
-  const [reloading, setReloading] = useState(false);
-  const [reloadError, setReloadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    sourceFromLocation(window.location.search)
-      .then((s) => {
-        setSource(s);
-        return loadFrom(s);
-      })
-      .then(setLoaded)
-      .catch((e: unknown) => setLoadError(String(e)));
-  }, []);
-
-  const [asOf, setAsOf] = useState<string | null>(null);
-
-  // Reload keeps view state and selection: resource and group IDs are stable.
-  const reloadAt = useCallback(
-    (at: string | null) => {
-      if (!source) return;
-      setReloading(true);
-      loadFrom(source, at ? { asOf: at } : undefined)
-      .then((g) => {
-        setLoaded(g);
-        setReloadError(null);
-      })
-      .catch((e: unknown) => setReloadError(String(e)))
-      .finally(() => setReloading(false));
-    },
-    [source],
-  );
-  const reload = useCallback(() => reloadAt(asOf), [reloadAt, asOf]);
-  const changeAsOf = useCallback(
-    (at: string | null) => {
-      setAsOf(at);
-      reloadAt(at);
-    },
-    [reloadAt],
-  );
-
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  // The past does not change: no polling while viewing a past time.
-  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !reloading && !asOf, reload);
+  const gs = useGraphSource();
+  const { source, loaded, loadError, reloading, reloadError, reload, asOf, autoRefresh } = gs;
 
   const index = useMemo(() => (loaded ? new GraphIndex(loaded.graph) : null), [loaded]);
   const views = useMemo(() => {
@@ -173,8 +129,8 @@ export function App() {
         reloading={reloading}
         reloadError={reloadError}
         autoRefresh={source?.version && !asOf ? autoRefresh : undefined}
-        onAutoRefresh={setAutoRefresh}
-        timeControl={source?.snapshots ? <TimeControl source={source} asOf={asOf} onAsOf={changeAsOf} /> : undefined}
+        onAutoRefresh={gs.setAutoRefresh}
+        timeControl={source?.snapshots ? <TimeControl source={source} asOf={asOf} onAsOf={gs.setAsOf} /> : undefined}
         index={index}
         views={views}
         projectionId={projectionId}
@@ -182,6 +138,11 @@ export function App() {
         selection={selection}
         onProjection={switchProjection}
         onSelectResource={(id) => selectResource(id, { reveal: true, center: true })}
+        remoteSearch={gs.search}
+        onPickRemote={(id) => {
+          gs.expand([id]);
+          selectResource(id, { reveal: true, center: true });
+        }}
         onSelectGroup={(gid) => setSelection({ kind: 'group', id: gid })}
         onToggleGroup={toggleGroup}
         onState={(fn) => updateState(fn, selectedNodeId)}
@@ -213,14 +174,32 @@ export function App() {
               onSelectPort={onSelectPort}
               onSelectEdge={(id) => setSelection({ kind: 'edge', id })}
               onToggleGroup={(n) => n.groupId && toggleGroup(n.groupId)}
+              onExpand={gs.partial ? (n) => n.resourceId && gs.expand([n.resourceId]) : undefined}
               onClear={() => setSelection(null)}
             />
           ) : (
             <div className="canvas-empty">Laying out…</div>
           )}
           {error && <div className="canvas-error">Layout failed: {error}</div>}
+          {gs.partial && loaded.graph.resources.length === 0 && (
+            <div className="canvas-hint">
+              <div>
+                <strong>Large inventory: {loaded.graph.meta.totals?.resources ?? 'many'} resources.</strong> Search the whole
+                inventory on the left to load a resource and its neighbours, then follow ⋯ badges to load more. Open with{' '}
+                <code>?full</code> to load everything at once.
+              </div>
+            </div>
+          )}
         </div>
-        <StatusBar rendered={rendered} view={view} issues={loaded.issues} warnings={loaded.graph.meta.warnings} engineName={engineName} />
+        <StatusBar
+          rendered={rendered}
+          view={view}
+          issues={loaded.issues}
+          warnings={loaded.graph.meta.warnings}
+          loadedCount={gs.partial ? loaded.graph.resources.length : undefined}
+          totals={gs.partial ? loaded.graph.meta.totals : undefined}
+          engineName={engineName}
+        />
       </main>
       <Inspector
         index={index}
@@ -234,6 +213,7 @@ export function App() {
         onProjection={switchProjection}
         onToggleGroup={toggleGroup}
         onFocus={(id, depth) => updateState((s) => ({ ...s, focus: depth > 0 ? { resourceId: id, depth } : null }))}
+        onExpand={gs.partial ? (id) => gs.expand([id]) : undefined}
       />
     </div>
   );

@@ -28,6 +28,8 @@ interface Props {
   onSelectPort(port: VisualPort): void;
   onSelectEdge(edgeId: string): void;
   onToggleGroup(node: VisualNode): void;
+  /** Partial graphs: load the neighbours of a node's resource. */
+  onExpand?(node: VisualNode): void;
   onClear(): void;
 }
 
@@ -154,7 +156,7 @@ export const GraphCanvas = forwardRef<CanvasHandle, Props>(function GraphCanvas(
         {groups.map((n) => {
           const box = layout.nodes.get(n.id);
           if (!box) return null;
-          return <GroupShape key={n.id} node={n} box={box} dimmed={false} depth={depthOf(n.id)} selected={highlight.primaryNode === n.id} onSelect={guard(props.onSelectNode)} onToggle={props.onToggleGroup} />;
+          return <GroupShape key={n.id} node={n} box={box} dimmed={false} depth={depthOf(n.id)} selected={highlight.primaryNode === n.id} onSelect={guard(props.onSelectNode)} onToggle={props.onToggleGroup} onExpand={props.onExpand} />;
         })}
         <g className="edges">
           {graph.edges.map((e) => {
@@ -183,7 +185,7 @@ export const GraphCanvas = forwardRef<CanvasHandle, Props>(function GraphCanvas(
         {leaves.map((n) => {
           const box = layout.nodes.get(n.id);
           if (!box) return null;
-          const common = { node: n, box, dimmed: dim(n.id), depth: depthOf(n.id), selected: highlight.primaryNode === n.id, onSelect: guard(props.onSelectNode), onToggle: props.onToggleGroup };
+          const common = { node: n, box, dimmed: dim(n.id), depth: depthOf(n.id), selected: highlight.primaryNode === n.id, onSelect: guard(props.onSelectNode), onToggle: props.onToggleGroup, onExpand: props.onExpand };
           return n.kind === 'collapsed' ? <CollapsedShape key={n.id} {...common} /> : <LeafShape key={n.id} {...common} />;
         })}
         {ordered.flatMap((n) =>

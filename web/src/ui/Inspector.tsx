@@ -20,6 +20,8 @@ export interface InspectorProps {
   onProjection(id: ProjectionId): void;
   onToggleGroup(groupId: string): void;
   onFocus(id: ResourceId, depth: number): void;
+  /** Partial graphs: load a resource's neighbours. */
+  onExpand?(id: ResourceId): void;
 }
 
 export function Inspector(props: InspectorProps) {

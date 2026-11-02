@@ -45,8 +45,21 @@ type Meta struct {
 	Version string `json:"version,omitempty"`
 	// AsOf is set when the graph shows the catalog as recorded at a past
 	// time (RFC 3339) rather than now.
-	AsOf     string   `json:"asOf,omitempty"`
-	Warnings []string `json:"warnings,omitempty"`
+	AsOf string `json:"asOf,omitempty"`
+	// Partial marks a neighbourhood (Subgraph): only some resources are
+	// present. Degree is each present resource's total relationship count, so
+	// a client can tell how many relationships are not loaded; Totals is the
+	// size of the whole graph.
+	Partial  bool           `json:"partial,omitempty"`
+	Degree   map[string]int `json:"degree,omitempty"`
+	Totals   *Totals        `json:"totals,omitempty"`
+	Warnings []string       `json:"warnings,omitempty"`
+}
+
+// Totals is the size of a whole graph.
+type Totals struct {
+	Resources     int `json:"resources"`
+	Relationships int `json:"relationships"`
 }
 
 // Resource is one cataloged resource in its current state.

@@ -79,6 +79,14 @@ export interface GraphMeta {
   version?: string;
   /** Set when the graph is the catalog as recorded at a past time (RFC 3339). */
   asOf?: string;
+  /**
+   * A partial graph holds only some resources (loaded on demand). degree is
+   * each loaded resource's total relationship count in the whole graph;
+   * totals is the whole graph's size.
+   */
+  partial?: boolean;
+  degree?: Record<string, number>;
+  totals?: { resources: number; relationships: number };
 }
 
 export interface CanonicalGraph {

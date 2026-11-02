@@ -1,3 +1,4 @@
+import { notLoaded } from '../data/merge';
 import { resourceType } from '../model/resourceTypes';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
@@ -85,6 +86,15 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
           </>
         )}
       </dl>
+
+      {props.onExpand && notLoaded(index, id) > 0 && (
+        <div className="notice">
+          {notLoaded(index, id)} relationship(s) of this resource lead to resources not loaded yet.
+          <div className="actions">
+            <button onClick={() => props.onExpand!(id)}>Load neighbours</button>
+          </div>
+        </div>
+      )}
 
       <h3>In this view</h3>
       {!inView && <div className="muted">Not part of the {view.projection.label} view.</div>}

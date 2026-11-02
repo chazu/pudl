@@ -3,6 +3,7 @@
 
 import type { GraphIndex, ResourceId } from '../model/canonical';
 import { resourceType } from '../model/resourceTypes';
+import { notLoaded } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import type { SemanticGroup, SemanticView } from '../projection/types';
 import { buildEdges } from './edges';
@@ -73,6 +74,7 @@ export function buildVisualGraph(view: SemanticView, index: GraphIndex, state: V
       ports: [],
       order: m.order,
       undrawnCount: 0,
+      notLoaded: unresolved ? 0 : notLoaded(index, m.resourceId),
     });
     resourceToNode.set(m.resourceId, id);
   }
@@ -115,6 +117,7 @@ function groupNode(g: SemanticGroup, parentId: string | null, collapsed: boolean
     memberCount: collapsed ? 0 : undefined,
     internalRelationships: collapsed ? [] : undefined,
     undrawnCount: 0,
+    notLoaded: g.resourceId ? notLoaded(index, g.resourceId) : 0,
   };
 }
 

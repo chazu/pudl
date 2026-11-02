@@ -8,10 +8,13 @@ interface Props {
   issues: GraphIssue[];
   /** Warnings the graph's producer reported (pudl graph export). */
   warnings?: string[];
+  /** Partial graphs: loaded resource count and whole-graph totals. */
+  loadedCount?: number;
+  totals?: { resources: number; relationships: number };
   engineName: string;
 }
 
-export function StatusBar({ rendered, view, issues, warnings, engineName }: Props) {
+export function StatusBar({ rendered, view, issues, warnings, loadedCount, totals, engineName }: Props) {
   if (!rendered) return <div className="statusbar">—</div>;
   const { graph, layout } = rendered;
   const counts: Record<string, number> = {};
@@ -21,6 +24,11 @@ export function StatusBar({ rendered, view, issues, warnings, engineName }: Prop
   const dangling = issues.filter((i) => i.kind === 'dangling-source' || i.kind === 'dangling-target').length;
   return (
     <div className="statusbar">
+      {totals && loadedCount !== undefined && (
+        <span className="warn" title="Large inventory: neighbourhoods are loaded on demand">
+          partial: {loadedCount} of {totals.resources} resources loaded
+        </span>
+      )}
       <span>{graph.nodes.size} nodes</span>
       <span>
         {graph.edges.length} edges ({counts.drawn ?? 0} relationships, {aggregated} aggregated)

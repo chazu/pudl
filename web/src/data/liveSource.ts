@@ -1,5 +1,19 @@
 import type { CanonicalGraph } from '../model/canonical';
-import type { GraphSource, LoadOptions, SnapshotInfo } from './source';
+import type { GraphSource, GraphSummary, LoadOptions, SearchHit, SnapshotInfo } from './source';
+
+function query(params: Record<string, string | undefined>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) q.set(k, v);
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+async function getJSON(url: string): Promise<unknown> {
+  const res = await fetch(url, { cache: 'no-store' });
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(`pudl ui: ${(body as { error?: string } | null)?.error ?? res.statusText}`);
+  return body;
+}
 import { parseCanonicalGraph } from './validate';
 
 /**
@@ -11,11 +25,21 @@ export class LiveGraphSource implements GraphSource {
   readonly label = 'pudl ui';
 
   async load(opts: LoadOptions = {}): Promise<CanonicalGraph> {
-    const url = opts.asOf ? `/api/graph?as_of=${encodeURIComponent(opts.asOf)}` : '/api/graph';
-    const res = await fetch(url, { cache: 'no-store' });
-    const body = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(`pudl ui: ${body?.error ?? res.statusText}`);
-    return parseCanonicalGraph(body, 'pudl catalog', 'live');
+    return parseCanonicalGraph(await getJSON(`/api/graph${query({ as_of: opts.asOf })}`), 'pudl catalog', 'live');
+  }
+
+  async summary(opts: LoadOptions = {}): Promise<GraphSummary> {
+    return (await getJSON(`/api/summary${query({ as_of: opts.asOf })}`)) as GraphSummary;
+  }
+
+  async neighbourhood(ids: string[], closure: string[], opts: LoadOptions = {}): Promise<CanonicalGraph> {
+    const url = `/api/graph${query({ focus: ids.join(','), depth: '1', closure: closure.join(','), as_of: opts.asOf })}`;
+    return parseCanonicalGraph(await getJSON(url), 'pudl catalog', 'live');
+  }
+
+  async search(q: string, opts: LoadOptions = {}): Promise<SearchHit[]> {
+    const body = await getJSON(`/api/search${query({ q, limit: '40', as_of: opts.asOf })}`);
+    return Array.isArray(body) ? body : [];
   }
 
   async snapshots(): Promise<SnapshotInfo[]> {

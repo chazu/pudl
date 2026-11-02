@@ -62,6 +62,8 @@ export interface VisualNode {
   internalRelationships?: RelationshipId[];
   /** Relationships touching this node's resource that are not drawn in the current state. */
   undrawnCount: number;
+  /** Partial graphs: relationships of this node's resource to resources not loaded yet. */
+  notLoaded: number;
 }
 
 export interface VisualEdge {

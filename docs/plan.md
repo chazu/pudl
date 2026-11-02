@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui loads large inventories as neighbourhoods on demand (2026-11-02)
+
+Above 500 resources the explorer starts empty. Server-side search and
+"⋯N not loaded" badges load neighbourhoods, plus their containment chain,
+which merge into the view. Relationships to unloaded resources are counted,
+never drawn as "not in inventory". See `docs/frontend.md#live-pudl-ui`.
+
 ### Graph time travel: pudl ui Time picker and graph export --as-of (2026-11-02)
 
 The graph can be viewed as pudl had recorded it at any past time: each

@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { SearchHit } from '../data/source';
 import type { GraphIndex, GraphMeta, ResourceId } from '../model/canonical';
 import { resourceType } from '../model/resourceTypes';
 import { PROJECTIONS } from '../projection/registry';
@@ -19,6 +20,9 @@ interface Props {
   onAutoRefresh?: (on: boolean) => void;
   /** As-of picker, for sources with history. */
   timeControl?: ReactNode;
+  /** Partial graphs: search the whole inventory on the server; picking a hit loads it. */
+  remoteSearch?: (q: string) => Promise<SearchHit[]>;
+  onPickRemote?: (id: ResourceId) => void;
   index: GraphIndex;
   views: Map<ProjectionId, SemanticView>;
   projectionId: ProjectionId;
@@ -77,13 +81,33 @@ export function Sidebar(props: Props) {
   const view = views.get(projectionId)!;
   const [query, setQuery] = useState('');
 
-  const results = useMemo(() => {
+  const localResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return index.graph.resources
       .filter((r) => [r.name, r.nativeId, r.type, r.id].some((s) => s?.toLowerCase().includes(q)))
       .slice(0, 40);
   }, [index, query]);
+  const [remoteResults, setRemoteResults] = useState<SearchHit[]>([]);
+  const { remoteSearch } = props;
+  useEffect(() => {
+    if (!remoteSearch || !query.trim()) {
+      setRemoteResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      remoteSearch(query.trim())
+        .then((hits) => !cancelled && setRemoteResults(hits))
+        .catch(() => !cancelled && setRemoteResults([]));
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [remoteSearch, query]);
+  const results = remoteSearch ? remoteResults : localResults;
+  const pick = (id: ResourceId) => (remoteSearch && props.onPickRemote ? props.onPickRemote(id) : props.onSelectResource(id));
 
   const nameOf = useMemo(() => (id: ResourceId) => index.resource(id)?.name ?? id, [index]);
   const inView = (id: ResourceId) => view.members.has(id) || view.groupOf.has(id);
@@ -154,12 +178,12 @@ export function Sidebar(props: Props) {
       </section>
 
       <section>
-        <h3>Search inventory</h3>
+        <h3>{remoteSearch ? 'Search whole inventory' : 'Search inventory'}</h3>
         <input className="search" placeholder="name, ID, type…" value={query} onChange={(e) => setQuery(e.target.value)} />
         {results.length > 0 && (
           <ul className="results">
             {results.map((r) => (
-              <li key={r.id} className={inView(r.id) ? '' : 'out'} onClick={() => props.onSelectResource(r.id)} title={inView(r.id) ? r.id : `${r.id} — not in this view`}>
+              <li key={r.id} className={inView(r.id) || remoteSearch ? '' : 'out'} onClick={() => pick(r.id)} title={inView(r.id) ? r.id : remoteSearch ? `${r.id} — click to load it and its neighbours` : `${r.id} — not in this view`}>
                 <span className={`code cls-${resourceType(r.type).cls}`}>{resourceType(r.type).code}</span>
                 {r.name}
               </li>
