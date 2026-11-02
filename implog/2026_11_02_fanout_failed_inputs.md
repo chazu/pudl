@@ -21,7 +21,9 @@ and its inputs can come from a command at run time instead of a CUE list.
   read the catalog directly (run or latest-known scope) cannot see the failed
   input's resources either, so they are marked unknown with a
   `failed_inputs` diagnostic (`markFailedInputChecks`). Their count and
-  witnesses stay in the JSON.
+  witnesses stay in the JSON. This includes a check whose findings are all
+  waived (`pudl-xf5.4`): the failed inputs could hold findings no waiver
+  covers.
 - **The model fails.** The run outcome is `errFailedInputs` (`populate: one or
   more inputs failed; their resources are unknown: 1 of 3 runs failed (p2)`,
   at most five inputs named). The member is `failed`, `--detailed-exitcode`
