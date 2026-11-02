@@ -125,7 +125,8 @@ var factsSearchCmd = &cobra.Command{
 first. The index covers the values of each fact's args (not the JSON keys).
 
 The query uses SQLite FTS5 syntax: bare terms are ANDed, "quoted phrases" match
-in order, a trailing * is a prefix match, and AND/OR/NOT combine terms.
+in order, a trailing * is a prefix match, and AND/OR/NOT combine terms. A term
+with punctuation, such as prod-nat or 10.0.0.1, is matched as a phrase.
 
 Examples:
     pudl facts search "rate limiting"

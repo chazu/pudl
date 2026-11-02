@@ -124,7 +124,7 @@ func (c *CatalogDB) SearchCurrentFacts(query, relation string, limit int) ([]Fac
 		JOIN current_facts cf ON cf.id = ft.id
 		JOIN facts f ON f.id = cf.id
 		WHERE ft.text MATCH ?`, FactsFTSTable)
-	params := []interface{}{query}
+	params := []interface{}{ftsQuery(query)}
 	if relation != "" {
 		sqlStr += " AND cf.relation = ?"
 		params = append(params, relation)

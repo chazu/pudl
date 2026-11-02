@@ -32,8 +32,8 @@ pudl facts stats                                # counts per relation
 
 `facts search` uses SQLite FTS5 syntax over the values of current facts:
 bare terms are ANDed, `"quoted phrases"` match in order, and a trailing `*`
-matches a prefix. Punctuation such as `.` is FTS5 syntax, so quote a phrase
-that contains it. `facts stats` counts by relation unless `--group-by` names
+matches a prefix. A term with punctuation, such as `prod-nat` or `10.0.0.1`,
+is matched as a phrase. `facts stats` counts by relation unless `--group-by` names
 `source` or arg fields; several comma-separated fields cross-tabulate.
 
 ## Time travel

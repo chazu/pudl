@@ -49,8 +49,9 @@ rotate every credential it redacts.`,
   pudl doctor --fix --only projections
   pudl doctor --fix --dry-run --only sensitive-scrub
   pudl doctor --fix --only inference --schema pudl/core.#Item --include-explicit`,
-	Args: cobra.NoArgs,
-	RunE: runDoctorCommand,
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE:         runDoctorCommand,
 }
 
 type healthDiagnostic struct {

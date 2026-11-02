@@ -703,7 +703,7 @@
         {
           "use": "search \u003cquery\u003e",
           "short": "Full-text search over currently-valid facts",
-          "long": "Keyword search over the indexed text of currently-valid facts, best matches\nfirst. The index covers the values of each fact's args (not the JSON keys).\n\nThe query uses SQLite FTS5 syntax: bare terms are ANDed, \"quoted phrases\" match\nin order, a trailing * is a prefix match, and AND/OR/NOT combine terms.\n\nExamples:\n    pudl facts search \"rate limiting\"\n    pudl facts search \"circular dependency\" --relation observation\n    pudl facts search \"auth*\" --limit 10",
+          "long": "Keyword search over the indexed text of currently-valid facts, best matches\nfirst. The index covers the values of each fact's args (not the JSON keys).\n\nThe query uses SQLite FTS5 syntax: bare terms are ANDed, \"quoted phrases\" match\nin order, a trailing * is a prefix match, and AND/OR/NOT combine terms. A term\nwith punctuation, such as prod-nat or 10.0.0.1, is matched as a phrase.\n\nExamples:\n    pudl facts search \"rate limiting\"\n    pudl facts search \"circular dependency\" --relation observation\n    pudl facts search \"auth*\" --limit 10",
           "args": "custom",
           "flags": [
             {
