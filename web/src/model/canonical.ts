@@ -75,6 +75,8 @@ export interface GraphMeta {
   generatedAt?: string;
   /** Problems the producer reported (unreadable payloads, ambiguous references). */
   warnings?: string[];
+  /** Producer's change stamp for this graph (pudl ui); compared to the source's current version. */
+  version?: string;
 }
 
 export interface CanonicalGraph {

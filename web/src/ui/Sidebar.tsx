@@ -14,6 +14,9 @@ interface Props {
   onReload?: () => void;
   reloading?: boolean;
   reloadError?: string | null;
+  /** Auto-refresh toggle state; absent when the source cannot report changes. */
+  autoRefresh?: boolean;
+  onAutoRefresh?: (on: boolean) => void;
   index: GraphIndex;
   views: Map<ProjectionId, SemanticView>;
   projectionId: ProjectionId;
@@ -31,9 +34,11 @@ interface BannerProps {
   onReload?: () => void;
   reloading?: boolean;
   reloadError?: string | null;
+  autoRefresh?: boolean;
+  onAutoRefresh?: (on: boolean) => void;
 }
 
-export function SourceBanner({ meta, onReload, reloading, reloadError }: BannerProps) {
+export function SourceBanner({ meta, onReload, reloading, reloadError, autoRefresh, onAutoRefresh }: BannerProps) {
   const text =
     meta.origin === 'live'
       ? `LIVE · ${meta.label}`
@@ -51,7 +56,14 @@ export function SourceBanner({ meta, onReload, reloading, reloadError }: BannerP
           </button>
         )}
       </div>
-      {at && !Number.isNaN(at.getTime()) && <div className="banner-sub">as of {at.toLocaleString()}</div>}
+      <div className="banner-row banner-sub">
+        {at && !Number.isNaN(at.getTime()) && <span>as of {at.toLocaleString()}</span>}
+        {autoRefresh !== undefined && onAutoRefresh && (
+          <label className="auto" title="Reload when the catalog, rules or schemas change">
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => onAutoRefresh(e.target.checked)} /> auto
+          </label>
+        )}
+      </div>
       {reloadError && <div className="banner-err">{reloadError}</div>}
     </div>
   );
@@ -117,7 +129,14 @@ export function Sidebar(props: Props) {
       <div className="brand">
         PUDL <span>graph explorer</span>
       </div>
-      <SourceBanner meta={props.meta} onReload={props.onReload} reloading={props.reloading} reloadError={props.reloadError} />
+      <SourceBanner
+        meta={props.meta}
+        onReload={props.onReload}
+        reloading={props.reloading}
+        reloadError={props.reloadError}
+        autoRefresh={props.autoRefresh}
+        onAutoRefresh={props.onAutoRefresh}
+      />
 
       <section>
         <h3>Views</h3>

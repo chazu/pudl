@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui refreshes itself when the catalog changes (2026-11-02)
+
+A cheap catalog change stamp (`CatalogDB.ChangeStamp` plus rule and schema
+file fingerprints) backs `/api/version` and a per-stamp graph cache. The UI
+polls it and reloads in place, so a `pudl check` in another terminal shows up
+within seconds. Schema edits reset the server's CUE caches, so no restart is
+needed. See `docs/frontend.md#live-pudl-ui`.
+
 ### pudl ui: graph explorer embedded in the binary, on the live catalog (2026-11-02)
 
 `pudl ui` serves the explorer from the binary (a committed Vite bundle,

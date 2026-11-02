@@ -40,6 +40,9 @@ type Meta struct {
 	Label       string   `json:"label"`
 	GeneratedAt string   `json:"generatedAt"`
 	Workspace   string   `json:"workspace,omitempty"`
+	// Version is the catalog change stamp the graph was built at, when the
+	// producer knows it (pudl ui); clients compare it to /api/version.
+	Version string `json:"version,omitempty"`
 	Warnings    []string `json:"warnings,omitempty"`
 }
 

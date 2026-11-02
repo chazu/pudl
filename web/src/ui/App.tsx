@@ -12,6 +12,7 @@ import { Inspector } from './Inspector';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
+import { useAutoRefresh } from './useAutoRefresh';
 import { usePipeline } from './usePipeline';
 
 type ViewStates = Partial<Record<ProjectionId, ViewState>>;
@@ -53,6 +54,9 @@ export function App() {
       .catch((e: unknown) => setReloadError(String(e)))
       .finally(() => setReloading(false));
   }, [source]);
+
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !reloading, reload);
 
   const index = useMemo(() => (loaded ? new GraphIndex(loaded.graph) : null), [loaded]);
   const views = useMemo(() => {
@@ -153,6 +157,8 @@ export function App() {
         onReload={loaded.graph.meta.origin === 'mock' ? undefined : reload}
         reloading={reloading}
         reloadError={reloadError}
+        autoRefresh={source?.version ? autoRefresh : undefined}
+        onAutoRefresh={setAutoRefresh}
         index={index}
         views={views}
         projectionId={projectionId}

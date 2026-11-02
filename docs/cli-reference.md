@@ -2079,8 +2079,9 @@ only requests addressed to that host, so other web pages cannot read the
 inventory. Serving on another interface exposes the inventory to anyone who
 can reach it, so it needs --allow-remote.
 
-Schema changes (new types, _pudl.graph blocks) take effect after a restart;
-new observations and rules do not need one.
+The UI refreshes itself when the catalog, the rules or the schemas change
+(for example when a 'pudl check' finishes in another terminal), keeping the
+current view.
 
 Examples:
     pudl ui

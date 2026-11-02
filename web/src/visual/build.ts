@@ -127,7 +127,9 @@ function groupCode(groupType: string): string {
     unresolved: '?',
     unassigned: 'NONE',
   };
-  return codes[groupType] ?? groupType.slice(0, 4).toUpperCase();
+  // Synthetic stand-ins for uncollected resources (an account named by an
+  // attribute) use the resource type's own code.
+  return codes[groupType] ?? (groupType.includes('.') ? resourceType(groupType).code : groupType.slice(0, 4).toUpperCase());
 }
 
 function sublabelFor(nativeId: string | undefined, props: Record<string, unknown> | undefined): string | undefined {

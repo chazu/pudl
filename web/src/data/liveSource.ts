@@ -16,6 +16,17 @@ export class LiveGraphSource implements GraphSource {
     if (!res.ok) throw new Error(`pudl ui: ${body?.error ?? res.statusText}`);
     return parseCanonicalGraph(body, 'pudl catalog', 'live');
   }
+
+  async version(): Promise<string | null> {
+    try {
+      const res = await fetch('/api/version', { cache: 'no-store' });
+      if (!res.ok) return null;
+      const body = await res.json();
+      return typeof body?.version === 'string' ? body.version : null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 /** True when this page was served by `pudl ui` (its /api/health identifies pudl). */

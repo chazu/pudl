@@ -327,10 +327,18 @@ load:
   rebuilds and fails if the committed bundle is stale; the build is
   reproducible. The directory is not named `dist` because a common global
   gitignore pattern would drop it from commits.
-- **Server** (`internal/uiserver`): `GET /api/health`, `GET /api/graph` (the
-  same graph as `pudl graph export`, `meta.origin: "live"`, `no-store`), and
-  the bundle with an index.html fallback. It is read-only and has no write
-  endpoints.
+- **Server** (`internal/uiserver`): `GET /api/health`, `GET /api/version`
+  (the change stamp), `GET /api/graph` (the same graph as `pudl graph
+  export`, `meta.origin: "live"`, `meta.version`, `no-store`), and the bundle
+  with an index.html fallback. It is read-only and has no write endpoints.
+- **Auto-refresh.** The change stamp combines the catalog's fact write
+  sequence and its entry and snapshot counters
+  (`CatalogDB.ChangeStamp`) with fingerprints of the rule and schema `.cue`
+  files. The server builds the graph once per stamp and serves it from cache
+  otherwise. The UI polls `/api/version` every 3 s (not while the tab is
+  hidden) and reloads when it differs, keeping view state. When the schema
+  files change, the server resets its cached CUE schemas before rebuilding,
+  so no restart is needed. The "auto" box in the banner turns this off.
 - **Network exposure.** It listens on `127.0.0.1:7468` by default. A
   non-loopback `--addr` needs `--allow-remote`. Requests with any other
   `Host` header get 403, so a web page cannot read the inventory through DNS
@@ -356,8 +364,7 @@ load:
 
 ## Known limitations
 
-- Live data is pull-only: Reload re-reads the catalog; nothing pushes changes.
-- Schema changes need a `pudl ui` restart; new observations and rules do not.
+- Auto-refresh polls every 3 s; there is no push channel.
 - The packs project no IAM trust or policy facts and no security-group rules,
   so on pack data the security view shows few edges.
 - Collapse and expand still move nodes outside the toggled group (anchored,
