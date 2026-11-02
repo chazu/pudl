@@ -14,6 +14,7 @@ import (
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
+	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -93,7 +94,7 @@ func checkCatalogEntry(entry database.CatalogEntry, validation *validator.Valida
 	}
 	if loadErr != nil {
 		diagnostic.Status, diagnostic.Error = "error", loadErr.Error()
-	} else if result := validation.ValidateDataAgainstSchema(data, entry.Schema); !result.Valid {
+	} else if result := validateCatalogData(validation, data, entry.Schema); !result.Valid {
 		diagnostic.Status, diagnostic.Error = "invalid", result.ErrorMessage
 		if diagnostic.Error == "" {
 			diagnostic.Error = strings.Join(result.Errors, "; ")
@@ -112,6 +113,23 @@ func checkCatalogEntry(entry database.CatalogEntry, validation *validator.Valida
 		}
 	}
 	return diagnostic
+}
+
+// validateCatalogData validates a stored payload against its schema. A model
+// instance recorded by an older pudl with `populate: {}` for a checks-only
+// model is validated without that key: it meant no populate arm, and the
+// content-addressed entry is not rewritten.
+func validateCatalogData(validation *validator.ValidationService, data interface{}, schema string) *validator.ServiceValidationResult {
+	result := validation.ValidateDataAgainstSchema(data, schema)
+	if result.Valid {
+		return result
+	}
+	if legacy, ok := systemmodel.WithoutLegacyEmptyPopulate(schema, data); ok {
+		if tolerated := validation.ValidateDataAgainstSchema(legacy, schema); tolerated.Valid {
+			return tolerated
+		}
+	}
+	return result
 }
 
 // Explicit assignments are validated, never heuristically reclassified.
