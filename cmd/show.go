@@ -25,6 +25,11 @@ var showCmd = &cobra.Command{
 	Long: `Show detailed information about a specific data entry including its content,
 metadata, and schema information.
 
+A compliance section lists each policy applicable to the entry's type with the
+resource's stored status (provisional when the type is a draft), its highest
+violation severity, and its violations (rule, severity, path, kind, declaring
+policy). --json includes it as "compliance".
+
 The ID parameter should be the unique identifier of the data entry as shown
 in the 'pudl list' command output.
 
@@ -124,6 +129,7 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 	if entry.Confidence < 0.8 {
 		fmt.Fprintf(outw(), "⚠️  Low schema confidence - data may not match assigned schema\n")
 	}
+	printCompliance(entryCompliance(entry))
 
 	// Show metadata if requested
 	if includeMetadata {

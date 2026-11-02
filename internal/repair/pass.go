@@ -1,62 +1,70 @@
-package doctor
+package repair
 
 import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/repair"
 )
 
-// RepairRun is one pass of catalog repairs: diagnose the selected repairs, or
-// apply them with Fix (previewed with DryRun).
-type RepairRun struct {
-	Selected []repair.Repair
+// Pass is one pass of `pudl doctor` over the catalog: diagnose the selected
+// repairs, or apply them with Fix (previewed with DryRun).
+type Pass struct {
+	Selected []Repair
 	// PudlDir is the persistence root holding the catalog.
 	PudlDir string
 	Fix     bool
 	DryRun  bool
+	// Only names the repairs the operator asked for. --fix applies an opt-in
+	// repair only when Only names it.
+	Only []string
 	// HealthOK is whether the workspace health checks passed; Fix refuses to
 	// write when they did not.
 	HealthOK bool
 	// Env builds what the repairs need over the opened catalog.
-	Env func(db *database.CatalogDB) (*repair.Env, error)
+	Env func(db *database.CatalogDB) (*Env, error)
 	// AfterChange runs when a repair other than projections changed entries,
 	// so projected facts follow them.
 	AfterChange func(ctx context.Context, db *database.CatalogDB)
 }
 
-// RunRepairs runs the selected repairs and returns their results in order.
+// RunPass runs the selected repairs and returns their results in order.
 // It never creates a catalog: without one every repair is ok with "no
 // catalog". A failure to open the catalog or build the environment is every
 // repair's error result, not a failure of the run.
-func RunRepairs(ctx context.Context, run RepairRun) []repair.Result {
-	out := make([]repair.Result, 0, len(run.Selected))
-	all := func(status, message string) []repair.Result {
+func RunPass(ctx context.Context, run Pass) []Result {
+	out := make([]Result, 0, len(run.Selected))
+	all := func(status, message string) []Result {
 		for _, r := range run.Selected {
-			out = append(out, repair.Result{Name: r.Name, Condition: r.Condition, Status: status, Message: message})
+			out = append(out, Result{Name: r.Name, Condition: r.Condition, Status: status, Message: message})
 		}
 		return out
 	}
 	if _, err := os.Stat(filepath.Join(run.PudlDir, "data", "sqlite", "catalog.db")); os.IsNotExist(err) {
-		return all(repair.StatusOK, "no catalog")
+		return all(StatusOK, "no catalog")
 	}
 	if run.Fix && !run.HealthOK {
-		return all(repair.StatusSkipped, "workspace health checks failed; resolve them before applying repairs")
+		return all(StatusSkipped, "workspace health checks failed; resolve them before applying repairs")
 	}
 	db, err := openRepairCatalog(run.PudlDir, run.Fix)
 	if err != nil {
-		return all(repair.StatusError, err.Error())
+		return all(StatusError, err.Error())
 	}
 	defer db.Close()
 	env, err := run.Env(db)
 	if err != nil {
-		return all(repair.StatusError, err.Error())
+		return all(StatusError, err.Error())
 	}
 	changed, projected := false, false
 	for _, r := range run.Selected {
-		result := repair.Run(ctx, r, env, run.Fix, run.DryRun)
+		if run.Fix && r.OptIn && !slices.Contains(run.Only, r.Name) {
+			out = append(out, Result{Name: r.Name, Condition: r.Condition, Status: StatusSkipped,
+				Message: "opt-in: name it with --only " + r.Name})
+			continue
+		}
+		result := Run(ctx, r, env, run.Fix, run.DryRun)
 		changed = changed || result.Changed > 0
 		projected = projected || r.Name == "projections"
 		out = append(out, result)

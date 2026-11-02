@@ -36,12 +36,18 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   policy-results policy results that are stale (evaluated with an older policy
                 digest), orphaned, or never evaluated
   data-permissions  data files or directories group or other users can access
+  sensitive-scrub   plaintext stored before a schema declared the field in
+                _pudl.sensitive_fields (opt-in: applied only when --only names it)
 
 Without --fix nothing is written. --fix applies every repair (or those named by
---only) in that order; --fix --dry-run previews them.`,
+--only) in that order; --fix --dry-run previews them. The sensitive scrub
+re-derives the IDs of the entries it rewrites (old IDs still resolve) and
+compacts the catalog; fact history and exported bundles keep the plaintext, so
+rotate every credential it redacts.`,
 	Example: `  pudl doctor
   pudl doctor --fix --dry-run
   pudl doctor --fix --only projections
+  pudl doctor --fix --dry-run --only sensitive-scrub
   pudl doctor --fix --only inference --schema pudl/core.#Item --include-explicit`,
 	Args: cobra.NoArgs,
 	RunE: runDoctorCommand,

@@ -48,9 +48,9 @@ func doctorMode() string {
 // runDoctorRepairs diagnoses the selected repairs, or applies them with --fix,
 // and names the commands that preview and apply each one still needed.
 func runDoctorRepairs(ctx context.Context, selected []repair.Repair, healthOK bool, catalog []doctor.CatalogDiagnostic, scanned bool) []doctorRepair {
-	results := doctor.RunRepairs(ctx, doctor.RepairRun{
+	results := repair.RunPass(ctx, repair.Pass{
 		Selected: selected, PudlDir: effectivePudlDir(),
-		Fix: doctorFix, DryRun: doctorDryRun, HealthOK: healthOK,
+		Fix: doctorFix, DryRun: doctorDryRun, Only: doctorOnly, HealthOK: healthOK,
 		Env: func(db *database.CatalogDB) (*repair.Env, error) {
 			return repairEnv(db, catalog, scanned)
 		},

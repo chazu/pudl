@@ -340,7 +340,7 @@
     {
       "use": "doctor",
       "short": "Check workspace health and catalog data, and repair the catalog",
-      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  policy-results policy results that are stale (evaluated with an older policy\n                digest), orphaned, or never evaluated\n  data-permissions  data files or directories group or other users can access\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them.",
+      "long": "Check workspace structure, integrity, schemas, and retained catalog data.\nCatalog records are validated against their assigned schemas. Ordinary inferred imports\nalso receive a fixed-point inference check; explicit producer assignments are never\nreclassified. Use --entry ID to inspect one catalog record, or --health-only for workspace checks.\nThe catalog scan also warns of likely secrets in stored payloads and current facts,\nnaming the entry or fact, path and kind, never the value.\n\nDoctor also diagnoses catalog conditions that a repair fixes, and names the repair:\n  schema-names  schema names not in canonical \u003cpackage\u003e.#\u003cDefinition\u003e form\n\n  policy-leaves entries assigned to a policy schema instead of its type\n  inference     inferred entries whose schema inference now selects another schema\n  identity      entries missing a resource_id, or namespaced by a leaf schema\n  projections   projected facts that no longer match the catalog or facts specs\n  policy-results policy results that are stale (evaluated with an older policy\n                digest), orphaned, or never evaluated\n  data-permissions  data files or directories group or other users can access\n  sensitive-scrub   plaintext stored before a schema declared the field in\n                _pudl.sensitive_fields (opt-in: applied only when --only names it)\n\nWithout --fix nothing is written. --fix applies every repair (or those named by\n--only) in that order; --fix --dry-run previews them. The sensitive scrub\nre-derives the IDs of the entries it rewrites (old IDs still resolve) and\ncompacts the catalog; fact history and exported bundles keep the plaintext, so\nrotate every credential it redacts.",
       "args": "custom",
       "flags": [
         {
@@ -388,7 +388,7 @@
         },
         {
           "name": "only",
-          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions",
+          "usage": "Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions, sensitive-scrub",
           "type": "stringSlice",
           "default": "[]"
         },
@@ -1290,6 +1290,61 @@
               "type": "string"
             }
           ]
+        },
+        {
+          "use": "list",
+          "short": "List loaded policies with their stored result counts",
+          "long": "List every loaded compliance policy: the type it applies to, the policy it\nextends, its rule count, the type's review status (draft results are\nprovisional), when it was last evaluated, and its stored compliant,\nnoncompliant, unknown and stale result counts. A result is stale when it was\nevaluated with an older version of the policy; pudl policy evaluate refreshes it.\n\n--type T lists the policies that apply to type T.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "type",
+              "usage": "List only the policies that apply to type `T`",
+              "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "show POLICY",
+          "short": "Show a policy's rules, inheritance and failing resources",
+          "long": "Show one compliance policy: its inheritance chain, its rules (inherited ones\nincluded) with severity, doc and the policy that declared each, how many\nresources currently fail each rule, its stored result counts and staleness, and\nthe resources failing most (most severe first, then most violations).\n\n--limit caps the failing resources listed (0 lists all).",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "limit",
+              "usage": "Maximum failing resources to list (0 = all)",
+              "type": "int",
+              "default": "10"
+            }
+          ]
         }
       ]
     },
@@ -1629,7 +1684,7 @@
     {
       "use": "show \u003cid\u003e",
       "short": "Show detailed information about a specific data entry",
-      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
       "args": "custom",
       "flags": [
         {

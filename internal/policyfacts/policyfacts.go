@@ -13,15 +13,12 @@ package policyfacts
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
-	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/policy"
 	"github.com/chazu/pudl/internal/schemaname"
 )
-
-// LoadFunc decodes a catalog entry's stored payload.
-type LoadFunc func(entry database.CatalogEntry) (any, error)
 
 // Evaluator evaluates the loaded policies against records.
 type Evaluator struct {
@@ -130,18 +127,5 @@ func (e *Evaluator) prepare(policies []*policy.Policy, scope []string, typeName,
 
 // covers reports whether the evaluation decides policy's result.
 func (p *Prepared) covers(policyName string) bool {
-	for _, k := range p.Kept {
-		if k == policyName {
-			return false
-		}
-	}
-	if len(p.Scope) == 0 {
-		return true
-	}
-	for _, s := range p.Scope {
-		if s == policyName {
-			return true
-		}
-	}
-	return false
+	return !slices.Contains(p.Kept, policyName) && (len(p.Scope) == 0 || slices.Contains(p.Scope, policyName))
 }

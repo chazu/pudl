@@ -59,6 +59,8 @@ These flags apply to every command.
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 - [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
   - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
+  - [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
+  - [pudl policy show](#pudl-policy-show) — Show a policy's rules, inheritance and failing resources
 - [pudl prime](#pudl-prime) — Output agent prompt describing how to use pudl
 - [pudl query](#pudl-query) — Query derived facts using Datalog rules
 - [pudl report](#pudl-report) — Read the latest or named check report
@@ -510,9 +512,14 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   policy-results policy results that are stale (evaluated with an older policy
                 digest), orphaned, or never evaluated
   data-permissions  data files or directories group or other users can access
+  sensitive-scrub   plaintext stored before a schema declared the field in
+                _pudl.sensitive_fields (opt-in: applied only when --only names it)
 
 Without --fix nothing is written. --fix applies every repair (or those named by
---only) in that order; --fix --dry-run previews them.
+--only) in that order; --fix --dry-run previews them. The sensitive scrub
+re-derives the IDs of the entries it rewrites (old IDs still resolve) and
+compacts the catalog; fact history and exported bundles keep the plaintext, so
+rotate every credential it redacts.
 ```
 
 Examples:
@@ -521,6 +528,7 @@ Examples:
 pudl doctor
   pudl doctor --fix --dry-run
   pudl doctor --fix --only projections
+  pudl doctor --fix --dry-run --only sensitive-scrub
   pudl doctor --fix --only inference --schema pudl/core.#Item --include-explicit
 ```
 
@@ -533,7 +541,7 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions, sensitive-scrub |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
@@ -575,6 +583,22 @@ for every entry in scope (`--entry`, or `--schema`/`--origin`, or the whole
 catalog). The identity repair backfills missing `resource_id`s and recomputes those that
 still equal the leaf-schema-namespaced id, re-sequencing the versions of the
 resources they join.
+
+The `sensitive-scrub` repair finds plaintext stored before a schema declared
+the path in `_pudl.sensitive_fields`: payloads, collection files, `.meta`
+files, and (by searching for the collected values of 8 bytes or more) legacy
+mu files, observe snapshot files and stored reports. It is opt-in: plain
+`--fix` reports it `skipped`, and only `--fix --only sensitive-scrub` applies
+it (`--dry-run` previews). Apply rewrites each artifact to what a fresh import
+would store, re-derives the ID of each entry whose content changes and
+rewrites every reference to it (an ID that already exists is merged into),
+re-projects current facts, unlinks the superseded files and compacts SQLite
+(`VACUUM`). Old IDs and proquints still resolve in `pudl show` and other entry
+lookups. Its `details` list `subjects` (kind, `id`, `new_id`, `paths`,
+`merged`), `unsupported` payloads (non-JSON or compressed: delete and
+re-import as JSON), `superseded_files`, `compaction_pending` and
+`short_values_skipped`; values never appear. Fact history and exported bundles
+keep the plaintext: rotate every credential the scrub redacts.
 
 Health checks include schema loading (each schema package that fails to load,
 and any `base_schema` cycle) and Datalog rules (each rule that cannot be
@@ -1304,6 +1328,8 @@ reports stale results and pudl policy evaluate refreshes them.
 Subcommands:
 
 - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
+- [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
+- [pudl policy show](#pudl-policy-show) — Show a policy's rules, inheritance and failing resources
 
 ## pudl policy evaluate
 
@@ -1345,6 +1371,67 @@ Flags:
 |------|------|---------|-------------|
 | `--dry-run` | bool |  | Report what would change without writing |
 | `--what-if` | string |  | Evaluate a draft policy `FILE` without installing it or writing results |
+
+## pudl policy list
+
+List loaded policies with their stored result counts
+
+```text
+pudl policy list [flags]
+```
+
+```text
+List every loaded compliance policy: the type it applies to, the policy it
+extends, its rule count, the type's review status (draft results are
+provisional), when it was last evaluated, and its stored compliant,
+noncompliant, unknown and stale result counts. A result is stale when it was
+evaluated with an older version of the policy; pudl policy evaluate refreshes it.
+
+--type T lists the policies that apply to type T.
+```
+
+Examples:
+
+```bash
+pudl policy list
+  pudl policy list --type pudl/aws.#Bucket --json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--type` | string |  | List only the policies that apply to type `T` |
+
+## pudl policy show
+
+Show a policy's rules, inheritance and failing resources
+
+```text
+pudl policy show POLICY [flags]
+```
+
+```text
+Show one compliance policy: its inheritance chain, its rules (inherited ones
+included) with severity, doc and the policy that declared each, how many
+resources currently fail each rule, its stored result counts and staleness, and
+the resources failing most (most severe first, then most violations).
+
+--limit caps the failing resources listed (0 lists all).
+```
+
+Examples:
+
+```bash
+pudl policy show pudl/aws.#BucketBestPractice
+  pudl policy show pudl/aws.#BucketBestPractice --limit 0 --json
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--limit` | int | `10` | Maximum failing resources to list (0 = all) |
 
 ## pudl prime
 
@@ -1691,6 +1778,11 @@ pudl show <id> [flags]
 ```text
 Show detailed information about a specific data entry including its content,
 metadata, and schema information.
+
+A compliance section lists each policy applicable to the entry's type with the
+resource's stored status (provisional when the type is a draft), its highest
+violation severity, and its violations (rule, severity, path, kind, declaring
+policy). --json includes it as "compliance".
 
 The ID parameter should be the unique identifier of the data entry as shown
 in the 'pudl list' command output.

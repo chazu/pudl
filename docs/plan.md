@@ -673,6 +673,19 @@ Beads work:
     [--what-if FILE]`, the built-in `policy_noncompliant` rule, and stale
     detection as the `policy-results` doctor repair. See
     `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-xf5.8.4` `pudl policy list [--type T]` (type, extends, rule
+    count, type review, last evaluated, compliant/noncompliant/unknown/stale
+    counts), `pudl policy show POLICY [--limit N]` (chain, rules with severity,
+    doc and declaring policy, failing counts per rule, resources failing most)
+    and the compliance section of `pudl show ID`, all with `--json`, read from
+    stored results. See `implog/2026_11_02_policy_list_show.md`.
+  - Done: `pudl-4fx.6` simplification pass over the policy code, no behavior
+    change: stored results filtered in SQL (violations joined on their policy
+    source), current resource entries picked in SQL, one stored-resource loop
+    for `evaluate` and `--what-if`, shared status counting and payload loader
+    type, one-pass CUE error paths. `policy_state` is kept: fact provenance
+    and `tx_start` do not track the latest evaluated entry and time. See
+    `implog/2026_11_02_policy_simplification.md`.
 - `pudl-o5i` (done): model load rejects `desired` values at a schema's sensitive
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
@@ -692,6 +705,18 @@ Beads work:
   - Done: observe-ingest (`#CommandObserve`) warnings by record, path and
     kind, in the run's stderr and the populate report's `secret_warnings`.
     See `implog/2026_11_02_policy_results_as_facts.md`.
+  - Done: `pudl-zxq` re-importing an already-cataloged document still scans
+    it and reports `secret_warnings` (dedup used to skip before decoding).
+    See `implog/2026_11_02_reimport_secret_scan.md`.
+- `pudl-m10` (done): `pudl doctor` diagnoses plaintext stored before a schema
+  declared the path in `_pudl.sensitive_fields`, and the opt-in repair
+  `pudl doctor --fix --only sensitive-scrub` redacts payloads, collection
+  files, `.meta`, legacy and snapshot files and stored reports, re-derives the
+  IDs of rewritten entries (every reference rewritten, collisions merged, old
+  IDs redirect), re-projects current facts and compacts SQLite. Fact history
+  and exported bundles keep the plaintext. See
+  [the design](design/2026-11-01-sensitive-data-scrub.md) and
+  `implog/2026_11_02_sensitive_scrub.md`.
 - Done: `pudl-oa4` owner-only data. Raw payloads, metadata, collection items,
   observe snapshots, staging files and the SQLite catalog are written 0600
   under 0700 directories (`internal/artifacts/perms.go`); `pudl doctor --fix

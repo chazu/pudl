@@ -54,8 +54,8 @@ func (s *Set) Evaluate(p *Policy, typeName string, record map[string]any) (*Resu
 		Unknown:     f.unknown,
 		Provisional: !typeMeta.IsValidated(),
 	}
-	sortViolations(res.Violations)
-	sortViolations(res.Unknown)
+	SortViolations(res.Violations)
+	SortViolations(res.Unknown)
 	switch {
 	case len(res.Violations) > 0:
 		res.Status = StatusNoncompliant
@@ -152,7 +152,7 @@ func (s *Set) conflicts(p *Policy, raw []byte, data any, f *findings) error {
 			if len(labels) < root {
 				continue
 			}
-			segs, present := resolveInRecord(data, parseErrorPath(labels[root:]))
+			segs, present := recordPath(data, labels[root:])
 			if !present {
 				continue
 			}

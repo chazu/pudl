@@ -92,6 +92,31 @@ func TestImportWarnsOnDocumentSecret(t *testing.T) {
 		Finding: secrets.Finding{Path: "settings.dsn", Kind: secrets.URLCredentials}}, result.SecretWarnings[0])
 }
 
+func TestReimportOfCatalogedDataStillWarns(t *testing.T) {
+	// pudl-zxq: dedup by content hash skips the import before decoding; the
+	// re-import must still report what the first import reported.
+	for name, content := range map[string]string{
+		"doc.json":    `{"settings":{"dsn":"postgres://app:` + testToken("", 12) + `@db:5432/app"}}`,
+		"many.ndjson": `{"misc":"a"}` + "\n" + `{"misc":"b","auth":{"token":"` + testToken("ghp_", 36) + `"}}` + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			imp, source := gcpFixture(t, firewallSchema, name, content)
+			first, err := imp.ImportFileWithFriendlyIDs(ImportOptions{SourcePath: source})
+			require.NoError(t, err)
+			require.Equal(t, 1, first.SecretWarningsTotal)
+
+			again, err := imp.ImportFileWithFriendlyIDs(ImportOptions{SourcePath: source})
+			require.NoError(t, err)
+			require.True(t, again.Skipped)
+			assert.Equal(t, first.SecretWarnings, again.SecretWarnings)
+			assert.Equal(t, first.ContentHash, again.ContentHash)
+			stored, err := os.ReadFile(first.StoredPath)
+			require.NoError(t, err)
+			assert.Equal(t, content, string(stored), "the rescan never rewrites stored data")
+		})
+	}
+}
+
 func TestImportSecretScanHonorsSchemaCoverage(t *testing.T) {
 	// spec.token is sensitive (redacted) on the child; spec.nonce is declared
 	// not secret on the base and inherited. Only spec.other is reported.
