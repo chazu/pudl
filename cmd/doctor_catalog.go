@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/doctor"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/schemaname"
@@ -24,73 +26,91 @@ type catalogDiagnostic struct {
 	InferenceChecked bool   `json:"inference_checked"`
 }
 
-func checkCatalogEntries(entryID string, filter database.FilterOptions) ([]catalogDiagnostic, error) {
+// checkCatalogEntries validates the entries in scope, streaming them, and
+// scans each loaded payload for likely secrets. Current facts are scanned too
+// unless --entry, --schema or --origin scope the check to catalog entries.
+func checkCatalogEntries(ctx context.Context, entryID string, filter database.FilterOptions) ([]catalogDiagnostic, *doctor.SecretReport, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	catalogRoot := filepath.Dir(cfg.DataPath)
 	if _, err := os.Stat(filepath.Join(catalogRoot, "data", "sqlite", "catalog.db")); os.IsNotExist(err) && entryID == "" {
-		return []catalogDiagnostic{}, nil
+		return []catalogDiagnostic{}, &doctor.SecretReport{FactsScanned: true, Findings: []doctor.SecretFinding{}}, nil
 	}
 	db, err := database.OpenCatalogDBReadOnly(catalogRoot)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer db.Close()
 	paths := effectiveSchemaPaths(cfg)
 	validation, err := validator.NewValidationService(paths...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	inferrer, err := inference.Shared(paths...)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var entries []database.CatalogEntry
+	secretScan := doctor.NewSecretScan(inferrer)
+	out := []catalogDiagnostic{}
+	check := func(entry database.CatalogEntry) error {
+		out = append(out, checkCatalogEntry(entry, validation, inferrer, secretScan))
+		return nil
+	}
 	if entryID != "" {
 		entry, lookupErr := db.GetEntryByProquint(entryID)
 		if lookupErr != nil {
 			entry, lookupErr = db.GetEntry(entryID)
 		}
 		if lookupErr != nil {
-			return nil, fmt.Errorf("entry %q not found: %w", entryID, lookupErr)
+			return nil, nil, fmt.Errorf("entry %q not found: %w", entryID, lookupErr)
 		}
-		entries = append(entries, *entry)
-	} else {
-		result, queryErr := db.QueryEntries(filter, database.QueryOptions{Limit: 0, SortBy: "timestamp"})
-		if queryErr != nil {
-			return nil, queryErr
-		}
-		entries = result.Entries
+		_ = check(*entry)
+	} else if err := db.EachEntryContext(ctx, filter, check); err != nil {
+		return nil, nil, err
 	}
-	out := make([]catalogDiagnostic, 0, len(entries))
-	for _, entry := range entries {
-		diagnostic := catalogDiagnostic{ID: entry.ID, Proquint: idgen.HashToProquint(entry.ID), Schema: entry.Schema, Status: "ok"}
-		data, loadErr := loadVerifyData(entry.StoredPath)
-		if loadErr != nil {
-			diagnostic.Status, diagnostic.Error = "error", loadErr.Error()
-		} else if result := validation.ValidateDataAgainstSchema(data, entry.Schema); !result.Valid {
-			diagnostic.Status, diagnostic.Error = "invalid", result.ErrorMessage
-			if diagnostic.Error == "" {
-				diagnostic.Error = strings.Join(result.Errors, "; ")
-			}
-		} else if shouldVerifyInference(data, entry) {
-			diagnostic.InferenceChecked = true
-			collectionType := ""
-			if entry.CollectionType != nil {
-				collectionType = *entry.CollectionType
-			}
-			result, inferErr := inferrer.Infer(data, inference.InferenceHints{Origin: entry.Origin, Format: entry.Format, CollectionType: collectionType})
-			if inferErr != nil {
-				diagnostic.Status, diagnostic.Error = "error", inferErr.Error()
-			} else if !schemaname.IsEquivalent(result.Schema, entry.Schema) {
-				diagnostic.Status, diagnostic.InferredSchema = "mismatch", result.Schema
-			}
+	if entryID == "" && filter.Schema == "" && filter.Origin == "" {
+		if err := secretScan.Facts(ctx, db); err != nil {
+			return nil, nil, err
 		}
-		out = append(out, diagnostic)
 	}
-	return out, nil
+	report := secretScan.Report()
+	return out, &report, nil
+}
+
+// checkCatalogEntry validates one entry, re-checks its inference, and scans
+// its payload for likely secrets.
+func checkCatalogEntry(entry database.CatalogEntry, validation *validator.ValidationService, inferrer *inference.SchemaInferrer, secretScan *doctor.SecretScan) catalogDiagnostic {
+	diagnostic := catalogDiagnostic{ID: entry.ID, Proquint: idgen.HashToProquint(entry.ID), Schema: entry.Schema, Status: "ok"}
+	data, loadErr := loadVerifyData(entry.StoredPath)
+	if loadErr == nil {
+		secretScan.Entry(entry, data)
+	}
+	if loadErr != nil {
+		diagnostic.Status, diagnostic.Error = "error", loadErr.Error()
+	} else if result := validation.ValidateDataAgainstSchema(data, entry.Schema); !result.Valid {
+		diagnostic.Status, diagnostic.Error = "invalid", result.ErrorMessage
+		if diagnostic.Error == "" {
+			diagnostic.Error = strings.Join(result.Errors, "; ")
+		}
+	} else if shouldVerifyInference(data, entry) {
+		diagnostic.InferenceChecked = true
+		collectionType := ""
+		if entry.CollectionType != nil {
+			collectionType = *entry.CollectionType
+		}
+		result, inferErr := inferrer.Infer(data, inference.InferenceHints{Origin: entry.Origin, Format: entry.Format, CollectionType: collectionType})
+		if inferErr != nil {
+			diagnostic.Status, diagnostic.Error = "error", inferErr.Error()
+		} else if !schemaname.IsEquivalent(result.Schema, entry.Schema) {
+			diagnostic.Status, diagnostic.InferredSchema = "mismatch", result.Schema
+		}
+	}
+	return diagnostic
 }
 
 // Explicit assignments are validated, never heuristically reclassified.
