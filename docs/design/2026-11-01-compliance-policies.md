@@ -95,7 +95,11 @@ from a policy leaf to its type does not change its identity or history.
 - **Rule attributes.** `@pudl(rule=..., severity=low|medium|high|critical,
   doc=...)` names a constraint. A violation reports the nearest annotated rule
   at or above the failing path. Unannotated constraints report their path as the
-  rule name.
+  rule name. Annotations are read from the bare policy, so a field annotated
+  only inside a comprehension whose condition reads record data (`if direction
+  == "INGRESS" {...}`) cannot be read, and the policy fails to load. Annotate
+  the field outside the comprehension (`sourceRanges?: _ @pudl(rule=...)`) and
+  constrain it inside.
 - **Absent fields.** A field the policy constrains but the record lacks is
   `absent`. By default an absent field makes the result `unknown`, because the
   collector may not have gathered it. `@pudl(absent="violation")` makes absence
@@ -103,7 +107,9 @@ from a policy leaf to its type does not change its identity or history.
   required (non-optional) in a **validated** type schema is always treated as
   collected, so its absence is a violation.
 - **Extra fields.** Policies constrain only the fields they name. Evaluation
-  ignores closedness, so extra fields never cause a violation.
+  ignores closedness at every depth, so extra fields never cause a violation,
+  and extra fields under a nested policy struct do not break references into
+  it. Nested policy structs need no `...`.
 - **Sensitive paths.** Values on `sensitive_fields` paths are redacted before
   storage, so a policy cannot evaluate them. A policy that constrains a path the
   type declares sensitive fails to load.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
-	cueerrors "cuelang.org/go/cue/errors"
 
 	"github.com/chazu/pudl/internal/schemaname"
 )
@@ -144,7 +143,11 @@ func (s *Set) conflicts(p *Policy, raw []byte, data any, f *findings) error {
 			compiled[ctx] = dv
 		}
 		root := len(m.value.Path().Selectors())
-		for _, e := range cueerrors.Errors(m.value.Unify(dv).Validate()) {
+		errs, err := openValidate(m, dv, raw, data)
+		if err != nil {
+			return err
+		}
+		for _, e := range errs {
 			if format, _ := e.Msg(); format == closednessError {
 				continue
 			}
