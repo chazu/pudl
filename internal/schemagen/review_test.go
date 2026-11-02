@@ -21,6 +21,7 @@ func TestGeneratedSchemaStartsAsDraft(t *testing.T) {
 		GenerateOptions{PackagePath: "gen", DefinitionName: "Thing"})
 	require.NoError(t, err)
 	assert.Contains(t, result.Content, `review: status: "draft"`)
+	assert.NotContains(t, result.Content, "cascade_fallback", "cascade priority was removed")
 	require.NoError(t, os.MkdirAll(filepath.Dir(result.FilePath), 0o755))
 	require.NoError(t, os.WriteFile(result.FilePath, []byte(result.Content), 0o644))
 
