@@ -70,7 +70,10 @@ func copyBootstrapSchemasTo(schemaPath string) error {
 	if err := os.MkdirAll(smDir, 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(smDir, "systemmodel.cue"), []byte(systemmodel.SchemaCUE()), 0644)
+	if err := os.WriteFile(filepath.Join(smDir, "systemmodel.cue"), []byte(systemmodel.SchemaCUE()), 0644); err != nil {
+		return err
+	}
+	return writeBootstrapStamp(schemaPath)
 }
 
 // bootstrapSchemaFiles returns every file that pudl init owns in the schema
@@ -135,6 +138,12 @@ func (e *EnhancedImporter) ensureBasicSchemas() error {
 
 	if err := retireBootstrapFiles(e.schemaPath); err != nil {
 		return err
+	}
+	// Built-ins from another pudl (or before the stamp existed): refresh them.
+	if !bootstrapCurrent(e.schemaPath) {
+		if err := copyBootstrapSchemasTo(e.schemaPath); err != nil {
+			return fmt.Errorf("failed to refresh bootstrap schemas: %w", err)
+		}
 	}
 
 	required, err := bootstrapSchemaFiles()

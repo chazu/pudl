@@ -8,7 +8,7 @@ import (
 )
 
 // claimSchemas pairs a generic schema that accepts any record with `name` and
-// `kind` (shaped like pudl/infra.#Service) with a type that claims records by
+// `kind` (shaped like the removed pudl/infra.#Service) with a type that claims records by
 // kind (@pudl(match)) and requires project, and a specialization of that type.
 const claimSchemas = `package x
 

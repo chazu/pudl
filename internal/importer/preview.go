@@ -8,6 +8,7 @@ import (
 
 	"github.com/chazu/pudl/internal/identity"
 	"github.com/chazu/pudl/internal/idgen"
+	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/projection"
 	"github.com/chazu/pudl/internal/redact"
 	"github.com/chazu/pudl/internal/schemaname"
@@ -141,6 +142,9 @@ func (e *EnhancedImporter) Preview(opts ImportOptions) (*ImportResult, error) {
 				}
 			}
 		}
+		if opts.Explain {
+			recordExplanation(result, shape.collection != "", index, assigned.Trace)
+		}
 		if assigned.Trace != nil && len(assigned.Trace.Alternatives) > 0 {
 			report.Ambiguous++
 			if report.AmbiguousExample == "" {
@@ -201,4 +205,24 @@ func previewContentHash(opts ImportOptions, shape sourceShape, record any, redac
 		return "", err
 	}
 	return idgen.ComputeContentID(canonical), nil
+}
+
+// recordExplanation keeps a record's classification trace for --explain: the
+// document's own, or up to maxItemExplanations collection items, as an import
+// would.
+func recordExplanation(result *ImportResult, collection bool, index int, trace *inference.InferenceTrace) {
+	if trace == nil {
+		return
+	}
+	if !collection {
+		if result.Explanation == nil {
+			result.Explanation = trace
+		}
+		return
+	}
+	if len(result.ItemExplanations) < maxItemExplanations {
+		result.ItemExplanations = append(result.ItemExplanations, ItemExplanation{Index: index, Trace: trace})
+	} else {
+		result.ExplanationsTruncated = true
+	}
 }

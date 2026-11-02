@@ -80,3 +80,31 @@ func TestImportExplanationRemainsOptIn(t *testing.T) {
 	require.NotEmpty(t, metadata.SchemaInfo.AssignmentReason)
 	require.Nil(t, metadata.SchemaInfo.Explanation)
 }
+
+// --dry-run --explain prints the classification trace it computes, for a
+// document and for each collection item, and writes nothing.
+func TestImportDryRunExplainPrintsTrace(t *testing.T) {
+	cliWorkspace(t)
+	dir := t.TempDir()
+	doc := filepath.Join(dir, "doc.json")
+	items := filepath.Join(dir, "items.json")
+	writeFile(t, doc, `{"widget":"a"}`)
+	writeFile(t, items, `[{"widget":"a"},{"widget":"b"}]`)
+
+	r := runCLI(t, "import", doc, "--dry-run", "--explain")
+	require.NoError(t, r.Err, r.Stderr)
+	require.Contains(t, r.Stdout, "Classification: pudl/core.#Item")
+
+	r = runCLI(t, "import", items, "--dry-run", "--explain")
+	require.NoError(t, r.Err, r.Stderr)
+	require.Contains(t, r.Stdout, "Item 0 classification:")
+	require.Contains(t, r.Stdout, "Item 1 classification:")
+
+	r = runCLI(t, "list", "--json", "--all")
+	require.NoError(t, r.Err, r.Stderr)
+	var listed struct {
+		TotalMatched int `json:"total_matched"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &listed), r.Stdout)
+	require.Zero(t, listed.TotalMatched, "a dry run writes nothing")
+}

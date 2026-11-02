@@ -74,12 +74,6 @@ entries: {
 
 // Infrastructure types
 entries: {
-	"pudl/infra.#Organization": {
-		schema:        "pudl/infra.#Organization"
-		schema_type:   "base"
-		resource_type: "infra.organization"
-		description:   "Organizational unit (company, team, AWS org)"
-	}
 	"pudl/infra.#Account": {
 		schema:        "pudl/infra.#Account"
 		schema_type:   "base"
@@ -97,12 +91,6 @@ entries: {
 		schema_type:   "base"
 		resource_type: "infra.environment"
 		description:   "Deployment target composed of platforms"
-	}
-	"pudl/infra.#Service": {
-		schema:        "pudl/infra.#Service"
-		schema_type:   "base"
-		resource_type: "infra.service"
-		description:   "Deployable unit with kind discriminator"
 	}
 }
 

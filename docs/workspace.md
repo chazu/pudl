@@ -27,7 +27,10 @@ outside the workspace.
 `pudl init` is safe to repeat. It creates or repairs the data layout, the CUE
 module and the built-in schemas (including `pudl/systemmodel.#SystemModel`).
 It also installs the pudl agent skill in `.claude/skills/`. It keeps an edited
-`workspace.cue` unless you pass `--force`. Run it again after upgrading pudl.
+`workspace.cue` unless you pass `--force`. Run it again after upgrading pudl
+to refresh the agent skill. The built-in schemas also refresh on their own:
+the first import or observation by a new pudl rewrites them (pudl owns these
+files, so edits to them are lost) and removes retired ones it shipped.
 
 `pudl config --paths --json` prints every effective path.
 

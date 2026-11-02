@@ -39,6 +39,10 @@ CONVENTIONS
 
   - Preview first: import --dry-run, doctor --fix --dry-run,
     policy evaluate --dry-run or --what-if, snapshot prune --dry-run.
+  - Before importing a new source, run import --dry-run --explain (--json
+    for preview.schemas). Any record on pudl/core.#Item or an unexpected
+    type fell through: fix it with --schema, --set or a type before the
+    real import. Do not report an import as cataloged until it is clean.
   - Scaffold, then edit the printed path: model new, rule new, schema new.
   - Query projected facts instead of post-processing payloads with jq.
   - Unknown is not pass: report incomplete or stale evidence as unknown.

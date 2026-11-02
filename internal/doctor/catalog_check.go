@@ -106,12 +106,15 @@ func checkCatalogEntry(entry database.CatalogEntry, validation *validator.Valida
 		diagnostic.Status, diagnostic.Error = "error", loadErr.Error()
 	} else if isCollectionContainer(entry) {
 		// Nothing to validate: see isCollectionContainer.
-	} else if result := validateCatalogData(validation, data, entry.Schema); !result.Valid {
+	} else if result := validateCatalogData(validation, data, entry.Schema); !result.Valid && (result.SchemaAvailable || !shouldVerifyInference(data, entry)) {
 		diagnostic.Status, diagnostic.Error = "invalid", result.ErrorMessage
 		if diagnostic.Error == "" {
 			diagnostic.Error = strings.Join(result.Errors, "; ")
 		}
 	} else if shouldVerifyInference(data, entry) {
+		// Also reached when an inferred entry's schema is no longer loaded (a
+		// removed built-in or user schema): inference picks its new schema,
+		// so the inference repair can reassign it.
 		diagnostic.InferenceChecked = true
 		collectionType := ""
 		if entry.CollectionType != nil {

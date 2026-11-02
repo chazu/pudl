@@ -68,6 +68,9 @@ Offline first run, with the GCP pack's fixtures:
   unknown. Only a complete observation resolves a finding.
 - Preview before writing: import --dry-run, doctor --fix --dry-run,
   policy evaluate --what-if FILE.
+- Check a new import source with import --dry-run --explain first: a record
+  that matches no type still imports, as pudl/core.#Item. Fix records on
+  pudl/core.#Item or an unexpected type (--schema, --set, a type) first.
 - Query projected facts (pudl query) rather than parsing payloads.
 
 ## JSON contracts

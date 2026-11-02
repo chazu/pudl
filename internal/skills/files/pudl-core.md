@@ -40,6 +40,12 @@ pudl report <new-check-id> --since <old-check-id> --json
   `pudl schema new --from <entry-id> --path <pkg>:#<Def>`.
 - Preview writes: `import --dry-run`, `doctor --fix --dry-run`,
   `policy evaluate --dry-run` or `--what-if FILE`, `snapshot prune --dry-run`.
+- Check every new import source with `pudl import FILE --dry-run --explain`
+  first. Without `--schema`, a record that matches no type still imports, as
+  the catch-all `pudl/core.#Item`. The dry run shows records per schema
+  (`preview.schemas` with `--json`) and, per record, the candidates tried and
+  the fields that failed. Fix any record on `pudl/core.#Item` or an
+  unexpected type with `--schema`, `--set` or a type before the real import.
 
 ## JSON contracts and exit codes
 
