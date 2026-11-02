@@ -23,7 +23,8 @@ import (
 
 // The live collectors fan out over every project `gcloud projects list` prints
 // for your credentials, discovered at run time. A gcloud filter narrows the
-// list, e.g. "labels.env=staging" or "projectId:staging"; "" lists them all.
+// list, e.g. "labels.env=staging" or "projectId~staging" (a regex match);
+// "" lists them all.
 _gcpProjectFilter: string | *""
 
 // Locations gcp-kms-keyrings and gcp-kms-keys list key rings in, per project.
