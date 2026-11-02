@@ -172,9 +172,9 @@ func TestBundleMovedRootRoundTripPreservesEvidenceAndHistory(t *testing.T) {
 	snapshot, err := db.GetObserveSnapshot("approval-snapshot")
 	require.NoError(t, err)
 	require.False(t, snapshot.Retained)
-	live, err := db.LatestSuccessfulObserveSnapshot("demo", "original")
-	require.NoError(t, err)
-	require.Nil(t, live, "restored successful history must not authorize producer snapshot reuse")
+	var blocked int
+	require.NoError(t, db.DB().QueryRow(`SELECT COUNT(*) FROM snapshot_reuse_blocks`).Scan(&blocked))
+	require.Positive(t, blocked, "restored history must not count as the latest live observation")
 	historicalRun, err := db.GetRun("historical-run")
 	require.NoError(t, err)
 	require.Equal(t, database.RunStatusSucceeded, historicalRun.CompletionStatus)
@@ -186,10 +186,9 @@ func TestBundleMovedRootRoundTripPreservesEvidenceAndHistory(t *testing.T) {
 	require.NoError(t, db.AddEntry(database.CatalogEntry{ID: "fresh-snapshot", StoredPath: freshPath, Schema: "pudl/mu.#ObserveSnapshot", Format: "json", Origin: "new-observation", ImportTimestamp: time.Now(), CollectionType: &kind}))
 	require.NoError(t, db.RecordObserveSnapshot(database.ObserveSnapshot{SnapshotID: "fresh-snapshot", RunID: "live-after-restore", Model: "demo", Workspace: "original", Source: database.SnapshotSourceMuObserve, CreatedAt: time.Now()}))
 	require.NoError(t, db.FinishRun("live-after-restore", database.RunConclusion{CompletionStatus: database.RunStatusSucceeded}))
-	live, err = db.LatestSuccessfulObserveSnapshot("demo", "original")
-	require.NoError(t, err)
-	require.NotNil(t, live)
-	require.Equal(t, "fresh-snapshot", live.SnapshotID)
+	var freshBlocked int
+	require.NoError(t, db.DB().QueryRow(`SELECT COUNT(*) FROM snapshot_reuse_blocks WHERE snapshot_id='fresh-snapshot'`).Scan(&freshBlocked))
+	require.Zero(t, freshBlocked, "a live observation after restore is eligible again")
 
 	for _, rel := range []string{"schema/user/resource.cue", "definitions/checks.cue", "models/demo.cue", "populators/demo.cue", "schema/pudl/rules/demo.cue"} {
 		_, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel)))

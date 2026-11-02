@@ -27,6 +27,8 @@ var retiredFields = []retiredField{
 	{"plugins", "mu plugins were removed"},
 	{"populate.plugin", "#PluginObserve was removed; use #CommandObserve runs"},
 	{"populate.eweSource", "#EweTarget was removed; use #CommandObserve runs"},
+	{"inputs", "value bindings were removed; write the value into the model or read it in the command"},
+	{"bindings", "value bindings were removed; order models with depends_on"},
 }
 
 // rejectRetiredFields fails when the model uses any retired field. It runs

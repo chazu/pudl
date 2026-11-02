@@ -97,13 +97,7 @@ func listModelsIn(dir string) ([]ModelInfo, error) {
 			if summaryErr != nil {
 				continue
 			}
-			// Preserve the existing concrete projection for commands that inspect
-			// models without bindings. Bound models remain discoverable through their
-			// retained template and summary until run-time elaboration.
-			var m *systemmodel.SystemModel
-			if len(template.Bindings) == 0 {
-				m, _ = systemmodel.DecodeValue(val)
-			}
+			m, _ := systemmodel.DecodeValue(val)
 			out = append(out, ModelInfo{
 				Name:       template.Name,
 				DefName:    shortDefName(schemaName),

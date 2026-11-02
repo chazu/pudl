@@ -3,18 +3,13 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/wiring"
 )
 
 // runSetExecutionContext is the coordinator state a run set threads through its
@@ -23,19 +18,11 @@ import (
 type runSetExecutionContext struct {
 	// ctx is the invocation's lifetime. Once it is cancelled no further member
 	// starts: the rest of the set is recorded cancelled.
-	ctx              context.Context
-	runSetID         string
-	successfulRuns   map[string]wiring.ProducerRun
-	successfulModels map[string]*systemmodel.SystemModel
-	snapshotIDs      map[string]string
-	modelDirs        map[string]string
-	bindingEvidence  map[string][]wiring.BindingEvidence
-	nextRunID        string
-	lastModel        *systemmodel.SystemModel
-	lastSnapshotID   string
-	lastModelDir     string
-	lastRunID        string
-	suppressOutput   bool
+	ctx            context.Context
+	runSetID       string
+	nextRunID      string
+	lastRunID      string
+	suppressOutput bool
 }
 
 // interrupted reports the cancellation that stops the set, or nil.
@@ -58,14 +45,6 @@ func (c *runSetExecutionContext) id() string {
 	return c.runSetID
 }
 
-// producerRuns are the members that already succeeded in this set.
-func (c *runSetExecutionContext) producerRuns() map[string]wiring.ProducerRun {
-	if c == nil {
-		return nil
-	}
-	return c.successfulRuns
-}
-
 // memberRunID is the run ID reserved for the member about to run.
 func (c *runSetExecutionContext) memberRunID() string {
 	if c == nil {
@@ -81,59 +60,29 @@ func (c *runSetExecutionContext) registerMemberRunID(runID string) {
 	}
 }
 
-// retainMember keeps the elaborated member so downstream members can use it
-// once the member succeeds.
-func (c *runSetExecutionContext) retainMember(model *systemmodel.SystemModel, snapshotID, modelDir string) {
-	if c == nil {
-		return
-	}
-	c.lastModel = model
-	c.lastSnapshotID = snapshotID
-	c.lastModelDir = modelDir
-}
-
 // emitOutput reports whether a member run prints its own report.
 func (c *runSetExecutionContext) emitOutput() bool {
 	return c == nil || !c.suppressOutput
 }
 
-var (
-	runSetMaxObservationAge time.Duration
-	runSetDetailedExitCode  bool
-)
-
-// runSetOptions is the complete input of one `pudl run set`, read once from
-// its flags.
-type runSetOptions struct {
-	maxObservationAge    time.Duration
-	maxObservationAgeSet bool
-}
-
-func runSetOptionsFromFlags(cmd *cobra.Command) runSetOptions {
-	return runSetOptions{
-		maxObservationAge:    runSetMaxObservationAge,
-		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
-	}
-}
+var runSetDetailedExitCode bool
 
 var runSetCmd = &cobra.Command{
 	Use:   "set <model> [<model>...]",
 	Short: "Run an explicit producer/consumer model set in dependency order",
 	Long: `Run exactly the named models in dependency order.
 
-The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Every
-member is observe-only, and successful producer snapshots are pinned for
-downstream plain bindings.
+The set is closed and explicit: pudl does not add missing producers. Members
+run producers first, following depends_on within the named set. Every member
+is observe-only.
 
 Examples:
   pudl run set network app
-  pudl run set network app --max-observation-age 15m
   pudl run set network app --detailed-exitcode
   pudl run report`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		result, err := executeRunSet(cmd.Context(), args, runSetOptionsFromFlags(cmd))
+		result, err := executeRunSet(cmd.Context(), args)
 		if !runSetDetailedExitCode {
 			return err
 		}
@@ -152,16 +101,16 @@ type runSetResult struct {
 // executeRunSet runs exactly the named models in dependency order. Each member
 // is an observe-only executeRun with its own options. The result is nil when
 // the set failed before it had a report.
-func executeRunSet(ctx context.Context, args []string, opts runSetOptions) (*runSetResult, error) {
+func executeRunSet(ctx context.Context, args []string) (*runSetResult, error) {
 	result := &runSetResult{}
-	err := runSetMembers(ctx, args, opts, result)
+	err := runSetMembers(ctx, args, result)
 	if result.report == nil {
 		return nil, err
 	}
 	return result, err
 }
 
-func runSetMembers(ctx context.Context, args []string, opts runSetOptions, result *runSetResult) error {
+func runSetMembers(ctx context.Context, args []string, result *runSetResult) error {
 	selected := make([]acute.RunSetModel, 0, len(args))
 	for _, requested := range args {
 		template, _, _, err := resolveModelTemplate(requested)
@@ -169,23 +118,16 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 			return err
 		}
 		selected = append(selected, acute.RunSetModel{
-			Template: template,
-			Aliases:  []string{requested, shortDefName(template.Origin.SchemaName)},
+			Name: template.Name, DependsOn: template.DependsOn,
+			Aliases: []string{requested, shortDefName(template.Origin.SchemaName)},
 		})
 	}
 	plan, err := acute.NewRunSetPlan(selected)
 	if err != nil {
 		return err
 	}
-	if opts.maxObservationAgeSet && opts.maxObservationAge <= 0 {
-		return fmt.Errorf("--max-observation-age must be greater than zero")
-	}
-	agePolicy := ""
-	if opts.maxObservationAgeSet {
-		agePolicy = opts.maxObservationAge.String()
-	}
 	mode := "observe-only"
-	digest, err := plan.Digest(mode, agePolicy)
+	digest, err := plan.Digest(mode)
 	if err != nil {
 		return err
 	}
@@ -206,11 +148,7 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 
 	context := &runSetExecutionContext{
 		ctx:      ctx,
-		runSetID: report.RunSetID, successfulRuns: map[string]wiring.ProducerRun{},
-		successfulModels: map[string]*systemmodel.SystemModel{},
-		snapshotIDs:      map[string]string{}, modelDirs: map[string]string{},
-		bindingEvidence: map[string][]wiring.BindingEvidence{},
-		suppressOutput:  jsonOutput,
+		runSetID: report.RunSetID, suppressOutput: jsonOutput,
 	}
 	memberDeps := runDeps{set: context}
 
@@ -218,7 +156,7 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 	for _, model := range plan.Ordered {
 		if context.interrupted() != nil {
 			runID := acute.NewMemberRunID()
-			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusCancelled, runSetCancelledNote, nil); err != nil {
+			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusCancelled, runSetCancelledNote); err != nil {
 				return err
 			}
 			results[model] = database.RunStatusCancelled
@@ -231,8 +169,7 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 		if blocker := firstNonSuccessfulPrerequisite(model, plan.Edges, results); blocker != "" {
 			runID := acute.NewMemberRunID()
 			note := fmt.Sprintf("blocked by unsuccessful prerequisite %q", blocker)
-			issues := blockedBindingIssues(plan.Models[model].Template, blocker, plan.Models[blocker].Aliases)
-			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusBlocked, note, issues); err != nil {
+			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusBlocked, note); err != nil {
 				return err
 			}
 			results[model] = database.RunStatusBlocked
@@ -245,10 +182,7 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 
 		context.nextRunID = acute.NewMemberRunID()
 		context.lastRunID = ""
-		context.lastModel = nil
-		context.lastSnapshotID = ""
-		context.lastModelDir = ""
-		memberReport, runErr := executeRun(ctx, memberRunOptions(model, opts), memberDeps)
+		memberReport, runErr := executeRun(ctx, runOptions{model: model}, memberDeps)
 		result.findings = result.findings || reportHasFindings(memberReport)
 		runID := context.lastRunID
 		if runID == "" {
@@ -257,8 +191,7 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 			if runErr != nil {
 				note = runErr.Error()
 			}
-			issues := resolutionBindingIssues(plan.Models[model].Template, runErr)
-			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusFailed, note, issues); err != nil {
+			if err := recordSyntheticRunSetMember(db, report.RunSetID, runID, model, database.RunStatusFailed, note); err != nil {
 				return err
 			}
 		}
@@ -270,17 +203,6 @@ func runSetMembers(ctx context.Context, args []string, opts runSetOptions, resul
 		} else {
 			member.Result = database.RunStatusSucceeded
 			results[model] = database.RunStatusSucceeded
-			producerRun := wiring.ProducerRun{Model: model, RunID: runID}
-			context.successfulRuns[model] = producerRun
-			if context.lastModel == nil {
-				return fmt.Errorf("run-set member %q succeeded without retaining its elaborated model", model)
-			}
-			context.successfulModels[model] = context.lastModel
-			context.snapshotIDs[model] = context.lastSnapshotID
-			context.modelDirs[model] = context.lastModelDir
-			for _, alias := range plan.Models[model].Aliases {
-				context.successfulRuns[alias] = producerRun
-			}
 		}
 		report.Members = append(report.Members, member)
 		if err := saveRunSetReport(db, report); err != nil {
@@ -313,7 +235,7 @@ func firstNonSuccessfulPrerequisite(model string, edges []acute.RunSetEdge, resu
 	return ""
 }
 
-func recordSyntheticRunSetMember(db *database.CatalogDB, runSetID, runID, model, status, note string, issues []wiring.BindingIssue) error {
+func recordSyntheticRunSetMember(db *database.CatalogDB, runSetID, runID, model, status, note string) error {
 	if err := db.StartRun(runID, model, "run-set observe-only"); err != nil {
 		return err
 	}
@@ -323,56 +245,12 @@ func recordSyntheticRunSetMember(db *database.CatalogDB, runSetID, runID, model,
 	report := &RunReport{
 		ReportVersion: 1, RunSetID: runSetID, RunID: runID, Model: model,
 		Mode: "observe-only", CompletionStatus: status, OK: false, Error: note,
-		BindingIssues: issues,
 	}
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return err
 	}
 	return db.SaveRunReport(runID, model, payload)
-}
-
-func blockedBindingIssues(template *systemmodel.ModelTemplate, blocker string, aliases []string) []wiring.BindingIssue {
-	if template == nil {
-		return nil
-	}
-	producerNames := map[string]struct{}{blocker: {}}
-	for _, alias := range aliases {
-		producerNames[alias] = struct{}{}
-	}
-	issues := make([]wiring.BindingIssue, 0)
-	for input, binding := range template.Bindings {
-		if _, matches := producerNames[binding.Source.Model]; !matches {
-			continue
-		}
-		issues = append(issues, wiring.BindingIssue{
-			Input: input, ProducerModel: blocker, Schema: binding.Source.Schema,
-			Identity: binding.Source.Identity, Path: binding.Path,
-			Code: "producer-unsuccessful", Message: fmt.Sprintf("producer %q did not complete successfully in this run set; historical fallback is forbidden", blocker),
-		})
-	}
-	sort.Slice(issues, func(i, j int) bool { return issues[i].Input < issues[j].Input })
-	return issues
-}
-
-func resolutionBindingIssues(template *systemmodel.ModelTemplate, err error) []wiring.BindingIssue {
-	if template == nil || err == nil {
-		return nil
-	}
-	var resolution *wiring.ResolutionError
-	if !errors.As(err, &resolution) {
-		return nil
-	}
-	issue := wiring.BindingIssue{
-		Input: resolution.Input, Code: resolution.Code, Message: resolution.Error(),
-	}
-	if binding, exists := template.Bindings[resolution.Input]; exists {
-		issue.ProducerModel = binding.Source.Model
-		issue.Schema = binding.Source.Schema
-		issue.Identity = binding.Source.Identity
-		issue.Path = binding.Path
-	}
-	return []wiring.BindingIssue{issue}
 }
 
 func saveRunSetReport(db *database.CatalogDB, report *acute.RunSetReport) error {
@@ -421,8 +299,6 @@ func printRunSetReport(report *acute.RunSetReport) error {
 
 func init() {
 	runCmd.AddCommand(runSetCmd)
-	runSetCmd.Flags().DurationVar(&runSetMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
-
 	runSetCmd.Flags().BoolVar(&runSetDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
 }
 

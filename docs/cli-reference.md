@@ -1134,8 +1134,7 @@ pudl model validate <name>
 ```text
 Resolve and validate a #SystemModel by name. It validates the authored
 CUE template and runs structural checks on its arms without touching any external
-system. Bound models remain valid templates before their catalog values exist;
-their final concrete values are validated again when pudl runs them.
+system.
 ```
 
 Models with plain bindings are valid before their catalog values exist; the
@@ -1333,7 +1332,6 @@ Flags:
 | `--check-upstream` | bool |  | warn if any transitive upstream model (depends_on) is drifted/failed |
 | `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
 | `--from-catalog` | bool |  | drift over already-ingested records (inventory; no live observe); requires --catalog-scope |
-| `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
 | `--populate` | string |  | Run an unregistered observer: command:&lt;cmdline&gt; (a command printing JSON records) |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
@@ -1444,14 +1442,12 @@ pudl run set <model> [<model>...] [flags]
 ```text
 Run exactly the named models in dependency order.
 
-The set is closed and explicit: pudl does not add missing producers. A binding
-whose producer is not named fails preflight before any member runs. Every
-member is observe-only, and successful producer snapshots are pinned for
-downstream plain bindings.
+The set is closed and explicit: pudl does not add missing producers. Members
+run producers first, following depends_on within the named set. Every member
+is observe-only.
 
 Examples:
   pudl run set network app
-  pudl run set network app --max-observation-age 15m
   pudl run set network app --detailed-exitcode
   pudl run report
 ```
@@ -1461,7 +1457,6 @@ Flags:
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--detailed-exitcode` | bool |  | exit 0 when clean, 2 when drift or a failing fail-severity check was found, 1 on error |
-| `--max-observation-age` | duration |  | reject a bound producer snapshot older than this duration |
 | `--progress-json` | bool |  | Emit phase progress events as JSON lines on stderr (alongside diagnostics) |
 
 Every member of a set is observe-only. A set continues independent branches

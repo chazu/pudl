@@ -25,12 +25,6 @@ package systemmodel
 	// model itself is persisted as a typed catalog resource.
 	"_schema"?: string
 
-	// INPUTS + BINDINGS are authoring-only. PUDL resolves every binding to one
-	// concrete scalar and unifies it into inputs before decoding SystemModel.
-	// Runtime models and catalog model-instance records omit both fields.
-	inputs?: {...}
-	bindings?: {[string]: #ValueBinding}
-
 	// DEPENDS_ON — NAMES of other #SystemModel instances whose output this
 	// model's desired/observed state depends on. Model names (each dependency's
 	// `name:` field), not value references: this expresses ordering/impact, not
@@ -64,6 +58,8 @@ package systemmodel
 	// (docs/retired-commands.md).
 	plugins?:  [...#PluginDef]
 	converge?: #PluginPlan
+	inputs?: {...}
+	bindings?: {[string]: #ValueBinding}
 
 	// FRESHNESS — loop cadence.
 	freshness?: #Freshness
@@ -130,7 +126,8 @@ package systemmodel
 	sealed_outputs?: _
 }
 
-// #ValueBinding selects one scalar field from one exact typed resource.
+// #ValueBinding is the retired value-binding shape, kept so old model files
+// compile and are rejected by name.
 #ValueBinding: {
 	source: #ResourceRef
 	path:   string & !=""

@@ -27,15 +27,13 @@ type RunSetReport struct {
 	Members       []RunSetMemberReport `json:"members"`
 }
 
-// Digest commits to the deterministic observe-only orchestration plan and its
-// run policy.
-func (p *RunSetPlan) Digest(mode, maxObservationAge string) (string, error) {
+// Digest commits to the deterministic observe-only orchestration plan.
+func (p *RunSetPlan) Digest(mode string) (string, error) {
 	payload, err := json.Marshal(struct {
-		Mode              string       `json:"mode"`
-		MaxObservationAge string       `json:"max_observation_age,omitempty"`
-		Edges             []RunSetEdge `json:"edges"`
-		Ordered           []string     `json:"ordered_members"`
-	}{Mode: mode, MaxObservationAge: maxObservationAge, Edges: p.Edges, Ordered: p.Ordered})
+		Mode    string       `json:"mode"`
+		Edges   []RunSetEdge `json:"edges"`
+		Ordered []string     `json:"ordered_members"`
+	}{Mode: mode, Edges: p.Edges, Ordered: p.Ordered})
 	if err != nil {
 		return "", fmt.Errorf("encode run-set plan digest: %w", err)
 	}

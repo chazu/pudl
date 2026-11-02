@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -10,12 +9,11 @@ import (
 // Flag variables for `pudl run`. They are read exactly once, by
 // runOptionsFromFlags; nothing else reads or writes them.
 var (
-	runFromCatalog       bool
-	runCatalogScope      string
-	runCheckUpstream     bool
-	runPopulateSpec      string
-	runMaxObservationAge time.Duration
-	runDetailedExitCode  bool
+	runFromCatalog      bool
+	runCatalogScope     string
+	runCheckUpstream    bool
+	runPopulateSpec     string
+	runDetailedExitCode bool
 )
 
 var runCmd = &cobra.Command{
@@ -52,7 +50,7 @@ Examples:
 	},
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report, err := executeRun(cmd.Context(), runOptionsFromFlags(cmd, args), runDeps{})
+		report, err := executeRun(cmd.Context(), runOptionsFromFlags(args), runDeps{})
 		if counter, ok := outw().(*resultCounter); ok && !counter.attempted && jsonOutput && err != nil && report != nil {
 			out, renderErr := report.render(true)
 			if renderErr != nil {
@@ -75,7 +73,6 @@ func init() {
 	runCmd.Flags().BoolVar(&runFromCatalog, "from-catalog", false, "drift over already-ingested records (inventory; no live observe); requires --catalog-scope")
 	runCmd.Flags().StringVar(&runCatalogScope, "catalog-scope", "", "which already-ingested records --from-catalog replays: an observe snapshot ID, or the origin they were ingested under")
 	runCmd.Flags().BoolVar(&runCheckUpstream, "check-upstream", false, "warn if any transitive upstream model (depends_on) is drifted/failed")
-	runCmd.Flags().DurationVar(&runMaxObservationAge, "max-observation-age", 0, "reject a bound producer snapshot older than this duration")
 	runCmd.Flags().BoolVar(&runDetailedExitCode, "detailed-exitcode", false, detailedExitCodeUsage)
 
 }

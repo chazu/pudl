@@ -180,7 +180,8 @@ func resolveModelIn(dir, name string) (*systemmodel.SystemModel, string, error) 
 		return nil, "", nil
 	}
 	if match.Model == nil {
-		return nil, "", fmt.Errorf("system model %q requires binding elaboration; use `pudl run`", name)
+		_, err := match.Template.Model()
+		return nil, "", fmt.Errorf("system model %q is invalid: %w", name, err)
 	}
 	return match.Model, match.Dir, nil
 }

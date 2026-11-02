@@ -3,9 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
-
-	"github.com/spf13/cobra"
 )
 
 // runFlags is the validated catalog-replay surface for `pudl run`: the subset
@@ -26,9 +23,6 @@ type runOptions struct {
 	model         string
 	populateSpec  string
 	checkUpstream bool
-
-	maxObservationAge    time.Duration
-	maxObservationAgeSet bool
 }
 
 // runDeps are the collaborators a run reaches outside its own options: the
@@ -38,33 +32,20 @@ type runDeps struct {
 	set *runSetExecutionContext
 }
 
-// runOptionsFromFlags reads `pudl run`'s flags once. Changed() is consulted
-// here and nowhere else; downstream code reads the *Set booleans.
-func runOptionsFromFlags(cmd *cobra.Command, args []string) runOptions {
+// runOptionsFromFlags reads `pudl run`'s flags once.
+func runOptionsFromFlags(args []string) runOptions {
 	opts := runOptions{
 		runFlags: runFlags{
 			fromCatalog:  runFromCatalog,
 			catalogScope: runCatalogScope,
 		},
-		populateSpec:         runPopulateSpec,
-		checkUpstream:        runCheckUpstream,
-		maxObservationAge:    runMaxObservationAge,
-		maxObservationAgeSet: cmd.Flags().Changed("max-observation-age"),
+		populateSpec:  runPopulateSpec,
+		checkUpstream: runCheckUpstream,
 	}
 	if len(args) > 0 {
 		opts.model = args[0]
 	}
 	return opts
-}
-
-// memberRunOptions is the observe-only run a run-set member performs: the
-// set's observation-age policy.
-func memberRunOptions(model string, set runSetOptions) runOptions {
-	return runOptions{
-		model:                model,
-		maxObservationAge:    set.maxObservationAge,
-		maxObservationAgeSet: set.maxObservationAgeSet,
-	}
 }
 
 // validateRunFlags enforces that a catalog replay names the records it

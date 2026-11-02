@@ -4,20 +4,16 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/chazu/pudl/internal/acute"
 	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/inference"
 	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/wiring"
 )
 
-// resolvedRun is a model ready to run: elaborated and located.
+// resolvedRun is a model ready to run: decoded and located.
 type resolvedRun struct {
-	model           *systemmodel.SystemModel
-	modelDir        string
-	bindingEvidence []wiring.BindingEvidence
+	model    *systemmodel.SystemModel
+	modelDir string
 }
 
 // executeRun drives one model through the observe-only cycle. It is the whole
@@ -53,7 +49,7 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 		return nil, err
 	}
 
-	resolved, err := resolveRunModel(ctx, cat, opts, deps)
+	resolved, err := resolveRunModel(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +59,6 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 		session.RunID = reserved
 	}
 	deps.set.registerMemberRunID(session.RunID)
-	deps.set.retainMember(model, session.SnapshotID, modelDir)
 
 	live := !jsonOutput
 	if live {
@@ -91,7 +86,6 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	report := &RunReport{
 		ReportVersion: 2, RunSetID: deps.set.id(), RunID: session.RunID,
 		Model: model.Name, CompletionStatus: database.RunStatusRunning, OK: true,
-		Bindings: resolved.bindingEvidence,
 	}
 	reportPersisted := false
 	defer func() {
@@ -120,68 +114,27 @@ func executeRun(ctx context.Context, opts runOptions, deps runDeps) (finalReport
 	return report, err
 }
 
-// resolveRunModel loads the model the options name — or builds the ad-hoc one
-// --populate describes — and elaborates its bindings.
-func resolveRunModel(ctx context.Context, cat *runCatalog, opts runOptions, deps runDeps) (*resolvedRun, error) {
-	resolved := &resolvedRun{}
-	var err error
+// resolveRunModel loads the registered model the options name (project
+// .pudl/schema wins over global ~/.pudl/schema) — or builds the ad-hoc one
+// --populate describes. The model's directory is the base for relative
+// command paths.
+func resolveRunModel(opts runOptions) (*resolvedRun, error) {
 	if opts.populateSpec != "" {
-		resolved.model, resolved.modelDir, err = adHocModel(opts.populateSpec)
-	} else {
-		resolved.model, err = elaborateRunTemplate(cat, opts, deps, resolved)
+		model, modelDir, err := adHocModel(opts.populateSpec)
+		if err != nil {
+			return nil, err
+		}
+		return &resolvedRun{model: model, modelDir: modelDir}, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	return resolved, nil
-}
-
-// elaborateRunTemplate resolves a registered model template (project
-// .pudl/schema wins over global ~/.pudl/schema) and elaborates its bindings.
-// The template's directory is the base for relative command paths.
-func elaborateRunTemplate(cat *runCatalog, opts runOptions, deps runDeps, resolved *resolvedRun) (*systemmodel.SystemModel, error) {
 	template, templateDir, _, err := resolveModelTemplate(opts.model)
 	if err != nil {
 		return nil, err
 	}
-	resolved.modelDir = templateDir
-	db, err := cat.required()
+	model, err := template.Model()
 	if err != nil {
 		return nil, err
 	}
-	if reconcileErr := reconcileBindingDependencies(db, template); reconcileErr != nil {
-		return nil, fmt.Errorf("reconcile binding dependencies for %q: %w", template.Name, reconcileErr)
-	}
-	if len(template.Bindings) == 0 {
-		return template.Elaborate(map[string]any{})
-	}
-	if opts.maxObservationAgeSet && opts.maxObservationAge <= 0 {
-		return nil, fmt.Errorf("--max-observation-age must be greater than zero")
-	}
-	schemas, err := inference.Shared(wsPolicy.SchemaSearchPaths...)
-	if err != nil {
-		return nil, fmt.Errorf("load binding schemas: %w", err)
-	}
-	var maxAge *time.Duration
-	if opts.maxObservationAgeSet {
-		age := opts.maxObservationAge
-		maxAge = &age
-	}
-	elaboration, err := (wiring.Resolver{Catalog: db, Schemas: schemas}).Elaborate(template, wiring.ResolveRequest{
-		Workspace: effectiveWorkspaceName(), MaxObservationAge: maxAge,
-		CurrentProducerRuns: deps.set.producerRuns(),
-	})
-	if err != nil {
-		if jsonOutput && deps.set == nil {
-			diagnostic := resolutionDiagnosticReport(template, err)
-			if rendered, renderErr := diagnostic.render(true); renderErr == nil {
-				fmt.Fprint(outw(), rendered)
-			}
-		}
-		return nil, err
-	}
-	resolved.bindingEvidence = elaboration.Evidence
-	return elaboration.Model, nil
+	return &resolvedRun{model: model, modelDir: templateDir}, nil
 }
 
 // recordRunContext writes the model instance and its dependency facts, and

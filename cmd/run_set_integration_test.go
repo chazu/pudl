@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,29 +20,23 @@ import (
 )
 
 // Run-set fixture models observe through #CommandObserve shell runs. The
-// producer honours two switches so one fixture covers failure and empty
-// observations: PUDL_TEST_FAIL_PRODUCER and PUDL_TEST_EMPTY_PRODUCER. The
-// consumer writes its bound input to PUDL_TEST_CONSUMER_OUT, proving the
-// producer's value reached the consumer's command.
+// producer fails when PUDL_TEST_FAIL_PRODUCER is set. The consumer depends on
+// the producer and touches PUDL_TEST_CONSUMER_OUT when its command runs, so a
+// test can tell whether a blocked consumer ran.
 const runSetFixtureModels = `
 
 #Producer: #SystemModel & {
 	name: "producer"
 	populate: runs: [{argv: ["sh", "-c", """
 		if [ -n "$PUDL_TEST_FAIL_PRODUCER" ]; then echo 'producer observation failed' >&2; exit 1; fi
-		if [ -n "$PUDL_TEST_EMPTY_PRODUCER" ]; then echo '[]'; exit 0; fi
 		echo '[{"_schema":"resources.thing","name":"one","value":"ready"}]'
 		"""]}]
 }
 
 #Consumer: #SystemModel & {
 	name: "consumer"
-	inputs: value: string @pudl(binding=plain)
-	bindings: value: {
-		source: {model: "producer", schema: "pudl/resources.#Thing", identity: {name: "one"}}
-		path: "/value"
-	}
-	populate: runs: [{argv: ["sh", "-c", "printf '%s' \"$1\" > \"$PUDL_TEST_CONSUMER_OUT\"; echo '[{\"_schema\":\"resources.consumer\",\"name\":\"consumer\"}]'", "consumer", inputs.value]}]
+	depends_on: ["producer"]
+	populate: runs: [{argv: ["sh", "-c", "touch \"$PUDL_TEST_CONSUMER_OUT\"; echo '[{\"_schema\":\"resources.consumer\",\"name\":\"consumer\"}]'"]}]
 }
 
 #Zeta: #SystemModel & {
@@ -78,25 +71,20 @@ func writeRunSetFixtureSchemas(t *testing.T, schemaRoot string) {
 		tracked_fields: ["value"]
 	}
 	name: string
-	value: string @pudl(binding=plain)
+	value: string
 	...
 }
 `
 	require.NoError(t, os.WriteFile(filepath.Join(resourcesDir, "resources.cue"), []byte(resources), 0o644))
 }
 
-// runSetHarness drives run sets with explicit options.
+// runSetHarness drives run sets.
 type runSetHarness struct {
-	opts        runSetOptions
 	consumerOut string
 }
 
 func (h *runSetHarness) run(models ...string) error {
-	return runSetForTest(models, h.opts)
-}
-
-func runSetForTest(models []string, opts runSetOptions) error {
-	_, err := executeRunSet(context.Background(), models, opts)
+	_, err := executeRunSet(context.Background(), models)
 	return err
 }
 
@@ -151,13 +139,12 @@ func memberRunReportForTest(t *testing.T, pudlDir, runID string) RunReport {
 	return report
 }
 
-func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing.T) {
+func TestRunSetRunsProducersFirstAndPersistsLinkedReports(t *testing.T) {
 	h, pudlDir := setupRunSetFixture(t)
 
 	require.NoError(t, h.run("consumer", "producer"))
-	bound, err := os.ReadFile(h.consumerOut)
-	require.NoError(t, err)
-	assert.Equal(t, "ready", string(bound), "the producer's value reached the consumer's command")
+	_, err := os.Stat(h.consumerOut)
+	require.NoError(t, err, "the consumer ran")
 
 	setReport := latestRunSetReportForTest(t, pudlDir)
 	assert.Equal(t, database.RunStatusSucceeded, setReport.Status)
@@ -167,9 +154,6 @@ func TestRunSetUsesProducerCurrentRunSnapshotAndPersistsLinkedReports(t *testing
 	consumerReport := memberRunReportForTest(t, pudlDir, setReport.Members[1].RunID)
 	assert.Equal(t, setReport.RunSetID, consumerReport.RunSetID)
 	assert.Equal(t, database.RunStatusSucceeded, consumerReport.CompletionStatus)
-	require.Len(t, consumerReport.Bindings, 1)
-	assert.Equal(t, "current-run", consumerReport.Bindings[0].Selection)
-	assert.Equal(t, setReport.Members[0].RunID, consumerReport.Bindings[0].ProducerRunID)
 }
 
 func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t *testing.T) {
@@ -189,16 +173,6 @@ func TestRunSetBlocksConsumerAndContinuesIndependentBranchAfterProducerFailure(t
 		memberReport := memberRunReportForTest(t, pudlDir, member.RunID)
 		assert.Equal(t, member.Result, memberReport.CompletionStatus)
 		assert.Equal(t, report.RunSetID, memberReport.RunSetID)
-		if member.Model == "consumer" {
-			require.Len(t, memberReport.BindingIssues, 1)
-			issue := memberReport.BindingIssues[0]
-			assert.Equal(t, "value", issue.Input)
-			assert.Equal(t, "producer", issue.ProducerModel)
-			assert.Equal(t, "pudl/resources.#Thing", issue.Schema)
-			assert.Equal(t, "/value", issue.Path)
-			assert.Equal(t, "producer-unsuccessful", issue.Code)
-			assert.Contains(t, issue.Message, "historical fallback is forbidden")
-		}
 	}
 	assert.Equal(t, database.RunStatusFailed, results["producer"])
 	assert.Equal(t, database.RunStatusBlocked, results["consumer"])
@@ -222,26 +196,4 @@ func TestRunSetReportCommandReadsPersistedReportByID(t *testing.T) {
 	t.Cleanup(func() { jsonOutput = previousJSON })
 	require.NoError(t, runReportCmd.RunE(runReportCmd, []string{"set_1"}))
 	require.ErrorContains(t, runReportCmd.RunE(runReportCmd, []string{"missing"}), "not found")
-}
-
-func TestRunSetPersistsStructuredUnresolvedBindingWhenCurrentSnapshotLacksSource(t *testing.T) {
-	h, pudlDir := setupRunSetFixture(t)
-	t.Setenv("PUDL_TEST_EMPTY_PRODUCER", "1")
-
-	err := h.run("consumer", "producer")
-	require.ErrorContains(t, err, "run set")
-	report := latestRunSetReportForTest(t, pudlDir)
-	require.Len(t, report.Members, 2)
-	consumer := report.Members[1]
-	assert.Equal(t, "consumer", consumer.Model)
-	assert.Equal(t, database.RunStatusFailed, consumer.Result)
-
-	memberReport := memberRunReportForTest(t, pudlDir, consumer.RunID)
-	require.Len(t, memberReport.BindingIssues, 1)
-	issue := memberReport.BindingIssues[0]
-	assert.Equal(t, "value", issue.Input)
-	assert.Equal(t, "producer", issue.ProducerModel)
-	assert.Equal(t, "source-absent", issue.Code)
-	assert.Equal(t, "/value", issue.Path)
-	assert.True(t, strings.Contains(issue.Message, "no matching"), issue.Message)
 }

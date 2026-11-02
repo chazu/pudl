@@ -20,7 +20,6 @@ const modelDependsRelation = "model_depends_on"
 // declared reconcile and the Phase-2 derived reconcile never clobber each
 // other: each only manages edges carrying its own source.
 func declaredSource(model string) string { return "model:" + model }
-func bindingSource(model string) string  { return "binding:" + model }
 
 // declaredDepsOf canonicalizes a model's declared depends_on into a set of
 // resolved instance names (so the `to` recorded matches the `from` that dep
@@ -117,22 +116,6 @@ func reconcileEdgesIn(store dependencyFactStore, from, source string, wanted map
 		}
 	}
 	return nil
-}
-
-func bindingDepsOf(template *systemmodel.ModelTemplate) map[string]struct{} {
-	dependencies := make(map[string]struct{}, len(template.BindingProducers))
-	for _, producer := range template.BindingProducers {
-		canonical := producer
-		if found, _, _, err := resolveModelTemplate(producer); err == nil && found != nil {
-			canonical = found.Name
-		}
-		dependencies[canonical] = struct{}{}
-	}
-	return dependencies
-}
-
-func reconcileBindingDependencies(db *database.CatalogDB, template *systemmodel.ModelTemplate) error {
-	return reconcileEdges(db, template.Name, bindingSource(template.Name), bindingDepsOf(template))
 }
 
 // reconcileModelDependencies reconciles a model's DECLARED depends_on into

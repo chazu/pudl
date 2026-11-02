@@ -1160,7 +1160,7 @@
         {
           "use": "validate \u003cname\u003e",
           "short": "Validate a registered #SystemModel without running it",
-          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem. Bound models remain valid templates before their catalog values exist;\ntheir final concrete values are validated again when pudl runs them.",
+          "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem.",
           "args": "custom",
           "flags": [
             {
@@ -1385,12 +1385,6 @@
           "persistent": true
         },
         {
-          "name": "max-observation-age",
-          "usage": "reject a bound producer snapshot older than this duration",
-          "type": "duration",
-          "default": "0s"
-        },
-        {
           "name": "populate",
           "usage": "Run an unregistered observer: command:\u003ccmdline\u003e (a command printing JSON records)",
           "type": "string"
@@ -1435,7 +1429,7 @@
         {
           "use": "set \u003cmodel\u003e [\u003cmodel\u003e...]",
           "short": "Run an explicit producer/consumer model set in dependency order",
-          "long": "Run exactly the named models in dependency order.\n\nThe set is closed and explicit: pudl does not add missing producers. A binding\nwhose producer is not named fails preflight before any member runs. Every\nmember is observe-only, and successful producer snapshots are pinned for\ndownstream plain bindings.\n\nExamples:\n  pudl run set network app\n  pudl run set network app --max-observation-age 15m\n  pudl run set network app --detailed-exitcode\n  pudl run report",
+          "long": "Run exactly the named models in dependency order.\n\nThe set is closed and explicit: pudl does not add missing producers. Members\nrun producers first, following depends_on within the named set. Every member\nis observe-only.\n\nExamples:\n  pudl run set network app\n  pudl run set network app --detailed-exitcode\n  pudl run report",
           "args": "custom",
           "flags": [
             {
@@ -1457,12 +1451,6 @@
               "type": "bool",
               "default": "false",
               "persistent": true
-            },
-            {
-              "name": "max-observation-age",
-              "usage": "reject a bound producer snapshot older than this duration",
-              "type": "duration",
-              "default": "0s"
             },
             {
               "name": "progress-json",

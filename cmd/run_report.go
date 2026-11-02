@@ -3,32 +3,27 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/chazu/pudl/internal/acute"
 	"strings"
 
-	"github.com/chazu/pudl/internal/database"
-	"github.com/chazu/pudl/internal/systemmodel"
-	"github.com/chazu/pudl/internal/wiring"
+	"github.com/chazu/pudl/internal/acute"
 )
 
 // RunReport is the structured result of a `pudl run`, collected across phases and
 // rendered as markdown (human, default) or JSON (--json, machine/agent/CI). Both
 // outputs carry the same data — the design is agent-native (README:36,445).
 type RunReport struct {
-	Summary          *acute.VerdictSummary    `json:"summary,omitempty"`
-	ReportVersion    int                      `json:"report_version"`
-	RunSetID         string                   `json:"run_set_id,omitempty"`
-	RunID            string                   `json:"run_id"`
-	Model            string                   `json:"model"`
-	Mode             string                   `json:"mode"` // observe-only | observe-only (inventory) | checks-only
-	CompletionStatus string                   `json:"completion_status"`
-	Populate         *PopulateReport          `json:"populate,omitempty"`
-	Drift            *ModelDriftResult        `json:"drift,omitempty"`
-	Checks           []CheckResult            `json:"checks,omitempty"`
-	OK               bool                     `json:"ok"` // overall: no phase error, no fail-severity check failed
-	Error            string                   `json:"error,omitempty"`
-	Bindings         []wiring.BindingEvidence `json:"bindings,omitempty"`
-	BindingIssues    []wiring.BindingIssue    `json:"unresolved_bindings,omitempty"`
+	Summary          *acute.VerdictSummary `json:"summary,omitempty"`
+	ReportVersion    int                   `json:"report_version"`
+	RunSetID         string                `json:"run_set_id,omitempty"`
+	RunID            string                `json:"run_id"`
+	Model            string                `json:"model"`
+	Mode             string                `json:"mode"` // observe-only | observe-only (inventory) | checks-only
+	CompletionStatus string                `json:"completion_status"`
+	Populate         *PopulateReport       `json:"populate,omitempty"`
+	Drift            *ModelDriftResult     `json:"drift,omitempty"`
+	Checks           []CheckResult         `json:"checks,omitempty"`
+	OK               bool                  `json:"ok"` // overall: no phase error, no fail-severity check failed
+	Error            string                `json:"error,omitempty"`
 }
 
 // applyRunError copies a phase error into the report before it is rendered or
@@ -41,19 +36,6 @@ func applyRunError(report *RunReport, err error) {
 	report.OK = false
 	report.Error = err.Error()
 	report.CompletionStatus = failureStatus(err)
-}
-
-func resolutionDiagnosticReport(template *systemmodel.ModelTemplate, err error) *RunReport {
-	mode := "observe-only"
-	model := ""
-	if template != nil {
-		model = template.Name
-	}
-	return &RunReport{
-		ReportVersion: 2, Model: model, Mode: mode,
-		CompletionStatus: database.RunStatusFailed, OK: false, Error: errorString(err),
-		BindingIssues: resolutionBindingIssues(template, err),
-	}
 }
 
 // PopulateReport summarizes an inventory populate.
@@ -104,22 +86,6 @@ func (r *RunReport) markdown() string {
 	fmt.Fprintf(&b, "- status: %s\n", status)
 	if r.Error != "" {
 		fmt.Fprintf(&b, "- error: %s\n", r.Error)
-	}
-	if len(r.Bindings) > 0 {
-		fmt.Fprintf(&b, "\n## bindings\n")
-		for _, binding := range r.Bindings {
-			fmt.Fprintf(&b, "- %s <- %s %s%s (%s, snapshot %s, age %s)\n",
-				binding.Input, binding.ProducerModel, binding.Schema, binding.Path,
-				binding.Selection, binding.SnapshotID, binding.Age)
-		}
-	}
-	if len(r.BindingIssues) > 0 {
-		fmt.Fprintf(&b, "\n## unresolved bindings\n")
-		for _, issue := range r.BindingIssues {
-			fmt.Fprintf(&b, "- %s <- %s %s%s (%s): %s\n",
-				issue.Input, issue.ProducerModel, issue.Schema, issue.Path,
-				issue.Code, issue.Message)
-		}
 	}
 
 	if r.Populate != nil {

@@ -78,9 +78,6 @@ func summarizeRun(r *RunReport, db *database.CatalogDB) *acute.VerdictSummary {
 	if r.Drift != nil {
 		snapshotIDs = append(snapshotIDs, r.Drift.SnapshotID)
 	}
-	for _, binding := range r.Bindings {
-		snapshotIDs = append(snapshotIDs, binding.SnapshotID)
-	}
 	for _, id := range snapshotIDs {
 		if db != nil && id != "" {
 			if snapshot, err := db.GetObserveSnapshot(id); err == nil && snapshot != nil {
