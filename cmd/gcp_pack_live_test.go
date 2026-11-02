@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,7 +70,25 @@ func TestGCPPackLiveCollectorsEnumerateProjects(t *testing.T) {
 		require.Equal(t, []string{"proj-a", "proj-b"}, report.Populate.Inputs, model)
 		require.Empty(t, report.Populate.FailedInputs, model)
 		require.Equal(t, 2, report.Populate.Records, "%s: one record per project", model)
+		require.Equal(t, 2, report.Populate.NewRecords, "%s: all new on the first run", model)
 	}
+
+	// A re-run over unchanged resources observes the same records but stores
+	// none as new; records matches what `pudl snapshot show` reports.
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	rerun := checkedModel(t, r.Stdout).Populate
+	require.NotNil(t, rerun)
+	require.Equal(t, 2, rerun.Records, "the re-run still observed both projects' records")
+	require.Zero(t, rerun.NewRecords, "nothing changed, so nothing is stored as new")
+	var shown struct {
+		Records int `json:"records"`
+	}
+	r = runCLI(t, "snapshot", "show", rerun.SnapshotID, "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.NoError(t, json.Unmarshal([]byte(r.Stdout), &shown))
+	require.Equal(t, rerun.Records, shown.Records)
+
 	calls := readLog(t, log)
 	require.Contains(t, calls, "projects list --format=json\n")
 	require.Contains(t, calls, "compute firewall-rules list --project=proj-b --format=json")

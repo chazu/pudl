@@ -889,6 +889,11 @@ Beads work:
   paths (and broken sensitive declarations), and a `populate.schema` naming a
   policy, before any command runs. See
   `implog/2026_11_02_model_load_schema_contracts.md`.
+- `pudl-xcc` (done): a check report's `populate.records` counts the records
+  observed in the snapshot (as `pudl snapshot show` does), and the new
+  `populate.new_records` counts those stored as new catalog entries. A re-run
+  over unchanged resources no longer reports `records: 0`. See
+  `implog/2026_11_02_populate_new_records.md`.
 - `pudl-167` (done): the `name|path|id` inventory identity fallback is one
   function (`acute.IdentityFields`), and inventory drift and snapshot
   comparison report each schema that used it (`identity_fallbacks`). Not fail

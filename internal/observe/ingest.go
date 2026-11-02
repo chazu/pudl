@@ -91,8 +91,12 @@ type ObserveIngest struct {
 // ObserveIngestResult is what an ingest recorded.
 type ObserveIngestResult struct {
 	SchemaMismatches int
-	Records          int
-	SnapshotID       string
+	// Records counts the distinct records linked into the snapshot, whether
+	// stored new or re-observed unchanged; NewRecords counts those stored as
+	// new catalog entries.
+	Records    int
+	NewRecords int
+	SnapshotID string
 	// Redacted counts sensitive values replaced before storage.
 	Redacted int
 	// Facts counts projected facts per relation; FactWarnings explains gaps.

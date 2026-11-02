@@ -166,6 +166,7 @@ func (r *modelRun) ingest(observeJSON []byte, in populateIngest) (int, string, e
 	}
 	if in.summary != nil {
 		in.summary.SchemaMismatches = result.SchemaMismatches
+		in.summary.NewRecords = result.NewRecords
 		in.summary.SecretWarnings, in.summary.SecretWarningsTotal = result.SecretWarnings, result.SecretWarningsTotal
 	}
 	return result.Records, result.SnapshotID, err

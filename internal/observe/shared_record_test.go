@@ -37,7 +37,8 @@ func TestIngestObserve_SecondCollectorReusesByteIdenticalRecord(t *testing.T) {
 		SnapshotID: "snap_b", Model: "model_b", Scope: "model_b", Complete: true,
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 0, second.Records, "the record is deduplicated, not stored twice")
+	assert.Equal(t, 1, second.Records, "the record is observed in the second snapshot")
+	assert.Equal(t, 0, second.NewRecords, "the record is deduplicated, not stored twice")
 
 	aRecords, err := db.SnapshotRecordEntries("snap_a")
 	require.NoError(t, err)

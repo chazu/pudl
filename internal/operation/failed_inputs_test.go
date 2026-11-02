@@ -101,6 +101,7 @@ func TestCheckFanoutWithoutFailuresIsComplete(t *testing.T) {
 	assert.Equal(t, database.RunStatusSucceeded, report.CompletionStatus)
 	require.NotNil(t, report.Populate)
 	assert.Equal(t, 3, report.Populate.Records)
+	assert.Equal(t, 3, report.Populate.NewRecords)
 	assert.Equal(t, []string{"p1", "p2", "p3"}, report.Populate.Inputs)
 	assert.Empty(t, report.Populate.FailedInputs)
 	for _, c := range report.Checks {
@@ -126,7 +127,8 @@ func TestCheckFanoutIngestsTheRestWhenOneInputFails(t *testing.T) {
 	assert.Equal(t, database.RunStatusFailed, report.CompletionStatus)
 	pr := report.Populate
 	require.NotNil(t, pr)
-	assert.Equal(t, 0, pr.Records, "p1 and p3 are unchanged since the first run")
+	assert.Equal(t, 2, pr.Records, "p1 and p3 were observed again")
+	assert.Equal(t, 0, pr.NewRecords, "p1 and p3 are unchanged since the first run")
 	assert.Equal(t, 3, pr.Runs)
 	require.Len(t, pr.FailedInputs, 1)
 	failed := pr.FailedInputs[0]

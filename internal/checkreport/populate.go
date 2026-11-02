@@ -10,7 +10,7 @@ import (
 // line of its stderr (JSON carries the whole tail).
 func (p *Populate) writeMarkdown(b *strings.Builder) {
 	// The populate target is an internal catalog key; JSON carries it.
-	fmt.Fprintf(b, "\n## populate\n- records: %d\n", p.Records)
+	fmt.Fprintf(b, "\n## populate\n- records: %d (%d new)\n", p.Records, p.NewRecords)
 	if p.SnapshotID != "" {
 		fmt.Fprintf(b, "- snapshot_id: %s\n", p.SnapshotID)
 	}

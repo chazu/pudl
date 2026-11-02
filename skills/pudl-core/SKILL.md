@@ -93,6 +93,9 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).
+- Report `populate.records` counts records observed in the snapshot (as
+  `snapshot show` does); `populate.new_records` those stored as new. A re-run
+  over unchanged resources has `new_records: 0`, not an empty observation.
 - Snapshots: `pudl snapshot list|show|current|retain|prune`;
   `snapshot show NEW --compare OLD`; `pudl show ID --history`.
 

@@ -58,6 +58,12 @@ With `each`, every run must use `{{item}}`; without it, none may. The report
 records the inputs under `populate.inputs`. A failing `each` command fails the
 populate with nothing ingested.
 
+The report's `populate.records` counts the records observed in the snapshot,
+the same number `pudl snapshot show` reports; `populate.new_records` counts
+those stored as new catalog entries. Records are content-addressed, so a re-run
+over unchanged resources reports every record under `records` and
+`new_records: 0`.
+
 ### Failed inputs
 
 A run that exits nonzero, times out or prints something other than JSON

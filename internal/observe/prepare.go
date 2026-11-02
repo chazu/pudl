@@ -213,6 +213,9 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 }
 
 func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResult, error) {
+	// observed holds the distinct entries linked into the snapshot (what
+	// `pudl snapshot show` counts); ingested counts those stored as new.
+	observed := map[string]struct{}{}
 	ingested := 0
 	var policyChange policyfacts.Change
 	err := artifacts.WithLock(p.in.Context, db.Root(), func() error {
@@ -243,6 +246,7 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 					return err
 				}
 				entry := descriptor.CatalogEntry
+				observed[entry.ID] = struct{}{}
 				// Dedup on the entry ID itself — the content hash — since that is
 				// what the catalog keys on. A byte-identical record from another
 				// target or model is the same entry: reuse it and record its
@@ -297,7 +301,7 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 	if err != nil {
 		return ObserveIngestResult{}, err
 	}
-	result := ObserveIngestResult{Records: ingested, SnapshotID: p.in.SnapshotID}
+	result := ObserveIngestResult{Records: len(observed), NewRecords: ingested, SnapshotID: p.in.SnapshotID}
 	if p.route.mismatches != nil {
 		result.SchemaMismatches = *p.route.mismatches
 	}

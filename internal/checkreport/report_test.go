@@ -66,6 +66,11 @@ func TestRunReportMarkdownShowsFailureContext(t *testing.T) {
 	assert.True(t, strings.Contains(text, "status: FAILED"))
 }
 
+func TestRunReportMarkdownShowsObservedAndNewRecords(t *testing.T) {
+	text := (&ModelReport{Model: "pods", Populate: &Populate{Records: 55, NewRecords: 0}}).Markdown()
+	assert.Contains(t, text, "- records: 55 (0 new)")
+}
+
 func TestRenderRunPlan_ObserveOnly(t *testing.T) {
 	m := &systemmodel.SystemModel{
 		Name:     "fw",

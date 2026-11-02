@@ -227,12 +227,15 @@ func TestIngestObserveResults_Dedup(t *testing.T) {
 
 	// Same data again — should deduplicate
 	count2Result, err := IngestObserve(db, ObserveIngest{Reader: strings.NewReader(input), Origin: "mu-observe", DataDir: dataDir, Graph: nil})
-	count2 := count2Result.Records
+	count2 := count2Result.NewRecords
 	if err != nil {
 		t.Fatalf("second ingest failed: %v", err)
 	}
 	if count2 != 0 {
-		t.Errorf("expected 0 on duplicate ingest, got %d", count2)
+		t.Errorf("expected 0 new on duplicate ingest, got %d", count2)
+	}
+	if count2Result.Records != 1 {
+		t.Errorf("expected the duplicate observed once, got %d", count2Result.Records)
 	}
 }
 

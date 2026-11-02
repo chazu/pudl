@@ -47,8 +47,12 @@ type Populate struct {
 	SchemaPolicy     string `json:"schema_policy,omitempty"`
 	SchemaMismatches int    `json:"schema_mismatches,omitempty"`
 	Target           string `json:"target"`
-	Records          int    `json:"records"`
-	SnapshotID       string `json:"snapshot_id,omitempty"`
+	// Records counts the records observed in the snapshot (what `pudl
+	// snapshot show` reports); NewRecords counts those stored as new catalog
+	// entries. A re-run over unchanged resources has NewRecords 0.
+	Records    int    `json:"records"`
+	NewRecords int    `json:"new_records"`
+	SnapshotID string `json:"snapshot_id,omitempty"`
 	// SecretWarnings are likely secrets outside sensitive-field coverage, by
 	// record, path and kind (never the value); stored data is unchanged.
 	SecretWarnings      []secretscan.Warning `json:"secret_warnings,omitempty"`
