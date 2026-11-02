@@ -1,0 +1,51 @@
+pudl guide packs — bundled content packs and tutorials
+
+INSTALL
+
+  pudl init
+  pudl example install gcp
+  pudl example install aws
+  pudl example install gcp-network-hygiene
+  pudl example install git-inventory
+
+  A pack is plain CUE and fixtures written into .pudl/. Identical files are
+  left alone; files you changed are kept and reported as conflicts.
+
+WHAT A CLOUD PACK HOLDS
+
+  schema/<cloud>/*.cue             draft type schemas with identity,
+                                   ownership, sensitive fields and facts
+  schema/<cloud>/policies.cue      best-practice policies
+  schema/pudl/rules/<cloud>_pack.cue   cross-resource rules
+  schema/models/<cloud>_pack.cue        collectors and the live settings
+  schema/models/<cloud>_pack_checks.cue check families and their waivers
+  populators/<cloud>/*.json        fixtures for offline runs
+
+  Every collector has a live model (gcp-firewalls, aws-instances) and an
+  offline fixture twin (gcp-fixture-firewalls). Check families are
+  checks-only models; name them with their collectors:
+
+  pudl model list
+  pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
+    gcp-fixture-network-hygiene-checks --detailed-exitcode
+
+  The fixtures hold noncompliant resources on purpose, so that exits 2.
+
+GO LIVE
+
+  Edit the settings at the top of .pudl/schema/models/gcp_pack.cue
+  (_gcpProjects) or aws_pack.cue (_awsAccounts, _awsRegions), name each
+  project's or account's team in schema/<cloud>/owners.cue, then:
+
+  pudl model validate gcp-firewalls
+  pudl check gcp-firewalls gcp-addresses gcp-routers gcp-network-hygiene-checks
+
+  Review each draft type against your own CLI output and set
+  review: {status: "validated", by: ..., at: ...} once it is complete.
+
+TUTORIALS
+
+  gcp-network-hygiene   one firewall type, a policy, a fixture and a fix
+  git-inventory         inventory drift against expected branches, no cloud
+
+  Each pack's README is under examples/ in the source tree.

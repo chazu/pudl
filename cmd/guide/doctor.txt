@@ -1,0 +1,50 @@
+pudl guide doctor — diagnose and repair the workspace
+
+DIAGNOSE
+
+  pudl doctor                       structure, schemas, catalog, secrets
+  pudl doctor --health-only         workspace structure only
+  pudl doctor --entry <entry-id>    one record
+  pudl doctor --json                versioned report; each repair has a status
+
+  Doctor validates every record against its assigned schema, warns of likely
+  secrets in stored payloads and facts (naming the path, never the value),
+  and names the repair for each condition it finds. Without --fix it writes
+  nothing.
+
+REPAIR
+
+  pudl doctor --fix --dry-run                   preview every repair
+  pudl doctor --fix                             apply them
+  pudl doctor --fix --only projections          apply one
+  pudl doctor --fix --only inference --schema gcp.#Firewall
+
+  schema-names      non-canonical schema names
+  policy-leaves     records assigned to a policy instead of its type
+  inference         inferred records whose inference now picks another type
+  identity          missing resource IDs, or IDs namespaced by a leaf schema
+  projections       projected facts out of sync with records or facts specs
+  policy-results    stale, orphaned or missing policy results
+  data-permissions  data files other users can read
+  sensitive-scrub   plaintext stored before a field became sensitive;
+                    opt-in, runs only when --only names it
+
+  --origin and --schema narrow the scan and repairs. Explicit --schema
+  assignments are never re-inferred unless --include-explicit is given.
+
+COMMON CASES
+
+  A query or check over imported data finds nothing:
+    read the stderr warnings of 'pudl query', then
+    pudl doctor --fix --dry-run --only projections
+    pudl import <file> --schema <type> --dry-run
+
+  A model fails to load with "retired field(s)": remove the named field;
+  docs/retired-commands.md lists replacements.
+
+  A collector command fails: the report quotes its stderr tail. Run the argv
+  by hand; set populate.timeout for slow commands.
+
+  Doctor flags a secret: add the path to _pudl.sensitive_fields and run
+  pudl doctor --fix --only sensitive-scrub, or add it to
+  _pudl.secret_scan_ignore if it is not a secret.
