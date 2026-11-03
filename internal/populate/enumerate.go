@@ -22,10 +22,8 @@ func (x *executor) enumerate(each systemmodel.Enumeration, out string) ([]string
 		return fail(err)
 	}
 	if failure != nil {
-		if failure.Stderr != "" {
-			return fail(fmt.Errorf("%s\nstderr (last %d bytes):\n%s", failure.Error, stderrTail, failure.Stderr))
-		}
-		return fail(fmt.Errorf("%s", failure.Error))
+		failure.Argv = each.Argv
+		return fail(&eachError{failure: *failure})
 	}
 	var selectPath *fieldpath.Path
 	if each.Select != "" {

@@ -58,6 +58,9 @@ type Populate struct {
 	// that exited non-zero. A match means the input has no resources (an API
 	// that is disabled, say): the run is an empty input, not a failed one.
 	EmptyWhen []string `json:"empty_when,omitempty"`
+	// Fallback observes the same resources another way when these runs
+	// cannot (see Fallback).
+	Fallback *Fallback `json:"fallback,omitempty"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }
@@ -161,6 +164,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	if _, err := m.Populate.EmptyPatterns(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
+	if err := m.Populate.validateFallback(); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	return &m, nil

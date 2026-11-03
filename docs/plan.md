@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Populate fallback (2026-11-03)
+
+`populate.fallback: {when, observe}` names a second way to observe the same
+resources. It replaces the populate's runs when a run or `each` fails with
+stderr matching `when`, or `each` lists nothing; the two sources are never
+mixed, and the check report shows `populate.fallback` with the trigger. See
+`implog/2026_11_03_populate_fallback.md`. Closes `pudl-q4v.3`; its GCP pack
+settings moved to `pudl-q4v.4`.
+
 ### Per-run transforms in CUE (2026-11-03)
 
 A `#CommandRun` can declare `transform: {in: _, out: ...}`: each printed

@@ -67,6 +67,10 @@ type Populate struct {
 	// were observed with no records and do not make the observation
 	// incomplete. Listed so a declared-empty input stays visible.
 	EmptyInputs []populate.EmptyInput `json:"empty_inputs,omitempty"`
+	// Fallback is set when populate.fallback answered instead of the
+	// populate's own runs; Inputs, Runs and the input lists are then the
+	// fallback's.
+	Fallback *populate.FallbackUse `json:"fallback,omitempty"`
 }
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated

@@ -33,11 +33,51 @@ snapshots they trust, and pudl tells "absent" apart from "not observed".
 | `timeout` | Per-run limit as a Go duration (default `10m`) |
 | `fail_fast` | Fail the whole populate, ingesting nothing, on the first failed run |
 | `empty_when` | Regular expressions (Go RE2) matched against a failed run's stderr; a match makes the run an empty input (below) |
+| `fallback` | `{when, observe}`: another way to observe the same resources, used when these runs cannot answer (below) |
 
 The environment is inherited, so cloud CLI credentials work. `argv` and `set`
 are recorded with the model: keep secrets out of them. A record can route
 itself with a quoted `"_schema"` field. `pudl check --populate
 'command:<cmdline>'` tries one command without a model.
+
+### Fall back to another source
+
+A populate can name a second way to observe the same resources, used when its
+own runs cannot answer: for example gcloud list commands behind a Cloud Asset
+Inventory search.
+
+```cue
+populate: {
+	schema: "gcp.#ComputeInstance"
+	each: {argv: ["gcloud", "organizations", "list", "--format=json"], select: "name"}
+	runs: [{argv: ["gcloud", "asset", "search-all-resources", "--scope={{item}}", ...]}]
+	fallback: {
+		when: ["SERVICE_DISABLED", "USER_PROJECT_DENIED", "PERMISSION_DENIED"]
+		observe: {
+			each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+			runs: [{argv: ["gcloud", "compute", "instances", "list", "--project={{item}}", "--format=json"]
+				set: project: "{{item}}"}]
+			empty_when: ["SERVICE_DISABLED"]
+		}
+	}
+}
+```
+
+The fallback is used instead of the populate's runs when:
+
+- a run exits non-zero with stderr matching a `when` pattern (checked before
+  `empty_when`; a timeout never matches);
+- the `each` command fails that way; or
+- `each` lists no inputs, e.g. credentials that see no organization.
+
+The remaining runs are skipped and the records already read are discarded,
+so the two sources are never mixed. The fallback has its own `runs`, `each`,
+`timeout`, `fail_fast` and `empty_when`. Its records are routed by the
+populate's `schema`, and its failures are failed inputs as usual. It cannot
+set a schema or declare a fallback of its own. The report says
+`source: fallback` with what triggered it (JSON `populate.fallback`: `reason`
+`failed_input`, `each_failed` or `no_inputs`, the matching `pattern` and
+`stderr_line`, and the `trigger` run).
 
 ### Reshape records with a transform
 

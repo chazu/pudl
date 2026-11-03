@@ -14,6 +14,9 @@ func (p *Populate) writeMarkdown(b *strings.Builder) {
 	if p.SnapshotID != "" {
 		fmt.Fprintf(b, "- snapshot_id: %s\n", p.SnapshotID)
 	}
+	if p.Fallback != nil {
+		fmt.Fprintf(b, "- source: fallback (%s)\n", p.Fallback.Summary())
+	}
 	if p.Inputs != nil {
 		fmt.Fprintf(b, "- inputs (%d): %s\n", len(p.Inputs), strings.Join(p.Inputs, ", "))
 	}

@@ -22,23 +22,34 @@ var (
 	transformOut = cue.ParsePath("out")
 )
 
-// decodeTransforms attaches each run's transform, read from the CUE value
-// because Decode cannot carry a value that depends on in.
+// decodeTransforms attaches each run's transform, the populate's and its
+// fallback's, read from the CUE value because Decode cannot carry a value
+// that depends on in.
 func decodeTransforms(inst cue.Value, m *SystemModel) error {
-	runs := inst.LookupPath(cue.ParsePath("populate.runs"))
-	if !runs.Exists() {
+	if err := attachTransforms(inst, "populate.runs", m.Populate.Runs); err != nil {
+		return err
+	}
+	if f := m.Populate.Fallback; f != nil {
+		return attachTransforms(inst, "populate.fallback.observe.runs", f.Observe.Runs)
+	}
+	return nil
+}
+
+func attachTransforms(inst cue.Value, path string, runs []CommandRun) error {
+	list := inst.LookupPath(cue.ParsePath(path))
+	if !list.Exists() {
 		return nil
 	}
-	for i := range m.Populate.Runs {
-		v := runs.LookupPath(cue.MakePath(cue.Index(i), cue.Str("transform")))
+	for i := range runs {
+		v := list.LookupPath(cue.MakePath(cue.Index(i), cue.Str("transform")))
 		if !v.Exists() {
 			continue
 		}
 		t, err := NewTransform(v)
 		if err != nil {
-			return fmt.Errorf("populate.runs[%d].transform: %w", i, err)
+			return fmt.Errorf("%s[%d].transform: %w", path, i, err)
 		}
-		m.Populate.Runs[i].Transform = t
+		runs[i].Transform = t
 	}
 	return nil
 }
@@ -107,49 +118,57 @@ func (t *Transform) Apply(record map[string]any) (out map[string]any, keep bool,
 }
 
 // validateConcrete requires the model to be concrete everywhere except in
-// populate.runs[*].transform, where in is a placeholder and out depends on
-// it. Transforms are still checked for errors.
+// run transforms (any `transform` of an element of a `runs` list), where in
+// is a placeholder and out depends on it. Transforms are still checked for
+// errors.
 func validateConcrete(v cue.Value) error {
 	if err := v.Validate(cue.Concrete(false)); err != nil {
 		return err
 	}
-	return eachField(v, func(label string, f cue.Value) error {
-		if label != "populate" {
-			return f.Validate(cue.Concrete(true))
-		}
-		return eachField(f, func(label string, pf cue.Value) error {
-			if label != "runs" {
-				return pf.Validate(cue.Concrete(true))
-			}
-			list, err := pf.List()
-			if err != nil {
-				return err
-			}
-			for list.Next() {
-				if err := eachField(list.Value(), func(label string, rf cue.Value) error {
-					if label == "transform" {
-						return nil
-					}
-					return rf.Validate(cue.Concrete(true))
-				}); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
+	return concreteExceptTransforms(v, false)
 }
 
-// eachField calls fn for each regular field of a struct value.
-func eachField(v cue.Value, fn func(label string, f cue.Value) error) error {
-	iter, err := v.Fields()
-	if err != nil {
-		return err
-	}
-	for iter.Next() {
-		if err := fn(iter.Selector().String(), iter.Value()); err != nil {
+func concreteExceptTransforms(v cue.Value, isRun bool) error {
+	switch v.IncompleteKind() {
+	case cue.StructKind:
+		iter, err := v.Fields()
+		if err != nil {
 			return err
 		}
+		for iter.Next() {
+			label, child := iter.Selector().String(), iter.Value()
+			if isRun && label == "transform" {
+				continue
+			}
+			if label == "runs" && child.IncompleteKind() == cue.ListKind {
+				list, err := child.List()
+				if err != nil {
+					return err
+				}
+				for list.Next() {
+					if err := concreteExceptTransforms(list.Value(), true); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+			if err := concreteExceptTransforms(child, false); err != nil {
+				return err
+			}
+		}
+		return nil
+	case cue.ListKind:
+		list, err := v.List()
+		if err != nil {
+			return err
+		}
+		for list.Next() {
+			if err := concreteExceptTransforms(list.Value(), false); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return v.Validate(cue.Concrete(true))
 	}
-	return nil
 }

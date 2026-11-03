@@ -81,28 +81,20 @@ CAI-only.
 `PERMISSION_DENIED` on the scope. Any other CAI failure is a failed input, as
 today. A fallback that also fails is a failed input.
 
-**This needs a product change,** because `#CommandObserve` has no notion of
-an alternative source. Proposed:
+**Implemented 2026-11-03 (`pudl-q4v.3`)** as `populate.fallback: {when,
+observe}`, with one change from the first draft: the fallback replaces the
+**whole** populate rather than only the failed input. The primary and
+fallback usually fan out differently (organizations versus projects), so
+there is no per-input correspondence, and replacing everything never mixes
+two sources' records. The first matching failure stops the primary, which
+also saves the remaining calls. The fallback is also used when the primary's
+`each` fails with a matching error or lists no inputs (credentials that see
+no organization). The check report carries `populate.fallback` with the
+reason and trigger. See `docs/observation-scope.md#fall-back-to-another-source`.
 
-```cue
-#CommandObserve: {
-	// ... existing fields ...
-	// fallback is observed instead when a run fails and its stderr matches
-	// fallback.when. With each on both sides, the fallback replaces only the
-	// failed input; without each on the primary, it replaces the whole
-	// populate.
-	fallback?: {
-		when: [...string & !=""]
-		observe: #CommandObserve
-	}
-}
-```
-
-The check report names the source each input came from (`cai` or
-`fallback`). A helper script that tries CAI and then gcloud would need no
-product change, but the report could not say which source answered, and a
-silent fallback hides an access regression. The product field is
-recommended.
+A helper script that tries CAI and then gcloud would have needed no product
+change, but the report could not say which source answered, and a silent
+fallback hides an access regression.
 
 ## 2. Scope
 
