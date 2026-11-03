@@ -65,9 +65,12 @@ each lives in its own directory:
 Canonical objects carry no positions, visual parents, ports or routes, and no
 stage mutates them (a test checks this).
 
-`src/model/relationshipTypes.ts` registers every relationship type with one
-**category** and a **meaning** (the strongest claim it supports, shown in the
-inspector):
+The graph carries its own **vocabulary** (`src/model/vocabulary.ts`): every
+resource type's code, label, class and view roles, and every relationship
+type's **category** and **meaning** (the strongest claim it supports, shown in
+the inspector). pudl builds it from CUE (see
+[Vocabulary](#vocabulary)); the UI holds no type names of its own.
+Categories are a fixed set the UI styles:
 
 | Category | Meaning | Line |
 | --- | --- | --- |
@@ -125,9 +128,34 @@ The four views (`src/projection/views/`):
 | Resource inventory | provider → account/project (GCP: org → folder → project) → region → type | none | packed |
 | Security relationships | account/project; external principals and ranges apart | iam, security | layered, left→right |
 
-The network view is provider-aware. AWS VPCs are regional, so the region sits
-between account and VPC. GCP networks are global and subnets regional, so the
-region sits inside the network.
+The views name no resource or relationship type. Every type-specific
+decision comes from the vocabulary's roles, declared in each type's schema:
+
+- **Network:** types with `admin` or `network` roles are shown. A type's
+  `network.via` edges place it, falling back to its owner, and
+  `network.region` wraps the parent in a region group. That is how AWS VPCs
+  sit in a region under the account, while GCP subnets sit in a region
+  inside their global network.
+- **Security:** account types, `security.control` types, and anything
+  touching a security or iam edge.
+- **Inventory:** administrative types are groups. Everything else goes
+  under owner, region and type.
+- **Application:** `application.group` types are groups. Members go under
+  any application group they have an edge to.
+
+A resource's owner is the type its provider's `graph_account_type` names.
+Ports come from `port_of`.
+
+### Vocabulary
+
+`vocabulary` (built by `internal/graphvocab`, also printed by
+`pudl graph vocab --json`) has `categories`, `edgeTypes`, `providers`,
+`resourceTypes` and `problems`. Each resource type carries `code`, `label`,
+`class`, the schema it came from, and its roles (`admin`, `network`,
+`portOf`, `security`, `inventory`, `application`; `null` when absent). The
+status bar shows a count of vocabulary problems and undeclared relationship
+types. The demo data carries its own vocabulary
+(`src/data/mock/vocabulary.json`).
 
 ## Visual model
 
@@ -294,7 +322,8 @@ Shipped sources:
   ],
   "relationships": [
     { "id": "r1", "type": "in_subnet", "source": "aws:i-0abc", "target": "aws:subnet-0def", "basis": "observed" }
-  ]
+  ],
+  "vocabulary": { "categories": [], "edgeTypes": [], "providers": [], "resourceTypes": [], "problems": [] }
 }
 ```
 
@@ -334,9 +363,11 @@ The command (`internal/graphexport`) writes this shape from the catalog:
   are listed in `meta.warnings` and shown in the status bar. They never stop
   the export.
 
-The UI owns the edge vocabulary: `type` values are keys of
-`src/model/relationshipTypes.ts`. A pack that emits a type the UI does not
-know still shows it, under the `other` category ("meaning unknown").
+The export carries the vocabulary in a top-level `vocabulary` field. A type
+the vocabulary does not know still shows: a resource as unknown (code from
+the type's last segment), a relationship under the `other` category
+("meaning unknown"). A graph file with no vocabulary loads, and the status
+bar says so.
 
 A file is a snapshot, so the UI labels it FILE, not LIVE.
 
@@ -411,8 +442,10 @@ load:
 
 - **New view**: add a `ProjectionDefinition` in `src/projection/views/` and
   register it in `registry.ts`.
-- **New resource or relationship type**: add it to `resourceTypes.ts` or
-  `relationshipTypes.ts`. A relationship type needs a category and a meaning.
+- **New resource or relationship type**: declare it in CUE, not here: the
+  schema's `_pudl: graph` block (display and roles) and `graph_edge_type`
+  facts. See
+  [schema authoring](schema-authoring.md#make-a-type-appear-in-pudl-ui).
 - **New layout engine**: implement `LayoutEngine`, then choose it per view
   through `LayoutConfig.algorithm`.
 - **Live data**: implement `GraphSource`.

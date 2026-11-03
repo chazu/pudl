@@ -5,6 +5,8 @@
 // routing: those belong to the visual model (src/visual) and the layout
 // result (src/layout). Projections read this graph; they never mutate it.
 
+import { Vocab, type Vocabulary } from './vocabulary';
+
 export type ResourceId = string;
 export type RelationshipId = string;
 
@@ -57,7 +59,7 @@ export interface Resource {
 
 export interface Relationship {
   id: RelationshipId;
-  /** Key into the relationship type registry (src/model/relationshipTypes.ts). */
+  /** Relationship type, declared in the graph's vocabulary (src/model/vocabulary.ts). */
   type: string;
   source: ResourceId;
   target: ResourceId;
@@ -109,6 +111,8 @@ export interface CanonicalGraph {
   meta: GraphMeta;
   resources: Resource[];
   relationships: Relationship[];
+  /** What the types mean, as pudl declares them in CUE. Absent: every type is unknown. */
+  vocabulary?: Vocabulary;
 }
 
 /**
@@ -117,6 +121,8 @@ export interface CanonicalGraph {
  */
 export class GraphIndex {
   readonly graph: CanonicalGraph;
+  /** The graph's vocabulary, indexed. */
+  readonly vocab: Vocab;
   private readonly byId = new Map<ResourceId, Resource>();
   private readonly relById = new Map<RelationshipId, Relationship>();
   private readonly outgoing = new Map<ResourceId, Relationship[]>();
@@ -125,6 +131,7 @@ export class GraphIndex {
 
   constructor(graph: CanonicalGraph) {
     this.graph = graph;
+    this.vocab = new Vocab(graph.vocabulary);
     for (const r of graph.resources) {
       this.byId.set(r.id, r);
       if (r.nativeId) this.byTypeNative.set(`${r.type}\u0000${r.nativeId}`, r);

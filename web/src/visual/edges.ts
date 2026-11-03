@@ -11,7 +11,7 @@
 // - Every candidate gets a disposition explaining whether and how it is drawn.
 
 import type { Basis, GraphIndex, Relationship, ResourceId } from '../model/canonical';
-import { CATEGORIES, relationshipType, type RelationshipCategory } from '../model/relationshipTypes';
+import type { RelationshipCategory, Vocab } from '../model/vocabulary';
 import type { Direction } from '../layout/types';
 import type { SemanticView } from '../projection/types';
 import { nodeIdForResource } from './ids';
@@ -90,7 +90,7 @@ export function buildEdges(input: EdgeInput): {
   };
 
   for (const rel of view.candidates) {
-    const category = relationshipType(rel.type).category;
+    const category = index.vocab.relationshipType(rel.type).category;
     if (!state.enabledCategories.has(category)) {
       dispositions.set(rel.id, { kind: 'category-off' });
       continue;
@@ -144,7 +144,7 @@ export function buildEdges(input: EdgeInput): {
 
   for (const port of ports.values()) nodes.get(port.nodeId)?.ports.push(port);
   const edges = [...byKey.values()];
-  for (const e of edges) e.label = edgeLabel(e);
+  for (const e of edges) e.label = edgeLabel(e, index.vocab);
   countUndrawn(view, dispositions, nodes, resourceToNode);
   return { edges, dispositions };
 }
@@ -156,8 +156,8 @@ function addMember(edge: VisualEdge, rel: Relationship) {
   edge.aggregated = edge.relationshipIds.length > 1;
 }
 
-function edgeLabel(e: VisualEdge): string {
-  const name = e.types.length === 1 ? relationshipType(e.types[0]).label : CATEGORIES[e.category].label.toLowerCase();
+function edgeLabel(e: VisualEdge, vocab: Vocab): string {
+  const name = e.types.length === 1 ? vocab.relationshipType(e.types[0]).label : vocab.category(e.category).label.toLowerCase();
   return e.aggregated ? `${e.relationshipIds.length}× ${name}` : name;
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEMO_VOCABULARY } from '../data/mock';
 import { GraphBuilder } from '../data/mock/builder';
 import { GraphIndex } from '../model/canonical';
 import { project } from '../projection/project';
@@ -16,7 +17,7 @@ describe('unconnected leaves', () => {
     b.res({ id: 'r', type: 'aws.iam.role', name: 'role', account: '1' });
     b.res({ id: 'p', type: 'aws.iam.policy', name: 'policy', account: '1' });
     b.rel('has_policy', 'r', 'p', 'observed');
-    const idx = new GraphIndex({ meta: { origin: 'file', label: 't' }, resources: b.resources, relationships: b.relationships });
+    const idx = new GraphIndex({ meta: { origin: 'file', label: 't' }, resources: b.resources, relationships: b.relationships, vocabulary: DEMO_VOCABULARY });
     const view = project(idx, projectionById('security'));
     const state = initialViewState(view);
     const graph = buildVisualGraph(view, idx, state);

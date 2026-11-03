@@ -11,6 +11,13 @@ directory is the source. After changing it, run `make web` from the repository
 root and commit `internal/webui/static`. Standalone, the app loads a graph
 file (bannered FILE) or a synthetic demo dataset (bannered DEMO DATA).
 
+The UI knows no resource or relationship types. What each type is called,
+how it is drawn and where each view places it arrives with the graph as its
+`vocabulary`, which pudl builds from CUE: schemas' `_pudl.graph` blocks and
+`graph_*` datalog facts (docs/design/2026-11-02-graph-vocabulary-in-cue.md).
+A new type never needs a change here. Only the styling of the fixed category
+and class sets (colours, line patterns) lives in this directory.
+
 ## Run
 
 Requires Node 20 or later.
@@ -68,8 +75,9 @@ npm run build        # typecheck + bundle into ../internal/webui/static (embedde
 ## Source layout
 
 ```
-src/model/       canonical graph types, resource and relationship registries
+src/model/       canonical graph types, vocabulary (indexing and fallbacks only)
 src/data/        GraphSource, validation, JSON loader, mock/ demo dataset
+                 (mock/vocabulary.json stands in for pudl's vocabulary)
 src/projection/  projection engine and the four view definitions
 src/visual/      visual graph: visibility, collapse, ports, edge aggregation
 src/layout/      LayoutEngine interface, ELK adapter, layout memory

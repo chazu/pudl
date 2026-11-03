@@ -17,6 +17,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: {name: "Name", account: "AccountId"}
+		graph: display: {code: "S3", label: "S3 bucket", class: "data"}
 	}
 	AccountId:     string
 	Name:          string
@@ -43,6 +44,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {name: "DBInstanceIdentifier", refs: ["DBInstanceIdentifier"]}
+		graph: display: {code: "RDS", label: "RDS instance", class: "data"}
+		graph: network: via: ["in_subnet"]
 		facts: {
 			aws_db_instance: args: {
 				arn:          "DBInstanceArn"
@@ -93,6 +96,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {name: "KeyMetadata.KeyId", refs: ["KeyMetadata.KeyId"]}
+		graph: display: {code: "KMS", label: "KMS key", class: "security"}
+		graph: security: control: true
 		facts: aws_kms_key: args: {
 			arn:     "KeyMetadata.Arn"
 			key_id:  "KeyMetadata.KeyId"

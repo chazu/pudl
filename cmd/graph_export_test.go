@@ -22,6 +22,33 @@ func exportGraph(t *testing.T) graphexport.Graph {
 	return g
 }
 
+// requireCompleteVocabulary checks that a pack draws in pudl ui without any
+// TypeScript: the vocabulary has no problems, every exported resource type
+// has display info, and every relationship type is declared.
+func requireCompleteVocabulary(t *testing.T, g graphexport.Graph) {
+	t.Helper()
+	v := g.Vocabulary
+	require.NotNil(t, v)
+	require.Empty(t, v.Problems)
+	types := map[string]bool{}
+	for _, r := range g.Resources {
+		types[r.Type] = true
+	}
+	var list []string
+	for typ := range types {
+		list = append(list, typ)
+	}
+	require.Empty(t, v.MissingDisplay(list), "resource types with no display info")
+	declared := map[string]bool{}
+	for _, e := range v.EdgeTypes {
+		declared[e.Type] = true
+	}
+	for _, rel := range g.Relationships {
+		require.True(t, declared[rel.Type], "relationship type %s is not declared", rel.Type)
+	}
+	require.NotEmpty(t, v.EdgeTypesIn("containment"))
+}
+
 type graphLookup struct {
 	g        graphexport.Graph
 	byNative map[string]graphexport.Resource
@@ -71,6 +98,7 @@ func TestGraphExportAWSPack(t *testing.T) {
 	l := newGraphLookup(g)
 	require.Equal(t, "pudl", g.Meta.Origin)
 	require.Empty(t, g.Meta.Warnings)
+	requireCompleteVocabulary(t, g)
 
 	inst := l.byNative["i-0aa00000000000002"]
 	require.Equal(t, "aws.ec2.instance", inst.Type)
@@ -159,6 +187,7 @@ func TestGraphExportGCPPack(t *testing.T) {
 	}
 	l := newGraphLookup(g)
 	require.Empty(t, g.Meta.Warnings)
+	requireCompleteVocabulary(t, g)
 	cov := g.Meta.Coverage
 	require.NotNil(t, cov)
 	require.Positive(t, cov.EdgeRules)

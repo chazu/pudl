@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyPartial, mergeGraphs } from '../data/merge';
 import { loadFrom, sourceFromLocation, type GraphSource, type LoadedGraph, type LoadOptions, type SearchHit } from '../data/source';
 import { validateGraph } from '../data/validate';
-import { CONTAINMENT_TYPES } from '../model/relationshipTypes';
+import { Vocab } from '../model/vocabulary';
 import { useAutoRefresh } from './useAutoRefresh';
 
 export const PARTIAL_ABOVE = 500;
@@ -30,6 +30,13 @@ export function useGraphSource() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [partial, setPartial] = useState(false);
   const focus = useRef<string[]>([]);
+  // Containment types from the last vocabulary seen: followed when loading a
+  // neighbourhood. Empty before the first neighbourhood arrives; the server
+  // then follows containment itself.
+  const containment = useRef<string[]>([]);
+  useEffect(() => {
+    if (loaded?.graph.vocabulary) containment.current = new Vocab(loaded.graph.vocabulary).containmentTypes();
+  }, [loaded]);
 
   const fetchGraph = useCallback(async (s: GraphSource, at: string | null, isPartial: boolean): Promise<LoadedGraph> => {
     const opts: LoadOptions | undefined = at ? { asOf: at } : undefined;
@@ -41,7 +48,7 @@ export function useGraphSource() {
         emptyPartial({ origin: 'live', label: 'pudl catalog', asOf: at ?? undefined, version, totals: summary }),
       );
     }
-    return withIssues(await s.neighbourhood!(focus.current, CONTAINMENT_TYPES, opts));
+    return withIssues(await s.neighbourhood!(focus.current, containment.current, opts));
   }, []);
 
   useEffect(() => {
@@ -94,7 +101,7 @@ export function useGraphSource() {
       focus.current = [...focus.current, ...fresh];
       setReloading(true);
       try {
-        const add = await source.neighbourhood(fresh, CONTAINMENT_TYPES, asOf ? { asOf } : undefined);
+        const add = await source.neighbourhood(fresh, containment.current, asOf ? { asOf } : undefined);
         setLoaded((cur) => withIssues(cur && cur.graph.resources.length > 0 ? mergeGraphs(cur.graph, add) : add));
         setReloadError(null);
       } catch (e) {

@@ -2,11 +2,20 @@
 // meta.origin is always 'mock' and the UI shows a persistent banner.
 
 import type { CanonicalGraph } from '../../model/canonical';
+import type { Vocabulary } from '../../model/vocabulary';
 import type { GraphSource } from '../source';
 import { buildApplications } from './applications';
 import { buildAws } from './aws';
 import { GraphBuilder } from './builder';
 import { buildGcp } from './gcp';
+import vocabulary from './vocabulary.json';
+
+/**
+ * The demo dataset's vocabulary. Live graphs get theirs from pudl (CUE
+ * schemas and graph_* facts); this file stands in for it, in the same shape
+ * as `pudl graph vocab --json`.
+ */
+export const DEMO_VOCABULARY: Vocabulary = vocabulary;
 
 /** Deterministic: the same graph, in the same order, every call. */
 export function buildDemoGraph(): CanonicalGraph {
@@ -21,6 +30,7 @@ export function buildDemoGraph(): CanonicalGraph {
     meta: { origin: 'mock', label: 'Demo dataset (synthetic)', generatedAt: '2026-10-30T14:00:00Z' },
     resources: [...aws.resources, ...gcp.resources, ...apps.resources],
     relationships: [...aws.relationships, ...gcp.relationships, ...apps.relationships],
+    vocabulary: DEMO_VOCABULARY,
   };
 }
 

@@ -18,6 +18,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: {name: "User.UserName", account: "AccountId"}
+		graph: display: {code: "USER", label: "IAM user", class: "identity"}
+		graph: security: control: true
 	}
 	AccountId: string
 	User: {
@@ -45,6 +47,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: {name: "RoleName", account: "AccountId"}
+		graph: display: {code: "ROLE", label: "IAM role", class: "identity"}
+		graph: security: control: true
 		// Trust policy principals. IAM writes a lone statement, and a lone
 		// principal, without the enclosing list: one_or_many reads both
 		// shapes. aws_role_trust is one fact per AWS principal (an ARN, an
@@ -85,6 +89,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: {name: "InstanceProfileName", account: "AccountId"}
+		graph: display: {code: "PROF", label: "Instance profile", class: "identity"}
 		facts: aws_instance_profile_role: args: role_arn: "Roles[*].Arn"
 	}
 	AccountId:           string

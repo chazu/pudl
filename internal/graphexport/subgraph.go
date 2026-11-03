@@ -75,7 +75,7 @@ func Subgraph(g *Graph, focus []string, depth int, closure []string) *Graph {
 		}
 	}
 
-	out := &Graph{Meta: g.Meta, Resources: []Resource{}, Relationships: []Relationship{}}
+	out := &Graph{Meta: g.Meta, Resources: []Resource{}, Relationships: []Relationship{}, Vocabulary: g.Vocabulary}
 	out.Meta.Partial = true
 	out.Meta.Totals = &Totals{Resources: len(g.Resources), Relationships: len(g.Relationships)}
 	out.Meta.Degree = map[string]int{}

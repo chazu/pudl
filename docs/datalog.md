@@ -55,6 +55,35 @@ open_ssh: {
 
 The rule's name is its field name, or its optional `name` field.
 
+### Facts
+
+A rule with no `body` (or `body: []`) is a fact: it holds unconditionally.
+Every head argument must be a constant; a variable has nothing to bind it.
+
+```cue
+graph_edge_type_in_vpc: {
+	head: {rel: "graph_edge_type", args: {type: "in_vpc", category: "containment",
+		label: "in VPC", meaning: "Defined inside this VPC."}}
+}
+```
+
+Facts can share a relation with derived rules, and rule bodies can join on
+them. pudl's graph vocabulary is written this way (see
+[Resource graph vocabulary](#resource-graph-vocabulary)). A long list of facts
+reads better as a table and a comprehension:
+
+```cue
+_edgeTypes: {
+	in_vpc: {category: "containment", label: "in VPC", meaning: "Defined inside this VPC."}
+}
+for id, e in _edgeTypes {
+	"graph_edge_type_\(id)": {head: {rel: "graph_edge_type", args: {type: id, category: e.category, label: e.label, meaning: e.meaning}}}
+}
+```
+
+Hidden fields such as `_edgeTypes` are shared by every file of a CUE package,
+so give each file's tables distinct names.
+
 ### Recursive example
 
 ```cue
@@ -77,8 +106,8 @@ pattern over `model_depends_on`.
 
 ### Invalid rules fail loudly
 
-A rule that cannot be read as written (a missing `rel`, an empty body, an
-unbound head variable, an aggregate in the body, mismatched head keys) is
+A rule that cannot be read as written (a missing `rel`, a variable in a
+fact's head, an unbound head variable, an aggregate in the body, mismatched head keys) is
 loaded as invalid, with its source position, never skipped:
 
 - `pudl rule add` refuses the file and lists each problem;
@@ -129,7 +158,7 @@ Every projected fact also carries `entry_id` and `resource_id`.
 
 | Argument | Value |
 | --- | --- |
-| `type` | Relationship type, from the web explorer's vocabulary (`in_subnet`, `protected_by`, `encrypted_by`, ...) |
+| `type` | Relationship type, declared by a `graph_edge_type` fact ([vocabulary](#resource-graph-vocabulary)): `in_subnet`, `protected_by`, `encrypted_by`, ... An undeclared type renders as "other" and is reported |
 | `source`, `target` | A `resource_id`, or a reference value such as an AWS ID or a GCP path |
 | `basis` | `observed`, `declared`, `inferred` or `unknown` |
 
@@ -168,6 +197,26 @@ aws_graph_sg_cidr_port: {
 	body: [{rel: "aws_sg_ingress_cidr", args: {resource_id: "$R", cidr: "$C", from_port: "$F"}}]
 }
 ```
+
+### Resource graph vocabulary
+
+pudl ui knows what a type or edge type means only from these relations,
+declared as [facts](#facts) in rule files. `pudl graph export` sends them as
+the graph's `vocabulary`, and `pudl graph vocab` lists them with their
+problems. pudl's own are in `pudl/rules/graph_vocabulary.cue`.
+
+| Relation | Arguments | Meaning |
+| --- | --- | --- |
+| `graph_edge_category` | `category, label, meaning, order` | The fixed categories pudl ui styles; pudl built-ins only |
+| `graph_edge_type` | `type, category, label, meaning` | What an edge type `graph_edge` rules derive means |
+| `graph_provider` | `provider, label` | A provider's label (the first segment of a resource type) |
+| `graph_account_type` | `provider, type` | The type a provider's `account` values name |
+| `graph_resource_type` | `type, code, label, class` | Display info for a type with no schema |
+
+These relations take facts only. The first declaration of a key wins, and a
+later one that disagrees is reported. A resource type's display info and view
+roles normally live in its schema; see
+[schema authoring](schema-authoring.md#make-a-type-appear-in-pudl-ui).
 
 ### Catalog (`catalog_entry`)
 

@@ -107,6 +107,7 @@ func TestJSONOutputContract(t *testing.T) {
 	run("show", proquint, "--raw", "--metadata")
 	run("export", "--id", proquint)
 	run("graph", "export")
+	run("graph", "vocab")
 
 	factID := field(run("facts", "add", "--relation", "host", "--args", `{"name":"h1"}`), "id")
 	run("facts", "list", "--relation", "host")

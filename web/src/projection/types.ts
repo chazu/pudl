@@ -9,7 +9,7 @@
 // projection and in an application service in another.
 
 import type { GraphIndex, Relationship, Resource, ResourceId } from '../model/canonical';
-import type { RelationshipCategory } from '../model/relationshipTypes';
+import type { PortRule, RelationshipCategory, Vocab } from '../model/vocabulary';
 import type { LayoutConfig } from '../layout/types';
 
 export type ProjectionId = 'network' | 'application' | 'inventory' | 'security';
@@ -22,6 +22,8 @@ export interface SyntheticGroupSpec {
   parent: ParentRef | null;
   /** Why this grouping exists, shown in the inspector. */
   basis: string;
+  /** For a type bucket: the resource type it holds. */
+  bucketType?: string;
 }
 
 export type ParentRef = { resource: ResourceId; via?: string } | { synthetic: SyntheticGroupSpec };
@@ -38,22 +40,18 @@ export interface ProjectionContext {
   via(resource: Resource, ...types: string[]): ParentRef[];
 }
 
-/** Render a resource as a port on a host instead of as a node. */
-export interface PortRule {
-  resourceType: string;
-  /** Relationship from the port resource to its host. */
-  hostRelation: string;
-}
+export type { PortRule };
 
 export interface ProjectionDefinition {
   id: ProjectionId;
   label: string;
   description: string;
   include(resource: Resource, ctx: ProjectionContext): boolean;
-  /** Resource types rendered as compound groups rather than leaf nodes. */
-  isGroup(resource: Resource): boolean;
+  /** Resources rendered as compound groups rather than leaf nodes. */
+  isGroup(resource: Resource, ctx: ProjectionContext): boolean;
   place(resource: Resource, ctx: ProjectionContext): Placement;
-  ports?: PortRule[];
+  /** Resources rendered as ports on a host (from the vocabulary's portOf). */
+  ports?(ctx: ProjectionContext): PortRule[];
   categories: {
     available: RelationshipCategory[];
     enabled: RelationshipCategory[];
@@ -62,7 +60,7 @@ export interface ProjectionDefinition {
   flowCategories: RelationshipCategory[];
   layout: LayoutConfig;
   /** Groups collapsed when the view first opens. */
-  defaultCollapsed?(group: SemanticGroup): boolean;
+  defaultCollapsed?(group: SemanticGroup, vocab: Vocab): boolean;
 }
 
 export interface SemanticGroup {
@@ -74,6 +72,8 @@ export interface SemanticGroup {
   parentId: string | null;
   basis: string;
   order: number;
+  /** For a type bucket: the resource type it holds. */
+  bucketType?: string;
 }
 
 export interface SemanticMember {
@@ -96,6 +96,8 @@ export type ProjectionDisposition =
 
 export interface SemanticView {
   projection: ProjectionDefinition;
+  /** The vocabulary the view was projected with. */
+  vocab: Vocab;
   groups: Map<string, SemanticGroup>;
   /** Leaf members, ports and unresolved placeholders, keyed by resource ID. */
   members: Map<ResourceId, SemanticMember>;

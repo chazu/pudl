@@ -160,3 +160,11 @@ gcp_graph_iam_binding_condition: {
 	head: {rel: "graph_edge_property", args: {type: "iam_binding", source: "$M", target: "$R", key: "conditional", value: "yes"}}
 	body: [{rel: "gcp_iam_binding", args: {resource_id: "$R", member: "$M", conditional: true}}]
 }
+
+// Graph vocabulary for this pack (facts: rules with no body). Every edge
+// type above is a pudl built-in (pudl/rules/graph_vocabulary.cue). A
+// record's project names a gcp.project, which the pack does not collect, so
+// its display info is declared here.
+graph_provider_gcp:              {head: {rel: "graph_provider", args: {provider: "gcp", label: "Google Cloud"}}}
+graph_account_type_gcp:          {head: {rel: "graph_account_type", args: {provider: "gcp", type: "gcp.project"}}}
+graph_resource_type_gcp_project: {head: {rel: "graph_resource_type", args: {type: "gcp.project", code: "PROJ", label: "Project", class: "admin"}}}

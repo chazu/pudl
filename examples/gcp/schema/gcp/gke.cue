@@ -12,6 +12,8 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["resourceLabels.team"]}
 		graph: _gcpGraph & {region: "location"}
+		graph: display: {code: "GKE", label: "GKE cluster", class: "compute"}
+		graph: network: via: ["in_subnet"]
 		sensitive_fields: [
 			"nodeConfig.metadata",
 			"nodePools[*].config.metadata",

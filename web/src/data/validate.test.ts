@@ -28,8 +28,18 @@ describe('graph validation', () => {
         { id: 'a', type: 'x', name: 'a', provider: 'aws', properties: {} },
       ],
       relationships: [{ id: 'r', type: 'frobnicates', source: 'a', target: 'a', basis: 'unknown' }],
+      vocabulary: { categories: [], edgeTypes: [], providers: [], resourceTypes: [] },
     });
     expect(issues.map((i) => i.kind)).toEqual(['duplicate-resource', 'unknown-relationship-type']);
+  });
+
+  it('reports a graph without a vocabulary once, not per relationship', () => {
+    const issues = validateGraph({
+      meta: { origin: 'file', label: 't' },
+      resources: [{ id: 'a', type: 'x', name: 'a', provider: 'aws', properties: {} }],
+      relationships: [{ id: 'r', type: 'frobnicates', source: 'a', target: 'a', basis: 'unknown' }],
+    });
+    expect(issues.map((i) => i.kind)).toEqual(['no-vocabulary']);
   });
 
   it('never lets a file claim to be live inventory', () => {
@@ -58,12 +68,22 @@ describe('pudl graph export documents', () => {
         meta: { origin: 'pudl', label: 'pudl catalog · demo', warnings: ['ref ambiguous', 3] },
         resources: [{ id: 'r1', type: 'aws.ec2.instance', name: 'i-1', provider: 'aws', schema: 'aws.#EC2Instance', entryId: 'babod-fakak' }],
         relationships: [{ id: 'x', type: 'protected_by', source: 'r1', target: 'ref:sg-1', basis: 'observed' }],
+        vocabulary: {
+          categories: [{ id: 'security', label: 'Security control', meaning: 'm', order: 4, source: 'graph_edge_category_security @ x.cue:1' }],
+          edgeTypes: [{ type: 'protected_by', category: 'security', label: 'SG', meaning: 'm' }, { type: 3 }],
+          providers: [{ provider: 'aws', label: 'AWS' }],
+          resourceTypes: [{ type: 'aws.ec2.instance', code: 'EC2', label: 'EC2 instance', class: 'compute', schema: 'aws.#EC2Instance', admin: null, network: { via: ['in_subnet'] }, portOf: '', security: null, inventory: null, application: null }],
+          problems: ['p'],
+        },
       },
       'graph.json',
     );
     expect(g.meta).toMatchObject({ origin: 'file', label: 'pudl catalog · demo', warnings: ['ref ambiguous'] });
     expect(g.resources[0]).toMatchObject({ schema: 'aws.#EC2Instance', entryId: 'babod-fakak' });
     expect(validateGraph(g).map((i) => i.kind)).toEqual(['dangling-target']);
+    expect(g.vocabulary?.edgeTypes.map((e) => e.type)).toEqual(['protected_by']);
+    expect(g.vocabulary?.resourceTypes[0].network).toEqual({ via: ['in_subnet'] });
+    expect(g.vocabulary?.problems).toEqual(['p']);
   });
 });
 

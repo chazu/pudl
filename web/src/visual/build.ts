@@ -2,7 +2,6 @@
 // Edge construction lives in edges.ts.
 
 import type { GraphIndex, ResourceId } from '../model/canonical';
-import { resourceType } from '../model/resourceTypes';
 import { notLoaded } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import type { SemanticGroup, SemanticView } from '../projection/types';
@@ -56,7 +55,7 @@ export function buildVisualGraph(view: SemanticView, index: GraphIndex, state: V
     }
     const id = nodeIdForResource(m.resourceId);
     const r = index.resource(m.resourceId);
-    const info = resourceType(r?.type ?? 'unresolved');
+    const info = index.vocab.resourceType(r?.type ?? 'unresolved');
     const unresolved = m.role === 'unresolved';
     const size = unresolved ? SIZES.unresolved : SIZES.leaf;
     nodes.set(id, {
@@ -97,7 +96,7 @@ export function buildVisualGraph(view: SemanticView, index: GraphIndex, state: V
 
 function groupNode(g: SemanticGroup, parentId: string | null, collapsed: boolean, index: GraphIndex): VisualNode {
   const r = g.resourceId ? index.resource(g.resourceId) : undefined;
-  const code = r ? resourceType(r.type).code : groupCode(g.groupType);
+  const code = r ? index.vocab.resourceType(r.type).code : groupCode(g.groupType, index);
   const size = collapsed ? SIZES.collapsed : { width: 0, height: 0 };
   return {
     id: g.id,
@@ -109,7 +108,7 @@ function groupNode(g: SemanticGroup, parentId: string | null, collapsed: boolean
     label: g.label,
     code,
     sublabel: r ? sublabelFor(r.nativeId, r.properties) : undefined,
-    styleType: r ? resourceType(r.type).cls : g.groupType,
+    styleType: r ? index.vocab.resourceType(r.type).cls : g.groupType,
     synthetic: g.kind === 'synthetic',
     ...size,
     ports: [],
@@ -121,7 +120,7 @@ function groupNode(g: SemanticGroup, parentId: string | null, collapsed: boolean
   };
 }
 
-function groupCode(groupType: string): string {
+function groupCode(groupType: string, index: GraphIndex): string {
   const codes: Record<string, string> = {
     region: 'RGN',
     'type-bucket': 'TYPE',
@@ -132,7 +131,7 @@ function groupCode(groupType: string): string {
   };
   // Synthetic stand-ins for uncollected resources (an account named by an
   // attribute) use the resource type's own code.
-  return codes[groupType] ?? (groupType.includes('.') ? resourceType(groupType).code : groupType.slice(0, 4).toUpperCase());
+  return codes[groupType] ?? (groupType.includes('.') ? index.vocab.resourceType(groupType).code : groupType.slice(0, 4).toUpperCase());
 }
 
 function sublabelFor(nativeId: string | undefined, props: Record<string, unknown> | undefined): string | undefined {

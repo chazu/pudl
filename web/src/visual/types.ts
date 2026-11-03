@@ -5,7 +5,7 @@
 // aggregation. Canonical objects are never annotated with any of this.
 
 import type { Basis, RelationshipId, ResourceId } from '../model/canonical';
-import type { RelationshipCategory } from '../model/relationshipTypes';
+import type { RelationshipCategory } from '../model/vocabulary';
 import type { Direction } from '../layout/types';
 
 export type PortSide = 'NORTH' | 'SOUTH' | 'EAST' | 'WEST';

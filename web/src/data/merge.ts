@@ -4,7 +4,7 @@
 
 import type { CanonicalGraph, GraphIndex, ResourceId } from '../model/canonical';
 
-/** Union of two graphs by ID; `add` wins on conflicts and supplies the meta. */
+/** Union of two graphs by ID; `add` wins on conflicts and supplies the meta and vocabulary. */
 export function mergeGraphs(base: CanonicalGraph, add: CanonicalGraph): CanonicalGraph {
   const resources = new Map(base.resources.map((r) => [r.id, r]));
   for (const r of add.resources) resources.set(r.id, r);
@@ -14,6 +14,7 @@ export function mergeGraphs(base: CanonicalGraph, add: CanonicalGraph): Canonica
     meta: { ...add.meta, partial: true, degree: { ...base.meta.degree, ...add.meta.degree } },
     resources: [...resources.values()],
     relationships: [...relationships.values()],
+    vocabulary: add.vocabulary ?? base.vocabulary,
   };
 }
 

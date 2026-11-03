@@ -150,6 +150,30 @@ waivers: [{policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingres
   rejected, not stored as a generic type.
 - Explicit `--schema` is strict; `--allow-schema-fallback` permits fallback.
 
+## Making a type draw in pudl ui
+
+pudl ui knows nothing about types except what CUE declares; never edit
+`web/` to add a type or relationship. For a new type or pack:
+
+1. In the schema: `graph: display: {code: "SUBN", label: "Subnetwork",
+   class: "network"}` (class: admin, network, compute, data, messaging, edge,
+   security, identity, logical, external; code at most 5 characters).
+2. Roles, as needed: `graph: network: {via: ["in_subnet"]}` (placement),
+   `network: {group: true, region: true}`, `security: control: true`,
+   `port_of: "attached_to"`, `admin: parent: ["in_folder"]`,
+   `application: {group: true, via: [...]}`.
+3. Edges: `graph_edge` rules, plus a `graph_edge_type` fact (a rule with no
+   body: `{head: {rel: "graph_edge_type", args: {type, category, label,
+   meaning}}}`) for each type pudl does not ship. Categories: containment,
+   network, traffic, dependency, security, iam, other.
+4. A new provider adds `graph_provider(provider, label)` and
+   `graph_account_type(provider, type)`, plus `graph_resource_type(type,
+   code, label, class)` for an account type with no schema.
+
+Check with `pudl graph vocab` (problems at the end) or the doctor "Graph
+Vocabulary" check. `pudl schema new` scaffolds the graph block. See
+`docs/schema-authoring.md#make-a-type-appear-in-pudl-ui`.
+
 ## Compliance policies
 
 A policy is a standalone definition: `_pudl: {schema_type: "policy",
@@ -184,7 +208,8 @@ pudl model deps && pudl query impacted_by changed=<model>
 ```
 
 Rules are CUE: `name: {head: {rel, args}, body: [{rel, args}, ...]}` with
-`$`-prefixed variables. `catalog_entry` is join-only. `pudl query` warns on
+`$`-prefixed variables. A rule with no body is a fact (constant head args
+only). `catalog_entry` is join-only. `pudl query` warns on
 stderr about rules naming relations or args nothing produces, and about stale
 projections; read those warnings when a check passes unexpectedly. Writing
 facts by hand (`facts add/retract/invalidate`) is advanced; prefer projection.

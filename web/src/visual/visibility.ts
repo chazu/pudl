@@ -5,7 +5,6 @@
 // apparent A→C edge.
 
 import type { GraphIndex, ResourceId } from '../model/canonical';
-import { relationshipType } from '../model/relationshipTypes';
 import { groupAncestors } from '../projection/project';
 import type { SemanticView } from '../projection/types';
 import type { ViewState } from './viewState';
@@ -43,7 +42,7 @@ export function computeVisibility(view: SemanticView, index: GraphIndex, state: 
   // relationships; without an enabled one it would float unexplained.
   const anchored = new Set<ResourceId>();
   for (const rel of view.candidates) {
-    if (!state.enabledCategories.has(relationshipType(rel.type).category)) continue;
+    if (!state.enabledCategories.has(view.vocab.relationshipType(rel.type).category)) continue;
     anchored.add(rel.source);
     anchored.add(rel.target);
   }
@@ -113,7 +112,7 @@ function focusNeighborhood(view: SemanticView, state: ViewState): Set<ResourceId
     adj.get(a)!.add(b);
   };
   for (const rel of view.candidates) {
-    if (!state.enabledCategories.has(relationshipType(rel.type).category)) continue;
+    if (!state.enabledCategories.has(view.vocab.relationshipType(rel.type).category)) continue;
     const a = anchor(rel.source);
     const b = anchor(rel.target);
     link(a, b);

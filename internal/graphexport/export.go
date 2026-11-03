@@ -8,13 +8,16 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/datalog"
+	"github.com/chazu/pudl/internal/graphvocab"
 )
 
 // Input is everything Build reads.
 type Input struct {
-	DB        *database.CatalogDB
-	Rules     []datalog.Rule
-	Metadata  MetadataFunc
+	DB       *database.CatalogDB
+	Rules    []datalog.Rule
+	Metadata MetadataFunc
+	// Schemas are the loaded schema names, read for the vocabulary.
+	Schemas   []string
 	Load      LoadFunc
 	Workspace string
 	Now       time.Time
@@ -83,8 +86,34 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 	}
 	applyProperties(g.Relationships, props, index, warn)
 	g.Meta.Coverage = coverage(in, len(g.Resources), warn)
+	g.Vocabulary = Vocabulary(in.Schemas, in.Metadata, in.Rules)
+	g.Vocabulary.NoteMissingDisplay(resourceTypes(g.Resources))
 	g.Resources = append(g.Resources, index.externalResources()...)
 	return g, nil
+}
+
+// Vocabulary builds the graph vocabulary from the loaded schemas and rules,
+// leaving out pudl's internal types.
+func Vocabulary(schemas []string, meta MetadataFunc, rules []datalog.Rule) *graphvocab.Vocabulary {
+	return graphvocab.Build(graphvocab.Input{
+		Schemas:  schemas,
+		Metadata: graphvocab.MetadataFunc(meta),
+		Rules:    rules,
+		Skip:     InternalTypes,
+	})
+}
+
+// resourceTypes lists the distinct types of resources, unknown excluded.
+func resourceTypes(resources []Resource) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range resources {
+		if r.Type != "unknown" && !seen[r.Type] {
+			seen[r.Type] = true
+			out = append(out, r.Type)
+		}
+	}
+	return out
 }
 
 // EvaluateEdgeRules evaluates each graph_edge rule on its own, so every

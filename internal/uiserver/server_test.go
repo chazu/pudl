@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/graphexport"
+	"github.com/chazu/pudl/internal/graphvocab"
 )
 
 func testHandler(graph GraphFunc) http.Handler {
@@ -174,6 +175,9 @@ func neighbourhoodHandler() http.Handler {
 			{ID: "b", Type: "in_subnet", Source: "i1", Target: "sub"},
 			{ID: "c", Type: "in_subnet", Source: "i2", Target: "sub"},
 		},
+		Vocabulary: &graphvocab.Vocabulary{EdgeTypes: []graphvocab.EdgeType{
+			{Type: "in_subnet", Category: "containment"}, {Type: "in_vpc", Category: "containment"}, {Type: "peers_with", Category: "network"},
+		}},
 	}
 	return Handler(Options{
 		Assets: fstest.MapFS{},
@@ -188,6 +192,13 @@ func TestNeighbourhoodSummaryAndSearch(t *testing.T) {
 	require.True(t, g.Meta.Partial)
 	require.Len(t, g.Resources, 3, "i1 plus its containment closure, not its sibling i2")
 	require.Equal(t, 3, g.Meta.Totals.Relationships)
+
+	var noClosure graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?focus=i1&depth=0").Body.Bytes(), &noClosure))
+	require.Len(t, noClosure.Resources, 3, "no closure param: follow the vocabulary's containment types")
+	var emptyClosure graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?focus=i1&depth=0&closure=").Body.Bytes(), &emptyClosure))
+	require.Len(t, emptyClosure.Resources, 1, "an explicit empty closure follows nothing")
 
 	require.JSONEq(t, `{"resources":4,"relationships":3,"version":""}`, get(t, h, "localhost", "/api/summary").Body.String())
 	var hits []graphexport.SearchHit

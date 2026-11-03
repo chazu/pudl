@@ -3,7 +3,7 @@
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import type { LayoutResult } from '../layout/types';
-import { CATEGORY_ORDER } from '../model/relationshipTypes';
+import { CATEGORY_IDS } from '../model/vocabulary';
 import type { VisualGraph, VisualNode, VisualPort } from '../visual/types';
 import { EDGE_STYLES, labelPoint, pathFor } from './edgeStyle';
 import type { Highlight } from './highlight';
@@ -146,7 +146,7 @@ export const GraphCanvas = forwardRef<CanvasHandle, Props>(function GraphCanvas(
       onClick={guard(() => props.onClear())}
     >
       <defs>
-        {CATEGORY_ORDER.map((c) => (
+        {CATEGORY_IDS.map((c) => (
           <marker key={c} id={`arrow-${c}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M0,1 L9,5 L0,9 z" fill={EDGE_STYLES[c].color} />
           </marker>

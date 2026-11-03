@@ -11,6 +11,8 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["settings.userLabels.team"]}
 		graph: _gcpGraph & {region: "region"}
+		graph: display: {code: "SQL", label: "Cloud SQL", class: "data"}
+		graph: network: region: true
 		// The VPC of a private IP, in path form; absent without one.
 		facts: gcp_sql_network: args: {
 			self_link: "selfLink"
@@ -45,6 +47,7 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {region: "location"}
+		graph: display: {code: "GCS", label: "Storage bucket", class: "data"}
 	}
 	project:                      _gcpProjectID
 	name:                         string
@@ -65,6 +68,7 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
+		graph: display: {code: "KRING", label: "KMS key ring", class: "security"}
 	}
 	project: _gcpProjectID
 	name:    =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+$" @pudl(match)
@@ -82,6 +86,7 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
+		graph: display: {code: "KMS", label: "KMS key", class: "security"}
 		facts: gcp_kms_key: args: {
 			project:       "project"
 			name:          "name"

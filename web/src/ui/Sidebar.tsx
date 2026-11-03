@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { SearchHit } from '../data/source';
 import type { GraphIndex, GraphMeta, ResourceId } from '../model/canonical';
-import { resourceType } from '../model/resourceTypes';
 import { PROJECTIONS } from '../projection/registry';
 import { ownerResource } from '../projection/views/common';
 import type { ProjectionId, SemanticView } from '../projection/types';
@@ -133,7 +132,7 @@ export function Sidebar(props: Props) {
     };
     for (const id of view.members.keys()) add(id);
     for (const id of view.groupOf.keys()) add(id);
-    return [...counts.entries()].sort((a, b) => resourceType(a[0]).cls.localeCompare(resourceType(b[0]).cls) || a[0].localeCompare(b[0]));
+    return [...counts.entries()].sort((a, b) => index.vocab.resourceType(a[0]).cls.localeCompare(index.vocab.resourceType(b[0]).cls) || a[0].localeCompare(b[0]));
   }, [index, view]);
 
   const toggleOwner = (owner: string) =>
@@ -186,7 +185,7 @@ export function Sidebar(props: Props) {
           <ul className="results">
             {results.map((r) => (
               <li key={r.id} className={inView(r.id) || remoteSearch ? '' : 'out'} onClick={() => pick(r.id)} title={inView(r.id) ? r.id : remoteSearch ? `${r.id} — click to load it and its neighbours` : `${r.id} — not in this view`}>
-                <span className={`code cls-${resourceType(r.type).cls}`}>{resourceType(r.type).code}</span>
+                <span className={`code cls-${index.vocab.resourceType(r.type).cls}`}>{index.vocab.resourceType(r.type).code}</span>
                 {r.name}
               </li>
             ))}
@@ -215,7 +214,7 @@ export function Sidebar(props: Props) {
             <li key={type}>
               <label title={type}>
                 <input type="checkbox" checked={!state.hiddenTypes.has(type)} onChange={() => toggleType(type)} />
-                <span className={`code cls-${resourceType(type).cls}`}>{resourceType(type).code}</span> {resourceType(type).label}
+                <span className={`code cls-${index.vocab.resourceType(type).cls}`}>{index.vocab.resourceType(type).code}</span> {index.vocab.resourceType(type).label}
                 <span className="count">{n}</span>
               </label>
             </li>

@@ -1,4 +1,3 @@
-import { CATEGORIES, relationshipType } from '../model/relationshipTypes';
 import type { InspectorProps } from './Inspector';
 import { BasisBadge, EvidenceList, LineSample, PropertyTable } from './inspectorParts';
 import type { Basis } from '../model/canonical';
@@ -7,7 +6,7 @@ export function EdgePanel(props: InspectorProps & { edgeId: string }) {
   const { edgeId, graph, index } = props;
   const edge = graph?.edges.find((e) => e.id === edgeId);
   if (!edge || !graph) return <div className="panel muted">Edge no longer drawn.</div>;
-  const cat = CATEGORIES[edge.category];
+  const cat = index.vocab.category(edge.category);
   const src = graph.nodes.get(edge.source);
   const tgt = graph.nodes.get(edge.target);
   const lifted = edge.liftedSource || edge.liftedTarget;
@@ -15,8 +14,8 @@ export function EdgePanel(props: InspectorProps & { edgeId: string }) {
   return (
     <div className="panel">
       <div className="phead">
-        <LineSample type={edge.types[0]} />
-        <h2>{edge.aggregated ? `${edge.relationshipIds.length} relationships` : relationshipType(edge.types[0]).label}</h2>
+        <LineSample category={edge.category} />
+        <h2>{edge.aggregated ? `${edge.relationshipIds.length} relationships` : index.vocab.relationshipType(edge.types[0]).label}</h2>
       </div>
       <div className="ptype">
         {cat.label} · {edge.types.join(', ')}
@@ -55,11 +54,11 @@ export function EdgePanel(props: InspectorProps & { edgeId: string }) {
         {edge.relationshipIds.map((rid) => {
           const rel = index.relationship(rid);
           if (!rel) return null;
-          const info = relationshipType(rel.type);
+          const info = index.vocab.relationshipType(rel.type);
           return (
             <li key={rid}>
               <div className="relrow">
-                <LineSample type={rel.type} />
+                <LineSample category={info.category} />
                 <strong>{info.label}</strong>
                 <BasisBadge basis={rel.basis} />
               </div>

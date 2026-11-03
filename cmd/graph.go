@@ -28,7 +28,8 @@ var graphCmd = &cobra.Command{
 between them, as read by the web graph explorer (web/).
 
 Available subcommands:
-- export:  Write the current resource graph as JSON`,
+- export:  Write the current resource graph as JSON
+- vocab:   Show what pudl ui knows about resource and relationship types`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},
@@ -54,6 +55,12 @@ AWS ID or a GCP path. A reference that matches no cataloged resource is kept
 as "ref:<value>", so the graph shows the resource as unknown instead of
 dropping the edge. Problems (unreadable payloads, ambiguous references, rules
 that fail) are listed in meta.warnings and never stop the export.
+
+The vocabulary field carries everything the explorer knows about types and
+relationship types, read from CUE: display info and view roles from each
+schema's _pudl.graph block, and graph_edge_type, graph_edge_category,
+graph_provider, graph_account_type and graph_resource_type facts from rule
+files. 'pudl graph vocab' shows it.
 
 --as-of exports the graph as pudl had recorded it at a past time: each
 resource's latest entry by then, the snapshots taken by then, and facts as
@@ -136,6 +143,7 @@ func buildWorkspaceGraph(ctx context.Context, asOf *time.Time) (*graphexport.Gra
 		DB:        db,
 		Rules:     rules,
 		Metadata:  reg.Source().GetSchemaMetadata,
+		Schemas:   reg.Source().GetAvailableSchemas(),
 		Load:      importer.DecodeEntry,
 		Workspace: effectiveWorkspaceName(),
 		Now:       time.Now(),

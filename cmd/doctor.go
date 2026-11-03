@@ -225,6 +225,7 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckOrphanedFilesAt(pudlDir) },
 		},
 		{Name: "Datalog Rules", CheckFunc: func() *doctor.CheckResult { return doctor.CheckRulesAt(queryRulePaths(pudlDir)...) }},
+		{Name: "Graph Vocabulary", CheckFunc: func() *doctor.CheckResult { return doctor.CheckGraphVocabulary(workspaceVocabulary(pudlDir)) }},
 	}
 }
 

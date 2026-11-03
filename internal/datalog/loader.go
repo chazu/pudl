@@ -168,9 +168,10 @@ func extractRule(fieldName string, v cue.Value) Rule {
 	}
 	rule.Head = head
 
+	// A rule with no body is a fact (see checkFact).
 	bodyVal := v.LookupPath(cue.ParsePath("body"))
 	if !bodyVal.Exists() {
-		return fail(fmt.Errorf("missing body"))
+		return rule
 	}
 	bodyList, err := bodyVal.List()
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/chazu/pudl/internal/graphvocab"
 )
 
 // vpc <-in_vpc- subnet <-in_subnet- i1 -protected_by-> sg ; i2 -in_subnet-> subnet ; i1 -reads-> db ; db -> ref:key
@@ -67,4 +69,11 @@ func TestSearchRanksNameFirst(t *testing.T) {
 	require.Len(t, Search(g, "n-orders", 10), 1, "native IDs match")
 	require.Len(t, Search(g, "t.", 3), 3, "limit applies")
 	require.Empty(t, Search(g, "  ", 10))
+}
+
+func TestSubgraphKeepsVocabulary(t *testing.T) {
+	g := testGraph()
+	g.Vocabulary = &graphvocab.Vocabulary{EdgeTypes: []graphvocab.EdgeType{{Type: "in_vpc", Category: "containment"}}}
+	sub := Subgraph(g, []string{"i1"}, 1, []string{"in_vpc"})
+	require.Same(t, g.Vocabulary, sub.Vocabulary)
 }

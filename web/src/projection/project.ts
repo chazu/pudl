@@ -4,7 +4,6 @@
 // disposition, so nothing is dropped without a recorded reason.
 
 import type { GraphIndex, Resource, ResourceId } from '../model/canonical';
-import { relationshipType } from '../model/relationshipTypes';
 import {
   UNRESOLVED_GROUP_ID,
   type ParentRef,
@@ -47,12 +46,12 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
 
   // Ports: resources rendered on a host node rather than as nodes.
   const portHost = new Map<ResourceId, { host: ResourceId; relation: string }>();
-  for (const rule of def.ports ?? []) {
+  for (const rule of def.ports?.(ctx) ?? []) {
     for (const r of index.graph.resources) {
       if (r.type !== rule.resourceType || !included.has(r.id)) continue;
       const host = index
         .targets(r.id, rule.hostRelation)
-        .find((h) => included.has(h.id) && !def.isGroup(h));
+        .find((h) => included.has(h.id) && !def.isGroup(h, ctx));
       if (host) portHost.set(r.id, { host: host.id, relation: rule.hostRelation });
     }
   }
@@ -64,7 +63,7 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
     const known = groupOf.get(id);
     if (known) return known;
     const r = index.resource(id);
-    if (!r || !included.has(id) || !def.isGroup(r) || resolving.has(id)) return undefined;
+    if (!r || !included.has(id) || !def.isGroup(r, ctx) || resolving.has(id)) return undefined;
     resolving.add(id);
     const placement = def.place(r, ctx);
     const { parentId } = resolveParent(placement);
@@ -96,6 +95,7 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
         parentId,
         basis: spec.basis,
         order: order++,
+        ...(spec.bucketType ? { bucketType: spec.bucketType } : {}),
       });
     }
     return gid;
@@ -126,7 +126,7 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
 
   for (const r of index.graph.resources) {
     if (!included.has(r.id)) continue;
-    if (def.isGroup(r)) {
+    if (def.isGroup(r, ctx)) {
       groupForResource(r.id);
       continue;
     }
@@ -167,7 +167,7 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
       dispositions.set(rel.id, { kind: 'port-binding' });
       continue;
     }
-    const category = relationshipType(rel.type).category;
+    const category = index.vocab.relationshipType(rel.type).category;
     if (!def.categories.available.includes(category)) {
       dispositions.set(rel.id, { kind: 'category-not-in-view', category });
       continue;
@@ -205,7 +205,7 @@ export function project(index: GraphIndex, def: ProjectionDefinition): SemanticV
     candidates.push(rel);
   }
 
-  return { projection: def, groups, members, groupOf, candidates, dispositions, excluded };
+  return { projection: def, vocab: index.vocab, groups, members, groupOf, candidates, dispositions, excluded };
 }
 
 /** Ancestor chain of a group, nearest first, including itself. */

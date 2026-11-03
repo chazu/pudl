@@ -1,7 +1,7 @@
 // Visual vocabulary for relationship categories. Each category has its own
 // colour AND line pattern, so they stay distinguishable without colour.
 
-import type { RelationshipCategory } from '../model/relationshipTypes';
+import type { RelationshipCategory } from '../model/vocabulary';
 import type { Point } from '../layout/types';
 
 export interface EdgeStyle {

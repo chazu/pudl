@@ -20,6 +20,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph
+		graph: display: {code: "VPC", label: "VPC network", class: "network"}
+		graph: network: {group: true, via: ["in_project"]}
 		// Network references are joined in path form
 		// (projects/P/global/networks/N), see gcp_depends_on_network.
 		facts: gcp_network: args: {
@@ -45,6 +47,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
+		graph: display: {code: "SUBN", label: "Subnetwork", class: "network"}
+		graph: network: {group: true, via: ["in_network"], region: true}
 		facts: gcp_subnet: args: {
 			project: "project"
 			name:    "name"
@@ -73,6 +77,9 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph
+		graph: display: {code: "FW", label: "Firewall rule", class: "security"}
+		graph: network: via: ["in_network"]
+		graph: security: control: true
 		facts: {
 			gcp_firewall_network: args: {
 				self_link: "selfLink"
@@ -119,6 +126,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph
+		graph: display: {code: "ROUTE", label: "Route", class: "network"}
+		graph: network: via: ["in_network"]
 		facts: gcp_route_network: args: {
 			self_link: "selfLink"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
@@ -142,6 +151,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
+		graph: display: {code: "RTR", label: "Cloud Router", class: "network"}
+		graph: network: {via: ["in_network"], region: true}
 		facts: {
 			gcp_router: args: {
 				project:   "project"
@@ -171,6 +182,8 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
+		graph: display: {code: "IP", label: "IP address", class: "network"}
+		graph: network: region: true
 		facts: gcp_address: args: {
 			project:   "project"
 			name:      "name"

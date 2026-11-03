@@ -228,6 +228,11 @@ account). Wildcards are not allowed.
 | `account` | Owning AWS account or GCP project |
 | `region`, `zone` | Location |
 | `refs` | Values other records use to refer to this resource, in addition to a single identity field's value |
+| `display` | `{code, label, class}`: how pudl ui draws the type |
+| `admin`, `network`, `port_of`, `security`, `inventory`, `application` | The type's roles in pudl ui's views |
+
+`display` and the roles are covered in
+[Make a type appear in pudl ui](#make-a-type-appear-in-pudl-ui).
 
 `refs` matters when a type's identity and the references other records hold
 are spelled differently. A GCP network's identity is its full `selfLink`, but
@@ -235,6 +240,109 @@ a subnet's `network` fact holds the path with the API prefix trimmed.
 Relationships are Datalog rules for the `graph_edge` relation; see
 [datalog](datalog.md#resource-graph-edges-graph_edge). The block is inherited
 along `base_schema`, and the nearest one wins.
+
+## Make a type appear in pudl ui
+
+pudl ui has no type knowledge of its own. Everything it shows about a type
+or a relationship comes from CUE, and travels with the graph as its
+`vocabulary` (`pudl graph vocab` prints it). A type with nothing declared
+still appears, drawn as unknown. Four steps give it a code, a label, a place
+in each view and labelled edges, with no TypeScript.
+
+### 1. Display info
+
+In the schema's `_pudl: graph` block:
+
+```cue
+graph: display: {code: "SUBN", label: "Subnetwork", class: "network"}
+```
+
+- `code`: 1 to 5 characters, drawn on the node.
+- `label`: the type's name in the sidebar, legends and inspector.
+- `class`: one of `admin`, `network`, `compute`, `data`, `messaging`, `edge`,
+  `security`, `identity`, `logical`, `external`. It sets the node's colour.
+
+`pudl schema new` writes this line with guesses from the definition name.
+
+### 2. Roles in the views
+
+All optional. Without roles a type still shows in the inventory view, under
+its owner, region and type.
+
+```cue
+graph: network: {group: true, via: ["in_network"], region: true}
+graph: security: control: true
+```
+
+| Key | Effect |
+| --- | --- |
+| `network: {}` | Shown in the network view, placed under its owner |
+| `network: via: [types]` | Placed under the target of the first of these edge types the resource has; under its owner when it has none |
+| `network: region: true` | The parent is wrapped in a region group when the resource has a region |
+| `network: group: true` | Drawn as a container that other resources sit in |
+| `port_of: "type"` | Drawn as a port on the resource this edge type points to (network and security views) |
+| `security: control: true` | Always shown in the security view, even with no security edges |
+| `inventory: collapsed: true` | Its type bucket starts collapsed in the inventory view |
+| `admin: parent: [types]` | An administrative node (project, folder, organization): a group in the network and inventory views, under the target of these edges, or at the top when there are none |
+| `application: {group: true, via: [types]}` | A group in the application view, placed under the target of these edges |
+
+Roles name edge types, so they must match the `type` of your `graph_edge`
+rules. The GCP and AWS packs (`examples/*/schema/`) declare roles for every
+type they ship.
+
+### 3. Edges and their meaning
+
+Edges are `graph_edge` rules ([datalog](datalog.md#resource-graph-edges-graph_edge)).
+Each edge type the rules derive needs a `graph_edge_type` fact, in any rule
+file, saying what the edge means:
+
+```cue
+graph_edge_type_in_vpc: {
+	head: {rel: "graph_edge_type", args: {type: "in_vpc", category: "containment",
+		label: "in VPC", meaning: "Defined inside this VPC."}}
+}
+```
+
+`category` is one of pudl's built-in categories: `containment`, `network`,
+`traffic`, `dependency`, `security`, `iam`, `other`. It sets the edge's
+colour and line, which views draw it, and whether it places resources:
+neighbourhood loading follows `containment` edges. `meaning` is the strongest
+claim the edge supports; the inspector shows it. pudl ships the edge types
+every provider shares (`in_subnet`, `runs_as`, `allows_ingress_from`, ...) in
+`pudl/rules/graph_vocabulary.cue`; run `pudl graph vocab` to see them before
+declaring your own.
+
+### 4. Provider and account type
+
+A pack for a new provider adds, in a rule file:
+
+```cue
+graph_provider_acme: {head: {rel: "graph_provider", args: {provider: "acme", label: "Acme Cloud"}}}
+graph_account_type_acme: {head: {rel: "graph_account_type", args: {provider: "acme", type: "acme.account"}}}
+graph_resource_type_acme_account: {head: {rel: "graph_resource_type", args: {type: "acme.account", code: "ACCT", label: "Acme account", class: "admin"}}}
+```
+
+- `graph_provider`: the provider's label. Without it, pudl ui shows the
+  provider id.
+- `graph_account_type`: the type a resource's `account` value names. pudl ui
+  groups resources under it in every view. It is a group even when the pack
+  does not collect accounts.
+- `graph_resource_type`: display info for a type with no schema. A schema's
+  `display` wins over it.
+
+### Check it
+
+```sh
+pudl graph vocab          # every type and edge type, where each was declared, and problems
+pudl doctor --health-only # "Graph Vocabulary" lists the same problems
+```
+
+The reported problems are:
+- a cataloged type with no display info;
+- a `graph_edge` rule deriving an undeclared edge type;
+- a role naming an undeclared edge type;
+- an edge type in an unknown category;
+- two declarations of one type that disagree.
 
 ## Claiming records: `@pudl(match)`
 

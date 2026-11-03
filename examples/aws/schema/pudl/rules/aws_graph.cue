@@ -165,3 +165,23 @@ aws_graph_sg_egress_cidr_port: {
 	head: {rel: "graph_edge_property", args: {type: "allows_egress_to", source: "$R", target: "$C", key: "port", value: "$F"}}
 	body: [{rel: "aws_sg_egress_cidr", args: {resource_id: "$R", cidr: "$C", from_port: "$F"}}]
 }
+
+// Graph vocabulary for this pack (facts: rules with no body). Edge types
+// shared by every provider are pudl built-ins (pudl/rules/graph_vocabulary.cue);
+// these are AWS's own. A resource's AccountId names an aws.account, which
+// the pack does not collect, so its display info is declared here too.
+_awsEdgeTypes: {
+	in_vpc:               {category: "containment", label: "in VPC", meaning: "Defined inside this VPC."}
+	protected_by:         {category: "security", label: "SG", meaning: "Security group is associated. Association is not a connection."}
+	has_instance_profile: {category: "iam", label: "instance profile", meaning: "Instance runs with this instance profile (and the role it carries). Effective permission not evaluated."}
+	profile_role:         {category: "iam", label: "profile role", meaning: "Instance profile carries this role; instances launched with it can use the role."}
+	trust_allows_assume:  {category: "iam", label: "trust", meaning: "Role trust policy names this principal. The principal’s own permissions are not evaluated."}
+}
+
+for id, e in _awsEdgeTypes {
+	"graph_edge_type_\(id)": {head: {rel: "graph_edge_type", args: {type: id, category: e.category, label: e.label, meaning: e.meaning}}}
+}
+
+graph_provider_aws:              {head: {rel: "graph_provider", args: {provider: "aws", label: "AWS"}}}
+graph_account_type_aws:          {head: {rel: "graph_account_type", args: {provider: "aws", type: "aws.account"}}}
+graph_resource_type_aws_account: {head: {rel: "graph_resource_type", args: {type: "aws.account", code: "ACCT", label: "AWS account", class: "admin"}}}

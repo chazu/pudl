@@ -1,4 +1,4 @@
-import { CATEGORIES, CATEGORY_ORDER, type RelationshipCategory } from '../model/relationshipTypes';
+import type { RelationshipCategory } from '../model/vocabulary';
 import type { SemanticView } from '../projection/types';
 import { EDGE_STYLES } from '../render/edgeStyle';
 import type { Selection } from '../render/highlight';
@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function Toolbar({ view, state, selection, pending, onState, onFit, onZoom, onRelayout }: Props) {
-  const available = CATEGORY_ORDER.filter((c) => view.projection.categories.available.includes(c));
+  const available = view.vocab.categoryOrder().filter((c) => view.projection.categories.available.includes(c));
   const toggleCategory = (c: RelationshipCategory) =>
     onState((s) => {
       const enabledCategories = new Set(s.enabledCategories);
@@ -77,11 +77,11 @@ export function Toolbar({ view, state, selection, pending, onState, onFit, onZoo
         {available.map((c) => {
           const st = EDGE_STYLES[c];
           return (
-            <button key={c} className={`chip${state.enabledCategories.has(c) ? ' on' : ''}`} title={CATEGORIES[c].meaning} onClick={() => toggleCategory(c)}>
+            <button key={c} className={`chip${state.enabledCategories.has(c) ? ' on' : ''}`} title={view.vocab.category(c).meaning} onClick={() => toggleCategory(c)}>
               <svg width="26" height="8">
                 <line x1="1" y1="4" x2="25" y2="4" stroke={st.color} strokeWidth={st.width + 0.5} strokeDasharray={st.dash} />
               </svg>
-              {CATEGORIES[c].label}
+              {view.vocab.category(c).label}
             </button>
           );
         })}

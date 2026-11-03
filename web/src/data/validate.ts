@@ -3,14 +3,15 @@
 // projection shows it as an unresolved reference.
 
 import type { CanonicalGraph, GraphMeta } from '../model/canonical';
-import { isKnownRelationshipType } from '../model/relationshipTypes';
+import { Vocab, type Vocabulary } from '../model/vocabulary';
 
 export type GraphIssueKind =
   | 'duplicate-resource'
   | 'duplicate-relationship'
   | 'dangling-source'
   | 'dangling-target'
-  | 'unknown-relationship-type';
+  | 'unknown-relationship-type'
+  | 'no-vocabulary';
 
 export interface GraphIssue {
   kind: GraphIssueKind;
@@ -20,6 +21,14 @@ export interface GraphIssue {
 
 export function validateGraph(graph: CanonicalGraph): GraphIssue[] {
   const issues: GraphIssue[] = [];
+  const vocab = graph.vocabulary ? new Vocab(graph.vocabulary) : null;
+  if (!vocab && graph.resources.length > 0) {
+    issues.push({
+      kind: 'no-vocabulary',
+      id: 'vocabulary',
+      message: 'the graph carries no vocabulary: every resource type is unknown and every relationship is shown as "other"',
+    });
+  }
   const ids = new Set<string>();
   for (const r of graph.resources) {
     if (ids.has(r.id)) {
@@ -51,11 +60,11 @@ export function validateGraph(graph: CanonicalGraph): GraphIssue[] {
         message: `${rel.type} target ${rel.target} is not in the inventory`,
       });
     }
-    if (!isKnownRelationshipType(rel.type)) {
+    if (vocab && !vocab.isKnownRelationshipType(rel.type)) {
       issues.push({
         kind: 'unknown-relationship-type',
         id: rel.id,
-        message: `relationship type ${rel.type} is not registered`,
+        message: `relationship type ${rel.type} is not declared in the vocabulary (declare it with a graph_edge_type fact)`,
       });
     }
   }
@@ -87,6 +96,7 @@ export function parseCanonicalGraph(data: unknown, fallbackLabel: string, origin
     rel.basis ??= 'unknown';
   }
   const meta = (obj.meta as Record<string, unknown> | undefined) ?? {};
+  const vocabulary = parseVocabulary(obj.vocabulary);
   return {
     meta: {
       origin,
@@ -102,5 +112,33 @@ export function parseCanonicalGraph(data: unknown, fallbackLabel: string, origin
     },
     resources: obj.resources as CanonicalGraph['resources'],
     relationships: obj.relationships as CanonicalGraph['relationships'],
+    ...(vocabulary ? { vocabulary } : {}),
+  };
+}
+
+/**
+ * Shape check for the vocabulary. Malformed entries are dropped (the types
+ * they described then render as unknown); a vocabulary that is not an object
+ * is treated as absent.
+ */
+export function parseVocabulary(data: unknown): Vocabulary | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const v = data as Record<string, unknown>;
+  const list = (k: string) => (Array.isArray(v[k]) ? (v[k] as Record<string, unknown>[]).filter((x) => x && typeof x === 'object') : []);
+  const str = (x: unknown) => typeof x === 'string';
+  return {
+    categories: list('categories')
+      .filter((c) => str(c.id))
+      .map((c) => ({ id: c.id as string, label: str(c.label) ? (c.label as string) : (c.id as string), meaning: str(c.meaning) ? (c.meaning as string) : '', order: typeof c.order === 'number' ? c.order : 0 })),
+    edgeTypes: list('edgeTypes')
+      .filter((e) => str(e.type) && str(e.category))
+      .map((e) => e as unknown as Vocabulary['edgeTypes'][number]),
+    providers: list('providers')
+      .filter((p) => str(p.provider) && str(p.label))
+      .map((p) => p as unknown as Vocabulary['providers'][number]),
+    resourceTypes: list('resourceTypes')
+      .filter((t) => str(t.type))
+      .map((t) => t as unknown as Vocabulary['resourceTypes'][number]),
+    problems: Array.isArray(v.problems) ? v.problems.filter(str) as string[] : [],
   };
 }

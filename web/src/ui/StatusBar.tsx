@@ -22,6 +22,9 @@ export function StatusBar({ rendered, view, issues, warnings, loadedCount, total
   const aggregated = graph.edges.filter((e) => e.aggregated).length;
   const hidden = (counts['category-off'] ?? 0) + (counts['endpoint-hidden'] ?? 0);
   const dangling = issues.filter((i) => i.kind === 'dangling-source' || i.kind === 'dangling-target').length;
+  const noVocabulary = issues.find((i) => i.kind === 'no-vocabulary');
+  const undeclared = [...new Set(issues.filter((i) => i.kind === 'unknown-relationship-type').map((i) => i.message))];
+  const vocabProblems = view.vocab.problems;
   return (
     <div className="statusbar">
       {totals && loadedCount !== undefined && (
@@ -38,6 +41,21 @@ export function StatusBar({ rendered, view, issues, warnings, loadedCount, total
       <span title="Relationships hidden by category or resource filters">{hidden} filtered</span>
       <span>{view.excluded.length} resources not in this view</span>
       {dangling > 0 && <span className="warn">{dangling} unresolved reference(s)</span>}
+      {noVocabulary && (
+        <span className="warn" title={noVocabulary.message}>
+          no vocabulary
+        </span>
+      )}
+      {undeclared.length > 0 && (
+        <span className="warn" title={undeclared.join('\n')}>
+          {undeclared.length} undeclared relationship type(s)
+        </span>
+      )}
+      {vocabProblems.length > 0 && (
+        <span className="warn" title={vocabProblems.join('\n')}>
+          {vocabProblems.length} vocabulary problem(s)
+        </span>
+      )}
       {warnings && warnings.length > 0 && (
         <span className="warn" title={warnings.join('\n')}>
           {warnings.length} export warning(s)

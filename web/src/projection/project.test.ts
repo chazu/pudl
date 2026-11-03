@@ -124,7 +124,7 @@ const boxes: ProjectionDefinition = {
   include: () => true,
   isGroup: (r) => r.type === 'box',
   place: (r, ctx) => ({ parents: ctx.via(r, 'in'), basis: 'test' }),
-  ports: [],
+  ports: () => [],
   categories: { available: ['dependency', 'other'], enabled: ['dependency', 'other'] },
 };
 

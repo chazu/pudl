@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Graph vocabulary in CUE: no type knowledge in the UI (2026-11-02)
+
+pudl ui now learns every resource type's code, label, class and view roles
+from the schema's `_pudl: graph` block. It learns every edge type, category,
+provider and account type from datalog facts: rules with no body, a new
+engine feature. The graph export carries this as `vocabulary`, and the
+views name no types. New tooling: `pudl graph vocab`, the doctor check
+**Graph Vocabulary**, and a `graph` block scaffolded by `pudl schema new`.
+Authoring guide: `docs/schema-authoring.md#make-a-type-appear-in-pudl-ui`.
+See `implog/2026_11_02_graph_vocabulary_in_cue.md`. Closes pudl-mrw.
+
 ### GCP pack: instance metadata redacted; external-IP facts (2026-11-02)
 
 `gcp.#ComputeInstance` now redacts `metadata.items[*].value` (startup
@@ -1488,6 +1499,8 @@ under the hood.
 | `schemaname` | `internal/schemaname/` | Schema name normalization |
 | `schemagen` | `internal/schemagen/` | Schema generation from data |
 | `datalog` | `internal/datalog/` | Rule loading, SQL compilation, SCC-based evaluation |
+| `graphspec` | `internal/graphspec/` | `_pudl.graph` decoding: labels, refs, display and view roles |
+| `graphvocab` | `internal/graphvocab/` | Graph vocabulary from schemas and graph_* facts, with problems |
 | `acute` | `internal/acute/` | Run plans, reports, drift comparison and findings |
 | `operation` | `internal/operation/` | `pudl check` execution: model resolution, ordering, populate and ingest, inventory drift, checks, verdicts, one check report |
 | `checkreport` | `internal/checkreport/` | A check's recorded report: model reports, summaries, rendering, reading stored reports back |

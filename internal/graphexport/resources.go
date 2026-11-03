@@ -11,6 +11,7 @@ import (
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/graphspec"
+	"github.com/chazu/pudl/internal/graphvocab"
 	"github.com/chazu/pudl/internal/validator"
 )
 
@@ -34,7 +35,7 @@ const (
 // identity, with a warning.
 func buildResource(ctx context.Context, entry database.CatalogEntry, meta MetadataFunc, load LoadFunc, obs ObservationsFunc, warn func(string)) (Resource, []string) {
 	m, _ := meta(entry.Schema)
-	spec := graphSpecFor(entry.Schema, meta)
+	spec := graphvocab.SpecFor(entry.Schema, graphvocab.MetadataFunc(meta))
 	identity := identityValues(entry)
 	r := Resource{
 		ID:         *entry.ResourceID,
@@ -73,23 +74,6 @@ func buildResource(ctx context.Context, entry database.CatalogEntry, meta Metada
 		}
 	}
 	return r, refs
-}
-
-// graphSpecFor returns the nearest `_pudl.graph` along the base_schema chain.
-func graphSpecFor(schema string, meta MetadataFunc) *graphspec.Spec {
-	seen := map[string]bool{}
-	for name := schema; name != "" && !seen[name]; {
-		seen[name] = true
-		m, ok := meta(name)
-		if !ok {
-			return nil
-		}
-		if m.Graph != nil {
-			return m.Graph
-		}
-		name = m.BaseSchema
-	}
-	return nil
 }
 
 func specValue(spec *graphspec.Spec, field string) *graphspec.Value {

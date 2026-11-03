@@ -1,7 +1,7 @@
 // Building blocks shared by the inspector panels.
 
 import type { Basis, Evidence, GraphIndex, Relationship, ResourceId } from '../model/canonical';
-import { relationshipType } from '../model/relationshipTypes';
+import type { RelationshipCategory } from '../model/vocabulary';
 import type { SemanticView } from '../projection/types';
 import { EDGE_STYLES } from '../render/edgeStyle';
 import type { VisualGraph } from '../visual/types';
@@ -16,8 +16,8 @@ export function BasisBadge({ basis }: { basis: Basis }) {
   return <span className={`basis basis-${basis}`} title={titles[basis]}>{basis}</span>;
 }
 
-export function LineSample({ type }: { type: string }) {
-  const st = EDGE_STYLES[relationshipType(type).category];
+export function LineSample({ category }: { category: RelationshipCategory }) {
+  const st = EDGE_STYLES[category];
   return (
     <svg className="linesample" width="22" height="8">
       <line x1="1" y1="4" x2="21" y2="4" stroke={st.color} strokeWidth={st.width + 0.5} strokeDasharray={st.dash} />
@@ -71,7 +71,8 @@ interface RelListProps {
 
 export function RelationshipList({ title, rels, self, index, view, graph, onSelectResource, onSelectEdge }: RelListProps) {
   if (rels.length === 0) return null;
-  const sorted = [...rels].sort((a, b) => relationshipType(a.type).category.localeCompare(relationshipType(b.type).category) || a.type.localeCompare(b.type));
+  const categoryOf = (type: string) => index.vocab.relationshipType(type).category;
+  const sorted = [...rels].sort((a, b) => categoryOf(a.type).localeCompare(categoryOf(b.type)) || a.type.localeCompare(b.type));
   return (
     <div className="relsection">
       <h4>
@@ -82,11 +83,11 @@ export function RelationshipList({ title, rels, self, index, view, graph, onSele
           const peer = rel.source === self ? rel.target : rel.source;
           const peerRes = index.resource(peer);
           const d = disposition(rel.id, view, graph);
-          const info = relationshipType(rel.type);
+          const info = index.vocab.relationshipType(rel.type);
           return (
             <li key={rel.id} className={d.drawn ? '' : 'undrawn'}>
               <div className="relrow">
-                <LineSample type={rel.type} />
+                <LineSample category={info.category} />
                 <span className="reltype" title={info.meaning}>{info.label}</span>
                 <span className={`peer${peerRes ? '' : ' missing'}`} onClick={() => onSelectResource(peer)} title={peer}>
                   {peerRes?.name ?? `${peer} (not in inventory)`}

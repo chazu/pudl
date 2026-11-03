@@ -49,6 +49,11 @@ When --from points to a collection entry:
 The --infer flag allows specifying type hints for specific fields, such as
 marking a field as an enum type.
 
+An item schema gets a _pudl graph block, so the type draws in pudl ui: name,
+account and region fields guessed from the data, display {code, label,
+class} guessed from the definition name, and the view roles as commented
+examples. Check it with 'pudl graph vocab'.
+
 Examples:
     pudl schema new --from hugib-dubuf --path aws/ec2:#Instance
     pudl schema new --from govim-nupab --path aws/ec2:#Instance  # from collection

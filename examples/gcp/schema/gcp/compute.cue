@@ -26,6 +26,8 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpComputeGraph & {zone: {path: "zone", last_segment: true}}
+		graph: display: {code: "GCE", label: "Compute instance", class: "compute"}
+		graph: network: via: ["in_subnet"]
 		facts: {
 			gcp_instance: args: {
 				self_link: "selfLink"

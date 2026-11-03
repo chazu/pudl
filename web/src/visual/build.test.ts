@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildDemoGraph } from '../data/mock';
+import { buildDemoGraph, DEMO_VOCABULARY } from '../data/mock';
 import { GraphIndex } from '../model/canonical';
-import { relationshipType } from '../model/relationshipTypes';
 import { project } from '../projection/project';
 import { PROJECTIONS, projectionById } from '../projection/registry';
 import type { SemanticView } from '../projection/types';
@@ -18,7 +17,7 @@ function assertEdgesFaithful(g: VisualGraph) {
   for (const e of g.edges) {
     for (const rid of e.relationshipIds) {
       const rel = index.relationship(rid)!;
-      expect(relationshipType(rel.type).category).toBe(e.category);
+      expect(index.vocab.relationshipType(rel.type).category).toBe(e.category);
       expect(g.resourceToNode.get(rel.source)).toBe(e.source);
       expect(g.resourceToNode.get(rel.target)).toBe(e.target);
     }
@@ -202,7 +201,7 @@ describe('synthetic owner groups', () => {
     const { GraphBuilder } = await import('../data/mock/builder');
     const b = new GraphBuilder('gcp');
     b.res({ id: 'n1', type: 'gcp.compute.network', name: 'vpc', account: 'proj-x' });
-    const idx = new GraphIndex({ meta: { origin: 'file', label: 't' }, resources: b.resources, relationships: [] });
+    const idx = new GraphIndex({ meta: { origin: 'file', label: 't' }, resources: b.resources, relationships: [], vocabulary: DEMO_VOCABULARY });
     const view = project(idx, projectionById('network'));
     const g = buildVisualGraph(view, idx, initialViewState(view));
     const owner = [...g.nodes.values()].find((n) => n.label === 'proj-x')!;

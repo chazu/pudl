@@ -2,32 +2,31 @@
 // security groups, firewall rules and keys, plus the resources they name.
 // Grouped only by administrative owner; no network nesting, so nothing here
 // reads as a network path.
+//
+// From the vocabulary: owner types (`admin.owner`) are the groups; types with
+// `security.control` always appear; anything else appears when it touches a
+// security or IAM relationship.
 
 import type { Resource } from '../../model/canonical';
-import { relationshipType } from '../../model/relationshipTypes';
+import type { RelationshipCategory } from '../../model/vocabulary';
 import type { Placement, ProjectionContext, ProjectionDefinition } from '../types';
-import { EXTERNAL_GROUP, isExternal, ownerRef } from './common';
+import { EXTERNAL_GROUP, isExternal, ownerRef, touching } from './common';
 
-const CONTROL_TYPES = new Set([
-  'aws.iam.user',
-  'aws.iam.role',
-  'aws.iam.policy',
-  'aws.ec2.security_group',
-  'aws.kms.key',
-  'gcp.iam.service_account',
-  'gcp.compute.firewall',
-]);
+const SECURITY = new Set<RelationshipCategory>(['security', 'iam']);
 
-const SECURITY = new Set(['security', 'iam']);
+const touchesSecurity = (r: Resource, ctx: ProjectionContext) => touching(r, SECURITY, ctx).length > 0;
 
-function touchesSecurity(r: Resource, ctx: ProjectionContext): boolean {
-  const touches = [...ctx.index.out(r.id), ...ctx.index.in(r.id)];
-  return touches.some((rel) => SECURITY.has(relationshipType(rel.type).category));
+/** Hosts of ports (e.g. interfaces) that carry security relationships, so the port can be drawn on them. */
+function hostsSecurePort(r: Resource, ctx: ProjectionContext): boolean {
+  return ctx.index.in(r.id).some((rel) => {
+    const port = ctx.index.resource(rel.source);
+    return !!port && ctx.index.vocab.resourceType(port.type).portOf === rel.type && touchesSecurity(port, ctx);
+  });
 }
 
 function place(r: Resource, ctx: ProjectionContext): Placement {
   if (isExternal(r)) return { parents: [{ synthetic: EXTERNAL_GROUP }], basis: 'External principal or range.' };
-  if (r.type === 'aws.account' || r.type === 'gcp.project') return { parents: [], basis: 'Administrative boundary.' };
+  if (ctx.index.vocab.resourceType(r.type).admin?.owner) return { parents: [], basis: 'Administrative boundary.' };
   const owner = ownerRef(r, ctx);
   return { parents: owner ? [owner] : [], basis: 'Placed by owning account or project.' };
 }
@@ -36,16 +35,18 @@ export const securityProjection: ProjectionDefinition = {
   id: 'security',
   label: 'Security relationships',
   description: 'IAM principals, policies, trust, security controls and exposure.',
-  include: (r, ctx) =>
-    r.type === 'aws.account' ||
-    r.type === 'gcp.project' ||
-    CONTROL_TYPES.has(r.type) ||
-    (r.provider !== 'logical' && touchesSecurity(r, ctx)) ||
-    // Hosts of interfaces that carry security groups, so the interface can be a port.
-    ctx.index.sources(r.id, 'attached_to').some((iface) => touchesSecurity(iface, ctx)),
-  isGroup: (r) => r.type === 'aws.account' || r.type === 'gcp.project',
+  include: (r, ctx) => {
+    const t = ctx.index.vocab.resourceType(r.type);
+    return (
+      !!t.admin?.owner ||
+      t.securityControl ||
+      (t.cls !== 'logical' && touchesSecurity(r, ctx)) ||
+      hostsSecurePort(r, ctx)
+    );
+  },
+  isGroup: (r, ctx) => !!ctx.index.vocab.resourceType(r.type).admin?.owner,
   place,
-  ports: [{ resourceType: 'aws.ec2.network_interface', hostRelation: 'attached_to' }],
+  ports: (ctx) => ctx.index.vocab.portRules(),
   categories: {
     available: ['iam', 'security', 'network', 'other'],
     enabled: ['iam', 'security', 'other'],

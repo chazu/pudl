@@ -144,7 +144,13 @@ func Handler(opts Options) http.Handler {
 			if d, err := strconv.Atoi(q.Get("depth")); err == nil && d >= 0 && d <= 3 {
 				depth = d
 			}
-			g = graphexport.Subgraph(g, focus, depth, splitList(q.Get("closure")))
+			// Without a closure (a client that has no vocabulary yet), follow
+			// containment so what is loaded can still be placed.
+			closure := splitList(q.Get("closure"))
+			if !q.Has("closure") && g.Vocabulary != nil {
+				closure = g.Vocabulary.EdgeTypesIn("containment")
+			}
+			g = graphexport.Subgraph(g, focus, depth, closure)
 		}
 		writeJSON(w, http.StatusOK, g)
 	})

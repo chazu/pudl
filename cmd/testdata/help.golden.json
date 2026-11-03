@@ -803,7 +803,7 @@
     {
       "use": "graph",
       "short": "Export the resource graph",
-      "long": "Work with the resource graph: cataloged resources and the relationships\nbetween them, as read by the web graph explorer (web/).\n\nAvailable subcommands:\n- export:  Write the current resource graph as JSON",
+      "long": "Work with the resource graph: cataloged resources and the relationships\nbetween them, as read by the web graph explorer (web/).\n\nAvailable subcommands:\n- export:  Write the current resource graph as JSON\n- vocab:   Show what pudl ui knows about resource and relationship types",
       "args": "custom",
       "flags": [
         {
@@ -825,7 +825,7 @@
         {
           "use": "export",
           "short": "Write the current resource graph as JSON",
-          "long": "Write the current resource graph as JSON, in the canonical graph format the\nweb explorer loads (docs/frontend.md#backend-integration).\n\nResources are the catalog's current entries, one per resource. Each schema's\noptional _pudl.graph block names the fields used for name, account, region and\nzone, and the values other records use to refer to the resource.\n\nRelationships come from Datalog rules whose head is the reserved relation\n\n    graph_edge(type, source, target, basis)\n\nwhere source and target are a resource ID or a reference value such as an\nAWS ID or a GCP path. A reference that matches no cataloged resource is kept\nas \"ref:\u003cvalue\u003e\", so the graph shows the resource as unknown instead of\ndropping the edge. Problems (unreadable payloads, ambiguous references, rules\nthat fail) are listed in meta.warnings and never stop the export.\n\n--as-of exports the graph as pudl had recorded it at a past time: each\nresource's latest entry by then, the snapshots taken by then, and facts as\nbelieved then about then. Rules and schemas are always today's, and entries\ndeleted since cannot be shown.\n\nOutput is always JSON; the global --json flag changes nothing.\n\nExamples:\n    pudl graph export \u003e graph.json\n    pudl graph export -o web/public/graph.json\n    pudl graph export --as-of 2026-10-01T00:00:00Z",
+          "long": "Write the current resource graph as JSON, in the canonical graph format the\nweb explorer loads (docs/frontend.md#backend-integration).\n\nResources are the catalog's current entries, one per resource. Each schema's\noptional _pudl.graph block names the fields used for name, account, region and\nzone, and the values other records use to refer to the resource.\n\nRelationships come from Datalog rules whose head is the reserved relation\n\n    graph_edge(type, source, target, basis)\n\nwhere source and target are a resource ID or a reference value such as an\nAWS ID or a GCP path. A reference that matches no cataloged resource is kept\nas \"ref:\u003cvalue\u003e\", so the graph shows the resource as unknown instead of\ndropping the edge. Problems (unreadable payloads, ambiguous references, rules\nthat fail) are listed in meta.warnings and never stop the export.\n\nThe vocabulary field carries everything the explorer knows about types and\nrelationship types, read from CUE: display info and view roles from each\nschema's _pudl.graph block, and graph_edge_type, graph_edge_category,\ngraph_provider, graph_account_type and graph_resource_type facts from rule\nfiles. 'pudl graph vocab' shows it.\n\n--as-of exports the graph as pudl had recorded it at a past time: each\nresource's latest entry by then, the snapshots taken by then, and facts as\nbelieved then about then. Rules and schemas are always today's, and entries\ndeleted since cannot be shown.\n\nOutput is always JSON; the global --json flag changes nothing.\n\nExamples:\n    pudl graph export \u003e graph.json\n    pudl graph export -o web/public/graph.json\n    pudl graph export --as-of 2026-10-01T00:00:00Z",
           "args": "custom",
           "flags": [
             {
@@ -852,6 +852,28 @@
               "shorthand": "o",
               "usage": "Output file (default: stdout)",
               "type": "string"
+            }
+          ]
+        },
+        {
+          "use": "vocab",
+          "short": "Show what pudl ui knows about resource and relationship types",
+          "long": "Show the graph vocabulary: everything pudl ui knows about types, read from\nCUE. pudl ui has no type knowledge of its own; a type or relationship missing\nhere is drawn as unknown.\n\n- Resource types: each schema's _pudl graph block (display {code, label,\n  class} and view roles), plus graph_resource_type facts for types with no\n  schema.\n- Edge types and categories: graph_edge_type and graph_edge_category facts\n  in rule files (pudl/rules/*.cue).\n- Providers: graph_provider facts; graph_account_type names the type a\n  provider's account attribute refers to.\n\nProblems lists what will not draw as intended: cataloged types with no display\ninfo, graph_edge rules deriving undeclared types, roles naming undeclared edge\ntypes, unknown categories and conflicting declarations. pudl doctor reports\nthe same problems.\n\n--json prints exactly the vocabulary field of pudl graph export.\n\nSee docs/schema-authoring.md, \"Make a type appear in pudl ui\".",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
             }
           ]
         }
@@ -1695,7 +1717,7 @@
         {
           "use": "new",
           "short": "Generate a new schema from imported data",
-          "long": "Generate a new CUE schema by analyzing data from a previously imported entry.\n\nThis command creates a new schema file based on the structure of imported data,\ninferring field types, identifying likely identity fields, and generating\nappropriate CUE type definitions.\n\nThe --from flag specifies the proquint ID of the imported data to analyze.\nThe --path flag specifies where to create the schema (package path and definition name).\n\nIf the path contains a # character, everything after it is used as the definition name.\nOtherwise, the last path component is capitalized and used as the definition name.\n\nWhen --from points to a collection entry:\n- Without --collection: analyzes individual items to create an item schema\n- With --collection: creates a schema for the collection structure itself\n\nThe --infer flag allows specifying type hints for specific fields, such as\nmarking a field as an enum type.\n\nExamples:\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance\n    pudl schema new --from govim-nupab --path aws/ec2:#Instance  # from collection\n    pudl schema new --from govim-nupab --path aws/ec2:#InstanceCollection --collection\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance --infer State=enum",
+          "long": "Generate a new CUE schema by analyzing data from a previously imported entry.\n\nThis command creates a new schema file based on the structure of imported data,\ninferring field types, identifying likely identity fields, and generating\nappropriate CUE type definitions.\n\nThe --from flag specifies the proquint ID of the imported data to analyze.\nThe --path flag specifies where to create the schema (package path and definition name).\n\nIf the path contains a # character, everything after it is used as the definition name.\nOtherwise, the last path component is capitalized and used as the definition name.\n\nWhen --from points to a collection entry:\n- Without --collection: analyzes individual items to create an item schema\n- With --collection: creates a schema for the collection structure itself\n\nThe --infer flag allows specifying type hints for specific fields, such as\nmarking a field as an enum type.\n\nAn item schema gets a _pudl graph block, so the type draws in pudl ui: name,\naccount and region fields guessed from the data, display {code, label,\nclass} guessed from the definition name, and the view roles as commented\nexamples. Check it with 'pudl graph vocab'.\n\nExamples:\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance\n    pudl schema new --from govim-nupab --path aws/ec2:#Instance  # from collection\n    pudl schema new --from govim-nupab --path aws/ec2:#InstanceCollection --collection\n    pudl schema new --from hugib-dubuf --path aws/ec2:#Instance --infer State=enum",
           "flags": [
             {
               "name": "collection",

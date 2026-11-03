@@ -1,25 +1,43 @@
 // Application architecture: application → service → member resources, with
 // dependency and observed-traffic edges. Applications and services are
-// logical entities declared in PUDL, not provider resources. Resources that
-// participate in dependencies without any membership go in an explicit
-// "not assigned" group rather than being guessed into an application.
+// logical entities, not provider resources: whatever types the vocabulary
+// marks `application.group`, nested through their `application.via` edges.
+// A resource is a member of the application groups it has an edge to.
+// Resources that participate in dependencies without any membership go in
+// an explicit "not assigned" group rather than being guessed into an
+// application.
 
-import type { Resource } from '../../model/canonical';
-import { relationshipType } from '../../model/relationshipTypes';
-import type { Placement, ProjectionContext, ProjectionDefinition } from '../types';
+import type { Relationship, Resource } from '../../model/canonical';
+import type { RelationshipCategory } from '../../model/vocabulary';
+import type { ParentRef, Placement, ProjectionContext, ProjectionDefinition } from '../types';
+import { touching, viaEdges } from './common';
 
-const FLOW = new Set(['dependency', 'traffic']);
+const FLOW = new Set<RelationshipCategory>(['dependency', 'traffic']);
 
-function participates(r: Resource, ctx: ProjectionContext): boolean {
-  const touches = [...ctx.index.out(r.id), ...ctx.index.in(r.id)];
-  return touches.some((rel) => FLOW.has(relationshipType(rel.type).category));
+const isAppGroup = (r: Resource | undefined, ctx: ProjectionContext) => !!r && !!ctx.index.vocab.resourceType(r.type).application?.group;
+
+/** Outgoing relationships to an application group: membership. */
+function memberships(r: Resource, ctx: ProjectionContext): Relationship[] {
+  return ctx.index.out(r.id).filter((rel) => isAppGroup(ctx.index.resource(rel.target), ctx));
 }
 
 function place(r: Resource, ctx: ProjectionContext): Placement {
-  if (r.type === 'logical.application') return { parents: [], basis: 'Application (declared).' };
-  if (r.type === 'logical.service') return { parents: ctx.via(r, 'part_of'), basis: 'Service of application (part_of).' };
-  const parents = ctx.via(r, 'member_of');
-  if (parents.length > 0) return { parents, basis: 'Member of service (member_of).' };
+  const app = ctx.index.vocab.resourceType(r.type).application;
+  if (app?.group) {
+    const { parents, type } = viaEdges(r, app.via, ctx);
+    return { parents, basis: type ? `Part of its parent (${type}).` : 'Application (declared).' };
+  }
+  const member = memberships(r, ctx);
+  if (member.length > 0) {
+    const seen = new Set<string>();
+    const parents: ParentRef[] = [];
+    for (const rel of member) {
+      if (seen.has(rel.target)) continue;
+      seen.add(rel.target);
+      parents.push({ resource: rel.target, via: rel.type });
+    }
+    return { parents, basis: `Member (${[...new Set(member.map((rel) => rel.type))].join(', ')}).` };
+  }
   return {
     parents: [
       {
@@ -28,7 +46,7 @@ function place(r: Resource, ctx: ProjectionContext): Placement {
           label: 'Not assigned to an application',
           groupType: 'unassigned',
           parent: null,
-          basis: 'Participates in a dependency but has no member_of relationship.',
+          basis: 'Participates in a dependency but has no membership relationship.',
         },
       },
     ],
@@ -40,12 +58,8 @@ export const applicationProjection: ProjectionDefinition = {
   id: 'application',
   label: 'Application architecture',
   description: 'Logical applications and services, with dependency and data-flow edges.',
-  include: (r, ctx) =>
-    r.type === 'logical.application' ||
-    r.type === 'logical.service' ||
-    ctx.index.out(r.id, 'member_of').length > 0 ||
-    participates(r, ctx),
-  isGroup: (r) => r.type === 'logical.application' || r.type === 'logical.service',
+  include: (r, ctx) => isAppGroup(r, ctx) || memberships(r, ctx).length > 0 || touching(r, FLOW, ctx).length > 0,
+  isGroup: (r, ctx) => isAppGroup(r, ctx),
   place,
   categories: {
     available: ['dependency', 'traffic', 'iam', 'security', 'other'],

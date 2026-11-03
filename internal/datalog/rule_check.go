@@ -21,7 +21,7 @@ func checkRule(r Rule) error {
 		return fmt.Errorf("head has no arguments")
 	}
 	if len(r.Body) == 0 {
-		return fmt.Errorf("empty body")
+		return checkFact(r)
 	}
 
 	bound := make(map[string]bool)
@@ -50,6 +50,21 @@ func checkRule(r Rule) error {
 		}
 		if term.IsVariable() && !bound[term.Variable] {
 			return fmt.Errorf("head argument %s: variable %s is not bound in the body", key, term.Variable)
+		}
+	}
+	return nil
+}
+
+// checkFact validates a rule with no body: a fact, whose head arguments must
+// all be constants.
+func checkFact(r Rule) error {
+	for _, key := range sortedArgKeys(r.Head.Args) {
+		term := r.Head.Args[key]
+		switch {
+		case term.IsComparison():
+			return fmt.Errorf("head argument %s: comparison %s is only allowed in a rule body", key, term.Cmp)
+		case term.IsVariable():
+			return fmt.Errorf("head argument %s: a fact (a rule with no body) takes constants only, not variable %s", key, term.Variable)
 		}
 	}
 	return nil

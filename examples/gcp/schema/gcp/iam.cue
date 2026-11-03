@@ -14,6 +14,8 @@ package gcp
 			name: "email"
 			refs: [{path: "email", prepend: "serviceAccount:"}]
 		}
+		graph: display: {code: "SA", label: "Service account", class: "identity"}
+		graph: security: control: true
 		facts: gcp_service_account: args: {
 			email:    "email"
 			disabled: {path: "disabled", default: false}
@@ -40,6 +42,7 @@ package gcp
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: {name: {path: "project", prepend: "IAM policy · "}, account: "project"}
+		graph: display: {code: "IAM", label: "Project IAM policy", class: "identity"}
 		facts: gcp_iam_binding: {
 			each: "bindings[*]"
 			args: {role: "role", member: "members[*]", conditional: {exists: "condition"}}

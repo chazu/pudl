@@ -1,5 +1,4 @@
 import { notLoaded } from '../data/merge';
-import { resourceType } from '../model/resourceTypes';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
 import type { InspectorProps } from './Inspector';
@@ -30,7 +29,7 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
     );
   }
 
-  const info = resourceType(r.type);
+  const info = index.vocab.resourceType(r.type);
   const member = view.members.get(id);
   const groupId = view.groupOf.get(id);
   const parentId = member?.parentId ?? (groupId ? view.groups.get(groupId)?.parentId : null) ?? null;

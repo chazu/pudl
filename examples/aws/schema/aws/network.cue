@@ -27,6 +27,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph
+		graph: display: {code: "VPC", label: "VPC", class: "network"}
+		graph: network: {group: true, region: true}
 		facts: aws_vpc: args: {
 			vpc_id:     "VpcId"
 			account:    "AccountId"
@@ -55,6 +57,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {zone: "AvailabilityZone"}
+		graph: display: {code: "SUBN", label: "Subnet", class: "network"}
+		graph: network: {group: true, via: ["in_vpc"]}
 		facts: aws_subnet: args: {
 			subnet_id:         "SubnetId"
 			vpc_id:            "VpcId"
@@ -85,6 +89,9 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {name: "GroupName"}
+		graph: display: {code: "SG", label: "Security group", class: "security"}
+		graph: network: via: ["in_vpc"]
+		graph: security: control: true
 		facts: {
 			aws_security_group: args: {
 				group_id: "GroupId"

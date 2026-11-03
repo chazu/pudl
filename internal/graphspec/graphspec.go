@@ -11,7 +11,12 @@
 //		account: "project"
 //		region:  {path: "region", last_segment: true}
 //		refs: [{path: "selfLink", trim_prefix: "https://www.googleapis.com/compute/v1/"}]
+//		display: {code: "VPC", label: "VPC network", class: "network"}
+//		network: {group: true, via: ["in_project"]}
 //	}
+//
+// display and the view roles (admin, network, port_of, security, inventory,
+// application) tell pudl ui how to draw and place the type; see roles.go.
 //
 // Pure: no database or importer dependencies.
 package graphspec
@@ -43,6 +48,10 @@ type Spec struct {
 	// Refs are the values other records use to name this resource, in
 	// addition to its identity values.
 	Refs []Value
+	// Display is how pudl ui labels the type (nil when undeclared).
+	Display *Display
+	// Roles are the type's parts in pudl ui's views.
+	Roles Roles
 }
 
 type rawSpec struct {
@@ -51,6 +60,8 @@ type rawSpec struct {
 	Region  json.RawMessage   `json:"region"`
 	Zone    json.RawMessage   `json:"zone"`
 	Refs    []json.RawMessage `json:"refs"`
+	Display json.RawMessage   `json:"display"`
+	rawRoles
 }
 
 type rawValue struct {
@@ -89,6 +100,18 @@ func Parse(raw json.RawMessage) (*Spec, error) {
 		}
 		spec.Refs = append(spec.Refs, v)
 	}
+	if r.Display != nil {
+		d, err := parseDisplay(r.Display)
+		if err != nil {
+			return nil, err
+		}
+		spec.Display = d
+	}
+	roles, err := parseRoles(r.rawRoles)
+	if err != nil {
+		return nil, err
+	}
+	spec.Roles = roles
 	return spec, nil
 }
 

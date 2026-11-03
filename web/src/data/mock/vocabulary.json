@@ -1,0 +1,1080 @@
+{
+  "categories": [
+    {
+      "id": "network",
+      "label": "Network config",
+      "meaning": "Configured connectivity. Does not establish reachability on its own.",
+      "order": 0
+    },
+    {
+      "id": "traffic",
+      "label": "Observed traffic",
+      "meaning": "Communication recorded by a collector during its observation window.",
+      "order": 1
+    },
+    {
+      "id": "dependency",
+      "label": "Dependency",
+      "meaning": "Configured or declared dependency. Not proof of observed communication.",
+      "order": 2
+    },
+    {
+      "id": "security",
+      "label": "Security control",
+      "meaning": "A control or rule that permits, restricts or protects. Not a connection.",
+      "order": 3
+    },
+    {
+      "id": "iam",
+      "label": "Identity & access",
+      "meaning": "Policy attachment, binding or trust. Not evaluated effective permission.",
+      "order": 4
+    },
+    {
+      "id": "containment",
+      "label": "Containment",
+      "meaning": "Placement or membership. Says nothing about connectivity or access.",
+      "order": 5
+    },
+    {
+      "id": "other",
+      "label": "Other",
+      "meaning": "Relationship type PUDL has no registered meaning for.",
+      "order": 6
+    }
+  ],
+  "edgeTypes": [
+    {
+      "type": "in_organization",
+      "category": "containment",
+      "label": "in org",
+      "meaning": "Administrative placement under an organization.",
+      "source": "mock"
+    },
+    {
+      "type": "in_folder",
+      "category": "containment",
+      "label": "in folder",
+      "meaning": "Administrative placement under a folder.",
+      "source": "mock"
+    },
+    {
+      "type": "in_account",
+      "category": "containment",
+      "label": "in account",
+      "meaning": "Owned by this account.",
+      "source": "mock"
+    },
+    {
+      "type": "in_project",
+      "category": "containment",
+      "label": "in project",
+      "meaning": "Owned by this project.",
+      "source": "mock"
+    },
+    {
+      "type": "in_vpc",
+      "category": "containment",
+      "label": "in VPC",
+      "meaning": "Defined inside this VPC.",
+      "source": "mock"
+    },
+    {
+      "type": "in_network",
+      "category": "containment",
+      "label": "in network",
+      "meaning": "Defined inside this VPC network.",
+      "source": "mock"
+    },
+    {
+      "type": "in_subnet",
+      "category": "containment",
+      "label": "in subnet",
+      "meaning": "Has an address in this subnet.",
+      "source": "mock"
+    },
+    {
+      "type": "attached_to",
+      "category": "containment",
+      "label": "attached to",
+      "meaning": "Attached to this resource (interface, gateway).",
+      "source": "mock"
+    },
+    {
+      "type": "member_of",
+      "category": "containment",
+      "label": "member of",
+      "meaning": "Declared member of a logical service.",
+      "source": "mock"
+    },
+    {
+      "type": "part_of",
+      "category": "containment",
+      "label": "part of",
+      "meaning": "Logical service belongs to this application.",
+      "source": "mock"
+    },
+    {
+      "type": "routes_via",
+      "category": "network",
+      "label": "route via",
+      "meaning": "A route table entry targets this gateway. Traffic still subject to security rules.",
+      "source": "mock"
+    },
+    {
+      "type": "associated_with",
+      "category": "network",
+      "label": "associated",
+      "meaning": "Route table is associated with this subnet.",
+      "source": "mock"
+    },
+    {
+      "type": "peers_with",
+      "category": "network",
+      "label": "peering",
+      "meaning": "Peering is configured. Reachability also requires routes and security rules; not evaluated.",
+      "source": "mock"
+    },
+    {
+      "type": "endpoint_for",
+      "category": "network",
+      "label": "endpoint for",
+      "meaning": "Private endpoint to this service. Access still governed by IAM and endpoint policy.",
+      "source": "mock"
+    },
+    {
+      "type": "private_ip_in",
+      "category": "network",
+      "label": "private IP in",
+      "meaning": "Has a private address allocated from this network.",
+      "source": "mock"
+    },
+    {
+      "type": "nat_via",
+      "category": "network",
+      "label": "NAT via",
+      "meaning": "Outbound NAT is configured through this gateway.",
+      "source": "mock"
+    },
+    {
+      "type": "nat_ip",
+      "category": "network",
+      "label": "NAT IP",
+      "meaning": "NAT is configured to use this address. Says nothing about which workloads egress through it.",
+      "source": "mock"
+    },
+    {
+      "type": "private_zone_for",
+      "category": "network",
+      "label": "private zone",
+      "meaning": "Private DNS zone is visible from this network. Name resolution only; not connectivity.",
+      "source": "mock"
+    },
+    {
+      "type": "observed_flow",
+      "category": "traffic",
+      "label": "flow seen",
+      "meaning": "Flow logs recorded traffic in the window. Absence of a flow is not proof of no traffic.",
+      "source": "mock"
+    },
+    {
+      "type": "routes_to",
+      "category": "dependency",
+      "label": "routes to",
+      "meaning": "Load balancer target registration.",
+      "source": "mock"
+    },
+    {
+      "type": "health_checks",
+      "category": "dependency",
+      "label": "health check",
+      "meaning": "Load balancer health-checks this target.",
+      "source": "mock"
+    },
+    {
+      "type": "reads_from",
+      "category": "dependency",
+      "label": "reads",
+      "meaning": "Configured to read from this resource.",
+      "source": "mock"
+    },
+    {
+      "type": "writes_to",
+      "category": "dependency",
+      "label": "writes",
+      "meaning": "Configured to write to this resource.",
+      "source": "mock"
+    },
+    {
+      "type": "publishes_to",
+      "category": "dependency",
+      "label": "publishes",
+      "meaning": "Configured to publish messages to this topic or queue.",
+      "source": "mock"
+    },
+    {
+      "type": "consumes_from",
+      "category": "dependency",
+      "label": "consumes",
+      "meaning": "Configured to consume from this queue or subscription.",
+      "source": "mock"
+    },
+    {
+      "type": "subscribed_to",
+      "category": "dependency",
+      "label": "subscribed",
+      "meaning": "Subscription attached to this topic.",
+      "source": "mock"
+    },
+    {
+      "type": "replica_of",
+      "category": "dependency",
+      "label": "replica of",
+      "meaning": "Configured as a replica of this database.",
+      "source": "mock"
+    },
+    {
+      "type": "scrapes",
+      "category": "dependency",
+      "label": "scrapes",
+      "meaning": "Monitoring configuration targets this resource.",
+      "source": "mock"
+    },
+    {
+      "type": "protected_by",
+      "category": "security",
+      "label": "SG",
+      "meaning": "Security group is associated. Association is not a connection.",
+      "source": "mock"
+    },
+    {
+      "type": "allows_ingress_from",
+      "category": "security",
+      "label": "allows from",
+      "meaning": "A rule permits ingress from this source. Permission is not observed traffic.",
+      "source": "mock"
+    },
+    {
+      "type": "allows_egress_to",
+      "category": "security",
+      "label": "allows to",
+      "meaning": "A rule permits egress to this destination. Permission is not observed traffic.",
+      "source": "mock"
+    },
+    {
+      "type": "applies_to",
+      "category": "security",
+      "label": "applies to",
+      "meaning": "Firewall rule targets this resource (by tag or service account).",
+      "source": "mock"
+    },
+    {
+      "type": "encrypted_by",
+      "category": "security",
+      "label": "encrypted by",
+      "meaning": "Data at rest is encrypted with this key.",
+      "source": "mock"
+    },
+    {
+      "type": "exposed_to",
+      "category": "security",
+      "label": "exposed to",
+      "meaning": "Configured to accept connections from this external range.",
+      "source": "mock"
+    },
+    {
+      "type": "has_instance_profile",
+      "category": "iam",
+      "label": "instance profile",
+      "meaning": "Instance runs with this instance profile (and the role it carries). Effective permission not evaluated.",
+      "source": "mock"
+    },
+    {
+      "type": "profile_role",
+      "category": "iam",
+      "label": "profile role",
+      "meaning": "Instance profile carries this role; instances launched with it can use the role.",
+      "source": "mock"
+    },
+    {
+      "type": "runs_as",
+      "category": "iam",
+      "label": "runs as",
+      "meaning": "Workload identity is this service account.",
+      "source": "mock"
+    },
+    {
+      "type": "has_policy",
+      "category": "iam",
+      "label": "policy",
+      "meaning": "Policy is attached. Effective permission not evaluated.",
+      "source": "mock"
+    },
+    {
+      "type": "grants_on",
+      "category": "iam",
+      "label": "grants on",
+      "meaning": "Policy statement names this resource. Conditions, boundaries and SCPs not evaluated.",
+      "source": "mock"
+    },
+    {
+      "type": "trust_allows_assume",
+      "category": "iam",
+      "label": "trust",
+      "meaning": "Role trust policy names this principal. The principal’s own permissions are not evaluated.",
+      "source": "mock"
+    },
+    {
+      "type": "iam_binding",
+      "category": "iam",
+      "label": "binding",
+      "meaning": "IAM binding grants a role on this resource. Inherited, conditional and deny policies not evaluated.",
+      "source": "mock"
+    }
+  ],
+  "providers": [
+    {
+      "provider": "aws",
+      "label": "AWS"
+    },
+    {
+      "provider": "gcp",
+      "label": "Google Cloud"
+    },
+    {
+      "provider": "logical",
+      "label": "Logical (PUDL)"
+    },
+    {
+      "provider": "external",
+      "label": "External"
+    },
+    {
+      "provider": "k8s",
+      "label": "Kubernetes"
+    }
+  ],
+  "resourceTypes": [
+    {
+      "type": "aws.account",
+      "code": "ACCT",
+      "label": "AWS account",
+      "class": "admin",
+      "schema": "",
+      "admin": {
+        "owner": true
+      },
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.vpc",
+      "code": "VPC",
+      "label": "VPC",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "group": true,
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.subnet",
+      "code": "SUBN",
+      "label": "Subnet",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "group": true,
+        "via": [
+          "in_vpc"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.internet_gateway",
+      "code": "IGW",
+      "label": "Internet gateway",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "attached_to"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.nat_gateway",
+      "code": "NAT",
+      "label": "NAT gateway",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.route_table",
+      "code": "RTB",
+      "label": "Route table",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_vpc"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.vpc_peering",
+      "code": "PCX",
+      "label": "VPC peering",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "peers_with"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.vpc_endpoint",
+      "code": "VPCE",
+      "label": "VPC endpoint",
+      "class": "edge",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.network_interface",
+      "code": "ENI",
+      "label": "Network interface",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "attached_to",
+      "security": null,
+      "inventory": {
+        "collapsed": true
+      },
+      "application": null
+    },
+    {
+      "type": "aws.ec2.instance",
+      "code": "EC2",
+      "label": "EC2 instance",
+      "class": "compute",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.volume",
+      "code": "EBS",
+      "label": "EBS volume",
+      "class": "data",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.ec2.security_group",
+      "code": "SG",
+      "label": "Security group",
+      "class": "security",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_vpc"
+        ]
+      },
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.elbv2.load_balancer",
+      "code": "ALB",
+      "label": "Load balancer",
+      "class": "edge",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.rds.db_instance",
+      "code": "RDS",
+      "label": "RDS instance",
+      "class": "data",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.s3.bucket",
+      "code": "S3",
+      "label": "S3 bucket",
+      "class": "data",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.sqs.queue",
+      "code": "SQS",
+      "label": "SQS queue",
+      "class": "messaging",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.kms.key",
+      "code": "KMS",
+      "label": "KMS key",
+      "class": "security",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.iam.user",
+      "code": "USER",
+      "label": "IAM user",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.iam.role",
+      "code": "ROLE",
+      "label": "IAM role",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.iam.policy",
+      "code": "POL",
+      "label": "IAM policy",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "aws.iam.instance_profile",
+      "code": "PROF",
+      "label": "Instance profile",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.organization",
+      "code": "ORG",
+      "label": "Organization",
+      "class": "admin",
+      "schema": "",
+      "admin": {},
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.folder",
+      "code": "FLDR",
+      "label": "Folder",
+      "class": "admin",
+      "schema": "",
+      "admin": {
+        "parent": [
+          "in_folder",
+          "in_organization"
+        ]
+      },
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.project",
+      "code": "PROJ",
+      "label": "Project",
+      "class": "admin",
+      "schema": "",
+      "admin": {
+        "owner": true,
+        "parent": [
+          "in_folder",
+          "in_organization"
+        ]
+      },
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.network",
+      "code": "VPC",
+      "label": "VPC network",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "group": true,
+        "via": [
+          "in_project"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.subnetwork",
+      "code": "SUBN",
+      "label": "Subnetwork",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "group": true,
+        "via": [
+          "in_network"
+        ],
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.firewall",
+      "code": "FW",
+      "label": "Firewall rule",
+      "class": "security",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_network"
+        ]
+      },
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.router",
+      "code": "RTR",
+      "label": "Cloud Router",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_network"
+        ],
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.route",
+      "code": "ROUTE",
+      "label": "Route",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_network"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.address",
+      "code": "IP",
+      "label": "IP address",
+      "class": "network",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.container.cluster",
+      "code": "GKE",
+      "label": "GKE cluster",
+      "class": "compute",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.dns.managed_zone",
+      "code": "DNS",
+      "label": "DNS zone",
+      "class": "edge",
+      "schema": "",
+      "admin": null,
+      "network": {},
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.kms.keyring",
+      "code": "KRING",
+      "label": "KMS key ring",
+      "class": "security",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.kms.key",
+      "code": "KMS",
+      "label": "KMS key",
+      "class": "security",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.compute.instance",
+      "code": "GCE",
+      "label": "Compute instance",
+      "class": "compute",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "via": [
+          "in_subnet"
+        ]
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.sql.instance",
+      "code": "SQL",
+      "label": "Cloud SQL",
+      "class": "data",
+      "schema": "",
+      "admin": null,
+      "network": {
+        "region": true
+      },
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.storage.bucket",
+      "code": "GCS",
+      "label": "Storage bucket",
+      "class": "data",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.pubsub.topic",
+      "code": "TOPIC",
+      "label": "Pub/Sub topic",
+      "class": "messaging",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.pubsub.subscription",
+      "code": "SUB",
+      "label": "Pub/Sub subscription",
+      "class": "messaging",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.run.service",
+      "code": "RUN",
+      "label": "Cloud Run service",
+      "class": "edge",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.iam.service_account",
+      "code": "SA",
+      "label": "Service account",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": {
+        "control": true
+      },
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "gcp.iam.project_policy",
+      "code": "IAM",
+      "label": "Project IAM policy",
+      "class": "identity",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "external.cidr",
+      "code": "CIDR",
+      "label": "External address range",
+      "class": "external",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "external.principal",
+      "code": "EXT",
+      "label": "External principal",
+      "class": "external",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": null
+    },
+    {
+      "type": "logical.application",
+      "code": "APP",
+      "label": "Application",
+      "class": "logical",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": {
+        "group": true
+      }
+    },
+    {
+      "type": "logical.service",
+      "code": "SVC",
+      "label": "Service",
+      "class": "logical",
+      "schema": "",
+      "admin": null,
+      "network": null,
+      "portOf": "",
+      "security": null,
+      "inventory": null,
+      "application": {
+        "group": true,
+        "via": [
+          "part_of"
+        ]
+      }
+    }
+  ],
+  "problems": []
+}

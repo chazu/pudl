@@ -13,8 +13,10 @@
 // shows an uncollected resource as unknown rather than dropping the edge.
 package graphexport
 
+import "github.com/chazu/pudl/internal/graphvocab"
+
 // EdgeRelation is the reserved relation that graph rules derive.
-const EdgeRelation = "graph_edge"
+const EdgeRelation = graphvocab.EdgeRelation
 
 // PropertyRelation optionally attaches details to edges:
 // graph_edge_property(type, source, target, key, value). Values for one key
@@ -38,6 +40,9 @@ type Graph struct {
 	Meta          Meta           `json:"meta"`
 	Resources     []Resource     `json:"resources"`
 	Relationships []Relationship `json:"relationships"`
+	// Vocabulary is what the types and relationship types mean, read from
+	// CUE (see graphvocab); the UI holds no type knowledge of its own.
+	Vocabulary *graphvocab.Vocabulary `json:"vocabulary,omitempty"`
 }
 
 // Meta describes the export.

@@ -49,6 +49,7 @@ These flags apply to every command.
   - [pudl facts stats](#pudl-facts-stats) — Aggregate statistics over the fact store
 - [pudl graph](#pudl-graph) — Export the resource graph
   - [pudl graph export](#pudl-graph-export) — Write the current resource graph as JSON
+  - [pudl graph vocab](#pudl-graph-vocab) — Show what pudl ui knows about resource and relationship types
 - [pudl guide](#pudl-guide) — Quick-reference guide for agents and humans
 - [pudl import](#pudl-import) — Import data into PUDL data lake
 - [pudl init](#pudl-init) — Initialize or repair a local PUDL workspace (--global for ~/.pudl)
@@ -891,11 +892,13 @@ between them, as read by the web graph explorer (web/).
 
 Available subcommands:
 - export:  Write the current resource graph as JSON
+- vocab:   Show what pudl ui knows about resource and relationship types
 ```
 
 Subcommands:
 
 - [pudl graph export](#pudl-graph-export) — Write the current resource graph as JSON
+- [pudl graph vocab](#pudl-graph-vocab) — Show what pudl ui knows about resource and relationship types
 
 ## pudl graph export
 
@@ -923,6 +926,12 @@ as "ref:<value>", so the graph shows the resource as unknown instead of
 dropping the edge. Problems (unreadable payloads, ambiguous references, rules
 that fail) are listed in meta.warnings and never stop the export.
 
+The vocabulary field carries everything the explorer knows about types and
+relationship types, read from CUE: display info and view roles from each
+schema's _pudl.graph block, and graph_edge_type, graph_edge_category,
+graph_provider, graph_account_type and graph_resource_type facts from rule
+files. 'pudl graph vocab' shows it.
+
 --as-of exports the graph as pudl had recorded it at a past time: each
 resource's latest entry by then, the snapshots taken by then, and facts as
 believed then about then. Rules and schemas are always today's, and entries
@@ -942,6 +951,44 @@ Flags:
 |------|------|---------|-------------|
 | `--as-of` | string |  | Export the graph as recorded at this time (RFC3339 or Unix seconds) |
 | `-o`, `--output` | string |  | Output file (default: stdout) |
+
+## pudl graph vocab
+
+Show what pudl ui knows about resource and relationship types
+
+```text
+pudl graph vocab
+```
+
+```text
+Show the graph vocabulary: everything pudl ui knows about types, read from
+CUE. pudl ui has no type knowledge of its own; a type or relationship missing
+here is drawn as unknown.
+
+- Resource types: each schema's _pudl graph block (display {code, label,
+  class} and view roles), plus graph_resource_type facts for types with no
+  schema.
+- Edge types and categories: graph_edge_type and graph_edge_category facts
+  in rule files (pudl/rules/*.cue).
+- Providers: graph_provider facts; graph_account_type names the type a
+  provider's account attribute refers to.
+
+Problems lists what will not draw as intended: cataloged types with no display
+info, graph_edge rules deriving undeclared types, roles naming undeclared edge
+types, unknown categories and conflicting declarations. pudl doctor reports
+the same problems.
+
+--json prints exactly the vocabulary field of pudl graph export.
+
+See docs/schema-authoring.md, "Make a type appear in pudl ui".
+```
+
+Examples:
+
+```bash
+pudl graph vocab
+  pudl graph vocab --json | jq '.problems'
+```
 
 ## pudl guide
 
@@ -1831,6 +1878,11 @@ When --from points to a collection entry:
 
 The --infer flag allows specifying type hints for specific fields, such as
 marking a field as an enum type.
+
+An item schema gets a _pudl graph block, so the type draws in pudl ui: name,
+account and region fields guessed from the data, display {code, label,
+class} guessed from the definition name, and the view roles as commented
+examples. Check it with 'pudl graph vocab'.
 
 Examples:
     pudl schema new --from hugib-dubuf --path aws/ec2:#Instance

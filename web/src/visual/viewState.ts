@@ -3,7 +3,7 @@
 // survives relayouts and refreshes.
 
 import type { ResourceId } from '../model/canonical';
-import type { RelationshipCategory } from '../model/relationshipTypes';
+import type { RelationshipCategory } from '../model/vocabulary';
 import type { Direction } from '../layout/types';
 import { groupAncestors } from '../projection/project';
 import type { SemanticView } from '../projection/types';
@@ -34,7 +34,7 @@ export function initialViewState(view: SemanticView): ViewState {
   const def = view.projection;
   const collapsed = new Set<string>();
   if (def.defaultCollapsed) {
-    for (const g of view.groups.values()) if (def.defaultCollapsed(g)) collapsed.add(g.id);
+    for (const g of view.groups.values()) if (def.defaultCollapsed(g, view.vocab)) collapsed.add(g.id);
   }
   return {
     collapsed,

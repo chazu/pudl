@@ -33,10 +33,8 @@ func Compile(rule Rule, scope TemporalScope) (*CompiledQuery, error) {
 }
 
 func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*CompiledQuery, error) {
-	if len(rule.Body) == 0 {
-		return nil, fmt.Errorf("rule %s has no body atoms", rule.Name)
-	}
-
+	// A rule with no body is a fact: its constant head is projected with no
+	// FROM clause (checkRule rejects a fact with a variable head argument).
 	tableName := "current_facts"
 	if scope.ValidAt != nil || scope.TxAt != nil {
 		tableName = "facts"
@@ -170,24 +168,29 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 		whereClause = "\nWHERE " + strings.Join(whereParts, "\n  AND ")
 	}
 
+	fromClause := ""
+	if len(fromParts) > 0 {
+		fromClause = "\nFROM " + strings.Join(fromParts, ", ")
+	}
+
 	var sql string
 	if hasAgg {
 		// Aggregated rule: non-aggregate head vars become GROUP BY keys; the
 		// aggregate functions reduce within each group. No DISTINCT (the GROUP BY
 		// already collapses rows). A head with only aggregates and no group keys
 		// reduces over the whole relation (single row, no GROUP BY clause).
-		sql = fmt.Sprintf("SELECT\n    %s\nFROM %s%s",
+		sql = fmt.Sprintf("SELECT\n    %s%s%s",
 			strings.Join(selectParts, ",\n    "),
-			strings.Join(fromParts, ", "),
+			fromClause,
 			whereClause,
 		)
 		if len(groupParts) > 0 {
 			sql += "\nGROUP BY " + strings.Join(groupParts, ", ")
 		}
 	} else {
-		sql = fmt.Sprintf("SELECT DISTINCT\n    %s\nFROM %s%s",
+		sql = fmt.Sprintf("SELECT DISTINCT\n    %s%s%s",
 			strings.Join(selectParts, ",\n    "),
-			strings.Join(fromParts, ", "),
+			fromClause,
 			whereClause,
 		)
 	}

@@ -268,6 +268,9 @@ func (g *Generator) generateCUEContent(analysis *FieldAnalysis, opts GenerateOpt
 	fmt.Fprintf(&b, "\t\tresource_type: \"%s.%s\" // Format: <package>.<type> - identifies this resource type\n", packageName, strings.ToLower(opts.DefinitionName))
 	fmt.Fprintf(&b, "\t\tidentity_fields: %s\n", g.formatStringSlice(analysis.IdentityFields))
 	b.WriteString("\t\treview: status: \"draft\" // Set to \"validated\" (with by/at) once reviewed as complete\n")
+	if !opts.IsCollection {
+		writeGraphBlock(&b, analysis, opts)
+	}
 	b.WriteString("\t}\n\n")
 
 	// Write field definitions

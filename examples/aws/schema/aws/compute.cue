@@ -21,6 +21,8 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {zone: "Placement.AvailabilityZone"}
+		graph: display: {code: "EC2", label: "EC2 instance", class: "compute"}
+		graph: network: via: ["in_subnet"]
 		sensitive_fields: ["UserData"]
 		facts: {
 			aws_instance: args: {
@@ -61,6 +63,7 @@ import awsboot "pudl.schemas/pudl/aws@v0"
 		review: status: "draft"
 		owner: _#AWSOwner
 		graph: _awsGraph & {zone: "AvailabilityZone"}
+		graph: display: {code: "EBS", label: "EBS volume", class: "data"}
 		facts: {
 			aws_volume: args: {
 				volume_id: "VolumeId"

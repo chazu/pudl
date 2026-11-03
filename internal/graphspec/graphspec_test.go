@@ -50,3 +50,46 @@ func TestEvalIgnoresNonScalars(t *testing.T) {
 	var nilSpec *Spec
 	require.Nil(t, nilSpec.RefValues(map[string]any{}))
 }
+
+func TestParseDisplayAndRoles(t *testing.T) {
+	spec, err := Parse(json.RawMessage(`{
+		"name": "name",
+		"display": {"code": "SUBN", "label": "Subnetwork", "class": "network"},
+		"admin": {"parent": ["in_folder"]},
+		"network": {"group": true, "via": ["in_network"], "region": true},
+		"port_of": "attached_to",
+		"security": {"control": true},
+		"inventory": {"collapsed": true},
+		"application": {"group": true, "via": ["part_of"]}
+	}`))
+	require.NoError(t, err)
+	require.Equal(t, &Display{Code: "SUBN", Label: "Subnetwork", Class: "network"}, spec.Display)
+	require.Equal(t, &Admin{Parent: []string{"in_folder"}}, spec.Roles.Admin)
+	require.Equal(t, &NetworkRole{Group: true, Via: []string{"in_network"}, Region: true}, spec.Roles.Network)
+	require.Equal(t, "attached_to", spec.Roles.PortOf)
+	require.True(t, spec.Roles.Security.Control)
+	require.True(t, spec.Roles.Inventory.Collapsed)
+	require.Equal(t, []string{"in_folder", "in_network", "attached_to", "part_of"}, spec.Roles.EdgeTypes())
+
+	bare, err := Parse(json.RawMessage(`{"name": "name"}`))
+	require.NoError(t, err)
+	require.Nil(t, bare.Display)
+	require.Equal(t, Roles{}, bare.Roles)
+}
+
+func TestParseRejectsBadDisplayAndRoles(t *testing.T) {
+	for name, raw := range map[string]string{
+		"display missing class": `{"display": {"code": "X", "label": "X"}}`,
+		"display bad class":     `{"display": {"code": "X", "label": "X", "class": "netwrok"}}`,
+		"display long code":     `{"display": {"code": "TOOLONG", "label": "X", "class": "data"}}`,
+		"display unknown key":   `{"display": {"code": "X", "label": "X", "class": "data", "colour": "red"}}`,
+		"network unknown key":   `{"network": {"grp": true}}`,
+		"empty port_of":         `{"port_of": ""}`,
+		"empty via":             `{"network": {"via": [""]}}`,
+		"admin parent not list": `{"admin": {"parent": "in_folder"}}`,
+		"admin owner in schema": `{"admin": {"owner": true}}`,
+	} {
+		_, err := Parse(json.RawMessage(raw))
+		require.Error(t, err, name)
+	}
+}
