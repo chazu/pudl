@@ -161,9 +161,13 @@ transform for the same type is usually the identity, because gcloud prints
 the API shape.
 
 CUE keeps transforms declarative and testable with fixtures, and needs no jq
-on the machine. The risk is cost: CUE evaluation per record. Measure on the
-largest kept type (DNS record sets, thousands of records) before committing; helper scripts
-remain the fallback design.
+on the machine. The risk was cost: CUE evaluation per record. Measured
+2026-11-03 (`pudl-q4v.2`): about 0.9 s per 5,000 synthetic 3 KB instance
+records, with heap flat at about 5 MB over 20,000. Compiling each record as
+CUE source leaked about 54 KB per record in the CUE runtime, so records are
+built from a JSON syntax tree instead (which also keeps numbers exact).
+Implemented as designed, except that `out` is optional in the schema and
+required by the loader.
 
 **Shape per type:** the v1 REST API object, unless a type has a reason
 otherwise. That is what CAI returns and what most gcloud list commands print.

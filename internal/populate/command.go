@@ -114,7 +114,7 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 		}
 		var got []any
 		if failure == nil {
-			if got, err = decodeCommandRecords(out, run.Set); err != nil {
+			if got, err = decodeCommandRecords(out, run); err != nil {
 				failure = &FailedInput{Error: err.Error()}
 			}
 		}
@@ -212,14 +212,27 @@ func (x *executor) execute(run systemmodel.CommandRun, out string) (string, erro
 
 // decodeCommandRecords reads a run's stdout: a stream of JSON values, where an
 // array contributes its elements and an object is one record. Numbers stay
-// exact. set is applied to every record.
-func decodeCommandRecords(path string, set map[string]any) ([]any, error) {
-	assignments := flattenSet(nil, set)
+// exact. The run's transform, if any, reshapes or drops each record; set is
+// then applied to every record kept.
+func decodeCommandRecords(path string, run systemmodel.CommandRun) ([]any, error) {
+	assignments := flattenSet(nil, run.Set)
 	var records []any
+	n := 0
 	err := decodeJSONStream(path, func(v any) error {
 		obj, ok := v.(map[string]any)
 		if !ok {
-			return fmt.Errorf("stdout record %d is %T, not a JSON object", len(records), v)
+			return fmt.Errorf("stdout record %d is %T, not a JSON object", n, v)
+		}
+		n++
+		if run.Transform != nil {
+			out, keep, err := run.Transform.Apply(obj)
+			if err != nil {
+				return fmt.Errorf("stdout record %d: %w", n-1, err)
+			}
+			if !keep {
+				return nil
+			}
+			obj = out
 		}
 		for _, a := range assignments {
 			if err := a.path.Set(obj, a.value); err != nil {

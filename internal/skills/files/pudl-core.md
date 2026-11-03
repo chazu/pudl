@@ -94,6 +94,9 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
   declares errors that mean "no resources here": a match is an empty input
   (`populate.empty_inputs`), observed with 0 records; the snapshot stays
   complete and dependents run. Timeouts and unmatched errors stay failed.
+- `runs[].transform: {in: _, out: ...}` reshapes each printed record in CUE
+  before `set` and routing (`out: in.versionedResources[0].resource`);
+  `out: null` drops it; a transform that fails is a failed input.
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).

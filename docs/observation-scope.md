@@ -26,6 +26,7 @@ snapshots they trust, and pudl tells "absent" apart from "not observed".
 | `runs[].argv` | One command, run directly with no shell. It prints a JSON array of records or a stream of JSON objects |
 | `runs[].set` | Fields written into every record that run prints, overwriting them |
 | `runs[].dir` | Working directory, relative to the model file |
+| `runs[].transform` | `{in: _, out: ...}`: reshape each record before `set` and routing; `out: null` drops it (below) |
 | `each` | A command whose JSON list supplies the fan-out inputs at run time (below) |
 | `schema` | Route every record to this type; mismatches fail the populate |
 | `allow_schema_fallback` | Permit exploratory fallback to a base or catchall schema; the observation is then incomplete |
@@ -37,6 +38,36 @@ The environment is inherited, so cloud CLI credentials work. `argv` and `set`
 are recorded with the model: keep secrets out of them. A record can route
 itself with a quoted `"_schema"` field. `pudl check --populate
 'command:<cmdline>'` tries one command without a model.
+
+### Reshape records with a transform
+
+When a tool prints records in a different shape from the schema, a run's
+`transform` reshapes each one in CUE. `in` is the record as printed; `out` is
+what is stored. `set` then applies to `out`, and the result is routed and
+redacted as usual:
+
+```cue
+runs: [{
+	argv: ["gcloud", "asset", "search-all-resources", "--scope=projects/{{item}}",
+		"--asset-types=compute.googleapis.com/Instance",
+		"--read-mask=name,assetType,versionedResources", "--format=json"]
+	set: project: "{{item}}"
+	transform: {
+		in: _
+		out: [if in.assetType != "compute.googleapis.com/Instance" {null},
+			in.versionedResources[0].resource][0]
+	}
+}]
+```
+
+- `out: null` drops the record.
+- Hidden helper fields are allowed inside the transform, e.g.
+  `_r: in.versionedResources[0].resource`.
+- An `out` that fails to evaluate (a field the record lacks, a conflict), is
+  not concrete, or is not an object or null makes the run a failed input,
+  like any other malformed output.
+- The transform is not recorded with the model instance.
+- Cost: about 0.2 ms per record of a few kilobytes.
 
 ### Enumerate inputs at run time
 

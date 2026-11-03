@@ -138,6 +138,13 @@ package systemmodel
 	set?: {...}
 	// dir is the working directory, relative to the model file.
 	dir?: string
+	// transform reshapes each record before set applies and before routing:
+	// out is evaluated with in bound to the record, and out is stored.
+	// out: null drops the record; an out that is not an object or null is a
+	// failed input.
+	//
+	//	transform: {in: _, out: in.versionedResources[0].resource}
+	transform?: {in: _, out?: _}
 }
 
 // RETIRED shapes (docs/retired-commands.md). Kept so model files that still

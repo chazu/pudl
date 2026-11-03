@@ -54,3 +54,29 @@ app: #SystemModel & {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "secrets")
 }
+
+// Only run transforms are exempt from concreteness: an incomplete value
+// anywhere else, including elsewhere in a run, still fails.
+func TestModelTemplateConcretenessExemptsOnlyTransforms(t *testing.T) {
+	for name, src := range map[string]string{
+		"incomplete argv":    `m: #SystemModel & {name: "m", populate: runs: [{argv: [string]}]}`,
+		"incomplete set":     `m: #SystemModel & {name: "m", populate: runs: [{argv: ["true"], set: project: string}]}`,
+		"incomplete timeout": `m: #SystemModel & {name: "m", populate: {timeout: string, runs: [{argv: ["true"]}]}}`,
+		"incomplete name":    `m: #SystemModel & {name: string, populate: runs: [{argv: ["true"]}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			template, err := NewTemplate(compileTemplate(t, src, "m"), TemplateOrigin{})
+			if err != nil {
+				return // rejected even earlier
+			}
+			_, err = template.Model()
+			require.Error(t, err)
+		})
+	}
+	ok := `m: #SystemModel & {name: "m", populate: runs: [{argv: ["true"], transform: {in: _, out: in}}]}`
+	template, err := NewTemplate(compileTemplate(t, ok, "m"), TemplateOrigin{})
+	require.NoError(t, err)
+	model, err := template.Model()
+	require.NoError(t, err)
+	require.NotNil(t, model.Populate.Runs[0].Transform)
+}

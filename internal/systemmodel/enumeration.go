@@ -68,7 +68,7 @@ func setUsesItem(v any) bool {
 // ForItem returns the run for one enumerated input: the placeholder replaced
 // in argv and in set's string values. The receiver is not modified.
 func (r CommandRun) ForItem(item string) CommandRun {
-	out := CommandRun{Dir: r.Dir, Argv: make([]string, len(r.Argv))}
+	out := CommandRun{Dir: r.Dir, Argv: make([]string, len(r.Argv)), Transform: r.Transform}
 	for i, arg := range r.Argv {
 		out.Argv[i] = strings.ReplaceAll(arg, ItemPlaceholder, item)
 	}
