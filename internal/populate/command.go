@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -55,6 +56,9 @@ type Result struct {
 	Empty []EmptyInput
 	// Inputs are the enumerated inputs, in order; nil without `each`.
 	Inputs []string
+	// Fallback is set when the populate's fallback was used: the Result is
+	// the fallback's, and this says why.
+	Fallback *FallbackUse
 }
 
 // Run executes a #CommandObserve populate: the `each` enumeration if any,
@@ -68,18 +72,18 @@ type Result struct {
 // failure. Run returns an error, and no Result, when the populate cannot
 // proceed: a bad timeout or empty_when pattern, a failed enumeration, the
 // staging byte limit, or the context ending.
+//
+// With a Fallback, a run or enumeration that fails with stderr matching
+// Fallback.When, or an enumeration that lists nothing, abandons the
+// populate's own runs: their records are discarded, and the Result is the
+// fallback's, with Fallback recording what triggered it.
 func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, error) {
-	emptyWhen, err := p.EmptyPatterns()
-	if err != nil {
-		return Result{}, err
-	}
-	timeout := DefaultTimeout
-	if p.Timeout != "" {
-		d, err := time.ParseDuration(p.Timeout)
-		if err != nil {
-			return Result{}, fmt.Errorf("populate timeout: %w", err)
+	var when []*regexp.Regexp
+	if p.Fallback != nil {
+		var err error
+		if when, err = p.Fallback.Patterns(); err != nil {
+			return Result{}, err
 		}
-		timeout = d
 	}
 	limits, err := req.Limits.Resolve()
 	if err != nil {
@@ -91,16 +95,59 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 	}
 	defer req.track(dir)()
 
-	x := &executor{ctx: ctx, modelDir: req.ModelDir, timeout: timeout, budget: &byteBudget{remaining: limits.StagingBytes}, stderr: req.Stderr}
+	x := &executor{ctx: ctx, modelDir: req.ModelDir, budget: &byteBudget{remaining: limits.StagingBytes}, stderr: req.Stderr}
 	if x.stderr == nil {
 		x.stderr = io.Discard
+	}
+	primary := filepath.Join(dir, "primary")
+	res, trigger, err := x.observe(p, primary, when)
+	if err != nil || trigger == nil {
+		return res, err
+	}
+	fmt.Fprintf(x.stderr, "pudl: using the populate fallback: %s\n", trigger.Summary())
+	// The abandoned runs' output is discarded, so its spool and its share of
+	// the staging budget are released for the fallback.
+	_ = os.RemoveAll(primary)
+	x.budget = &byteBudget{remaining: limits.StagingBytes}
+	res, _, err = x.observe(p.Fallback.Observe, filepath.Join(dir, "fallback"), nil)
+	if err != nil {
+		return Result{}, fmt.Errorf("populate fallback: %w", err)
+	}
+	res.Fallback = trigger
+	return res, nil
+}
+
+// observe runs one source: a populate's runs or its fallback's. A non-nil
+// FallbackUse means the source could not answer and its Result is to be
+// discarded; when is nil for a source without a fallback.
+func (x *executor) observe(p systemmodel.Populate, dir string, when []*regexp.Regexp) (Result, *FallbackUse, error) {
+	emptyWhen, err := p.EmptyPatterns()
+	if err != nil {
+		return Result{}, nil, err
+	}
+	x.timeout = DefaultTimeout
+	if p.Timeout != "" {
+		d, err := time.ParseDuration(p.Timeout)
+		if err != nil {
+			return Result{}, nil, fmt.Errorf("populate timeout: %w", err)
+		}
+		x.timeout = d
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return Result{}, nil, fmt.Errorf("create populate workspace: %w", err)
 	}
 	res := Result{Records: make([]any, 0)}
 	runs := p.Runs
 	var items []string
 	if p.Each != nil {
 		if items, err = x.enumerate(*p.Each, filepath.Join(dir, "each.json")); err != nil {
-			return Result{}, err
+			if use, ok := eachFallback(when, err); ok {
+				return Result{}, use, nil
+			}
+			return Result{}, nil, err
+		}
+		if len(items) == 0 && when != nil {
+			return Result{}, &FallbackUse{Reason: FallbackNoInputs}, nil
 		}
 		res.Inputs = items
 		runs = expandRuns(p.Runs, items)
@@ -110,7 +157,7 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 		out := filepath.Join(dir, fmt.Sprintf("run-%d.json", i))
 		failure, err := x.attempt(run, out)
 		if err != nil {
-			return Result{}, fmt.Errorf("populate run %d (%s): %w", i, strings.Join(run.Argv, " "), err)
+			return Result{}, nil, fmt.Errorf("populate run %d (%s): %w", i, strings.Join(run.Argv, " "), err)
 		}
 		var got []any
 		if failure == nil {
@@ -123,19 +170,23 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 			if items != nil {
 				failure.Item = items[i/len(p.Runs)]
 			}
+			if pattern, line, ok := matchStderr(when, failure); ok {
+				f := *failure
+				return Result{}, &FallbackUse{Reason: FallbackFailedInput, Pattern: pattern, StderrLine: line, Trigger: &f}, nil
+			}
 			if empty, ok := matchEmpty(emptyWhen, failure); ok {
 				res.Empty = append(res.Empty, empty)
 				continue
 			}
 			if p.FailFast {
-				return Result{}, failure.Err()
+				return Result{}, nil, failure.Err()
 			}
 			res.Failed = append(res.Failed, *failure)
 			continue
 		}
 		res.Records = append(res.Records, got...)
 	}
-	return res, nil
+	return res, nil, nil
 }
 
 func (r Request) track(dir string) func() {

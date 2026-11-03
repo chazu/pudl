@@ -43,7 +43,7 @@ func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	}
 
 	target := populateTargetName(m.Name)
-	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema, Inputs: res.Inputs, Runs: res.Runs, FailedInputs: res.Failed, EmptyInputs: res.Empty}
+	summary := &checkreport.Populate{Target: target, RequestedSchema: p.Schema, Inputs: res.Inputs, Runs: res.Runs, FailedInputs: res.Failed, EmptyInputs: res.Empty, Fallback: res.Fallback}
 	if len(res.Failed) > 0 && len(res.Failed) == res.Runs {
 		return summary, allInputsFailed(res.Failed)
 	}

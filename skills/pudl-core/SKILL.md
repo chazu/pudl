@@ -97,6 +97,10 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
 - `runs[].transform: {in: _, out: ...}` reshapes each printed record in CUE
   before `set` and routing (`out: in.versionedResources[0].resource`);
   `out: null` drops it; a transform that fails is a failed input.
+- `fallback: {when: [regexes], observe: {runs, each?, ...}}` observes the same
+  resources another way when a run or `each` fails with matching stderr, or
+  `each` lists nothing; the populate's runs are then discarded and the
+  report shows `populate.fallback`.
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).

@@ -34,20 +34,28 @@ func (e EmptyInput) Label() string {
 // non-zero on its own (not a timeout, a signal, or undecodable stdout) and
 // one of the patterns matches its stderr. The first matching pattern wins.
 func matchEmpty(patterns []*regexp.Regexp, f *FailedInput) (EmptyInput, bool) {
-	if !f.exited {
+	pattern, line, ok := matchStderr(patterns, f)
+	if !ok {
 		return EmptyInput{}, false
 	}
-	for _, re := range patterns {
-		loc := re.FindStringIndex(f.Stderr)
-		if loc == nil {
-			continue
-		}
-		return EmptyInput{
-			Run: f.Run, Item: f.Item, Argv: f.Argv, ExitStatus: f.ExitStatus,
-			Pattern: re.String(), Reason: lineAt(f.Stderr, loc[0]),
-		}, true
+	return EmptyInput{
+		Run: f.Run, Item: f.Item, Argv: f.Argv, ExitStatus: f.ExitStatus,
+		Pattern: pattern, Reason: line,
+	}, true
+}
+
+// matchStderr reports the first pattern matching the stderr of a run that
+// exited non-zero on its own, and the stderr line it matched in.
+func matchStderr(patterns []*regexp.Regexp, f *FailedInput) (pattern, line string, ok bool) {
+	if !f.exited {
+		return "", "", false
 	}
-	return EmptyInput{}, false
+	for _, re := range patterns {
+		if loc := re.FindStringIndex(f.Stderr); loc != nil {
+			return re.String(), lineAt(f.Stderr, loc[0]), true
+		}
+	}
+	return "", "", false
 }
 
 // lineAt returns the trimmed line of s containing byte offset i.

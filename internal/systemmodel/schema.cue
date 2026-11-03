@@ -100,11 +100,34 @@ package systemmodel
 // {"_schema": "git.repository", ...}) to route it. The quote matters in CUE —
 // a bare _schema is a hidden field and is dropped from JSON.
 #CommandObserve: {
-	runs: [#CommandRun, ...#CommandRun]
+	#CommandSource
 	// schema routes every record like strict `pudl import --schema`.
 	// allow_schema_fallback explicitly permits exploratory base/catchall fallback.
-	schema?: string
- allow_schema_fallback?: bool | *false
+	schema?:                string
+	allow_schema_fallback?: bool | *false
+	// fallback observes the same resources another way (e.g. gcloud list
+	// commands behind a Cloud Asset Inventory search) and is used instead of
+	// these runs when one of them, or the each command, fails with stderr
+	// matching a `when` pattern, or when each lists no inputs. The remaining
+	// runs are skipped and their records discarded, so the two sources are
+	// never mixed; the report names the fallback and what triggered it. The
+	// fallback's records are routed by this populate's schema. Its own
+	// failures are failed inputs as usual.
+	//
+	//	fallback: {
+	//		when: ["SERVICE_DISABLED", "USER_PROJECT_DENIED", "PERMISSION_DENIED"]
+	//		observe: {each: ..., runs: [...]}
+	//	}
+	fallback?: {
+		when: [string & !="", ...string & !=""]
+		observe: #CommandSource
+	}
+}
+
+// #CommandSource — the runs of a populate or of its fallback, and how they
+// fan out and fail.
+#CommandSource: {
+	runs: [#CommandRun, ...#CommandRun]
 	// timeout applies to each run and to each's command (Go duration).
 	timeout?:   string
 	each?:      #Enumeration
