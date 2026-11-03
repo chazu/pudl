@@ -27,6 +27,7 @@ for a in "$@"; do
 	--location=*) l=${a#--location=} ;;
 	--keyring=*) r=${a#--keyring=} ;;
 	--format=*) f=${a#--format=} ;;
+	--asset-types=*) at=${a#--asset-types=} ;;
 	esac
 done
 if [ "$1" = compute ] && [ "$p" = proj-nocompute ]; then
@@ -51,6 +52,16 @@ case "$1 $2" in
 		echo "  reason: SERVICE_DISABLED" >&2
 		exit 1
 	fi
+	if [ "$at" = cloudkms.googleapis.com/CryptoKey ]; then
+		printf '['
+		sep=''
+		for l in global us-central1; do
+			printf '%s{"name":"//cloudkms.googleapis.com/projects/proj-a/locations/%s/keyRings/app/cryptoKeys/data-key","assetType":"cloudkms.googleapis.com/CryptoKey","parentFullResourceName":"//cloudkms.googleapis.com/projects/proj-a/locations/%s/keyRings/app","versionedResources":[{"version":"v1","resource":{"name":"projects/proj-a/locations/%s/keyRings/app/cryptoKeys/data-key","purpose":"ENCRYPT_DECRYPT","createTime":"2024-01-20T10:05:00Z","rotationPeriod":"7776000s","primary":{"name":"projects/proj-a/locations/%s/keyRings/app/cryptoKeys/data-key/cryptoKeyVersions/1","state":"ENABLED"}}}]}' "$sep" "$l" "$l" "$l" "$l"
+			sep=','
+		done
+		echo ']'
+		exit 0
+	fi
 	printf '['
 	sep=''
 	for q in proj-a proj-b; do
@@ -66,7 +77,7 @@ case "$1 $2" in
 	fi ;;
 "compute firewall-rules")
 	printf '[{"kind":"compute#firewall","id":"1","creationTimestamp":"2024-02-01T10:00:00.000-08:00","name":"allow-ssh","network":"https://www.googleapis.com/compute/v1/projects/%s/global/networks/default","priority":1000,"sourceRanges":["10.0.0.0/8"],"allowed":[{"IPProtocol":"tcp","ports":["22"]}],"direction":"INGRESS","disabled":false,"selfLink":"https://www.googleapis.com/compute/v1/projects/%s/global/firewalls/allow-ssh"}]' "$p" "$p" ;;
-"compute addresses"|"compute routers") echo '[]' ;;
+"compute addresses"|"compute routers"|"compute instances") echo '[]' ;;
 "kms keyrings")
 	if [ "$f" = json ]; then
 		printf '[{"name":"projects/%s/locations/%s/keyRings/app","createTime":"2024-01-20T10:00:00Z"}]' "$p" "$l"
@@ -289,7 +300,31 @@ func TestGCPPackLiveCollectorsFallBackWithoutCloudAssetInventory(t *testing.T) {
 	require.Contains(t, readLog(t, log), "compute firewall-rules list --project=proj-a")
 
 	// Types not collected through CAI never search it.
-	r = runCLI(t, "check", "gcp-kms-keyrings", "--json")
+	r = runCLI(t, "check", "gcp-instances", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Nil(t, checkedModel(t, r.Stdout).Populate.Fallback)
+	require.NotContains(t, readLog(t, log), "--asset-types=compute.googleapis.com/Instance")
+}
+
+// CAI lists KMS keys in every location; the live search keeps the locations
+// in _gcpKMSLocations, as the gcloud commands do, so a fallback run would
+// observe the same keys.
+func TestGCPPackCloudAssetKMSKeepsConfiguredLocations(t *testing.T) {
+	pudlDir := cliWorkspace(t)
+	fakeGcloudOnPath(t)
+	t.Setenv("GCLOUD_CAI", "1")
+	r := runCLI(t, "example", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	r = runCLI(t, "check", "gcp-kms-keys", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr := checkedModel(t, r.Stdout).Populate
+	require.Nil(t, pr.Fallback)
+	require.Equal(t, 1, pr.Records, "only the global key, by default")
+
+	writeFile(t, filepath.Join(pudlDir, "schema", "models", "gcp_settings.cue"),
+		"package models\n\n_gcpKMSLocations: [\"global\", \"us-central1\"]\n")
+	r = runCLI(t, "check", "gcp-kms-keys", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.Equal(t, 2, checkedModel(t, r.Stdout).Populate.Records)
 }

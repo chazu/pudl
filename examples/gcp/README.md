@@ -201,8 +201,10 @@ fails the collector with nothing ingested.
 
 ### Cloud Asset Inventory
 
-Networks, subnets, firewall rules, routes, routers and addresses are
-collected through Cloud Asset Inventory (CAI) search: one search per type
+Networks, subnets, firewall rules, routes, routers, addresses, GKE clusters,
+Cloud Run services, Pub/Sub topics, service accounts, DNS zones and KMS key
+rings and keys are collected through Cloud Asset Inventory (CAI) search: one
+search per type
 for every organization your credentials can see (`gcloud organizations list`,
 at run time), instead of one gcloud list command per project. It needs
 `cloudasset.assets.searchAllResources` on the organization (or the
@@ -213,12 +215,17 @@ When CAI cannot answer (the asset API disabled or unbillable, or permission
 denied), the collector falls back to its per-project gcloud commands and the
 report says `source: fallback` with the error. Both sources store identical
 records: each type's records are normalized to one shape (no `kind`
-differences, fingerprints or gcloud-only `x_gcloud_*` fields), so switching
-creates no new versions.
+differences, fingerprints, etags or gcloud-only fields, DNS visibility in
+lower case, a service account's `disabled` always stated), so switching
+creates no new versions. CAI lists KMS key rings and keys in every location;
+the collectors keep `_gcpKMSLocations`, as the gcloud commands do.
 
-Other types stay on gcloud. Compute instances in particular do: CAI's copy of
-instance metadata omits most keys (including settings such as
-`disable-legacy-endpoints`) and lower-cases values.
+Other types stay on gcloud, because CAI's copy loses something checks use:
+compute instances (CAI's metadata omits most keys, including settings such
+as `disable-legacy-endpoints`, and lower-cases values), Cloud SQL instances
+(an older API version without `settings.edition`), buckets (no
+`publicAccessPrevention` for some), project IAM policies (no
+`auditConfigs`), and Pub/Sub subscriptions (not yet compared).
 
 ### Settings
 
