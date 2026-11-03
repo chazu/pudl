@@ -18,6 +18,12 @@ package gcp
 			self_link: "selfLink"
 			network:   "settings.ipConfiguration.privateNetwork"
 		}
+		// One fact per authorized network, and whether the instance has a
+		// public IP for it to reach.
+		facts: gcp_sql_authorized_network: args: {
+			range: "settings.ipConfiguration.authorizedNetworks[*].value"
+			public: {path: "settings.ipConfiguration.ipv4Enabled", default: false}
+		}
 	}
 	kind:            "sql#instance" @pudl(match)
 	project:         _gcpProjectID

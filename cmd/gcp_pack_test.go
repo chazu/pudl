@@ -168,7 +168,7 @@ func TestGCPContentPack(t *testing.T) {
 	require.Equal(t, map[string][3]int{
 		"gcp.#AddressBestPractice":     {3, 2, 0},
 		"gcp.#BucketBestPractice":      {1, 2, 0},
-		"gcp.#FirewallBestPractice":    {4, 1, 0},
+		"gcp.#FirewallBestPractice":    {5, 1, 0},
 		"gcp.#GKEClusterBestPractice":  {2, 1, 0},
 		"gcp.#KMSKeyBestPractice":      {4, 1, 0},
 		"gcp.#SQLInstanceBestPractice": {1, 3, 0},
@@ -183,7 +183,7 @@ func TestGCPContentPack(t *testing.T) {
 	r = runCLI(t, "query", "gcp_depends_on_network", "network=projects/example-project/global/networks/prod-vpc")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Equal(t, map[string]int{
-		"subnet": 3, "firewall": 5, "route": 2, "router": 1,
+		"subnet": 3, "firewall": 6, "route": 2, "router": 1,
 		"gke_cluster": 2, "sql_instance": 2, "dns_zone": 1,
 	}, kindCounts(r.Stdout))
 
