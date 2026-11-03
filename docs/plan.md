@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Redaction allowlists in `sensitive_fields` (2026-11-03)
+
+A `sensitive_fields` entry can be a struct
+(`{each, value, keep_when: {field, in}}`) that redacts a value in every
+array element except the listed ones; it compiles to the new field-path
+filter `[*!field=["a"]]`. `gcp.#ComputeInstance` now keeps the values of
+`_gcpSafeMetadataKeys` (OS Login, serial port and similar settings) and
+still redacts every other metadata value. See
+`implog/2026_11_03_sensitive_allowlist.md`. Closes `pudl-q4v.1`.
+
 ### Built-in schemas refresh on every command, not only import (2026-11-03)
 
 A workspace's built-ins were rewritten only by import, so `pudl graph vocab`,

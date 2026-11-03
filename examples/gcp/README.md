@@ -78,7 +78,9 @@ Sensitive values are replaced with `[REDACTED]` before anything is stored:
 Cloud Run environment values and creator/modifier e-mail annotations (secret
 references are kept), GKE node metadata (startup scripts) and legacy
 `masterAuth` credentials, Compute Engine instance metadata values (startup
-scripts, user-data, and `kube-env` on GKE nodes; the keys are kept), and
+scripts, user-data, and `kube-env` on GKE nodes; the keys are kept, and the
+settings in `_gcpSafeMetadataKeys`, such as `enable-oslogin`, keep their
+values), and
 Pub/Sub push endpoints, which can embed tokens.
 
 The schemas are drafts. Compare each with your own gcloud output, then set

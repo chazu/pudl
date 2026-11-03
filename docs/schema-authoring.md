@@ -192,6 +192,17 @@ such a schema is not stored. Payloads stored before a path was declared are
 rewritten only by `pudl doctor --fix --only sensitive-scrub`. See
 [projection](projection.md#sensitive-fields-_pudlsensitive_fields).
 
+To keep a few safe values in an array and redact the rest, use an allowlist
+entry ([details](projection.md#allowlists)):
+
+```cue
+sensitive_fields: [{
+	each:  "metadata.items[*]"
+	value: "value"
+	keep_when: {field: "key", in: ["enable-oslogin", "serial-port-enable"]}
+}]
+```
+
 ### `secret_scan_ignore`
 
 ```cue

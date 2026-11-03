@@ -207,6 +207,7 @@ func TestGCPContentPack(t *testing.T) {
 	require.Contains(t, r.Stdout, "[REDACTED]")
 	require.NotContains(t, r.Stdout, "fixture-kube-env-not-a-real-cert")
 	require.NotContains(t, r.Stdout, "fixture-instance-startup-script")
+	require.Contains(t, r.Stdout, "FIXTURE-OSLOGIN-TRUE", "allowlisted metadata values are kept")
 
 	// One external-IP fact per address, on the network it is attached on.
 	r = runCLI(t, "query", "gcp_instance_external_ip")
