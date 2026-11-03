@@ -1,0 +1,41 @@
+[
+  {
+    "name": "//pubsub.googleapis.com/projects/example-project/topics/orders",
+    "assetType": "pubsub.googleapis.com/Topic",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/topics/orders",
+          "labels": {
+            "team": "orders"
+          },
+          "messageStoragePolicy": {
+            "allowedPersistenceRegions": [
+              "us-central1"
+            ]
+          },
+          "kmsKeyName": "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//pubsub.googleapis.com/projects/example-project/topics/orders-dlq",
+    "assetType": "pubsub.googleapis.com/Topic",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/topics/orders-dlq",
+          "labels": {
+            "team": "orders"
+          },
+          "messageRetentionDuration": "604800s"
+        }
+      }
+    ]
+  }
+]

@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Seven more GCP types through Cloud Asset Inventory (2026-11-03)
+
+GKE clusters, Cloud Run services, Pub/Sub topics, service accounts, DNS
+zones and KMS key rings and keys search CAI first: 13 of the pack's 18
+types. A live end-to-end run stores 0 new records when switching from CAI
+to gcloud. SQL, buckets, project IAM policies and Pub/Sub subscriptions stay
+on gcloud. See `implog/2026_11_03_gcp_cai_more_types.md`. Part 2 of
+`pudl-q4v.4`.
+
 ### GCP network types through Cloud Asset Inventory (2026-11-03)
 
 `gcp-networks`, `-subnets`, `-firewalls`, `-routes`, `-routers` and

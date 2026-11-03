@@ -342,8 +342,19 @@ alone.
   `disable-legacy-endpoints`) with lower-cased values; Shielded VM
   certificates use standard instead of URL-safe base64. Instances stay on
   gcloud (decision 13).
-- **Every remaining type gets the same live parity check** before it moves;
-  a type that fails it stays on gcloud.
+- **Second parity round, 2026-11-03.** GKE clusters (gcloud adds node-pool
+  `kubeletCertInfo`), Cloud Run services and Pub/Sub topics (identical),
+  service accounts (gcloud adds `etag`; CAI omits `disabled: false`), DNS
+  zones (CAI omits nested `kind`s and upper-cases `visibility`), KMS key
+  rings and keys (identical; CAI covers every location, so the live search
+  keeps `_gcpKMSLocations`) moved to CAI. Verified end to end with pudl on a
+  live project: CAI then gcloud stores 0 new records for all 13 CAI types.
+- **Stay on gcloud:** Cloud SQL (CAI serves v1beta4 without
+  `settings.edition`, `geminiConfig`, `serverCaCert`; `settingsVersion`
+  differs), buckets (even `--raw` differs in formats, and CAI lacks
+  `publicAccessPrevention` for some buckets), project IAM policies (same
+  role/member pairs, no `auditConfigs`; search is not granted everywhere;
+  see pudl-q4v.5), Pub/Sub subscriptions (none to compare).
 
 ## Decisions (2026-11-03)
 

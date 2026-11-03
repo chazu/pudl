@@ -9,7 +9,11 @@ import (
 )
 
 // gcpAssetTypes are the pack types collected through Cloud Asset Inventory.
-var gcpAssetTypes = []string{"networks", "subnets", "firewalls", "routes", "routers", "addresses"}
+var gcpAssetTypes = []string{
+	"networks", "subnets", "firewalls", "routes", "routers", "addresses",
+	"gke-clusters", "run-services", "pubsub-topics", "service-accounts", "dns-zones",
+	"kms-keyrings", "kms-keys",
+}
 
 type assetPopulate struct {
 	Records    int `json:"records"`

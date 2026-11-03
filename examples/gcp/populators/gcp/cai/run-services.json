@@ -1,0 +1,151 @@
+[
+  {
+    "name": "//run.googleapis.com/projects/example-project/locations/us-central1/services/orders-api",
+    "assetType": "run.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "apiVersion": "serving.knative.dev/v1",
+          "kind": "Service",
+          "metadata": {
+            "annotations": {
+              "run.googleapis.com/client-name": "gcloud",
+              "run.googleapis.com/ingress": "internal-and-cloud-load-balancing",
+              "run.googleapis.com/operation-id": "00000000-0000-4000-8000-000000000001",
+              "serving.knative.dev/creator": "deployer@example-project.iam.gserviceaccount.com",
+              "serving.knative.dev/lastModifier": "jane.doe@example.com"
+            },
+            "creationTimestamp": "2024-02-10T12:00:01.000000Z",
+            "generation": 7,
+            "labels": {
+              "cloud.googleapis.com/location": "us-central1"
+            },
+            "name": "orders-api",
+            "namespace": "123456789012",
+            "resourceVersion": "AAYGa8v1T6k",
+            "selfLink": "/apis/serving.knative.dev/v1/namespaces/123456789012/services/orders-api",
+            "uid": "00000000-0000-4000-8000-000000000002"
+          },
+          "spec": {
+            "template": {
+              "metadata": {
+                "name": "orders-api-00007-abc"
+              },
+              "spec": {
+                "containerConcurrency": 80,
+                "containers": [
+                  {
+                    "image": "us-docker.pkg.dev/example-project/apps/orders-api:1.4.2",
+                    "env": [
+                      {
+                        "name": "LOG_LEVEL",
+                        "value": "info"
+                      },
+                      {
+                        "name": "PAYMENTS_API_TOKEN",
+                        "value": "fixture-literal-not-a-real-token"
+                      },
+                      {
+                        "name": "DB_PASSWORD",
+                        "valueFrom": {
+                          "secretKeyRef": {
+                            "key": "latest",
+                            "name": "orders-db-password"
+                          }
+                        }
+                      }
+                    ],
+                    "ports": [
+                      {
+                        "containerPort": 8080,
+                        "name": "http1"
+                      }
+                    ],
+                    "resources": {
+                      "limits": {
+                        "cpu": "1000m",
+                        "memory": "512Mi"
+                      }
+                    }
+                  }
+                ],
+                "serviceAccountName": "orders-api@example-project.iam.gserviceaccount.com",
+                "timeoutSeconds": 300
+              }
+            },
+            "traffic": [
+              {
+                "latestRevision": true,
+                "percent": 100
+              }
+            ]
+          },
+          "status": {
+            "latestCreatedRevisionName": "orders-api-00007-abc",
+            "latestReadyRevisionName": "orders-api-00007-abc",
+            "observedGeneration": 7,
+            "url": "https://orders-api-example-uc.a.run.app"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//run.googleapis.com/projects/example-project/locations/europe-west1/services/orders-api",
+    "assetType": "run.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "apiVersion": "serving.knative.dev/v1",
+          "kind": "Service",
+          "metadata": {
+            "annotations": {
+              "run.googleapis.com/ingress": "all",
+              "serving.knative.dev/creator": "deployer@example-project.iam.gserviceaccount.com"
+            },
+            "creationTimestamp": "2024-03-01T12:00:00.000000Z",
+            "generation": 2,
+            "labels": {
+              "cloud.googleapis.com/location": "europe-west1"
+            },
+            "name": "orders-api",
+            "namespace": "123456789012",
+            "selfLink": "/apis/serving.knative.dev/v1/namespaces/123456789012/services/orders-api",
+            "uid": "00000000-0000-4000-8000-000000000003"
+          },
+          "spec": {
+            "template": {
+              "spec": {
+                "containers": [
+                  {
+                    "image": "us-docker.pkg.dev/example-project/apps/orders-api:1.4.2",
+                    "env": [
+                      {
+                        "name": "LOG_LEVEL",
+                        "value": "debug"
+                      }
+                    ]
+                  }
+                ],
+                "serviceAccountName": "orders-api@example-project.iam.gserviceaccount.com"
+              }
+            },
+            "traffic": [
+              {
+                "latestRevision": true,
+                "percent": 100
+              }
+            ]
+          },
+          "status": {
+            "url": "https://orders-api-example-ew.a.run.app"
+          }
+        }
+      }
+    ]
+  }
+]

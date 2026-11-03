@@ -17,6 +17,7 @@
     "nodePools": [
       {
         "name": "default-pool",
+        "kubeletCertInfo": {"tpmBootstrapCertExpireTime": "2027-01-01T00:00:00Z"},
         "config": {
           "machineType": "e2-standard-4",
           "metadata": {"disable-legacy-endpoints": "true", "startup-script": "#!/bin/bash\necho fixture-startup-script"}
