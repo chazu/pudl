@@ -29,28 +29,101 @@ package gcp
 	...
 }
 
-// `gcloud projects get-iam-policy PROJECT --format=json`: one record per
-// project (the collector sets project; gcloud does not print it). Each
-// binding grants a role to members ("user:", "group:", "serviceAccount:",
-// "domain:", allUsers, allAuthenticatedUsers). Inherited (folder and
-// organization) policies, conditions and deny policies are not evaluated.
-#ProjectIAMPolicy: {
+// An IAM allow policy on one resource: a project, bucket, service account,
+// secret, key, topic and so on. Collected by `gcloud asset
+// search-all-iam-policies` per project, which finds every resource's policy;
+// when Cloud Asset Inventory cannot answer, `gcloud projects get-iam-policy`
+// supplies each project's own policy in the same shape. Identity is the
+// resource's full name (//cloudresourcemanager.googleapis.com/projects/P for
+// a project). Each binding grants a role to members ("user:", "group:",
+// "serviceAccount:", "domain:", allUsers, allAuthenticatedUsers). Inherited
+// (folder and organization) policies, conditions and deny policies are not
+// evaluated, and audit configs are not kept (Cloud Asset Inventory omits
+// them).
+#IAMPolicy: {
 	_pudl: {
 		schema_type:   "base"
-		resource_type: "gcp.iam.project_policy"
-		identity_fields: ["project"]
+		resource_type: "gcp.iam.policy"
+		identity_fields: ["resource"]
 		review: status: "draft"
 		owner: _#GCPOwner
-		graph: {name: {path: "project", prepend: "IAM policy · "}, account: "project"}
-		graph: display: {code: "IAM", label: "Project IAM policy", class: "identity"}
-		facts: gcp_iam_binding: {
-			each: "bindings[*]"
-			args: {role: "role", member: "members[*]", conditional: {exists: "condition"}}
+		graph: _gcpGraph & {name: {path: "resource", last_segment: true, prepend: "IAM policy · "}}
+		graph: display: {code: "IAM", label: "IAM policy", class: "identity"}
+		facts: {
+			gcp_iam_policy: args: {asset_type: "assetType"}
+			gcp_iam_member: {
+				each: "policy.bindings[*]"
+				args: {role: "role", member: "members[*]", conditional: {exists: "condition"}}
+			}
 		}
 	}
-	project: _gcpProjectID
-	bindings: [...{role: =~"^(roles|projects|organizations)/", members: [...string], ...}] @pudl(match)
-	etag?:    string
-	version?: int
+	project:   _gcpProjectID
+	resource:  =~"^//[^/]+/" @pudl(match)
+	assetType: =~"^[a-z0-9.]+\\.googleapis\\.com/[A-Za-z]+$"
+	policy: {
+		bindings?: [...{role: =~"^(roles|projects|organizations)/", members: [...string], ...}]
+		...
+	}
+	...
+}
+
+// A custom IAM role defined in a project (iam.googleapis.com/Role).
+// Predefined roles are not collected, and neither are custom roles defined
+// in an organization: they belong to no project. Identity is the role name,
+// projects/P/roles/ID, which bindings use as the role.
+#IAMRole: {
+	_pudl: {
+		schema_type:   "base"
+		resource_type: "gcp.iam.role"
+		identity_fields: ["name"]
+		review: status: "draft"
+		owner: _#GCPOwner
+		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
+		graph: display: {code: "ROLE", label: "Custom role", class: "identity"}
+		facts: {
+			gcp_iam_role: args: {name: "name", stage: "stage"}
+			gcp_iam_role_permission: args: {name: "name", permission: "includedPermissions[*]"}
+		}
+	}
+	project:              _gcpProjectID
+	name:                 =~"^projects/[^/]+/roles/[^/]+$" @pudl(match)
+	title?:               string
+	description?:         string
+	stage:                string
+	includedPermissions?: [...string]
+	...
+}
+
+// A user-managed service account key: metadata only, never key material.
+// Google-managed (SYSTEM_MANAGED) keys are not collected; Google rotates
+// them, and they cannot be downloaded. Identity is the key name,
+// projects/P/serviceAccounts/EMAIL/keys/ID.
+#ServiceAccountKey: {
+	_pudl: {
+		schema_type:   "base"
+		resource_type: "gcp.iam.service_account_key"
+		identity_fields: ["name"]
+		review: status: "draft"
+		owner: _#GCPOwner
+		// Neither source prints key material; redact it should one appear.
+		sensitive_fields: ["privateKeyData", "publicKeyData"]
+		graph: _gcpGraph & {name: {path: "name", last_segment: true, prepend: "key · "}}
+		graph: display: {code: "KEY", label: "Service account key", class: "identity"}
+		facts: gcp_service_account_key: args: {
+			name:         "name"
+			key_type:     "keyType"
+			valid_after:  "validAfterTime"
+			valid_before: "validBeforeTime"
+			disabled:     {path: "disabled", default: false}
+		}
+	}
+	project:          _gcpProjectID
+	name:             =~"^projects/[^/]+/serviceAccounts/[^/]+/keys/[^/]+$" @pudl(match)
+	keyType:          "USER_MANAGED"
+	keyAlgorithm?:    string
+	keyOrigin?:       string
+	validAfterTime?:  string
+	validBeforeTime?: string
+	disabled?:        bool
 	...
 }

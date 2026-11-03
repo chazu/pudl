@@ -76,7 +76,8 @@ type Result struct {
 // With a Fallback, a run or enumeration that fails with stderr matching
 // Fallback.When, or an enumeration that lists nothing, abandons the
 // populate's own runs: their records are discarded, and the Result is the
-// fallback's, with Fallback recording what triggered it.
+// fallback's, with Fallback recording what triggered it and whether the
+// fallback is partial.
 func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, error) {
 	var when []*regexp.Regexp
 	if p.Fallback != nil {
@@ -113,6 +114,7 @@ func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, erro
 	if err != nil {
 		return Result{}, fmt.Errorf("populate fallback: %w", err)
 	}
+	trigger.Partial = p.Fallback.Partial
 	res.Fallback = trigger
 	return res, nil
 }

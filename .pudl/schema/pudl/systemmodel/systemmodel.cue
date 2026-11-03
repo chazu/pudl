@@ -112,7 +112,10 @@ package systemmodel
 	// runs are skipped and their records discarded, so the two sources are
 	// never mixed; the report names the fallback and what triggered it. The
 	// fallback's records are routed by this populate's schema. Its own
-	// failures are failed inputs as usual.
+	// failures are failed inputs as usual. partial: true says the fallback
+	// sees only some of these resources (e.g. a project's own IAM policy, not
+	// its buckets'): the observation is then incomplete, so nothing it cannot
+	// see is marked gone.
 	//
 	//	fallback: {
 	//		when: ["SERVICE_DISABLED", "USER_PROJECT_DENIED", "PERMISSION_DENIED"]
@@ -120,7 +123,8 @@ package systemmodel
 	//	}
 	fallback?: {
 		when: [string & !="", ...string & !=""]
-		observe: #CommandSource
+		partial?: bool | *false
+		observe:  #CommandSource
 	}
 }
 

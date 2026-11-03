@@ -38,6 +38,8 @@ _gcpAssetTypes: {
 	"dns-zones":        "dns.googleapis.com/ManagedZone"
 	"kms-keyrings":     "cloudkms.googleapis.com/KeyRing"
 	"kms-keys":         "cloudkms.googleapis.com/CryptoKey"
+	"iam-roles":            "iam.googleapis.com/Role"
+	"service-account-keys": "iam.googleapis.com/ServiceAccountKey"
 }
 
 // CAI lists KMS key rings and keys in every location; the gcloud commands
@@ -95,37 +97,46 @@ _gcpAssetSearch: {
 }
 
 // Unwraps a CAI search result into the type's shape. The project is the one
-// in the resource's parent (the project itself, or e.g. a KMS key's ring);
-// other asset types, and with _locations resources in other locations, are
-// dropped.
+// in the resource's parent (the project itself, or e.g. a KMS key's ring).
+// Dropped: other asset types, resources outside a project (an organization's
+// custom roles), what _gcpSkip names, and with _locations resources in other
+// locations.
 _gcpAssetTransform: {
 	_t: string
 	_locations: *null | [...string]
 	in: _
 	_resource: in.versionedResources[0].resource
 	_shaped:   (_gcpShapes[_t] & {in: _resource}).out
-	_project:  regexp.FindSubmatch("projects/([^/]+)", in.parentFullResourceName)[1]
+	_inProject: regexp.Match("^//[^/]+/projects/", in.parentFullResourceName)
 	// CUE's && does not short-circuit; an unselected list element may fail.
 	_elsewhere: [
 		if _locations == null {false},
 		!list.Contains(_locations, regexp.FindSubmatch("/locations/([^/]+)/", in.name)[1]),
 	][0]
+	_skip: [if _gcpSkip[_t] != _|_ {(_gcpSkip[_t] & {in: _resource}).skip}, false][0]
 	// The first elements exist only for a record to drop, so they select
 	// null; otherwise the shaped resource. (out must be declared outright:
 	// a transform's in is unknown until a record arrives.)
 	out: [
 		if in.assetType != _gcpAssetTypes[_t] {null},
+		if !_inProject {null},
 		if _elsewhere {null},
-		_shaped & {project: _project},
+		if _skip {null},
+		_shaped & {project: regexp.FindSubmatch("projects/([^/]+)", in.parentFullResourceName)[1]},
 	][0]
 }
 
-// Puts a gcloud list record into the type's shape.
+// Puts a gcloud list record into the type's shape, or drops what _gcpSkip
+// names.
 _gcpGcloudTransform: {
 	_t:      string
 	in:      _
 	_record: in
-	out:     (_gcpShapes[_t] & {in: _record}).out
+	_skip: [if _gcpSkip[_t] != _|_ {(_gcpSkip[_t] & {in: _record}).skip}, false][0]
+	out: [
+		if _skip {null},
+		(_gcpShapes[_t] & {in: _record}).out,
+	][0]
 }
 
 // The shape each source is normalized to: the v1 API object as gcloud prints
@@ -153,6 +164,9 @@ _gcpShapes: {
 	"pubsub-topics": _gcpSameShape
 	"kms-keyrings":  _gcpSameShape
 	"kms-keys":      _gcpSameShape
+	"iam-roles":     _gcpRoleShape
+	// Key metadata is identical in both sources.
+	"service-account-keys": _gcpSameShape
 
 	// gcloud adds etag; CAI omits disabled when it is false (gcloud prints
 	// it), so the shape always states it.

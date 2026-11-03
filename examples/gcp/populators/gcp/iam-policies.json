@@ -21,6 +21,12 @@
     ]
    },
    {
+    "role": "projects/example-project/roles/ordersDeployer",
+    "members": [
+     "group:release@example.com"
+    ]
+   },
+   {
     "role": "roles/storage.objectViewer",
     "members": [
      "allUsers"
@@ -38,6 +44,19 @@
    }
   ],
   "etag": "BwYZ0aB1cDE=",
-  "version": 3
+  "version": 3,
+  "auditConfigs": [
+   {
+    "service": "allServices",
+    "auditLogConfigs": [
+     {
+      "logType": "ADMIN_READ"
+     },
+     {
+      "logType": "DATA_WRITE"
+     }
+    ]
+   }
+  ]
  }
 ]

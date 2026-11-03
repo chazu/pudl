@@ -214,26 +214,27 @@ gcp_graph_firewall_applies_tag_property: {
 }
 
 // ---- IAM ----
-// A project IAM policy binding grants a role to a member. The edge runs from
-// the member (a collected service account, or a reference such as
-// user:alice@example.com that pudl did not collect) to the project's policy
-// node, with the role as a property. Inherited policies, conditions and deny
-// policies are not evaluated: this is what the policy says, not effective
-// access.
+// An IAM policy binding grants a role to a member on one resource (a
+// project, bucket, service account, topic and so on). The edge runs from the
+// member (a collected service account, or a reference such as
+// user:alice@example.com that pudl did not collect) to that resource's
+// policy node, with the role as a property. Inherited policies, conditions
+// and deny policies are not evaluated: this is what the policy says, not
+// effective access.
 
 gcp_graph_iam_binding: {
 	head: {rel: "graph_edge", args: {type: "iam_binding", source: "$M", target: "$R", basis: "observed"}}
-	body: [{rel: "gcp_iam_binding", args: {resource_id: "$R", member: "$M"}}]
+	body: [{rel: "gcp_iam_member", args: {resource_id: "$R", member: "$M"}}]
 }
 
 gcp_graph_iam_binding_role: {
 	head: {rel: "graph_edge_property", args: {type: "iam_binding", source: "$M", target: "$R", key: "role", value: "$X"}}
-	body: [{rel: "gcp_iam_binding", args: {resource_id: "$R", member: "$M", role: "$X"}}]
+	body: [{rel: "gcp_iam_member", args: {resource_id: "$R", member: "$M", role: "$X"}}]
 }
 
 gcp_graph_iam_binding_condition: {
 	head: {rel: "graph_edge_property", args: {type: "iam_binding", source: "$M", target: "$R", key: "conditional", value: "yes"}}
-	body: [{rel: "gcp_iam_binding", args: {resource_id: "$R", member: "$M", conditional: true}}]
+	body: [{rel: "gcp_iam_member", args: {resource_id: "$R", member: "$M", conditional: true}}]
 }
 
 // Graph vocabulary for this pack (facts: rules with no body). Every edge

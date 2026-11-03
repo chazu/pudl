@@ -10,9 +10,12 @@ import (
 // used when a run (or the `each` command) fails with stderr matching one of
 // When, or when `each` lists no inputs. The fallback's records are routed
 // like the populate's (its schema); it has its own runs, each, timeout,
-// fail_fast and empty_when, and no fallback of its own.
+// fail_fast and empty_when, and no fallback of its own. A Partial fallback
+// sees only some of the populate's resources, so an observation it answers is
+// incomplete.
 type Fallback struct {
 	When    []string `json:"when"`
+	Partial bool     `json:"partial,omitempty"`
 	Observe Populate `json:"observe"`
 }
 

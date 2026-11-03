@@ -27,8 +27,9 @@ func populateTargetName(modelName string) string {
 // succeeded are ingested and the failed runs recorded as failed inputs, which
 // leaves the snapshot incomplete. Runs whose failure matched empty_when are
 // empty inputs: observed with no records, so they neither fail nor leave the
-// snapshot incomplete. When every run failed nothing is ingested, and the
-// summary listing them comes back with the error.
+// snapshot incomplete. A partial fallback's snapshot is incomplete too. When
+// every run failed nothing is ingested, and the summary listing them comes
+// back with the error.
 func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 	m := r.model
 	if m.Populate.Kind() == systemmodel.KindNone {
@@ -53,12 +54,20 @@ func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 			summary.SchemaPolicy = "permissive"
 		}
 	}
+	observation := m.Observation
+	if observation != nil && res.Fallback != nil && res.Fallback.Partial {
+		// A partial fallback cannot see every resource of the scope, so its
+		// observation must not mark the rest gone.
+		incomplete := *observation
+		incomplete.Complete = false
+		observation = &incomplete
+	}
 	results := []observe.ObserveResult{{Target: target, Current: map[string]any{"records": res.Records}}}
 	wrapped, err := json.Marshal(append(results, failedInputResults(target, res.Failed)...))
 	if err != nil {
 		return nil, fmt.Errorf("marshal observe results: %w", err)
 	}
-	count, snapshotID, err := r.ingest(wrapped, populateIngest{observation: m.Observation,
+	count, snapshotID, err := r.ingest(wrapped, populateIngest{observation: observation,
 		summary:             summary,
 		ctx:                 r.ctx,
 		snapshotID:          r.session.SnapshotID,

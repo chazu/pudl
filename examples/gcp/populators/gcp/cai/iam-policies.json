@@ -1,0 +1,119 @@
+[
+  {
+    "resource": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "assetType": "cloudresourcemanager.googleapis.com/Project",
+    "project": "projects/123456789012",
+    "folders": [
+      "folders/111111111111"
+    ],
+    "organization": "organizations/222222222222",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/owner",
+          "members": [
+            "user:alice@example.com"
+          ]
+        },
+        {
+          "role": "roles/editor",
+          "members": [
+            "serviceAccount:123456789012-compute@developer.gserviceaccount.com",
+            "serviceAccount:ops@example-project.iam.gserviceaccount.com"
+          ]
+        },
+        {
+          "role": "roles/cloudsql.client",
+          "members": [
+            "serviceAccount:orders-api@example-project.iam.gserviceaccount.com"
+          ]
+        },
+        {
+          "role": "projects/example-project/roles/ordersDeployer",
+          "members": [
+            "group:release@example.com"
+          ]
+        },
+        {
+          "role": "roles/storage.objectViewer",
+          "members": [
+            "allUsers"
+          ]
+        },
+        {
+          "role": "roles/iap.tunnelResourceAccessor",
+          "members": [
+            "group:sre@example.com"
+          ],
+          "condition": {
+            "title": "business hours",
+            "expression": "request.time.getHours('America/Chicago') >= 9"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//storage.googleapis.com/example-project-public-assets",
+    "assetType": "storage.googleapis.com/Bucket",
+    "project": "projects/123456789012",
+    "folders": [
+      "folders/111111111111"
+    ],
+    "organization": "organizations/222222222222",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/storage.legacyBucketOwner",
+          "members": [
+            "projectOwner:example-project"
+          ]
+        },
+        {
+          "role": "roles/storage.objectViewer",
+          "members": [
+            "allUsers"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//iam.googleapis.com/projects/example-project/serviceAccounts/100000000000000000001",
+    "assetType": "iam.googleapis.com/ServiceAccount",
+    "project": "projects/123456789012",
+    "folders": [
+      "folders/111111111111"
+    ],
+    "organization": "organizations/222222222222",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/iam.serviceAccountTokenCreator",
+          "members": [
+            "group:sre@example.com"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "resource": "//pubsub.googleapis.com/projects/example-project/topics/orders",
+    "assetType": "pubsub.googleapis.com/Topic",
+    "project": "projects/123456789012",
+    "folders": [
+      "folders/111111111111"
+    ],
+    "organization": "organizations/222222222222",
+    "policy": {
+      "bindings": [
+        {
+          "role": "roles/pubsub.publisher",
+          "members": [
+            "serviceAccount:orders-api@example-project.iam.gserviceaccount.com"
+          ]
+        }
+      ]
+    }
+  }
+]

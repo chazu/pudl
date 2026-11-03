@@ -33,7 +33,7 @@ snapshots they trust, and pudl tells "absent" apart from "not observed".
 | `timeout` | Per-run limit as a Go duration (default `10m`) |
 | `fail_fast` | Fail the whole populate, ingesting nothing, on the first failed run |
 | `empty_when` | Regular expressions (Go RE2) matched against a failed run's stderr; a match makes the run an empty input (below) |
-| `fallback` | `{when, observe}`: another way to observe the same resources, used when these runs cannot answer (below) |
+| `fallback` | `{when, observe, partial?}`: another way to observe the same resources, used when these runs cannot answer (below) |
 
 The environment is inherited, so cloud CLI credentials work. `argv` and `set`
 are recorded with the model: keep secrets out of them. A record can route
@@ -78,6 +78,13 @@ set a schema or declare a fallback of its own. The report says
 `source: fallback` with what triggered it (JSON `populate.fallback`: `reason`
 `failed_input`, `each_failed` or `no_inputs`, the matching `pattern` and
 `stderr_line`, and the `trigger` run).
+
+A fallback that sees only some of the resources declares `partial: true`. The
+gcloud fallback of the GCP pack's IAM policy collector, for example, reads
+each project's own policy, while the search it stands in for also returns
+the policies of buckets, service accounts and secrets. A partial fallback's
+observation is incomplete, so nothing it cannot see is marked gone; the
+report says `partial fallback` (JSON `populate.fallback.partial`).
 
 ### Reshape records with a transform
 

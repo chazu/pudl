@@ -1,0 +1,22 @@
+[
+ {
+  "name": "projects/example-project/roles/ordersDeployer",
+  "title": "Orders deployer",
+  "description": "Deploys the orders service",
+  "includedPermissions": [
+   "run.services.get",
+   "run.services.update"
+  ],
+  "stage": "GA",
+  "etag": "BwYZ0aB1cDE="
+ },
+ {
+  "name": "projects/example-project/roles/logReader",
+  "title": "Log reader",
+  "includedPermissions": [
+   "logging.logEntries.list"
+  ],
+  "stage": "ALPHA",
+  "etag": "BwYZ0aB1cDF="
+ }
+]
