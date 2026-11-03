@@ -56,10 +56,10 @@ func (t *ModelTemplate) Value() cue.Value { return t.value }
 // Context returns the CUE context that owns Value.
 func (t *ModelTemplate) Context() *cue.Context { return t.context }
 
-// Model concretely validates the authored value and decodes the runtime
-// projection.
+// Model concretely validates the authored value (run transforms excepted)
+// and decodes the runtime projection.
 func (t *ModelTemplate) Model() (*SystemModel, error) {
-	if err := t.value.Validate(cue.Concrete(true)); err != nil {
+	if err := validateConcrete(t.value); err != nil {
 		return nil, fmt.Errorf("model %q: %w", t.Name, err)
 	}
 	return DecodeValue(t.value)

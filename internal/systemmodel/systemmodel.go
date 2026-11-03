@@ -67,6 +67,9 @@ type CommandRun struct {
 	Argv []string       `json:"argv"`
 	Set  map[string]any `json:"set,omitempty"`
 	Dir  string         `json:"dir,omitempty"`
+	// Transform is read from the CUE value (decodeTransforms), never from
+	// JSON, and is not part of the recorded model instance.
+	Transform *Transform `json:"-"`
 }
 
 // PopulateKind names the populate arm a model declares.
@@ -150,6 +153,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		if len(m.Desired) > 0 {
 			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired", m.Name)
 		}
+	}
+	if err := decodeTransforms(inst, &m); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	if err := m.Populate.validateItemPlaceholders(); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)

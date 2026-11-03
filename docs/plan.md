@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Per-run transforms in CUE (2026-11-03)
+
+A `#CommandRun` can declare `transform: {in: _, out: ...}`: each printed
+record is bound to `in`, `out` is stored (before `set` and routing), and
+`out: null` drops the record. A failing transform is a failed input. Cost
+measured at about 0.2 ms per 3 KB record with flat memory. See
+`implog/2026_11_03_command_run_transforms.md`. Closes `pudl-q4v.2`.
+
 ### Redaction allowlists in `sensitive_fields` (2026-11-03)
 
 A `sensitive_fields` entry can be a struct
