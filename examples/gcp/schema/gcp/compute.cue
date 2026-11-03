@@ -6,15 +6,21 @@ package gcp
 // view places them there.
 //
 // Instance metadata holds startup scripts, user-data and, on GKE nodes,
-// kube-env (cluster certificates and bootstrap credentials), so every metadata
-// value is redacted before storage. The keys stay: a record still shows which
-// metadata items an instance has.
+// kube-env (cluster certificates and bootstrap credentials). Every metadata
+// value is redacted before storage except those of the keys in
+// _gcpSafeMetadataKeys, which hold settings checks need (OS Login, serial
+// port, project SSH keys). A key not on the list, including one nobody has
+// reviewed yet, stays redacted. The keys themselves are always kept.
 #ComputeInstance: {
 	_pudl: {
 		schema_type:   "base"
 		resource_type: "gcp.compute.instance"
 		identity_fields: ["selfLink"]
-		sensitive_fields: ["metadata.items[*].value"]
+		sensitive_fields: [{
+			each:  "metadata.items[*]"
+			value: "value"
+			keep_when: {field: "key", in: _gcpSafeMetadataKeys}
+		}]
 		// Shielded VM Secure Boot state: public UEFI certificates (pk, keks,
 		// dbs) and revocation hashes (dbxs), high-entropy but not secret.
 		secret_scan_ignore: [
@@ -70,3 +76,26 @@ package gcp
 	metadata?: {items?: [...{key: string, value?: _}], ...}
 	...
 }
+
+// Instance metadata keys whose values are settings, not secrets, so
+// gcp.#ComputeInstance stores them. To change the list without editing this
+// file, set it in another file of package gcp, e.g.
+// .pudl/schema/gcp/settings.cue: _gcpSafeMetadataKeys: ["enable-oslogin"]
+// Never add a key that can hold a script, a credential or user data
+// (startup-script, user-data, ssh-keys, kube-env, gce-container-declaration).
+_gcpSafeMetadataKeys: [...string] | *[
+	"block-project-ssh-keys",
+	"cluster-location",
+	"cluster-name",
+	"disable-legacy-endpoints",
+	"enable-guest-attributes",
+	"enable-os-inventory",
+	"enable-osconfig",
+	"enable-oslogin",
+	"enable-oslogin-2fa",
+	"google-logging-enabled",
+	"google-monitoring-enabled",
+	"serial-port-enable",
+	"serial-port-logging-enable",
+	"vm-dns-setting",
+]

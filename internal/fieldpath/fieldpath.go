@@ -3,12 +3,17 @@
 // fields and `pudl import --set` keys all share this one syntax.
 //
 //	path     := segment ("." segment)*
-//	segment  := (ident | quoted) ("[*]")*
+//	segment  := (ident | quoted) ("[*]" | filter)*
 //	ident    := any run of characters other than '.'
 //	quoted   := '"' JSON string body '"'     (may contain dots)
+//	filter   := "[*!" field "=" JSON array of strings "]"   (see filter.go)
 //
 // Examples: name, metadata.name, metadata.labels."cloud.googleapis.com/location",
-// sourceRanges[*], allowed[*].IPProtocol.
+// sourceRanges[*], allowed[*].IPProtocol,
+// metadata.items[*!key=["enable-oslogin"]].value.
+//
+// An ident never contains "[*!": that sequence always starts a filter, and a
+// malformed filter is an error rather than part of a key.
 //
 // Every dot-separated path that parsed before quoting existed parses to the
 // same keys, so stored identity fields keep their meaning. The package is pure:
@@ -22,9 +27,13 @@ import (
 )
 
 // step is one hop through a record: a map key, or a fan-out over an array.
+// A filtered fan-out skips the elements whose keepField holds a value in
+// keepSet (canonical, see valueSet). step stays comparable.
 type step struct {
-	key      string
-	wildcard bool
+	key       string
+	wildcard  bool
+	keepField string
+	keepSet   string
 }
 
 // Path is a parsed field path.
@@ -55,29 +64,36 @@ func Parse(s string) (Path, error) {
 				return Path{}, fmt.Errorf("field path %q: empty quoted segment", s)
 			}
 			steps = append(steps, step{key: key})
-			for strings.HasPrefix(rest, "[*]") {
-				steps = append(steps, step{wildcard: true})
-				rest = rest[3:]
+			n, err := segmentEnd(rest)
+			if err != nil {
+				return Path{}, fmt.Errorf("field path %q: %w", s, err)
 			}
+			wild, ok, err := parseWildcards(rest[:n])
+			if err != nil || !ok {
+				if err == nil {
+					err = fmt.Errorf("expected '.' after segment")
+				}
+				return Path{}, fmt.Errorf("field path %q: %w", s, err)
+			}
+			steps = append(steps, wild...)
+			rest = rest[n:]
 		} else {
-			seg := rest
-			if i := strings.IndexByte(rest, '.'); i >= 0 {
-				seg = rest[:i]
+			n, err := segmentEnd(rest)
+			if err != nil {
+				return Path{}, fmt.Errorf("field path %q: %w", s, err)
 			}
-			rest = rest[len(seg):]
-			wildcards := 0
-			for strings.HasSuffix(seg, "[*]") {
-				seg = strings.TrimSuffix(seg, "[*]")
-				wildcards++
+			seg := rest[:n]
+			rest = rest[n:]
+			key, wild, err := splitWildcards(seg)
+			if err != nil {
+				return Path{}, fmt.Errorf("field path %q: %w", s, err)
 			}
-			if seg != "" {
-				steps = append(steps, step{key: seg})
-			} else if wildcards == 0 {
+			if key != "" {
+				steps = append(steps, step{key: key})
+			} else if len(wild) == 0 {
 				return Path{}, fmt.Errorf("field path %q: empty segment", s)
 			}
-			for ; wildcards > 0; wildcards-- {
-				steps = append(steps, step{wildcard: true})
-			}
+			steps = append(steps, wild...)
 		}
 		if rest == "" {
 			break
@@ -91,6 +107,27 @@ func Parse(s string) (Path, error) {
 		}
 	}
 	return Path{raw: s, steps: steps}, nil
+}
+
+// splitWildcards splits an unquoted segment into its key and the longest
+// trailing run of [*] and filters.
+func splitWildcards(seg string) (string, []step, error) {
+	for p := 0; p < len(seg); p++ {
+		if seg[p] != '[' {
+			continue
+		}
+		wild, ok, err := parseWildcards(seg[p:])
+		if err != nil {
+			return "", nil, err
+		}
+		if ok {
+			return seg[:p], wild, nil
+		}
+	}
+	if strings.Contains(seg, filterOpen) {
+		return "", nil, fmt.Errorf("a filter must end its segment")
+	}
+	return seg, nil, nil
 }
 
 // MustParse parses a path known to be valid; it panics otherwise.
@@ -169,8 +206,12 @@ func (p Path) lookupAll(v any, oneOrMany bool) []any {
 		for _, c := range cur {
 			if s.wildcard {
 				if arr, ok := c.([]any); ok {
-					next = append(next, arr...)
-				} else if oneOrMany && c != nil {
+					for _, el := range arr {
+						if !s.keepsOut(el) {
+							next = append(next, el)
+						}
+					}
+				} else if oneOrMany && c != nil && !s.keepsOut(c) {
 					next = append(next, c)
 				}
 				continue
@@ -235,6 +276,9 @@ func replace(v any, steps []step, fn func(any) any) int {
 		}
 		n := 0
 		for i := range arr {
+			if s.keepsOut(arr[i]) {
+				continue
+			}
 			if len(rest) == 0 {
 				arr[i] = fn(arr[i])
 				n++

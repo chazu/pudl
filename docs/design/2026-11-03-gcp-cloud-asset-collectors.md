@@ -192,7 +192,7 @@ _pudl: sensitive_fields: [
 		// Redact each item's value unless its key is listed.
 		each:  "metadata.items[*]"
 		value: "value"
-		keep_when: {key: "key", in: _gcpSafeMetadataKeys}
+		keep_when: {field: "key", in: _gcpSafeMetadataKeys}
 	},
 ]
 

@@ -98,6 +98,10 @@
     {
      "key": "kube-env",
      "value": "KUBELET_CERT: fixture-kube-env-not-a-real-cert"
+    },
+    {
+     "key": "enable-oslogin",
+     "value": "FIXTURE-OSLOGIN-TRUE"
     }
    ]
   },

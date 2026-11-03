@@ -86,6 +86,11 @@ All `_pudl` paths use one syntax: identity fields, facts, sensitive fields, and
 - **Dots nest:** `metadata.name`.
 - **Quotes allow keys that contain dots:** `metadata.labels."cloud.googleapis.com/location"`.
 - **`[*]` fans out over an array** (not allowed in identity fields).
+- **`[*!field=["a","b"]]` fans out over every element except** objects whose
+  `field` holds one of the listed strings:
+  `metadata.items[*!key=["enable-oslogin"]].value`. An element without the
+  field, with a non-string value there, or that is not an object is not
+  skipped. `[*!` always starts a filter; a malformed one is an error.
 
 ### What stays current
 
@@ -204,9 +209,31 @@ Each matching value is replaced with `"[REDACTED]"` before the record is
 hashed, identified, stored or projected. This applies to `pudl import` and to
 model observations alike. Fields are inherited along `base_schema`.
 
+### Allowlists
+
+An entry can instead be a struct that redacts a value in every element of an
+array **except** the elements named on a list:
+
+```cue
+_pudl: sensitive_fields: [{
+	each:  "metadata.items[*]"   // the array; must end in [*]
+	value: "value"               // the path redacted in each element; omit for the element itself
+	keep_when: {field: "key", in: _safeMetadataKeys}
+}]
+_safeMetadataKeys: ["enable-oslogin", "serial-port-enable"]
+```
+
+Items whose `key` is listed keep their values; every other value is redacted,
+including keys added after the list was written. The struct is the same as
+the path `metadata.items[*!key=["enable-oslogin","serial-port-enable"]].value`
+(see [field paths](#field-paths)), which is how pudl reports it. Likely-secret
+warnings still scan the values an allowlist keeps.
+
 Redaction **fails closed**. The record is not stored when any of these hold:
 
-- `sensitive_fields` is not a list of valid paths
+- `sensitive_fields` is not a list of valid paths and allowlist structs (an
+  allowlist needs `each`, `keep_when.field` and `keep_when.in`, and unknown
+  keys are errors)
 - an unknown key such as `sensitive_mode` is present
 - a sensitive path overlaps an identity field
 - the record is a YAML or CSV document routed to a schema with sensitive fields
