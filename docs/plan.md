@@ -915,6 +915,16 @@ and the second-round implementation log for acceptance results and limitations.
 
 ## What's Next
 
+### GCP collectors on Cloud Asset Inventory (proposed 2026-11-03)
+
+The GCP pack's collectors read Cloud Asset Inventory search first, org-wide
+or per project, and fall back to today's gcloud commands. Every real
+resource type gets a typed schema, with a `gcp.#Asset` catch-all for the
+rest. Needs three product features: a redaction allowlist in CUE, per-run
+transforms in CUE, and a populate-level source fallback. See
+[the design](design/2026-11-03-gcp-cloud-asset-collectors.md). Not started;
+tracked by beads epic `pudl-q4v` (`pudl-q4v.1` to `pudl-q4v.9`).
+
 ### After the convergence and mu removal (decided 2026-11-01)
 
 PUDL narrows to discovering, cataloging and governing infrastructure. The
