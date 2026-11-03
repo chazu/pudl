@@ -1,6 +1,7 @@
 [
   {
     "kind": "compute#address",
+    "labelFingerprint": "gcloud-lfp-1",
     "id": "6000000000000000001",
     "creationTimestamp": "2024-01-11T07:55:00.000-08:00",
     "name": "nat-ip-1",

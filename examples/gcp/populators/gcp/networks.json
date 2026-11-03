@@ -1,6 +1,8 @@
 [
   {
     "kind": "compute#network",
+    "x_gcloud_subnet_mode": "CUSTOM",
+    "x_gcloud_bgp_routing_mode": "REGIONAL",
     "id": "1000000000000000001",
     "creationTimestamp": "2024-01-10T09:00:00.000-08:00",
     "name": "prod-vpc",

@@ -1,0 +1,186 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-ssh-world",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000001",
+          "creationTimestamp": "2024-02-01T10:00:00.000-08:00",
+          "name": "allow-ssh-world",
+          "description": "Temporary SSH access",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 1000,
+          "sourceRanges": [
+            "0.0.0.0/0"
+          ],
+          "targetTags": [
+            "bastion"
+          ],
+          "allowed": [
+            {
+              "IPProtocol": "tcp",
+              "ports": [
+                "22"
+              ]
+            }
+          ],
+          "direction": "INGRESS",
+          "logConfig": {
+            "enable": false
+          },
+          "disabled": false,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/allow-ssh-world"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/deny-all-ingress",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000002",
+          "creationTimestamp": "2024-02-01T10:01:00.000-08:00",
+          "name": "deny-all-ingress",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 65000,
+          "sourceRanges": [
+            "0.0.0.0/0"
+          ],
+          "denied": [
+            {
+              "IPProtocol": "all"
+            }
+          ],
+          "direction": "INGRESS",
+          "logConfig": {
+            "enable": false
+          },
+          "disabled": false,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/deny-all-ingress"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-internal",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000003",
+          "creationTimestamp": "2024-02-01T10:02:00.000-08:00",
+          "name": "allow-internal",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 1000,
+          "sourceRanges": [
+            "10.0.0.0/8"
+          ],
+          "allowed": [
+            {
+              "IPProtocol": "tcp"
+            },
+            {
+              "IPProtocol": "udp"
+            },
+            {
+              "IPProtocol": "icmp"
+            }
+          ],
+          "direction": "INGRESS",
+          "logConfig": {
+            "enable": false
+          },
+          "disabled": false,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/allow-internal"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-rdp-world-disabled",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000004",
+          "creationTimestamp": "2024-02-01T10:03:00.000-08:00",
+          "name": "allow-rdp-world-disabled",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 1000,
+          "sourceRanges": [
+            "0.0.0.0/0"
+          ],
+          "allowed": [
+            {
+              "IPProtocol": "tcp",
+              "ports": [
+                "3389"
+              ]
+            }
+          ],
+          "direction": "INGRESS",
+          "logConfig": {
+            "enable": false
+          },
+          "disabled": true,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/allow-rdp-world-disabled"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-egress-all",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000005",
+          "creationTimestamp": "2024-02-01T10:04:00.000-08:00",
+          "name": "allow-egress-all",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 1000,
+          "destinationRanges": [
+            "0.0.0.0/0"
+          ],
+          "allowed": [
+            {
+              "IPProtocol": "all"
+            }
+          ],
+          "direction": "EGRESS",
+          "logConfig": {
+            "enable": false
+          },
+          "disabled": false,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/allow-egress-all"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewallPolicies/example-policy",
+    "assetType": "compute.googleapis.com/FirewallPolicy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "example-policy"
+        }
+      }
+    ]
+  }
+]

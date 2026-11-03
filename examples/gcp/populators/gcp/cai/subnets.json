@@ -1,0 +1,88 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/regions/us-central1/subnetworks/gke-nodes",
+    "assetType": "compute.googleapis.com/Subnetwork",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "2000000000000000001",
+          "creationTimestamp": "2024-01-10T09:05:00.000-08:00",
+          "name": "gke-nodes",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "ipCidrRange": "10.10.0.0/20",
+          "gatewayAddress": "10.10.0.1",
+          "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/gke-nodes",
+          "privateIpGoogleAccess": false,
+          "secondaryIpRanges": [
+            {
+              "rangeName": "pods",
+              "ipCidrRange": "10.12.0.0/14"
+            },
+            {
+              "rangeName": "services",
+              "ipCidrRange": "10.16.0.0/20"
+            }
+          ],
+          "purpose": "PRIVATE",
+          "stackType": "IPV4_ONLY",
+          "fingerprint": "cai-fp-1"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/regions/us-central1/subnetworks/gke-secure",
+    "assetType": "compute.googleapis.com/Subnetwork",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "2000000000000000002",
+          "creationTimestamp": "2024-01-10T09:06:00.000-08:00",
+          "name": "gke-secure",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "ipCidrRange": "10.30.0.0/20",
+          "gatewayAddress": "10.30.0.1",
+          "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/gke-secure",
+          "privateIpGoogleAccess": true,
+          "logConfig": {
+            "enable": true,
+            "aggregationInterval": "INTERVAL_5_SEC",
+            "flowSampling": 0.5,
+            "metadata": "INCLUDE_ALL_METADATA"
+          },
+          "purpose": "PRIVATE",
+          "stackType": "IPV4_ONLY"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/regions/us-central1/subnetworks/app",
+    "assetType": "compute.googleapis.com/Subnetwork",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "2000000000000000003",
+          "creationTimestamp": "2024-01-10T09:07:00.000-08:00",
+          "name": "app",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "ipCidrRange": "10.20.0.0/20",
+          "gatewayAddress": "10.20.0.1",
+          "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app",
+          "privateIpGoogleAccess": true,
+          "purpose": "PRIVATE",
+          "stackType": "IPV4_ONLY"
+        }
+      }
+    ]
+  }
+]

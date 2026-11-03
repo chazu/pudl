@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP network types through Cloud Asset Inventory (2026-11-03)
+
+`gcp-networks`, `-subnets`, `-firewalls`, `-routes`, `-routers` and
+`-addresses` search Cloud Asset Inventory once per organization (discovered
+at run time) and fall back to per-project gcloud. Both sources are normalized
+to one shape and store identical records, checked on live data first.
+Compute instances stay on gcloud: CAI's instance metadata is a filtered
+view. Settings `_gcpAssetScope` and `_gcpBillingProject`. See
+`implog/2026_11_03_gcp_cai_network_types.md`. Part 1 of `pudl-q4v.4`.
+
 ### Populate fallback (2026-11-03)
 
 `populate.fallback: {when, observe}` names a second way to observe the same

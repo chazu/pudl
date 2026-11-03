@@ -199,9 +199,32 @@ The report records the projects it enumerated under `populate.inputs`. A
 failing project is a failed input as above; a failing `gcloud projects list`
 fails the collector with nothing ingested.
 
-1. Optionally narrow the projects or widen the KMS locations. Set them in a
-   file of your own, so the pack's files stay identical to the bundle, e.g.
-   `.pudl/schema/models/gcp_settings.cue`:
+### Cloud Asset Inventory
+
+Networks, subnets, firewall rules, routes, routers and addresses are
+collected through Cloud Asset Inventory (CAI) search: one search per type
+for every organization your credentials can see (`gcloud organizations list`,
+at run time), instead of one gcloud list command per project. It needs
+`cloudasset.assets.searchAllResources` on the organization (or the
+projects), plus a billing project with `cloudasset.googleapis.com` enabled
+where you hold `serviceusage.services.use`.
+
+When CAI cannot answer (the asset API disabled or unbillable, or permission
+denied), the collector falls back to its per-project gcloud commands and the
+report says `source: fallback` with the error. Both sources store identical
+records: each type's records are normalized to one shape (no `kind`
+differences, fingerprints or gcloud-only `x_gcloud_*` fields), so switching
+creates no new versions.
+
+Other types stay on gcloud. Compute instances in particular do: CAI's copy of
+instance metadata omits most keys (including settings such as
+`disable-legacy-endpoints`) and lower-cases values.
+
+### Settings
+
+1. Optionally narrow the projects, widen the KMS locations or choose how CAI
+   is used. Set them in a file of your own, so the pack's files stay
+   identical to the bundle, e.g. `.pudl/schema/models/gcp_settings.cue`:
 
    ```cue
    package models
@@ -209,6 +232,8 @@ fails the collector with nothing ingested.
    _gcpProjectFilter: "labels.env=staging"   // any gcloud --filter; default "" (all)
    _gcpKMSLocations: ["global", "us-central1"] // default ["global"]
    _gcpExtraEmptyWhen: ["Billing is disabled for project"] // default []
+   _gcpAssetScope: "projects"   // "organization" (default), "projects" (one search per listed project), or "off" (gcloud only)
+   _gcpBillingProject: "my-billing-project" // --billing-project for CAI; default "" uses gcloud's billing/quota_project
    ```
 
    Key rings are listed per project and location; `gcp-kms-keys` lists the
@@ -230,8 +255,8 @@ fails the collector with nothing ingested.
    pudl policy evaluate --json
    ```
 
-A collector's observation is complete only for the projects gcloud listed and
-the KMS locations you set. Keep fixture and live runs in separate workspaces if
+A collector's observation is complete only for the projects gcloud listed (or
+the organizations, through CAI) and the KMS locations you set. Keep fixture and live runs in separate workspaces if
 you want `pudl query` (latest-known facts) to show only one of them.
 
 ## Impact: what depends on this network
