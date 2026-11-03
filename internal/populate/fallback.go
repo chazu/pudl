@@ -28,6 +28,9 @@ type FallbackUse struct {
 	StderrLine string `json:"stderr_line,omitempty"`
 	// Trigger is the failed run or each command; nil for no_inputs.
 	Trigger *FailedInput `json:"trigger,omitempty"`
+	// Partial is the fallback's partial setting: it sees only some of the
+	// populate's resources, so the observation is incomplete.
+	Partial bool `json:"partial,omitempty"`
 }
 
 // Summary describes the trigger for a person in one line.

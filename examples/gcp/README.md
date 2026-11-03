@@ -14,14 +14,17 @@ Installed files, under `.pudl/`:
 
 | Path | Contents |
 | --- | --- |
-| `schema/gcp/{network,gke,data,services}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/{network,compute,gke,data,services,iam}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The three check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
+| `populators/gcp/iam-roles.sh` | Helper `gcp-iam-roles` runs: every custom role in one project, described |
+| `populators/gcp/service-account-keys.sh` | Helper `gcp-service-account-keys` runs: every account's user-managed keys in one project |
 
 ## What it collects
 
@@ -50,7 +53,9 @@ stays complete.
 | `gcp-addresses` | `compute addresses list` | `gcp.#Address` | `selfLink` | `compute.addresses.list`, `compute.globalAddresses.list` (same) |
 | `gcp-instances` | `compute instances list` | `gcp.#ComputeInstance` | `selfLink` | `compute.instances.list` (`roles/compute.viewer`) |
 | `gcp-service-accounts` | `iam service-accounts list` | `gcp.#ServiceAccount` | `email` | `iam.serviceAccounts.list` (`roles/iam.serviceAccountViewer`) |
-| `gcp-iam-policies` | `projects get-iam-policy P` | `gcp.#ProjectIAMPolicy` | `project` | `resourcemanager.projects.getIamPolicy` (`roles/iam.securityReviewer`) |
+| `gcp-iam-policies` | `asset search-all-iam-policies` per project; fallback `projects get-iam-policy P` | `gcp.#IAMPolicy` | `resource` | `cloudasset.assets.searchAllIamPolicies`; fallback `resourcemanager.projects.getIamPolicy` (`roles/iam.securityReviewer`) |
+| `gcp-iam-roles` | `iam roles list` then `describe`, via `iam-roles.sh` | `gcp.#IAMRole` | `name` | `iam.roles.list`, `iam.roles.get` (`roles/iam.roleViewer`) |
+| `gcp-service-account-keys` | `iam service-accounts keys list --managed-by=user` per account, via `service-account-keys.sh` | `gcp.#ServiceAccountKey` | `name` | `iam.serviceAccountKeys.list` (`roles/iam.serviceAccountKeyAdmin` or `roles/iam.securityReviewer`) |
 | `gcp-gke-clusters` | `container clusters list` | `gcp.#GKECluster` | `selfLink` | `container.clusters.list` (`roles/container.clusterViewer`) |
 | `gcp-sql-instances` | `sql instances list` | `gcp.#SQLInstance` | `selfLink` | `cloudsql.instances.list` (`roles/cloudsql.viewer`) |
 | `gcp-buckets` | `storage buckets list` | `gcp.#Bucket` | `name` | `storage.buckets.list` (`roles/viewer`) |
@@ -202,8 +207,9 @@ fails the collector with nothing ingested.
 ### Cloud Asset Inventory
 
 Networks, subnets, firewall rules, routes, routers, addresses, GKE clusters,
-Cloud Run services, Pub/Sub topics, service accounts, DNS zones and KMS key
-rings and keys are collected through Cloud Asset Inventory (CAI) search: one
+Cloud Run services, Pub/Sub topics, service accounts, DNS zones, KMS key
+rings and keys, custom roles and service account keys are collected through
+Cloud Asset Inventory (CAI) search: one
 search per type
 for every organization your credentials can see (`gcloud organizations list`,
 at run time), instead of one gcloud list command per project. It needs
@@ -218,14 +224,28 @@ records: each type's records are normalized to one shape (no `kind`
 differences, fingerprints, etags or gcloud-only fields, DNS visibility in
 lower case, a service account's `disabled` always stated), so switching
 creates no new versions. CAI lists KMS key rings and keys in every location;
-the collectors keep `_gcpKMSLocations`, as the gcloud commands do.
+the collectors keep `_gcpKMSLocations`, as the gcloud commands do. Custom
+roles defined in an organization rather than a project, and Google-managed
+service account keys, are not collected from either source.
+
+IAM policies are searched per project (`search-all-iam-policies`), whatever
+`_gcpAssetScope` says, because `cloudasset.assets.searchAllIamPolicies` is
+often granted on some projects and not on the organization. The search finds
+the policy of every resource in the project: the project's own, and those of
+its buckets, service accounts, secrets, keys, topics and so on. A project that
+refuses the search is a failed input; gcloud's `get-iam-policy` needs a
+similar grant, so it is not tried instead. Only a billing project that cannot
+be used switches to gcloud, which reads each project's own policy and not its
+resources'. That fallback is partial: its observation is incomplete, so the
+other policies are kept rather than marked gone (as with
+`_gcpAssetScope: "off"`). Audit configs are not kept: the search omits them.
 
 Other types stay on gcloud, because CAI's copy loses something checks use:
 compute instances (CAI's metadata omits most keys, including settings such
 as `disable-legacy-endpoints`, and lower-cases values), Cloud SQL instances
 (an older API version without `settings.edition`), buckets (no
-`publicAccessPrevention` for some), project IAM policies (no
-`auditConfigs`), and Pub/Sub subscriptions (not yet compared).
+`publicAccessPrevention` for some), and Pub/Sub subscriptions (not yet
+compared).
 
 ### Settings
 
@@ -283,7 +303,7 @@ relationships (rules in `schema/pudl/rules/gcp_graph.cue`):
 | `runs_as` | instance, Cloud Run service → service account |
 | `encrypted_by` | GKE cluster (secrets), Pub/Sub topic → KMS key |
 | `subscribed_to`, `publishes_to` | subscription → its topic, and its dead-letter topic |
-| `iam_binding` | member → project IAM policy (role as a property) |
+| `iam_binding` | member → the IAM policy of the project or resource that grants it (role as a property) |
 
 A reference to something the pack did not collect (a forwarding rule, the
 Compute Engine default service account) is drawn as "not in inventory".

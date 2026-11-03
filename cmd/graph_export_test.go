@@ -221,16 +221,24 @@ func TestGraphExportGCPPack(t *testing.T) {
 	require.Contains(t, runsAs, vm("us-central1-a/instances/bastion-1")+" -> ops@example-project.iam.gserviceaccount.com", "a collected service account resolves")
 	require.Contains(t, runsAs, vm("us-central1-c/instances/batch-worker-1")+" -> ref:123456789012-compute@developer.gserviceaccount.com", "the default compute account was not collected")
 
-	// Project IAM bindings: member -> the project's policy, with roles.
+	// IAM bindings: member -> the policy of the resource that grants it, with
+	// roles; the project's own policy and its resources' policies alike.
 	bindings := l.edges("iam_binding")
-	policy := l.byNative["example-project"]
-	require.Equal(t, "gcp.iam.project_policy", policy.Type)
-	require.Contains(t, bindings, "ops@example-project.iam.gserviceaccount.com -> example-project", "serviceAccount: members resolve to the account")
-	require.Contains(t, bindings, "ref:user:alice@example.com -> example-project")
-	require.Contains(t, bindings, "ext:any:* -> example-project", "allUsers is Anyone, not a missing resource")
-	ops := relationship(t, g, "iam_binding", "ops@example-project.iam.gserviceaccount.com", "example-project")
+	const project = "//cloudresourcemanager.googleapis.com/projects/example-project"
+	const bucket = "//storage.googleapis.com/example-project-public-assets"
+	const topic = "//pubsub.googleapis.com/projects/example-project/topics/orders"
+	policy := l.byNative[project]
+	require.Equal(t, "gcp.iam.policy", policy.Type)
+	require.Equal(t, "IAM policy · example-project", policy.Name)
+	require.Equal(t, "gcp.iam.policy", l.byNative[bucket].Type)
+	require.Contains(t, bindings, "ops@example-project.iam.gserviceaccount.com -> "+project, "serviceAccount: members resolve to the account")
+	require.Contains(t, bindings, "ref:user:alice@example.com -> "+project)
+	require.Contains(t, bindings, "ext:any:* -> "+project, "allUsers is Anyone, not a missing resource")
+	require.Contains(t, bindings, "ext:any:* -> "+bucket, "a bucket's own policy")
+	require.Contains(t, bindings, "orders-api@example-project.iam.gserviceaccount.com -> "+topic)
+	ops := relationship(t, g, "iam_binding", "ops@example-project.iam.gserviceaccount.com", project)
 	require.Equal(t, "roles/editor", ops.Properties["role"])
-	sre := relationship(t, g, "iam_binding", "ref:group:sre@example.com", "example-project")
+	sre := relationship(t, g, "iam_binding", "ref:group:sre@example.com", project)
 	require.Equal(t, "yes", sre.Properties["conditional"])
 	applies := l.edges("applies_to")
 	require.Contains(t, applies, fwl("allow-ssh-world")+" -> "+vm("us-central1-a/instances/bastion-1"), "matched by target tag")

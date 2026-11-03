@@ -20,8 +20,14 @@ var gcpPackSchemas = map[string]string{
 	"pubsub-topics": "gcp.#PubSubTopic", "pubsub-subscriptions": "gcp.#PubSubSubscription",
 	"kms-keyrings": "gcp.#KMSKeyRing", "kms-keys": "gcp.#KMSKey",
 	"instances": "gcp.#ComputeInstance", "service-accounts": "gcp.#ServiceAccount",
-	"iam-policies": "gcp.#ProjectIAMPolicy",
+	"iam-policies": "gcp.#IAMPolicy", "iam-roles": "gcp.#IAMRole",
+	"service-account-keys": "gcp.#ServiceAccountKey",
 }
+
+// gcpPackReshaped are the fixtures whose gcloud output is not the stored shape:
+// get-iam-policy names no resource, so its collector's transform and set
+// supply it. Imported as printed, such a record claims no pack type.
+var gcpPackReshaped = map[string]bool{"iam-policies": true}
 
 // TestGCPPackFixturesInferTheirType imports each fixture without --schema.
 // Without a valid project ID every fixture is rejected; with the project
@@ -37,6 +43,9 @@ func TestGCPPackFixturesInferTheirType(t *testing.T) {
 	for _, typ := range gcpPackTypes {
 		schema, ok := gcpPackSchemas[typ]
 		require.True(t, ok, typ)
+		if gcpPackReshaped[typ] {
+			continue
+		}
 		path := filepath.Join(pudlDir, "populators", "gcp", typ+".json")
 		raw, err := os.ReadFile(path)
 		require.NoError(t, err)

@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: IAM policies on every resource, custom roles, keys (2026-11-03)
+
+`gcp-iam-policies` searches each project's IAM policies through Cloud Asset
+Inventory, so buckets', service accounts', secrets' and topics' policies are
+collected as well as the project's (`gcp.#IAMPolicy` replaces
+`gcp.#ProjectIAMPolicy`). New `gcp-iam-roles` (project custom roles) and
+`gcp-service-account-keys` (user-managed key metadata). New
+`populate.fallback.partial`: a fallback that sees only part of the scope
+leaves the observation incomplete. See
+`implog/2026_11_03_gcp_iam_policies_roles_keys.md`. Closes `pudl-q4v.5`.
+
 ### GCP pack: eight more graph relationships (2026-11-03)
 
 Network peerings, firewall rules targeting service accounts, what an

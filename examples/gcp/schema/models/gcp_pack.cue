@@ -74,7 +74,9 @@ _gcpSchemas: {
 	"kms-keys":             "gcp.#KMSKey"
 	instances:              "gcp.#ComputeInstance"
 	"service-accounts":     "gcp.#ServiceAccount"
-	"iam-policies":         "gcp.#ProjectIAMPolicy"
+	"iam-policies":         "gcp.#IAMPolicy"
+	"iam-roles":            "gcp.#IAMRole"
+	"service-account-keys": "gcp.#ServiceAccountKey"
 }
 
 // The gcloud list command of each per-project collector. Each prints every
@@ -125,9 +127,21 @@ _gcpRuns: {
 		argv: list.Concat([["sh", "../../populators/gcp/kms-keys.sh", "{{item}}"], _gcpKMSLocations])
 		set: project: "{{item}}"
 	}]
-	// get-iam-policy takes the project as an argument and prints one object.
-	"iam-policies": [{
+	// get-iam-policy takes the project as an argument and prints one object,
+	// the project's own policy (gcp_iam.cue).
+	"iam-policies": [_gcpProjectPolicyRun & {
+		_p: "{{item}}"
 		argv: ["gcloud", "projects", "get-iam-policy", "{{item}}", "--format=json"]
+	}]
+	// Helpers: list the project's custom roles, then describe each (the list
+	// omits permissions); list its service accounts, then each one's
+	// user-managed keys.
+	"iam-roles": [{
+		argv: ["sh", "../../populators/gcp/iam-roles.sh", "{{item}}"]
+		set: project: "{{item}}"
+	}]
+	"service-account-keys": [{
+		argv: ["sh", "../../populators/gcp/service-account-keys.sh", "{{item}}"]
 		set: project: "{{item}}"
 	}]
 }
@@ -147,23 +161,33 @@ _gcpEmptyWhen: [
 ]
 
 // A collector's _gcloud source is its gcloud list commands; a type in
-// _gcpAssetTypes searches CAI first and falls back to them.
+// _gcpAssetTypes, and gcp-iam-policies (gcp_iam.cue), searches CAI first and
+// falls back to them. A gcloud source in _gcpPartialGcloud observes only
+// part of the type, incompletely.
 _#GCPCollector: {
 	_type:   string
 	_prefix: string
 	_scope:  string
 	_gcloud: {...}
 	_cai: {...}
-	_useCAI: _gcpAssetScope != "off" && _gcpAssetTypes[_type] != _|_
+	_iamPolicies: _type == "iam-policies"
+	_useCAI:      _gcpAssetScope != "off" && (_gcpAssetTypes[_type] != _|_ || _iamPolicies)
+	_partial:     _gcpPartialGcloud[_type] != _|_
 	sm.#SystemModel
 	name: "\(_prefix)\(_type)"
-	observation: {scope: "\(_scope)/\(_type)", complete: true}
+	observation: {scope: "\(_scope)/\(_type)", complete: _useCAI || !_partial}
 	populate: sm.#CommandObserve & {schema: _gcpSchemas[_type]}
 	if !_useCAI {
 		populate: _gcloud
 	}
 	if _useCAI {
-		populate: _cai & {fallback: {when: _gcpAssetUnavailable, observe: _gcloud}}
+		populate: _cai & {fallback: {
+			when: [if _iamPolicies {_gcpIAMSearchUnavailable}, _gcpAssetUnavailable][0]
+			if _partial {
+				partial: true
+			}
+			observe: _gcloud
+		}}
 	}
 }
 
@@ -189,7 +213,7 @@ _#GCPLive: _#GCPCollector & {
 		empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])
 		runs: (_gcpShapedRuns & {_t: _type, _runs: _gcpRuns[_type]}).out
 	}
-	_cai: _gcpAssetSearch & {_t: _type}
+	_cai: [if _type == "iam-policies" {_gcpIAMPolicySearch}, _gcpAssetSearch & {_t: _type}][0]
 }
 
 // Fixtures: the bundled gcloud output, and for CAI types a bundled CAI search
@@ -198,10 +222,21 @@ _#GCPFixture: _#GCPCollector & {
 	_type:   string
 	_prefix: "gcp-fixture-"
 	_scope:  "fixture/gcp"
-	_gcloud: runs: (_gcpShapedRuns & {_t: _type, _runs: [{argv: ["cat", "../../populators/gcp/\(_type).json"], set: project: "example-project"}]}).out
+	_gcloud: runs: (_gcpShapedRuns & {_t: _type, _runs: [
+		[if _gcpFixtureGcloudRun[_type] != _|_ {_gcpFixtureGcloudRun[_type]}, {}][0] & {
+			argv: ["cat", "../../populators/gcp/\(_type).json"]
+			set: project: "example-project"
+		},
+	]}).out
 	_cai: runs: [{
 		argv: ["cat", "../../populators/gcp/cai/\(_type).json"]
-		transform: _gcpAssetTransform & {_t: _type}
+		if _type == "iam-policies" {
+			set: project: "example-project"
+			transform: _gcpIAMPolicyTransform
+		}
+		if _type != "iam-policies" {
+			transform: _gcpAssetTransform & {_t: _type}
+		}
 	}]
 }
 
@@ -223,6 +258,8 @@ _#GCPFixture: _#GCPCollector & {
 #GCPInstances: _#GCPLive & {_type: "instances"}
 #GCPServiceAccounts: _#GCPLive & {_type: "service-accounts"}
 #GCPIAMPolicies: _#GCPLive & {_type: "iam-policies"}
+#GCPIAMRoles: _#GCPLive & {_type: "iam-roles"}
+#GCPServiceAccountKeys: _#GCPLive & {_type: "service-account-keys"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -241,3 +278,5 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixtureInstances: _#GCPFixture & {_type: "instances"}
 #GCPFixtureServiceAccounts: _#GCPFixture & {_type: "service-accounts"}
 #GCPFixtureIAMPolicies: _#GCPFixture & {_type: "iam-policies"}
+#GCPFixtureIAMRoles: _#GCPFixture & {_type: "iam-roles"}
+#GCPFixtureServiceAccountKeys: _#GCPFixture & {_type: "service-account-keys"}

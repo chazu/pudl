@@ -1,0 +1,63 @@
+[
+  {
+    "name": "//iam.googleapis.com/projects/example-project/roles/ordersDeployer",
+    "assetType": "iam.googleapis.com/Role",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/roles/ordersDeployer",
+          "title": "Orders deployer",
+          "description": "Deploys the orders service",
+          "includedPermissions": [
+            "run.services.get",
+            "run.services.update"
+          ],
+          "stage": "GA",
+          "groupName": "custom",
+          "groupTitle": "Custom"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//iam.googleapis.com/projects/example-project/roles/logReader",
+    "assetType": "iam.googleapis.com/Role",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/roles/logReader",
+          "title": "Log reader",
+          "includedPermissions": [
+            "logging.logEntries.list"
+          ],
+          "groupName": "custom",
+          "groupTitle": "Custom"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//iam.googleapis.com/organizations/222222222222/roles/auditor",
+    "assetType": "iam.googleapis.com/Role",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/organizations/222222222222",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "organizations/222222222222/roles/auditor",
+          "title": "Auditor",
+          "includedPermissions": [
+            "resourcemanager.projects.get"
+          ],
+          "stage": "GA",
+          "groupName": "custom",
+          "groupTitle": "Custom"
+        }
+      }
+    ]
+  }
+]

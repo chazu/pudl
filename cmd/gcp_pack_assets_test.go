@@ -12,7 +12,7 @@ import (
 var gcpAssetTypes = []string{
 	"networks", "subnets", "firewalls", "routes", "routers", "addresses",
 	"gke-clusters", "run-services", "pubsub-topics", "service-accounts", "dns-zones",
-	"kms-keyrings", "kms-keys",
+	"kms-keyrings", "kms-keys", "iam-roles", "service-account-keys",
 }
 
 type assetPopulate struct {

@@ -16,6 +16,9 @@ func (p *Populate) writeMarkdown(b *strings.Builder) {
 	}
 	if p.Fallback != nil {
 		fmt.Fprintf(b, "- source: fallback (%s)\n", p.Fallback.Summary())
+		if p.Fallback.Partial {
+			b.WriteString("- partial fallback: it sees only some of these resources, so the observation is incomplete and nothing is marked gone\n")
+		}
 	}
 	if p.Inputs != nil {
 		fmt.Fprintf(b, "- inputs (%d): %s\n", len(p.Inputs), strings.Join(p.Inputs, ", "))

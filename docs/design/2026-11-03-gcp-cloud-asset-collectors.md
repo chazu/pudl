@@ -359,6 +359,22 @@ alone.
   role/member pairs, no `auditConfigs`; search is not granted everywhere;
   see pudl-q4v.5), Pub/Sub subscriptions (none to compare).
 
+- **IAM, 2026-11-03 (`pudl-q4v.5`).** `search-all-iam-policies` per
+  project: one result per resource, `policy` holding only `bindings`, the
+  project named by number, the resource by full name (a project's by ID).
+  The project policy's bindings equal `get-iam-policy`'s, order included.
+  Some projects allow the search and the others refuse both the
+  search and `get-iam-policy`, so a refused project is a failed input, not
+  a fallback trigger; only `SERVICE_DISABLED` and `USER_PROJECT_DENIED`
+  switch to gcloud. Because that fallback sees only project policies it is
+  partial (new `populate.fallback.partial`): its observation is incomplete.
+  Custom roles: CAI adds `groupName`/`groupTitle` and omits `stage` when it
+  is `ALPHA`; gcloud's `describe` adds `etag` (its `list` omits
+  permissions). Organization roles are dropped (no project). Service
+  account keys: user-managed keys identical in both sources; Google-managed
+  keys differ entirely (rotation) and are not collected. CAI holds no key
+  material.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:
