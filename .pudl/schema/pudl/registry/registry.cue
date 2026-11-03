@@ -8,7 +8,6 @@ package registry
 		schema_type:    "base"
 		resource_type:  "registry.entry"
 		identity_fields: ["name"]
-		tracked_fields: []
 	}
 
 	name:        string
@@ -21,7 +20,6 @@ package registry
 		schema_type:    "base"
 		resource_type:  "registry.domain"
 		identity_fields: ["name"]
-		tracked_fields: []
 	}
 
 	name:        string
@@ -34,7 +32,6 @@ package registry
 		schema_type:    "base"
 		resource_type:  "registry.formatter"
 		identity_fields: ["name"]
-		tracked_fields: ["version"]
 	}
 
 	name:    string

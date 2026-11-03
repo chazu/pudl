@@ -9,15 +9,14 @@ package k8s
 		schema_type:   "base"
 		resource_type: "k8s.resource"
 		identity_fields: ["kind", "metadata.namespace", "metadata.name"]
-		tracked_fields: ["apiVersion", "kind", "metadata", "spec", "status"]
 	}
 
-	apiVersion: string @pudl(binding=plain)
-	kind:       string @pudl(binding=plain)
+	apiVersion: string
+	kind:       string
 	metadata: {
-		name:       string @pudl(binding=plain)
-		namespace?: string @pudl(binding=plain)
-		uid?:       string @pudl(binding=plain)
+		name:       string
+		namespace?: string
+		uid?:       string
 		labels?: [string]:      string
 		annotations?: [string]: string
 		...

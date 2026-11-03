@@ -1,5 +1,15 @@
 package mu
 
+// Package mu keeps the schemas of the retired mu integration (see
+// docs/retired-commands.md) so catalog entries written before the removal —
+// manifests, actions, drift observations, plans and targets — still list,
+// show and validate. Nothing new is written with them. Observation ingest's
+// #ObserveResult and #ObserveSnapshot moved to pudl/core (observe.cue); their
+// old names still resolve.
+//
+// LEGACY: #Manifest, #ManifestTarget, #ManifestAction, #DriftObservation,
+// #PlanOutput, #PlanPlugin, #PlanAction and #Target.
+
 // Manifest represents the output of `mu build --emit-manifest`.
 // Each build produces one manifest documenting what actions were executed,
 // which were cached, and what artifacts were produced.
@@ -8,7 +18,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.manifest"
 		identity_fields: ["timestamp"]
-		tracked_fields: ["summary", "actions", "targets"]
 	}
 
 	version:    int & >=1
@@ -40,7 +49,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.manifest_action"
 		identity_fields: ["id"]
-		tracked_fields: ["target", "cached", "exit_code", "outputs"]
 	}
 
 	id:        string
@@ -48,53 +56,6 @@ package mu
 	cached:    bool
 	exit_code: int
 	outputs: {[string]: string} | *{}
-}
-
-// ObserveResult represents a single observe record that doesn't declare a
-// _schema field. Records with _schema are routed to their specific schema
-// (e.g. pudl/linux.#Host); this is the fallback for untyped observe data.
-#ObserveResult: {
-	_pudl: {
-		schema_type:   "base"
-		resource_type: "mu.observe"
-		// Identity includes `current` (the observed-state payload) so a full
-		// target *definition* — which has no `current` — does not tie with this
-		// fallback observe-record schema during inference. See pudl/mu.#Target.
-		identity_fields: ["target", "current"]
-		tracked_fields: []
-	}
-
-	target?: string
-	current?: {...}
-	error?: string
-	...
-}
-
-// ObserveSnapshot represents a single mu observe run — the collection of all
-// records observed across one or more targets at a point in time.
-// Created by `pudl ingest-observe` to group records from one invocation.
-#ObserveSnapshot: {
-	_pudl: {
-		schema_type:   "collection"
-		resource_type: "mu.observe_snapshot"
-		identity_fields: ["snapshot_id"]
-		tracked_fields: ["targets", "record_count", "schema_summary"]
-	}
-
-	snapshot_id: string // timestamp-based ID
-	timestamp:   string // ISO 8601
-	origin:      string // e.g. "mu-observe"
-	run_id?:     string // enclosing pudl run, when available
-	targets: [...string] // targets that were observed
-	record_count:        int & >=0 // total records across all targets
-	schema_summary: [...{// distribution of _schema types
-		schema: string
-		count:  int & >=0
-	}]
-	errors?: [...{// targets that reported errors
-		target: string
-		error:  string
-	}]
 }
 
 // DriftObservation is the durable evidence behind a differential observe
@@ -105,7 +66,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.drift_observation"
 		identity_fields: ["observation_id"]
-		tracked_fields: ["target", "clean", "drifted_count", "drifted"]
 	}
 
 	observation_id: string
@@ -125,7 +85,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.plan"
 		identity_fields: ["targets"]
-		tracked_fields: ["plugins", "actions"]
 	}
 
 	version:     2
@@ -194,7 +153,6 @@ package mu
 		schema_type:   "base"
 		resource_type: "mu.target"
 		identity_fields: ["target"]
-		tracked_fields: ["toolchain", "sources", "deps", "config", "sealed_inputs", "sealed_input_modes", "sealed_outputs", "sealed_output_modes", "sealed_routing"]
 	}
 
 	// Fully-qualified target label, e.g. "//cmd/mu". Globally unique handle.

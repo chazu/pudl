@@ -1,0 +1,24 @@
+[
+  {
+    "name": "projects/example-project/subscriptions/orders-worker",
+    "topic": "projects/example-project/topics/orders",
+    "pushConfig": {},
+    "ackDeadlineSeconds": 60,
+    "messageRetentionDuration": "604800s",
+    "expirationPolicy": {},
+    "deadLetterPolicy": {"deadLetterTopic": "projects/example-project/topics/orders-dlq", "maxDeliveryAttempts": 5},
+    "state": "ACTIVE"
+  },
+  {
+    "name": "projects/example-project/subscriptions/orders-webhook",
+    "topic": "projects/example-project/topics/orders",
+    "pushConfig": {
+      "pushEndpoint": "https://hooks.example.com/pubsub?token=fixture-not-a-real-token",
+      "attributes": {"x-goog-version": "v1"}
+    },
+    "ackDeadlineSeconds": 10,
+    "messageRetentionDuration": "604800s",
+    "expirationPolicy": {"ttl": "2678400s"},
+    "state": "ACTIVE"
+  }
+]

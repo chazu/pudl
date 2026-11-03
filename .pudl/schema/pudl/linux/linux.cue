@@ -6,7 +6,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.host"
 		identity_fields: ["hostname"]
-		tracked_fields: ["os", "kernel", "arch"]
 	}
 
 	hostname:        string
@@ -27,7 +26,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.package"
 		identity_fields: ["host", "name"]
-		tracked_fields: ["version", "status"]
 	}
 
 	host:    string
@@ -43,7 +41,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.service"
 		identity_fields: ["host", "unit"]
-		tracked_fields: ["active", "sub"]
 	}
 
 	host:   string
@@ -59,7 +56,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.filesystem"
 		identity_fields: ["host", "mountpoint"]
-		tracked_fields: ["device", "fstype", "size_bytes", "used_bytes", "avail_bytes"]
 	}
 
 	host:        string
@@ -78,7 +74,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.user"
 		identity_fields: ["host", "name"]
-		tracked_fields: ["uid", "gid", "home", "shell"]
 	}
 
 	host:  string
@@ -96,7 +91,6 @@ package linux
 		schema_type:    "base"
 		resource_type:  "linux.network_interface"
 		identity_fields: ["host", "ifname"]
-		tracked_fields: ["operstate", "addr_info"]
 	}
 
 	host:        string

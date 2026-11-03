@@ -6,14 +6,13 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.file"
 		identity_fields: ["path"]
-		tracked_fields: ["mode", "size"]
 	}
 
-	path:    string @pudl(binding=plain)
+	path:    string
 	type:    "file" | "symlink" | "directory"
 	mode:    string | *"644"
 	size?:   int & >=0
-	target?: string @pudl(binding=plain) // symlink target
+	target?: string // symlink target
 }
 
 // Dir represents a directory with typed file and subdirectory maps.
@@ -23,10 +22,9 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.dir"
 		identity_fields: ["path"]
-		tracked_fields: []
 	}
 
-	path: string @pudl(binding=plain)
+	path: string
 	files?: {[string]: #File}
 	dirs?: {[string]: #Dir}
 }
@@ -38,10 +36,9 @@ package fs
 		schema_type:   "base"
 		resource_type: "fs.layout"
 		identity_fields: ["name"]
-		tracked_fields: []
 	}
 
-	name:         string @pudl(binding=plain)
+	name:         string
 	description?: string
 	root:         #Dir
 }

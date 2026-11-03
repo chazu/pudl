@@ -1,27 +1,11 @@
 package infra
 
-// Organization represents an organizational unit (company, team, AWS org, etc.)
-#Organization: {
-	_pudl: {
-		schema_type:    "base"
-		resource_type:  "infra.organization"
-		identity_fields: ["name"]
-		tracked_fields: ["region"]
-	}
-
-	name:        string
-	region?:     string
-	description?: string
-	...
-}
-
-// Account represents a named account within an organization.
+// Account represents a named account within an organization (org).
 #Account: {
 	_pudl: {
 		schema_type:    "base"
 		resource_type:  "infra.account"
 		identity_fields: ["org", "name"]
-		tracked_fields: ["id", "email"]
 	}
 
 	org:    string
@@ -38,7 +22,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.platform"
 		identity_fields: ["name"]
-		tracked_fields: ["kind"]
 	}
 
 	name:        string
@@ -60,7 +43,6 @@ package infra
 		schema_type:    "base"
 		resource_type:  "infra.environment"
 		identity_fields: ["name"]
-		tracked_fields: ["cluster", "server"]
 	}
 
 	name:        string
@@ -69,22 +51,4 @@ package infra
 	server?:     string
 	registry?:   string
 	description?: string
-}
-
-// Service represents a deployable unit with a kind discriminator.
-// Use CUE's conditional fields to gate kind-specific configuration:
-//   if kind == "helm" { chart: string, chart_version: string }
-#Service: {
-	_pudl: {
-		schema_type:    "base"
-		resource_type:  "infra.service"
-		identity_fields: ["name"]
-		tracked_fields: ["kind"]
-	}
-
-	name:        string
-	kind:        string
-	path?:       string
-	description?: string
-	...
 }
