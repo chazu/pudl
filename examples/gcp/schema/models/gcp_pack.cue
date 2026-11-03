@@ -9,8 +9,11 @@ import (
 // GCP content pack models (README: examples/gcp/README.md in the PUDL source).
 //
 // One collector per resource type, in two variants:
-//   gcp-<type>          runs gcloud against every project gcloud lists;
-//   gcp-fixture-<type>  reads the bundled fixtures in .pudl/populators/gcp.
+//   gcp-<type>          runs gcloud against every project gcloud lists, or
+//                       for the types in _gcpAssetTypes (gcp_assets.cue)
+//                       searches Cloud Asset Inventory first;
+//   gcp-fixture-<type>  reads the bundled fixtures in .pudl/populators/gcp
+//                       (a CAI search result under cai/ first, likewise).
 // Three checks-only families evaluate the latest collector observations:
 //   gcp[-fixture]-network-hygiene-checks, -data-protection-checks and
 //   -gke-posture-checks.
@@ -35,6 +38,20 @@ _gcpKMSLocations: [...string] | *["global"]
 // you have decided means no resources for you, e.g. "Billing is disabled for
 // project" when unbilled projects' resources do not count.
 _gcpExtraEmptyWhen: [...string] | *[]
+
+// Where the collectors of the types in _gcpAssetTypes (gcp_assets.cue) search
+// Cloud Asset Inventory: "organization" searches every organization the
+// credentials can see, discovered at run time, once per type; "projects"
+// searches each project gcloud lists (_gcpProjectFilter applies); "off" uses
+// only the gcloud list commands. Whenever CAI cannot answer (the asset API is
+// disabled or unbillable, or the caller may not search), a collector falls
+// back to its gcloud commands and the report says so.
+_gcpAssetScope: *"organization" | "projects" | "off"
+
+// The project CAI calls are billed to (--billing-project). It needs
+// cloudasset.googleapis.com enabled and serviceusage.services.use for the
+// caller. Empty uses gcloud's own billing/quota_project setting.
+_gcpBillingProject: string | *""
 
 // ---- End of live settings. ----
 
@@ -129,33 +146,63 @@ _gcpEmptyWhen: [
 	"API has not been used in project [^ ]+ before or it is disabled",
 ]
 
+// A collector's _gcloud source is its gcloud list commands; a type in
+// _gcpAssetTypes searches CAI first and falls back to them.
 _#GCPCollector: {
 	_type:   string
 	_prefix: string
 	_scope:  string
-	_runs: [...]
+	_gcloud: {...}
+	_cai: {...}
+	_useCAI: _gcpAssetScope != "off" && _gcpAssetTypes[_type] != _|_
 	sm.#SystemModel
 	name: "\(_prefix)\(_type)"
 	observation: {scope: "\(_scope)/\(_type)", complete: true}
-	populate: sm.#CommandObserve & {schema: _gcpSchemas[_type], runs: _runs}
+	populate: sm.#CommandObserve & {schema: _gcpSchemas[_type]}
+	if !_useCAI {
+		populate: _gcloud
+	}
+	if _useCAI {
+		populate: _cai & {fallback: {when: _gcpAssetUnavailable, observe: _gcloud}}
+	}
+}
+
+// The gcloud runs of a type, put into its shape when it has one.
+_gcpShapedRuns: {
+	_t: string
+	let type = _t
+	_runs: [...]
+	out: [for r in _runs {
+		r
+		if _gcpShapes[type] != _|_ {
+			transform: _gcpGcloudTransform & {_t: type}
+		}
+	}]
 }
 
 _#GCPLive: _#GCPCollector & {
 	_type:   string
 	_prefix: "gcp-"
 	_scope:  "gcp"
-	_runs:   _gcpRuns[_type]
-	populate: {
+	_gcloud: {
 		each: _gcpProjectList
 		empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])
+		runs: (_gcpShapedRuns & {_t: _type, _runs: _gcpRuns[_type]}).out
 	}
+	_cai: _gcpAssetSearch & {_t: _type}
 }
 
+// Fixtures: the bundled gcloud output, and for CAI types a bundled CAI search
+// result (populators/gcp/cai/) read first, as live.
 _#GCPFixture: _#GCPCollector & {
 	_type:   string
 	_prefix: "gcp-fixture-"
 	_scope:  "fixture/gcp"
-	_runs: [{argv: ["cat", "../../populators/gcp/\(_type).json"], set: project: "example-project"}]
+	_gcloud: runs: (_gcpShapedRuns & {_t: _type, _runs: [{argv: ["cat", "../../populators/gcp/\(_type).json"], set: project: "example-project"}]}).out
+	_cai: runs: [{
+		argv: ["cat", "../../populators/gcp/cai/\(_type).json"]
+		transform: _gcpAssetTransform & {_t: _type}
+	}]
 }
 
 #GCPNetworks: _#GCPLive & {_type: "networks"}

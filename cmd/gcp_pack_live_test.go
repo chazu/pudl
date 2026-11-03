@@ -14,7 +14,11 @@ import (
 // $GCLOUD_PROJECTS replaces the project list; in proj-nocompute the Compute
 // Engine and KMS APIs are disabled, so those commands fail as gcloud's do
 // (KMS without the SERVICE_DISABLED reason); in proj-nobilling every command
-// fails with billing disabled.
+// fails with billing disabled. One organization is listed; its Cloud Asset
+// search fails as with the asset API disabled in the billing project, so the
+// CAI collectors fall back to their gcloud commands, unless $GCLOUD_CAI is
+// set: then it returns proj-a's and proj-b's firewall rules (CAI-shaped, as
+// listed by compute firewall-rules below, without kind).
 const fakeGcloud = `#!/bin/sh
 echo "$*" >> "$GCLOUD_LOG"
 for a in "$@"; do
@@ -40,6 +44,20 @@ if [ "$1" = kms ] && [ "$p" = proj-nocompute ]; then
 	exit 1
 fi
 case "$1 $2" in
+"organizations list") echo '[{"name":"organizations/123"}]' ;;
+"asset search-all-resources")
+	if [ -z "$GCLOUD_CAI" ]; then
+		echo "ERROR: (gcloud.asset.search-all-resources) Cloud Asset API has not been used in project bill before or it is disabled." >&2
+		echo "  reason: SERVICE_DISABLED" >&2
+		exit 1
+	fi
+	printf '['
+	sep=''
+	for q in proj-a proj-b; do
+		printf '%s{"name":"//compute.googleapis.com/projects/%s/global/firewalls/allow-ssh","assetType":"compute.googleapis.com/Firewall","parentFullResourceName":"//cloudresourcemanager.googleapis.com/projects/%s","versionedResources":[{"version":"v1","resource":{"id":"1","creationTimestamp":"2024-02-01T10:00:00.000-08:00","name":"allow-ssh","network":"https://www.googleapis.com/compute/v1/projects/%s/global/networks/default","priority":1000,"sourceRanges":["10.0.0.0/8"],"allowed":[{"IPProtocol":"tcp","ports":["22"]}],"direction":"INGRESS","disabled":false,"selfLink":"https://www.googleapis.com/compute/v1/projects/%s/global/firewalls/allow-ssh"}}]}' "$sep" "$q" "$q" "$q" "$q"
+		sep=','
+	done
+	echo ']' ;;
 "projects list")
 	if [ -n "$GCLOUD_PROJECTS" ]; then
 		echo "$GCLOUD_PROJECTS"
@@ -210,4 +228,68 @@ func TestGCPPackExtraEmptyWhen(t *testing.T) {
 	require.Empty(t, pr.FailedInputs)
 	require.Len(t, pr.EmptyInputs, 1)
 	require.Equal(t, "Billing is disabled for project", pr.EmptyInputs[0].Pattern)
+}
+
+// With Cloud Asset Inventory available, a CAI collector searches each
+// organization once instead of listing every project; per-project search and
+// the billing project are settings outside the pack; "off" goes back to the
+// gcloud commands, which store the same records.
+func TestGCPPackLiveCollectorsSearchCloudAssetInventory(t *testing.T) {
+	pudlDir := cliWorkspace(t)
+	log := fakeGcloudOnPath(t)
+	t.Setenv("GCLOUD_CAI", "1")
+	r := runCLI(t, "example", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr := checkedModel(t, r.Stdout).Populate
+	require.NotNil(t, pr)
+	require.Nil(t, pr.Fallback)
+	require.Equal(t, []string{"organizations/123"}, pr.Inputs)
+	require.Equal(t, 2, pr.Records, "one rule per project, from one search")
+	calls := readLog(t, log)
+	require.Contains(t, calls, "organizations list --format=json\n")
+	require.Contains(t, calls, "asset search-all-resources --scope=organizations/123 --asset-types=compute.googleapis.com/Firewall")
+	require.NotContains(t, calls, "compute firewall-rules", "no per-project listing")
+
+	settings := filepath.Join(pudlDir, "schema", "models", "gcp_settings.cue")
+	writeFile(t, settings, "package models\n\n_gcpAssetScope: \"projects\"\n_gcpBillingProject: \"bill\"\n")
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr = checkedModel(t, r.Stdout).Populate
+	require.Equal(t, []string{"proj-a", "proj-b"}, pr.Inputs)
+	require.Contains(t, readLog(t, log), "--scope=projects/proj-a --asset-types=compute.googleapis.com/Firewall")
+	require.Contains(t, readLog(t, log), "--billing-project=bill")
+
+	writeFile(t, settings, "package models\n\n_gcpAssetScope: \"off\"\n")
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr = checkedModel(t, r.Stdout).Populate
+	require.Equal(t, 2, pr.Records)
+	require.Zero(t, pr.NewRecords, "gcloud's records are identical to CAI's")
+}
+
+// With the asset API unavailable, a CAI collector falls back to its gcloud
+// commands and the report says why.
+func TestGCPPackLiveCollectorsFallBackWithoutCloudAssetInventory(t *testing.T) {
+	cliWorkspace(t)
+	log := fakeGcloudOnPath(t)
+	r := runCLI(t, "example", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	r = runCLI(t, "check", "gcp-firewalls", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	pr := checkedModel(t, r.Stdout).Populate
+	require.NotNil(t, pr.Fallback)
+	require.Equal(t, "failed_input", pr.Fallback.Reason)
+	require.Equal(t, "SERVICE_DISABLED", pr.Fallback.Pattern)
+	require.Equal(t, []string{"proj-a", "proj-b"}, pr.Inputs)
+	require.Equal(t, 2, pr.Records)
+	require.Contains(t, readLog(t, log), "compute firewall-rules list --project=proj-a")
+
+	// Types not collected through CAI never search it.
+	r = runCLI(t, "check", "gcp-kms-keyrings", "--json")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	require.Nil(t, checkedModel(t, r.Stdout).Populate.Fallback)
 }

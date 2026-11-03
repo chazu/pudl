@@ -332,6 +332,19 @@ alone.
 
 1. Shared identity across schemas (§8).
 
+## Findings during delivery
+
+- **Live parity, 2026-11-03.** Networks, subnets, firewalls, routes, routers
+  and addresses: CAI's copy equals gcloud's except `kind`, fingerprints and
+  `x_gcloud_*`, which the shape normalizes. These six moved to CAI.
+- **Compute instances are not equivalent.** CAI's metadata is a filtered
+  view (on GKE nodes only a few keys, without settings such as
+  `disable-legacy-endpoints`) with lower-cased values; Shielded VM
+  certificates use standard instead of URL-safe base64. Instances stay on
+  gcloud (decision 13).
+- **Every remaining type gets the same live parity check** before it moves;
+  a type that fails it stays on gcloud.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:
@@ -360,3 +373,5 @@ Made with the user during the access research:
     different schemas share an identity.
 11. Catalog all DNS record sets and enabled services.
 12. Cloud SQL backups: keep the newest 10 per instance.
+13. Compute instances stay on gcloud: CAI's copy of their metadata is lossy.
+    Each type moves to CAI only after a live parity check.

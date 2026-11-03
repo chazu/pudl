@@ -234,30 +234,45 @@ func TestGCPContentPack(t *testing.T) {
 }
 
 // dropFixtureRecords rewrites installed fixtures without the named records
-// (matched by name, or by the last segment of a fully qualified name).
+// (matched by name, or by the last segment of a fully qualified name), in the
+// gcloud fixture and in the CAI fixture where the type has one (a CAI asset's
+// name ends in the resource's name).
 func dropFixtureRecords(t *testing.T, pudlDir string, drop map[string][]string) {
 	t.Helper()
 	for typ, names := range drop {
-		path := filepath.Join(pudlDir, "populators", "gcp", typ+".json")
-		data, err := os.ReadFile(path)
-		require.NoError(t, err)
-		var records []map[string]any
-		require.NoError(t, json.Unmarshal(data, &records))
-		var kept []map[string]any
-		for _, rec := range records {
-			name, _ := rec["name"].(string)
-			short := name[strings.LastIndex(name, "/")+1:]
-			dropped := false
-			for _, n := range names {
-				dropped = dropped || n == short
-			}
-			if !dropped {
-				kept = append(kept, rec)
-			}
+		dir := filepath.Join(pudlDir, "populators", "gcp")
+		dropRecordsFrom(t, filepath.Join(dir, typ+".json"), typ, names)
+		if cai := filepath.Join(dir, "cai", typ+".json"); fileExists(cai) {
+			dropRecordsFrom(t, cai, typ, names)
 		}
-		require.Len(t, kept, len(records)-len(names), typ)
-		out, err := json.Marshal(kept)
-		require.NoError(t, err)
-		writeFile(t, path, string(out))
 	}
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func dropRecordsFrom(t *testing.T, path, typ string, names []string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var records []map[string]any
+	require.NoError(t, json.Unmarshal(data, &records))
+	var kept []map[string]any
+	for _, rec := range records {
+		name, _ := rec["name"].(string)
+		short := name[strings.LastIndex(name, "/")+1:]
+		dropped := false
+		for _, n := range names {
+			dropped = dropped || n == short
+		}
+		if !dropped {
+			kept = append(kept, rec)
+		}
+	}
+	require.Len(t, kept, len(records)-len(names), typ)
+	out, err := json.Marshal(kept)
+	require.NoError(t, err)
+	writeFile(t, path, string(out))
 }
