@@ -16,7 +16,8 @@ import (
 // bootstrapStampFile records which built-ins a workspace holds: the digest of
 // the built-in schema files this pudl ships. pudl owns those files (`pudl
 // init` overwrites them), so a workspace whose stamp differs (written by
-// another pudl, or never) gets every built-in rewritten on its next import.
+// another pudl, or never) gets every built-in rewritten by the next pudl
+// command (RefreshBootstrapSchemas, called from the CLI's pre-run and import).
 // That is how a changed or removed built-in definition reaches an existing
 // workspace; retired files are removed by retireBootstrapFiles.
 const bootstrapStampFile = "pudl/.bootstrap-digest"
@@ -58,4 +59,24 @@ func writeBootstrapStamp(schemaPath string) error {
 func bootstrapCurrent(schemaPath string) bool {
 	data, err := os.ReadFile(filepath.Join(schemaPath, filepath.FromSlash(bootstrapStampFile)))
 	return err == nil && strings.TrimSpace(string(data)) == BootstrapDigest()
+}
+
+// RefreshBootstrapSchemas rewrites the built-in schemas under schemaPath when
+// they are not this pudl's. A schema repository that is not initialized (no
+// cue.mod/module.cue) is left alone: pudl init installs its built-ins. It
+// reports whether the built-ins were rewritten.
+func RefreshBootstrapSchemas(schemaPath string) (bool, error) {
+	if _, err := os.Stat(filepath.Join(schemaPath, "cue.mod", "module.cue")); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if bootstrapCurrent(schemaPath) {
+		return false, nil
+	}
+	if err := copyBootstrapSchemasTo(schemaPath); err != nil {
+		return false, err
+	}
+	return true, nil
 }

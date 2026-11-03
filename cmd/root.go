@@ -69,6 +69,7 @@ Key features:
 		if err != nil {
 			return fmt.Errorf("workspace discovery: %w", err)
 		}
+		refreshBuiltinSchemas(cmd.ErrOrStderr())
 		return nil
 	},
 }

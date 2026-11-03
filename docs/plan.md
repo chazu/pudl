@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Built-in schemas refresh on every command, not only import (2026-11-03)
+
+A workspace's built-ins were rewritten only by import, so `pudl graph vocab`,
+doctor, ui, query and check read an older pudl's copies; the vocab blamed the
+GCP pack's rules for built-in edge types missing from them. The CLI pre-run
+now refreshes stale built-ins (`importer.RefreshBootstrapSchemas`). See
+`implog/2026_11_03_builtin_refresh_on_every_command.md`.
+
 ### Graph vocabulary in CUE: no type knowledge in the UI (2026-11-02)
 
 pudl ui now learns every resource type's code, label, class and view roles

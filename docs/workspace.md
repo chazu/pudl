@@ -29,8 +29,9 @@ module and the built-in schemas (including `pudl/systemmodel.#SystemModel`).
 It also installs the pudl agent skill in `.claude/skills/`. It keeps an edited
 `workspace.cue` unless you pass `--force`. Run it again after upgrading pudl
 to refresh the agent skill. The built-in schemas also refresh on their own:
-the first import or observation by a new pudl rewrites them (pudl owns these
-files, so edits to them are lost) and removes retired ones it shipped.
+the first command a new pudl runs in the workspace rewrites them (pudl owns
+these files, so edits to them are lost), removes retired ones it shipped, and
+says so on stderr.
 
 `pudl config --paths --json` prints every effective path.
 

@@ -140,10 +140,8 @@ func (e *EnhancedImporter) ensureBasicSchemas() error {
 		return err
 	}
 	// Built-ins from another pudl (or before the stamp existed): refresh them.
-	if !bootstrapCurrent(e.schemaPath) {
-		if err := copyBootstrapSchemasTo(e.schemaPath); err != nil {
-			return fmt.Errorf("failed to refresh bootstrap schemas: %w", err)
-		}
+	if _, err := RefreshBootstrapSchemas(e.schemaPath); err != nil {
+		return fmt.Errorf("failed to refresh bootstrap schemas: %w", err)
 	}
 
 	required, err := bootstrapSchemaFiles()
