@@ -245,6 +245,38 @@ func TestGraphExportGCPPack(t *testing.T) {
 		require.NotContains(t, e, "disabled", "a disabled rule permits nothing: %s", e)
 	}
 	require.NotEmpty(t, l.edges("nat_ip"))
+
+	// A rule targeting a service account applies to the instances that run
+	// as it.
+	hc := relationship(t, g, "applies_to", fwl("allow-health-checks-orders"), vm("us-central1-b/instances/orders-api-1"))
+	require.Equal(t, "orders-api@example-project.iam.gserviceaccount.com", hc.Properties["matched_service_account"])
+	require.NotContains(t, applies, fwl("allow-health-checks-orders")+" -> "+vm("us-central1-a/instances/bastion-1"), "runs as another account")
+
+	// Peerings, what addresses are attached to, encryption, dead letters and
+	// the account a Cloud Run service runs as.
+	net := func(name string) string {
+		return "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/" + name
+	}
+	require.ElementsMatch(t, []string{net("prod-vpc") + " -> " + net("default"), net("default") + " -> " + net("prod-vpc")}, l.edges("peers_with"))
+	require.Equal(t, "ACTIVE", relationship(t, g, "peers_with", net("prod-vpc"), net("default")).Properties["state"])
+	require.ElementsMatch(t, []string{
+		"https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/addresses/nat-ip-1 -> https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/routers/prod-nat-router",
+		"https://www.googleapis.com/compute/v1/projects/example-project/global/addresses/web-lb-ip -> ref:projects/example-project/global/forwardingRules/web-lb-https",
+	}, l.edges("attached_to"), "a forwarding rule the pack does not collect stays a reference")
+	require.Contains(t, l.edges("encrypted_by"), "projects/example-project/topics/orders -> projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key")
+	require.Equal(t, []string{"projects/example-project/subscriptions/orders-worker -> projects/example-project/topics/orders-dlq"}, l.edges("publishes_to"))
+	require.Contains(t, runsAs, "us-central1/orders-api/123456789012 -> orders-api@example-project.iam.gserviceaccount.com")
+
+	// Who may reach public endpoints: a public Cloud SQL instance's
+	// authorized networks, and a GKE control plane's enforced ones.
+	sql := func(name string) string {
+		return "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/" + name
+	}
+	ingress := l.edges("allows_ingress_from")
+	require.Contains(t, ingress, sql("legacy-mysql")+" -> ext:cidr:0.0.0.0/0")
+	require.Contains(t, ingress, sql("analytics-mysql")+" -> ext:cidr:198.51.100.0/24")
+	require.NotContains(t, strings.Join(ingress, "\n"), sql("orders-db"), "no public IP, no authorized-network edge")
+	require.Contains(t, ingress, "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private -> ext:cidr:192.0.2.0/24")
 	require.NotEmpty(t, subnetEdges)
 	for _, e := range subnetEdges {
 		require.NotContains(t, e, graphexport.RefPrefix, "every network in the fixtures is cataloged: %s", e)

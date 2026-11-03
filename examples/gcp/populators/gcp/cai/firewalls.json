@@ -106,6 +106,44 @@
     ]
   },
   {
+    "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-health-checks-orders",
+    "assetType": "compute.googleapis.com/Firewall",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "3000000000000000006",
+          "creationTimestamp": "2024-02-01T10:05:00.000-08:00",
+          "name": "allow-health-checks-orders",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "priority": 900,
+          "sourceRanges": [
+            "35.191.0.0/16",
+            "130.211.0.0/22"
+          ],
+          "targetServiceAccounts": [
+            "orders-api@example-project.iam.gserviceaccount.com"
+          ],
+          "allowed": [
+            {
+              "IPProtocol": "tcp",
+              "ports": [
+                "8080"
+              ]
+            }
+          ],
+          "direction": "INGRESS",
+          "logConfig": {
+            "enable": true
+          },
+          "disabled": false,
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/firewalls/allow-health-checks-orders"
+        }
+      }
+    ]
+  },
+  {
     "name": "//compute.googleapis.com/projects/example-project/global/firewalls/allow-rdp-world-disabled",
     "assetType": "compute.googleapis.com/Firewall",
     "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",

@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: eight more graph relationships (2026-11-03)
+
+Network peerings, firewall rules targeting service accounts, what an
+address is attached to, who may reach public Cloud SQL and GKE endpoints,
+the account a Cloud Run service runs as, Pub/Sub topic encryption and
+dead-letter topics. Built-in edge types only; the vocabulary reports no
+problems. See `implog/2026_11_03_gcp_graph_relationships.md`.
+
 ### Seven more GCP types through Cloud Asset Inventory (2026-11-03)
 
 GKE clusters, Cloud Run services, Pub/Sub topics, service accounts, DNS

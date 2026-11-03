@@ -266,6 +266,28 @@ A collector's observation is complete only for the projects gcloud listed (or
 the organizations, through CAI) and the KMS locations you set. Keep fixture and live runs in separate workspaces if
 you want `pudl query` (latest-known facts) to show only one of them.
 
+## Graph
+
+`pudl graph export` and `pudl ui` draw the pack's records with these
+relationships (rules in `schema/pudl/rules/gcp_graph.cue`):
+
+| Relationship | From → to |
+|---|---|
+| `in_network`, `in_subnet` | subnets, firewall rules, routes, routers → network; instances, GKE clusters → subnet |
+| `peers_with` | network → peered network (state as a property) |
+| `allows_ingress_from` | enabled ingress firewall rule, public Cloud SQL instance (authorized networks), GKE control plane (enforced authorized networks) → address range |
+| `applies_to` | firewall rule → instances it targets (whole network, tag or service account) |
+| `attached_to` | address → what uses it (instance, forwarding rule, Cloud NAT router) |
+| `nat_ip` | Cloud NAT router → its external address |
+| `private_ip_in`, `private_zone_for` | Cloud SQL private IP, private DNS zone → network |
+| `runs_as` | instance, Cloud Run service → service account |
+| `encrypted_by` | GKE cluster (secrets), Pub/Sub topic → KMS key |
+| `subscribed_to`, `publishes_to` | subscription → its topic, and its dead-letter topic |
+| `iam_binding` | member → project IAM policy (role as a property) |
+
+A reference to something the pack did not collect (a forwarding rule, the
+Compute Engine default service account) is drawn as "not in inventory".
+
 ## Impact: what depends on this network
 
 `gcp_depends_on_network(network, resource, kind)` lists every cataloged

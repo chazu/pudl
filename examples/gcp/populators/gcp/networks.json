@@ -17,6 +17,9 @@
     ],
     "routingConfig": {"routingMode": "REGIONAL"},
     "mtu": 1460,
+    "peerings": [
+      {"name": "prod-to-default", "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/default", "state": "ACTIVE", "exportCustomRoutes": false, "importCustomRoutes": false}
+    ],
     "networkFirewallPolicyEnforcementOrder": "AFTER_CLASSIC_FIREWALL"
   },
   {
@@ -29,6 +32,9 @@
     "selfLinkWithId": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/1000000000000000002",
     "autoCreateSubnetworks": true,
     "routingConfig": {"routingMode": "REGIONAL"},
+    "peerings": [
+      {"name": "default-to-prod", "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc", "state": "ACTIVE", "exportCustomRoutes": false, "importCustomRoutes": false}
+    ],
     "networkFirewallPolicyEnforcementOrder": "AFTER_CLASSIC_FIREWALL"
   }
 ]

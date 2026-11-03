@@ -29,6 +29,15 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			name:    "name"
 			path: {path: "selfLink", trim_prefix: _gcpComputeAPI}
 		}
+		// One fact per peering: the peer network in path form, and its state
+		// (ACTIVE once both sides peer).
+		facts: gcp_network_peering: {
+			each: "peerings[*]"
+			args: {
+				network: {path: "network", trim_prefix: _gcpComputeAPI}
+				state: {path: "state", default: "UNKNOWN"}
+			}
+		}
 	}
 	kind:                   "compute#network" @pudl(match)
 	project:                _gcpProjectID
@@ -91,6 +100,7 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 				disabled: {path: "disabled", default: false}
 			}
 			gcp_firewall_target_tag: args: tag: "targetTags[*]"
+			gcp_firewall_target_sa: args: email: "targetServiceAccounts[*]"
 			// One fact per source range, with the rule's direction and state.
 			gcp_firewall_source: args: {
 				range:     "sourceRanges[*]"
@@ -190,6 +200,9 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			self_link: "selfLink"
 			status:    "status"
 		}
+		// What uses the address (an instance, forwarding rule or Cloud NAT
+		// router), in path form.
+		facts: gcp_address_user: args: user: {path: "users[*]", trim_prefix: _gcpComputeAPI}
 	}
 	kind:         "compute#address" @pudl(match)
 	project:      _gcpProjectID

@@ -25,6 +25,9 @@ package gcp
 			"metadata.annotations.\"serving.knative.dev/creator\"",
 			"metadata.annotations.\"serving.knative.dev/lastModifier\"",
 		]
+		// The service account revisions run as; absent means the Compute
+		// Engine default account.
+		facts: gcp_run_service_sa: args: email: "spec.template.spec.serviceAccountName"
 	}
 	apiVersion: "serving.knative.dev/v1" @pudl(match)
 	kind:       "Service" @pudl(match)
@@ -83,6 +86,8 @@ package gcp
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 		graph: display: {code: "TOPIC", label: "Pub/Sub topic", class: "messaging"}
+		// The customer-managed key messages are encrypted with, if any.
+		facts: gcp_topic_key: args: key: "kmsKeyName"
 	}
 	project: _gcpProjectID
 	name:    =~"^projects/[^/]+/topics/[^/]+$" @pudl(match)
@@ -101,6 +106,8 @@ package gcp
 		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 		graph: display: {code: "SUB", label: "Pub/Sub subscription", class: "messaging"}
 		facts: gcp_subscription_topic: args: topic: "topic"
+		// Where undeliverable messages are forwarded, if anywhere.
+		facts: gcp_subscription_dead_letter: args: topic: "deadLetterPolicy.deadLetterTopic"
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
 	project: _gcpProjectID

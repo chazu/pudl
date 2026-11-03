@@ -35,6 +35,12 @@ package gcp
 				key: "databaseEncryption.keyName"
 				state: {path: "databaseEncryption.state", default: "DECRYPTED"}
 			}
+			// One fact per range allowed to reach the control plane, when
+			// master authorized networks are enforced.
+			gcp_gke_authorized_network: args: {
+				range: "masterAuthorizedNetworksConfig.cidrBlocks[*].cidrBlock"
+				enabled: {path: "masterAuthorizedNetworksConfig.enabled", default: false}
+			}
 		}
 	}
 	project:   _gcpProjectID
