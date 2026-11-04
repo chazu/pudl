@@ -66,7 +66,11 @@ config.local.*
 *.local.yml
 *.local.json
 
-# SQLite/runtime database files (repo-local copies stay under ignored .pudl/data/)
+# No pudl workspace in this repo: run pudl against the global ~/.pudl. Smoke
+# tests use .pudl/data/ as scratch space.
+/.pudl/
+
+# SQLite/runtime database files
 **/data/sqlite/
 *.db
 *.db-shm

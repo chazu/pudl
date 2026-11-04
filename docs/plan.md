@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Repository runs pudl globally (2026-11-04)
+
+The repository's own `.pudl/` workspace is removed from Git and ignored;
+pudl run inside the repository uses `~/.pudl`. See
+`implog/2026_11_04_remove_repo_workspace.md`.
+
 ### GCP pack: container images with capped tag history (2026-11-04)
 
 New `gcp-container-images`: one `gcp.#ContainerImage` per Docker image in
