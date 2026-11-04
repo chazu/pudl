@@ -1,3 +1,0 @@
-# Runtime state belongs to this workspace but not to Git.
-data/
-config.yaml
