@@ -22,12 +22,15 @@ var gcpPackSchemas = map[string]string{
 	"instances": "gcp.#ComputeInstance", "service-accounts": "gcp.#ServiceAccount",
 	"iam-policies": "gcp.#IAMPolicy", "iam-roles": "gcp.#IAMRole",
 	"service-account-keys": "gcp.#ServiceAccountKey",
+	"container-images":     "gcp.#ContainerImage",
 }
 
 // gcpPackReshaped are the fixtures whose gcloud output is not the stored shape:
 // get-iam-policy names no resource, so its collector's transform and set
-// supply it. Imported as printed, such a record claims no pack type.
-var gcpPackReshaped = map[string]bool{"iam-policies": true}
+// supply it; the container image helper prints gcloud's version list per
+// image, which the transform turns into the image record. Imported as
+// printed, such a record claims no pack type.
+var gcpPackReshaped = map[string]bool{"iam-policies": true, "container-images": true}
 
 // TestGCPPackFixturesInferTheirType imports each fixture without --schema.
 // Without a valid project ID every fixture is rejected; with the project

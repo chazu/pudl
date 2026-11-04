@@ -53,6 +53,10 @@ _gcpAssetScope: *"organization" | "projects" | "off"
 // caller. Empty uses gcloud's own billing/quota_project setting.
 _gcpBillingProject: string | *""
 
+// How many tagged versions gcp-container-images keeps per image, newest push
+// first.
+_gcpImageHistory: int & >0 | *10
+
 // ---- End of live settings. ----
 
 // The schema each collector routes its records to.
@@ -77,6 +81,7 @@ _gcpSchemas: {
 	"iam-policies":         "gcp.#IAMPolicy"
 	"iam-roles":            "gcp.#IAMRole"
 	"service-account-keys": "gcp.#ServiceAccountKey"
+	"container-images":     "gcp.#ContainerImage"
 }
 
 // The gcloud list command of each per-project collector. Each prints every
@@ -144,7 +149,16 @@ _gcpRuns: {
 		argv: ["sh", "../../populators/gcp/service-account-keys.sh", "{{item}}"]
 		set: project: "{{item}}"
 	}]
+	// Helper: list the project's Docker repositories, their images, then
+	// each image's newest tagged versions (gcp_images.cue).
+	"container-images": [{
+		argv: ["sh", "../../populators/gcp/container-images.sh", "{{item}}", "\(_gcpImageHistory)"]
+		set: project: "{{item}}"
+	}]
 }
+
+// Run timeouts of collectors whose runs can outlast the default (10m).
+_gcpRunTimeout: [string]: string
 
 // A collector observes one type completely. A run that fails is a failed
 // input: the other runs are ingested and the observation is incomplete.
@@ -211,6 +225,9 @@ _#GCPLive: _#GCPCollector & {
 	_gcloud: {
 		each: _gcpProjectList
 		empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])
+		if _gcpRunTimeout[_type] != _|_ {
+			timeout: _gcpRunTimeout[_type]
+		}
 		runs: (_gcpShapedRuns & {_t: _type, _runs: _gcpRuns[_type]}).out
 	}
 	_cai: [if _type == "iam-policies" {_gcpIAMPolicySearch}, _gcpAssetSearch & {_t: _type}][0]
@@ -260,6 +277,7 @@ _#GCPFixture: _#GCPCollector & {
 #GCPIAMPolicies: _#GCPLive & {_type: "iam-policies"}
 #GCPIAMRoles: _#GCPLive & {_type: "iam-roles"}
 #GCPServiceAccountKeys: _#GCPLive & {_type: "service-account-keys"}
+#GCPContainerImages: _#GCPLive & {_type: "container-images"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -280,3 +298,4 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixtureIAMPolicies: _#GCPFixture & {_type: "iam-policies"}
 #GCPFixtureIAMRoles: _#GCPFixture & {_type: "iam-roles"}
 #GCPFixtureServiceAccountKeys: _#GCPFixture & {_type: "service-account-keys"}
+#GCPFixtureContainerImages: _#GCPFixture & {_type: "container-images"}
