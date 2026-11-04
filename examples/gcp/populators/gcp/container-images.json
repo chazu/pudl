@@ -1,0 +1,58 @@
+[
+  {
+    "repository": "projects/example-project/locations/us/repositories/gcr.io",
+    "package": "us-docker.pkg.dev/example-project/gcr.io/api",
+    "versions": [
+      {
+        "createTime": "2026-10-28T14:02:11.418Z",
+        "metadata": {
+          "buildTime": "2026-10-28T14:01:57.203Z",
+          "imageSizeBytes": "148213760",
+          "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+          "name": "projects/example-project/locations/us/repositories/gcr.io/dockerImages/api@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "package": "us-docker.pkg.dev/example-project/gcr.io/api",
+        "tags": ["3f2a9c1", "latest"],
+        "updateTime": "2026-10-28T14:02:11.418Z",
+        "version": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      },
+      {
+        "createTime": "2026-10-21T09:45:30.006Z",
+        "metadata": {
+          "buildTime": "2026-10-21T09:45:12.880Z",
+          "imageSizeBytes": "147995136",
+          "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+          "name": "projects/example-project/locations/us/repositories/gcr.io/dockerImages/api@sha256:2222222222222222222222222222222222222222222222222222222222222222"
+        },
+        "package": "us-docker.pkg.dev/example-project/gcr.io/api",
+        "tags": ["8be04d7"],
+        "updateTime": "2026-10-28T14:02:11.418Z",
+        "version": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  {
+    "repository": "projects/example-project/locations/us-central1/repositories/apps",
+    "package": "us-central1-docker.pkg.dev/example-project/apps/web/frontend",
+    "versions": [
+      {
+        "createTime": "2026-11-01T17:20:04.551Z",
+        "metadata": {
+          "buildTime": "2026-11-01T17:19:48.102Z",
+          "imageSizeBytes": "61865984",
+          "mediaType": "application/vnd.oci.image.index.v1+json",
+          "name": "projects/example-project/locations/us-central1/repositories/apps/dockerImages/web%2Ffrontend@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "package": "us-central1-docker.pkg.dev/example-project/apps/web/frontend",
+        "tags": ["v1.4.0"],
+        "updateTime": "2026-11-01T17:20:04.551Z",
+        "version": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      }
+    ]
+  },
+  {
+    "repository": "projects/example-project/locations/us-central1/repositories/apps",
+    "package": "us-central1-docker.pkg.dev/example-project/apps/scratch",
+    "versions": []
+  }
+]

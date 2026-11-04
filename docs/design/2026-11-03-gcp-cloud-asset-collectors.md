@@ -375,6 +375,20 @@ alone.
   keys differ entirely (rotation) and are not collected. CAI holds no key
   material.
 
+- **Images, 2026-11-04 (`pudl-q4v.6`).** Collected through gcloud only,
+  per project: the repository list from `gcloud artifacts repositories
+  list`, not CAI (one call per project saved, at the cost of org discovery
+  and fallback in the helper). No separate Container Registry listing: the
+  2025 migration made gcr.io, us.gcr.io, eu.gcr.io and asia.gcr.io Artifact
+  Registry repositories, which the listing already covers. Versions sort by
+  `CREATE_TIME` (push time); on migrated images `UPDATE_TIME` is the
+  migration date for every version. gcloud reads all versions to sort them:
+  tens of seconds for an image with thousands at the default page size, a few at
+  `--page-size=1000`, which the helper uses; about a minute per live
+  project of a few dozen images. Runs time out after 30 minutes. Remote and
+  virtual repositories are skipped; the surveyed
+  organization has none.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:

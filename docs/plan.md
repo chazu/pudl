@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: container images with capped tag history (2026-11-04)
+
+New `gcp-container-images`: one `gcp.#ContainerImage` per Docker image in
+each project's Artifact Registry repositories (gcr.io repositories
+included), with its newest `_gcpImageHistory` (default 10) tagged versions,
+newest push first. gcloud only, through `populators/gcp/container-images.sh`;
+30-minute run timeout. See `implog/2026_11_04_gcp_container_images.md`.
+Closes `pudl-q4v.6`.
+
 ### GCP pack: IAM policies on every resource, custom roles, keys (2026-11-03)
 
 `gcp-iam-policies` searches each project's IAM policies through Cloud Asset

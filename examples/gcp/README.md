@@ -14,17 +14,18 @@ Installed files, under `.pudl/`:
 
 | Path | Contents |
 | --- | --- |
-| `schema/gcp/{network,compute,gke,data,services,iam}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/{network,compute,gke,data,services,iam,artifacts}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
-| `schema/models/gcp_assets.cue`, `gcp_iam.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The three check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
 | `populators/gcp/iam-roles.sh` | Helper `gcp-iam-roles` runs: every custom role in one project, described |
 | `populators/gcp/service-account-keys.sh` | Helper `gcp-service-account-keys` runs: every account's user-managed keys in one project |
+| `populators/gcp/container-images.sh` | Helper `gcp-container-images` runs: every Docker image in one project, with its newest tagged versions |
 
 ## What it collects
 
@@ -65,6 +66,7 @@ stays complete.
 | `gcp-pubsub-subscriptions` | `pubsub subscriptions list` | `gcp.#PubSubSubscription` | `name` | `pubsub.subscriptions.list` (same) |
 | `gcp-kms-keyrings` | `kms keyrings list --location=L` | `gcp.#KMSKeyRing` | `name` | `cloudkms.keyRings.list` (`roles/cloudkms.viewer`) |
 | `gcp-kms-keys` | `kms keys list` per key ring, via `kms-keys.sh` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
+| `gcp-container-images` | `artifacts repositories list`, `packages list`, then `docker images list --include-tags` per image, via `container-images.sh` | `gcp.#ContainerImage` | `name` (image path) | `artifactregistry.repositories.list`, `artifactregistry.packages.list`, `artifactregistry.versions.list`, `artifactregistry.tags.list` (`roles/artifactregistry.reader`) |
 
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
@@ -247,6 +249,18 @@ as `disable-legacy-endpoints`, and lower-cases values), Cloud SQL instances
 `publicAccessPrevention` for some), and Pub/Sub subscriptions (not yet
 compared).
 
+Container images are collected through gcloud only. CAI lists every image
+version as its own asset (tens of thousands in a real organization), while
+`gcp-container-images` keeps one record per image with only its newest
+`_gcpImageHistory` (default 10) tagged versions, newest push first; untagged
+versions are left out. Container Registry needs no collector of its own:
+gcr.io is served by Artifact Registry repositories named `gcr.io`,
+`us.gcr.io` and so on, which are listed with the others. Remote (cache) and
+virtual repositories are skipped. gcloud reads all of an image's versions to
+sort them (a few seconds for an image with thousands, about a minute for a
+project of a few dozen images), so the collector's runs time out after 30 minutes
+instead of 10.
+
 ### Settings
 
 1. Optionally narrow the projects, widen the KMS locations or choose how CAI
@@ -261,6 +275,7 @@ compared).
    _gcpExtraEmptyWhen: ["Billing is disabled for project"] // default []
    _gcpAssetScope: "projects"   // "organization" (default), "projects" (one search per listed project), or "off" (gcloud only)
    _gcpBillingProject: "my-billing-project" // --billing-project for CAI; default "" uses gcloud's billing/quota_project
+   _gcpImageHistory: 5 // tagged versions kept per container image, newest first; default 10
    ```
 
    Key rings are listed per project and location; `gcp-kms-keys` lists the
