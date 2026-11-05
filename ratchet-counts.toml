@@ -3,4 +3,4 @@
 # Counts can only be reduced (tightened) or explicitly bumped with justification.
 
 [no-fmt-println-outside-cmd]
-"." = 1
+"." = 0

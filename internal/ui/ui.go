@@ -1,17 +1,15 @@
 package ui
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/chazu/pudl/internal/lister"
 )
 
-// RunInteractiveList runs the bubbletea interactive list interface
+// RunInteractiveList runs the bubbletea interactive list interface. With no
+// entries it does nothing: the command says so before calling it.
 func RunInteractiveList(entries []lister.ListEntry, verbose bool) error {
 	if len(entries) == 0 {
-		fmt.Println("No data found matching the specified criteria.")
 		return nil
 	}
 
