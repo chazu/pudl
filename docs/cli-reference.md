@@ -1212,6 +1212,13 @@ Display Options:
 - --reverse: Reverse sort order
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
+Counting:
+- --count-by schema|origin|format: Print how many matching entries share each
+  value instead of listing them. Every filter (--schema, --origin, --where,
+  --artifacts, collection filters) and --limit applies; pagination does not.
+  pudl's own record types (observe snapshots, system models) are listed
+  separately under "pudl bookkeeping"; --json flags them "bookkeeping": true.
+
 Examples:
     pudl list                                    # List the active catalog
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
@@ -1222,6 +1229,8 @@ Examples:
     pudl list --collection-id my-collection     # Show items from specific collection
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries
+    pudl list --count-by schema                 # Count entries per schema
+    pudl list --count-by schema --origin gcp --json # Per-schema counts as JSON
     pudl list --fancy                           # Interactive list with filtering and detailed view
 ```
 
@@ -1233,6 +1242,7 @@ Flags:
 | `--artifacts` | bool |  | Show only legacy run artifacts (mu manifests and manifest actions) |
 | `--collection-id` | string |  | Filter by collection ID |
 | `--collections-only` | bool |  | Show only collections |
+| `--count-by` | string |  | Count matching entries per value of a field (schema, origin, format) instead of listing them |
 | `--fancy` | bool |  | Use interactive bubbletea interface with filtering |
 | `--format` | string |  | Filter by file format (json, yaml, csv, ndjson) |
 | `--item-id` | string |  | Filter by item ID |
@@ -1281,6 +1291,28 @@ individual records, skipping collection containers. Filtering precedes paginatio
 Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
 256 MiB total scan budget; narrow schema or collection scope for larger data.
 `--fancy` remains available and can display the filtered record set.
+
+`--count-by schema` (or `origin`, `format`) prints how many matching entries
+share each value instead of listing them, most common first. Every filter
+(`--schema`, `--origin`, `--format`, `--where`, `--artifacts`, collection
+filters, `--global`) and `--limit` applies; it cannot be combined with
+`--page`, `--per-page`, `--select` or `--fancy`. pudl's own record types
+(`pudl/core.#ObserveSnapshot`, `pudl/systemmodel.#SystemModel`, legacy mu
+artifacts) are listed after the resource types under `pudl bookkeeping:`.
+With `--json`:
+
+```json
+{
+  "count_by": "schema",
+  "groups": [{"schema": "pudl/gcp.#Firewall", "count": 12},
+             {"schema": "pudl/core.#ObserveSnapshot", "count": 3, "bookkeeping": true}],
+  "total_entries": 15, "total_matched": 15
+}
+```
+
+Each group is keyed by the counted field (`schema`, `origin` or `format`);
+`bookkeeping` appears only when true. `total_entries` is the number counted
+(`total_matched` capped by `--limit`); `groups` is `[]` when nothing matches.
 
 ## pudl model
 

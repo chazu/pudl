@@ -25,7 +25,8 @@ VERSIONED DOCUMENTS (--json)
                                    secrets, repairs[] with status
   pudl policy list|show|evaluate --json   report_version 1
 
-  Other --json views: list (paginated: total_matched, --all), show (entry,
+  Other --json views: list (paginated: total_matched, --all), list
+  --count-by schema (groups[]: schema, count, bookkeeping), show (entry,
   metadata, raw, compliance), import (one element per file), snapshot,
   status, query. --progress-json on check streams phase events to stderr.
 
@@ -45,6 +46,7 @@ CONVENTIONS
     real import. Do not report an import as cataloged until it is clean.
   - Scaffold, then edit the printed path: model new, rule new, schema new.
   - Query projected facts instead of post-processing payloads with jq.
+    Count entries per type with list --count-by schema [--json].
   - Unknown is not pass: report incomplete or stale evidence as unknown.
   - Name every model a check needs; pudl never runs unnamed producers.
   - pudl never changes infrastructure; hand fixes to the owning tool.
