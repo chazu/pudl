@@ -69,3 +69,24 @@ CMEK keys were not checked against live data, so
 
 No Go API change. Schema surface: fact arg option `rewrite`; GCP facts and
 edge types above.
+
+## Follow-up: absent fields (same day)
+
+On a real catalog six of the new rules warned "all
+rows have a null source or target": a plain path arg whose field is absent
+is left out of the fact, so most routes still yielded a `gcp_route_next_hop`
+fact with no `hop`, and the rule matched it with a null target. The
+fixtures missed it because some rows always had the field.
+
+- `internal/projection/compute.go`: an arg with `rewrite` whose field is
+  absent (and has no default) now yields no fact, like a value no rule
+  matches. Plain path args are unchanged.
+- GCP pack: every new target arg is a rewrite (`gcp_bucket_key`,
+  `gcp_subscription_push`, and the route next hops through the new
+  `_gcpComputePathRewrite`).
+- Tests: `TestRewriteWithoutAMatchYieldsNoFact` (absent field);
+  `TestGraphExportGCPPack` counts facts per relation (fails without the fix:
+  5 route facts instead of 1).
+
+`gcp_graph_topic_key` and `gcp_graph_subscription_dead_letter` (older rules
+on plain path args) warn the same way on real data; not changed here.

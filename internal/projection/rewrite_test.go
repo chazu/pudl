@@ -41,6 +41,7 @@ func TestRewriteWithoutAMatchYieldsNoFact(t *testing.T) {
 	rel := `{"args": {"v": {"path": "sa", "rewrite": [{"match": "^([^@]+@[^@]+)$", "replace": "$1"}]}, "other": "x"}}`
 	require.Empty(t, rewriteValues(t, rel, `{"sa": "default", "x": "kept?"}`), "the whole row is dropped, not just the arg")
 	require.Empty(t, rewriteValues(t, rel, `{"sa": 7}`), "a non-string matches nothing")
+	require.Empty(t, rewriteValues(t, rel, `{"x": "no sa field"}`), "an absent value yields no fact either, unlike a plain path arg")
 	require.Equal(t, []string{"ci@p.iam.gserviceaccount.com"}, rewriteValues(t, rel, `{"sa": "ci@p.iam.gserviceaccount.com"}`))
 }
 
