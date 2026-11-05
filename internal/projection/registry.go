@@ -168,6 +168,10 @@ func fingerprint(spec *SchemaSpec) string {
 		Default    any
 		HasDefault bool
 		Rewrite    []rewritePrint `json:",omitempty"` // omitted when unset: existing fingerprints are unchanged
+		// AbsentNone marks that an absent field yields no fact for a
+		// rewritten arg (it once yielded a fact without the arg), so
+		// catalogs projected before that change reproject.
+		AbsentNone bool `json:",omitempty"`
 	}
 	type relPrint struct {
 		Name, Each string
@@ -191,6 +195,7 @@ func fingerprint(spec *SchemaSpec) string {
 			for _, r := range a.Rewrite {
 				ap.Rewrite = append(ap.Rewrite, rewritePrint{r.Match.String(), r.Replace})
 			}
+			ap.AbsentNone = a.Rewrite != nil
 			rp.Args[name] = ap
 		}
 		print.Relations = append(print.Relations, rp)
