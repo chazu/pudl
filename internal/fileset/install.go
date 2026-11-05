@@ -1,12 +1,13 @@
-// Package examples installs bundled examples into initialized PUDL workspaces.
+// Package fileset installs sets of embedded files (tutorial examples and
+// content packs) into initialized PUDL workspaces.
 //
 // Upgrades: every install records the digest of each file it wrote in a
-// manifest (<workspace>/.examples/<name>.json). On the next install, a file
-// that differs from the new version but still matches its recorded digest
-// was never edited and is upgraded in place. A file the user edited, or one
-// installed by a pudl that kept no manifest, is a conflict: nothing is
-// written unless Overwrite is set, which keeps the old file as <path>.bak.
-package examples
+// manifest (<workspace>/<Kind.RecordDir>/<name>.json). On the next install, a
+// file that differs from the new version but still matches its recorded
+// digest was never edited and is upgraded in place. A file the user edited,
+// or one installed without a record, is a conflict: nothing is written unless
+// Overwrite is set, which keeps the old file as <path>.bak.
+package fileset
 
 import (
 	"bytes"
@@ -19,13 +20,22 @@ import (
 	"strings"
 )
 
+// Kind is a family of file sets: what the CLI calls one and where installs of
+// it are recorded.
+type Kind struct {
+	// Noun names a file set in messages and its install command: pudl <Noun> install.
+	Noun string
+	// RecordDir is the workspace-relative directory of install records.
+	RecordDir string
+}
+
 // Options controls an install.
 type Options struct {
 	// Overwrite replaces conflicting files, keeping each as <path>.bak.
 	Overwrite bool
 }
 
-// Result says what an install did with each file of the example.
+// Result says what an install did with each file of the file set.
 type Result struct {
 	Files     []string          `json:"files"`
 	Added     []string          `json:"added"`
@@ -35,28 +45,25 @@ type Result struct {
 	Backups   map[string]string `json:"backups,omitempty"`
 }
 
-// ConflictError lists files that differ from the example and were not
+// ConflictError lists files that differ from the file set and were not
 // written.
 type ConflictError struct {
-	Example string
-	Paths   []string
+	Kind  Kind
+	Name  string
+	Paths []string
 }
 
 func (e *ConflictError) Error() string {
 	return fmt.Sprintf("%d %s file(s) differ from this version and were left as they are:\n  %s\n"+
-		"They were edited, or installed by an earlier pudl that kept no record of what it wrote. "+
-		"To replace them, keeping your versions as <file>.bak, run: pudl example install %s --overwrite",
-		len(e.Paths), e.Example, strings.Join(e.Paths, "\n  "), e.Example)
+		"They were edited, or installed without a record of what was written. "+
+		"To replace them, keeping your versions as <file>.bak, run: pudl %s install %s --overwrite",
+		len(e.Paths), e.Name, strings.Join(e.Paths, "\n  "), e.Kind.Noun, e.Name)
 }
 
-// Install writes example name into the workspace at root. All checks run
-// before anything is written.
-func Install(root, name string, opts Options) (*Result, error) {
-	files, err := packFiles(name)
-	if err != nil {
-		return nil, err
-	}
-	manifest, err := readManifest(root, name)
+// Install writes file set name, whose files are keyed by workspace-relative
+// path, into the workspace at root. All checks run before anything is written.
+func Install(root string, kind Kind, name string, files map[string][]byte, opts Options) (*Result, error) {
+	manifest, err := readManifest(root, kind, name)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +75,7 @@ func Install(root, name string, opts Options) (*Result, error) {
 
 	var conflicts []string
 	for _, path := range res.Files {
-		if err := checkParents(root, filepath.Dir(path)); err != nil {
+		if err := checkParents(root, kind, filepath.Dir(path)); err != nil {
 			return nil, err
 		}
 		info, err := os.Lstat(filepath.Join(root, path))
@@ -79,7 +86,7 @@ func Install(root, name string, opts Options) (*Result, error) {
 		case err != nil:
 			return nil, err
 		case !info.Mode().IsRegular():
-			return nil, fmt.Errorf("example destination is not a regular file: %s", path)
+			return nil, fmt.Errorf("%s destination is not a regular file: %s", kind.Noun, path)
 		}
 		current, err := os.ReadFile(filepath.Join(root, path))
 		if err != nil {
@@ -97,7 +104,7 @@ func Install(root, name string, opts Options) (*Result, error) {
 		}
 	}
 	if len(conflicts) > 0 {
-		return nil, &ConflictError{Example: name, Paths: conflicts}
+		return nil, &ConflictError{Kind: kind, Name: name, Paths: conflicts}
 	}
 
 	res.Backups = map[string]string{}
@@ -115,7 +122,7 @@ func Install(root, name string, opts Options) (*Result, error) {
 			}
 		}
 	}
-	if err := writeManifest(root, name, files); err != nil {
+	if err := writeManifest(root, kind, name, files); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -150,15 +157,15 @@ func backupFile(root, path string) (string, error) {
 	return backup, os.WriteFile(filepath.Join(root, backup), data, 0o644)
 }
 
-// Refuse symlinked destinations so example installation stays in its workspace.
-func checkParents(root, relative string) error {
+// Refuse symlinked destinations so installation stays in its workspace.
+func checkParents(root string, kind Kind, relative string) error {
 	for relative != "." {
 		info, err := os.Lstat(filepath.Join(root, relative))
 		if err != nil && !os.IsNotExist(err) {
 			return err
 		}
 		if err == nil && !info.IsDir() {
-			return fmt.Errorf("example destination is not a directory: %s", relative)
+			return fmt.Errorf("%s destination is not a directory: %s", kind.Noun, relative)
 		}
 		relative = filepath.Dir(relative)
 	}

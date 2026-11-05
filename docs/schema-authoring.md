@@ -152,7 +152,7 @@ _projectOwners: {"shop-prod": "payments", "data-prod": "data"} // once per packa
   and a block with none of the three keys are load errors.
 - A path names one value. To own AWS resources by tag, have the collector
   print the tag as a field first (see the
-  [AWS pack](../examples/aws/README.md#ownership)).
+  [AWS pack](../packs/aws/README.md#ownership)).
 
 Owners are projected as `resource_owner` and `resource_unowned` facts
 ([projection](projection.md#resource-ownership)) and attributed to check
@@ -588,7 +588,7 @@ whenever the rule matters, and name the rule there:
 }
 ```
 
-`examples/gcp/schema/gcp/policies.cue` uses all three patterns.
+`packs/gcp/schema/gcp/policies.cue` uses all three patterns.
 
 ### Known limitations
 

@@ -35,12 +35,16 @@
 
 ## Content packs
 
-Install with `pudl example install NAME`.
+Install a pack with `pudl pack install NAME` (`pudl pack list` shows them),
+and a tutorial with `pudl example install NAME`.
 
 | Pack | What it covers |
 | --- | --- |
-| [gcp](../examples/gcp/README.md) | GCP types, policies, collectors, rules and check families |
-| [aws](../examples/aws/README.md) | AWS types, policies, collectors, relationship rules and check families |
+| [gcp](../packs/gcp/README.md) | GCP types, policies, collectors, rules and check families |
+| [aws](../packs/aws/README.md) | AWS types, policies, collectors, relationship rules and check families |
+
+| Tutorial | What it covers |
+| --- | --- |
 | [gcp-network-hygiene](gcp-network-hygiene.md) | One firewall type, policy and check, with a fixed fixture |
 | `git-inventory` | The drift tutorial in [Getting started](getting-started.md) |
 

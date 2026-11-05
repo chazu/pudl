@@ -9,7 +9,7 @@ WHAT PUDL IS
 THE LOOP
 
   pudl init                                   create .pudl/ in this repo
-  pudl example install gcp                    or aws, or write a collector
+  pudl pack install gcp                       or aws, or write a collector
   pudl check gcp-fixture-firewalls gcp-fixture-addresses \
     gcp-fixture-routers gcp-fixture-network-hygiene-checks
   pudl report                                 read the report again

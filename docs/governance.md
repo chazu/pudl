@@ -10,7 +10,7 @@ The examples use the GCP content pack's fixtures, so you can run them offline:
 
 ```bash
 pudl init
-pudl example install gcp
+pudl pack install gcp
 pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
   gcp-fixture-network-hygiene-checks --detailed-exitcode
 ```

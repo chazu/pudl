@@ -18,7 +18,7 @@ import (
 // entry, so this is the only way an upgraded pack reaches existing records.)
 func TestDoctorFixReinfersImportedArrayItems(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	// An older pack without the instance type.

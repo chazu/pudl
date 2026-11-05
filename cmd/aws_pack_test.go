@@ -20,9 +20,9 @@ var awsPackFamilies = []string{"network-exposure", "data-protection", "identity-
 
 func TestAWSContentPack(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "aws", "--json")
+	r := runCLI(t, "pack", "install", "aws", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	r = runCLI(t, "example", "install", "aws", "--json")
+	r = runCLI(t, "pack", "install", "aws", "--json")
 	require.NoError(t, r.Err, "identical install is idempotent")
 
 	families := checkPack(t, "aws-fixture-", awsPackTypes, awsPackFamilies, 2)

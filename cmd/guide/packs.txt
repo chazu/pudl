@@ -3,13 +3,17 @@ pudl guide packs — bundled content packs and tutorials
 INSTALL
 
   pudl init
-  pudl example install gcp
-  pudl example install aws
+  pudl pack list
+  pudl pack install gcp
+  pudl pack install aws
   pudl example install gcp-network-hygiene
   pudl example install git-inventory
 
   A pack is plain CUE and fixtures written into .pudl/. Identical files are
   left alone; files you changed are kept and reported as conflicts.
+  Installing again upgrades the files you did not edit. A pack installed
+  with pudl example install (before pudl pack) needs one install with
+  --overwrite; your versions are kept as <file>.bak.
 
 WHAT A CLOUD PACK HOLDS
 
@@ -51,4 +55,5 @@ TUTORIALS
   gcp-network-hygiene   one firewall type, a policy, a fixture and a fix
   git-inventory         inventory drift against expected branches, no cloud
 
-  Each pack's README is under examples/ in the source tree.
+  Each pack's README is under packs/ in the source tree; the tutorials are
+  under examples/.

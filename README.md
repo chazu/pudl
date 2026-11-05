@@ -32,7 +32,7 @@ account. Run it in a new directory:
 ```bash
 mkdir pudl-tour && cd pudl-tour
 pudl init
-pudl example install gcp
+pudl pack install gcp
 ```
 
 `pudl init` creates `.pudl/`. The pack installs draft GCP schemas,
@@ -90,7 +90,7 @@ The exit status is 0: the findings still fail, but none is new.
 
 Next steps: the [tutorial](docs/getting-started.md) walks through drift,
 evidence, waivers and ownership. To collect from a real project, follow the
-[GCP pack README](examples/gcp/README.md).
+[GCP pack README](packs/gcp/README.md).
 
 ## How it fits together
 
@@ -134,8 +134,9 @@ The [concepts guide](docs/concepts.md) explains each term.
   look deleted.
 - `pudl import` reads JSON, YAML, CSV and NDJSON from files, directories or
   stdin, including `.gz` and `.zst` files.
-- Content packs for GCP and AWS, a GCP network hygiene example and a Git
-  inventory tutorial: `pudl example install gcp|aws|gcp-network-hygiene|git-inventory`.
+- Content packs for GCP and AWS (`pudl pack install gcp|aws`), a GCP network
+  hygiene example and a Git inventory tutorial
+  (`pudl example install gcp-network-hygiene|git-inventory`).
 
 **Catalog**
 - Content-addressed entries with short IDs (`vomap-foqab`), stable resource

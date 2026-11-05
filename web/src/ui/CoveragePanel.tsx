@@ -18,7 +18,7 @@ export function CoveragePanel({ coverage }: { coverage: Coverage }) {
       {coverage.edgeRules === 0 && coverage.resources > 0 && (
         <div className="notice warn-notice">
           No relationship rules are loaded, so nothing is connected. Packs installed before graph support lack them:
-          re-run <code>pudl example install gcp</code> (or <code>aws</code>), adding <code>--overwrite</code> if it
+          re-run <code>pudl pack install gcp</code> (or <code>aws</code>), adding <code>--overwrite</code> if it
           reports conflicts, then <code>pudl doctor --fix</code> to reclassify records with the new types.
         </div>
       )}

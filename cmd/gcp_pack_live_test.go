@@ -112,7 +112,7 @@ func readLog(t *testing.T, path string) string {
 func TestGCPPackLiveCollectorsEnumerateProjects(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	log := fakeGcloudOnPath(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	for _, model := range []string{"gcp-firewalls", "gcp-kms-keyrings", "gcp-kms-keys"} {
@@ -161,7 +161,7 @@ func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
 	cliWorkspace(t)
 	fakeGcloudOnPath(t)
 	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-nocompute"}]`)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-firewalls", "--json")
@@ -222,7 +222,7 @@ func TestGCPPackExtraEmptyWhen(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	fakeGcloudOnPath(t)
 	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-nobilling"}]`)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-firewalls", "--json")
@@ -249,7 +249,7 @@ func TestGCPPackLiveCollectorsSearchCloudAssetInventory(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	log := fakeGcloudOnPath(t)
 	t.Setenv("GCLOUD_CAI", "1")
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-firewalls", "--json")
@@ -286,7 +286,7 @@ func TestGCPPackLiveCollectorsSearchCloudAssetInventory(t *testing.T) {
 func TestGCPPackLiveCollectorsFallBackWithoutCloudAssetInventory(t *testing.T) {
 	cliWorkspace(t)
 	log := fakeGcloudOnPath(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-firewalls", "--json")
@@ -313,7 +313,7 @@ func TestGCPPackCloudAssetKMSKeepsConfiguredLocations(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	fakeGcloudOnPath(t)
 	t.Setenv("GCLOUD_CAI", "1")
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-kms-keys", "--json")

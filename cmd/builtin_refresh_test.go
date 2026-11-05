@@ -16,7 +16,7 @@ import (
 // rules derive as undeclared, until something ran an import.
 func TestReadCommandRefreshesStaleBuiltins(t *testing.T) {
 	ws := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	schemaPudl := filepath.Join(ws, "schema", "pudl")

@@ -357,7 +357,7 @@ The command (`internal/graphexport`) writes this shape from the catalog:
   for records whose type has no identity fields, often a generic catch-all,
   and `internal` for pudl's own records), and how many `graph_edge` rules are
   loaded. The sidebar shows it, so a sparse graph explains itself. With no
-  edge rules it tells you to re-run `pudl example install`, which upgrades a
+  edge rules it tells you to re-run `pudl pack install`, which upgrades a
   pack installed by an earlier pudl.
 - **Warnings** (unreadable payloads, ambiguous references, failing rules)
   are listed in `meta.warnings` and shown in the status bar. They never stop

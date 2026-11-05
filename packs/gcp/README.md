@@ -7,7 +7,7 @@ contains no vendor-specific Go.
 
 ```bash
 pudl init
-pudl example install gcp
+pudl pack install gcp
 ```
 
 Installed files, under `.pudl/`:

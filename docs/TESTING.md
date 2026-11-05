@@ -17,7 +17,7 @@ Overview of the testing strategy for PUDL.
 | Integration | `test/integration/` | End-to-end import-to-catalog workflows |
 | System | `test/system/` | Reliability, config, edge cases, stress tests |
 | Getting-started smoke | `test/smoke/git_inventory_walkthrough_test.go` | Documented Git inventory commands, drift, snapshot evidence, and isolation |
-| Example smoke | `test/smoke/example_install_test.go`, `test/smoke/git_inventory_observation_test.go` | Embedded example installation, conflict preservation, and live command observation |
+| Example smoke | `test/smoke/example_install_test.go`, `test/smoke/git_inventory_observation_test.go` | Embedded example and pack installation, conflict preservation, and live command observation |
 
 ## Running Tests
 

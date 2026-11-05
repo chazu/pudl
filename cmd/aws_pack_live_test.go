@@ -58,7 +58,7 @@ func TestAWSPackLiveCollectorsEnumerateProfiles(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "aws.log")
 	t.Setenv("AWS_LOG", log)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
-	r := runCLI(t, "example", "install", "aws")
+	r := runCLI(t, "pack", "install", "aws")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	for model, records := range map[string]int{"aws-vpcs": 6, "aws-iam-roles": 3, "aws-s3-buckets": 3} {
