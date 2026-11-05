@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Shared identity core (2026-11-05)
+
+Schemas declare cross-schema keys in `_pudl.same_resource`; projection writes
+`same_resource_key` facts; the built-in rule `same_resource_by_key` derives
+`same_resource(a, b, kind)`; `internal/sameresource` groups links and
+refuses components with two members of one identity namespace. Built-in
+kinds `k8s.cluster`, `k8s.object`. See
+`implog/2026_11_05_shared_identity_core.md`. Closes `pudl-h7s.1`.
+
 ### Design: shared identity across schemas (2026-11-05)
 
 Accepted design for linking different schemas' records of one resource

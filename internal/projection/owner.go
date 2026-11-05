@@ -3,6 +3,7 @@ package projection
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/ownership"
@@ -59,14 +60,23 @@ func (r *Registry) chainDeclaresOwner(schema string) bool {
 
 // declaredWhat names what a spec projects, for error messages.
 func declaredWhat(spec *SchemaSpec, relations map[string]RelationSpec) string {
-	switch {
-	case spec.Owner != nil && len(relations) > 0:
-		return "facts and an owner"
-	case spec.Owner != nil:
-		return "an owner"
-	default:
-		return "facts"
+	var parts []string
+	if len(relations) > 0 {
+		parts = append(parts, "facts")
 	}
+	if spec.Owner != nil {
+		parts = append(parts, "an owner")
+	}
+	if spec.SameResource != nil {
+		parts = append(parts, "same_resource keys")
+	}
+	switch len(parts) {
+	case 0:
+		return "facts"
+	case 1:
+		return parts[0]
+	}
+	return strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 }
 
 // ownerFact is the one ownership fact of a record: resource_owner when its

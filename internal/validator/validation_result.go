@@ -7,6 +7,7 @@ import (
 
 	"github.com/chazu/pudl/internal/graphspec"
 	"github.com/chazu/pudl/internal/ownership"
+	"github.com/chazu/pudl/internal/sameresource"
 )
 
 // ValidationResult represents the result of schema validation
@@ -85,6 +86,14 @@ type SchemaMetadata struct {
 	// a decode failure, reported by CheckModuleIntegrity.
 	Graph      *graphspec.Spec `json:"-"`
 	GraphError string          `json:"-"`
+
+	// SameResource is the strictly decoded `_pudl.same_resource`: keys that
+	// link a record to records of other schemas describing the same resource
+	// (nil when absent; see the sameresource package). SameResourceError
+	// carries a decode failure; projection is then disabled for the schema
+	// and CheckModuleIntegrity reports a load error.
+	SameResource      *sameresource.Spec `json:"-"`
+	SameResourceError string             `json:"-"`
 }
 
 // GetSummary returns a human-readable summary of the validation result

@@ -10,6 +10,7 @@ import (
 	"github.com/chazu/pudl/internal/fieldpath"
 	"github.com/chazu/pudl/internal/ownership"
 	"github.com/chazu/pudl/internal/redact"
+	"github.com/chazu/pudl/internal/sameresource"
 	"github.com/chazu/pudl/internal/schemaname"
 )
 
@@ -25,6 +26,10 @@ type SchemaSpec struct {
 	// Owner is the nearest `_pudl.owner` along the chain; when set, every
 	// record projects resource_owner or resource_unowned (see owner.go).
 	Owner *ownership.Spec
+	// SameResource is the nearest `_pudl.same_resource` along the chain; when
+	// set, every record projects one same_resource_key fact per key it holds
+	// (see same_resource.go).
+	SameResource *sameresource.Spec
 	// Fingerprint changes whenever anything that shapes the facts changes.
 	Fingerprint string
 	// Err disables projection for the schema; the import still succeeds and
@@ -58,8 +63,8 @@ func (r *Registry) Source() redact.Source {
 	return r.src
 }
 
-// Schemas returns every loaded schema whose chain declares facts or an
-// owner, sorted.
+// Schemas returns every loaded schema whose chain declares facts, an owner or
+// same_resource keys, sorted.
 func (r *Registry) Schemas() []string {
 	if r == nil || r.src == nil {
 		return nil
@@ -84,8 +89,8 @@ func (r *Registry) Subset(schemas map[string]bool) *Registry {
 	return &Registry{src: r.src, redactor: r.redactor, cache: map[string]*SchemaSpec{}, allowed: schemas}
 }
 
-// For returns schema's effective spec, or nil when its chain declares no facts
-// and no owner.
+// For returns schema's effective spec, or nil when its chain declares no facts,
+// no owner and no same_resource keys.
 func (r *Registry) For(schema string) *SchemaSpec {
 	if r == nil || r.src == nil || schema == "" {
 		return nil
@@ -110,8 +115,12 @@ func (r *Registry) compute(schema string) *SchemaSpec {
 	byName := map[string]RelationSpec{}
 	chain := r.src.GetInheritanceGraph().GetCascadeChain(schema)
 	owner, ownerErr := r.owner(chain)
-	declared := owner != nil || ownerErr != nil
-	spec.Owner, spec.Err = owner, ownerErr
+	same, sameErr := r.sameResource(chain)
+	declared := owner != nil || ownerErr != nil || same != nil || sameErr != nil
+	spec.Owner, spec.SameResource, spec.Err = owner, same, ownerErr
+	if spec.Err == nil {
+		spec.Err = sameErr
+	}
 	for _, name := range chain {
 		if spec.Err != nil {
 			break
@@ -184,7 +193,9 @@ func fingerprint(spec *SchemaSpec) string {
 		Sensitive []string
 		Err       string
 		Owner     string `json:",omitempty"`
-	}{Contract: 2, Owner: spec.Owner.Canonical()}
+		// SameResource is omitted when unset: existing fingerprints are unchanged.
+		SameResource string `json:",omitempty"`
+	}{Contract: 2, Owner: spec.Owner.Canonical(), SameResource: spec.SameResource.Canonical()}
 	for _, rel := range spec.Relations {
 		rp := relPrint{Name: rel.Name, Args: map[string]argPrint{}, OneOrMany: rel.OneOrMany}
 		if rel.Each != nil {
@@ -222,6 +233,9 @@ func (r *Registry) RelationArgs() map[string]map[string]bool {
 		}
 		if spec.Owner != nil {
 			addOwnerRelationArgs(out)
+		}
+		if spec.SameResource != nil {
+			addSameResourceKeyArgs(out)
 		}
 		for _, rel := range spec.Relations {
 			args := out[rel.Name]
