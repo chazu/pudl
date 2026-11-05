@@ -7,14 +7,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func mustParse(t *testing.T, raw string) *Spec {
+func mustParseSpec(t *testing.T, raw string) *Spec {
 	t.Helper()
 	spec, err := Parse([]byte(raw))
 	require.NoError(t, err)
 	return spec
 }
 
-func TestParseRejectsMistakes(t *testing.T) {
+func TestParseRejectsBadDeclarations(t *testing.T) {
 	for name, raw := range map[string]string{
 		"not a list":        `{"kind": "k8s.cluster", "key": {"host": "endpoint"}}`,
 		"empty list":        `[]`,
@@ -35,7 +35,7 @@ func TestParseRejectsMistakes(t *testing.T) {
 }
 
 func TestKeysReadsEveryDeclaration(t *testing.T) {
-	spec := mustParse(t, `[
+	spec := mustParseSpec(t, `[
 		{"kind": "k8s.cluster", "key": {"host": "endpoint"}},
 		{"kind": "k8s.cluster", "key": {"host": "privateClusterConfig.privateEndpoint"}},
 		{"kind": "k8s.cluster", "key": {"host": {"path": "server", "trim_prefix": "https://"}}}
@@ -52,7 +52,7 @@ func TestKeysReadsEveryDeclaration(t *testing.T) {
 }
 
 func TestKeysNeedEveryPart(t *testing.T) {
-	spec := mustParse(t, `[{"kind": "k8s.object", "key": {"cluster": "cluster", "namespace": "metadata.namespace", "name": "metadata.name"}}]`)
+	spec := mustParseSpec(t, `[{"kind": "k8s.object", "key": {"cluster": "cluster", "namespace": "metadata.namespace", "name": "metadata.name"}}]`)
 	full := spec.Keys(map[string]any{"cluster": "c1", "metadata": map[string]any{"namespace": "default", "name": "web"}})
 	assert.Equal(t, []Key{{Kind: "k8s.object", Key: `{"cluster":"c1","name":"web","namespace":"default"}`}}, full)
 
@@ -65,7 +65,7 @@ func TestKeysNeedEveryPart(t *testing.T) {
 }
 
 func TestKeysFanOutOverOneWildcard(t *testing.T) {
-	spec := mustParse(t, `[{"kind": "k8s.cluster", "key": {"host": {"path": "endpoints[*]", "last_segment": true}}}]`)
+	spec := mustParseSpec(t, `[{"kind": "k8s.cluster", "key": {"host": {"path": "endpoints[*]", "last_segment": true}}}]`)
 	keys := spec.Keys(map[string]any{"endpoints": []any{"https://a/b/1.1.1.1", "2.2.2.2", "", map[string]any{}}})
 	assert.Equal(t, []Key{
 		{Kind: "k8s.cluster", Key: `{"host":"1.1.1.1"}`},
@@ -74,9 +74,9 @@ func TestKeysFanOutOverOneWildcard(t *testing.T) {
 }
 
 func TestCanonicalChangesWithTheSpec(t *testing.T) {
-	a := mustParse(t, `[{"kind": "k8s.cluster", "key": {"host": "endpoint"}}]`)
-	b := mustParse(t, `[{"kind": "k8s.cluster", "key": {"host": {"path": "endpoint", "prepend": "x"}}}]`)
+	a := mustParseSpec(t, `[{"kind": "k8s.cluster", "key": {"host": "endpoint"}}]`)
+	b := mustParseSpec(t, `[{"kind": "k8s.cluster", "key": {"host": {"path": "endpoint", "prepend": "x"}}}]`)
 	assert.NotEqual(t, a.Canonical(), b.Canonical())
-	assert.Equal(t, a.Canonical(), mustParse(t, `[{"key": {"host": "endpoint"}, "kind": "k8s.cluster"}]`).Canonical())
+	assert.Equal(t, a.Canonical(), mustParseSpec(t, `[{"key": {"host": "endpoint"}, "kind": "k8s.cluster"}]`).Canonical())
 	assert.Equal(t, "", (*Spec)(nil).Canonical())
 }
