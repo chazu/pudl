@@ -19,3 +19,8 @@ own command) have no `.packs` record; install once with `--overwrite`. See
 
 `--json` returns `pack`, the workspace `root`, relative `files` paths, and
 the `added`, `upgraded`, `replaced` and `unchanged` lists.
+
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected (as `pudl doctor --fix --only projections` would), so
+a pack upgrade that changes a type's `_pudl.facts` takes effect at once. A
+workspace with no catalog yet is left without one.

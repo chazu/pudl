@@ -119,7 +119,8 @@ detect deletions.
 `pudl import` and `pudl check` project as records arrive. Afterwards they bring
 everything else up to date: data imported before a facts block existed,
 changed facts blocks, and deleted or reassigned entries. `delete`,
-`snapshot prune` and the `pudl doctor --fix` repairs do the same when they finish.
+`snapshot prune`, `pudl pack install`, `pudl example install` and the
+`pudl doctor --fix` repairs do the same when they finish.
 
 `pudl doctor` reports pending reprojection, and
 `pudl doctor --fix [--dry-run] --only projections` runs it explicitly. `pudl query` writes

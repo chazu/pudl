@@ -29,7 +29,8 @@ installed them are replaced with this version's, and new files are added.
 Files you edited, and files installed without a record (including installs
 made with pudl example install before packs had their own command), are
 conflicts: nothing is written and each is listed. --overwrite replaces them,
-keeping your versions as <file>.bak.
+keeping your versions as <file>.bak. When files changed, records already in
+the catalog are reprojected, so their facts follow the pack's current types.
 
 The gcp pack includes draft schemas for the core GCP inventory,
 best-practice policies, gcloud and fixture collectors, and three check
