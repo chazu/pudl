@@ -275,6 +275,15 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 					}
 					continue
 				}
+				// A new content hash for a known resource is its next version.
+				// Read inside the transaction, so two records of one resource in
+				// this observation take consecutive versions.
+				latest, err := tx.GetLatestVersion(*entry.ResourceID)
+				if err != nil {
+					return err
+				}
+				version := latest + 1
+				entry.Version = &version
 				if err := publishObserveEntry(journal, &entry, p.rawDir); err != nil {
 					return err
 				}

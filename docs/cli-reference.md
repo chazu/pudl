@@ -488,6 +488,8 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
+  versions      resources with two entries holding the same version (opt-in:
+                applied only when --only names it)
   projections   projected facts that no longer match the catalog or facts specs
   policy-results policy results that are stale (evaluated with an older policy
                 digest), orphaned, or never evaluated
@@ -521,7 +523,7 @@ Flags:
 | `--fix` | bool |  | Apply the diagnosed repairs |
 | `--health-only` | bool |  | Check workspace health without scanning catalog records |
 | `--include-explicit` | bool |  | Re-infer every entry in scope, including explicit assignments and invalid entries |
-| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, projections, policy-results, data-permissions, sensitive-scrub |
+| `--only` | stringSlice |  | Limit repairs to these names: schema-names, policy-leaves, inference, identity, versions, projections, policy-results, data-permissions, sensitive-scrub |
 | `--origin` | string |  | Check and repair only entries from this origin |
 | `--schema` | string |  | Check and repair only entries assigned to this schema |
 | `--verify-payloads` | bool |  | Verify referenced raw payload hashes without repairing evidence |
@@ -542,6 +544,12 @@ scan found drifted; `--include-explicit` re-infers every entry in scope,
 explicit assignments included. The identity repair backfills missing
 `resource_id`s and recomputes those an older release namespaced by the leaf
 schema.
+
+**`versions`** renumbers each resource whose history holds two entries with
+the same version, 1..N in import order. Observation ingest before pudl-42w
+recorded every observed entry as version 1, so a resource observed in several
+states (a model whose definition changed, say) has several version-1 entries.
+It runs only when named: `--fix --only versions`.
 
 **Likely secrets.** The scan reports likely secrets (known token formats and
 a conservative entropy check) in stored payloads outside `sensitive_fields`
