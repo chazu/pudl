@@ -14,7 +14,9 @@ import (
 // $GCLOUD_PROJECTS replaces the project list; in proj-nocompute the Compute
 // Engine and KMS APIs are disabled, so those commands fail as gcloud's do
 // (KMS without the SERVICE_DISABLED reason); in proj-nobilling every command
-// fails with billing disabled. One organization is listed; its Cloud Asset
+// fails with billing disabled; in proj-hidden the account may not list
+// compute resources, which gcloud's aggregated lists report only as a
+// warning, printing [] and exiting 0. One organization is listed; its Cloud Asset
 // search fails as with the asset API disabled in the billing project, so the
 // CAI collectors fall back to their gcloud commands, unless $GCLOUD_CAI is
 // set: then it returns proj-a's and proj-b's firewall rules (CAI-shaped, as
@@ -39,6 +41,12 @@ fi
 if [ "$p" = proj-nobilling ] && [ "$1" != projects ]; then
 	echo "ERROR: (gcloud.$1.$2.list) FAILED_PRECONDITION: Billing is disabled for project $p. Enable it, then retry." >&2
 	exit 1
+fi
+if [ "$1" = compute ] && [ "$p" = proj-hidden ]; then
+	echo "WARNING: Some requests did not succeed." >&2
+	echo " - Required 'compute.$2.list' permission for 'projects/$p'" >&2
+	echo '[]'
+	exit 0
 fi
 if [ "$1" = kms ] && [ "$p" = proj-nocompute ]; then
 	echo "ERROR: (gcloud.kms.$2.list) PERMISSION_DENIED: Google Cloud KMS API has not been used in project $p before or it is disabled. Enable it, then retry." >&2
@@ -213,6 +221,32 @@ func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
 		require.Len(t, pr.EmptyInputs, 1, model)
 		require.Equal(t, "proj-nocompute", pr.EmptyInputs[0].Item, model)
 		require.Equal(t, "API has not been used in project [^ ]+ before or it is disabled", pr.EmptyInputs[0].Pattern, model)
+	}
+}
+
+// A project that refuses an aggregated list is a failed input, not an empty
+// project: gcloud exits 0 and only warns, which the pack's fail_when
+// catches. The observation is incomplete, so proj-a's address is not the
+// only one the catalog keeps.
+func TestGCPPackHiddenPermissionErrorIsAFailedInput(t *testing.T) {
+	cliWorkspace(t)
+	fakeGcloudOnPath(t)
+	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-hidden"}]`)
+	r := runCLI(t, "pack", "install", "gcp")
+	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+
+	for _, model := range []string{"gcp-addresses", "gcp-instances"} {
+		r = runCLI(t, "check", model, "--json")
+		require.Error(t, r.Err, model)
+		pr := checkedModel(t, r.Stdout).Populate
+		require.NotNil(t, pr, model)
+		require.Empty(t, pr.EmptyInputs, model)
+		require.Len(t, pr.FailedInputs, 1, model)
+		f := pr.FailedInputs[0]
+		require.Equal(t, "proj-hidden", f.Item, model)
+		require.Equal(t, 0, f.ExitStatus, model)
+		require.Contains(t, f.Error, "fail_when", model)
+		require.False(t, snapshotComplete(t, pr.SnapshotID), model)
 	}
 }
 

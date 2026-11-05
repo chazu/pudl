@@ -98,6 +98,10 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
   declares errors that mean "no resources here": a match is an empty input
   (`populate.empty_inputs`), observed with 0 records; the snapshot stays
   complete and dependents run. Timeouts and unmatched errors stay failed.
+- `fail_when: ["Some requests did not succeed"]` (regexes over the stderr of
+  a run that exited 0) declares warnings that mean "only part was read",
+  like gcloud's aggregated lists when a project refuses them: a match is a
+  failed input (exit status 0) and its records are dropped.
 - `runs[].transform: {in: _, out: ...}` reshapes each printed record in CUE
   before `set` and routing (`out: in.versionedResources[0].resource`);
   `out: null` drops it; a transform that fails is a failed input.

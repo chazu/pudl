@@ -55,3 +55,49 @@ fw: #SystemModel & {
 	_, err = Populate{EmptyWhen: []string{""}}.EmptyPatterns()
 	require.ErrorContains(t, err, "populate.empty_when[0] is empty")
 }
+
+func TestLoadModel_FailWhen(t *testing.T) {
+	m, err := loadModel([]byte(`
+fw: #SystemModel & {
+	name: "fw"
+	populate: {
+		fail_when: ["Some requests did not succeed"]
+		runs: [{argv: ["gcloud", "compute", "addresses", "list", "--project=proj-a"]}]
+	}
+}
+`), "fw")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Some requests did not succeed"}, m.Populate.FailWhen)
+	assert.False(t, m.Populate.IsZero())
+}
+
+// A bad or empty fail_when pattern fails the load, also in a fallback.
+func TestLoadModel_FailWhenRejectsBadPatterns(t *testing.T) {
+	_, err := loadModel([]byte(`
+fw: #SystemModel & {
+	name: "fw"
+	populate: {
+		fail_when: ["(unclosed"]
+		runs: [{argv: ["list"]}]
+	}
+}
+`), "fw")
+	require.ErrorContains(t, err, `populate.fail_when[0] "(unclosed" is not a valid regular expression`)
+
+	_, err = loadModel([]byte(`
+fw: #SystemModel & {
+	name: "fw"
+	populate: {
+		runs: [{argv: ["search"]}]
+		fallback: {
+			when: ["PERMISSION_DENIED"]
+			observe: {fail_when: ["(unclosed"], runs: [{argv: ["list"]}]}
+		}
+	}
+}
+`), "fw")
+	require.ErrorContains(t, err, `populate.fallback.observe: populate.fail_when[0]`)
+
+	_, err = Populate{FailWhen: []string{""}}.FailPatterns()
+	require.ErrorContains(t, err, "populate.fail_when[0] is empty, so it would match every run")
+}

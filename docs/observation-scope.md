@@ -33,6 +33,7 @@ snapshots they trust, and pudl tells "absent" apart from "not observed".
 | `timeout` | Per-run limit as a Go duration (default `10m`) |
 | `fail_fast` | Fail the whole populate, ingesting nothing, on the first failed run |
 | `empty_when` | Regular expressions (Go RE2) matched against a failed run's stderr; a match makes the run an empty input (below) |
+| `fail_when` | Regular expressions (Go RE2) matched against the stderr of a run that exited 0; a match makes the run a failed input (below) |
 | `fallback` | `{when, observe, partial?}`: another way to observe the same resources, used when these runs cannot answer (below) |
 
 The environment is inherited, so cloud CLI credentials work. `argv` and `set`
@@ -72,7 +73,7 @@ The fallback is used instead of the populate's runs when:
 
 The remaining runs are skipped and the records already read are discarded,
 so the two sources are never mixed. The fallback has its own `runs`, `each`,
-`timeout`, `fail_fast` and `empty_when`. Its records are routed by the
+`timeout`, `fail_fast`, `empty_when` and `fail_when`. Its records are routed by the
 populate's `schema`, and its failures are failed inputs as usual. It cannot
 set a schema or declare a fallback of its own. The report says
 `source: fallback` with what triggered it (JSON `populate.fallback`: `reason`
@@ -176,6 +177,29 @@ argv, exit status, the matched `pattern`, and `reason`, the stderr line it
 matched), so it stays visible. A timeout, undecodable output, or a failure no
 pattern matches (`PERMISSION_DENIED`, say) is still a failed input. A pattern
 that is not a valid regular expression fails the model's load.
+
+### Warnings that hide a failure
+
+Some commands exit 0 after reading only part of what they were asked for.
+gcloud's aggregated list commands (compute lists that span regions or
+zones) do this when a project refuses the list: they print
+`WARNING: Some requests did not succeed.` on stderr and an empty or partial
+result on stdout. Taken at its word, the project would look empty and its
+resources would be marked gone. List such warnings in `fail_when`:
+
+```cue
+populate: {
+	each: {argv: ["gcloud", "projects", "list", "--format=json"], select: "projectId"}
+	runs: [{argv: ["gcloud", "compute", "addresses", "list", "--project={{item}}", "--format=json"], set: project: "{{item}}"}]
+	fail_when: ["Some requests did not succeed"]
+}
+```
+
+A run that exits 0 with stderr matching one of the patterns is a **failed
+input** with exit status 0: its records are discarded, the snapshot is
+incomplete, and the report's error names the pattern and the stderr line it
+matched. It is never an empty input, and it trips `fail_fast`. `fail_when`
+does not apply to the `each` command.
 
 ## Declare scope and completeness
 
