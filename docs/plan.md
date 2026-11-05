@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl list --count-by; pudl show prints the record (2026-11-04)
+
+`pudl list --count-by schema|origin|format` counts matching entries per
+value (pudl's own record types listed last), with every list filter.
+`pudl show ID` prints the stored record after its details (`--meta-only` for
+the old view; `--json` now includes `raw`). See
+`implog/2026_11_04_list_count_by.md`,
+`implog/2026_11_04_show_record_default.md`. Closes `pudl-kdl`, `pudl-kii`.
+
 ### Every command uses the resolved workspace; identity moves version (2026-11-04)
 
 `list`, `show`, `delete`, `import`, shell completions, `snapshot prune`,
