@@ -1,0 +1,11 @@
+# gitleaks configuration: default rules plus known false positives.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "GCP key algorithm enum values (e.g. KEY_ALG_RSA_2048) in fixtures, not secrets"
+regexes = ['''^KEY_ALG_[A-Z0-9_]+$''']
+
+[[allowlists]]
+description = "Fake JWT used to test secret detection"
+paths = ['''^internal/secretscan/secretscan_test\.go$''']

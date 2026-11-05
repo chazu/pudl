@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pre-commit hooks: gitleaks and ratchets (2026-11-05)
+
+`lefthook.yml` runs two pre-commit jobs: `gitleaks git --pre-commit --staged`
+(with `.gitleaks.toml` allowlisting known fixture false positives) and
+`ratchets check` against the budgets in `ratchet-counts.toml`. Policy: each
+antipattern we want to avoid or eliminate gets a ratchet rule. See
+`implog/2026_11_05_precommit_gitleaks_ratchets.md`.
+
 ### pudl list --count-by; pudl show prints the record (2026-11-04)
 
 `pudl list --count-by schema|origin|format` counts matching entries per
