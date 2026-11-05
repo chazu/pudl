@@ -6,7 +6,7 @@ import (
 	sm "pudl.schemas/pudl/systemmodel@v0"
 )
 
-// GCP content pack models (README: examples/gcp/README.md in the PUDL source).
+// GCP content pack models (README: packs/gcp/README.md in the PUDL source).
 //
 // One collector per resource type, in two variants:
 //   gcp-<type>          runs gcloud against every project gcloud lists, or

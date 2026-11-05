@@ -342,7 +342,7 @@ without MFA, roles anyone can assume); and three checks-only families
 group, RDS → subnet group/VPC), checks that use them (internet-exposed
 instance, instance in the default VPC, database on an unusable key) and impact
 queries: `aws_depends_on_vpc` and the recursive `aws_depends_on` for AWS, and
-`gcp_depends_on_network` for GCP. See the [pack README](../examples/aws/README.md)
+`gcp_depends_on_network` for GCP. See the [pack README](../packs/aws/README.md)
 and the [delivery log](../implog/2026_11_02_aws_content_pack.md).
 
 ### Ownership attribution (2026-11-02)
@@ -377,7 +377,7 @@ fact projection; live (`gcp-<type>`, gcloud with project fan-out) and fixture
 addresses, buckets, Cloud SQL, KMS keys and GKE; cross-resource rules; and
 three checks-only families (network hygiene, data protection, GKE posture)
 that fail on high-severity noncompliance. See the
-[pack README](../examples/gcp/README.md) and the
+[pack README](../packs/gcp/README.md) and the
 [delivery log](../implog/2026_11_02_gcp_content_pack.md), which also records
 five policy and doctor engine findings. Findings 1, 2 and 4 are fixed
 (`pudl-opz`, `pudl-pob`) and the pack's workarounds for them removed; see

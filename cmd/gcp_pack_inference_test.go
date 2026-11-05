@@ -39,7 +39,7 @@ var gcpPackReshaped = map[string]bool{"iam-policies": true, "container-images": 
 // matched any record with `name` and `kind`).
 func TestGCPPackFixturesInferTheirType(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Len(t, gcpPackSchemas, len(gcpPackTypes))
 

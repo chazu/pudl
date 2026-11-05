@@ -87,7 +87,7 @@ func (l graphLookup) edges(typ string) []string {
 
 func TestGraphExportAWSPack(t *testing.T) {
 	cliWorkspace(t)
-	r := runCLI(t, "example", "install", "aws", "--json")
+	r := runCLI(t, "pack", "install", "aws", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	checkPack(t, "aws-fixture-", awsPackTypes, awsPackFamilies, 2)
 
@@ -177,7 +177,7 @@ func relationship(t *testing.T, g graphexport.Graph, typ, src, tgt string) graph
 
 func TestGraphExportGCPPack(t *testing.T) {
 	cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	checkGCPPack(t, 2)
 
@@ -342,7 +342,7 @@ func mustJSON(t *testing.T, v any) []byte {
 func TestGraphExportAsOf(t *testing.T) {
 	cliWorkspace(t)
 	for _, pack := range []string{"aws", "gcp"} {
-		r := runCLI(t, "example", "install", pack, "--json")
+		r := runCLI(t, "pack", "install", pack, "--json")
 		require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	}
 	r := runCLI(t, "check", "aws-fixture-vpcs", "aws-fixture-subnets", "aws-fixture-instances", "--json")

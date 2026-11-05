@@ -56,4 +56,4 @@ IN CHECKS
   pudl query policy_noncompliant severity=high
 
   Details and worked patterns: docs/schema-authoring.md#compliance-policies,
-  examples/gcp/schema/gcp/policies.cue.
+  packs/gcp/schema/gcp/policies.cue.

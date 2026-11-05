@@ -4,7 +4,7 @@
 
 **Status:** Accepted 2026-11-03. The [Decisions](#decisions-2026-11-03) govern;
 the body is the design built on them. Nothing is implemented. Follows the GCP content pack
-(`examples/gcp/`) and the instance-metadata redaction of 2026-11-02.
+(`packs/gcp/`) and the instance-metadata redaction of 2026-11-02.
 
 ## Decision
 
@@ -96,7 +96,7 @@ fallback hides an access regression.
 ## 2. Scope
 
 The pack holds no organization-specific value: no org ID, project ID or
-billing project. New settings in `examples/gcp/schema/models/gcp_pack.cue`:
+billing project. New settings in `packs/gcp/schema/models/gcp_pack.cue`:
 
 ```cue
 // "organization": one search per type per organization the credentials

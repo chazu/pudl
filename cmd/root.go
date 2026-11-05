@@ -120,7 +120,7 @@ func ExecuteContext(ctx context.Context) {
 
 func shouldAutoInitializeGlobal(command string) bool {
 	switch command {
-	case "help", "version", "init", "example", "prime", "guide", "completion", "report", "--help", "-h", "--version", "-v":
+	case "help", "version", "init", "example", "pack", "prime", "guide", "completion", "report", "--help", "-h", "--version", "-v":
 		return false
 	default:
 		return true

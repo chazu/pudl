@@ -39,7 +39,7 @@ the resource.
 ## The loop
 
 1. Set up:       pudl init
-2. Observe:      pudl example install gcp      (or aws; or write a collector:
+2. Observe:      pudl pack install gcp      (or aws; or write a collector:
                  pudl model new NAME --populate 'command:<cmd printing JSON>')
 3. Check:        pudl check COLLECTOR... CHECK-FAMILY --json
 4. Read:         pudl report --json; pudl policy list; pudl policy show POLICY;
@@ -52,7 +52,7 @@ the resource.
 Offline first run, with the GCP pack's fixtures:
 
   pudl init
-  pudl example install gcp
+  pudl pack install gcp
   pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
     gcp-fixture-network-hygiene-checks --json --detailed-exitcode
   pudl policy show gcp.#FirewallBestPractice

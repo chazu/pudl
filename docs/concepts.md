@@ -238,11 +238,15 @@ sensitive-value scrub runs only when you name it with `--only sensitive-scrub`.
 
 ## Content packs
 
-`pudl example install NAME` copies CUE files and fixtures into the workspace:
+`pudl pack install NAME` and `pudl example install NAME` copy CUE files and
+fixtures into the workspace:
 
-- `gcp` and `aws`: types, policies, collectors, rules and check families. See
-  the [GCP](../examples/gcp/README.md) and [AWS](../examples/aws/README.md)
-  pack READMEs.
+- `pudl pack install gcp|aws`: types, policies, collectors, rules and check
+  families. See the [GCP](../packs/gcp/README.md) and
+  [AWS](../packs/aws/README.md) pack READMEs.
+
+The tutorials install with `pudl example install`:
+
 - `gcp-network-hygiene`: a single worked firewall example. See
   [GCP network hygiene](gcp-network-hygiene.md).
 - `git-inventory`: the drift tutorial in [getting started](getting-started.md).

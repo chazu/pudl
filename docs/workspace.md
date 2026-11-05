@@ -31,7 +31,9 @@ It also installs the pudl agent skill in `.claude/skills/`. It keeps an edited
 to refresh the agent skill. The built-in schemas also refresh on their own:
 the first command a new pudl runs in the workspace rewrites them (pudl owns
 these files, so edits to them are lost), removes retired ones it shipped, and
-says so on stderr.
+says so on stderr. This holds in global mode too (`pudl --global check`,
+`pudl --global model validate`), and `pudl init --global` repairs an existing
+`~/.pudl` the same way, keeping its `config.yaml` unless you pass `--force`.
 
 `pudl config --paths --json` prints every effective path.
 

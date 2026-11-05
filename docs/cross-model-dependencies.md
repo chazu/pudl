@@ -80,8 +80,8 @@ pudl query aws_depends_on on=sg-0aa00000000000003
 ```
 
 These read latest-known facts, so run the collectors first. See the
-[GCP](../examples/gcp/README.md#impact-what-depends-on-this-network) and
-[AWS](../examples/aws/README.md#relationships-and-impact) pack READMEs. Write
+[GCP](../packs/gcp/README.md#impact-what-depends-on-this-network) and
+[AWS](../packs/aws/README.md#relationships-and-impact) pack READMEs. Write
 your own impact rules the same way: project the references with
 `_pudl.facts` ([projection](projection.md)) and join them in a recursive rule
 ([Datalog](datalog.md)).

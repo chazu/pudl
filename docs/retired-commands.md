@@ -162,6 +162,26 @@ kept as aliases.
 | `pudl validate --entry ID` | `pudl doctor --entry ID` |
 | `pudl list --all-workspaces` | `pudl list` (the active catalog; filter with `--origin`) |
 
+## Content packs
+
+The AWS and GCP content packs are no longer examples. Their sources moved from
+`examples/aws` and `examples/gcp` to `packs/aws` and `packs/gcp`, and they
+install with `pudl pack` (2026-11-04). `pudl example` keeps the tutorials
+(`git-inventory`, `gcp-network-hygiene`). There are no aliases.
+
+| Former command | Current command |
+| --- | --- |
+| `pudl example install gcp` | `pudl pack install gcp` |
+| `pudl example install aws` | `pudl pack install aws` |
+
+A pack install is recorded in `<workspace>/.packs/<name>.json`. The
+`.examples/gcp.json` and `.examples/aws.json` records of earlier installs are
+not read or migrated, so pudl treats those files as installed without a
+record: the first `pudl pack install` reports every file that differs from
+this version as a conflict. Run `pudl pack install gcp --overwrite` (or `aws`)
+once; it keeps your versions as `<file>.bak`. The old `.examples/<pack>.json`
+can then be deleted.
+
 ## Agent memory application
 
 The agent self-improvement application was removed: `memory`, `hooks`, `pull`,

@@ -150,7 +150,7 @@ GCP type schemas, best-practice **policies**, collectors and **check
 families**, plus gcloud-shaped fixtures:
 
 ```bash
-pudl example install gcp
+pudl pack install gcp
 pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
   gcp-fixture-network-hygiene-checks
 ```
@@ -242,8 +242,8 @@ It is not resolved. When the waiver expires, the finding counts again.
 
 ## Next steps
 
-- Collect from a real project with the [GCP pack](../examples/gcp/README.md)
-  or the [AWS pack](../examples/aws/README.md).
+- Collect from a real project with the [GCP pack](../packs/gcp/README.md)
+  or the [AWS pack](../packs/aws/README.md).
 - Write your own collector with
   `pudl model new NAME --populate 'command:...'`, or import files with
   `pudl import --path FILE`.
