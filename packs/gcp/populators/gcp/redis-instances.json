@@ -1,0 +1,66 @@
+[
+  {
+    "name": "projects/example-project/locations/us-central1/instances/sessions",
+    "displayName": "sessions",
+    "locationId": "us-central1-a",
+    "redisVersion": "REDIS_7_2",
+    "tier": "STANDARD_HA",
+    "memorySizeGb": 5,
+    "host": "10.30.0.134",
+    "port": 6379,
+    "authorizedNetwork": "projects/example-project/global/networks/prod-vpc",
+    "connectMode": "PRIVATE_SERVICE_ACCESS",
+    "reservedIpRange": "10.30.0.0/29",
+    "state": "READY",
+    "createTime": "2024-11-12T08:00:00.000000Z",
+    "authEnabled": true,
+    "transitEncryptionMode": "SERVER_AUTHENTICATION",
+    "persistenceConfig": {
+      "persistenceMode": "DISABLED"
+    },
+    "labels": {
+      "team": "platform"
+    },
+    "alternativeLocationId": "us-central1-b",
+    "replicaCount": 1,
+    "readReplicasMode": "READ_REPLICAS_DISABLED",
+    "serverCaCerts": [
+      {
+        "serialNumber": "0",
+        "createTime": "2024-11-12T08:01:00Z",
+        "expireTime": "2034-11-10T08:01:00Z",
+        "sha1Fingerprint": "5e1f0c7a6b2d8e9f00112233445566778899aabb",
+        "cert": "-----BEGIN CERTIFICATE-----\nMIIBexample\n-----END CERTIFICATE-----"
+      }
+    ],
+    "availableMaintenanceVersions": [
+      "20260916_03_01"
+    ]
+  },
+  {
+    "name": "projects/example-project/locations/us-central1/instances/cache",
+    "displayName": "cache",
+    "locationId": "us-central1-a",
+    "redisVersion": "REDIS_7_2",
+    "tier": "BASIC",
+    "memorySizeGb": 5,
+    "host": "10.30.0.122",
+    "port": 6379,
+    "authorizedNetwork": "projects/example-project/global/networks/prod-vpc",
+    "connectMode": "PRIVATE_SERVICE_ACCESS",
+    "reservedIpRange": "10.30.0.0/29",
+    "state": "READY",
+    "createTime": "2024-11-12T08:00:00.000000Z",
+    "authEnabled": false,
+    "transitEncryptionMode": "DISABLED",
+    "persistenceConfig": {
+      "persistenceMode": "DISABLED"
+    },
+    "labels": {
+      "team": "platform"
+    },
+    "availableMaintenanceVersions": [
+      "20260916_03_01"
+    ]
+  }
+]

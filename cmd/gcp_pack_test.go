@@ -20,6 +20,7 @@ var gcpPackTypes = []string{
 	"organizations", "folders", "org-policies", "firewall-policies", "binauthz-policies", "services",
 	"forwarding-rules", "target-http-proxies", "target-https-proxies", "url-maps", "backend-services", "healthchecks",
 	"http-healthchecks", "network-endpoint-groups", "ssl-certificates", "ssl-policies", "security-policies", "dns-record-sets",
+	"alloydb-clusters", "alloydb-instances", "redis-instances", "firestore-databases", "sql-backups", "sql-backup-runs",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}

@@ -1,0 +1,52 @@
+[
+  {
+    "name": "//firestore.googleapis.com/projects/example-project/databases/(default)",
+    "assetType": "firestore.googleapis.com/Database",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/databases/(default)",
+          "uid": "c72fd8e4-0000-4000-8000-00003cebf73a",
+          "createTime": "2024-08-01T12:00:00.000000Z",
+          "updateTime": "2024-08-01T12:00:00.000000Z",
+          "locationId": "nam5",
+          "type": "FIRESTORE_NATIVE",
+          "concurrencyMode": "PESSIMISTIC",
+          "appEngineIntegrationMode": "DISABLED",
+          "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_ENABLED",
+          "deleteProtectionState": "DELETE_PROTECTION_ENABLED",
+          "databaseEdition": "STANDARD",
+          "deleteTime": "1970-01-01T00:00:00Z",
+          "enhancedTextSearchQueryMode": "ENHANCED_QUERY_MODE_DISABLED"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//firestore.googleapis.com/projects/example-project/databases/events",
+    "assetType": "firestore.googleapis.com/Database",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/databases/events",
+          "uid": "6c20ef82-0000-4000-8000-000040123ec9",
+          "createTime": "2024-08-01T12:00:00.000000Z",
+          "updateTime": "2024-08-01T12:00:00.000000Z",
+          "locationId": "nam5",
+          "type": "FIRESTORE_NATIVE",
+          "concurrencyMode": "PESSIMISTIC",
+          "appEngineIntegrationMode": "DISABLED",
+          "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+          "deleteProtectionState": "DELETE_PROTECTION_DISABLED",
+          "databaseEdition": "STANDARD",
+          "deleteTime": "1970-01-01T00:00:00Z",
+          "enhancedTextSearchQueryMode": "ENHANCED_QUERY_MODE_DISABLED"
+        }
+      }
+    ]
+  }
+]

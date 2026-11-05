@@ -1,0 +1,80 @@
+[
+  {
+    "name": "projects/example-project/locations/us-central1/clusters/ledger/instances/primary",
+    "uid": "bdd700a3-0000-4000-8000-00000a7fe573",
+    "createTime": "2025-02-10T15:20:00.000000Z",
+    "state": "READY",
+    "instanceType": "PRIMARY",
+    "availabilityType": "REGIONAL",
+    "machineConfig": {
+      "cpuCount": 4
+    },
+    "labels": {
+      "team": "payments"
+    },
+    "ipAddress": "10.20.0.5",
+    "clientConnectionConfig": {
+      "sslConfig": {
+        "sslMode": "ENCRYPTED_ONLY"
+      },
+      "requireConnectors": false
+    },
+    "databaseFlags": {
+      "alloydb.iam_authentication": "on"
+    },
+    "updateTime": "2026-01-05T21:26:35.805234293Z",
+    "reconciling": false
+  },
+  {
+    "name": "projects/example-project/locations/us-central1/clusters/ledger/instances/reports",
+    "uid": "53d9618f-0000-4000-8000-0000ab1930cb",
+    "createTime": "2025-03-01T10:00:00.000000Z",
+    "state": "READY",
+    "instanceType": "READ_POOL",
+    "availabilityType": "ZONAL",
+    "machineConfig": {
+      "cpuCount": 2
+    },
+    "readPoolConfig": {
+      "nodeCount": 2
+    },
+    "ipAddress": "10.20.0.9",
+    "clientConnectionConfig": {
+      "sslConfig": {
+        "sslMode": "ENCRYPTED_ONLY"
+      }
+    },
+    "updateTime": "2026-01-05T21:26:35.805234293Z",
+    "reconciling": false
+  },
+  {
+    "name": "projects/example-project/locations/us-east1/clusters/search/instances/primary",
+    "uid": "2e814eed-0000-4000-8000-0000283e6764",
+    "createTime": "2025-06-01T09:45:00.000000Z",
+    "state": "READY",
+    "instanceType": "PRIMARY",
+    "availabilityType": "ZONAL",
+    "machineConfig": {
+      "cpuCount": 2
+    },
+    "networkConfig": {
+      "enablePublicIp": true,
+      "authorizedExternalNetworks": [
+        {
+          "cidrRange": "203.0.113.0/24"
+        }
+      ]
+    },
+    "publicIpAddress": "198.51.100.20",
+    "clientConnectionConfig": {
+      "sslConfig": {
+        "sslMode": "ALLOW_UNENCRYPTED_AND_ENCRYPTED"
+      }
+    },
+    "pscInstanceConfig": {
+      "pscDnsName": "abc.example-project.alloydb-psc.goog."
+    },
+    "updateTime": "2026-01-05T21:26:35.805234293Z",
+    "reconciling": false
+  }
+]

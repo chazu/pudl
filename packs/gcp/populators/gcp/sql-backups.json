@@ -1,0 +1,199 @@
+[
+  {
+    "kind": "sql#backup",
+    "name": "projects/example-project/backups/f50f4e5a-0000-4000-8000-0000e9dcc29e",
+    "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/backups/f50f4e5a-0000-4000-8000-0000e9dcc29e",
+    "instance": "orders-db",
+    "type": "AUTOMATED",
+    "backupKind": "SNAPSHOT",
+    "state": "SUCCESSFUL",
+    "databaseVersion": "POSTGRES_15",
+    "location": "us",
+    "backupRun": "projects/example-project/instances/orders-db/backupRuns/1767582101547",
+    "backupInterval": {
+      "startTime": "2026-01-05T06:00:01.300Z",
+      "endTime": "2026-01-05T06:04:12.480Z"
+    },
+    "instanceSettings": {
+      "kind": "sql#instance",
+      "region": "us-central1",
+      "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/orders-db",
+      "settings": {
+        "kind": "sql#settings",
+        "tier": "db-custom-2-7680",
+        "availabilityType": "REGIONAL",
+        "userLabels": {
+          "team": "payments"
+        },
+        "backupConfiguration": {
+          "kind": "sql#backupConfiguration",
+          "enabled": true,
+          "startTime": "05:00",
+          "pointInTimeRecoveryEnabled": true,
+          "transactionLogRetentionDays": 7,
+          "backupRetentionSettings": {
+            "retainedBackups": 7,
+            "retentionUnit": "COUNT"
+          }
+        }
+      }
+    },
+    "satisfiesPzs": false,
+    "satisfiesPzi": false
+  },
+  {
+    "kind": "sql#backup",
+    "name": "projects/example-project/backups/0aff0a2a-0000-4000-8000-00003b47588b",
+    "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/backups/0aff0a2a-0000-4000-8000-00003b47588b",
+    "instance": "orders-db",
+    "type": "AUTOMATED",
+    "backupKind": "SNAPSHOT",
+    "state": "SUCCESSFUL",
+    "databaseVersion": "POSTGRES_15",
+    "location": "us",
+    "backupRun": "projects/example-project/instances/orders-db/backupRuns/1767609584405",
+    "backupInterval": {
+      "startTime": "2026-01-04T06:00:01.300Z",
+      "endTime": "2026-01-04T06:04:12.480Z"
+    },
+    "instanceSettings": {
+      "kind": "sql#instance",
+      "region": "us-central1",
+      "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/orders-db",
+      "settings": {
+        "kind": "sql#settings",
+        "tier": "db-custom-2-7680",
+        "availabilityType": "REGIONAL",
+        "userLabels": {
+          "team": "payments"
+        },
+        "backupConfiguration": {
+          "kind": "sql#backupConfiguration",
+          "enabled": true,
+          "startTime": "05:00",
+          "pointInTimeRecoveryEnabled": true,
+          "transactionLogRetentionDays": 7,
+          "backupRetentionSettings": {
+            "retainedBackups": 7,
+            "retentionUnit": "COUNT"
+          }
+        }
+      }
+    },
+    "satisfiesPzs": false,
+    "satisfiesPzi": false
+  },
+  {
+    "kind": "sql#backup",
+    "name": "projects/example-project/backups/94a147cb-0000-4000-8000-00002128def6",
+    "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/backups/94a147cb-0000-4000-8000-00002128def6",
+    "instance": "orders-db",
+    "type": "AUTOMATED",
+    "backupKind": "SNAPSHOT",
+    "state": "SUCCESSFUL",
+    "databaseVersion": "POSTGRES_15",
+    "location": "us",
+    "backupRun": "projects/example-project/instances/orders-db/backupRuns/1767628032108",
+    "backupInterval": {
+      "startTime": "2026-01-03T06:00:01.300Z",
+      "endTime": "2026-01-03T06:04:12.480Z"
+    },
+    "instanceSettings": {
+      "kind": "sql#instance",
+      "region": "us-central1",
+      "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/orders-db",
+      "settings": {
+        "kind": "sql#settings",
+        "tier": "db-custom-2-7680",
+        "availabilityType": "REGIONAL",
+        "userLabels": {
+          "team": "payments"
+        },
+        "backupConfiguration": {
+          "kind": "sql#backupConfiguration",
+          "enabled": true,
+          "startTime": "05:00",
+          "pointInTimeRecoveryEnabled": true,
+          "transactionLogRetentionDays": 7,
+          "backupRetentionSettings": {
+            "retainedBackups": 7,
+            "retentionUnit": "COUNT"
+          }
+        }
+      }
+    },
+    "satisfiesPzs": false,
+    "satisfiesPzi": false
+  },
+  {
+    "kind": "sql#backup",
+    "name": "projects/example-project/backups/2a3c84a8-0000-4000-8000-0000a64be478",
+    "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/backups/2a3c84a8-0000-4000-8000-0000a64be478",
+    "instance": "reporting-db",
+    "type": "AUTOMATED",
+    "backupKind": "SNAPSHOT",
+    "state": "SUCCESSFUL",
+    "databaseVersion": "POSTGRES_14",
+    "location": "us",
+    "backupRun": "projects/example-project/instances/reporting-db/backupRuns/1767572231428",
+    "backupInterval": {
+      "startTime": "2026-01-05T06:00:01.300Z",
+      "endTime": "2026-01-05T06:04:12.480Z"
+    },
+    "instanceSettings": {
+      "kind": "sql#instance",
+      "region": "us-central1",
+      "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/reporting-db",
+      "settings": {
+        "kind": "sql#settings",
+        "tier": "db-custom-2-7680",
+        "availabilityType": "REGIONAL",
+        "userLabels": {},
+        "backupConfiguration": {
+          "kind": "sql#backupConfiguration",
+          "enabled": true,
+          "startTime": "05:00",
+          "pointInTimeRecoveryEnabled": true,
+          "transactionLogRetentionDays": 7,
+          "backupRetentionSettings": {
+            "retainedBackups": 7,
+            "retentionUnit": "COUNT"
+          }
+        }
+      }
+    },
+    "satisfiesPzs": false,
+    "satisfiesPzi": false
+  },
+  {
+    "kind": "sql#backup",
+    "name": "projects/example-project/backups/ecd55cc6-0000-4000-8000-00004bdd0f9e",
+    "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/backups/ecd55cc6-0000-4000-8000-00004bdd0f9e",
+    "instance": "old-orders-db",
+    "type": "FINAL",
+    "backupKind": "SNAPSHOT",
+    "state": "SUCCESSFUL",
+    "databaseVersion": "POSTGRES_13",
+    "location": "us",
+    "description": "final backup before deletion",
+    "backupInterval": {
+      "startTime": "2025-12-01T10:00:00.000Z",
+      "endTime": "2025-12-01T10:06:00.000Z"
+    },
+    "instanceSettings": {
+      "kind": "sql#instance",
+      "region": "us-central1",
+      "selfLink": "https://sqladmin.googleapis.com/sql/v1beta4/projects/example-project/instances/old-orders-db",
+      "settings": {
+        "kind": "sql#settings",
+        "tier": "db-custom-1-3840",
+        "availabilityType": "ZONAL",
+        "userLabels": {
+          "team": "payments"
+        }
+      }
+    },
+    "satisfiesPzs": false,
+    "satisfiesPzi": false
+  }
+]

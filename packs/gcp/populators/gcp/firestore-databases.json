@@ -1,0 +1,38 @@
+[
+  {
+    "name": "projects/example-project/databases/(default)",
+    "uid": "c72fd8e4-0000-4000-8000-00003cebf73a",
+    "createTime": "2024-08-01T12:00:00.000000Z",
+    "updateTime": "2024-08-01T12:00:00.000000Z",
+    "locationId": "nam5",
+    "type": "FIRESTORE_NATIVE",
+    "concurrencyMode": "PESSIMISTIC",
+    "appEngineIntegrationMode": "DISABLED",
+    "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_ENABLED",
+    "deleteProtectionState": "DELETE_PROTECTION_ENABLED",
+    "databaseEdition": "STANDARD",
+    "earliestVersionTime": "2026-01-05T22:32:39.103634Z",
+    "etag": "INaSlcr+8ZcDMJCl77yn4pcD",
+    "freeTier": false,
+    "realtimeUpdatesMode": "REALTIME_UPDATES_MODE_ENABLED",
+    "versionRetentionPeriod": "604800s"
+  },
+  {
+    "name": "projects/example-project/databases/events",
+    "uid": "6c20ef82-0000-4000-8000-000040123ec9",
+    "createTime": "2024-08-01T12:00:00.000000Z",
+    "updateTime": "2024-08-01T12:00:00.000000Z",
+    "locationId": "nam5",
+    "type": "FIRESTORE_NATIVE",
+    "concurrencyMode": "PESSIMISTIC",
+    "appEngineIntegrationMode": "DISABLED",
+    "pointInTimeRecoveryEnablement": "POINT_IN_TIME_RECOVERY_DISABLED",
+    "deleteProtectionState": "DELETE_PROTECTION_DISABLED",
+    "databaseEdition": "STANDARD",
+    "earliestVersionTime": "2026-01-05T22:32:39.103634Z",
+    "etag": "INaSlcr+8ZcDMJCl77yn4pcD",
+    "freeTier": false,
+    "realtimeUpdatesMode": "REALTIME_UPDATES_MODE_ENABLED",
+    "versionRetentionPeriod": "3600s"
+  }
+]

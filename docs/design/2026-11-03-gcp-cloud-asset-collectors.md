@@ -445,6 +445,30 @@ alone.
     so the project reads as empty (`pudl-zbj`). Global-only lists (legacy
     HTTP health checks, managed zones) fail properly.
 
+- **Batch (c), 2026-11-05 (`pudl-q4v.7`).** AlloyDB clusters and
+  instances, Redis instances and Firestore databases on CAI with gcloud
+  fallbacks; Cloud SQL backups and backup runs through gcloud only.
+  - Live parity (values compared): AlloyDB differs only in gcloud's
+    `updateTime` (it moves without a configuration change) and
+    `reconciling`; Redis in gcloud's `availableMaintenanceVersions` and CA
+    certificate PEMs; Firestore in CAI's zero `deleteTime` and
+    `enhancedTextSearchQueryMode` and gcloud's `earliestVersionTime` (moves
+    every minute), `etag`, `freeTier`, `keyPrefix`, `realtimeUpdatesMode`
+    and `versionRetentionPeriod`. The shapes drop these and add the
+    location the AlloyDB and Redis names hold.
+  - Cloud SQL `Backup` and `BackupRun` describe the same backups: a Backup
+    names its run (`backupRun`), carries the instance's settings at the
+    time, and outlives a deleted instance (final backups); a run goes with
+    its instance and records failures. Both are collected, newest
+    `_gcpBackupHistory` per instance. `gcloud sql backups list
+    --instance=I` lists runs newest first; without `--instance` it lists
+    the project's Backups newest first, and `--filter='instance="I"'`
+    matches the name exactly. The helpers list instances with gcloud
+    (Backups: the instances the backups name) rather than from CAI as §5
+    planned, which keeps the collectors' fallback-free per-project form.
+  - CAI's copy of a backup run lags: a run gcloud already reports
+    `SUCCESSFUL` can still be `RUNNING` in CAI.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:

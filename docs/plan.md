@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: AlloyDB, Redis, Firestore and Cloud SQL backups (2026-11-05)
+
+Batch (c) of `pudl-q4v.7`: AlloyDB clusters and instances, Redis instances
+and Firestore databases on CAI with gcloud fallbacks (live parity verified
+end to end); Cloud SQL backups and backup runs through gcloud helpers, the
+newest `_gcpBackupHistory` (default 10) per instance. See
+`implog/2026_11_05_gcp_batch_c_data_stores.md`. Batches (d)–(f) remain.
+
 ### populate.fail_when: warnings that hide a failure (2026-11-05)
 
 A command source can declare `fail_when` (stderr regexes for runs that
