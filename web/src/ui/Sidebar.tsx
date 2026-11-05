@@ -7,6 +7,7 @@ import type { ProjectionId, SemanticView } from '../projection/types';
 import type { Selection } from '../render/highlight';
 import type { ViewState } from '../visual/viewState';
 import { CoveragePanel } from './CoveragePanel';
+import { isOnlyOwner, isOnlyType, onlyOwner, onlyType } from './filters';
 import { HierarchyTree } from './HierarchyTree';
 
 interface Props {
@@ -143,6 +144,11 @@ export function Sidebar(props: Props) {
       else scope.add(owner);
       return { ...s, scope: scope.size === all.length ? null : scope };
     });
+  // Every type in the graph, so "only" holds when the view changes.
+  const allTypes = useMemo(() => [...new Set(index.graph.resources.map((r) => r.type))], [index]);
+  const isolateOwner = (owner: string) => onState((s) => ({ ...s, scope: onlyOwner(s.scope, owner) }));
+  const isolateType = (type: string) => onState((s) => ({ ...s, hiddenTypes: onlyType(s.hiddenTypes, type, allTypes) }));
+
   const toggleType = (type: string) =>
     onState((s) => {
       const hiddenTypes = new Set(s.hiddenTypes);
@@ -202,6 +208,7 @@ export function Sidebar(props: Props) {
                 <input type="checkbox" checked={!state.scope || state.scope.has(owner)} onChange={() => toggleOwner(owner)} />
                 <span className="prov">{info.provider.toUpperCase()}</span> {info.label}
               </label>
+              <OnlyButton only={isOnlyOwner(state.scope, owner)} what={info.label} onClick={() => isolateOwner(owner)} />
             </li>
           ))}
         </ul>
@@ -217,6 +224,7 @@ export function Sidebar(props: Props) {
                 <span className={`code cls-${index.vocab.resourceType(type).cls}`}>{index.vocab.resourceType(type).code}</span> {index.vocab.resourceType(type).label}
                 <span className="count">{n}</span>
               </label>
+              <OnlyButton only={isOnlyType(state.hiddenTypes, type, allTypes)} what={index.vocab.resourceType(type).label} onClick={() => isolateType(type)} />
             </li>
           ))}
         </ul>
@@ -227,5 +235,14 @@ export function Sidebar(props: Props) {
         <HierarchyTree view={view} state={state} selection={props.selection} nameOf={nameOf} onSelectResource={props.onSelectResource} onSelectGroup={props.onSelectGroup} onToggleGroup={props.onToggleGroup} />
       </section>
     </aside>
+  );
+}
+
+/** Isolates one list item; reads "all" (and shows everything) once it is isolated. */
+function OnlyButton({ only, what, onClick }: { only: boolean; what: string; onClick(): void }) {
+  return (
+    <button type="button" className={`only${only ? ' on' : ''}`} onClick={onClick} title={only ? 'Show all again' : `Show only ${what}`}>
+      {only ? 'all' : 'only'}
+    </button>
   );
 }

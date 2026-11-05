@@ -124,7 +124,12 @@ code, .code { font-family: var(--mono); }
 .results li.out { color: var(--muted); }
 .results .code, .checks .code { display: inline-block; min-width: 34px; font-size: 10px; font-weight: 600; }
 .checks { list-style: none; margin: 0; padding: 0; max-height: 170px; overflow: auto; }
-.checks li label { display: flex; align-items: center; gap: 5px; padding: 1px 0; cursor: pointer; white-space: nowrap; }
+.checks li { display: flex; align-items: center; gap: 4px; }
+.checks li label { display: flex; align-items: center; gap: 5px; padding: 1px 0; cursor: pointer; white-space: nowrap; flex: 1; min-width: 0; }
+.checks .only { visibility: hidden; flex: none; padding: 0 4px; border: 0; background: none; color: var(--muted); font-size: 10px; cursor: pointer; }
+.checks li:hover .only, .checks .only:focus-visible, .checks .only.on { visibility: visible; }
+.checks .only:hover { color: inherit; text-decoration: underline; }
+.checks .only.on { color: var(--accent); }
 .checks .count { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 10.5px; }
 .checks .prov { font-size: 9.5px; color: var(--muted); font-family: var(--mono); min-width: 26px; }
 
