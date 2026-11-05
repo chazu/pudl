@@ -217,8 +217,9 @@ fails the collector with nothing ingested.
 ### Cloud Asset Inventory
 
 Networks, subnets, firewall rules, routes, routers, addresses, GKE clusters,
-Cloud Run services, Pub/Sub topics, service accounts, DNS zones, KMS key
-rings and keys, custom roles and service account keys are collected through
+Cloud Run services, Pub/Sub topics and subscriptions, service accounts, DNS
+zones, KMS key rings and keys, custom roles and service account keys are
+collected through
 Cloud Asset Inventory (CAI) search: one
 search per type
 for every organization your credentials can see (`gcloud organizations list`,
@@ -231,8 +232,9 @@ When CAI cannot answer (the asset API disabled or unbillable, or permission
 denied), the collector falls back to its per-project gcloud commands and the
 report says `source: fallback` with the error. Both sources store identical
 records: each type's records are normalized to one shape (no `kind`
-differences, fingerprints, etags or gcloud-only fields, DNS visibility in
-lower case, a service account's `disabled` always stated), so switching
+differences, fingerprints, etags or gcloud-only fields such as a
+subscription's `state`, DNS visibility in lower case, a service account's
+`disabled` always stated), so switching
 creates no new versions. CAI lists KMS key rings and keys in every location;
 the collectors keep `_gcpKMSLocations`, as the gcloud commands do. Custom
 roles defined in an organization rather than a project, and Google-managed
@@ -254,8 +256,7 @@ Other types stay on gcloud, because CAI's copy loses something checks use:
 compute instances (CAI's metadata omits most keys, including settings such
 as `disable-legacy-endpoints`, and lower-cases values), Cloud SQL instances
 (an older API version without `settings.edition`), buckets (no
-`publicAccessPrevention` for some), and Pub/Sub subscriptions (not yet
-compared).
+`publicAccessPrevention` for some).
 
 Kubernetes deployments are collected through CAI only: gcloud cannot list
 Kubernetes objects, so `gcp-k8s-deployments` has no fallback and searches

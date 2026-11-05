@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pub/Sub subscriptions on Cloud Asset Inventory (2026-11-05)
+
+Live parity: CAI and gcloud agree except gcloud-only `state` and
+`topicMessageRetentionDuration`, which the shape drops;
+`gcp-pubsub-subscriptions` now searches CAI first. See
+`implog/2026_11_05_pubsub_subscriptions_cai.md`. Closes `pudl-q4v.10`.
+
 ### Check reports grouped by project and owner (2026-11-05)
 
 Findings record the cataloged resource one of their values identifies

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "//pubsub.googleapis.com/projects/example-project/subscriptions/orders-worker",
+    "assetType": "pubsub.googleapis.com/Subscription",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/subscriptions/orders-worker",
+          "topic": "projects/example-project/topics/orders",
+          "pushConfig": {},
+          "ackDeadlineSeconds": 60,
+          "messageRetentionDuration": "604800s",
+          "expirationPolicy": {},
+          "deadLetterPolicy": {
+            "deadLetterTopic": "projects/example-project/topics/orders-dlq",
+            "maxDeliveryAttempts": 5
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//pubsub.googleapis.com/projects/example-project/subscriptions/orders-webhook",
+    "assetType": "pubsub.googleapis.com/Subscription",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/subscriptions/orders-webhook",
+          "topic": "projects/example-project/topics/orders",
+          "pushConfig": {
+            "pushEndpoint": "https://hooks.example.com/pubsub?token=fixture-not-a-real-token",
+            "attributes": {
+              "x-goog-version": "v1"
+            }
+          },
+          "ackDeadlineSeconds": 10,
+          "messageRetentionDuration": "604800s",
+          "expirationPolicy": {
+            "ttl": "2678400s"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//pubsub.googleapis.com/projects/example-project/subscriptions/orders-run-push",
+    "assetType": "pubsub.googleapis.com/Subscription",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "projects/example-project/subscriptions/orders-run-push",
+          "topic": "projects/example-project/topics/orders",
+          "pushConfig": {
+            "pushEndpoint": "https://orders-api-example-uc.a.run.app/pubsub/push?token=fixture-not-a-real-token",
+            "oidcToken": {
+              "serviceAccountEmail": "orders-api@example-project.iam.gserviceaccount.com"
+            }
+          },
+          "ackDeadlineSeconds": 30,
+          "messageRetentionDuration": "604800s",
+          "expirationPolicy": {}
+        }
+      }
+    ]
+  }
+]

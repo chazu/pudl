@@ -358,7 +358,7 @@ alone.
   differs), buckets (even `--raw` differs in formats, and CAI lacks
   `publicAccessPrevention` for some buckets), project IAM policies (same
   role/member pairs, no `auditConfigs`; search is not granted everywhere;
-  see pudl-q4v.5), Pub/Sub subscriptions (none to compare).
+  see pudl-q4v.5). Pub/Sub subscriptions moved to CAI on 2026-11-05 (below).
 
 - **IAM, 2026-11-03 (`pudl-q4v.5`).** `search-all-iam-policies` per
   project: one result per resource, `policy` holding only `bindings`, the
@@ -389,6 +389,12 @@ alone.
   project of a few dozen images. Runs time out after 30 minutes. Remote and
   virtual repositories are skipped; the surveyed
   organization has none.
+
+- **Pub/Sub subscriptions, 2026-11-05 (`pudl-q4v.10`).** CAI found
+  subscriptions gcloud could not list (one project refused
+  `pubsub.subscriptions.list`). On those in both, every shared value is
+  equal; CAI omits `state` and `topicMessageRetentionDuration`. Neither is used by a fact, policy or check; the shape drops both, and
+  subscriptions moved to CAI.
 
 ## Decisions (2026-11-03)
 
