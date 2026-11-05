@@ -83,7 +83,8 @@ SNAPSHOTS
   pudl snapshot list --model fw
   pudl snapshot current fw
   pudl snapshot show <new> --compare <old>
-  pudl show <id> --history
+  pudl show <id>                     one record: type, compliance, data
+  pudl show <id> --history           its stored versions and snapshots
   pudl snapshot retain <snapshot-id>
   pudl snapshot prune --model fw --keep 5 --older-than 720h --dry-run
 

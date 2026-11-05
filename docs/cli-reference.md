@@ -78,7 +78,7 @@ These flags apply to every command.
   - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
   - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
   - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
-- [pudl show](#pudl-show) — Show detailed information about a specific data entry
+- [pudl show](#pudl-show) — Show a data entry: its type, compliance and stored record
 - [pudl snapshot](#pudl-snapshot) — Inspect and retain observation snapshots
   - [pudl snapshot current](#pudl-snapshot-current) — Show the newest observation snapshot for a model
   - [pudl snapshot list](#pudl-snapshot-list) — List observation snapshots, newest first
@@ -2058,35 +2058,43 @@ Examples:
 
 ## pudl show
 
-Show detailed information about a specific data entry
+Show a data entry: its type, compliance and stored record
 
 ```text
 pudl show <id> [flags]
 ```
 
 ```text
-Show detailed information about a specific data entry including its content,
-metadata, and schema information.
+Show a data entry: its catalog details (type, origin, format, paths), its
+compliance and the stored record itself.
 
 A compliance section lists each policy applicable to the entry's type with the
 resource's stored status (provisional when the type is a draft), its highest
 violation severity, and its violations (rule, severity, path, kind, declaring
 policy). --json includes it as "compliance".
 
-The ID parameter should be the unique identifier of the data entry as shown
-in the 'pudl list' command output.
+The record follows under RAW DATA: stored JSON indented with its values
+unchanged, YAML re-rendered, other formats verbatim. Sensitive fields were
+redacted when the record was stored; show prints what is stored.
+
+The ID parameter is the entry's proquint or hash as shown by 'pudl list'.
 
 Display Options:
-- --metadata: Show the metadata file content
-- --raw: Show the raw imported data content
-- --json: Print {"entry": ..., "metadata": ..., "raw": ...} as one JSON document;
-  stored JSON is embedded exactly, other formats appear as "raw_text"
+- --meta-only: Show the catalog details and compliance without the record
+- --metadata: Also show the metadata file content
+- --raw: Show the record (the default; kept for compatibility)
+- --field PATH: Print one payload field as JSON
+- --history: Show the resource's stored versions and snapshot observations
+- --json: Print {"entry": ..., "raw": ..., "compliance": ...} as one JSON
+  document ("metadata" with --metadata; no "raw" with --meta-only); stored JSON
+  is embedded exactly, other formats appear as "raw_text"
 
 Examples:
-    pudl show 20250825_222510_test-data           # Show basic info
-    pudl show 20250825_222510_test-data --metadata # Show with metadata
-    pudl show 20250825_222510_test-data --raw      # Show with raw data
-    pudl show 20250825_222510_test-data --metadata --raw # Show everything
+    pudl show vomap-foqab                  # Details, compliance and the record
+    pudl show vomap-foqab --meta-only      # Details and compliance only
+    pudl show vomap-foqab --metadata       # Also the metadata file
+    pudl show vomap-foqab --field name     # One field as JSON
+    pudl show vomap-foqab --json           # Everything as one JSON document
 ```
 
 Flags:
@@ -2095,8 +2103,31 @@ Flags:
 |------|------|---------|-------------|
 | `--field` | string |  | Print one payload field as JSON (nested paths and wildcards supported) |
 | `--history` | bool |  | Show this resource's stored versions and snapshot observations |
+| `--meta-only` | bool |  | Show catalog details and compliance without the stored record |
 | `--metadata` | bool |  | Show metadata file content |
-| `--raw` | bool |  | Show raw data content |
+| `--raw` | bool |  | Show the stored record (the default; kept for compatibility) |
+
+`pudl show ID` prints the entry's catalog details, its compliance section and
+then the stored record under `RAW DATA` (stored JSON indented with its values
+and key order unchanged). Sensitive fields were redacted when the record was
+stored, so show prints the redacted value. `--meta-only` prints the details and
+compliance without the record; `--raw` is the default and is still accepted.
+`--field PATH` prints one payload field as JSON; `--history` lists the
+resource's stored versions and snapshot observations.
+
+`--json` prints one object:
+
+```json
+{
+  "entry": {"id": "…", "proquint": "…", "schema": "…", "origin": "…", "…": "…"},
+  "raw": {"…": "the stored record"},
+  "compliance": [{"policy": "…", "status": "…", "…": "…"}]
+}
+```
+
+Stored JSON is embedded byte for byte as `raw`; other formats (YAML, CSV) appear
+as the string `raw_text`. `--meta-only` omits `raw`/`raw_text`; `--metadata`
+adds the metadata file as `metadata`.
 
 ## pudl snapshot
 

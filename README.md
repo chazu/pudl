@@ -74,9 +74,9 @@ pudl show vomap-foqab
 pudl show vomap-foqab --history
 ```
 
-`pudl show` prints the entry's type (`gcp.#Firewall`) and its compliance
-section; add `--raw` to see the record itself. `--history` lists every
-observation of that resource.
+`pudl show` prints the entry's type (`gcp.#Firewall`), its compliance
+section and the record itself (`--meta-only` leaves the record out).
+`--history` lists every observation of that resource.
 
 Finally, gate on the result as CI would:
 
