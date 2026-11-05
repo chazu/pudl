@@ -88,5 +88,13 @@ fixtures missed it because some rows always had the field.
   `TestGraphExportGCPPack` counts facts per relation (fails without the fix:
   5 route facts instead of 1).
 
+The behaviour change alone left existing catalogs' facts stale (a spec
+that did not change kept its fingerprint, so `gcp_sql_key` was never
+reprojected). The fingerprint of a rewritten arg now carries `AbsentNone`
+(`internal/projection/registry.go`), so every catalog projected before the
+change reprojects (`pudl doctor` reports it; `--fix --only projections` or
+the next import/check/install applies it). Verified on the global catalog:
+every affected resource reprojected, the `gcp_sql_key` warning gone.
+
 `gcp_graph_topic_key` and `gcp_graph_subscription_dead_letter` (older rules
 on plain path args) warn the same way on real data; not changed here.
