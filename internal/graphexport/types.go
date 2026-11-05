@@ -112,6 +112,20 @@ type Resource struct {
 	EntryID    string         `json:"entryId"`
 	Properties map[string]any `json:"properties"`
 	Evidence   []Evidence     `json:"evidence"`
+	// Representations lists each cataloged record of a resource that several
+	// schemas describe (see same_resource). ID is then the group's ID and
+	// the labels come from the first representation. Absent for a resource
+	// with one record.
+	Representations []Representation `json:"representations,omitempty"`
+}
+
+// Representation is one cataloged record of a grouped resource.
+type Representation struct {
+	ID      string `json:"id"`
+	Schema  string `json:"schema"`
+	Type    string `json:"type"`
+	EntryID string `json:"entryId"`
+	Origin  string `json:"origin"`
 }
 
 // Relationship is one derived, directed, typed edge.

@@ -39,9 +39,18 @@ func Subgraph(g *Graph, focus []string, depth int, closure []string) *Graph {
 		}
 	}
 
+	aliases := map[string]string{}
+	for _, r := range g.Resources {
+		for _, rep := range r.Representations {
+			aliases[rep.ID] = r.ID
+		}
+	}
 	in := map[string]bool{}
 	frontier := []string{}
 	for _, id := range focus {
+		if group, ok := aliases[id]; ok {
+			id = group // a grouped member's ID focuses its group
+		}
 		if known[id] && !in[id] {
 			in[id] = true
 			frontier = append(frontier, id)

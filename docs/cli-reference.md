@@ -2073,6 +2073,9 @@ resource's stored status (provisional when the type is a draft), its highest
 violation severity, and its violations (rule, severity, path, kind, declaring
 policy). --json includes it as "compliance".
 
+When records of other schemas describe the same resource (_pudl.same_resource),
+"Same resource as" lists them; --json includes them as "same_resource".
+
 The record follows under RAW DATA: stored JSON indented with its values
 unchanged, YAML re-rendered, other formats verbatim. Sensitive fields were
 redacted when the record was stored; show prints what is stored.
@@ -2121,9 +2124,16 @@ resource's stored versions and snapshot observations.
 {
   "entry": {"id": "…", "proquint": "…", "schema": "…", "origin": "…", "…": "…"},
   "raw": {"…": "the stored record"},
-  "compliance": [{"policy": "…", "status": "…", "…": "…"}]
+  "compliance": [{"policy": "…", "status": "…", "…": "…"}],
+  "same_resource": {"group_id": "…", "kinds": ["k8s.cluster"],
+                    "others": [{"resource_id": "…", "entry_id": "…", "proquint": "…", "schema": "…"}]}
 }
 ```
+
+When records of other schemas describe the same resource (see
+`_pudl.same_resource` in docs/schema-authoring.md), the details list them
+under "Same resource as" and `--json` includes `same_resource`; it is absent
+otherwise.
 
 Stored JSON is embedded byte for byte as `raw`; other formats (YAML, CSV) appear
 as the string `raw_text`. `--meta-only` omits `raw`/`raw_text`; `--metadata`

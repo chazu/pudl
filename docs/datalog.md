@@ -162,6 +162,9 @@ pudl rule add standards.cue --global
 | `resource_owner` | facts | `entry_id`, `resource_id`, `type`, `owner`, `via` |
 | `resource_unowned` | facts | `entry_id`, `resource_id`, `type` |
 | `model_depends_on` | facts | `from`, `to` |
+| `same_resource_key` | facts (projection only) | `entry_id`, `resource_id`, `kind`, `key` |
+| `same_resource` | rules only | `a`, `b`, `kind` |
+| `same_resource_kind` | facts in rule files | `kind`, `label`, `meaning` |
 | `depends_transitive`, `impacted_by`, `cyclic` | rules | see [dependencies](cross-model-dependencies.md) |
 
 Every projected fact also carries `entry_id` and `resource_id`.
@@ -232,6 +235,52 @@ These relations take facts only. The first declaration of a key wins, and a
 later one that disagrees is reported. A resource type's display info and view
 roles normally live in its schema; see
 [schema authoring](schema-authoring.md#make-a-type-appear-in-pudl-ui).
+
+### Shared identity (`same_resource`)
+
+`same_resource(a, b, kind)` says resources `a` and `b` (resource IDs) are
+two records of one real resource. Schemas declare keys in
+[`_pudl.same_resource`](schema-authoring.md#same_resource); projection writes
+each as `same_resource_key(kind, key, resource_id)`, where `key` is the
+canonical JSON of the key's parts, and the built-in rule
+`same_resource_by_key` links resources holding an equal key. The relation
+also has `a = b` rows, because rules cannot say "different"; consumers drop
+them.
+
+A pack writes its own `same_resource` rules when a key needs a join. Rules
+may read `same_resource` itself, so objects can be linked through linked
+clusters:
+
+```cue
+gcp_same_k8s_object: {
+	head: {rel: "same_resource", args: {a: "$A", b: "$B", kind: "k8s.object"}}
+	body: [
+		{rel: "gcp_k8s_object", args: {resource_id: "$A", cluster: "$CL", namespace: "$NS", name: "$N"}},
+		{rel: "gcp_gke_cluster", args: {resource_id: "$GC", self_link: "$CL"}},
+		{rel: "same_resource", args: {a: "$GC", b: "$KC", kind: "k8s.cluster"}},
+		{rel: "k8s_cluster", args: {resource_id: "$KC", host: "$H"}},
+		{rel: "k8s_object", args: {resource_id: "$B", cluster_host: "$H", namespace: "$NS", name: "$N"}},
+	]
+}
+```
+
+A relation with no facts matches nothing, so such a rule is harmless until
+both packs are installed.
+
+Kinds are `same_resource_kind` facts. pudl ships `k8s.cluster` and
+`k8s.object`; a pack declares its own the same way:
+
+```cue
+same_resource_kind_aws_account: {
+	head: {rel: "same_resource_kind", args: {kind: "aws.account", label: "AWS account",
+		meaning: "An AWS account, keyed by its account ID."}}
+}
+```
+
+`same_resource` and `same_resource_key` are reserved: `pudl facts add`
+rejects them. `pudl doctor` ("Shared Identity") reports kinds no fact
+declares and records that were not grouped because two of one schema family
+share a key.
 
 ### Catalog (`catalog_entry`)
 

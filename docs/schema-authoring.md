@@ -158,6 +158,62 @@ Owners are projected as `resource_owner` and `resource_unowned` facts
 ([projection](projection.md#resource-ownership)) and attributed to check
 findings ([governance](governance.md#attribute-findings-to-owners)).
 
+### `same_resource`
+
+Keys that say a record and a record of another schema describe the same real
+resource: a GKE cluster from GCP and the kube context pointing at it, a
+Kubernetes deployment collected from both GCP and kubectl. pudl links such
+records; it never merges them. Each keeps its record, identity, versions and
+facts.
+
+```cue
+#GKECluster: {
+	_pudl: {
+		schema_type:     "base"
+		resource_type:   "gcp.container.cluster"
+		identity_fields: ["selfLink"]
+		same_resource: [
+			{kind: "k8s.cluster", key: host: "endpoint"},
+			{kind: "k8s.cluster", key: host: "privateClusterConfig.privateEndpoint"},
+		]
+	}
+	...
+}
+
+#KubeContext: {
+	_pudl: {
+		...
+		same_resource: [{kind: "k8s.cluster", key: host: {path: "server", trim_prefix: "https://"}}]
+	}
+	...
+}
+```
+
+- `kind` names a space of real resources, independent of provider, as dotted
+  lower-case words. pudl declares `k8s.cluster` and `k8s.object`; declare
+  others with `same_resource_kind` facts in a rule file
+  ([datalog](datalog.md#shared-identity-same_resource)).
+- `key` maps part names to a field path or `{path, trim_prefix?,
+  last_segment?, prepend?}`, as in [`graph`](#graph). Records whose kind and
+  every key part are equal are linked. One part may contain `[*]`: each
+  element is its own key.
+- A part that is missing, empty or not a scalar yields no key, so absent data
+  never links.
+- List several keys for one kind when a resource answers to several names
+  (a cluster's public and private endpoints).
+- The nearest schema in the `base_schema` chain that declares
+  `same_resource` wins. It needs `identity_fields`. Unknown fields, a
+  malformed kind, an empty key and two `[*]` parts are load errors.
+- When a key needs a join (an object keyed by the cluster it runs in), write
+  a rule deriving `same_resource` instead
+  ([datalog](datalog.md#shared-identity-same_resource)).
+
+Linked records are one node in `pudl ui` and `pudl graph export` (with a
+`representations` list), and `pudl show` lists the other records under
+"Same resource as". Two records of one schema family never join a group: if
+a key would put them together (a collision, or a stale record), nothing in
+that set is grouped and `pudl doctor` reports it under "Shared Identity".
+
 ### `facts`
 
 Relations a type's records project into the fact store, so rules, queries and

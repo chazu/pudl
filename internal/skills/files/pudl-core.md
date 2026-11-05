@@ -154,6 +154,13 @@ waivers: [{policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingres
   `entry_id` and `resource_id`; join one record's relations on `entry_id`.
   `{exists: path}` and `default` stand in for negation.
 - Ownership projects `resource_owner` / `resource_unowned`.
+- `same_resource: [{kind: "k8s.cluster", key: host: "endpoint"}]` links
+  records of different schemas that describe one resource (never merged).
+  Equal kind and key parts link; keys needing a join are rules deriving
+  `same_resource(a, b, kind)`. Linked records are one node in pudl ui and
+  `pudl graph export` (`representations`); `pudl show` lists them under
+  "Same resource as"; doctor's "Shared Identity" check reports undeclared
+  kinds (declare with `same_resource_kind` facts) and conflicts.
 - Policy results against a draft type are provisional.
 - `secret_scan_ignore: [paths]` silences doctor's secret warning for a path.
 - `@pudl(match)` on a body field (`kind: "compute#firewall" @pudl(match)`)

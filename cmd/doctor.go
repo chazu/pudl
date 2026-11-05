@@ -246,6 +246,9 @@ func workspaceHealthChecks(pudlDir, schemaPath string) []doctor.HealthCheck {
 		},
 		{Name: "Datalog Rules", CheckFunc: func() *doctor.CheckResult { return doctor.CheckRulesAt(queryRulePaths(pudlDir)...) }},
 		{Name: "Graph Vocabulary", CheckFunc: func() *doctor.CheckResult { return doctor.CheckGraphVocabulary(workspaceVocabulary(pudlDir)) }},
+		{Name: "Shared Identity", CheckFunc: func() *doctor.CheckResult {
+			return doctor.CheckSameResource(workspaceSameResource(context.Background(), pudlDir))
+		}},
 	}
 }
 

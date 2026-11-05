@@ -15,13 +15,20 @@ type RuleTuples struct {
 
 // refIndex resolves endpoint values to resource IDs.
 type refIndex struct {
-	ids       map[string]bool
-	refs      map[string][]string
+	ids  map[string]bool
+	refs map[string][]string
+	// aliases maps a grouped member's resource ID to its group's ID.
+	aliases   map[string]string
 	externals map[string]Resource
 }
 
 func newRefIndex() *refIndex {
-	return &refIndex{ids: map[string]bool{}, refs: map[string][]string{}, externals: map[string]Resource{}}
+	return &refIndex{ids: map[string]bool{}, refs: map[string][]string{}, aliases: map[string]string{}, externals: map[string]Resource{}}
+}
+
+// alias makes a grouped member's resource ID resolve to its group.
+func (x *refIndex) alias(memberID, groupID string) {
+	x.aliases[memberID] = groupID
 }
 
 func (x *refIndex) add(resourceID string, refs []string) {
@@ -38,6 +45,9 @@ func (x *refIndex) add(resourceID string, refs []string) {
 func (x *refIndex) resolve(value string) (id string, problem string) {
 	if x.ids[value] {
 		return value, ""
+	}
+	if group, ok := x.aliases[value]; ok {
+		return group, ""
 	}
 	switch matches := x.refs[value]; len(matches) {
 	case 1:

@@ -12,9 +12,16 @@ resource's stored versions and snapshot observations.
 {
   "entry": {"id": "…", "proquint": "…", "schema": "…", "origin": "…", "…": "…"},
   "raw": {"…": "the stored record"},
-  "compliance": [{"policy": "…", "status": "…", "…": "…"}]
+  "compliance": [{"policy": "…", "status": "…", "…": "…"}],
+  "same_resource": {"group_id": "…", "kinds": ["k8s.cluster"],
+                    "others": [{"resource_id": "…", "entry_id": "…", "proquint": "…", "schema": "…"}]}
 }
 ```
+
+When records of other schemas describe the same resource (see
+`_pudl.same_resource` in docs/schema-authoring.md), the details list them
+under "Same resource as" and `--json` includes `same_resource`; it is absent
+otherwise.
 
 Stored JSON is embedded byte for byte as `raw`; other formats (YAML, CSV) appear
 as the string `raw_text`. `--meta-only` omits `raw`/`raw_text`; `--metadata`

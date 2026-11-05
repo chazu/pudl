@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 
@@ -17,12 +18,15 @@ type showOutput struct {
 	RawText string `json:"raw_text,omitempty"`
 	// Compliance is each applicable policy's stored result.
 	Compliance []complianceResult `json:"compliance"`
+	// SameResource lists the other records that describe this entry's
+	// resource (see same_resource); absent when there are none.
+	SameResource *sameResourceGroup `json:"same_resource,omitempty"`
 }
 
 // writeEntryJSON writes entry as one JSON document. Stored JSON is embedded
 // byte-for-byte, so numbers keep their exact value.
-func writeEntryJSON(entry lister.ListEntry, includeMetadata, includeRaw bool) error {
-	out := showOutput{Entry: entry, Compliance: entryCompliance(entry)}
+func writeEntryJSON(ctx context.Context, entry lister.ListEntry, includeMetadata, includeRaw bool) error {
+	out := showOutput{Entry: entry, Compliance: entryCompliance(entry), SameResource: entrySameResource(ctx, entry)}
 	if includeMetadata {
 		content, err := os.ReadFile(entry.MetadataPath)
 		if err != nil {
