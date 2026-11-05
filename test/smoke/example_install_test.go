@@ -62,7 +62,7 @@ func TestSmoke_ExampleInstallRequiresWorkspace(t *testing.T) {
 	require.NoDirExists(t, filepath.Join(home, ".pudl"))
 }
 
-func TestSmoke_ExampleInstallGlobal(t *testing.T) {
+func TestSmoke_PackInstallGlobal(t *testing.T) {
 	root, sandbox, env := exampleWorkspace(t, "git", "cat")
 	run := func(args ...string) (string, error) {
 		command := exec.Command(pudlBin, args...)
@@ -71,14 +71,14 @@ func TestSmoke_ExampleInstallGlobal(t *testing.T) {
 		return string(out), err
 	}
 	global := filepath.Join(sandbox, "home", ".pudl")
-	out, err := run("example", "install", "gcp", "--global")
+	out, err := run("pack", "install", "gcp", "--global")
 	require.Error(t, err)
 	require.Contains(t, out, "pudl init --global")
 	require.NoDirExists(t, global)
 
 	out, err = run("init", "--global")
 	require.NoError(t, err, "%s", out)
-	out, err = run("example", "install", "gcp", "--global")
+	out, err = run("pack", "install", "gcp", "--global")
 	require.NoError(t, err, "%s", out)
 	require.Contains(t, out, global)
 	require.FileExists(t, filepath.Join(global, "schema/models/gcp_pack.cue"))

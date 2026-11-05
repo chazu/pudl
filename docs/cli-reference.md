@@ -39,8 +39,8 @@ These flags apply to every command.
   - [pudl config set](#pudl-config-set) — Set a configuration value
 - [pudl delete](#pudl-delete) — Delete a data entry from the catalog
 - [pudl doctor](#pudl-doctor) — Check workspace health and catalog data, and repair the catalog
-- [pudl example](#pudl-example) — Install bundled examples into this workspace
-  - [pudl example install](#pudl-example-install) — Install a runnable example and its fixture data
+- [pudl example](#pudl-example) — Install bundled tutorials into this workspace
+  - [pudl example install](#pudl-example-install) — Install a runnable tutorial and its fixture data
 - [pudl export](#pudl-export) — Export data lake entries to various formats
 - [pudl facts](#pudl-facts) — Query the bitemporal fact store
   - [pudl facts list](#pudl-facts-list) — List facts from the bitemporal store
@@ -60,6 +60,9 @@ These flags apply to every command.
   - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
+- [pudl pack](#pudl-pack) — Install bundled content packs (gcp, aws) into this workspace
+  - [pudl pack install](#pudl-pack-install) — Install a content pack: schemas, policies, collectors, checks and fixtures
+  - [pudl pack list](#pudl-pack-list) — List the bundled content packs and whether this workspace has them
 - [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
   - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
   - [pudl policy list](#pudl-policy-list) — List loaded policies with their stored result counts
@@ -582,24 +585,25 @@ It never repairs evidence.
 
 ## pudl example
 
-Install bundled examples into this workspace
+Install bundled tutorials into this workspace
 
 Subcommands:
 
-- [pudl example install](#pudl-example-install) — Install a runnable example and its fixture data
+- [pudl example install](#pudl-example-install) — Install a runnable tutorial and its fixture data
 
 ## pudl example install
 
-Install a runnable example and its fixture data
+Install a runnable tutorial and its fixture data
 
 ```text
 pudl example install <name> [flags]
 ```
 
 ```text
-Install a bundled example in the current initialized PUDL workspace,
+Install a bundled tutorial in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
-No source checkout or download is needed.
+No source checkout or download is needed. Content packs (gcp, aws) install
+with pudl pack install.
 
 Installing again upgrades the example: files you have not edited since pudl
 installed them are replaced with this version's, and new files are added.
@@ -615,14 +619,6 @@ The gcp-network-hygiene example includes a firewall type and policy, a
 fixture observer, a check over policy results, a corrected fixture, and a
 separate gcloud-based live model.
 
-The gcp content pack includes draft schemas for the core GCP inventory,
-best-practice policies, gcloud and fixture collectors, and three check
-families: network hygiene, data protection and GKE posture.
-
-The aws content pack does the same for AWS, with aws CLI and fixture
-collectors and three check families: network exposure, data protection and
-identity posture.
-
 Example:
     pudl init
     pudl example install git-inventory
@@ -634,24 +630,21 @@ Flags:
 |------|------|---------|-------------|
 | `--overwrite` | bool |  | Replace files that differ from this version, keeping yours as &lt;file&gt;.bak |
 
-Available examples: `git-inventory`, `gcp-network-hygiene`, `gcp` and `aws`.
-Each includes its model and fixture data; no checkout or download is needed.
+Available examples: `git-inventory` and `gcp-network-hygiene`. Each includes
+its model and fixture data; no checkout or download is needed.
 Identical files are left alone. Conflicting edits or symlinked destinations
 cause an error before installation writes files. This command does not
-initialize global state.
+initialize global state. Installs are recorded in
+`<workspace>/.examples/<name>.json`.
 
-`gcp` is a content pack: draft schemas for the core GCP inventory,
-best-practice policies, gcloud and fixture collectors, and three check
-families. See [the pack README](../examples/gcp/README.md).
-
-`aws` is the AWS content pack: draft schemas for VPC networking, EC2, EBS,
-S3, RDS, KMS and IAM, best-practice policies, relationship and impact rules,
-aws CLI and fixture collectors, and three check families. See
-[the pack README](../examples/aws/README.md).
+The GCP and AWS content packs install with [`pudl pack install`](#pudl-pack-install).
 
 `--json` returns `example`, the workspace `root`, and relative `files` paths.
 See [getting started](getting-started.md) for the Git inventory tutorial; it
 needs only PUDL, Git, `cat` and `cp`.
+
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected, as `pudl pack install` does.
 
 ## pudl export
 
@@ -1177,7 +1170,8 @@ Flags:
 
 Initialization installs configuration, a local CUE module and built-in schemas,
 authoring and data directories, and bundled Claude skills. Repeated
-initialization preserves authored configuration; `--force` replaces
+initialization, local or `--global`, repairs the owned files (built-in schemas
+included) and preserves authored configuration; `--force` replaces
 configuration while preserving data.
 
 `--json` returns the workspace `path` and `mode`.
@@ -1429,6 +1423,106 @@ system.
 A model is validated as authored: CUE decode, structural checks on its arms,
 and its schema contracts. A model that still declares a retired field (such as
 `inputs` or `bindings`) fails with an error naming the field.
+
+## pudl pack
+
+Install bundled content packs (gcp, aws) into this workspace
+
+Subcommands:
+
+- [pudl pack install](#pudl-pack-install) — Install a content pack: schemas, policies, collectors, checks and fixtures
+- [pudl pack list](#pudl-pack-list) — List the bundled content packs and whether this workspace has them
+
+## pudl pack install
+
+Install a content pack: schemas, policies, collectors, checks and fixtures
+
+```text
+pudl pack install <name> [flags]
+```
+
+```text
+Install a bundled content pack in the current initialized PUDL workspace,
+or with --global in the personal ~/.pudl workspace (after pudl init --global).
+No source checkout or download is needed. pudl records what it wrote in
+<workspace>/.packs/<name>.json.
+
+Installing again upgrades the pack: files you have not edited since pudl
+installed them are replaced with this version's, and new files are added.
+Files you edited, and files installed without a record (including installs
+made with pudl example install before packs had their own command), are
+conflicts: nothing is written and each is listed. --overwrite replaces them,
+keeping your versions as <file>.bak. When files changed, records already in
+the catalog are reprojected, so their facts follow the pack's current types.
+
+The gcp pack includes draft schemas for the core GCP inventory,
+best-practice policies, gcloud and fixture collectors, and three check
+families: network hygiene, data protection and GKE posture.
+
+The aws pack does the same for AWS, with aws CLI and fixture collectors and
+three check families: network exposure, data protection and identity
+posture.
+
+Example:
+    pudl init
+    pudl pack install gcp
+```
+
+Flags:
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--overwrite` | bool |  | Replace files that differ from this version, keeping yours as &lt;file&gt;.bak |
+
+Available packs: `gcp` and `aws`. No checkout or download is needed.
+Identical files are left alone. Conflicting edits or symlinked destinations
+cause an error before installation writes files. This command does not
+initialize global state. Installs are recorded in
+`<workspace>/.packs/<name>.json`.
+
+`gcp` is the GCP content pack: draft schemas for the core GCP inventory,
+best-practice policies, gcloud and fixture collectors, and three check
+families. See [the pack README](../packs/gcp/README.md).
+
+`aws` is the AWS content pack: draft schemas for VPC networking, EC2, EBS,
+S3, RDS, KMS and IAM, best-practice policies, relationship and impact rules,
+aws CLI and fixture collectors, and three check families. See
+[the pack README](../packs/aws/README.md).
+
+Packs installed with `pudl example install gcp|aws` (before packs had their
+own command) have no `.packs` record; install once with `--overwrite`. See
+[retired commands](retired-commands.md#content-packs).
+
+`--json` returns `pack`, the workspace `root`, relative `files` paths, and
+the `added`, `upgraded`, `replaced` and `unchanged` lists.
+
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected (as `pudl doctor --fix --only projections` would), so
+a pack upgrade that changes a type's `_pudl.facts` takes effect at once. A
+workspace with no catalog yet is left without one.
+
+## pudl pack list
+
+List the bundled content packs and whether this workspace has them
+
+```text
+pudl pack list
+```
+
+```text
+List the content packs this pudl ships. In a workspace (or with --global),
+each pack's state compares the workspace's install record with this pudl's
+version: installed (current), outdated (pudl pack install upgrades it) or
+not-installed. The record says what pudl wrote; edits made since are not
+checked here.
+```
+
+Examples:
+
+```bash
+pudl pack list
+  pudl pack list --json
+```
 
 ## pudl policy
 

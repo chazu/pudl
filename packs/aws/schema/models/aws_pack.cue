@@ -6,7 +6,7 @@ import (
 	sm "pudl.schemas/pudl/systemmodel@v0"
 )
 
-// AWS content pack models (README: examples/aws/README.md in the PUDL source).
+// AWS content pack models (README: packs/aws/README.md in the PUDL source).
 //
 // One collector per resource type, in two variants:
 //   aws-<type>          runs the AWS CLI against every profile in your config;

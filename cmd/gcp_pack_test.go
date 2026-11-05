@@ -122,9 +122,9 @@ func requireCheck(t *testing.T, checks map[string]packCheck, name, outcome strin
 
 func TestGCPContentPack(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	r = runCLI(t, "example", "install", "gcp", "--json")
+	r = runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, "identical install is idempotent")
 
 	families := checkGCPPack(t, 2)

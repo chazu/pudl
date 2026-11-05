@@ -34,12 +34,9 @@ func Initialize(opts InitOptions) error {
 	out := opts.output()
 	pudlDir := config.GetPudlDir()
 
-	// Check if already initialized (unless force is specified)
+	// Already initialized (and not forced): repair, keeping the configuration.
 	if !opts.Force && config.Exists() {
-		if opts.Verbose {
-			fmt.Fprintf(out, "PUDL workspace already initialized at %s\n", pudlDir)
-		}
-		return nil
+		return repair(pudlDir, opts)
 	}
 
 	if opts.Verbose {

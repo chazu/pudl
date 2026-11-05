@@ -93,7 +93,7 @@ func TestGCPPackIAMPoliciesSearchEachProject(t *testing.T) {
 	cliWorkspace(t)
 	log := fakeIAMGcloudOnPath(t)
 	t.Setenv("GCLOUD_PROJECTS", `[{"projectId":"proj-a"},{"projectId":"proj-denied"}]`)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-iam-policies", "--json")
@@ -116,7 +116,7 @@ func TestGCPPackIAMPoliciesSearchEachProject(t *testing.T) {
 func TestGCPPackIAMPoliciesFallBackPartially(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	log := fakeIAMGcloudOnPath(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-iam-policies", "--json")
@@ -153,7 +153,7 @@ func TestGCPPackIAMPoliciesFallBackPartially(t *testing.T) {
 func TestGCPPackIAMRolesAndKeysThroughGcloud(t *testing.T) {
 	pudlDir := cliWorkspace(t)
 	log := fakeIAMGcloudOnPath(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	writeFile(t, filepath.Join(pudlDir, "schema", "models", "gcp_settings.cue"), "package models\n\n_gcpAssetScope: \"off\"\n")
 

@@ -1,28 +1,42 @@
+// Package examples installs the bundled tutorials (pudl example install) into
+// initialized PUDL workspaces. Installs are recorded under
+// <workspace>/.examples; see package fileset for upgrades and conflicts.
 package examples
 
 import (
 	"fmt"
-	"io/fs"
 
-	awspack "github.com/chazu/pudl/examples/aws"
-	gcppack "github.com/chazu/pudl/examples/gcp"
 	gcpnetwork "github.com/chazu/pudl/examples/gcp-network-hygiene"
 	gitinventory "github.com/chazu/pudl/examples/git-inventory"
+	"github.com/chazu/pudl/internal/fileset"
 )
 
-// packFiles returns an example's files by their path in the workspace.
-func packFiles(name string) (map[string][]byte, error) {
+// Kind is the tutorial family of file sets.
+var Kind = fileset.Kind{Noun: "example", RecordDir: ".examples"}
+
+// Names lists the installable examples.
+func Names() []string {
+	return []string{"git-inventory", "gcp-network-hygiene"}
+}
+
+// Install writes example name into the workspace at root.
+func Install(root, name string, opts fileset.Options) (*fileset.Result, error) {
+	files, err := Files(name)
+	if err != nil {
+		return nil, err
+	}
+	return fileset.Install(root, Kind, name, files, opts)
+}
+
+// Files returns an example's files by their path in the workspace.
+func Files(name string) (map[string][]byte, error) {
 	switch name {
 	case "git-inventory":
 		return gitInventoryFiles()
 	case "gcp-network-hygiene":
 		return gcpNetworkFiles()
-	case "gcp":
-		return treeFiles(gcppack.Files)
-	case "aws":
-		return treeFiles(awspack.Files)
 	}
-	return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene, gcp, aws)", name)
+	return nil, fmt.Errorf("unknown example %q (available: git-inventory, gcp-network-hygiene)", name)
 }
 
 func gitInventoryFiles() (map[string][]byte, error) {
@@ -42,20 +56,6 @@ func gitInventoryFiles() (map[string][]byte, error) {
 	}
 	files[populator+"current.json"] = files[populator+"baseline.json"]
 	return files, nil
-}
-
-// treeFiles installs every file of a bundle at its path in the bundle.
-func treeFiles(bundle fs.FS) (map[string][]byte, error) {
-	files := map[string][]byte{}
-	err := fs.WalkDir(bundle, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := fs.ReadFile(bundle, path)
-		files[path] = data
-		return err
-	})
-	return files, err
 }
 
 func gcpNetworkFiles() (map[string][]byte, error) {

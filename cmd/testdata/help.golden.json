@@ -423,7 +423,7 @@
     },
     {
       "use": "example",
-      "short": "Install bundled examples into this workspace",
+      "short": "Install bundled tutorials into this workspace",
       "flags": [
         {
           "name": "global",
@@ -443,8 +443,8 @@
       "subcommands": [
         {
           "use": "install \u003cname\u003e",
-          "short": "Install a runnable example and its fixture data",
-          "long": "Install a bundled example in the current initialized PUDL workspace,\nor with --global in the personal ~/.pudl workspace (after pudl init --global).\nNo source checkout or download is needed.\n\nInstalling again upgrades the example: files you have not edited since pudl\ninstalled them are replaced with this version's, and new files are added.\nFiles you edited, and files from an install by an older pudl (which kept no\nrecord of what it wrote), are conflicts: nothing is written and each is\nlisted. --overwrite replaces them, keeping your versions as \u003cfile\u003e.bak.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a firewall type and policy, a\nfixture observer, a check over policy results, a corrected fixture, and a\nseparate gcloud-based live model.\n\nThe gcp content pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nThe aws content pack does the same for AWS, with aws CLI and fixture\ncollectors and three check families: network exposure, data protection and\nidentity posture.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
+          "short": "Install a runnable tutorial and its fixture data",
+          "long": "Install a bundled tutorial in the current initialized PUDL workspace,\nor with --global in the personal ~/.pudl workspace (after pudl init --global).\nNo source checkout or download is needed. Content packs (gcp, aws) install\nwith pudl pack install.\n\nInstalling again upgrades the example: files you have not edited since pudl\ninstalled them are replaced with this version's, and new files are added.\nFiles you edited, and files from an install by an older pudl (which kept no\nrecord of what it wrote), are conflicts: nothing is written and each is\nlisted. --overwrite replaces them, keeping your versions as \u003cfile\u003e.bak.\n\nThe git-inventory example includes a model expecting default branch main and\nbaseline and changed inventories. The model observes the current inventory\nwith cat, so the tutorial needs nothing beyond PUDL.\n\nThe gcp-network-hygiene example includes a firewall type and policy, a\nfixture observer, a check over policy results, a corrected fixture, and a\nseparate gcloud-based live model.\n\nExample:\n    pudl init\n    pudl example install git-inventory",
           "args": "custom",
           "flags": [
             {
@@ -1313,6 +1313,78 @@
           "use": "validate \u003cname\u003e",
           "short": "Validate a registered #SystemModel without running it",
           "long": "Resolve and validate a #SystemModel by name. It validates the authored\nCUE template and runs structural checks on its arms without touching any external\nsystem.",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "use": "pack",
+      "short": "Install bundled content packs (gcp, aws) into this workspace",
+      "flags": [
+        {
+          "name": "global",
+          "usage": "Use the personal ~/.pudl workspace explicitly",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        },
+        {
+          "name": "json",
+          "usage": "Output results as JSON for scripting",
+          "type": "bool",
+          "default": "false",
+          "persistent": true
+        }
+      ],
+      "subcommands": [
+        {
+          "use": "install \u003cname\u003e",
+          "short": "Install a content pack: schemas, policies, collectors, checks and fixtures",
+          "long": "Install a bundled content pack in the current initialized PUDL workspace,\nor with --global in the personal ~/.pudl workspace (after pudl init --global).\nNo source checkout or download is needed. pudl records what it wrote in\n\u003cworkspace\u003e/.packs/\u003cname\u003e.json.\n\nInstalling again upgrades the pack: files you have not edited since pudl\ninstalled them are replaced with this version's, and new files are added.\nFiles you edited, and files installed without a record (including installs\nmade with pudl example install before packs had their own command), are\nconflicts: nothing is written and each is listed. --overwrite replaces them,\nkeeping your versions as \u003cfile\u003e.bak. When files changed, records already in\nthe catalog are reprojected, so their facts follow the pack's current types.\n\nThe gcp pack includes draft schemas for the core GCP inventory,\nbest-practice policies, gcloud and fixture collectors, and three check\nfamilies: network hygiene, data protection and GKE posture.\n\nThe aws pack does the same for AWS, with aws CLI and fixture collectors and\nthree check families: network exposure, data protection and identity\nposture.\n\nExample:\n    pudl init\n    pudl pack install gcp",
+          "args": "custom",
+          "flags": [
+            {
+              "name": "global",
+              "usage": "Use the personal ~/.pudl workspace explicitly",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "json",
+              "usage": "Output results as JSON for scripting",
+              "type": "bool",
+              "default": "false",
+              "persistent": true
+            },
+            {
+              "name": "overwrite",
+              "usage": "Replace files that differ from this version, keeping yours as \u003cfile\u003e.bak",
+              "type": "bool",
+              "default": "false"
+            }
+          ]
+        },
+        {
+          "use": "list",
+          "short": "List the bundled content packs and whether this workspace has them",
+          "long": "List the content packs this pudl ships. In a workspace (or with --global),\neach pack's state compares the workspace's install record with this pudl's\nversion: installed (current), outdated (pudl pack install upgrades it) or\nnot-installed. The record says what pudl wrote; edits made since are not\nchecked here.",
           "args": "custom",
           "flags": [
             {
