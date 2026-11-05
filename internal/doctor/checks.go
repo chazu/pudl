@@ -10,8 +10,10 @@ import (
 
 	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
+	"github.com/chazu/pudl/internal/examples"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/packs"
 	_ "modernc.org/sqlite"
 )
 
@@ -327,6 +329,9 @@ func CheckDirectoryStructureAt(pudlDir string) *CheckResult {
 		"config.yaml":   true,
 		"workspace.cue": true,
 		"mu.cue":        true, // legacy mu workspace file; tolerated, unused
+		// Install records of pudl example install and pudl pack install.
+		examples.Kind.RecordDir: true,
+		packs.Kind.RecordDir:    true,
 	}
 	unexpectedEntries := []string{}
 	if entries, err := os.ReadDir(pudlDir); err == nil {
