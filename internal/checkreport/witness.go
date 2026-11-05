@@ -102,13 +102,7 @@ func newWitness(tuple datalog.Tuple) Witness {
 		}
 		args[key] = value
 	}
-	witness := Witness{Key: FindingKey(tuple.Args), Arguments: args}
-	for _, key := range []string{"resource", "target", "name"} {
-		if value, ok := args[key].(string); ok {
-			witness.Resource = value
-			break
-		}
-	}
+	witness := Witness{Key: FindingKey(tuple.Args), Arguments: args, Resource: resourceOf(args)}
 	for _, key := range []string{"entry_id", "evidence_id", "observation_id", "snapshot_id"} {
 		if value, ok := args[key].(string); ok && value != "" {
 			witness.EvidenceIDs = append(witness.EvidenceIDs, value)
@@ -116,6 +110,17 @@ func newWitness(tuple datalog.Tuple) Witness {
 	}
 	sort.Strings(witness.EvidenceIDs)
 	return witness
+}
+
+// resourceOf is the resource a match names: its resource, target or name
+// argument, or "".
+func resourceOf(args map[string]any) string {
+	for _, key := range []string{"resource", "target", "name"} {
+		if value, ok := args[key].(string); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 // WriteFindings writes what a failed or waived check found: its witnesses,

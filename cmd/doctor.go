@@ -33,6 +33,8 @@ Doctor also diagnoses catalog conditions that a repair fixes, and names the repa
   policy-leaves entries assigned to a policy schema instead of its type
   inference     inferred entries whose schema inference now selects another schema
   identity      entries missing a resource_id, or namespaced by a leaf schema
+  versions      resources with two entries holding the same version (opt-in:
+                applied only when --only names it)
   projections   projected facts that no longer match the catalog or facts specs
   policy-results policy results that are stale (evaluated with an older policy
                 digest), orphaned, or never evaluated
