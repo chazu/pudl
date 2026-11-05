@@ -6,8 +6,10 @@ import (
 
 	"github.com/chazu/pudl/internal/checkreport"
 	"github.com/chazu/pudl/internal/checks"
+	"github.com/chazu/pudl/internal/graphvocab"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/ownership"
+	"github.com/chazu/pudl/internal/resourceref"
 	"github.com/chazu/pudl/internal/systemmodel"
 	"github.com/chazu/pudl/internal/waiver"
 )
@@ -54,6 +56,11 @@ func runChecks(evalCtx context.Context, cat *runCatalog, ws Workspace, out Outpu
 		}
 		results = append(results, result)
 	}
+	refs, err := resourceref.Load(db, graphvocab.MetadataFunc(reg.Source().GetSchemaMetadata), importer.DecodeEntry)
+	if err != nil {
+		return nil, fmt.Errorf("load resource references: %w", err)
+	}
+	checkreport.AttributeResources(results, refs)
 	owners, err := ownership.Load(db)
 	if err != nil {
 		return nil, fmt.Errorf("load resource owners: %w", err)

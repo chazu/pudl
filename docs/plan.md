@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Check reports grouped by project and owner (2026-11-05)
+
+Findings record the cataloged resource one of their values identifies
+(`resource_id`, `account`, `type`, `name`) and take its owner. The human
+report counts each check's findings by project and owner and lists resources
+several checks found once, grouped by project. See
+`implog/2026_11_05_check_report_grouping.md`. Closes `pudl-f8l`.
+
 ### pudl ui: "only" next to each filter checkbox (2026-11-05)
 
 Scope and resource-type checkboxes each have an "only" button that isolates

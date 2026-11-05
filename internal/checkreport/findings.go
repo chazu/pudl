@@ -46,9 +46,18 @@ type Finding struct {
 	// Owner is the owner of the resource the finding references (see
 	// AttributeOwners); "" when none was resolved.
 	Owner string `json:"owner"`
-	// refs are the match's resource and catalog entry references, taken from
-	// all of its arguments, so that a finding whose arguments are not
-	// recorded can still be attributed. They are not stored.
+	// ResourceID, Account, Type and Name describe the cataloged resource one
+	// of the match's argument values identifies (see AttributeResources): its
+	// resource ID, the account or project that owns it, its type and its
+	// name. Empty when no value identifies one.
+	ResourceID string `json:"resource_id,omitempty"`
+	Account    string `json:"account,omitempty"`
+	Type       string `json:"type,omitempty"`
+	// Name is that resource's display name (its graph name).
+	Name string `json:"name,omitempty"`
+	// refs are the match's string arguments, kept so that a finding whose
+	// arguments are not recorded can still be attributed to its resource and
+	// owner. They are not stored.
 	refs map[string]any
 }
 
@@ -105,7 +114,7 @@ func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []W
 		}
 		seen[key] = true
 		findings = append(findings, Finding{Key: key, Waived: waivedKeys[key], Arguments: known[key],
-			Resource: resourceOf(tuple.Args), refs: ownerRefs(tuple.Args)})
+			Resource: resourceOf(tuple.Args), refs: stringArgs(tuple.Args)})
 	}
 	sort.Slice(findings, func(i, j int) bool { return findings[i].Key < findings[j].Key })
 	if len(findings) > FindingLimit {

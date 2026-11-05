@@ -133,7 +133,13 @@ func TestOwnershipAttributesFindingsAndListsUnowned(t *testing.T) {
 	r = runCLI(t, "check", "fleet") // fails: a fail-severity check found public servers
 	require.Contains(t, r.Stdout, "unowned [warn]", r.Stdout+r.Stderr)
 	public := r.Stdout[strings.Index(r.Stdout, "public [fail]"):strings.Index(r.Stdout, "unowned [warn]")]
-	assert.Regexp(t, `(?s)- owner ml:\n.*gpu-1.*- owner orders:\n.*web-1.*- owner payments:\n.*web-2.*- owner \(none\):\n.*web-3`, public, "human output groups findings by owner")
+	assert.Contains(t, public, "    - by owner: ml 1, orders 1, payments 1, (none) 1\n", "human output counts findings by owner")
+	for _, name := range []string{"web-1", "gpu-1", "web-2"} {
+		assert.Contains(t, public, name)
+	}
+	assert.Contains(t, public, "1 also fail other checks")
+	assert.Regexp(t, `### resources failing several checks \(1\)\n(?s:.*)web-3: public, unowned`, r.Stdout,
+		"a server both checks found is listed once, with both checks")
 
 	r = runCLI(t, "check", "fleet", "--owner", "payments", "--json", "--detailed-exitcode")
 	require.Equal(t, 2, exitCodeFor(r.Err), "the exit status still covers every finding")
