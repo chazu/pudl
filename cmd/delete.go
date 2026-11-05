@@ -52,14 +52,9 @@ func init() {
 func runDeleteCommand(cmd *cobra.Command, args []string) error {
 	entryID := args[0]
 
-	cfg, err := loadEffectiveConfig()
+	l, err := openWorkspaceLister()
 	if err != nil {
 		return err
-	}
-
-	l, err := lister.New(cfg.DataPath)
-	if err != nil {
-		return errors.NewSystemError("Failed to initialize lister", err)
 	}
 	defer l.Close()
 

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -13,14 +12,7 @@ import (
 
 // completeProquintIDs returns a completion function for proquint entry IDs
 func completeProquintIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -131,14 +123,7 @@ func completeSortByOptions(cmd *cobra.Command, args []string, toComplete string)
 
 // completeOrigins returns a completion function for data origins
 func completeOrigins(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -163,14 +148,7 @@ func completeOrigins(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeEntryIDs returns a completion function for recent entry IDs
 func completeEntryIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	// dataPath is <active-pudl-root>/data; its parent owns the catalog.
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -202,13 +180,7 @@ func completeEntryIDs(cmd *cobra.Command, args []string, toComplete string) ([]s
 
 // completeRelations returns a completion function for fact relation names
 func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -251,13 +223,7 @@ func completeRelations(cmd *cobra.Command, args []string, toComplete string) ([]
 
 // completeSources returns a completion function for fact source names
 func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -280,13 +246,7 @@ func completeSources(cmd *cobra.Command, args []string, toComplete string) ([]st
 
 // completeFactIDs returns a completion function for fact IDs (hex prefix)
 func completeFactIDs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	cfg, err := loadEffectiveConfig()
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	configDir := filepath.Dir(cfg.DataPath)
-
-	catalogDB, err := database.NewCatalogDB(configDir)
+	catalogDB, err := openWorkspaceCatalog()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
