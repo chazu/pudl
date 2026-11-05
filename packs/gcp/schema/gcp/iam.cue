@@ -12,8 +12,8 @@ package gcp
 		owner: _#GCPOwner
 		graph: _gcpGraph & {
 			name: "email"
-			// IAM bindings name an account as serviceAccount:EMAIL; its own
-			// IAM policy names it by unique ID.
+			// IAM bindings name an account as serviceAccount:EMAIL; some
+			// API resource names use its unique ID.
 			refs: [{path: "email", prepend: "serviceAccount:"}, {path: "uniqueId"}]
 		}
 		graph: display: {code: "SA", label: "Service account", class: "identity"}
@@ -55,16 +55,17 @@ package gcp
 			gcp_iam_policy: args: {asset_type: "assetType"}
 			// The resource a policy is attached to, in the form its record
 			// is named or referenced by: a bucket's name; a compute
-			// resource's path; a service account's unique ID; projects/P
-			// for a project; projects/... for topics and KMS keys. Other
-			// resources (secrets and so on) are not collected and yield no
-			// fact.
+			// resource's path; a service account's email (Cloud Asset
+			// Inventory names accounts by email; a unique ID also resolves);
+			// projects/P for a project; projects/... for topics,
+			// subscriptions and KMS keys. Other resources (secrets and so
+			// on) are not collected and yield no fact.
 			gcp_iam_policy_resource: args: target: {
 				path: "resource"
 				rewrite: [
 					{match: "^//storage\\.googleapis\\.com/(.+)$", replace: "$1"},
 					{match: "^//compute\\.googleapis\\.com/(projects/.+)$", replace: "$1"},
-					{match: "^//iam\\.googleapis\\.com/projects/[^/]+/serviceAccounts/([0-9]+)$", replace: "$1"},
+					{match: "^//iam\\.googleapis\\.com/projects/[^/]+/serviceAccounts/([^/]+)$", replace: "$1"},
 					{match: "^//cloudresourcemanager\\.googleapis\\.com/(projects/[^/]+)$", replace: "$1"},
 					{match: "^//(?:pubsub|cloudkms)\\.googleapis\\.com/(projects/.+)$", replace: "$1"},
 				]

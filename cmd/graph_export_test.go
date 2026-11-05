@@ -323,8 +323,8 @@ func TestGraphExportGCPPack(t *testing.T) {
 		project + " -> ref:projects/example-project",
 		bucket + " -> example-project-public-assets",
 		topic + " -> projects/example-project/topics/orders",
-		"//iam.googleapis.com/projects/example-project/serviceAccounts/100000000000000000001 -> ops@example-project.iam.gserviceaccount.com",
-	}, l.edges("grants_on"), "a service account's policy names it by unique ID; the pack collects no project record")
+		"//iam.googleapis.com/projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com -> ops@example-project.iam.gserviceaccount.com",
+	}, l.edges("grants_on"), "a service account's policy names it by email, as Cloud Asset Inventory does; the pack collects no project record")
 
 	require.NotEmpty(t, subnetEdges)
 	for _, e := range subnetEdges {
