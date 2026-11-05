@@ -60,6 +60,13 @@ Display Options:
 - --reverse: Reverse sort order
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
+Counting:
+- --count-by schema|origin|format: Print how many matching entries share each
+  value instead of listing them. Every filter (--schema, --origin, --where,
+  --artifacts, collection filters) and --limit applies; pagination does not.
+  pudl's own record types (observe snapshots, system models) are listed
+  separately under "pudl bookkeeping"; --json flags them "bookkeeping": true.
+
 Examples:
     pudl list                                    # List the active catalog
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
@@ -70,6 +77,8 @@ Examples:
     pudl list --collection-id my-collection     # Show items from specific collection
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries
+    pudl list --count-by schema                 # Count entries per schema
+    pudl list --count-by schema --origin gcp --json # Per-schema counts as JSON
     pudl list --fancy                           # Interactive list with filtering and detailed view`,
 	RunE: pudlRunE(runListCommand),
 }
@@ -128,6 +137,9 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+	if listCountBy != "" {
+		return runListCount(l, filters, displayOpts, listCountBy)
 	}
 
 	// List data
@@ -285,10 +297,14 @@ func init() {
 
 	// UI flags
 	listCmd.Flags().BoolVar(&listFancy, "fancy", false, "Use interactive bubbletea interface with filtering")
+	listCmd.Flags().StringVar(&listCountBy, "count-by", "", "Count matching entries per value of a field (schema, origin, format) instead of listing them")
 
 	// Make collections-only and items-only mutually exclusive
 	listCmd.MarkFlagsMutuallyExclusive("collections-only", "items-only")
 	listCmd.MarkFlagsMutuallyExclusive("all", "page")
+	for _, flag := range []string{"page", "per-page", "select", "fancy"} {
+		listCmd.MarkFlagsMutuallyExclusive("count-by", flag)
+	}
 
 	// Register completion functions
 	listCmd.RegisterFlagCompletionFunc("schema", completeSchemaNames)
@@ -296,6 +312,7 @@ func init() {
 	listCmd.RegisterFlagCompletionFunc("format", completeFormats)
 	listCmd.RegisterFlagCompletionFunc("sort-by", completeSortByOptions)
 	listCmd.RegisterFlagCompletionFunc("collection-id", completeProquintIDs)
+	listCmd.RegisterFlagCompletionFunc("count-by", cobra.FixedCompletions(listCountKeyNames, cobra.ShellCompDirectiveNoFileComp))
 }
 
 // displayEntry displays a single catalog entry

@@ -103,6 +103,8 @@ func TestJSONOutputContract(t *testing.T) {
 	entryID := field(imported, "id")
 	run("list")
 	run("list", "--origin", "git-baseline", "--items-only")
+	run("list", "--count-by", "schema")
+	run("list", "--count-by", "schema", "--schema", "nothing-here")
 	proquint := field(run("show", entryID), "entry", "proquint")
 	run("show", proquint, "--raw", "--metadata")
 	run("export", "--id", proquint)
