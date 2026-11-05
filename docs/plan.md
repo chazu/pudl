@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Observed resources get new versions; finding owners; SIGTERM test (2026-11-04)
+
+Observation ingest stores a changed resource as latest version + 1 (it
+stored every entry as version 1); `pudl doctor --fix --only versions`
+renumbers catalogs that already hold duplicates. Every check finding now
+records its resource and owner, past the witness limit and when waived. The
+SIGTERM cancellation test waits for the tool's readiness instead of racing
+it. See `implog/2026_11_04_observe_versions.md`,
+`implog/2026_11_04_finding_owners.md`,
+`implog/2026_11_04_sigterm_test_race.md`. Closes `pudl-42w`, `pudl-upc`,
+`pudl-o2u`.
+
 ### GCP graph: eight more edges on fact rewrites (2026-11-04)
 
 Fact args take `rewrite: [{match, replace}]` (first matching RE2 rule
