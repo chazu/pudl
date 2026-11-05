@@ -7,8 +7,8 @@ import (
 	"github.com/chazu/pudl/internal/lister"
 )
 
-// showOutput is `pudl show --json`: the catalog entry, plus its metadata
-// and raw data when --metadata or --raw ask for them.
+// showOutput is `pudl show --json`: the catalog entry and its stored record
+// (omitted with --meta-only), plus its metadata when --metadata asks for it.
 type showOutput struct {
 	Entry    lister.ListEntry `json:"entry"`
 	Metadata json.RawMessage  `json:"metadata,omitempty"`

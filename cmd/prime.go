@@ -43,7 +43,7 @@ the resource.
                  pudl model new NAME --populate 'command:<cmd printing JSON>')
 3. Check:        pudl check COLLECTOR... CHECK-FAMILY --json
 4. Read:         pudl report --json; pudl policy list; pudl policy show POLICY;
-                 pudl show ENTRY-ID (type, compliance) [--history]
+                 pudl show ENTRY-ID (type, compliance, record) [--history]
 5. Fix or waive: fix the resource with its owning tool, or add a waiver
                  (owner, reason, created, expires) to the model
 6. Re-check:     the same pudl check, with --fail-on new --detailed-exitcode

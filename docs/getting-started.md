@@ -130,13 +130,13 @@ list command prints, and `BASELINE_CHECK_ID` with the check ID from step 3.
 <!-- walkthrough:evidence -->
 ```bash
 pudl list --where default_branch=release --items-only
-pudl show RECORD_ID --raw
+pudl show RECORD_ID
 pudl report BASELINE_CHECK_ID
 ```
 
 Each record is a **catalog entry**. Its ID comes from its content, so the same
-record always gets the same ID. The raw record shows
-`default_branch: "release"` and its type. The baseline report is still clean:
+record always gets the same ID. `pudl show` prints its type, then the record
+itself, with `default_branch: "release"`. The baseline report is still clean:
 reports are stored, not recomputed. `pudl show RECORD_ID --history` lists
 every stored version and snapshot of that resource.
 

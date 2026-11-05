@@ -107,6 +107,7 @@ func TestJSONOutputContract(t *testing.T) {
 	run("list", "--count-by", "schema", "--schema", "nothing-here")
 	proquint := field(run("show", entryID), "entry", "proquint")
 	run("show", proquint, "--raw", "--metadata")
+	run("show", proquint, "--meta-only")
 	run("export", "--id", proquint)
 	run("graph", "export")
 	run("graph", "vocab")

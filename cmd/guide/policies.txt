@@ -43,7 +43,7 @@ TRY, INSTALL, READ
   pudl policy evaluate                          refresh stored results
   pudl policy list --type gcp.#Firewall         counts, review status, stale
   pudl policy show gcp.#FirewallBestPractice --owner platform
-  pudl show <entry-id>                          compliance section per entry
+  pudl show <entry-id>                          compliance section and record
 
 IN CHECKS
 

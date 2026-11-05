@@ -1866,8 +1866,8 @@
     },
     {
       "use": "show \u003cid\u003e",
-      "short": "Show detailed information about a specific data entry",
-      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "short": "Show a data entry: its type, compliance and stored record",
+      "long": "Show a data entry: its catalog details (type, origin, format, paths), its\ncompliance and the stored record itself.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe record follows under RAW DATA: stored JSON indented with its values\nunchanged, YAML re-rendered, other formats verbatim. Sensitive fields were\nredacted when the record was stored; show prints what is stored.\n\nThe ID parameter is the entry's proquint or hash as shown by 'pudl list'.\n\nDisplay Options:\n- --meta-only: Show the catalog details and compliance without the record\n- --metadata: Also show the metadata file content\n- --raw: Show the record (the default; kept for compatibility)\n- --field PATH: Print one payload field as JSON\n- --history: Show the resource's stored versions and snapshot observations\n- --json: Print {\"entry\": ..., \"raw\": ..., \"compliance\": ...} as one JSON\n  document (\"metadata\" with --metadata; no \"raw\" with --meta-only); stored JSON\n  is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show vomap-foqab                  # Details, compliance and the record\n    pudl show vomap-foqab --meta-only      # Details and compliance only\n    pudl show vomap-foqab --metadata       # Also the metadata file\n    pudl show vomap-foqab --field name     # One field as JSON\n    pudl show vomap-foqab --json           # Everything as one JSON document",
       "args": "custom",
       "flags": [
         {
@@ -1896,6 +1896,12 @@
           "persistent": true
         },
         {
+          "name": "meta-only",
+          "usage": "Show catalog details and compliance without the stored record",
+          "type": "bool",
+          "default": "false"
+        },
+        {
           "name": "metadata",
           "usage": "Show metadata file content",
           "type": "bool",
@@ -1903,7 +1909,7 @@
         },
         {
           "name": "raw",
-          "usage": "Show raw data content",
+          "usage": "Show the stored record (the default; kept for compatibility)",
           "type": "bool",
           "default": "false"
         }
