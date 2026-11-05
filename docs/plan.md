@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Every command uses the resolved workspace; identity moves version (2026-11-04)
+
+`list`, `show`, `delete`, `import`, shell completions, `snapshot prune`,
+`run`/`check` populate and `init --global` repair now read and write the
+workspace pudl resolved (`config.DataDir`, `cmd/workspace_catalog.go`), not
+`config.yaml`'s absolute paths. An unchanged entry that gains an identity
+becomes its resource's next version. See
+`implog/2026_11_04_catalog_commands_resolved_workspace.md`,
+`implog/2026_11_04_observe_identity_version.md`. Closes `pudl-orb`,
+`pudl-xr6`.
+
 ### Service account key checks; datalog "now" comparisons (2026-11-04)
 
 Rule bodies can compare a date with the evaluation time (`"<now-90d"`,
