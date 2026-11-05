@@ -241,8 +241,7 @@ before the snapshot contract existed, are never removed.`,
 		}
 		defer db.Close()
 
-		cfg, err := loadEffectiveConfig()
-		if err != nil {
+		if _, err := loadEffectiveConfig(); err != nil {
 			return fmt.Errorf("load config: %w", err)
 		}
 
@@ -250,7 +249,7 @@ before the snapshot contract existed, are never removed.`,
 			Model:   snapshotModel,
 			Keep:    snapshotKeep,
 			DryRun:  snapshotDryRun,
-			DataDir: cfg.DataPath,
+			DataDir: effectiveDataDir(),
 		}
 		if snapshotOlderThan > 0 {
 			opts.OlderThan = time.Now().Add(-snapshotOlderThan)

@@ -156,7 +156,7 @@ func (r *modelRun) ingest(observeJSON []byte, in populateIngest) (int, string, e
 		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas,
 		Reader:              bytes.NewReader(observeJSON),
 		Context:             in.ctx,
-		DataDir:             cfg.DataPath,
+		DataDir:             r.ws.DataDir(),
 		Graph:               inferrer.GetInheritanceGraph(),
 		Inferrer:            inferrer,
 		SnapshotID:          in.snapshotID,

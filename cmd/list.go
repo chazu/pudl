@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/idgen"
 	"github.com/chazu/pudl/internal/lister"
 	"github.com/chazu/pudl/internal/ui"
@@ -79,16 +78,9 @@ func runListCommand(cmd *cobra.Command, args []string) error {
 	if listPage < 1 || listPerPage < 1 || listLimit < 0 {
 		return fmt.Errorf("page and per-page must be positive; limit must not be negative")
 	}
-	// Load configuration to get data directory
-	cfg, err := loadEffectiveConfig()
+	l, err := openWorkspaceLister()
 	if err != nil {
-		return err // Already a PUDLError from loadEffectiveConfig()
-	}
-
-	// Create lister
-	l, err := lister.New(cfg.DataPath)
-	if err != nil {
-		return errors.NewSystemError("Failed to initialize lister", err)
+		return err
 	}
 	defer l.Close()
 
