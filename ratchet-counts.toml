@@ -2,7 +2,5 @@
 # These counts represent the maximum tolerated violations.
 # Counts can only be reduced (tightened) or explicitly bumped with justification.
 
-# Example:
-# [no-unwrap]
-# "." = 0
-# "src/legacy" = 15
+[no-fmt-println-outside-cmd]
+"." = 1

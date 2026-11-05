@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Ratchet: no fmt.Println outside cmd/ (2026-11-05)
+
+AST ratchet `no-fmt-println-outside-cmd` (tests excluded). Budget 1: the
+remaining call is `internal/ui/ui.go:14`. See
+`implog/2026_11_05_ratchet_no_fmt_println.md`.
+
 ### Pre-commit hooks: gitleaks and ratchets (2026-11-05)
 
 `lefthook.yml` runs two pre-commit jobs: `gitleaks git --pre-commit --staged`

@@ -1,0 +1,20 @@
+# Library packages should return values or errors and let cmd/ decide what to
+# print. fmt.Println writes straight to stdout, which callers cannot redirect,
+# capture or silence. Test files are excluded: Go Example functions need
+# fmt.Println to produce their checked output.
+[rule]
+id = "no-fmt-println-outside-cmd"
+description = "No fmt.Println outside cmd/; return data or take an io.Writer and let the command print"
+severity = "error"
+
+[match]
+query = """
+(call_expression
+  function: (selector_expression
+    operand: (identifier) @pkg
+    field: (field_identifier) @fn)
+  (#eq? @pkg "fmt")
+  (#eq? @fn "Println")) @violation
+"""
+language = "go"
+exclude = ["cmd/**", "**/*_test.go"]
