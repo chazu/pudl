@@ -93,4 +93,24 @@ describe('origin', () => {
     expect(parseCanonicalGraph(doc, 'x').meta.origin).toBe('file');
     expect(parseCanonicalGraph(doc, 'x', 'live').meta.origin).toBe('live');
   });
+
+  it('keeps the records of a resource that several schemas describe', () => {
+    const graph = parseCanonicalGraph(
+      {
+        resources: [
+          {
+            id: 'r-gke',
+            type: 'gcp.container.cluster',
+            representations: [
+              { id: 'r-gke', schema: 'gcp.#GKECluster', type: 'gcp.container.cluster', entryId: 'e1', origin: 'gcp' },
+              { id: 'r-ctx', schema: 'k8s.#Cluster', type: 'k8s.cluster', entryId: 'e2', origin: 'kubectl' },
+            ],
+          },
+        ],
+        relationships: [],
+      },
+      'test',
+    );
+    expect(graph.resources[0].representations?.map((r) => r.schema)).toEqual(['gcp.#GKECluster', 'k8s.#Cluster']);
+  });
 });

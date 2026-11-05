@@ -55,6 +55,22 @@ export interface Resource {
   /** pudl schema and catalog entry the resource was read from (live exports). */
   schema?: string;
   entryId?: string;
+  /**
+   * Every cataloged record of a resource that several schemas describe (pudl's
+   * same_resource), e.g. a cluster seen by GCP and by kubectl. Absent when the
+   * resource has one record; the fields above then come from the first.
+   */
+  representations?: Representation[];
+}
+
+/** One cataloged record of a resource that several schemas describe. */
+export interface Representation {
+  /** The record's own resource ID; the resource's id is its group's. */
+  id: ResourceId;
+  schema: string;
+  type: string;
+  entryId: string;
+  origin: string;
 }
 
 export interface Relationship {

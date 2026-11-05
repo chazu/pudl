@@ -2,7 +2,7 @@ import { notLoaded } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
 import type { InspectorProps } from './Inspector';
-import { EvidenceList, PropertyTable, RelationshipList, disposition } from './inspectorParts';
+import { EvidenceList, PropertyTable, RelationshipList, RepresentationList, disposition } from './inspectorParts';
 import type { ResourceId } from '../model/canonical';
 
 export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
@@ -85,6 +85,16 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
           </>
         )}
       </dl>
+
+      {r.representations && r.representations.length > 1 && (
+        <>
+          <h3>
+            Records <span className="count">{r.representations.length}</span>
+          </h3>
+          <div className="muted">One resource described by several schemas; details above come from the first.</div>
+          <RepresentationList reps={r.representations} />
+        </>
+      )}
 
       {props.onExpand && notLoaded(index, id) > 0 && (
         <div className="notice">

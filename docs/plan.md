@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui shows a node's records (2026-11-05)
+
+The inspector lists each cataloged record of a resource that several schemas
+describe (schema, origin, `pudl show` command). See
+`implog/2026_11_05_ui_representations.md`. Closes `pudl-h7s.3`.
+
 ### Shared identity in graph export, show and doctor (2026-11-05)
 
 Linked records are one node in `pudl graph export` / pudl ui (with

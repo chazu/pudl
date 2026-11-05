@@ -1,6 +1,6 @@
 // Building blocks shared by the inspector panels.
 
-import type { Basis, Evidence, GraphIndex, Relationship, ResourceId } from '../model/canonical';
+import type { Basis, Evidence, GraphIndex, Relationship, Representation, ResourceId } from '../model/canonical';
 import type { RelationshipCategory } from '../model/vocabulary';
 import type { SemanticView } from '../projection/types';
 import { EDGE_STYLES } from '../render/edgeStyle';
@@ -139,5 +139,21 @@ export function PropertyTable({ props }: { props: Record<string, unknown> }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** The cataloged records that describe one resource, one per schema. */
+export function RepresentationList({ reps }: { reps: Representation[] }) {
+  return (
+    <ul className="representations">
+      {reps.map((rep) => (
+        <li key={rep.id}>
+          <code className="wrap">{rep.schema}</code> <span className="muted">from {rep.origin || 'unknown origin'}</span>
+          <div className="muted" title="Inspect the record with pudl show">
+            <code className="wrap">pudl show {rep.entryId}</code>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
