@@ -57,6 +57,10 @@ _gcpBillingProject: string | *""
 // first.
 _gcpImageHistory: int & >0 | *10
 
+// How many backups gcp-sql-backups and gcp-sql-backup-runs keep per Cloud SQL
+// instance, newest first.
+_gcpBackupHistory: int & >0 | *10
+
 // ---- End of live settings. ----
 
 // The schema each collector routes its records to.

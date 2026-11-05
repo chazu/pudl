@@ -19,7 +19,7 @@ Installed files, under `.pudl/`:
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
-| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue`, `gcp_loadbalancing.cue`, `gcp_dns_records.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue`, `gcp_loadbalancing.cue`, `gcp_dns_records.cue`, `gcp_datastores.cue`, `gcp_sql_backups.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The four check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
@@ -30,6 +30,8 @@ Installed files, under `.pudl/`:
 | `populators/gcp/org-policies.sh` | Helper `gcp-org-policies` runs (fallback): every organization policy set on one organization, its folders and their projects, described |
 | `populators/gcp/firewall-policies.sh` | Helper `gcp-firewall-policies` runs (fallback): the hierarchical firewall policies of one organization and its folders |
 | `populators/gcp/dns-record-sets.sh` | Helper `gcp-dns-record-sets` runs: every record set of every Cloud DNS zone in one project |
+| `populators/gcp/sql-backups.sh` | Helper `gcp-sql-backups` runs: the newest backups of each Cloud SQL instance one project's backups name |
+| `populators/gcp/sql-backup-runs.sh` | Helper `gcp-sql-backup-runs` runs: the newest backup runs of each Cloud SQL instance in one project |
 | `populators/gcp/binauthz-policy.sh` | Helper `gcp-binauthz-policies` runs (fallback): one project's Binary Authorization policy, unless never set |
 
 ## What it collects
@@ -79,6 +81,12 @@ project is a failed input too, not a project with none of the type.
 | `gcp-service-account-keys` | `iam service-accounts keys list --managed-by=user` per account, via `service-account-keys.sh` | `gcp.#ServiceAccountKey` | `name` | `iam.serviceAccountKeys.list` (`roles/iam.serviceAccountKeyAdmin` or `roles/iam.securityReviewer`) |
 | `gcp-gke-clusters` | `container clusters list` | `gcp.#GKECluster` | `selfLink` | `container.clusters.list` (`roles/container.clusterViewer`) |
 | `gcp-sql-instances` | `sql instances list` | `gcp.#SQLInstance` | `selfLink` | `cloudsql.instances.list` (`roles/cloudsql.viewer`) |
+| `gcp-sql-backups` | `sql backups list --filter=instance=I --limit=N` per instance the project's backups name, via `sql-backups.sh` | `gcp.#SQLBackup` | `name` | `cloudsql.backupRuns.list` (`roles/cloudsql.viewer`) |
+| `gcp-sql-backup-runs` | `sql backups list --instance=I --limit=N` per instance, via `sql-backup-runs.sh` | `gcp.#SQLBackupRun` | `selfLink` | `cloudsql.backupRuns.list` (same) |
+| `gcp-alloydb-clusters` | `alloydb clusters list` | `gcp.#AlloyDBCluster` | `name` | `alloydb.clusters.list` (`roles/alloydb.viewer`) |
+| `gcp-alloydb-instances` | `alloydb instances list` | `gcp.#AlloyDBInstance` | `name` | `alloydb.instances.list` (same) |
+| `gcp-redis-instances` | `redis instances list --region=-` | `gcp.#RedisInstance` | `name` | `redis.instances.list` (`roles/redis.viewer`) |
+| `gcp-firestore-databases` | `firestore databases list` | `gcp.#FirestoreDatabase` | `name` | `datastore.databases.list` (`roles/datastore.viewer`) |
 | `gcp-buckets` | `storage buckets list` | `gcp.#Bucket` | `name` | `storage.buckets.list` (`roles/viewer`) |
 | `gcp-run-services` | `run services list` | `gcp.#RunService` | project number, location, name | `run.services.list` (`roles/run.viewer`) |
 | `gcp-dns-zones` | `dns managed-zones list` | `gcp.#DNSManagedZone` | `project`, `name` | `dns.managedZones.list` (`roles/dns.reader`) |
@@ -249,8 +257,9 @@ Networks, subnets, firewall rules, routes, routers, addresses, GKE clusters,
 Cloud Run services, Pub/Sub topics and subscriptions, service accounts, DNS
 zones, KMS key rings and keys, custom roles, service account keys, load
 balancing (forwarding rules, target proxies, URL maps, backend services,
-health checks, network endpoint groups, SSL certificates and policies) and
-Cloud Armor policies are collected through
+health checks, network endpoint groups, SSL certificates and policies),
+Cloud Armor policies, AlloyDB clusters and instances, Redis instances and
+Firestore databases are collected through
 Cloud Asset Inventory (CAI) search: one
 search per type
 for every organization your credentials can see (`gcloud organizations list`,
@@ -265,7 +274,9 @@ report says `source: fallback` with the error. Both sources store identical
 records: each type's records are normalized to one shape (no `kind`
 differences, fingerprints, etags or gcloud-only fields such as a
 subscription's `state`, DNS visibility in lower case, a service account's
-`disabled` always stated), so switching
+`disabled` always stated; AlloyDB's `updateTime`, Redis's CA certificate
+PEMs, and the Firestore settings only gcloud prints, such as
+`versionRetentionPeriod`), so switching
 creates no new versions. CAI lists KMS key rings and keys in every location;
 the collectors keep `_gcpKMSLocations`, as the gcloud commands do. Custom
 roles defined in an organization rather than a project, and Google-managed
@@ -319,6 +330,14 @@ exports none of a project's managed zones' records (its record sets are
 those of GKE's cluster-scoped DNS zones, pods and services, which the pack
 does not catalog). The helper adds each record's zone (`managedZone`).
 
+Cloud SQL backups are collected through gcloud only, the newest
+`_gcpBackupHistory` (default 10) per instance: CAI lists every retained
+backup, and a transform cannot keep only the newest of each instance.
+`gcp-sql-backups` (the Backup API) records the instance's settings when the
+backup was taken and keeps a deleted instance's final backups;
+`gcp-sql-backup-runs` is the instance's backup history (a backup run per
+backup, failed runs included), which goes with the instance.
+
 Container images are collected through gcloud only. CAI lists every image
 version as its own asset (tens of thousands in a real organization), while
 `gcp-container-images` keeps one record per image with only its newest
@@ -346,6 +365,7 @@ instead of 10.
    _gcpAssetScope: "projects"   // "organization" (default), "projects" (one search per listed project), or "off" (gcloud only)
    _gcpBillingProject: "my-billing-project" // --billing-project for CAI; default "" uses gcloud's billing/quota_project
    _gcpImageHistory: 5 // tagged versions kept per container image, newest first; default 10
+   _gcpBackupHistory: 5 // backups kept per Cloud SQL instance, newest first; default 10
    ```
 
    Key rings are listed per project and location; `gcp-kms-keys` lists the

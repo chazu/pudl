@@ -1,0 +1,74 @@
+[
+  {
+    "name": "projects/example-project/locations/us-central1/clusters/ledger",
+    "uid": "6598cfa6-0000-4000-8000-0000cf95a2e3",
+    "createTime": "2025-02-10T15:00:00.000000Z",
+    "state": "READY",
+    "clusterType": "PRIMARY",
+    "databaseVersion": "POSTGRES_16",
+    "subscriptionType": "STANDARD",
+    "labels": {
+      "team": "payments"
+    },
+    "networkConfig": {
+      "network": "projects/example-project/global/networks/prod-vpc"
+    },
+    "encryptionConfig": {
+      "kmsKeyName": "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key"
+    },
+    "encryptionInfo": {
+      "encryptionType": "CUSTOMER_MANAGED_ENCRYPTION",
+      "kmsKeyVersions": [
+        "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key/cryptoKeyVersions/1"
+      ]
+    },
+    "automatedBackupPolicy": {
+      "enabled": true,
+      "location": "us-central1",
+      "backupWindow": "3600s",
+      "weeklySchedule": {
+        "daysOfWeek": [
+          "MONDAY",
+          "THURSDAY"
+        ],
+        "startTimes": [
+          {
+            "hours": 2
+          }
+        ]
+      },
+      "timeBasedRetention": {
+        "retentionPeriod": "1209600s"
+      }
+    },
+    "continuousBackupConfig": {
+      "enabled": true,
+      "recoveryWindowDays": 14
+    },
+    "updateTime": "2026-01-05T21:26:35.805234293Z",
+    "reconciling": false
+  },
+  {
+    "name": "projects/example-project/locations/us-east1/clusters/search",
+    "uid": "3a291c2b-0000-4000-8000-0000ab02b36d",
+    "createTime": "2025-06-01T09:30:00.000000Z",
+    "state": "READY",
+    "clusterType": "PRIMARY",
+    "databaseVersion": "POSTGRES_15",
+    "subscriptionType": "STANDARD",
+    "pscConfig": {
+      "pscEnabled": true
+    },
+    "encryptionInfo": {
+      "encryptionType": "GOOGLE_DEFAULT_ENCRYPTION"
+    },
+    "automatedBackupPolicy": {
+      "enabled": false
+    },
+    "continuousBackupConfig": {
+      "enabled": false
+    },
+    "updateTime": "2026-01-05T21:26:35.805234293Z",
+    "reconciling": false
+  }
+]

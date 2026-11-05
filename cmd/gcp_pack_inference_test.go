@@ -39,6 +39,12 @@ var gcpPackSchemas = map[string]string{
 	"ssl-policies":            "gcp.#SSLPolicy",
 	"security-policies":       "gcp.#SecurityPolicy",
 	"dns-record-sets":         "gcp.#DNSRecordSet",
+	"alloydb-clusters":        "gcp.#AlloyDBCluster",
+	"alloydb-instances":       "gcp.#AlloyDBInstance",
+	"redis-instances":         "gcp.#RedisInstance",
+	"firestore-databases":     "gcp.#FirestoreDatabase",
+	"sql-backups":             "gcp.#SQLBackup",
+	"sql-backup-runs":         "gcp.#SQLBackupRun",
 }
 
 // gcpPackOrgLevel are the fixtures of types above projects: their records
