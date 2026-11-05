@@ -330,7 +330,8 @@ alone.
 
 ## Follow-up designs
 
-1. Shared identity across schemas (§8).
+1. Shared identity across schemas (§8):
+   [2026-11-05-shared-identity-across-schemas.md](2026-11-05-shared-identity-across-schemas.md).
 
 ## Findings during delivery
 
