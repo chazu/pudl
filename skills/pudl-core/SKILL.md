@@ -154,8 +154,9 @@ waivers: [{policy: "gcp.#FirewallBestPractice", rule: "gcp-firewall-world-ingres
   `entry_id` and `resource_id`; join one record's relations on `entry_id`.
   `{exists: path}` and `default` stand in for negation.
 - Ownership projects `resource_owner` / `resource_unowned`.
-- `same_resource: [{kind: "k8s.cluster", key: host: "endpoint"}]` links
+- `same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]` links
   records of different schemas that describe one resource (never merged).
+  Keys must be unique to one resource (no private IPs).
   Equal kind and key parts link; keys needing a join are rules deriving
   `same_resource(a, b, kind)`. Linked records are one node in pudl ui and
   `pudl graph export` (`representations`); `pudl show` lists them under

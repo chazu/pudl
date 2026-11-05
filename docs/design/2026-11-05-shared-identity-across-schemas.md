@@ -29,10 +29,13 @@ normalized to one shape and share one identity. This design covers records of
    `resource_id`, versions and facts. pudl records that they are one resource.
 2. **One node in pudl ui.** A linked group is drawn as one node listing each
    representation; edges to any member attach to that node.
-3. **Clusters first, then objects.** A cluster is itself a resource with
-   several representations, linked by its API server endpoint. Kubernetes
-   objects match on linked cluster, namespace, group, kind and name. This
-   covers GKE, EKS, AKS and local clusters alike.
+3. **Clusters by API server, objects by UID.** A cluster is itself a resource
+   with several representations, linked by its API server host. Kubernetes
+   objects match on `metadata.uid`, which every Kubernetes object has on any
+   distribution, so GKE, EKS, AKS and local clusters need no per-provider
+   rule. (Amended 2026-11-05 after the live check; first decided as linked
+   cluster + namespace + group + kind + name through a bridge rule. See
+   [Findings during delivery](#findings-during-delivery).)
 4. **Keys from schema paths and from rules.** A schema declares key paths for
    values its record holds; datalog rules link resources when the key needs a
    join.
@@ -60,13 +63,13 @@ Built-ins declare cross-provider kinds (`k8s.*`); packs declare their own.
 
 ```cue
 _pudl: same_resource: [
-	{kind: "k8s.cluster", key: {host: "endpoint"}},
-	{kind: "k8s.cluster", key: {host: "privateClusterConfig.privateEndpoint"}},
+	{kind: "k8s.cluster", key: {host: "privateClusterConfig.publicEndpoint"}},
+	{kind: "k8s.cluster", key: {host: "controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint"}},
 ]
 ```
 
 - A list, so a schema can belong to several kinds, or hold several keys for
-  one kind (a GKE cluster has public, private and DNS endpoints).
+  one kind (a GKE cluster has a public and a DNS endpoint).
 - Each key value is a path or `{path, trim_prefix?, last_segment?, prepend?}`,
   exactly as in `_pudl.graph.refs`. One `[*]` fans out, as in `_pudl.facts`.
 - A missing path yields no key, never an empty one, so absent data never links.
@@ -98,8 +101,8 @@ resource of `kind`. Two ways to derive it:
   It also yields `a = b` rows (datalog has no variable inequality); consumers
   drop them.
 - **From pack rules** that derive `same_resource` directly when the key needs a
-  join. Rules may read `same_resource` itself (recursion is supported); that is
-  how objects build on linked clusters (§4).
+  join. Rules may read `same_resource` itself (recursion is supported). No
+  shipped type needs one yet (§4).
 
 `same_resource` and `same_resource_key` are reserved
 (`database.IsReservedRelation`): `AddFact` rejects them, as it does
@@ -124,39 +127,18 @@ A wrong link is worse than a missing one.
 
 | Representation | Key source |
 | --- | --- |
-| `gcp.#GKECluster` | `_pudl.same_resource` on `endpoint`, `privateClusterConfig.privateEndpoint` and the DNS endpoint |
+| `gcp.#GKECluster` | `privateClusterConfig.publicEndpoint` and `controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint`; not private endpoints, which repeat across VPCs |
 | `aws.#EKSCluster` (later) | `endpoint` with `trim_prefix: "https://"` |
 | Kubernetes pack cluster record, one per kube context | the context's server URL, normalized to its host by the collector's transform (scheme and `:443` removed) |
 
-**Objects** (`k8s.object`):
+**Objects** (`k8s.object`, key `uid`): every representation declares
+`{kind: "k8s.object", key: uid: "metadata.uid"}`. `gcp.#K8sDeployment`
+(GKE's export to CAI) does; the Kubernetes pack's object schemas will. No
+bridge rule and no cross-pack relation contract are needed.
 
-- kubectl collectors stamp each object with its context's `cluster_host`
-  through the run's `set`, and project
-  `k8s_object(resource_id, cluster_host, namespace, group, kind, name)` and
-  `k8s_cluster(resource_id, host)`.
-- The GCP pack projects
-  `gcp_k8s_object(resource_id, cluster, namespace, group, kind, name)` from CAI,
-  where `cluster` is the cluster's path from the asset name.
-- A bridge rule in the GCP pack links them through the linked clusters:
-
-```cue
-gcp_same_k8s_object: {
-	head: {rel: "same_resource", args: {a: "$A", b: "$B", kind: "k8s.object"}}
-	body: [
-		{rel: "gcp_k8s_object", args: {resource_id: "$A", cluster: "$CL", namespace: "$NS", group: "$G", kind: "$K", name: "$N"}},
-		{rel: "gcp_gke_cluster", args: {resource_id: "$GC", self_link: "$CL"}},
-		{rel: "same_resource", args: {a: "$GC", b: "$KC", kind: "k8s.cluster"}},
-		{rel: "k8s_cluster", args: {resource_id: "$KC", host: "$H"}},
-		{rel: "k8s_object", args: {resource_id: "$B", cluster_host: "$H", namespace: "$NS", group: "$G", kind: "$K", name: "$N"}},
-	]
-}
-```
-
-Bridge rules live in the pack of the platform that hosts the clusters (GKE in
-the GCP pack, EKS in the AWS pack). They name the Kubernetes pack's relations,
-so `k8s_cluster` and `k8s_object` become a documented contract of that pack.
-Without the Kubernetes pack those relations have no facts and the rule
-matches nothing; the datalog engine does not reject unknown relations.
+A deleted and recreated object gets a new UID. Until both sources have seen
+the new object, the stale record on one side does not link: a missing link,
+not a wrong one.
 
 ### 5. Consumers
 
@@ -185,14 +167,39 @@ matches nothing; the datalog engine does not reject unknown relations.
 | 1 | Core: `same_resource_kind` facts, `_pudl.same_resource` (parse, validate, inherit), projection to `same_resource_key`, built-in rule, reserved relations, `internal/sameresource` groups and conflicts | about 1 day |
 | 2 | Consumers: graph export groups and ref resolution, `pudl show`, doctor checks, docs (schema authoring, datalog, pudl-core skill) | about 1 day |
 | 3 | pudl ui inspector: representations | about half a day |
-| 4 | GCP pack: `k8s.cluster` keys on `gcp.#GKECluster` after a live check of the endpoint fields; CAI Kubernetes schemas with `gcp_k8s_object`; bridge rule | about 1 day |
-| 5 | Kubernetes pack (its own epic): cluster record, object schemas, collectors stamping `cluster_host` | separate |
+| 4 | GCP pack: `k8s.cluster` keys on `gcp.#GKECluster` after a live check of the endpoint fields; CAI Kubernetes deployments (`gcp.#K8sDeployment`, `k8s.object` by UID) | about 1 day |
+| 5 | Kubernetes pack (its own epic): cluster record keyed by API server host, object schemas keyed by UID | separate |
 
 Steps 1 to 3 are tested with synthetic fixtures and need no Kubernetes pack.
 
 ## Open questions
 
-1. Which GKE field holds the DNS-based control plane endpoint, and is it in
-   CAI's copy? Live check in step 4.
+1. ~~Which GKE field holds the DNS-based control plane endpoint, and is it in
+   CAI's copy?~~ `controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint`, in
+   both (live check, 2026-11-05).
 2. Display precedence inside a group: first schema by name to start; a
    declared preference per kind if that reads badly.
+
+## Findings during delivery
+
+- **Live check, 2026-11-05 (`pudl-h7s.4`).** The organization's GKE clusters:
+  CAI and gcloud identical for every endpoint field. Every cluster has
+  `endpoint`, `privateClusterConfig.privateEndpoint`,
+  `privateClusterConfig.publicEndpoint` (IPv4) and the DNS endpoint. Only
+  the public and DNS endpoints are unique; private
+  endpoints repeat, and on private clusters
+  `endpoint` is the private IP. Keys are the public and DNS
+  endpoints only.
+- **CAI exports Kubernetes objects with their UID.** Deployments,
+  Services, Namespaces and Nodes, each with a distinct `metadata.uid`
+  and the cluster, namespace and name in the
+  asset name; no `apiVersion` or `kind`. kubectl reports the same UID, so
+  objects key on it (decision 3, amended with the user: "whatever works best
+  for other types of Kubernetes clusters as well").
+- **System namespaces.** Many Deployments are in `kube-*`, `gke-*` or
+  `gmp-*` namespaces; the collector skips them (GCP design decision 8).
+  Most carry container `env` values, and the last-applied annotation
+  repeats them; both are redacted.
+- **Evidence views re-project facts.** Checks scoped to snapshots project the
+  selected records into a scratch view under `snapshot:<id>` sources, so
+  `same_resource_key` is allowed there as well as under projection sources.

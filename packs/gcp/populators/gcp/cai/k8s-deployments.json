@@ -1,0 +1,212 @@
+[
+  {
+    "name": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/shop/apps/deployments/checkout",
+    "assetType": "apps.k8s.io/Deployment",
+    "parentFullResourceName": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/shop",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "metadata": {
+            "name": "checkout",
+            "namespace": "shop",
+            "uid": "3f2b9c1e-7a4d-4c2e-9b1a-0d5e6f7a8b9c",
+            "creationTimestamp": "2026-09-14T10:12:00Z",
+            "labels": {
+              "app": "checkout",
+              "team": "payments"
+            },
+            "annotations": {
+              "deployment.kubernetes.io/revision": "7",
+              "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"apps/v1\",\"kind\":\"Deployment\",\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"env\":[{\"name\":\"PAYMENT_API_TOKEN\",\"value\":\"example-not-a-real-token\"}]}]}}}}"
+            },
+            "managedFields": [
+              {
+                "manager": "kubectl",
+                "operation": "Apply",
+                "apiVersion": "apps/v1"
+              }
+            ]
+          },
+          "spec": {
+            "replicas": 2,
+            "selector": {
+              "matchLabels": {
+                "app": "checkout"
+              }
+            },
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app": "checkout"
+                }
+              },
+              "spec": {
+                "containers": [
+                  {
+                    "name": "checkout",
+                    "image": "us-docker.pkg.dev/example-project/apps/checkout:1.4.2",
+                    "env": [
+                      {
+                        "name": "LOG_LEVEL",
+                        "value": "info"
+                      },
+                      {
+                        "name": "PAYMENT_API_TOKEN",
+                        "value": "example-not-a-real-token"
+                      }
+                    ],
+                    "ports": [
+                      {
+                        "containerPort": 8080,
+                        "protocol": "TCP"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "replicas": 2,
+            "readyReplicas": 2,
+            "observedGeneration": 7
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/shop/apps/deployments/catalog",
+    "assetType": "apps.k8s.io/Deployment",
+    "parentFullResourceName": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/shop",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "metadata": {
+            "name": "catalog",
+            "namespace": "shop",
+            "uid": "8c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+            "creationTimestamp": "2026-09-14T10:12:00Z",
+            "labels": {
+              "app": "catalog",
+              "team": "payments"
+            },
+            "annotations": {
+              "deployment.kubernetes.io/revision": "7"
+            },
+            "managedFields": [
+              {
+                "manager": "kubectl",
+                "operation": "Apply",
+                "apiVersion": "apps/v1"
+              }
+            ]
+          },
+          "spec": {
+            "replicas": 3,
+            "selector": {
+              "matchLabels": {
+                "app": "catalog"
+              }
+            },
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app": "catalog"
+                }
+              },
+              "spec": {
+                "containers": [
+                  {
+                    "name": "catalog",
+                    "image": "us-docker.pkg.dev/example-project/apps/catalog:1.4.2",
+                    "env": [],
+                    "ports": [
+                      {
+                        "containerPort": 8080,
+                        "protocol": "TCP"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "replicas": 3,
+            "readyReplicas": 3,
+            "observedGeneration": 7
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/kube-system/apps/deployments/kube-dns",
+    "assetType": "apps.k8s.io/Deployment",
+    "parentFullResourceName": "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/kube-system",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "metadata": {
+            "name": "kube-dns",
+            "namespace": "kube-system",
+            "uid": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+            "creationTimestamp": "2026-09-14T10:12:00Z",
+            "labels": {
+              "k8s-app": "kube-dns"
+            },
+            "annotations": {
+              "deployment.kubernetes.io/revision": "7"
+            },
+            "managedFields": [
+              {
+                "manager": "kubectl",
+                "operation": "Apply",
+                "apiVersion": "apps/v1"
+              }
+            ]
+          },
+          "spec": {
+            "replicas": 2,
+            "selector": {
+              "matchLabels": {
+                "app": "kube-dns"
+              }
+            },
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app": "kube-dns"
+                }
+              },
+              "spec": {
+                "containers": [
+                  {
+                    "name": "kube-dns",
+                    "image": "us-docker.pkg.dev/example-project/apps/kube-dns:1.4.2",
+                    "env": [],
+                    "ports": [
+                      {
+                        "containerPort": 8080,
+                        "protocol": "TCP"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "replicas": 2,
+            "readyReplicas": 2,
+            "observedGeneration": 7
+          }
+        }
+      }
+    ]
+  }
+]

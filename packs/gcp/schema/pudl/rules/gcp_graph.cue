@@ -41,6 +41,17 @@ gcp_graph_gke_subnet: {
 	body: [{rel: "gcp_gke_cluster", args: {resource_id: "$R", subnetwork: "$S"}}]
 }
 
+// A Kubernetes object lives in its GKE cluster, matched by project,
+// location and name: the cluster's selfLink spells a zonal location as
+// zones/, the object's asset name as locations/.
+gcp_graph_k8s_deployment_cluster: {
+	head: {rel: "graph_edge", args: {type: "in_cluster", source: "$R", target: "$C", basis: "observed"}}
+	body: [
+		{rel: "gcp_k8s_deployment", args: {resource_id: "$R", project: "$P", location: "$L", cluster: "$N"}},
+		{rel: "gcp_gke_cluster", args: {resource_id: "$C", project: "$P", location: "$L", name: "$N"}},
+	]
+}
+
 gcp_graph_gke_key: {
 	head: {rel: "graph_edge", args: {type: "encrypted_by", source: "$R", target: "$K", basis: "observed"}}
 	body: [{rel: "gcp_gke_secrets_key", args: {resource_id: "$R", key: "$K"}}]

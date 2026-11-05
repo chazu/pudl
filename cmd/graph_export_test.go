@@ -204,6 +204,13 @@ func TestGraphExportGCPPack(t *testing.T) {
 	subnetEdges := l.edges("in_network")
 	require.NotEmpty(t, l.edges("subscribed_to"))
 
+	// Kubernetes deployments from CAI: system namespaces are skipped, and
+	// each deployment lives in its GKE cluster.
+	const deployments = "//container.googleapis.com/projects/example-project/locations/us-central1/clusters/prod-private/k8s/namespaces/shop/apps/deployments/"
+	prodPrivate := "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private"
+	require.ElementsMatch(t, []string{deployments + "catalog -> " + prodPrivate, deployments + "checkout -> " + prodPrivate}, l.edges("in_cluster"))
+	require.Equal(t, "checkout", l.byNative[deployments+"checkout"].Name)
+
 	// Compute instances: placed by subnet, the service account they run as,
 	// and the firewall rules GCP applies to them.
 	vm := func(name string) string {

@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/chazu/pudl/internal/errors"
 )
@@ -46,6 +47,22 @@ var policyRelations = map[string]bool{
 	PolicyViolationRelation: true,
 }
 
+// SnapshotEvidenceSourcePrefix marks facts an evidence view projects from a
+// selected snapshot's records (internal/evidence). They are projected facts,
+// written to the view, never to the source catalog.
+const SnapshotEvidenceSourcePrefix = "snapshot:"
+
+// SnapshotEvidenceSource is the fact source of an evidence view's facts from
+// snapshotID's records.
+func SnapshotEvidenceSource(snapshotID string) string {
+	return SnapshotEvidenceSourcePrefix + snapshotID
+}
+
+// IsSnapshotEvidenceSource reports whether source marks evidence view facts.
+func IsSnapshotEvidenceSource(source string) bool {
+	return strings.HasPrefix(source, SnapshotEvidenceSourcePrefix)
+}
+
 // sameResourceRelations are reserved for shared identity.
 var sameResourceRelations = map[string]bool{
 	SameResourceRelation:    true,
@@ -71,12 +88,13 @@ func ReservedRelations() []string {
 
 // checkReservedRelation rejects a fact under a reserved relation, except a
 // policy result written by policy evaluation under its own source and a
-// same_resource_key fact written by projection.
+// same_resource_key fact written by projection (into the catalog, or into an
+// evidence view).
 func checkReservedRelation(f Fact) error {
 	switch {
 	case policyRelations[f.Relation] && IsPolicySource(f.Source):
 		return nil
-	case f.Relation == SameResourceKeyRelation && IsProjectionSource(f.Source):
+	case f.Relation == SameResourceKeyRelation && (IsProjectionSource(f.Source) || IsSnapshotEvidenceSource(f.Source)):
 		return nil
 	case f.Relation == SameResourceKeyRelation:
 		return errors.WrapError(errors.ErrCodeInvalidInput,

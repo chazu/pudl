@@ -44,6 +44,7 @@ _graphEdgeTypes: {
 	in_project:      {category: "containment", label: "in project", meaning: "Owned by this project."}
 	in_network:      {category: "containment", label: "in network", meaning: "Defined inside this VPC network."}
 	in_subnet:       {category: "containment", label: "in subnet", meaning: "Has an address in this subnet."}
+	in_cluster:      {category: "containment", label: "in cluster", meaning: "Kubernetes object that lives in this cluster."}
 	attached_to:     {category: "containment", label: "attached to", meaning: "Attached to this resource (interface, gateway)."}
 	member_of:       {category: "containment", label: "member of", meaning: "Declared member of a logical service."}
 	part_of:         {category: "containment", label: "part of", meaning: "Logical service belongs to this application."}

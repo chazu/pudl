@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: GKE cluster keys and Kubernetes deployments (2026-11-05)
+
+GKE clusters declare `k8s.cluster` keys (public and DNS endpoints; private
+endpoints repeat across VPCs). New CAI-only collector `gcp-k8s-deployments`
+(`gcp.#K8sDeployment`, keyed `k8s.object` by `metadata.uid`, system
+namespaces skipped, env values redacted) with `in_cluster` edges to the
+cluster. Evidence views now accept `same_resource_key`. See
+`implog/2026_11_05_gcp_k8s_same_resource.md`. Closes `pudl-h7s.4` and epic
+`pudl-h7s`.
+
 ### pudl ui shows a node's records (2026-11-05)
 
 The inspector lists each cataloged record of a resource that several schemas

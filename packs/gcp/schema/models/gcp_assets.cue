@@ -40,6 +40,14 @@ _gcpAssetTypes: {
 	"kms-keys":         "cloudkms.googleapis.com/CryptoKey"
 	"iam-roles":            "iam.googleapis.com/Role"
 	"service-account-keys": "iam.googleapis.com/ServiceAccountKey"
+	"k8s-deployments":      "apps.k8s.io/Deployment"
+}
+
+// Types only CAI lists: gcloud has no command for them, so their collectors
+// search CAI whatever _gcpAssetScope says ("off" acts as "organization") and
+// have no fallback.
+_gcpCAIOnly: {
+	"k8s-deployments": true
 }
 
 // CAI lists KMS key rings and keys in every location; the gcloud commands
@@ -105,8 +113,11 @@ _gcpAssetTransform: {
 	_t: string
 	_locations: *null | [...string]
 	in: _
+	let asset = in
 	_resource: in.versionedResources[0].resource
-	_shaped:   (_gcpShapes[_t] & {in: _resource}).out
+	// A shape may read the asset itself (_asset), e.g. a Kubernetes object's
+	// cluster, which only its asset name records.
+	_shaped: (_gcpShapes[_t] & {in: _resource, _asset: asset}).out
 	_inProject: regexp.Match("^//[^/]+/projects/", in.parentFullResourceName)
 	// CUE's && does not short-circuit; an unselected list element may fail.
 	_elsewhere: [
@@ -272,4 +283,39 @@ _gcpComputeShape: {
 		}
 		kind: _kind
 	}
+}
+
+// Kubernetes objects (CAI only). The asset name says where the object lives:
+// //container.googleapis.com/projects/P/locations/L/clusters/C/k8s/...
+// The shape records it (assetName, location, cluster), restores the
+// apiVersion and kind CAI omits, and drops managedFields, server-side
+// bookkeeping that changes on every apply.
+_gcpK8sShape: {
+	_apiVersion: string
+	_kind:       string
+	_asset: {...}
+	in: {...}
+	let r = in
+	let where = regexp.FindSubmatch("^//container\\.googleapis\\.com/projects/[^/]+/locations/([^/]+)/clusters/([^/]+)/", _asset.name)
+	out: {
+		for k, v in r if k != "metadata" {(k): v}
+		metadata: {for k, v in r.metadata if k != "managedFields" {(k): v}}
+		apiVersion: _apiVersion
+		kind:       _kind
+		assetName:  _asset.name
+		location:   where[1]
+		cluster:    where[2]
+	}
+}
+
+_gcpShapes: "k8s-deployments": _gcpK8sShape & {_apiVersion: "apps/v1", _kind: "Deployment"}
+
+// Kubernetes and GKE system namespaces hold built-in defaults, which the pack
+// does not catalog (many of the live deployments, 2026-11-05).
+_gcpK8sSystemNamespace: "^(kube-system|kube-public|kube-node-lease|gke-.*|gmp-.*)$"
+
+_gcpSkip: "k8s-deployments": {
+	in: {...}
+	let r = in
+	skip: regexp.Match(_gcpK8sSystemNamespace, r.metadata.namespace)
 }

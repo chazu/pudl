@@ -195,7 +195,7 @@ func (v *View) materialize(tx *database.CatalogTx, reg *projection.Registry, pol
 			v.issue("projection_omitted", message, entry.ID)
 		}
 		for _, fact := range projected.Facts {
-			fact.Source = "snapshot:" + snapshot.SnapshotID
+			fact.Source = database.SnapshotEvidenceSource(snapshot.SnapshotID)
 			fact.ValidStart = snapshot.CreatedAt.Unix()
 			if _, err := tx.AddFact(fact); err != nil {
 				return err

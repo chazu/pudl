@@ -247,25 +247,26 @@ canonical JSON of the key's parts, and the built-in rule
 also has `a = b` rows, because rules cannot say "different"; consumers drop
 them.
 
-A pack writes its own `same_resource` rules when a key needs a join. Rules
-may read `same_resource` itself, so objects can be linked through linked
-clusters:
+A pack writes its own `same_resource` rules when no field of the record is a
+shared key, and the link needs a join. Rules may read `same_resource`
+itself, so a link can build on another link. For example, objects of two
+sources that only share a name could be linked through their linked
+clusters (the relations here are illustrative):
 
 ```cue
-gcp_same_k8s_object: {
+same_object_via_cluster: {
 	head: {rel: "same_resource", args: {a: "$A", b: "$B", kind: "k8s.object"}}
 	body: [
-		{rel: "gcp_k8s_object", args: {resource_id: "$A", cluster: "$CL", namespace: "$NS", name: "$N"}},
-		{rel: "gcp_gke_cluster", args: {resource_id: "$GC", self_link: "$CL"}},
-		{rel: "same_resource", args: {a: "$GC", b: "$KC", kind: "k8s.cluster"}},
-		{rel: "k8s_cluster", args: {resource_id: "$KC", host: "$H"}},
-		{rel: "k8s_object", args: {resource_id: "$B", cluster_host: "$H", namespace: "$NS", name: "$N"}},
+		{rel: "a_object", args: {resource_id: "$A", cluster: "$CA", namespace: "$NS", name: "$N"}},
+		{rel: "same_resource", args: {a: "$CA", b: "$CB", kind: "k8s.cluster"}},
+		{rel: "b_object", args: {resource_id: "$B", cluster: "$CB", namespace: "$NS", name: "$N"}},
 	]
 }
 ```
 
 A relation with no facts matches nothing, so such a rule is harmless until
-both packs are installed.
+both packs are installed. Prefer a key in `_pudl.same_resource` when one
+exists: Kubernetes objects key on `metadata.uid`.
 
 Kinds are `same_resource_kind` facts. pudl ships `k8s.cluster` and
 `k8s.object`; a pack declares its own the same way:
