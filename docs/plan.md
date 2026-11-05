@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: hierarchy, policies and enabled services (2026-11-05)
+
+Batch (a) of `pudl-q4v.7`: organizations, folders, organization policies,
+hierarchical firewall policies, Binary Authorization policies and enabled
+services, each on CAI with a gcloud fallback. Types above projects search
+per organization and carry no project; Binary Authorization searches per
+project. Live: CAI counts match the census; gcloud parity verified for
+organizations, folders and Binary Authorization. See
+`implog/2026_11_05_gcp_batch_a_hierarchy.md`. Batches (b)–(f) remain
+(`pudl-q4v.7` open); follow-ups `pudl-q4v.21`, `pudl-2ma`.
+
 ### Pub/Sub subscriptions on Cloud Asset Inventory (2026-11-05)
 
 Live parity: CAI and gcloud agree except gcloud-only `state` and

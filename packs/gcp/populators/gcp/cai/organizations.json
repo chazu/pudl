@@ -1,0 +1,20 @@
+[
+  {
+    "name": "//cloudresourcemanager.googleapis.com/organizations/222222222222",
+    "assetType": "cloudresourcemanager.googleapis.com/Organization",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "creationTime": "2016-04-12T18:20:31.000Z",
+          "displayName": "example.com",
+          "lifecycleState": "ACTIVE",
+          "name": "organizations/222222222222",
+          "owner": {
+            "directoryCustomerId": "C00example"
+          }
+        }
+      }
+    ]
+  }
+]

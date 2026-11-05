@@ -1,0 +1,90 @@
+[
+  {
+    "name": "//orgpolicy.googleapis.com/organizations/222222222222/policies/compute.requireOsLogin",
+    "assetType": "orgpolicy.googleapis.com/Policy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/organizations/222222222222",
+    "versionedResources": [
+      {
+        "version": "v2",
+        "resource": {
+          "name": "organizations/222222222222/policies/compute.requireOsLogin",
+          "spec": {
+            "rules": [
+              {
+                "enforce": true
+              }
+            ],
+            "updateTime": "2023-03-01T12:00:00.000000Z"
+          },
+          "etag": "W/\"etag-0\""
+        }
+      }
+    ]
+  },
+  {
+    "name": "//orgpolicy.googleapis.com/folders/111111111111/policies/iam.allowedPolicyMemberDomains",
+    "assetType": "orgpolicy.googleapis.com/Policy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/folders/111111111111",
+    "versionedResources": [
+      {
+        "version": "v2",
+        "resource": {
+          "name": "folders/111111111111/policies/iam.allowedPolicyMemberDomains",
+          "spec": {
+            "rules": [
+              {
+                "values": {
+                  "allowedValues": [
+                    "C00example"
+                  ]
+                }
+              }
+            ],
+            "updateTime": "2023-05-10T08:00:00.000000Z"
+          },
+          "etag": "W/\"etag-1\""
+        }
+      }
+    ]
+  },
+  {
+    "name": "//orgpolicy.googleapis.com/folders/111111111112/policies/compute.requireOsLogin",
+    "assetType": "orgpolicy.googleapis.com/Policy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/folders/111111111112",
+    "versionedResources": [
+      {
+        "version": "v2",
+        "resource": {
+          "name": "folders/111111111112/policies/compute.requireOsLogin",
+          "spec": {
+            "reset": true,
+            "updateTime": "2024-01-20T16:45:00.000000Z"
+          },
+          "etag": "W/\"etag-2\""
+        }
+      }
+    ]
+  },
+  {
+    "name": "//orgpolicy.googleapis.com/projects/123456789012/policies/storage.publicAccessPrevention",
+    "assetType": "orgpolicy.googleapis.com/Policy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v2",
+        "resource": {
+          "name": "projects/123456789012/policies/storage.publicAccessPrevention",
+          "spec": {
+            "rules": [
+              {
+                "enforce": true
+              }
+            ],
+            "updateTime": "2024-07-02T11:15:00.000000Z"
+          },
+          "etag": "W/\"etag-3\""
+        }
+      }
+    ]
+  }
+]

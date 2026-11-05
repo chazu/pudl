@@ -81,7 +81,13 @@ _gcpAssetSearch: {
 	_t:         string
 	let type = _t
 	_assetType: _gcpAssetTypes[_t]
-	_byProject: _gcpAssetScope == "projects"
+	// Types above projects (_gcpOrgLevel) are only found by searching an
+	// organization; types CAI names projects by number (_gcpAssetByProject)
+	// are searched per project, whose run names it by ID.
+	_byProject: [
+		if _gcpOrgLevel[_t] != _|_ {false},
+		_gcpAssetScope == "projects" || _gcpAssetByProject[_t] != _|_,
+	][0]
 
 	each: [if _byProject {_gcpProjectList}, _gcpOrgList][0]
 	runs: [{
@@ -108,8 +114,8 @@ _gcpAssetSearch: {
 // Unwraps a CAI search result into the type's shape. The project is the one
 // in the resource's parent (the project itself, or e.g. a KMS key's ring).
 // Dropped: other asset types, resources outside a project (an organization's
-// custom roles), what _gcpSkip names, and with _locations resources in other
-// locations.
+// custom roles) unless the type lives above projects (_gcpOrgLevel), what
+// _gcpSkip names, and with _locations resources in other locations.
 _gcpAssetTransform: {
 	_t: string
 	_locations: *null | [...string]
@@ -119,7 +125,10 @@ _gcpAssetTransform: {
 	// A shape may read the asset itself (_asset), e.g. a Kubernetes object's
 	// cluster, which only its asset name records.
 	_shaped: (_gcpShapes[_t] & {in: _resource, _asset: asset}).out
-	_inProject: regexp.Match("^//[^/]+/projects/", in.parentFullResourceName)
+	// An organization has no parent.
+	_parent: [if in.parentFullResourceName != _|_ {in.parentFullResourceName}, ""][0]
+	_inProject: regexp.Match("^//[^/]+/projects/", _parent)
+	_orgLevel:  _gcpOrgLevel[_t] != _|_
 	// CUE's && does not short-circuit; an unselected list element may fail.
 	_elsewhere: [
 		if _locations == null {false},
@@ -131,10 +140,13 @@ _gcpAssetTransform: {
 	// a transform's in is unknown until a record arrives.)
 	out: [
 		if in.assetType != _gcpAssetTypes[_t] {null},
-		if !_inProject {null},
+		if !_inProject && !_orgLevel {null},
 		if _elsewhere {null},
 		if _skip {null},
-		_shaped & {project: regexp.FindSubmatch("projects/([^/]+)", in.parentFullResourceName)[1]},
+		// A type above projects never names one (an organization policy set
+		// on a project names it by number); gcloud could not supply it.
+		if _inProject && !_orgLevel {_shaped & {project: regexp.FindSubmatch("projects/([^/]+)", _parent)[1]}},
+		_shaped,
 	][0]
 }
 

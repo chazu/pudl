@@ -396,6 +396,38 @@ alone.
   equal; CAI omits `state` and `topicMessageRetentionDuration`. Neither is used by a fact, policy or check; the shape drops both, and
   subscriptions moved to CAI.
 
+- **Batch (a), 2026-11-05 (`pudl-q4v.7`).** Six new types, each with a
+  gcloud fallback: organizations, folders, organization policies,
+  hierarchical firewall policies, Binary Authorization policies and enabled
+  services. The live CAI collectors stored exactly what a census search of
+  the surveyed organization returned. Organization policies are set on the
+  organization, on folders and on projects. Access Context Manager types are
+  not supported by search (`No supported asset type matches`). Findings:
+  - Organizations and folders: CAI and gcloud identical; end to end, gcloud
+    stores no new records. Folders and organization policies are Resource
+    Manager v2 / Org Policy v2 objects. The four types above projects get
+    their own path: searched per organization in any scope, kept outside
+    projects, no project field (an organization policy set on a project
+    names it by number), fallback per organization.
+  - Binary Authorization: identical except gcloud's `etag`, `updateTime`
+    and project ID in `name` (CAI: number). CAI's number cannot become an
+    ID in a transform, so the type is searched per project. gcloud prints a
+    default policy (no `updateTime`) for every project with the API enabled
+    that never set one; CAI omits those, and the helper drops them. End to
+    end, no new records in the projects gcloud could read.
+  - Enabled services: CAI holds only `name`, `parent`, `state`; gcloud adds
+    `config` and names `projects/N/services/S`. gcloud also lists
+    `cloudsecuritycompliance.googleapis.com` in every project (CAI never
+    does; dropped) and `containeranalysis.googleapis.com` in some projects
+    where CAI does not (CAI has it in others; no pattern found). A fallback
+    run therefore adds up to one record per project, which the next CAI run
+    marks gone.
+  - Not verified live: the gcloud fallbacks of organization policies (the
+    surveying account cannot bill a project with the Org Policy API) and
+    firewall policies (no `compute.firewallPolicies.list` at the
+    organization). Their shapes follow the API: `etag` dropped from policy
+    and spec; compute `kind` and `fingerprint` as for other compute types.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:

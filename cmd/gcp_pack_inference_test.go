@@ -24,7 +24,14 @@ var gcpPackSchemas = map[string]string{
 	"service-account-keys": "gcp.#ServiceAccountKey",
 	"container-images":     "gcp.#ContainerImage",
 	"k8s-deployments":      "gcp.#K8sDeployment",
+	"organizations":        "gcp.#Organization", "folders": "gcp.#Folder",
+	"org-policies": "gcp.#OrgPolicy", "firewall-policies": "gcp.#FirewallPolicy",
+	"binauthz-policies": "gcp.#BinaryAuthorizationPolicy", "services": "gcp.#EnabledService",
 }
+
+// gcpPackOrgLevel are the fixtures of types above projects: their records
+// name no project, so no project setting rejects them.
+var gcpPackOrgLevel = map[string]bool{"organizations": true, "folders": true, "org-policies": true, "firewall-policies": true}
 
 // gcpPackReshaped are the fixtures whose gcloud output is not the stored shape:
 // get-iam-policy names no resource, so its collector's transform and set
@@ -64,13 +71,20 @@ func TestGCPPackFixturesInferTheirType(t *testing.T) {
 		if _, hasProject := records[0]["project"]; !hasProject {
 			invalid = append(invalid, nil)
 		}
+		if gcpPackOrgLevel[typ] {
+			invalid = nil
+		}
 		for _, set := range invalid {
 			r := runCLI(t, append([]string{"import", "--path", path}, set...)...)
 			require.Error(t, r.Err, "%s %v should be rejected", typ, set)
 			require.Contains(t, r.Stderr, "@pudl(match)", "%s %v", typ, set)
 		}
 
-		r := runCLI(t, "import", "--path", path, "--set", "project=example-project")
+		set := []string{"--set", "project=example-project"}
+		if gcpPackOrgLevel[typ] {
+			set = nil
+		}
+		r := runCLI(t, append([]string{"import", "--path", path}, set...)...)
 		require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 		r = runCLI(t, "list", "--json", "--all", "--items-only", "--schema", schema)

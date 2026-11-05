@@ -17,6 +17,7 @@ var gcpPackTypes = []string{
 	"pubsub-topics", "pubsub-subscriptions", "kms-keyrings", "kms-keys", "instances",
 	"service-accounts", "iam-policies", "iam-roles", "service-account-keys",
 	"container-images", "k8s-deployments",
+	"organizations", "folders", "org-policies", "firewall-policies", "binauthz-policies", "services",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}

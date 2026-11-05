@@ -13,6 +13,7 @@ var gcpAssetTypes = []string{
 	"networks", "subnets", "firewalls", "routes", "routers", "addresses",
 	"gke-clusters", "run-services", "pubsub-topics", "pubsub-subscriptions", "service-accounts", "dns-zones",
 	"kms-keyrings", "kms-keys", "iam-roles", "service-account-keys",
+	"organizations", "folders", "org-policies", "firewall-policies", "binauthz-policies", "services",
 }
 
 type assetPopulate struct {

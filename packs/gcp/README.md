@@ -14,18 +14,22 @@ Installed files, under `.pudl/`:
 
 | Path | Contents |
 | --- | --- |
-| `schema/gcp/{network,compute,gke,data,services,iam,artifacts}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/{network,compute,gke,data,services,iam,artifacts,k8s,hierarchy,project}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
-| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The four check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
 | `populators/gcp/iam-roles.sh` | Helper `gcp-iam-roles` runs: every custom role in one project, described |
 | `populators/gcp/service-account-keys.sh` | Helper `gcp-service-account-keys` runs: every account's user-managed keys in one project |
 | `populators/gcp/container-images.sh` | Helper `gcp-container-images` runs: every Docker image in one project, with its newest tagged versions |
+| `populators/gcp/folders.sh` | Helper `gcp-folders` runs (fallback): every folder in one organization, walked breadth first |
+| `populators/gcp/org-policies.sh` | Helper `gcp-org-policies` runs (fallback): every organization policy set on one organization, its folders and their projects, described |
+| `populators/gcp/firewall-policies.sh` | Helper `gcp-firewall-policies` runs (fallback): the hierarchical firewall policies of one organization and its folders |
+| `populators/gcp/binauthz-policy.sh` | Helper `gcp-binauthz-policies` runs (fallback): one project's Binary Authorization policy, unless never set |
 
 ## What it collects
 
@@ -68,6 +72,12 @@ stays complete.
 | `gcp-kms-keys` | `kms keys list` per key ring, via `kms-keys.sh` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
 | `gcp-container-images` | `artifacts repositories list`, `packages list`, then `docker images list --include-tags` per image, via `container-images.sh` | `gcp.#ContainerImage` | `name` (image path) | `artifactregistry.repositories.list`, `artifactregistry.packages.list`, `artifactregistry.versions.list`, `artifactregistry.tags.list` (`roles/artifactregistry.reader`) |
 | `gcp-k8s-deployments` | none: Cloud Asset Inventory only (`apps.k8s.io/Deployment`) | `gcp.#K8sDeployment` | `assetName` | `cloudasset.assets.searchAllResources` (`roles/cloudasset.viewer`) |
+| `gcp-organizations` | `organizations describe O` per organization | `gcp.#Organization` | `name` | `resourcemanager.organizations.get` (`roles/browser`) |
+| `gcp-folders` | `resource-manager folders list` per parent, via `folders.sh` | `gcp.#Folder` | `name` | `resourcemanager.folders.list` (`roles/browser`) |
+| `gcp-org-policies` | `org-policies list` then `describe` on the organization, folders and projects, via `org-policies.sh` | `gcp.#OrgPolicy` | `name` | `orgpolicy.policies.list` (`roles/orgpolicy.policyViewer`) |
+| `gcp-firewall-policies` | `compute firewall-policies list` on the organization and each folder, via `firewall-policies.sh` | `gcp.#FirewallPolicy` | `selfLink` | `compute.firewallPolicies.list` on the organization and folders |
+| `gcp-binauthz-policies` | `container binauthz policy export`, via `binauthz-policy.sh` | `gcp.#BinaryAuthorizationPolicy` | `project` | `binaryauthorization.policy.get` (`roles/binaryauthorization.policyViewer`) |
+| `gcp-services` | `services list --enabled` | `gcp.#EnabledService` | `project`, `name` | `serviceusage.services.list` (`roles/serviceusage.serviceUsageViewer`) |
 
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
@@ -267,6 +277,21 @@ location and cluster read from the asset name. `managedFields` is dropped.
 Objects in system namespaces (`kube-system`, `kube-public`,
 `kube-node-lease`, `gke-*`, `gmp-*`) are built-in defaults and are not
 collected.
+
+Organizations, folders, organization policies and hierarchical firewall
+policies live above projects. Their collectors search each organization the
+credentials can see, whatever `_gcpAssetScope` says (a project search never
+finds them), and their fallbacks run once per organization, walking its
+folders. Their records carry no project and no owner. A disabled-API error
+there names gcloud's quota project, not the organization, so it fails the
+run instead of counting as "none". Network firewall policies (a project's)
+are not collected. Binary Authorization policies are searched per project
+instead, because CAI names their project by number; a project that never
+set a policy has none (gcloud prints a default, which the helper drops).
+Enabled services: gcloud also lists services CAI does not export
+(`cloudsecuritycompliance.googleapis.com` everywhere, which is not
+collected; `containeranalysis.googleapis.com` in some projects), so a
+fallback run can add a few records that the next CAI run marks gone.
 
 Container images are collected through gcloud only. CAI lists every image
 version as its own asset (tens of thousands in a real organization), while

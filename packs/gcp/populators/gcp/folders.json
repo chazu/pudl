@@ -1,0 +1,16 @@
+[
+  {
+    "createTime": "2019-02-01T10:00:00.000Z",
+    "displayName": "production",
+    "lifecycleState": "ACTIVE",
+    "name": "folders/111111111111",
+    "parent": "organizations/222222222222"
+  },
+  {
+    "createTime": "2021-06-15T09:30:00.000Z",
+    "displayName": "payments",
+    "lifecycleState": "ACTIVE",
+    "name": "folders/111111111112",
+    "parent": "folders/111111111111"
+  }
+]
