@@ -1,0 +1,16 @@
+# Git hooks managed by lefthook (https://lefthook.dev).
+#
+# Setup (once per clone):
+#   brew install lefthook gitleaks
+#   cargo install ratchets       # https://github.com/imbue-ai/ratchets
+#   lefthook install
+pre-commit:
+  parallel: true
+  jobs:
+    - name: gitleaks
+      # Scan only the staged changes for secrets.
+      run: gitleaks git --pre-commit --staged --redact --no-banner
+    - name: ratchets
+      # Budgets in ratchet-counts.toml are whole-repo counts, so check the
+      # whole repo rather than only staged files.
+      run: ratchets check

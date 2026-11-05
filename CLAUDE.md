@@ -48,6 +48,20 @@ Pudl has a bitemporal fact store and a datalog query engine:
 - `CGO_ENABLED=0 go test ./...` runs all tests (no C compiler needed)
 - Issue changes are exported explicitly with `br sync --flush-only`; do not rely on local database state alone.
 
+## Ratchets
+
+Antipatterns are enforced with [ratchets](https://github.com/imbue-ai/ratchets),
+run by the lefthook pre-commit hook (`lefthook.yml`) alongside gitleaks.
+
+- **Whenever we identify an antipattern to avoid or eliminate, add a ratchet
+  for it.** Write `ratchets/regex/<id>.toml` (or `ratchets/ast/<id>.toml`),
+  add the id to `enabled_ratchets` in `ratchets.toml`, then run
+  `ratchets tighten` to record the current count as its budget in
+  `ratchet-counts.toml`.
+- Budgets only go down. Run `ratchets tighten` after removing violations.
+  Raise a budget with `ratchets bump` only with a stated justification.
+- Never skip the hook (`--no-verify`) to get past a ratchet or gitleaks failure.
+
 <!-- br-agent-instructions-v1 -->
 
 ---

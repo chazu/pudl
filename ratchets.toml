@@ -1,0 +1,21 @@
+# Ratchets: progressive enforcement against antipatterns.
+#
+# Each rule lives in ratchets/regex/<id>.toml or ratchets/ast/<id>.toml and is
+# enabled by listing its id below. ratchet-counts.toml holds the whole-repo
+# violation budget per rule; budgets may only go down (`ratchets tighten`)
+# unless explicitly bumped with justification (`ratchets bump`).
+#
+# Policy: when we identify an antipattern to avoid or eliminate, add a ratchet
+# for it here rather than relying on memory or review.
+enabled_ratchets = []
+disabled_ratchets = []
+
+[ratchets]
+version = "2"
+languages = ["go"]
+exclude = ["**/.claude/worktrees/**", "**/node_modules/**", "**/dist/**", ".pudl/**"]
+
+[rules]
+
+[output]
+format = "human"
