@@ -315,13 +315,25 @@ relationships (rules in `schema/pudl/rules/gcp_graph.cue`):
 | `attached_to` | address → what uses it (instance, forwarding rule, Cloud NAT router) |
 | `nat_ip` | Cloud NAT router → its external address |
 | `private_ip_in`, `private_zone_for` | Cloud SQL private IP, private DNS zone → network |
-| `runs_as` | instance, Cloud Run service → service account |
-| `encrypted_by` | GKE cluster (secrets), Pub/Sub topic → KMS key |
+| `runs_as` | instance, Cloud Run service, GKE cluster (each node pool's account; node pool as a property) → service account |
+| `encrypted_by` | GKE cluster (secrets), Pub/Sub topic, bucket (default key), Cloud SQL instance (disk) → KMS key |
+| `in_key_ring` | KMS key → its key ring |
+| `key_of` | user-managed service account key → its service account |
+| `routes_via` | route → its next hop: instance, VPN tunnel or internal load balancer |
 | `subscribed_to`, `publishes_to` | subscription → its topic, and its dead-letter topic |
+| `pushes_to` | push subscription → the endpoint it delivers to, a Cloud Run service when its URL matches |
+| `runs_image` | Cloud Run service → the container image it runs (gcr.io references mapped to their Artifact Registry repositories) |
 | `iam_binding` | member → the IAM policy of the project or resource that grants it (role as a property) |
+| `grants_on` | IAM policy → the resource it is attached to (project, bucket, compute resource, service account, topic, KMS key) |
 
-A reference to something the pack did not collect (a forwarding rule, the
-Compute Engine default service account) is drawn as "not in inventory".
+A reference to something the pack did not collect (a forwarding rule, a VPN
+tunnel, the Compute Engine default service account, a project) is drawn as
+"not in inventory". Node pools on the Compute Engine default account
+(`default`), routes to the internet gateway, and images outside Artifact
+Registry have no edge. A push endpoint is redacted when stored; its origin
+(`pushConfig.pushEndpointOrigin`: scheme and host, no credentials, path or
+query) is kept to match it to a Cloud Run service. A service mapped to a
+custom domain does not match.
 
 ## Impact: what depends on this network
 

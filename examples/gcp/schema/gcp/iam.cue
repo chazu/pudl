@@ -12,7 +12,9 @@ package gcp
 		owner: _#GCPOwner
 		graph: _gcpGraph & {
 			name: "email"
-			refs: [{path: "email", prepend: "serviceAccount:"}]
+			// IAM bindings name an account as serviceAccount:EMAIL; its own
+			// IAM policy names it by unique ID.
+			refs: [{path: "email", prepend: "serviceAccount:"}, {path: "uniqueId"}]
 		}
 		graph: display: {code: "SA", label: "Service account", class: "identity"}
 		graph: security: control: true
@@ -51,6 +53,22 @@ package gcp
 		graph: display: {code: "IAM", label: "IAM policy", class: "identity"}
 		facts: {
 			gcp_iam_policy: args: {asset_type: "assetType"}
+			// The resource a policy is attached to, in the form its record
+			// is named or referenced by: a bucket's name; a compute
+			// resource's path; a service account's unique ID; projects/P
+			// for a project; projects/... for topics and KMS keys. Other
+			// resources (secrets and so on) are not collected and yield no
+			// fact.
+			gcp_iam_policy_resource: args: target: {
+				path: "resource"
+				rewrite: [
+					{match: "^//storage\\.googleapis\\.com/(.+)$", replace: "$1"},
+					{match: "^//compute\\.googleapis\\.com/(projects/.+)$", replace: "$1"},
+					{match: "^//iam\\.googleapis\\.com/projects/[^/]+/serviceAccounts/([0-9]+)$", replace: "$1"},
+					{match: "^//cloudresourcemanager\\.googleapis\\.com/(projects/[^/]+)$", replace: "$1"},
+					{match: "^//(?:pubsub|cloudkms)\\.googleapis\\.com/(projects/.+)$", replace: "$1"},
+				]
+			}
 			gcp_iam_member: {
 				each: "policy.bindings[*]"
 				args: {role: "role", member: "members[*]", conditional: {exists: "condition"}}
@@ -109,6 +127,11 @@ package gcp
 		sensitive_fields: ["privateKeyData", "publicKeyData"]
 		graph: _gcpGraph & {name: {path: "name", last_segment: true, prepend: "key · "}}
 		graph: display: {code: "KEY", label: "Service account key", class: "identity"}
+		// The account a key belongs to, by email (from the key name).
+		facts: gcp_service_account_key_account: args: email: {
+			path: "name"
+			rewrite: [{match: "^projects/[^/]+/serviceAccounts/([^/]+)/keys/[^/]+$", replace: "$1"}]
+		}
 		facts: gcp_service_account_key: args: {
 			name:         "name"
 			key_type:     "keyType"

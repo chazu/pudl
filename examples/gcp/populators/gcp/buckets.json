@@ -1,6 +1,7 @@
 [
   {
     "creation_time": "2024-01-15T10:00:00+0000",
+    "default_kms_key": "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key",
     "default_storage_class": "STANDARD",
     "location": "US-CENTRAL1",
     "location_type": "region",

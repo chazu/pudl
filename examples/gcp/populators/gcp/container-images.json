@@ -54,5 +54,24 @@
     "repository": "projects/example-project/locations/us-central1/repositories/apps",
     "package": "us-central1-docker.pkg.dev/example-project/apps/scratch",
     "versions": []
+  },
+  {
+    "repository": "projects/example-project/locations/us/repositories/apps",
+    "package": "us-docker.pkg.dev/example-project/apps/orders-api",
+    "versions": [
+      {
+        "createTime": "2026-10-30T12:11:09.734Z",
+        "metadata": {
+          "buildTime": "2026-10-30T12:10:51.020Z",
+          "imageSizeBytes": "92274688",
+          "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+          "name": "projects/example-project/locations/us/repositories/apps/dockerImages/orders-api@sha256:4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "package": "us-docker.pkg.dev/example-project/apps/orders-api",
+        "tags": ["1.4.2"],
+        "updateTime": "2026-10-30T12:11:09.734Z",
+        "version": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+      }
+    ]
   }
 ]

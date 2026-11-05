@@ -197,6 +197,26 @@ _gcpShapes: {
 	}
 }
 
+// Pub/Sub subscriptions (gcloud only for now): the push endpoint is redacted
+// when stored (it can carry a token), so the shape adds its origin, scheme
+// and host without credentials, path or query, which names the Cloud Run
+// service a subscription delivers to.
+_gcpShapes: "pubsub-subscriptions": {
+	in: {...}
+	let r = in
+	out: {
+		for k, v in r if k != "pushConfig" {(k): v}
+		if r.pushConfig != _|_ {
+			pushConfig: {
+				for k, v in r.pushConfig {(k): v}
+				if r.pushConfig.pushEndpoint != _|_ {
+					pushEndpointOrigin: regexp.ReplaceAll("^(https?://)(?:[^@/?#]*@)?([^/?#]+).*$", r.pushConfig.pushEndpoint, "${1}${2}")
+				}
+			}
+		}
+	}
+}
+
 // A record whose CAI copy is identical to gcloud's.
 _gcpSameShape: {
 	in: {...}

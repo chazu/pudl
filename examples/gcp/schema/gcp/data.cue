@@ -24,6 +24,12 @@ package gcp
 			range: "settings.ipConfiguration.authorizedNetworks[*].value"
 			public: {path: "settings.ipConfiguration.ipv4Enabled", default: false}
 		}
+		// The customer-managed disk key, if any, as a key name (a key
+		// version's /cryptoKeyVersions/N is dropped).
+		facts: gcp_sql_key: args: key: {
+			path: "diskEncryptionConfiguration.kmsKeyName"
+			rewrite: [{match: "^(projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+)", replace: "$1"}]
+		}
 	}
 	kind:            "sql#instance" @pudl(match)
 	project:         _gcpProjectID
@@ -54,6 +60,8 @@ package gcp
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {region: "location"}
 		graph: display: {code: "GCS", label: "Storage bucket", class: "data"}
+		// The bucket's default customer-managed key, if any.
+		facts: gcp_bucket_key: args: key: "default_kms_key"
 	}
 	project:                      _gcpProjectID
 	name:                         string
@@ -98,6 +106,8 @@ package gcp
 			name:          "name"
 			primary_state: "primary.state"
 		}
+		// The key ring a key belongs to: its name without /cryptoKeys/K.
+		facts: gcp_kms_key_ring: args: ring: {path: "name", rewrite: [{match: "^(.*)/cryptoKeys/[^/]+$", replace: "$1"}]}
 	}
 	project:         _gcpProjectID
 	name:            =~"^projects/[^/]+/locations/[^/]+/keyRings/[^/]+/cryptoKeys/[^/]+$" @pudl(match)

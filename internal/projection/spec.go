@@ -29,6 +29,10 @@ type ArgSpec struct {
 	Default    any
 	HasDefault bool
 	TrimPrefix string
+	// Rewrite, when set, maps a string value through the first rule whose
+	// pattern matches it; a value no rule matches (or a non-string) yields
+	// no fact for its row (rewrite.go).
+	Rewrite []RewriteRule
 }
 
 // RelationSpec is one projected relation.
@@ -64,6 +68,7 @@ type rawArg struct {
 	Exists     *string         `json:"exists"`
 	Default    json.RawMessage `json:"default"`
 	TrimPrefix string          `json:"trim_prefix"`
+	Rewrite    []rawRewrite    `json:"rewrite"`
 }
 
 // ParseRelations decodes and validates a `_pudl.facts` block.
@@ -151,12 +156,12 @@ func parseArg(raw json.RawMessage) (ArgSpec, error) {
 	}
 	var r rawArg
 	if err := decodeStrict(raw, &r); err != nil {
-		return ArgSpec{}, fmt.Errorf("expected a path string, {path, default?, trim_prefix?} or {exists: path}: %w", err)
+		return ArgSpec{}, fmt.Errorf("expected a path string, {path, default?, trim_prefix?, rewrite?} or {exists: path}: %w", err)
 	}
 	switch {
 	case r.Exists != nil && r.Path == nil:
-		if len(r.Default) > 0 || r.TrimPrefix != "" {
-			return ArgSpec{}, fmt.Errorf("exists takes no default or trim_prefix")
+		if len(r.Default) > 0 || r.TrimPrefix != "" || r.Rewrite != nil {
+			return ArgSpec{}, fmt.Errorf("exists takes no default, trim_prefix or rewrite")
 		}
 		p, err := fieldpath.Parse(*r.Exists)
 		if err != nil {
@@ -169,6 +174,11 @@ func parseArg(raw json.RawMessage) (ArgSpec, error) {
 			return ArgSpec{}, err
 		}
 		spec := ArgSpec{Path: p, TrimPrefix: r.TrimPrefix}
+		if r.Rewrite != nil {
+			if spec.Rewrite, err = parseRewrite(r.Rewrite); err != nil {
+				return ArgSpec{}, fmt.Errorf("rewrite: %w", err)
+			}
+		}
 		if len(r.Default) > 0 {
 			def, err := decodeExact(r.Default)
 			if err != nil {

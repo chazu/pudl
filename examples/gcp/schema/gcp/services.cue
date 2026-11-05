@@ -18,7 +18,8 @@ package gcp
 		]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["metadata.labels.team"]}
-		graph: _gcpGraph & {name: "metadata.name", region: "metadata.labels.\"cloud.googleapis.com/location\""}
+		// Push subscriptions name a service by its URL.
+		graph: _gcpGraph & {name: "metadata.name", region: "metadata.labels.\"cloud.googleapis.com/location\"", refs: [{path: "status.url"}]}
 		graph: display: {code: "RUN", label: "Cloud Run service", class: "edge"}
 		sensitive_fields: [
 			"spec.template.spec.containers[*].env[*].value",
@@ -28,6 +29,20 @@ package gcp
 		// The service account revisions run as; absent means the Compute
 		// Engine default account.
 		facts: gcp_run_service_sa: args: email: "spec.template.spec.serviceAccountName"
+		// The Artifact Registry image each container runs, as the image path
+		// gcp.#ContainerImage is named by: tag and digest dropped, gcr.io
+		// hosts mapped to the Artifact Registry repositories that serve
+		// them. Images from elsewhere (Docker Hub and so on) yield no fact.
+		facts: gcp_run_service_image: args: image: {
+			path: "spec.template.spec.containers[*].image"
+			rewrite: [
+				{match: "^([a-z0-9-]+-docker\\.pkg\\.dev/[^:@]+)", replace: "$1"},
+				{match: "^gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/gcr.io/${2}"},
+				{match: "^us\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/us.gcr.io/${2}"},
+				{match: "^eu\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "europe-docker.pkg.dev/${1}/eu.gcr.io/${2}"},
+				{match: "^asia\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "asia-docker.pkg.dev/${1}/asia.gcr.io/${2}"},
+			]
+		}
 	}
 	apiVersion: "serving.knative.dev/v1" @pudl(match)
 	kind:       "Service" @pudl(match)
@@ -95,7 +110,10 @@ package gcp
 }
 
 // `gcloud pubsub subscriptions list --format=json`. A push endpoint URL can
-// embed a token, so it is redacted.
+// embed a token, so it is redacted; the collector's transform keeps its
+// origin (scheme and host, no credentials, path or query) as
+// pushConfig.pushEndpointOrigin, which is how a push subscription names the
+// Cloud Run service it delivers to.
 #PubSubSubscription: {
 	_pudl: {
 		schema_type:   "base"
@@ -108,6 +126,8 @@ package gcp
 		facts: gcp_subscription_topic: args: topic: "topic"
 		// Where undeliverable messages are forwarded, if anywhere.
 		facts: gcp_subscription_dead_letter: args: topic: "deadLetterPolicy.deadLetterTopic"
+		// Where a push subscription delivers, by origin.
+		facts: gcp_subscription_push: args: endpoint: "pushConfig.pushEndpointOrigin"
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
 	project: _gcpProjectID

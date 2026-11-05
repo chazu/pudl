@@ -20,5 +20,17 @@
     "messageRetentionDuration": "604800s",
     "expirationPolicy": {"ttl": "2678400s"},
     "state": "ACTIVE"
+  },
+  {
+    "name": "projects/example-project/subscriptions/orders-run-push",
+    "topic": "projects/example-project/topics/orders",
+    "pushConfig": {
+      "pushEndpoint": "https://orders-api-example-uc.a.run.app/pubsub/push?token=fixture-not-a-real-token",
+      "oidcToken": {"serviceAccountEmail": "orders-api@example-project.iam.gserviceaccount.com"}
+    },
+    "ackDeadlineSeconds": 30,
+    "messageRetentionDuration": "604800s",
+    "expirationPolicy": {},
+    "state": "ACTIVE"
   }
 ]

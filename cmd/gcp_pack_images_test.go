@@ -48,12 +48,12 @@ func TestGCPPackContainerImagesFixture(t *testing.T) {
 	r = runCLI(t, "check", "gcp-fixture-container-images", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	pr := checkedModel(t, r.Stdout).Populate
-	require.Equal(t, 3, pr.Records, "one per image, the untagged-only image included")
+	require.Equal(t, 4, pr.Records, "one per image, the untagged-only image included")
 
 	r = runCLI(t, "query", "gcp_container_image_tag")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
-	require.Equal(t, 4, strings.Count(r.Stdout, `"tag":`), r.Stdout)
-	for _, tag := range []string{"latest", "3f2a9c1", "8be04d7", "v1.4.0"} {
+	require.Equal(t, 5, strings.Count(r.Stdout, `"tag":`), r.Stdout)
+	for _, tag := range []string{"latest", "3f2a9c1", "8be04d7", "v1.4.0", "1.4.2"} {
 		require.Contains(t, r.Stdout, `"`+tag+`"`)
 	}
 

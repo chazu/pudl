@@ -237,6 +237,65 @@ gcp_graph_iam_binding_condition: {
 	body: [{rel: "gcp_iam_member", args: {resource_id: "$R", member: "$M", conditional: true}}]
 }
 
+// ---- Keys, accounts, routes, push delivery, images and policies ----
+// Each target is derived from the source record by a fact rewrite
+// (`_pudl.facts` ... rewrite) in the type's schema.
+gcp_graph_kms_key_ring: {
+	head: {rel: "graph_edge", args: {type: "in_key_ring", source: "$R", target: "$K", basis: "observed"}}
+	body: [{rel: "gcp_kms_key_ring", args: {resource_id: "$R", ring: "$K"}}]
+}
+gcp_graph_bucket_key: {
+	head: {rel: "graph_edge", args: {type: "encrypted_by", source: "$R", target: "$K", basis: "observed"}}
+	body: [{rel: "gcp_bucket_key", args: {resource_id: "$R", key: "$K"}}]
+}
+gcp_graph_sql_key: {
+	head: {rel: "graph_edge", args: {type: "encrypted_by", source: "$R", target: "$K", basis: "observed"}}
+	body: [{rel: "gcp_sql_key", args: {resource_id: "$R", key: "$K"}}]
+}
+// The accounts a GKE cluster's nodes run as, with the node pool as a
+// property. Pools on the Compute Engine default account have no edge.
+gcp_graph_gke_node_pool_sa: {
+	head: {rel: "graph_edge", args: {type: "runs_as", source: "$R", target: "$A", basis: "observed"}}
+	body: [{rel: "gcp_gke_node_pool_sa", args: {resource_id: "$R", email: "$A"}}]
+}
+gcp_graph_gke_node_pool_sa_pool: {
+	head: {rel: "graph_edge_property", args: {type: "runs_as", source: "$R", target: "$A", key: "node_pool", value: "$P"}}
+	body: [{rel: "gcp_gke_node_pool_sa", args: {resource_id: "$R", email: "$A", pool: "$P"}}]
+}
+// Routes to an instance, a VPN tunnel or an internal load balancer. The pack
+// collects instances; tunnels and forwarding rules stay references.
+gcp_graph_route_next_hop: {
+	head: {rel: "graph_edge", args: {type: "routes_via", source: "$R", target: "$H", basis: "observed"}}
+	body: [{rel: "gcp_route_next_hop", args: {resource_id: "$R", hop: "$H"}}]
+}
+gcp_graph_route_next_hop_vpn: {
+	head: {rel: "graph_edge", args: {type: "routes_via", source: "$R", target: "$H", basis: "observed"}}
+	body: [{rel: "gcp_route_next_hop_vpn", args: {resource_id: "$R", hop: "$H"}}]
+}
+gcp_graph_route_next_hop_ilb: {
+	head: {rel: "graph_edge", args: {type: "routes_via", source: "$R", target: "$H", basis: "observed"}}
+	body: [{rel: "gcp_route_next_hop_ilb", args: {resource_id: "$R", hop: "$H"}}]
+}
+// A push subscription delivers to the endpoint origin it names; a Cloud Run
+// service's URL resolves it. A custom domain mapped to a service does not.
+gcp_graph_subscription_push: {
+	head: {rel: "graph_edge", args: {type: "pushes_to", source: "$R", target: "$E", basis: "observed"}}
+	body: [{rel: "gcp_subscription_push", args: {resource_id: "$R", endpoint: "$E"}}]
+}
+gcp_graph_run_service_image: {
+	head: {rel: "graph_edge", args: {type: "runs_image", source: "$R", target: "$I", basis: "observed"}}
+	body: [{rel: "gcp_run_service_image", args: {resource_id: "$R", image: "$I"}}]
+}
+gcp_graph_service_account_key: {
+	head: {rel: "graph_edge", args: {type: "key_of", source: "$R", target: "$A", basis: "observed"}}
+	body: [{rel: "gcp_service_account_key_account", args: {resource_id: "$R", email: "$A"}}]
+}
+// An IAM policy grants on the resource it is attached to.
+gcp_graph_iam_policy_resource: {
+	head: {rel: "graph_edge", args: {type: "grants_on", source: "$R", target: "$T", basis: "observed"}}
+	body: [{rel: "gcp_iam_policy_resource", args: {resource_id: "$R", target: "$T"}}]
+}
+
 // Graph vocabulary for this pack (facts: rules with no body). Every edge
 // type above is a pudl built-in (pudl/rules/graph_vocabulary.cue). A
 // record's project names a gcp.project, which the pack does not collect, so
@@ -244,3 +303,13 @@ gcp_graph_iam_binding_condition: {
 graph_provider_gcp:              {head: {rel: "graph_provider", args: {provider: "gcp", label: "Google Cloud"}}}
 graph_account_type_gcp:          {head: {rel: "graph_account_type", args: {provider: "gcp", type: "gcp.project"}}}
 graph_resource_type_gcp_project: {head: {rel: "graph_resource_type", args: {type: "gcp.project", code: "PROJ", label: "Project", class: "admin"}}}
+
+// Edge types no built-in fits.
+graph_edge_type_in_key_ring: {head: {rel: "graph_edge_type", args: {type: "in_key_ring", category: "containment",
+	label: "in key ring", meaning: "A KMS key defined in this key ring."}}}
+graph_edge_type_key_of: {head: {rel: "graph_edge_type", args: {type: "key_of", category: "iam",
+	label: "key of", meaning: "A user-managed key that authenticates as this service account."}}}
+graph_edge_type_pushes_to: {head: {rel: "graph_edge_type", args: {type: "pushes_to", category: "dependency",
+	label: "pushes to", meaning: "A push subscription delivers messages to this endpoint. Delivery success is not observed."}}}
+graph_edge_type_runs_image: {head: {rel: "graph_edge_type", args: {type: "runs_image", category: "dependency",
+	label: "runs image", meaning: "Configured to run this container image (any tag or digest of it)."}}}
