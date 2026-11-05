@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### populate.fail_when: warnings that hide a failure (2026-11-05)
+
+A command source can declare `fail_when` (stderr regexes for runs that
+exited 0); a match is a failed input and its records are dropped. The GCP
+pack uses it for gcloud's aggregated lists, which warn and exit 0 when a
+project refuses them, so such projects no longer read as empty and lose
+their resources. See `implog/2026_11_05_populate_fail_when.md`. Closes
+`pudl-zbj`.
+
 ### GCP pack: load balancing, Cloud Armor and DNS record sets (2026-11-05)
 
 Batch (b) of `pudl-q4v.7`: forwarding rules, target proxies, URL maps,

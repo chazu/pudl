@@ -58,6 +58,11 @@ type Populate struct {
 	// that exited non-zero. A match means the input has no resources (an API
 	// that is disabled, say): the run is an empty input, not a failed one.
 	EmptyWhen []string `json:"empty_when,omitempty"`
+	// FailWhen are regular expressions matched against the stderr of a run
+	// that exited 0. A match means the command could not see everything
+	// (gcloud's aggregated lists warn and exit 0 when a project refuses
+	// them): the run is a failed input and its records are discarded.
+	FailWhen []string `json:"fail_when,omitempty"`
 	// Fallback observes the same resources another way when these runs
 	// cannot (see Fallback).
 	Fallback *Fallback `json:"fallback,omitempty"`
@@ -95,7 +100,7 @@ func (p Populate) Kind() PopulateKind {
 // omits the field (omitzero). An emitted `populate: {}` would not satisfy
 // #CommandObserve, which requires runs.
 func (p Populate) IsZero() bool {
-	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast && len(p.EmptyWhen) == 0)
+	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast && len(p.EmptyWhen) == 0 && len(p.FailWhen) == 0)
 }
 
 // Check is an observe-only flag over a Datalog relation.
@@ -164,6 +169,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	if _, err := m.Populate.EmptyPatterns(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
+	if _, err := m.Populate.FailPatterns(); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	if err := m.Populate.validateFallback(); err != nil {

@@ -17,7 +17,7 @@ func (x *executor) enumerate(each systemmodel.Enumeration, out string) ([]string
 		return nil, fmt.Errorf("populate each (%s): %w", strings.Join(each.Argv, " "), err)
 	}
 	run := systemmodel.CommandRun{Argv: each.Argv, Dir: each.Dir}
-	failure, err := x.attempt(run, out)
+	failure, err := x.attempt(run, out, nil)
 	if err != nil {
 		return fail(err)
 	}

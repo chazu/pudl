@@ -47,7 +47,11 @@ unknown, not passing. A project whose API for the type is disabled is
 different: gcloud reports `SERVICE_DISABLED`, which the live collectors
 declare in `populate.empty_when`, so the project counts as having none of
 the type. It is listed under `populate.empty_inputs`, and the observation
-stays complete.
+stays complete. gcloud's aggregated lists (compute lists that span regions
+or zones, such as addresses, subnets, routers and instances) do not fail when
+a project refuses them: they warn `Some requests did not succeed` and exit 0.
+The live collectors declare that warning in `populate.fail_when`, so such a
+project is a failed input too, not a project with none of the type.
 
 | Collector | gcloud | Schema | Identity | Permission (role) |
 | --- | --- | --- | --- | --- |

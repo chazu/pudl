@@ -177,6 +177,14 @@ _gcpEmptyWhen: [
 	"API has not been used in project [^ ]+ before or it is disabled",
 ]
 
+// gcloud's aggregated list commands (compute lists that span regions or
+// zones: addresses, subnets, routers, instances, backend services and so on)
+// print "WARNING: Some requests did not succeed." and exit 0 when a project
+// refuses part of the list, with whatever they could read on stdout. Such a
+// run is a failed input, not a project with none of the type, so nothing is
+// marked gone because gcloud could not see it.
+_gcpFailWhen: ["Some requests did not succeed"]
+
 // A collector's _gcloud source is its gcloud list commands; a type in
 // _gcpAssetTypes, and gcp-iam-policies (gcp_iam.cue), searches CAI first and
 // falls back to them. A gcloud source in _gcpPartialGcloud observes only
@@ -235,6 +243,7 @@ _#GCPLive: _#GCPCollector & {
 	_gcloud: {
 		each: [if _orgLevel {_gcpOrgList}, _gcpProjectList][0]
 		empty_when: [if _orgLevel {[]}, list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])][0]
+		fail_when:  _gcpFailWhen
 		if _gcpRunTimeout[_type] != _|_ {
 			timeout: _gcpRunTimeout[_type]
 		}

@@ -145,6 +145,15 @@ package systemmodel
 	//
 	//	empty_when: ["SERVICE_DISABLED"]
 	empty_when?: [...string & !=""]
+	// fail_when lists regular expressions (Go RE2) matched against the
+	// stderr of a run that exited 0. A match means the command printed what
+	// it could but not everything (gcloud's aggregated list commands warn
+	// and exit 0 when a project refuses them): the run is a failed input,
+	// its records are discarded, and the observation is incomplete, so
+	// nothing is marked gone because the command could not see it.
+	//
+	//	fail_when: ["Some requests did not succeed"]
+	fail_when?: [...string & !=""]
 }
 
 // #Enumeration — a command whose JSON output lists the fan-out inputs.

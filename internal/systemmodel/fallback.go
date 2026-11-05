@@ -10,7 +10,7 @@ import (
 // used when a run (or the `each` command) fails with stderr matching one of
 // When, or when `each` lists no inputs. The fallback's records are routed
 // like the populate's (its schema); it has its own runs, each, timeout,
-// fail_fast and empty_when, and no fallback of its own. A Partial fallback
+// fail_fast, empty_when and fail_when, and no fallback of its own. A Partial fallback
 // sees only some of the populate's resources, so an observation it answers is
 // incomplete.
 type Fallback struct {
@@ -59,6 +59,9 @@ func (p Populate) validateFallback() error {
 		return fmt.Errorf("populate.fallback.observe: %w", err)
 	}
 	if _, err := o.EmptyPatterns(); err != nil {
+		return fmt.Errorf("populate.fallback.observe: %w", err)
+	}
+	if _, err := o.FailPatterns(); err != nil {
 		return fmt.Errorf("populate.fallback.observe: %w", err)
 	}
 	return nil

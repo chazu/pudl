@@ -69,7 +69,8 @@ type Result struct {
 // JSON objects) is a failed input in the Result, and the other runs go on.
 // With FailFast it fails the populate instead. A run that exits non-zero with
 // stderr matching an EmptyWhen pattern is an empty input: no records, not a
-// failure. Run returns an error, and no Result, when the populate cannot
+// failure. A run that exits 0 with stderr matching a FailWhen pattern is a
+// failed input: it saw only part of its input, so its records are dropped. Run returns an error, and no Result, when the populate cannot
 // proceed: a bad timeout or empty_when pattern, a failed enumeration, the
 // staging byte limit, or the context ending.
 //
@@ -127,6 +128,10 @@ func (x *executor) observe(p systemmodel.Populate, dir string, when []*regexp.Re
 	if err != nil {
 		return Result{}, nil, err
 	}
+	failWhen, err := p.FailPatterns()
+	if err != nil {
+		return Result{}, nil, err
+	}
 	x.timeout = DefaultTimeout
 	if p.Timeout != "" {
 		d, err := time.ParseDuration(p.Timeout)
@@ -157,7 +162,7 @@ func (x *executor) observe(p systemmodel.Populate, dir string, when []*regexp.Re
 	res.Runs = len(runs)
 	for i, run := range runs {
 		out := filepath.Join(dir, fmt.Sprintf("run-%d.json", i))
-		failure, err := x.attempt(run, out)
+		failure, err := x.attempt(run, out, failWhen)
 		if err != nil {
 			return Result{}, nil, fmt.Errorf("populate run %d (%s): %w", i, strings.Join(run.Argv, " "), err)
 		}
@@ -207,14 +212,14 @@ type executor struct {
 	stderr   io.Writer
 }
 
-// attempt runs one command with stdout spooled to out. A command that fails
-// is returned as a FailedInput (without its run, argv or item); err is a
-// failure of the populate itself: the context ended or the byte budget ran
-// out.
-func (x *executor) attempt(run systemmodel.CommandRun, out string) (*FailedInput, error) {
+// attempt runs one command with stdout spooled to out. A command that fails,
+// or exits 0 with stderr matching failWhen, is returned as a FailedInput
+// (without its run, argv or item); err is a failure of the populate itself:
+// the context ended or the byte budget ran out.
+func (x *executor) attempt(run systemmodel.CommandRun, out string, failWhen []*regexp.Regexp) (*FailedInput, error) {
 	tail, err := x.execute(run, out)
 	if err == nil {
-		return nil, nil
+		return matchFail(failWhen, tail), nil
 	}
 	if ctxErr := x.ctx.Err(); ctxErr != nil {
 		return nil, fmt.Errorf("%w (%w)", err, ctxErr)
@@ -228,7 +233,8 @@ func (x *executor) attempt(run systemmodel.CommandRun, out string) (*FailedInput
 }
 
 // execute runs one command with stdout spooled to out and stderr passed
-// through, returning the tail of its stderr.
+// through, returning the tail of its stderr (also when it succeeds, for
+// fail_when).
 func (x *executor) execute(run systemmodel.CommandRun, out string) (string, error) {
 	workDir := x.modelDir
 	if run.Dir != "" {
@@ -260,7 +266,7 @@ func (x *executor) execute(run systemmodel.CommandRun, out string) (string, erro
 		}
 		return strings.TrimSpace(tail.String()), err
 	}
-	return "", nil
+	return strings.TrimSpace(tail.String()), nil
 }
 
 // decodeCommandRecords reads a run's stdout: a stream of JSON values, where an
