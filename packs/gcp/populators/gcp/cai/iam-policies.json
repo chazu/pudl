@@ -79,7 +79,7 @@
     }
   },
   {
-    "resource": "//iam.googleapis.com/projects/example-project/serviceAccounts/100000000000000000001",
+    "resource": "//iam.googleapis.com/projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com",
     "assetType": "iam.googleapis.com/ServiceAccount",
     "project": "projects/123456789012",
     "folders": [

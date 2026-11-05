@@ -98,3 +98,15 @@ every affected resource reprojected, the `gcp_sql_key` warning gone.
 
 `gcp_graph_topic_key` and `gcp_graph_subscription_dead_letter` (older rules
 on plain path args) warn the same way on real data; not changed here.
+
+## Follow-up: service account policies name the account by email
+
+On live data Cloud Asset Inventory names a
+service account's policy resource
+`//iam.googleapis.com/projects/P/serviceAccounts/EMAIL`, not by unique ID as
+pudl-q4v.16 described; none matched. The rule now takes the last
+segment (email, or a unique ID, which `#ServiceAccount` still declares as a
+ref), and the fixture uses the email form. Also seen live: project
+policies resolve to workspace `gcp.project` records through a `projects/<id>`
+ref; KMS key policies stay references when the keys' location is outside
+`_gcpKMSLocations`.
