@@ -1045,7 +1045,7 @@
     {
       "use": "list",
       "short": "List imported data in the PUDL data lake",
-      "long": "List and query imported data in the PUDL data lake with filtering and sorting options.\n\nThis command displays imported data from the active catalog, including metadata\nsuch as schema assignments, timestamps, sizes, and record counts. In a repository\nworkspace all records in its local catalog are visible unless --origin is supplied.\n\nFiltering Options:\n- --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)\n- --origin: Filter by data origin (e.g., aws-ec2, k8s-pods)\n- --format: Filter by file format (json, yaml, csv, ndjson)\n- --collection-id: Filter by collection ID (show items from specific collection)\n- --collections-only: Show only collection entries (not individual items)\n- --items-only: Show only individual items (not collections)\n- --item-id: Filter by specific item ID\n\nDisplay Options:\n- --verbose: Show detailed information including file paths\n- --limit: Cap the total number of results across all pages (default: no cap)\n- --sort-by: Sort by field (timestamp, size, records, schema, origin)\n- --reverse: Reverse sort order\n- --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)\n\nExamples:\n    pudl list                                    # List the active catalog\n    pudl list --schema aws.#EC2Instance          # List only EC2 instances\n    pudl list --origin k8s-pods                  # List Kubernetes pod data\n    pudl list --format ndjson --verbose         # List NDJSON collections with details\n    pudl list --collections-only                # Show only collections\n    pudl list --items-only                      # Show only individual items\n    pudl list --collection-id my-collection     # Show items from specific collection\n    pudl list --sort-by size --reverse          # List by size, largest first\n    pudl list --limit 10                        # Show only first 10 entries\n    pudl list --fancy                           # Interactive list with filtering and detailed view",
+      "long": "List and query imported data in the PUDL data lake with filtering and sorting options.\n\nThis command displays imported data from the active catalog, including metadata\nsuch as schema assignments, timestamps, sizes, and record counts. In a repository\nworkspace all records in its local catalog are visible unless --origin is supplied.\n\nFiltering Options:\n- --schema: Filter by CUE schema (e.g., aws.#EC2Instance, k8s.#Pod)\n- --origin: Filter by data origin (e.g., aws-ec2, k8s-pods)\n- --format: Filter by file format (json, yaml, csv, ndjson)\n- --collection-id: Filter by collection ID (show items from specific collection)\n- --collections-only: Show only collection entries (not individual items)\n- --items-only: Show only individual items (not collections)\n- --item-id: Filter by specific item ID\n\nDisplay Options:\n- --verbose: Show detailed information including file paths\n- --limit: Cap the total number of results across all pages (default: no cap)\n- --sort-by: Sort by field (timestamp, size, records, schema, origin)\n- --reverse: Reverse sort order\n- --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)\n\nCounting:\n- --count-by schema|origin|format: Print how many matching entries share each\n  value instead of listing them. Every filter (--schema, --origin, --where,\n  --artifacts, collection filters) and --limit applies; pagination does not.\n  pudl's own record types (observe snapshots, system models) are listed\n  separately under \"pudl bookkeeping\"; --json flags them \"bookkeeping\": true.\n\nExamples:\n    pudl list                                    # List the active catalog\n    pudl list --schema aws.#EC2Instance          # List only EC2 instances\n    pudl list --origin k8s-pods                  # List Kubernetes pod data\n    pudl list --format ndjson --verbose         # List NDJSON collections with details\n    pudl list --collections-only                # Show only collections\n    pudl list --items-only                      # Show only individual items\n    pudl list --collection-id my-collection     # Show items from specific collection\n    pudl list --sort-by size --reverse          # List by size, largest first\n    pudl list --limit 10                        # Show only first 10 entries\n    pudl list --count-by schema                 # Count entries per schema\n    pudl list --count-by schema --origin gcp --json # Per-schema counts as JSON\n    pudl list --fancy                           # Interactive list with filtering and detailed view",
       "flags": [
         {
           "name": "all",
@@ -1069,6 +1069,11 @@
           "usage": "Show only collections",
           "type": "bool",
           "default": "false"
+        },
+        {
+          "name": "count-by",
+          "usage": "Count matching entries per value of a field (schema, origin, format) instead of listing them",
+          "type": "string"
         },
         {
           "name": "fancy",
@@ -1861,8 +1866,8 @@
     },
     {
       "use": "show \u003cid\u003e",
-      "short": "Show detailed information about a specific data entry",
-      "long": "Show detailed information about a specific data entry including its content,\nmetadata, and schema information.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe ID parameter should be the unique identifier of the data entry as shown\nin the 'pudl list' command output.\n\nDisplay Options:\n- --metadata: Show the metadata file content\n- --raw: Show the raw imported data content\n- --json: Print {\"entry\": ..., \"metadata\": ..., \"raw\": ...} as one JSON document;\n  stored JSON is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show 20250825_222510_test-data           # Show basic info\n    pudl show 20250825_222510_test-data --metadata # Show with metadata\n    pudl show 20250825_222510_test-data --raw      # Show with raw data\n    pudl show 20250825_222510_test-data --metadata --raw # Show everything",
+      "short": "Show a data entry: its type, compliance and stored record",
+      "long": "Show a data entry: its catalog details (type, origin, format, paths), its\ncompliance and the stored record itself.\n\nA compliance section lists each policy applicable to the entry's type with the\nresource's stored status (provisional when the type is a draft), its highest\nviolation severity, and its violations (rule, severity, path, kind, declaring\npolicy). --json includes it as \"compliance\".\n\nThe record follows under RAW DATA: stored JSON indented with its values\nunchanged, YAML re-rendered, other formats verbatim. Sensitive fields were\nredacted when the record was stored; show prints what is stored.\n\nThe ID parameter is the entry's proquint or hash as shown by 'pudl list'.\n\nDisplay Options:\n- --meta-only: Show the catalog details and compliance without the record\n- --metadata: Also show the metadata file content\n- --raw: Show the record (the default; kept for compatibility)\n- --field PATH: Print one payload field as JSON\n- --history: Show the resource's stored versions and snapshot observations\n- --json: Print {\"entry\": ..., \"raw\": ..., \"compliance\": ...} as one JSON\n  document (\"metadata\" with --metadata; no \"raw\" with --meta-only); stored JSON\n  is embedded exactly, other formats appear as \"raw_text\"\n\nExamples:\n    pudl show vomap-foqab                  # Details, compliance and the record\n    pudl show vomap-foqab --meta-only      # Details and compliance only\n    pudl show vomap-foqab --metadata       # Also the metadata file\n    pudl show vomap-foqab --field name     # One field as JSON\n    pudl show vomap-foqab --json           # Everything as one JSON document",
       "args": "custom",
       "flags": [
         {
@@ -1891,6 +1896,12 @@
           "persistent": true
         },
         {
+          "name": "meta-only",
+          "usage": "Show catalog details and compliance without the stored record",
+          "type": "bool",
+          "default": "false"
+        },
+        {
           "name": "metadata",
           "usage": "Show metadata file content",
           "type": "bool",
@@ -1898,7 +1909,7 @@
         },
         {
           "name": "raw",
-          "usage": "Show raw data content",
+          "usage": "Show the stored record (the default; kept for compatibility)",
           "type": "bool",
           "default": "false"
         }

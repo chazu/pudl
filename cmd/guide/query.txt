@@ -17,6 +17,14 @@ QUERY
   name='"22"' a string. Read the warnings 'pudl query' prints on stderr: a
   rule that names a relation or arg nothing produces matches nothing.
 
+COUNT
+
+  pudl list --count-by schema                entries per type
+  pudl list --count-by schema --where region=eu --json
+
+  --count-by (schema, origin or format) applies list's filters and lists
+  pudl's own snapshot and model records separately as bookkeeping.
+
 WRITE A RULE
 
     package rules

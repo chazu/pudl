@@ -38,8 +38,8 @@ pudl show RECORD_ID --field 'sourceRanges[*]'
 ```
 
 `policy show` lists the rule and the failing resource. Substitute the listed
-entry's `id` for `RECORD_ID`; plain `pudl show RECORD_ID` also prints its
-compliance section, with the violation at `sourceRanges[*]`.
+entry's `id` for `RECORD_ID`; plain `pudl show RECORD_ID` prints the whole
+record and its compliance section, with the violation at `sourceRanges[*]`.
 
 `--where` matches typed values, nested paths and wildcard membership; repeat
 it to AND conditions. `--select` adds fields to each returned entry. See
