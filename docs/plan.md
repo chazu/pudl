@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Design: shared identity across schemas (2026-11-05)
+
+Accepted design for linking different schemas' records of one resource
+without merging them: identity kinds, `_pudl.same_resource` keys, the
+`same_resource` relation, one graph node per group. Kubernetes clusters
+link by API server host, objects through the linked clusters. See
+`docs/design/2026-11-05-shared-identity-across-schemas.md`,
+`implog/2026_11_05_shared_identity_design.md`. Closes `pudl-q4v.9`; delivery
+is epic `pudl-h7s` and `pudl-3q5` (Kubernetes pack).
+
 ### Ratchet: no fmt.Println outside cmd/ (2026-11-05)
 
 AST ratchet `no-fmt-println-outside-cmd` (tests excluded). Budget 1: the

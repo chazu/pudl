@@ -1,6 +1,6 @@
 # Shared identity across schemas
 
-Status: proposed 2026-11-05. Issue: `pudl-q4v.9`. Follows
+Status: accepted 2026-11-05. Issue: `pudl-q4v.9`. Follows
 [GCP collectors on Cloud Asset Inventory §8](2026-11-03-gcp-cloud-asset-collectors.md#8-kubernetes-objects-and-shared-identity).
 
 ## Problem
