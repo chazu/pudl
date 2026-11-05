@@ -131,3 +131,41 @@ func TestCheckForOwnerFiltersEmbeddedMembers(t *testing.T) {
 	assert.Empty(t, filtered.Members[1].Report)
 	assert.JSONEq(t, string(payload), string(check.Members[0].Report), "the recorded report is unchanged")
 }
+
+// Every finding carries its resource and owner, including those past the
+// witness limit and waived ones, which are listed last and so are the first
+// to fall past it (pudl-upc). Arguments stay recorded for witnesses only.
+func TestEveryFindingCarriesResourceAndOwner(t *testing.T) {
+	const n = WitnessLimit + 3
+	c := CheckResult{Name: "c", Expect: "empty", Outcome: "fail", Count: n}
+	require.NoError(t, c.SetFindings(waiverTuples(n), waiveBelow("r01")))
+	require.True(t, c.WitnessesTruncated)
+	AttributeOwners([]CheckResult{c}, func(resources, entries []string) string {
+		if len(resources) > 0 {
+			return "team-" + resources[0]
+		}
+		return ""
+	})
+
+	require.Len(t, c.Findings, n)
+	withArgs := 0
+	for _, f := range c.Findings {
+		require.NotEmpty(t, f.Resource, "finding %s", f.Key)
+		assert.Equal(t, "team-"+f.Resource, f.Owner, "finding %s", f.Key)
+		if f.Arguments != nil {
+			withArgs++
+		}
+		if f.Resource == "r00" {
+			assert.True(t, f.Waived)
+			assert.Nil(t, f.Arguments, "the waived finding fell past the witness limit")
+		}
+	}
+	assert.Equal(t, WitnessLimit, withArgs)
+
+	encoded, err := json.Marshal(c.Findings[0])
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), "refs")
+	owned := (&ModelReport{Checks: []CheckResult{c}}).ForOwner("team-r22")
+	require.Len(t, owned.Checks, 1)
+	assert.Len(t, owned.Checks[0].Findings, 1, "owner filtering keeps a finding past the witness limit")
+}

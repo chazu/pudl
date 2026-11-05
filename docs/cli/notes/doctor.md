@@ -15,6 +15,12 @@ explicit assignments included. The identity repair backfills missing
 `resource_id`s and recomputes those an older release namespaced by the leaf
 schema.
 
+**`versions`** renumbers each resource whose history holds two entries with
+the same version, 1..N in import order. Observation ingest before pudl-42w
+recorded every observed entry as version 1, so a resource observed in several
+states (a model whose definition changed, say) has several version-1 entries.
+It runs only when named: `--fix --only versions`.
+
 **Likely secrets.** The scan reports likely secrets (known token formats and
 a conservative entropy check) in stored payloads outside `sensitive_fields`
 and `secret_scan_ignore`, and in the args of current facts, skipping facts

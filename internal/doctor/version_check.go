@@ -38,7 +38,7 @@ func CheckResourceVersionsAt(root string) *CheckResult {
 		}
 	}
 	if len(duplicates) > 0 {
-		return &CheckResult{Status: "warning", Message: "Duplicate historical resource versions", Details: strings.Join(duplicates, "\n"), Fix: "Preserve these records; re-observe affected resources. Historical versions are not renumbered automatically."}
+		return &CheckResult{Status: "warning", Message: "Duplicate historical resource versions", Details: strings.Join(duplicates, "\n"), Fix: "Historical versions are not renumbered automatically; pudl doctor --fix --only versions renumbers each affected resource's entries in import order."}
 	}
 	return &CheckResult{Status: "ok", Message: "Resource versions are unique"}
 }
