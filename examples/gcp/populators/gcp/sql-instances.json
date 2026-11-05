@@ -2,6 +2,8 @@
   {
     "kind": "sql#instance",
     "name": "orders-db",
+    "diskEncryptionConfiguration": {"kind": "sql#diskEncryptionConfiguration", "kmsKeyName": "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key"},
+    "diskEncryptionStatus": {"kind": "sql#diskEncryptionStatus", "kmsKeyVersionName": "projects/example-project/locations/global/keyRings/app/cryptoKeys/data-key/cryptoKeyVersions/1"},
     "project": "example-project",
     "databaseVersion": "POSTGRES_15",
     "region": "us-central1",

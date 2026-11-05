@@ -59,7 +59,8 @@ func Compute(spec *SchemaSpec, entryID, resourceID string, data any) Result {
 
 // rowArgs returns the arg maps one row yields: one, or one per value of the
 // relation's wildcard arg. A wildcard arg with no values and no default yields
-// none.
+// none, and so does a rewritten arg whose value no rule matches (for the
+// wildcard arg, that value is skipped).
 func rowArgs(rel RelationSpec, row any, res *Result) []map[string]any {
 	base := map[string]any{}
 	for _, name := range rel.ArgNames {
@@ -78,7 +79,11 @@ func rowArgs(rel RelationSpec, row any, res *Result) []map[string]any {
 			}
 			v = spec.Default
 		}
-		if v, ok := admit(rel.Name, name, spec.trim(v), res); ok {
+		v, matched := spec.rewrite(spec.trim(v))
+		if !matched {
+			return nil
+		}
+		if v, ok := admit(rel.Name, name, v, res); ok {
 			base[name] = v
 		}
 	}
@@ -92,7 +97,11 @@ func rowArgs(rel RelationSpec, row any, res *Result) []map[string]any {
 	}
 	out := make([]map[string]any, 0, len(values))
 	for _, value := range values {
-		v, ok := admit(rel.Name, rel.wildcard, spec.trim(value), res)
+		v, matched := spec.rewrite(spec.trim(value))
+		if !matched {
+			continue
+		}
+		v, ok := admit(rel.Name, rel.wildcard, v, res)
 		if !ok {
 			continue
 		}

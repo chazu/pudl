@@ -40,8 +40,21 @@ of three forms:
 | Form | Value |
 |---|---|
 | `"path"` | the field at path; the arg is omitted when the field is absent |
-| `{path, default?, trim_prefix?}` | the field, or `default` when it is absent; a string prefix stripped |
+| `{path, default?, trim_prefix?, rewrite?}` | the field, or `default` when it is absent; a string prefix stripped; then rewritten |
 | `{exists: path}` | `true` if the path is present, else `false` |
+
+`rewrite` is a list of `{match, replace}` rules. `match` is a Go RE2
+pattern; the value becomes `replace` with `$1`, `${name}` and so on standing
+for the first matching rule's submatches (write `${1}` when a letter or digit
+follows). A value no rule matches, or a value that is not a string, yields no
+fact for its row: for a `[*]` arg only that value is skipped. Rules both
+reshape a reference and filter out values that are not one:
+
+```cue
+// A key ring from a key name; a service account email but not "default".
+ring:  {path: "name", rewrite: [{match: "^(.*)/cryptoKeys/[^/]+$", replace: "$1"}]}
+email: {path: "config.serviceAccount", rewrite: [{match: "^([^@]+@[^@]+)$", replace: "$1"}]}
+```
 
 Rules for args:
 

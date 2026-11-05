@@ -41,6 +41,16 @@ package gcp
 				range: "masterAuthorizedNetworksConfig.cidrBlocks[*].cidrBlock"
 				enabled: {path: "masterAuthorizedNetworksConfig.enabled", default: false}
 			}
+			// The account each node pool's nodes run as. "default" (the
+			// Compute Engine default account, which no record names) is
+			// not an email, so it yields no fact.
+			gcp_gke_node_pool_sa: {
+				each: "nodePools[*]"
+				args: {
+					pool: "name"
+					email: {path: "config.serviceAccount", rewrite: [{match: "^([^@]+@[^@]+)$", replace: "$1"}]}
+				}
+			}
 		}
 	}
 	project:   _gcpProjectID

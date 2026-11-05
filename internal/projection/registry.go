@@ -161,11 +161,13 @@ func (r *Registry) compute(schema string) *SchemaSpec {
 
 // fingerprint hashes everything that determines a schema's facts.
 func fingerprint(spec *SchemaSpec) string {
+	type rewritePrint struct{ Match, Replace string }
 	type argPrint struct {
 		Path, Trim string
 		Exists     bool
 		Default    any
 		HasDefault bool
+		Rewrite    []rewritePrint `json:",omitempty"` // omitted when unset: existing fingerprints are unchanged
 	}
 	type relPrint struct {
 		Name, Each string
@@ -185,7 +187,11 @@ func fingerprint(spec *SchemaSpec) string {
 			rp.Each = rel.Each.String()
 		}
 		for name, a := range rel.Args {
-			rp.Args[name] = argPrint{Path: a.Path.String(), Trim: a.TrimPrefix, Exists: a.Exists, Default: a.Default, HasDefault: a.HasDefault}
+			ap := argPrint{Path: a.Path.String(), Trim: a.TrimPrefix, Exists: a.Exists, Default: a.Default, HasDefault: a.HasDefault}
+			for _, r := range a.Rewrite {
+				ap.Rewrite = append(ap.Rewrite, rewritePrint{r.Match.String(), r.Replace})
+			}
+			rp.Args[name] = ap
 		}
 		print.Relations = append(print.Relations, rp)
 	}

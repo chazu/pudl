@@ -42,5 +42,71 @@
         }
       }
     ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/routes/egress-via-bastion",
+    "assetType": "compute.googleapis.com/Route",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "4000000000000000003",
+          "creationTimestamp": "2024-03-02T10:00:00.000-08:00",
+          "name": "egress-via-bastion",
+          "description": "Office range through the bastion.",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "destRange": "203.0.113.0/24",
+          "priority": 900,
+          "nextHopInstance": "https://www.googleapis.com/compute/v1/projects/example-project/zones/us-central1-a/instances/bastion-1",
+          "routeType": "STATIC",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/routes/egress-via-bastion"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/routes/onprem-via-vpn",
+    "assetType": "compute.googleapis.com/Route",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "4000000000000000004",
+          "creationTimestamp": "2024-03-02T10:00:00.000-08:00",
+          "name": "onprem-via-vpn",
+          "description": "On-premises range over Cloud VPN.",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "destRange": "172.16.0.0/12",
+          "priority": 1000,
+          "nextHopVpnTunnel": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/vpnTunnels/onprem-tunnel-1",
+          "routeType": "STATIC",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/routes/onprem-via-vpn"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/routes/inspect-via-ilb",
+    "assetType": "compute.googleapis.com/Route",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "4000000000000000005",
+          "creationTimestamp": "2024-03-02T10:00:00.000-08:00",
+          "name": "inspect-via-ilb",
+          "description": "Traffic inspection through an internal load balancer.",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "destRange": "10.60.0.0/16",
+          "priority": 800,
+          "nextHopIlb": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/forwardingRules/inspect-ilb",
+          "routeType": "STATIC",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/routes/inspect-via-ilb"
+        }
+      }
+    ]
   }
 ]

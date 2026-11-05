@@ -285,6 +285,40 @@ func TestGraphExportGCPPack(t *testing.T) {
 	require.Contains(t, ingress, sql("analytics-mysql")+" -> ext:cidr:198.51.100.0/24")
 	require.NotContains(t, strings.Join(ingress, "\n"), sql("orders-db"), "no public IP, no authorized-network edge")
 	require.Contains(t, ingress, "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private -> ext:cidr:192.0.2.0/24")
+	// Edges whose targets are derived by fact rewrites: key rings, CMEK,
+	// node pool accounts, route next hops, push delivery, images, key
+	// owners and what IAM policies grant on.
+	const ring = "projects/example-project/locations/global/keyRings/app"
+	require.Contains(t, l.edges("in_key_ring"), ring+"/cryptoKeys/data-key -> "+ring)
+	encrypted := l.edges("encrypted_by")
+	require.Contains(t, encrypted, "example-project-audit-logs -> "+ring+"/cryptoKeys/data-key")
+	require.Contains(t, encrypted, sql("orders-db")+" -> "+ring+"/cryptoKeys/data-key")
+	gke := "https://container.googleapis.com/v1/projects/example-project/"
+	require.Contains(t, runsAs, gke+"locations/us-central1/clusters/prod-private -> ref:gke-nodes@example-project.iam.gserviceaccount.com")
+	require.Equal(t, "default-pool", relationship(t, g, "runs_as", gke+"locations/us-central1/clusters/prod-private", "ref:gke-nodes@example-project.iam.gserviceaccount.com").Properties["node_pool"])
+	require.NotContains(t, strings.Join(runsAs, "\n"), "legacy-public", `a pool on the "default" account has no edge`)
+	route := func(name string) string {
+		return "https://www.googleapis.com/compute/v1/projects/example-project/global/routes/" + name
+	}
+	require.ElementsMatch(t, []string{
+		route("egress-via-bastion") + " -> " + vm("us-central1-a/instances/bastion-1"),
+		route("onprem-via-vpn") + " -> ref:projects/example-project/regions/us-central1/vpnTunnels/onprem-tunnel-1",
+		route("inspect-via-ilb") + " -> ref:projects/example-project/regions/us-central1/forwardingRules/inspect-ilb",
+	}, l.edges("routes_via"), "the internet gateway and the subnet route are not resources")
+	const sub = "projects/example-project/subscriptions/"
+	require.ElementsMatch(t, []string{
+		sub + "orders-run-push -> us-central1/orders-api/123456789012",
+		sub + "orders-webhook -> ref:https://hooks.example.com",
+	}, l.edges("pushes_to"), "delivery by endpoint origin; the token never leaves the redacted endpoint")
+	require.Contains(t, l.edges("runs_image"), "us-central1/orders-api/123456789012 -> us-docker.pkg.dev/example-project/apps/orders-api")
+	require.Contains(t, l.edges("key_of"), "projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com/keys/1b2c3d4e5f60718293a4b5c6d7e8f9012345678a -> ops@example-project.iam.gserviceaccount.com")
+	require.ElementsMatch(t, []string{
+		project + " -> ref:projects/example-project",
+		bucket + " -> example-project-public-assets",
+		topic + " -> projects/example-project/topics/orders",
+		"//iam.googleapis.com/projects/example-project/serviceAccounts/100000000000000000001 -> ops@example-project.iam.gserviceaccount.com",
+	}, l.edges("grants_on"), "a service account's policy names it by unique ID; the pack collects no project record")
+
 	require.NotEmpty(t, subnetEdges)
 	for _, e := range subnetEdges {
 		require.NotContains(t, e, graphexport.RefPrefix, "every network in the fixtures is cataloged: %s", e)

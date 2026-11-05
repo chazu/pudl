@@ -142,6 +142,16 @@ _gcpComputeAPI: "https://www.googleapis.com/compute/v1/"
 			self_link: "selfLink"
 			network: {path: "network", trim_prefix: _gcpComputeAPI}
 		}
+		// Where a route sends traffic, when that is a resource: an instance,
+		// a VPN tunnel, or an internal load balancer's forwarding rule (an
+		// ILB given by IP address is not a reference). The internet
+		// gateway, peerings and the route's own network are not.
+		facts: gcp_route_next_hop: args: hop: {path: "nextHopInstance", trim_prefix: _gcpComputeAPI}
+		facts: gcp_route_next_hop_vpn: args: hop: {path: "nextHopVpnTunnel", trim_prefix: _gcpComputeAPI}
+		facts: gcp_route_next_hop_ilb: args: hop: {
+			path: "nextHopIlb"
+			rewrite: [{match: "^https://www\\.googleapis\\.com/compute/v1/(projects/.+)$", replace: "$1"}]
+		}
 	}
 	kind:      "compute#route" @pudl(match)
 	project:   _gcpProjectID

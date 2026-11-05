@@ -37,6 +37,7 @@
             {
               "name": "default-pool",
               "config": {
+                "serviceAccount": "gke-nodes@example-project.iam.gserviceaccount.com",
                 "machineType": "e2-standard-4",
                 "metadata": {
                   "disable-legacy-endpoints": "true",
@@ -118,6 +119,7 @@
             {
               "name": "default-pool",
               "config": {
+                "serviceAccount": "default",
                 "machineType": "e2-medium",
                 "metadata": {
                   "disable-legacy-endpoints": "true"
@@ -182,6 +184,7 @@
             {
               "name": "batch-pool",
               "config": {
+                "serviceAccount": "gke-batch@example-project.iam.gserviceaccount.com",
                 "machineType": "n2-standard-8",
                 "metadata": {
                   "disable-legacy-endpoints": "true"

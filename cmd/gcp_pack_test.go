@@ -184,7 +184,7 @@ func TestGCPContentPack(t *testing.T) {
 	r = runCLI(t, "query", "gcp_depends_on_network", "network=projects/example-project/global/networks/prod-vpc")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Equal(t, map[string]int{
-		"subnet": 3, "firewall": 6, "route": 2, "router": 1,
+		"subnet": 3, "firewall": 6, "route": 5, "router": 1,
 		"gke_cluster": 2, "sql_instance": 2, "dns_zone": 1,
 	}, kindCounts(r.Stdout))
 
