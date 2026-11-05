@@ -13,12 +13,17 @@ import (
 // pudl, as repeating a local `pudl init` does, and keeps its configuration:
 // the schema and data directories exist, the schema directory is a CUE module,
 // and the built-in schemas, rules and #SystemModel are this pudl's.
+//
+// The directories repaired are the ones beneath pudlDir that the workspace
+// policy reads, not config.yaml's schema_path/data_path: the global
+// configuration records absolute paths, so in a copied workspace those name
+// the original's directories.
 func repair(pudlDir string, opts InitOptions) error {
 	out := opts.output()
-	cfg, err := config.LoadFrom(pudlDir)
-	if err != nil {
+	if _, err := config.LoadFrom(pudlDir); err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
+	cfg := config.DefaultConfigFor(pudlDir)
 	if err := os.MkdirAll(cfg.SchemaPath, 0755); err != nil {
 		return fmt.Errorf("failed to create schema directory: %w", err)
 	}

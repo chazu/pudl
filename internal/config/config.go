@@ -25,10 +25,14 @@ func DefaultConfig() *Config {
 func DefaultConfigFor(pudlDir string) *Config {
 	return &Config{
 		SchemaPath: filepath.Join(pudlDir, "schema"),
-		DataPath:   filepath.Join(pudlDir, "data"),
+		DataPath:   DataDir(pudlDir),
 		Version:    "1.0",
 	}
 }
+
+// DataDir is the raw-payload and metadata directory beneath one PUDL state
+// root. The catalog lives at <DataDir>/sqlite/catalog.db.
+func DataDir(pudlDir string) string { return filepath.Join(pudlDir, "data") }
 
 func GetPudlDir() string {
 	homeDir, err := os.UserHomeDir()
