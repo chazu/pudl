@@ -635,6 +635,9 @@ The GCP and AWS content packs install with [`pudl pack install`](#pudl-pack-inst
 See [getting started](getting-started.md) for the Git inventory tutorial; it
 needs only PUDL, Git, `cat` and `cp`.
 
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected, as `pudl pack install` does.
+
 ## pudl export
 
 Export data lake entries to various formats
@@ -1441,7 +1444,8 @@ installed them are replaced with this version's, and new files are added.
 Files you edited, and files installed without a record (including installs
 made with pudl example install before packs had their own command), are
 conflicts: nothing is written and each is listed. --overwrite replaces them,
-keeping your versions as <file>.bak.
+keeping your versions as <file>.bak. When files changed, records already in
+the catalog are reprojected, so their facts follow the pack's current types.
 
 The gcp pack includes draft schemas for the core GCP inventory,
 best-practice policies, gcloud and fixture collectors, and three check
@@ -1483,6 +1487,11 @@ own command) have no `.packs` record; install once with `--overwrite`. See
 
 `--json` returns `pack`, the workspace `root`, relative `files` paths, and
 the `added`, `upgraded`, `replaced` and `unchanged` lists.
+
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected (as `pudl doctor --fix --only projections` would), so
+a pack upgrade that changes a type's `_pudl.facts` takes effect at once. A
+workspace with no catalog yet is left without one.
 
 ## pudl pack list
 

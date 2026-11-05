@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -46,6 +48,7 @@ func installFileset(cmd *cobra.Command, kind fileset.Kind, name string, install 
 	if err != nil {
 		return false, err
 	}
+	syncProjectionsAfterInstall(cmd.Context(), root, res)
 	if jsonOutput {
 		return true, GetOutputWriter().WriteJSON(map[string]any{
 			kind.Noun: name, "root": root, "files": res.Files, "added": res.Added,
@@ -58,4 +61,19 @@ func installFileset(cmd *cobra.Command, kind fileset.Kind, name string, install 
 		fmt.Fprintf(outw(), "  replaced %s (yours kept as %s)\n", path, res.Backups[path])
 	}
 	return false, nil
+}
+
+// syncProjectionsAfterInstall reprojects stored records' facts when an install
+// changed files: an upgrade can change a type's _pudl.facts specs, and records
+// otherwise kept the facts the old specs projected until pudl doctor --fix
+// --only projections. A workspace without a catalog has no records; its
+// catalog is not created here.
+func syncProjectionsAfterInstall(ctx context.Context, root string, res *fileset.Result) {
+	if len(res.Added)+len(res.Upgraded)+len(res.Replaced) == 0 {
+		return
+	}
+	if _, err := os.Stat(filepath.Join(root, "data", "sqlite", "catalog.db")); err != nil {
+		return
+	}
+	syncProjectionsAfterWrite(ctx)
 }

@@ -10,3 +10,6 @@ The GCP and AWS content packs install with [`pudl pack install`](#pudl-pack-inst
 `--json` returns `example`, the workspace `root`, and relative `files` paths.
 See [getting started](getting-started.md) for the Git inventory tutorial; it
 needs only PUDL, Git, `cat` and `cp`.
+
+When an install adds or changes files, the facts of records already in the
+catalog are reprojected, as `pudl pack install` does.
