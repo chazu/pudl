@@ -78,7 +78,7 @@ These flags apply to every command.
   - [pudl schema list](#pudl-schema-list) — List schema definitions and resource metadata
   - [pudl schema new](#pudl-schema-new) — Generate a new schema from imported data
   - [pudl schema show](#pudl-schema-show) — Display the contents of a schema
-- [pudl show](#pudl-show) — Show detailed information about a specific data entry
+- [pudl show](#pudl-show) — Show a data entry: its type, compliance and stored record
 - [pudl snapshot](#pudl-snapshot) — Inspect and retain observation snapshots
   - [pudl snapshot current](#pudl-snapshot-current) — Show the newest observation snapshot for a model
   - [pudl snapshot list](#pudl-snapshot-list) — List observation snapshots, newest first
@@ -1212,6 +1212,13 @@ Display Options:
 - --reverse: Reverse sort order
 - --fancy: Use interactive bubbletea interface with filtering (press / to filter, enter to show details with raw data)
 
+Counting:
+- --count-by schema|origin|format: Print how many matching entries share each
+  value instead of listing them. Every filter (--schema, --origin, --where,
+  --artifacts, collection filters) and --limit applies; pagination does not.
+  pudl's own record types (observe snapshots, system models) are listed
+  separately under "pudl bookkeeping"; --json flags them "bookkeeping": true.
+
 Examples:
     pudl list                                    # List the active catalog
     pudl list --schema aws.#EC2Instance          # List only EC2 instances
@@ -1222,6 +1229,8 @@ Examples:
     pudl list --collection-id my-collection     # Show items from specific collection
     pudl list --sort-by size --reverse          # List by size, largest first
     pudl list --limit 10                        # Show only first 10 entries
+    pudl list --count-by schema                 # Count entries per schema
+    pudl list --count-by schema --origin gcp --json # Per-schema counts as JSON
     pudl list --fancy                           # Interactive list with filtering and detailed view
 ```
 
@@ -1233,6 +1242,7 @@ Flags:
 | `--artifacts` | bool |  | Show only legacy run artifacts (mu manifests and manifest actions) |
 | `--collection-id` | string |  | Filter by collection ID |
 | `--collections-only` | bool |  | Show only collections |
+| `--count-by` | string |  | Count matching entries per value of a field (schema, origin, format) instead of listing them |
 | `--fancy` | bool |  | Use interactive bubbletea interface with filtering |
 | `--format` | string |  | Filter by file format (json, yaml, csv, ndjson) |
 | `--item-id` | string |  | Filter by item ID |
@@ -1281,6 +1291,28 @@ individual records, skipping collection containers. Filtering precedes paginatio
 Unreadable payloads fail the command. Inspection has a 64 MiB per-record and
 256 MiB total scan budget; narrow schema or collection scope for larger data.
 `--fancy` remains available and can display the filtered record set.
+
+`--count-by schema` (or `origin`, `format`) prints how many matching entries
+share each value instead of listing them, most common first. Every filter
+(`--schema`, `--origin`, `--format`, `--where`, `--artifacts`, collection
+filters, `--global`) and `--limit` applies; it cannot be combined with
+`--page`, `--per-page`, `--select` or `--fancy`. pudl's own record types
+(`pudl/core.#ObserveSnapshot`, `pudl/systemmodel.#SystemModel`, legacy mu
+artifacts) are listed after the resource types under `pudl bookkeeping:`.
+With `--json`:
+
+```json
+{
+  "count_by": "schema",
+  "groups": [{"schema": "pudl/gcp.#Firewall", "count": 12},
+             {"schema": "pudl/core.#ObserveSnapshot", "count": 3, "bookkeeping": true}],
+  "total_entries": 15, "total_matched": 15
+}
+```
+
+Each group is keyed by the counted field (`schema`, `origin` or `format`);
+`bookkeeping` appears only when true. `total_entries` is the number counted
+(`total_matched` capped by `--limit`); `groups` is `[]` when nothing matches.
 
 ## pudl model
 
@@ -2026,35 +2058,43 @@ Examples:
 
 ## pudl show
 
-Show detailed information about a specific data entry
+Show a data entry: its type, compliance and stored record
 
 ```text
 pudl show <id> [flags]
 ```
 
 ```text
-Show detailed information about a specific data entry including its content,
-metadata, and schema information.
+Show a data entry: its catalog details (type, origin, format, paths), its
+compliance and the stored record itself.
 
 A compliance section lists each policy applicable to the entry's type with the
 resource's stored status (provisional when the type is a draft), its highest
 violation severity, and its violations (rule, severity, path, kind, declaring
 policy). --json includes it as "compliance".
 
-The ID parameter should be the unique identifier of the data entry as shown
-in the 'pudl list' command output.
+The record follows under RAW DATA: stored JSON indented with its values
+unchanged, YAML re-rendered, other formats verbatim. Sensitive fields were
+redacted when the record was stored; show prints what is stored.
+
+The ID parameter is the entry's proquint or hash as shown by 'pudl list'.
 
 Display Options:
-- --metadata: Show the metadata file content
-- --raw: Show the raw imported data content
-- --json: Print {"entry": ..., "metadata": ..., "raw": ...} as one JSON document;
-  stored JSON is embedded exactly, other formats appear as "raw_text"
+- --meta-only: Show the catalog details and compliance without the record
+- --metadata: Also show the metadata file content
+- --raw: Show the record (the default; kept for compatibility)
+- --field PATH: Print one payload field as JSON
+- --history: Show the resource's stored versions and snapshot observations
+- --json: Print {"entry": ..., "raw": ..., "compliance": ...} as one JSON
+  document ("metadata" with --metadata; no "raw" with --meta-only); stored JSON
+  is embedded exactly, other formats appear as "raw_text"
 
 Examples:
-    pudl show 20250825_222510_test-data           # Show basic info
-    pudl show 20250825_222510_test-data --metadata # Show with metadata
-    pudl show 20250825_222510_test-data --raw      # Show with raw data
-    pudl show 20250825_222510_test-data --metadata --raw # Show everything
+    pudl show vomap-foqab                  # Details, compliance and the record
+    pudl show vomap-foqab --meta-only      # Details and compliance only
+    pudl show vomap-foqab --metadata       # Also the metadata file
+    pudl show vomap-foqab --field name     # One field as JSON
+    pudl show vomap-foqab --json           # Everything as one JSON document
 ```
 
 Flags:
@@ -2063,8 +2103,31 @@ Flags:
 |------|------|---------|-------------|
 | `--field` | string |  | Print one payload field as JSON (nested paths and wildcards supported) |
 | `--history` | bool |  | Show this resource's stored versions and snapshot observations |
+| `--meta-only` | bool |  | Show catalog details and compliance without the stored record |
 | `--metadata` | bool |  | Show metadata file content |
-| `--raw` | bool |  | Show raw data content |
+| `--raw` | bool |  | Show the stored record (the default; kept for compatibility) |
+
+`pudl show ID` prints the entry's catalog details, its compliance section and
+then the stored record under `RAW DATA` (stored JSON indented with its values
+and key order unchanged). Sensitive fields were redacted when the record was
+stored, so show prints the redacted value. `--meta-only` prints the details and
+compliance without the record; `--raw` is the default and is still accepted.
+`--field PATH` prints one payload field as JSON; `--history` lists the
+resource's stored versions and snapshot observations.
+
+`--json` prints one object:
+
+```json
+{
+  "entry": {"id": "…", "proquint": "…", "schema": "…", "origin": "…", "…": "…"},
+  "raw": {"…": "the stored record"},
+  "compliance": [{"policy": "…", "status": "…", "…": "…"}]
+}
+```
+
+Stored JSON is embedded byte for byte as `raw`; other formats (YAML, CSV) appear
+as the string `raw_text`. `--meta-only` omits `raw`/`raw_text`; `--metadata`
+adds the metadata file as `metadata`.
 
 ## pudl snapshot
 

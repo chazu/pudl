@@ -56,7 +56,11 @@ pudl report <new-check-id> --since <old-check-id> --json
 - `doctor --json`: `report_version` 3 with `repairs[]`. `policy
   list|show|evaluate --json`: `report_version` 1.
 - `list --json` is paginated (`total_matched`; `--all` for every row).
-  `show ID --json` includes `compliance`. `import --json` is one element per file.
+  `list --count-by schema [--json]` counts entries per type (`groups[]`:
+  `schema`, `count`, `bookkeeping`) and keeps list's filters; no jq needed.
+  `show ID` prints the stored record after its type and compliance
+  (`--meta-only` omits it); `show ID --json` includes `raw` and `compliance`.
+  `import --json` is one element per file.
 - `help --json` marks hidden commands `"advanced": true`.
 - Exit: 0 ok; 1 error or failed check. With `--detailed-exitcode`, 2 means
   drift or a failing fail-severity check. `--fail-on new` fails only on

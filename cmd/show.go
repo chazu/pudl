@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/chazu/pudl/internal/errors"
 	"github.com/chazu/pudl/internal/lister"
@@ -16,34 +14,43 @@ import (
 var (
 	showMetadata bool
 	showRaw      bool
+	showMetaOnly bool
 )
 
 // showCmd represents the show command
 var showCmd = &cobra.Command{
 	Use:   "show <id>",
-	Short: "Show detailed information about a specific data entry",
-	Long: `Show detailed information about a specific data entry including its content,
-metadata, and schema information.
+	Short: "Show a data entry: its type, compliance and stored record",
+	Long: `Show a data entry: its catalog details (type, origin, format, paths), its
+compliance and the stored record itself.
 
 A compliance section lists each policy applicable to the entry's type with the
 resource's stored status (provisional when the type is a draft), its highest
 violation severity, and its violations (rule, severity, path, kind, declaring
 policy). --json includes it as "compliance".
 
-The ID parameter should be the unique identifier of the data entry as shown
-in the 'pudl list' command output.
+The record follows under RAW DATA: stored JSON indented with its values
+unchanged, YAML re-rendered, other formats verbatim. Sensitive fields were
+redacted when the record was stored; show prints what is stored.
+
+The ID parameter is the entry's proquint or hash as shown by 'pudl list'.
 
 Display Options:
-- --metadata: Show the metadata file content
-- --raw: Show the raw imported data content
-- --json: Print {"entry": ..., "metadata": ..., "raw": ...} as one JSON document;
-  stored JSON is embedded exactly, other formats appear as "raw_text"
+- --meta-only: Show the catalog details and compliance without the record
+- --metadata: Also show the metadata file content
+- --raw: Show the record (the default; kept for compatibility)
+- --field PATH: Print one payload field as JSON
+- --history: Show the resource's stored versions and snapshot observations
+- --json: Print {"entry": ..., "raw": ..., "compliance": ...} as one JSON
+  document ("metadata" with --metadata; no "raw" with --meta-only); stored JSON
+  is embedded exactly, other formats appear as "raw_text"
 
 Examples:
-    pudl show 20250825_222510_test-data           # Show basic info
-    pudl show 20250825_222510_test-data --metadata # Show with metadata
-    pudl show 20250825_222510_test-data --raw      # Show with raw data
-    pudl show 20250825_222510_test-data --metadata --raw # Show everything`,
+    pudl show vomap-foqab                  # Details, compliance and the record
+    pudl show vomap-foqab --meta-only      # Details and compliance only
+    pudl show vomap-foqab --metadata       # Also the metadata file
+    pudl show vomap-foqab --field name     # One field as JSON
+    pudl show vomap-foqab --json           # Everything as one JSON document`,
 	Args: cobra.ExactArgs(1),
 	RunE: pudlRunE(runShowCommand),
 }
@@ -77,12 +84,15 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 	if showHistory {
 		return showEntryHistory(cmd.Context(), entry)
 	}
+	// The record is shown unless --meta-only asks for the details alone;
+	// --raw is the default and stays accepted.
+	includeData := !showMetaOnly
 	if jsonOutput {
-		return writeEntryJSON(*entry, showMetadata, showRaw)
+		return writeEntryJSON(*entry, showMetadata, includeData)
 	}
 
 	// Display entry information
-	displayDetailedEntry(*entry, showMetadata, showRaw)
+	displayDetailedEntry(*entry, showMetadata, includeData)
 	return nil
 }
 
@@ -91,7 +101,8 @@ func init() {
 
 	// Add flags
 	showCmd.Flags().BoolVar(&showMetadata, "metadata", false, "Show metadata file content")
-	showCmd.Flags().BoolVar(&showRaw, "raw", false, "Show raw data content")
+	showCmd.Flags().BoolVar(&showRaw, "raw", false, "Show the stored record (the default; kept for compatibility)")
+	showCmd.Flags().BoolVar(&showMetaOnly, "meta-only", false, "Show catalog details and compliance without the stored record")
 
 	showCmd.Flags().StringVar(&showField, "field", "", "Print one payload field as JSON (nested paths and wildcards supported)")
 	showCmd.Flags().BoolVar(&showHistory, "history", false, "Show this resource's stored versions and snapshot observations")
@@ -100,13 +111,16 @@ func init() {
 	showCmd.MarkFlagsMutuallyExclusive("field", "metadata")
 	showCmd.MarkFlagsMutuallyExclusive("history", "raw")
 	showCmd.MarkFlagsMutuallyExclusive("history", "metadata")
+	for _, flag := range []string{"raw", "field", "history"} {
+		showCmd.MarkFlagsMutuallyExclusive("meta-only", flag)
+	}
 
 	// Register completion for positional argument (proquint ID)
 	showCmd.ValidArgsFunction = completeEntryIDs
 }
 
 // displayDetailedEntry displays detailed information about a single entry
-func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bool) {
+func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeData bool) {
 	fmt.Fprintf(outw(), "Entry: %s\n", entry.Proquint)
 	fmt.Fprintf(outw(), "Hash: %s\n", entry.ID)
 	fmt.Fprintf(outw(), "Schema: %s\n", entry.Schema)
@@ -126,10 +140,7 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 
 	// Show metadata if requested
 	if includeMetadata {
-		separator := strings.Repeat("=", 60)
-		fmt.Fprintf(outw(), "\n%s\n", separator)
-		fmt.Fprintf(outw(), "METADATA\n")
-		fmt.Fprintf(outw(), "%s\n", separator)
+		printShowSection("METADATA")
 
 		metadataContent, err := os.ReadFile(entry.MetadataPath)
 		if err != nil {
@@ -151,47 +162,8 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeRaw bo
 		}
 	}
 
-	// Show raw data if requested
-	if includeRaw {
-		separator := strings.Repeat("=", 60)
-		fmt.Fprintf(outw(), "\n%s\n", separator)
-		fmt.Fprintf(outw(), "RAW DATA\n")
-		fmt.Fprintf(outw(), "%s\n", separator)
-
-		rawContent, err := os.ReadFile(entry.StoredPath)
-		if err != nil {
-			fmt.Fprintf(outw(), "Error reading raw data: %v\n", err)
-		} else {
-			// Try to pretty print based on format
-			switch strings.ToLower(entry.Format) {
-			case "json":
-				var data interface{}
-				if err := json.Unmarshal(rawContent, &data); err != nil {
-					fmt.Fprintf(outw(), "%s\n", string(rawContent))
-				} else {
-					prettyData, err := json.MarshalIndent(data, "", "  ")
-					if err != nil {
-						fmt.Fprintf(outw(), "%s\n", string(rawContent))
-					} else {
-						fmt.Fprintf(outw(), "%s\n", string(prettyData))
-					}
-				}
-			case "yaml":
-				var data interface{}
-				if err := yaml.Unmarshal(rawContent, &data); err != nil {
-					fmt.Fprintf(outw(), "%s\n", string(rawContent))
-				} else {
-					prettyData, err := yaml.Marshal(data)
-					if err != nil {
-						fmt.Fprintf(outw(), "%s\n", string(rawContent))
-					} else {
-						fmt.Fprintf(outw(), "%s\n", string(prettyData))
-					}
-				}
-			default:
-				fmt.Fprintf(outw(), "%s\n", string(rawContent))
-			}
-		}
+	// Show the stored record unless --meta-only
+	if includeData {
+		printEntryData(entry)
 	}
-
 }
