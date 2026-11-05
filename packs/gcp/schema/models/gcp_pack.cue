@@ -229,9 +229,12 @@ _#GCPLive: _#GCPCollector & {
 	_type:   string
 	_prefix: "gcp-"
 	_scope:  "gcp"
+	// Types above projects (gcp_hierarchy.cue) run per organization, where
+	// no error means "none of the type".
+	_orgLevel: _gcpOrgLevel[_type] != _|_
 	_gcloud: {
-		each: _gcpProjectList
-		empty_when: list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])
+		each: [if _orgLevel {_gcpOrgList}, _gcpProjectList][0]
+		empty_when: [if _orgLevel {[]}, list.Concat([_gcpEmptyWhen, _gcpExtraEmptyWhen])][0]
 		if _gcpRunTimeout[_type] != _|_ {
 			timeout: _gcpRunTimeout[_type]
 		}
@@ -249,13 +252,17 @@ _#GCPFixture: _#GCPCollector & {
 	_gcloud: runs: (_gcpShapedRuns & {_t: _type, _runs: [
 		[if _gcpFixtureGcloudRun[_type] != _|_ {_gcpFixtureGcloudRun[_type]}, {}][0] & {
 			argv: ["cat", "../../populators/gcp/\(_type).json"]
-			set: project: "example-project"
+			if _gcpOrgLevel[_type] == _|_ {
+				set: project: "example-project"
+			}
 		},
 	]}).out
 	_cai: runs: [{
 		argv: ["cat", "../../populators/gcp/cai/\(_type).json"]
-		if _type == "iam-policies" {
+		if _type == "iam-policies" || _gcpAssetByProject[_type] != _|_ {
 			set: project: "example-project"
+		}
+		if _type == "iam-policies" {
 			transform: _gcpIAMPolicyTransform
 		}
 		if _type != "iam-policies" {
@@ -286,6 +293,12 @@ _#GCPFixture: _#GCPCollector & {
 #GCPServiceAccountKeys: _#GCPLive & {_type: "service-account-keys"}
 #GCPContainerImages: _#GCPLive & {_type: "container-images"}
 #GCPK8sDeployments: _#GCPLive & {_type: "k8s-deployments"}
+#GCPOrganizations: _#GCPLive & {_type: "organizations"}
+#GCPFolders: _#GCPLive & {_type: "folders"}
+#GCPOrgPolicies: _#GCPLive & {_type: "org-policies"}
+#GCPFirewallPolicies: _#GCPLive & {_type: "firewall-policies"}
+#GCPBinauthzPolicies: _#GCPLive & {_type: "binauthz-policies"}
+#GCPServices: _#GCPLive & {_type: "services"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -308,3 +321,9 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixtureServiceAccountKeys: _#GCPFixture & {_type: "service-account-keys"}
 #GCPFixtureContainerImages: _#GCPFixture & {_type: "container-images"}
 #GCPFixtureK8sDeployments: _#GCPFixture & {_type: "k8s-deployments"}
+#GCPFixtureOrganizations: _#GCPFixture & {_type: "organizations"}
+#GCPFixtureFolders: _#GCPFixture & {_type: "folders"}
+#GCPFixtureOrgPolicies: _#GCPFixture & {_type: "org-policies"}
+#GCPFixtureFirewallPolicies: _#GCPFixture & {_type: "firewall-policies"}
+#GCPFixtureBinauthzPolicies: _#GCPFixture & {_type: "binauthz-policies"}
+#GCPFixtureServices: _#GCPFixture & {_type: "services"}

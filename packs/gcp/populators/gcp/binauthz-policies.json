@@ -1,0 +1,23 @@
+[
+  {
+    "admissionWhitelistPatterns": [
+      {
+        "namePattern": "gcr.io/google_containers/*"
+      },
+      {
+        "namePattern": "us-docker.pkg.dev/example-project/tools/*"
+      }
+    ],
+    "defaultAdmissionRule": {
+      "enforcementMode": "ENFORCED_BLOCK_AND_AUDIT_LOG",
+      "evaluationMode": "REQUIRE_ATTESTATION",
+      "requireAttestationsBy": [
+        "projects/example-project/attestors/built-by-ci"
+      ]
+    },
+    "globalPolicyEvaluationMode": "ENABLE",
+    "name": "projects/example-project/policy",
+    "etag": "\"examplEtag\"",
+    "updateTime": "2024-03-05T10:20:30.123456Z"
+  }
+]

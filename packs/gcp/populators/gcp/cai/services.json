@@ -1,0 +1,77 @@
+[
+  {
+    "name": "//serviceusage.googleapis.com/projects/123456789012/services/compute.googleapis.com",
+    "assetType": "serviceusage.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "compute.googleapis.com",
+          "parent": "projects/123456789012",
+          "state": "ENABLED"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//serviceusage.googleapis.com/projects/123456789012/services/container.googleapis.com",
+    "assetType": "serviceusage.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "container.googleapis.com",
+          "parent": "projects/123456789012",
+          "state": "ENABLED"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//serviceusage.googleapis.com/projects/123456789012/services/binaryauthorization.googleapis.com",
+    "assetType": "serviceusage.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "binaryauthorization.googleapis.com",
+          "parent": "projects/123456789012",
+          "state": "ENABLED"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//serviceusage.googleapis.com/projects/123456789012/services/cloudkms.googleapis.com",
+    "assetType": "serviceusage.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "cloudkms.googleapis.com",
+          "parent": "projects/123456789012",
+          "state": "ENABLED"
+        }
+      }
+    ]
+  },
+  {
+    "name": "//serviceusage.googleapis.com/projects/123456789012/services/secretmanager.googleapis.com",
+    "assetType": "serviceusage.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "secretmanager.googleapis.com",
+          "parent": "projects/123456789012",
+          "state": "ENABLED"
+        }
+      }
+    ]
+  }
+]

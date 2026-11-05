@@ -1,0 +1,81 @@
+[
+  {
+    "associations": [
+      {
+        "attachmentTarget": "folders/111111111111",
+        "name": "folder-111111111111"
+      }
+    ],
+    "creationTimestamp": "2022-09-01T07:00:00.000-07:00",
+    "description": "Baseline rules for production",
+    "displayName": "prod-baseline",
+    "id": "444444444444",
+    "name": "444444444444",
+    "parent": "organizations/222222222222",
+    "ruleTupleCount": 6,
+    "rules": [
+      {
+        "action": "deny",
+        "description": "Block SSH from the internet",
+        "direction": "INGRESS",
+        "enableLogging": true,
+        "match": {
+          "layer4Configs": [
+            {
+              "ipProtocol": "tcp",
+              "ports": [
+                "22"
+              ]
+            }
+          ],
+          "srcIpRanges": [
+            "0.0.0.0/0"
+          ]
+        },
+        "priority": 1000,
+        "ruleTupleCount": 2
+      },
+      {
+        "action": "goto_next",
+        "description": "Defer everything else",
+        "direction": "INGRESS",
+        "enableLogging": false,
+        "match": {
+          "layer4Configs": [
+            {
+              "ipProtocol": "all"
+            }
+          ],
+          "srcIpRanges": [
+            "0.0.0.0/0"
+          ]
+        },
+        "priority": 2147483647,
+        "ruleTupleCount": 2
+      },
+      {
+        "action": "goto_next",
+        "description": "Defer everything else",
+        "direction": "EGRESS",
+        "enableLogging": false,
+        "match": {
+          "destIpRanges": [
+            "0.0.0.0/0"
+          ],
+          "layer4Configs": [
+            {
+              "ipProtocol": "all"
+            }
+          ]
+        },
+        "priority": 2147483646,
+        "ruleTupleCount": 2
+      }
+    ],
+    "selfLink": "https://www.googleapis.com/compute/v1/locations/global/firewallPolicies/444444444444",
+    "selfLinkWithId": "https://www.googleapis.com/compute/v1/locations/global/firewallPolicies/444444444444",
+    "shortName": "prod-baseline",
+    "kind": "compute#firewallPolicy",
+    "fingerprint": "Z2Nsb3VkZmluZ2U="
+  }
+]

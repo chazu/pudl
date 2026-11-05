@@ -1,0 +1,54 @@
+[
+  {
+    "name": "organizations/222222222222/policies/compute.requireOsLogin",
+    "spec": {
+      "rules": [
+        {
+          "enforce": true
+        }
+      ],
+      "updateTime": "2023-03-01T12:00:00.000000Z",
+      "etag": "CO0example"
+    },
+    "etag": "CO0example"
+  },
+  {
+    "name": "folders/111111111111/policies/iam.allowedPolicyMemberDomains",
+    "spec": {
+      "rules": [
+        {
+          "values": {
+            "allowedValues": [
+              "C00example"
+            ]
+          }
+        }
+      ],
+      "updateTime": "2023-05-10T08:00:00.000000Z",
+      "etag": "CO1example"
+    },
+    "etag": "CO1example"
+  },
+  {
+    "name": "folders/111111111112/policies/compute.requireOsLogin",
+    "spec": {
+      "reset": true,
+      "updateTime": "2024-01-20T16:45:00.000000Z",
+      "etag": "CO2example"
+    },
+    "etag": "CO2example"
+  },
+  {
+    "name": "projects/123456789012/policies/storage.publicAccessPrevention",
+    "spec": {
+      "rules": [
+        {
+          "enforce": true
+        }
+      ],
+      "updateTime": "2024-07-02T11:15:00.000000Z",
+      "etag": "CO3example"
+    },
+    "etag": "CO3example"
+  }
+]

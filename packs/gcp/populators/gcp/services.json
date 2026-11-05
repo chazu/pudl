@@ -1,0 +1,86 @@
+[
+  {
+    "config": {
+      "name": "binaryauthorization.googleapis.com",
+      "title": "Binaryauthorization API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/binaryauthorization.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  },
+  {
+    "config": {
+      "name": "cloudkms.googleapis.com",
+      "title": "Cloudkms API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/cloudkms.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  },
+  {
+    "config": {
+      "name": "cloudsecuritycompliance.googleapis.com",
+      "title": "Cloudsecuritycompliance API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/cloudsecuritycompliance.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  },
+  {
+    "config": {
+      "name": "compute.googleapis.com",
+      "title": "Compute API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/compute.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  },
+  {
+    "config": {
+      "name": "container.googleapis.com",
+      "title": "Container API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/container.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  },
+  {
+    "config": {
+      "name": "secretmanager.googleapis.com",
+      "title": "Secretmanager API",
+      "documentation": {},
+      "quota": {},
+      "usage": {},
+      "authentication": {},
+      "monitoring": {}
+    },
+    "name": "projects/123456789012/services/secretmanager.googleapis.com",
+    "parent": "projects/123456789012",
+    "state": "ENABLED"
+  }
+]
