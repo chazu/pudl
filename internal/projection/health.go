@@ -50,6 +50,10 @@ func (r *Registry) RelationSchemas() map[string][]string {
 				seen[name] = true
 			}
 		}
+		if r.chainDeclaresSameResource(schema) {
+			out[database.SameResourceKeyRelation] = append(out[database.SameResourceKeyRelation], schema)
+			seen[database.SameResourceKeyRelation] = true
+		}
 		for _, parent := range r.src.GetInheritanceGraph().GetCascadeChain(schema) {
 			meta, ok := r.src.GetSchemaMetadata(parent)
 			if !ok {

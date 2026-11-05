@@ -16,6 +16,7 @@ func decodeStrictPudlParts(pudl cue.Value, meta *SchemaMetadata) {
 	decodeSecretScanIgnore(pudl, meta)
 	decodeOwner(pudl, meta)
 	decodeGraph(pudl, meta)
+	decodeSameResource(pudl, meta)
 	if v := pudl.LookupPath(cue.ParsePath("sensitive_fields")); v.Exists() {
 		if fields, err := decodeSensitiveFields(v); err != nil {
 			meta.SensitiveError = fmt.Sprintf("sensitive_fields: %v", err)

@@ -116,6 +116,13 @@ func Parse(raw json.RawMessage) (*Spec, error) {
 }
 
 func parseValue(raw json.RawMessage) (Value, error) {
+	return ParseValue(raw, false)
+}
+
+// ParseValue decodes one value: a field path, or {path, trim_prefix?,
+// last_segment?, prepend?}. wildcards permits a [*] in the path, for callers
+// that fan out over it themselves (see Value.Apply).
+func ParseValue(raw json.RawMessage, wildcards bool) (Value, error) {
 	var rv rawValue
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
@@ -130,7 +137,7 @@ func parseValue(raw json.RawMessage) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	if p.HasWildcard() {
+	if p.HasWildcard() && !wildcards {
 		return Value{}, fmt.Errorf("path %q: wildcards are not allowed", rv.Path)
 	}
 	return Value{Path: p, TrimPrefix: rv.TrimPrefix, LastSegment: rv.LastSegment, Prepend: rv.Prepend}, nil
@@ -148,6 +155,12 @@ func (v Value) Eval(record any) (string, bool) {
 	if !ok {
 		return "", false
 	}
+	return v.Apply(raw)
+}
+
+// Apply turns a value already read from a record (one element, for a path
+// with a wildcard) into the string the spec yields. Only scalars yield one.
+func (v Value) Apply(raw any) (string, bool) {
 	s, ok := Scalar(raw)
 	if !ok {
 		return "", false

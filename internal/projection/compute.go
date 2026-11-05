@@ -30,6 +30,9 @@ func Compute(spec *SchemaSpec, entryID, resourceID string, data any) Result {
 	if spec.Owner != nil {
 		res.Facts = append(res.Facts, ownerFact(spec, entryID, resourceID, data))
 	}
+	if spec.SameResource != nil {
+		res.Facts = append(res.Facts, sameResourceKeyFacts(spec, entryID, resourceID, data)...)
+	}
 	for _, rel := range spec.Relations {
 		res.PerRelation[rel.Name] += 0
 		rows := []any{data}
