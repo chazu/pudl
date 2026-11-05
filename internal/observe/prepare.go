@@ -260,6 +260,8 @@ func (p *PreparedObservation) Commit(db *database.CatalogDB) (ObserveIngestResul
 				}
 				if existing != nil {
 					if entry.IdentityJSON != nil && (existing.IdentityJSON == nil || *existing.IdentityJSON == "") {
+						// Moving to the identified resource makes it that
+						// resource's next version (see UpdateEntryIdentity).
 						if err := tx.UpdateEntryIdentity(existing.ID, *entry.ResourceID, *entry.IdentityJSON); err != nil {
 							return err
 						}

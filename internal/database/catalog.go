@@ -610,15 +610,22 @@ func (c *CatalogDB) UpdateEntry(entry CatalogEntry) error {
 }
 
 // UpdateEntryIdentity enriches a content-addressed entry whose bytes were
-// deduplicated before schema-relative identity metadata was available.
+// deduplicated before schema-relative identity metadata was available. An
+// entry that moves to another resource becomes that resource's next version
+// (its latest + 1), so it cannot duplicate a version the resource already
+// holds; an entry that stays in its resource keeps its version.
 func (c *CatalogDB) UpdateEntryIdentity(id, resourceID, identityJSON string) error {
 	return updateEntryIdentityIn(c.db, id, resourceID, identityJSON)
 }
 
 func updateEntryIdentityIn(q dbtx, id, resourceID, identityJSON string) error {
+	// SET expressions see the row as it was, so resource_id below is the
+	// entry's old resource.
 	result, err := q.Exec(`UPDATE catalog_entries
-		SET resource_id = ?, identity_json = ?, updated_at = ? WHERE id = ?`,
-		resourceID, identityJSON, formatCatalogTime(time.Now()), id)
+		SET version = CASE WHEN resource_id IS ? THEN version ELSE
+			(SELECT COALESCE(MAX(version), 0) + 1 FROM catalog_entries WHERE resource_id = ?) END,
+			resource_id = ?, identity_json = ?, updated_at = ? WHERE id = ?`,
+		resourceID, resourceID, resourceID, identityJSON, formatCatalogTime(time.Now()), id)
 	if err != nil {
 		return errors.WrapError(errors.ErrCodeDatabaseError, "Failed to update catalog entry identity", err)
 	}
