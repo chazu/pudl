@@ -4,6 +4,21 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Content packs leave examples/ (2026-11-04)
+
+The AWS and GCP packs moved to `packs/` and install with `pudl pack install
+<aws|gcp>` (`pudl pack list` shows their state); installs are recorded in
+`.packs/`. `pudl example` keeps the two tutorials. Hard break: `pudl example
+install gcp` no longer exists and old `.examples/` pack records are not read
+(reinstall with `--overwrite`). Also: `pudl init --global` repairs an
+existing workspace, installs reproject facts for existing records, and
+doctor accepts `.examples` and `.packs`. See
+`implog/2026_11_04_packs_leave_examples.md`,
+`implog/2026_11_04_global_builtin_refresh.md`,
+`implog/2026_11_04_install_reprojects_facts.md`,
+`implog/2026_11_04_doctor_install_records.md`. Closes `pudl-8eh`,
+`pudl-qaw`, `pudl-bpy`.
+
 ### Observed resources get new versions; finding owners; SIGTERM test (2026-11-04)
 
 Observation ingest stores a changed resource as latest version + 1 (it
