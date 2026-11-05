@@ -32,10 +32,9 @@ func runInitCommand(cmd *cobra.Command, args []string) error {
 	root := config.GetPudlDir()
 	mode := "global"
 	if initGlobal {
-		if initForce || !config.Exists() {
-			if err := pudlInit.Initialize(pudlInit.InitOptions{Force: initForce, Verbose: !jsonOutput, Out: outw()}); err != nil {
-				return err
-			}
+		// An existing ~/.pudl is repaired (built-ins refreshed, configuration kept).
+		if err := pudlInit.Initialize(pudlInit.InitOptions{Force: initForce, Verbose: !jsonOutput, Out: outw()}); err != nil {
+			return err
 		}
 	} else {
 		cwd, err := os.Getwd()
