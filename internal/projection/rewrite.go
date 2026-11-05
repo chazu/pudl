@@ -38,7 +38,8 @@ func parseRewrite(raw []rawRewrite) ([]RewriteRule, error) {
 }
 
 // rewrite applies the first matching rule. ok is false when the arg has rules
-// and none matches v (or v is not a string): the value yields no fact.
+// and none matches v (or v is not a string): the value yields no fact. An
+// absent value without a default yields no fact either (rowArgs).
 func (a ArgSpec) rewrite(v any) (any, bool) {
 	if a.Rewrite == nil {
 		return v, true

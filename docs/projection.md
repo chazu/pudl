@@ -46,8 +46,10 @@ of three forms:
 `rewrite` is a list of `{match, replace}` rules. `match` is a Go RE2
 pattern; the value becomes `replace` with `$1`, `${name}` and so on standing
 for the first matching rule's submatches (write `${1}` when a letter or digit
-follows). A value no rule matches, or a value that is not a string, yields no
-fact for its row: for a `[*]` arg only that value is skipped. Rules both
+follows). A value no rule matches, a value that is not a string, or an absent
+field (without `default`) yields no fact for its row: for a `[*]` arg only
+that value is skipped. A plain path arg, by contrast, is left out of a fact
+whose field is absent, and a rule matching on it sees a null. Rules both
 reshape a reference and filter out values that are not one:
 
 ```cue

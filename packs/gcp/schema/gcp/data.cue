@@ -60,8 +60,9 @@ package gcp
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {region: "location"}
 		graph: display: {code: "GCS", label: "Storage bucket", class: "data"}
-		// The bucket's default customer-managed key, if any.
-		facts: gcp_bucket_key: args: key: "default_kms_key"
+		// The bucket's default customer-managed key, if any (a rewrite, so a
+		// bucket without one yields no fact).
+		facts: gcp_bucket_key: args: key: {path: "default_kms_key", rewrite: [{match: "^(projects/.+/cryptoKeys/[^/]+)$", replace: "$1"}]}
 	}
 	project:                      _gcpProjectID
 	name:                         string

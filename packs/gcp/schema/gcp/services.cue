@@ -126,8 +126,9 @@ package gcp
 		facts: gcp_subscription_topic: args: topic: "topic"
 		// Where undeliverable messages are forwarded, if anywhere.
 		facts: gcp_subscription_dead_letter: args: topic: "deadLetterPolicy.deadLetterTopic"
-		// Where a push subscription delivers, by origin.
-		facts: gcp_subscription_push: args: endpoint: "pushConfig.pushEndpointOrigin"
+		// Where a push subscription delivers, by origin; pull subscriptions
+		// yield no fact.
+		facts: gcp_subscription_push: args: endpoint: {path: "pushConfig.pushEndpointOrigin", rewrite: [{match: "^(https?://.+)$", replace: "$1"}]}
 		sensitive_fields: ["pushConfig.pushEndpoint"]
 	}
 	project: _gcpProjectID
