@@ -12,6 +12,7 @@ import (
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/importer"
 	"github.com/chazu/pudl/internal/inference"
+	"github.com/chazu/pudl/internal/workspace"
 	_ "modernc.org/sqlite"
 )
 
@@ -139,33 +140,30 @@ func CheckDatabaseIntegrityAt(pudlDir string) *CheckResult {
 
 // CheckSchemaRepository verifies CUE module exists
 func CheckSchemaRepository() *CheckResult {
-	return CheckSchemaRepositoryAt(config.GetPudlDir())
+	return CheckSchemaRepositoryAt(globalSchemaPath())
 }
 
-// CheckSchemaRepositoryAt verifies the schema module beneath one PUDL root.
-func CheckSchemaRepositoryAt(pudlDir string) *CheckResult {
-	cfg, err := config.LoadFrom(pudlDir)
-	if err != nil {
-		return &CheckResult{
-			Status:  "error",
-			Message: "Failed to load configuration",
-			Details: err.Error(),
-			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
-		}
-	}
+// globalSchemaPath is the global workspace's schema directory as the
+// workspace policy resolves it; the no-argument checks examine it.
+func globalSchemaPath() string {
+	return workspace.Global(config.GetPudlDir()).SchemaSearchPaths[0]
+}
 
+// CheckSchemaRepositoryAt verifies the schema module at schemaPath, the
+// workspace's resolved schema directory.
+func CheckSchemaRepositoryAt(schemaPath string) *CheckResult {
 	// Check if schema directory exists
-	if _, err := os.Stat(cfg.SchemaPath); os.IsNotExist(err) {
+	if _, err := os.Stat(schemaPath); os.IsNotExist(err) {
 		return &CheckResult{
 			Status:  "error",
 			Message: "Schema directory not found",
-			Details: fmt.Sprintf("Directory %s does not exist", cfg.SchemaPath),
+			Details: fmt.Sprintf("Directory %s does not exist", schemaPath),
 			Fix:     "Run 'pudl init' to create schema directory",
 		}
 	}
 
 	// Check for cue.mod
-	cueModPath := filepath.Join(cfg.SchemaPath, "cue.mod")
+	cueModPath := filepath.Join(schemaPath, "cue.mod")
 	if _, err := os.Stat(cueModPath); os.IsNotExist(err) {
 		return &CheckResult{
 			Status:  "warning",
@@ -184,22 +182,14 @@ func CheckSchemaRepositoryAt(pudlDir string) *CheckResult {
 
 // CheckGitRepository verifies git is initialized
 func CheckGitRepository() *CheckResult {
-	return CheckGitRepositoryAt(config.GetPudlDir())
+	return CheckGitRepositoryAt(config.GetPudlDir(), globalSchemaPath())
 }
 
-// CheckGitRepositoryAt accepts either a standalone schema Git repository or
-// the enclosing repository that owns a local .pudl workspace.
-func CheckGitRepositoryAt(pudlDir string) *CheckResult {
-	cfg, err := config.LoadFrom(pudlDir)
-	if err != nil {
-		return &CheckResult{
-			Status:  "warning",
-			Message: "Failed to load configuration",
-			Details: err.Error(),
-		}
-	}
-
-	gitDir := filepath.Join(cfg.SchemaPath, ".git")
+// CheckGitRepositoryAt accepts either a standalone schema Git repository at
+// schemaPath (the workspace's resolved schema directory) or the enclosing
+// repository that owns a local .pudl workspace at pudlDir.
+func CheckGitRepositoryAt(pudlDir, schemaPath string) *CheckResult {
+	gitDir := filepath.Join(schemaPath, ".git")
 	repoGitDir := filepath.Join(filepath.Dir(pudlDir), ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
 		_, workspaceErr := os.Stat(filepath.Join(pudlDir, "workspace.cue"))
@@ -441,22 +431,13 @@ func isNumericDir(name string, expectedLen int) bool {
 // built-ins. Users should namespace their own schemas elsewhere -- `user/` by
 // convention. See docs/schema-authoring.md.
 func CheckPudlNamespaceSchemas() *CheckResult {
-	return CheckPudlNamespaceSchemasAt(config.GetPudlDir())
+	return CheckPudlNamespaceSchemasAt(globalSchemaPath())
 }
 
-// CheckPudlNamespaceSchemasAt checks one PUDL root's schema namespace.
-func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
-	cfg, err := config.LoadFrom(pudlDir)
-	if err != nil {
-		return &CheckResult{
-			Status:  "warning",
-			Message: "Failed to load configuration",
-			Details: err.Error(),
-			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
-		}
-	}
-
-	pudlNS := filepath.Join(cfg.SchemaPath, "pudl")
+// CheckPudlNamespaceSchemasAt checks the pudl/ namespace of schemaPath, the
+// workspace's resolved schema directory.
+func CheckPudlNamespaceSchemasAt(schemaPath string) *CheckResult {
+	pudlNS := filepath.Join(schemaPath, "pudl")
 	if _, err := os.Stat(pudlNS); os.IsNotExist(err) {
 		return &CheckResult{
 			Status:  "ok",
@@ -480,7 +461,7 @@ func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
 		if filepath.Ext(path) != ".cue" {
 			return nil
 		}
-		rel, relErr := filepath.Rel(cfg.SchemaPath, filepath.Dir(path))
+		rel, relErr := filepath.Rel(schemaPath, filepath.Dir(path))
 		if relErr != nil {
 			return nil
 		}
@@ -525,22 +506,13 @@ func CheckPudlNamespaceSchemasAt(pudlDir string) *CheckResult {
 // base_schema references that bypass CUE inheritance). Policies are skipped:
 // a record is never classified under one. See docs/schema-authoring.md.
 func CheckIdentityFieldConsistency() *CheckResult {
-	return CheckIdentityFieldConsistencyAt(config.GetPudlDir())
+	return CheckIdentityFieldConsistencyAt(globalSchemaPath())
 }
 
-// CheckIdentityFieldConsistencyAt checks one PUDL root's schema families.
-func CheckIdentityFieldConsistencyAt(pudlDir string) *CheckResult {
-	cfg, err := config.LoadFrom(pudlDir)
-	if err != nil {
-		return &CheckResult{
-			Status:  "warning",
-			Message: "Failed to load configuration",
-			Details: err.Error(),
-			Fix:     "Check config file at " + config.ConfigPath(pudlDir),
-		}
-	}
-
-	inferrer, err := inference.NewSchemaInferrer(cfg.SchemaPath)
+// CheckIdentityFieldConsistencyAt checks the schema families in schemaPath,
+// the workspace's resolved schema directory.
+func CheckIdentityFieldConsistencyAt(schemaPath string) *CheckResult {
+	inferrer, err := inference.NewSchemaInferrer(schemaPath)
 	if err != nil {
 		return &CheckResult{
 			Status:  "warning",
