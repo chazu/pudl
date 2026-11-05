@@ -1,0 +1,73 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/urlMaps/web-map",
+    "assetType": "compute.googleapis.com/UrlMap",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000000364016258",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-map",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-map",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "defaultService": "https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/web-backend",
+          "hostRules": [
+            {
+              "hosts": [
+                "shop.example.com"
+              ],
+              "pathMatcher": "shop"
+            }
+          ],
+          "pathMatchers": [
+            {
+              "name": "shop",
+              "defaultService": "https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/web-backend",
+              "pathRules": [
+                {
+                  "paths": [
+                    "/orders/*"
+                  ],
+                  "service": "https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/orders-backend"
+                }
+              ]
+            }
+          ],
+          "headerAction": {
+            "requestHeadersToAdd": [
+              {
+                "headerName": "X-Backend-Key",
+                "headerValue": "example-not-a-secret",
+                "replace": true
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/urlMaps/web-redirect",
+    "assetType": "compute.googleapis.com/UrlMap",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000004135456298",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-redirect",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-redirect",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "defaultUrlRedirect": {
+            "httpsRedirect": true,
+            "redirectResponseCode": "MOVED_PERMANENTLY_DEFAULT",
+            "stripQuery": false
+          }
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/targetHttpsProxies/web-https-proxy",
+    "assetType": "compute.googleapis.com/TargetHttpsProxy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000002543608710",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-https-proxy",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/targetHttpsProxies/web-https-proxy",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "urlMap": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-map",
+          "sslCertificates": [
+            "https://www.googleapis.com/compute/v1/projects/example-project/global/sslCertificates/shop-cert",
+            "https://www.googleapis.com/compute/v1/projects/example-project/global/sslCertificates/legacy-cert"
+          ],
+          "sslPolicy": "https://www.googleapis.com/compute/v1/projects/example-project/global/sslPolicies/modern-tls",
+          "quicOverride": "NONE"
+        }
+      }
+    ]
+  }
+]

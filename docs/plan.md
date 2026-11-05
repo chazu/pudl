@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: load balancing, Cloud Armor and DNS record sets (2026-11-05)
+
+Batch (b) of `pudl-q4v.7`: forwarding rules, target proxies, URL maps,
+backend services, health checks, NEGs, SSL certificates and policies and
+Cloud Armor policies on CAI with gcloud fallbacks (live parity verified end
+to end); DNS record sets through gcloud only (CAI has none of a project's
+managed zones). LB header values redacted. See
+`implog/2026_11_05_gcp_batch_b_load_balancing.md`. Follow-ups
+`pudl-q4v.22` (edges) and `pudl-zbj` (P1: aggregated gcloud lists hide
+permission errors).
+
 ### GCP pack: hierarchy, policies and enabled services (2026-11-05)
 
 Batch (a) of `pudl-q4v.7`: organizations, folders, organization policies,

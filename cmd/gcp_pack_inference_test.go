@@ -27,6 +27,18 @@ var gcpPackSchemas = map[string]string{
 	"organizations":        "gcp.#Organization", "folders": "gcp.#Folder",
 	"org-policies": "gcp.#OrgPolicy", "firewall-policies": "gcp.#FirewallPolicy",
 	"binauthz-policies": "gcp.#BinaryAuthorizationPolicy", "services": "gcp.#EnabledService",
+	"forwarding-rules":        "gcp.#ForwardingRule",
+	"target-http-proxies":     "gcp.#TargetHTTPProxy",
+	"target-https-proxies":    "gcp.#TargetHTTPSProxy",
+	"url-maps":                "gcp.#URLMap",
+	"backend-services":        "gcp.#BackendService",
+	"healthchecks":            "gcp.#HealthCheck",
+	"http-healthchecks":       "gcp.#HTTPHealthCheck",
+	"network-endpoint-groups": "gcp.#NetworkEndpointGroup",
+	"ssl-certificates":        "gcp.#SSLCertificate",
+	"ssl-policies":            "gcp.#SSLPolicy",
+	"security-policies":       "gcp.#SecurityPolicy",
+	"dns-record-sets":         "gcp.#DNSRecordSet",
 }
 
 // gcpPackOrgLevel are the fixtures of types above projects: their records

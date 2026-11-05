@@ -90,6 +90,39 @@ package gcp
 	...
 }
 
+// `gcloud dns record-sets list --zone=Z` for every zone of a project, with
+// the zone's name added (managedZone; gcloud prints none). A record set is
+// unique by zone, name and type. Records are what the zone publishes (to
+// the internet, or to the networks a private zone is visible to), so none
+// is redacted.
+#DNSRecordSet: {
+	_pudl: {
+		schema_type:   "base"
+		resource_type: "gcp.dns.record_set"
+		identity_fields: ["project", "managedZone", "name", "type"]
+		review: status: "draft"
+		owner: _#GCPOwner
+		graph: _gcpGraph & {name: "name"}
+		graph: display: {code: "RR", label: "DNS record set", class: "edge"}
+		graph: inventory: collapsed: true
+		facts: gcp_dns_record: args: {
+			project: "project"
+			zone:    "managedZone"
+			name:    "name"
+			type:    "type"
+			data:    "rrdatas[*]"
+		}
+	}
+	kind:        "dns#resourceRecordSet" @pudl(match)
+	project:     _gcpProjectID
+	managedZone: string
+	name:        string
+	type:        string
+	ttl?:        int
+	rrdatas?: [...string]
+	...
+}
+
 // `gcloud pubsub topics list --format=json`. Identity is the fully qualified
 // name projects/P/topics/T.
 #PubSubTopic: {

@@ -1,0 +1,16 @@
+[
+  {
+    "kind": "compute#sslPolicy",
+    "id": "1000002543086296",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "modern-tls",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/sslPolicies/modern-tls",
+    "profile": "MODERN",
+    "minTlsVersion": "TLS_1_2",
+    "fingerprint": "R0NMLWZwLTA=",
+    "enabledFeatures": [
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+    ]
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/regions/us-central1/networkEndpointGroups/orders-neg",
+    "assetType": "compute.googleapis.com/NetworkEndpointGroup",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000003616560336",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "orders-neg",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/networkEndpointGroups/orders-neg",
+          "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+          "networkEndpointType": "SERVERLESS",
+          "size": 0,
+          "cloudRun": {
+            "service": "orders-api"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/zones/us-central1-a/networkEndpointGroups/web-neg-a",
+    "assetType": "compute.googleapis.com/NetworkEndpointGroup",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000000034048457",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-neg-a",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/zones/us-central1-a/networkEndpointGroups/web-neg-a",
+          "zone": "https://www.googleapis.com/compute/v1/projects/example-project/zones/us-central1-a",
+          "networkEndpointType": "GCE_VM_IP_PORT",
+          "size": 2,
+          "defaultPort": 8080,
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "subnetwork": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app"
+        }
+      }
+    ]
+  }
+]

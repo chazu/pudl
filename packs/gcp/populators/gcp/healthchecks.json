@@ -1,0 +1,36 @@
+[
+  {
+    "kind": "compute#healthCheck",
+    "id": "1000000385892270",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "web-hc",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/healthChecks/web-hc",
+    "type": "HTTP",
+    "checkIntervalSec": 10,
+    "timeoutSec": 5,
+    "healthyThreshold": 2,
+    "unhealthyThreshold": 3,
+    "httpHealthCheck": {
+      "port": 8080,
+      "requestPath": "/healthz",
+      "proxyHeader": "NONE"
+    }
+  },
+  {
+    "kind": "compute#healthCheck",
+    "id": "1000000600587828",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "ilb-hc",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/healthChecks/ilb-hc",
+    "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+    "type": "TCP",
+    "checkIntervalSec": 5,
+    "timeoutSec": 5,
+    "healthyThreshold": 2,
+    "unhealthyThreshold": 2,
+    "tcpHealthCheck": {
+      "port": 8080,
+      "proxyHeader": "NONE"
+    }
+  }
+]

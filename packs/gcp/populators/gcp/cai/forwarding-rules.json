@@ -1,0 +1,83 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/forwardingRules/web-https",
+    "assetType": "compute.googleapis.com/ForwardingRule",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000001699557784",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-https",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/forwardingRules/web-https",
+          "IPAddress": "203.0.113.10",
+          "IPProtocol": "TCP",
+          "portRange": "443-443",
+          "target": "https://www.googleapis.com/compute/v1/projects/example-project/global/targetHttpsProxies/web-https-proxy",
+          "loadBalancingScheme": "EXTERNAL_MANAGED",
+          "networkTier": "PREMIUM",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "labelFingerprint": "42WmSpB8rSM=",
+          "labels": {
+            "team": "shop"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/forwardingRules/web-http",
+    "assetType": "compute.googleapis.com/ForwardingRule",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000004068617741",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-http",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/forwardingRules/web-http",
+          "IPAddress": "203.0.113.10",
+          "IPProtocol": "TCP",
+          "portRange": "80-80",
+          "target": "https://www.googleapis.com/compute/v1/projects/example-project/global/targetHttpProxies/web-http-proxy",
+          "loadBalancingScheme": "EXTERNAL_MANAGED",
+          "networkTier": "PREMIUM",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "labels": {
+            "team": "shop"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//compute.googleapis.com/projects/example-project/regions/us-central1/forwardingRules/internal-api-fr",
+    "assetType": "compute.googleapis.com/ForwardingRule",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000001013029035",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "internal-api-fr",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/forwardingRules/internal-api-fr",
+          "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+          "IPAddress": "10.10.0.50",
+          "IPProtocol": "TCP",
+          "ports": [
+            "8080"
+          ],
+          "backendService": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/backendServices/internal-api",
+          "loadBalancingScheme": "INTERNAL",
+          "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+          "subnetwork": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/subnetworks/app",
+          "networkTier": "PREMIUM",
+          "fingerprint": "Q0FJLWZwLTA="
+        }
+      }
+    ]
+  }
+]

@@ -14,6 +14,8 @@ var gcpAssetTypes = []string{
 	"gke-clusters", "run-services", "pubsub-topics", "pubsub-subscriptions", "service-accounts", "dns-zones",
 	"kms-keyrings", "kms-keys", "iam-roles", "service-account-keys",
 	"organizations", "folders", "org-policies", "firewall-policies", "binauthz-policies", "services",
+	"forwarding-rules", "target-http-proxies", "target-https-proxies", "url-maps", "backend-services", "healthchecks",
+	"http-healthchecks", "network-endpoint-groups", "ssl-certificates", "ssl-policies", "security-policies",
 }
 
 type assetPopulate struct {

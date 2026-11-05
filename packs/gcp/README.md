@@ -14,12 +14,12 @@ Installed files, under `.pudl/`:
 
 | Path | Contents |
 | --- | --- |
-| `schema/gcp/{network,compute,gke,data,services,iam,artifacts,k8s,hierarchy,project}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/{network,loadbalancing,compute,gke,data,services,iam,artifacts,k8s,hierarchy,project}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
-| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue`, `gcp_loadbalancing.cue`, `gcp_dns_records.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The four check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
@@ -29,6 +29,7 @@ Installed files, under `.pudl/`:
 | `populators/gcp/folders.sh` | Helper `gcp-folders` runs (fallback): every folder in one organization, walked breadth first |
 | `populators/gcp/org-policies.sh` | Helper `gcp-org-policies` runs (fallback): every organization policy set on one organization, its folders and their projects, described |
 | `populators/gcp/firewall-policies.sh` | Helper `gcp-firewall-policies` runs (fallback): the hierarchical firewall policies of one organization and its folders |
+| `populators/gcp/dns-record-sets.sh` | Helper `gcp-dns-record-sets` runs: every record set of every Cloud DNS zone in one project |
 | `populators/gcp/binauthz-policy.sh` | Helper `gcp-binauthz-policies` runs (fallback): one project's Binary Authorization policy, unless never set |
 
 ## What it collects
@@ -56,6 +57,17 @@ stays complete.
 | `gcp-routes` | `compute routes list` | `gcp.#Route` | `selfLink` | `compute.routes.list` (same) |
 | `gcp-routers` | `compute routers list` | `gcp.#Router` | `selfLink` | `compute.routers.list` (same) |
 | `gcp-addresses` | `compute addresses list` | `gcp.#Address` | `selfLink` | `compute.addresses.list`, `compute.globalAddresses.list` (same) |
+| `gcp-forwarding-rules` | `compute forwarding-rules list` | `gcp.#ForwardingRule` | `selfLink` | `compute.forwardingRules.list` (`roles/compute.viewer`) |
+| `gcp-target-http-proxies` | `compute target-http-proxies list` | `gcp.#TargetHTTPProxy` | `selfLink` | `compute.targetHttpProxies.list` (`roles/compute.viewer`) |
+| `gcp-target-https-proxies` | `compute target-https-proxies list` | `gcp.#TargetHTTPSProxy` | `selfLink` | `compute.targetHttpsProxies.list` (`roles/compute.viewer`) |
+| `gcp-url-maps` | `compute url-maps list` | `gcp.#URLMap` | `selfLink` | `compute.urlMaps.list` (`roles/compute.viewer`) |
+| `gcp-backend-services` | `compute backend-services list` | `gcp.#BackendService` | `selfLink` | `compute.backendServices.list` (`roles/compute.viewer`) |
+| `gcp-healthchecks` | `compute health-checks list` | `gcp.#HealthCheck` | `selfLink` | `compute.healthChecks.list` (`roles/compute.viewer`) |
+| `gcp-http-healthchecks` | `compute http-health-checks list` | `gcp.#HTTPHealthCheck` | `selfLink` | `compute.httpHealthChecks.list` (`roles/compute.viewer`) |
+| `gcp-network-endpoint-groups` | `compute network-endpoint-groups list` | `gcp.#NetworkEndpointGroup` | `selfLink` | `compute.networkEndpointGroups.list` (`roles/compute.viewer`) |
+| `gcp-ssl-certificates` | `compute ssl-certificates list` | `gcp.#SSLCertificate` | `selfLink` | `compute.sslCertificates.list` (`roles/compute.viewer`) |
+| `gcp-ssl-policies` | `compute ssl-policies list` | `gcp.#SSLPolicy` | `selfLink` | `compute.sslPolicies.list` (`roles/compute.viewer`) |
+| `gcp-security-policies` | `compute security-policies list` | `gcp.#SecurityPolicy` | `selfLink` | `compute.securityPolicies.list` (`roles/compute.viewer`) |
 | `gcp-instances` | `compute instances list` | `gcp.#ComputeInstance` | `selfLink` | `compute.instances.list` (`roles/compute.viewer`) |
 | `gcp-service-accounts` | `iam service-accounts list` | `gcp.#ServiceAccount` | `email` | `iam.serviceAccounts.list` (`roles/iam.serviceAccountViewer`) |
 | `gcp-iam-policies` | `asset search-all-iam-policies` per project; fallback `projects get-iam-policy P` | `gcp.#IAMPolicy` | `resource` | `cloudasset.assets.searchAllIamPolicies`; fallback `resourcemanager.projects.getIamPolicy` (`roles/iam.securityReviewer`) |
@@ -66,6 +78,7 @@ stays complete.
 | `gcp-buckets` | `storage buckets list` | `gcp.#Bucket` | `name` | `storage.buckets.list` (`roles/viewer`) |
 | `gcp-run-services` | `run services list` | `gcp.#RunService` | project number, location, name | `run.services.list` (`roles/run.viewer`) |
 | `gcp-dns-zones` | `dns managed-zones list` | `gcp.#DNSManagedZone` | `project`, `name` | `dns.managedZones.list` (`roles/dns.reader`) |
+| `gcp-dns-record-sets` | `dns managed-zones list`, then `dns record-sets list` per zone, via `dns-record-sets.sh` | `gcp.#DNSRecordSet` | `project`, `managedZone`, `name`, `type` | `dns.resourceRecordSets.list` (`roles/dns.reader`) |
 | `gcp-pubsub-topics` | `pubsub topics list` | `gcp.#PubSubTopic` | `name` | `pubsub.topics.list` (`roles/pubsub.viewer`) |
 | `gcp-pubsub-subscriptions` | `pubsub subscriptions list` | `gcp.#PubSubSubscription` | `name` | `pubsub.subscriptions.list` (same) |
 | `gcp-kms-keyrings` | `kms keyrings list --location=L` | `gcp.#KMSKeyRing` | `name` | `cloudkms.keyRings.list` (`roles/cloudkms.viewer`) |
@@ -99,7 +112,9 @@ references are kept), GKE node metadata (startup scripts) and legacy
 scripts, user-data, and `kube-env` on GKE nodes; the keys are kept, and the
 settings in `_gcpSafeMetadataKeys`, such as `enable-oslogin`, keep their
 values),
-Pub/Sub push endpoints, which can embed tokens, and Kubernetes deployments'
+Pub/Sub push endpoints, which can embed tokens, request header values a
+load balancer adds (backend services' custom request headers, URL map and
+Cloud Armor header actions) and an IAP OAuth client secret, and Kubernetes deployments'
 container environment values and `kubectl.kubernetes.io/last-applied-configuration`
 annotation, which repeats them.
 
@@ -228,8 +243,10 @@ fails the collector with nothing ingested.
 
 Networks, subnets, firewall rules, routes, routers, addresses, GKE clusters,
 Cloud Run services, Pub/Sub topics and subscriptions, service accounts, DNS
-zones, KMS key rings and keys, custom roles and service account keys are
-collected through
+zones, KMS key rings and keys, custom roles, service account keys, load
+balancing (forwarding rules, target proxies, URL maps, backend services,
+health checks, network endpoint groups, SSL certificates and policies) and
+Cloud Armor policies are collected through
 Cloud Asset Inventory (CAI) search: one
 search per type
 for every organization your credentials can see (`gcloud organizations list`,
@@ -292,6 +309,11 @@ Enabled services: gcloud also lists services CAI does not export
 (`cloudsecuritycompliance.googleapis.com` everywhere, which is not
 collected; `containeranalysis.googleapis.com` in some projects), so a
 fallback run can add a few records that the next CAI run marks gone.
+
+DNS record sets are collected through gcloud only: Cloud Asset Inventory
+exports none of a project's managed zones' records (its record sets are
+those of GKE's cluster-scoped DNS zones, pods and services, which the pack
+does not catalog). The helper adds each record's zone (`managedZone`).
 
 Container images are collected through gcloud only. CAI lists every image
 version as its own asset (tens of thousands in a large organization), while
