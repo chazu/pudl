@@ -32,18 +32,24 @@ const (
 
 // Finding is one failing match of a check, identified stably across
 // observations. Arguments are recorded when the match is one of a report's
-// witnesses; FirstSeen is when a comparable report first recorded it. Waived
-// marks a current finding an active waiver excuses: it keeps its state, but
-// is not a failure (an expired waiver excuses nothing).
+// witnesses; Resource and Owner are recorded for every finding. FirstSeen is
+// when a comparable report first recorded it. Waived marks a current finding
+// an active waiver excuses: it keeps its state, but is not a failure (an
+// expired waiver excuses nothing).
 type Finding struct {
 	Key       string         `json:"key"`
 	State     string         `json:"state,omitempty"`
 	FirstSeen *time.Time     `json:"first_seen,omitempty"`
 	Waived    bool           `json:"waived,omitempty"`
+	Resource  string         `json:"resource,omitempty"`
 	Arguments map[string]any `json:"arguments,omitempty"`
-	// Owner is the owner of the resource the finding's recorded arguments
-	// reference (see AttributeOwners); "" when none was resolved.
+	// Owner is the owner of the resource the finding references (see
+	// AttributeOwners); "" when none was resolved.
 	Owner string `json:"owner"`
+	// refs are the match's resource and catalog entry references, taken from
+	// all of its arguments, so that a finding whose arguments are not
+	// recorded can still be attributed. They are not stored.
+	refs map[string]any
 }
 
 // evidenceFields name the observation a match came from, not what failed: a
@@ -75,9 +81,9 @@ func FindingKey(args map[string]any) string {
 	return hex.EncodeToString(sum[:12])
 }
 
-// MatchFindings records the identity of every failing match of a check, with
-// the arguments of those that are also witnesses and whether waivedKeys says
-// an active waiver excuses it. A failing `expect: nonempty` check is one
+// MatchFindings records the identity and resource of every failing match of a
+// check, with the arguments of those that are also witnesses and whether
+// waivedKeys says an active waiver excuses it. A failing `expect: nonempty` check is one
 // finding with no arguments. truncated reports that more matched than
 // FindingLimit.
 func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []Witness, waivedKeys map[string]bool) (findings []Finding, truncated bool) {
@@ -98,7 +104,8 @@ func MatchFindings(tuples []datalog.Tuple, expect, outcome string, witnesses []W
 			continue
 		}
 		seen[key] = true
-		findings = append(findings, Finding{Key: key, Waived: waivedKeys[key], Arguments: known[key]})
+		findings = append(findings, Finding{Key: key, Waived: waivedKeys[key], Arguments: known[key],
+			Resource: resourceOf(tuple.Args), refs: ownerRefs(tuple.Args)})
 	}
 	sort.Slice(findings, func(i, j int) bool { return findings[i].Key < findings[j].Key })
 	if len(findings) > FindingLimit {
