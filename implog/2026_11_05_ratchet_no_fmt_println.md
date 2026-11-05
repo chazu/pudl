@@ -14,4 +14,4 @@
 - `internal/ui/ui.go:14` — `RunInteractiveList` prints "No data found..."
   when there are no entries.
 
-Remove it, then run `ratchets tighten` to drop the budget to 0.
+Removed 2026-11-05 (`pudl-4l1`): `cmd/list.go` already prints the message before calling `RunInteractiveList`. Budget is now 0.
