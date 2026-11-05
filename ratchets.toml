@@ -7,7 +7,9 @@
 #
 # Policy: when we identify an antipattern to avoid or eliminate, add a ratchet
 # for it here rather than relying on memory or review.
-enabled_ratchets = []
+enabled_ratchets = [
+  "no-fmt-println-outside-cmd",
+]
 disabled_ratchets = []
 
 [ratchets]
