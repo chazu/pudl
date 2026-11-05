@@ -198,7 +198,7 @@ func TestInvalidOwnerMetadataFailsToLoad(t *testing.T) {
 
 func TestGCPPackDeclaresOwnership(t *testing.T) {
 	cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	r = runCLI(t, "check", "gcp-fixture-pubsub-topics", "gcp-fixture-buckets", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)

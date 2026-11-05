@@ -50,7 +50,7 @@ func checkFixtureCollectors(t *testing.T, types []string) map[string]assetPopula
 // the same records, so the second run stores nothing new.
 func TestGCPPackAssetSourcesStoreIdenticalRecords(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	first := checkFixtureCollectors(t, gcpAssetTypes)

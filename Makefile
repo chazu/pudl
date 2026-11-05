@@ -50,10 +50,11 @@ test:
 	$(GO) test ./...
 
 # Execute the getting-started guide's command blocks against a fresh workspace,
-# and run the example's observation journey. Needs git; no mu or network.
+# run the example's observation journey, and install examples and packs.
+# Needs git; no mu or network.
 test-git-walkthrough:
 	@command -v git >/dev/null 2>&1 || (echo "git is required for test-git-walkthrough" && exit 1)
-	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(GitInventoryWalkthrough|GitInventoryObservation|ExampleInstall.*)$$' -v -count=1 -timeout 5m
+	CGO_ENABLED=0 $(GO) test -tags=smoke ./test/smoke/ -run '^TestSmoke_(GitInventoryWalkthrough|GitInventoryObservation|ExampleInstall.*|PackInstall.*)$$' -v -count=1 -timeout 5m
 
 # Sync embedded skill copies (internal/skills/files/*.md) from their canonical
 # sources in skills/<name>/SKILL.md.

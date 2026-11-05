@@ -3,7 +3,7 @@
 Find an enabled ingress ALLOW rule with source `0.0.0.0/0`, inspect its
 retained evidence, and verify a correction. The fixture walkthrough needs only
 pudl and `cp`; it makes no cloud requests. For the full GCP inventory, see the
-[GCP content pack](../examples/gcp/README.md).
+[GCP content pack](../packs/gcp/README.md).
 
 ## Install and check the fixture
 

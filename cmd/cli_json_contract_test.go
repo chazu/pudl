@@ -132,6 +132,9 @@ func TestJSONOutputContract(t *testing.T) {
 	run("facts", "retract", otherID)
 
 	run("delete", proquint)
+
+	run("pack", "list")
+	run("pack", "install", "aws")
 }
 
 // TestJSONOutputContractClassifiesEveryCommand fails when a runnable command is

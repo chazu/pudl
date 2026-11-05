@@ -107,7 +107,7 @@ func waiverChecks(report waiverReport) map[string]waiverCheck {
 
 func TestCheckWaivers(t *testing.T) {
 	pudlDir := cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp", "--json")
+	r := runCLI(t, "pack", "install", "gcp", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	r = runCLI(t, "check", "gcp-fixture-firewalls", "gcp-fixture-addresses", "gcp-fixture-routers", "gcp-fixture-network-hygiene-checks", "--json", "--detailed-exitcode")
 	require.Equal(t, 2, exitCodeFor(r.Err), r.Stdout+r.Stderr)

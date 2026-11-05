@@ -42,7 +42,7 @@ esac
 // digest, and per version its tags, push time, size and media type.
 func TestGCPPackContainerImagesFixture(t *testing.T) {
 	cliWorkspace(t)
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "check", "gcp-fixture-container-images", "--json")
@@ -74,7 +74,7 @@ func TestGCPPackContainerImagesThroughGcloud(t *testing.T) {
 	t.Setenv("GCLOUD_LOG", log)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	r := runCLI(t, "example", "install", "gcp")
+	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	writeFile(t, filepath.Join(pudlDir, "schema", "models", "gcp_settings.cue"), "package models\n\n_gcpImageHistory: 3\n")
 

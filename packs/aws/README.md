@@ -7,7 +7,7 @@ fixtures. It contains no vendor-specific Go.
 
 ```bash
 pudl init
-pudl example install aws
+pudl pack install aws
 ```
 
 Installed files, under `.pudl/`:

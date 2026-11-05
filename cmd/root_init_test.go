@@ -3,7 +3,7 @@ package cmd
 import "testing"
 
 func TestGlobalAutoInitCommandBoundary(t *testing.T) {
-	for _, command := range []string{"help", "version", "init", "example", "prime", "guide", "completion", "report", "--help", "-h", "--version", "-v"} {
+	for _, command := range []string{"help", "version", "init", "example", "pack", "prime", "guide", "completion", "report", "--help", "-h", "--version", "-v"} {
 		if shouldAutoInitializeGlobal(command) {
 			t.Errorf("%q should not auto-initialize global state", command)
 		}
