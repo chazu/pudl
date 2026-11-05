@@ -20,7 +20,7 @@ Installed files, under `.pudl/`:
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
 | `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
-| `schema/models/gcp_pack_checks.cue` | The three check families |
+| `schema/models/gcp_pack_checks.cue` | The four check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
 | `populators/gcp/iam-roles.sh` | Helper `gcp-iam-roles` runs: every custom role in one project, described |
@@ -153,6 +153,11 @@ the named collectors (evidence `model:<collector>`, at most an hour old).
 | `gcp-gke-posture-checks` | `policy-high`, `policy-any` | fail, warn | gke-clusters |
 | | `private-nodes-without-private-google-access`: a private-node cluster's subnet lacks Private Google Access | fail | gke-clusters, subnets |
 | | `secrets-key-unusable`: secrets encryption uses a key whose primary version is disabled or destroyed | fail | gke-clusters, kms-keys |
+| `gcp-iam-hygiene-checks` | `sa-key-older-than-90d`: an enabled user-managed service account key created more than 90 days ago (rotate it) | fail | service-account-keys |
+| | `sa-key-never-expires`: an enabled user-managed key with no expiry (`validBeforeTime` 9999-12-31) | warn | service-account-keys |
+
+Key age is measured against the time the check runs (the `--as-of` time
+for a time-travel query), with the datalog comparison `"<now-90d"`.
 
 Name a family together with its collectors; they run first:
 

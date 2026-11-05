@@ -104,9 +104,35 @@ _#GCPGKEPosture: _#GCPFamily & {
 	]])
 }
 
+// User-managed service account keys: rotation and expiry.
+_#GCPIAMHygiene: _#GCPFamily & {
+	_prefix: string
+	let P = _prefix
+	_family: "iam-hygiene"
+	_collectors: ["service-account-keys"]
+	checks: [
+		_#GCPCheck & {
+			_prefix: P, _from: ["service-account-keys"]
+			name:     "sa-key-older-than-90d"
+			query:    "gcp_sa_key_older_than_90d"
+			severity: "fail"
+			message:  "Rotate user-managed service account keys created more than 90 days ago"
+		},
+		_#GCPCheck & {
+			_prefix: P, _from: ["service-account-keys"]
+			name:     "sa-key-never-expires"
+			query:    "gcp_sa_key_never_expires"
+			severity: "warn"
+			message:  "Give user-managed service account keys an expiry (constraints/iam.serviceAccountKeyExpiryHours)"
+		},
+	]
+}
+
 #GCPNetworkHygieneChecks: _#GCPNetworkHygiene & {_prefix: "gcp-"}
 #GCPDataProtectionChecks: _#GCPDataProtection & {_prefix: "gcp-"}
 #GCPGKEPostureChecks: _#GCPGKEPosture & {_prefix: "gcp-"}
 #GCPFixtureNetworkHygieneChecks: _#GCPNetworkHygiene & {_prefix: "gcp-fixture-"}
 #GCPFixtureDataProtectionChecks: _#GCPDataProtection & {_prefix: "gcp-fixture-"}
 #GCPFixtureGKEPostureChecks: _#GCPGKEPosture & {_prefix: "gcp-fixture-"}
+#GCPIAMHygieneChecks: _#GCPIAMHygiene & {_prefix: "gcp-"}
+#GCPFixtureIAMHygieneChecks: _#GCPIAMHygiene & {_prefix: "gcp-fixture-"}

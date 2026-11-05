@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +19,11 @@ type Term struct {
 	Value    interface{} // ground value, or the numeric bound when Cmp is set
 	Agg      string      // aggregate function over Variable: "count"|"sum"|"min"|"max" (head only)
 	Cmp      string      // comparison operator against Value: ">"|"<"|">="|"<="|"!=" (body only)
+	// Ago, when set, makes Cmp compare a date (an RFC 3339 or other SQLite
+	// date string) with the evaluation time minus Ago seconds: the as-of time
+	// of a time-travel query, else the current time. "<now-90d" is
+	// Term{Cmp: "<", Ago: 90 days}.
+	Ago *int64
 }
 
 // IsVariable returns true if the term is a variable.
@@ -30,8 +36,9 @@ func (t Term) IsAggregate() bool {
 	return t.Agg != ""
 }
 
-// IsComparison returns true if the term is a numeric comparison constraint
-// (e.g. ">0.25"), as opposed to a plain equality ground value.
+// IsComparison returns true if the term is a comparison constraint, numeric
+// (e.g. ">0.25") or a date against now ("<now-90d"), as opposed to a plain
+// equality ground value.
 func (t Term) IsComparison() bool {
 	return t.Cmp != ""
 }
@@ -135,14 +142,32 @@ var aggTermPattern = regexp.MustCompile(`^(count|sum|min|max)\((\$[A-Za-z_][A-Za
 // Two-character operators are listed first so they win the alternation.
 var cmpTermPattern = regexp.MustCompile(`^(>=|<=|!=|>|<)\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)$`)
 
+// nowTermPattern matches a date comparison with the evaluation time, e.g.
+// "<now-90d", ">=now-12h" or "<now". Units: d(ays), h(ours), m(inutes).
+var nowTermPattern = regexp.MustCompile(`^(>=|<=|>|<)\s*now(?:\s*-\s*(\d+)\s*([dhm]))?$`)
+
+var nowUnitSeconds = map[string]int64{"d": 86400, "h": 3600, "m": 60}
+
 // ParseTerm converts a raw value (from CUE or JSON) into a Term.
 // Strings starting with "$" are variables; "agg($Var)" (count/sum/min/max) are
 // aggregate variable terms; "OP number" (>, <, >=, <=, != with a numeric literal)
-// are comparison constraints. Everything else is a ground equality value.
+// are comparison constraints, and "OP now[-N(d|h|m)]" (>, <, >=, <=) compares a
+// date with the evaluation time. Everything else is a ground equality value.
 func ParseTerm(v interface{}) Term {
 	if s, ok := v.(string); ok {
 		if m := aggTermPattern.FindStringSubmatch(s); m != nil {
 			return Term{Variable: m[2], Agg: m[1]}
+		}
+		if m := nowTermPattern.FindStringSubmatch(s); m != nil {
+			var ago int64
+			if m[2] != "" {
+				n, err := strconv.ParseInt(m[2], 10, 64)
+				if err != nil {
+					return Term{Value: v} // out of range: a plain value
+				}
+				ago = n * nowUnitSeconds[m[3]]
+			}
+			return Term{Cmp: m[1], Value: s, Ago: &ago}
 		}
 		if m := cmpTermPattern.FindStringSubmatch(s); m != nil {
 			return Term{Cmp: m[1], Value: json.Number(m[2])}

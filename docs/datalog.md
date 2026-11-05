@@ -38,6 +38,21 @@ open_ssh: {
 - **Variables** that appear in several body atoms must bind to the same
   value; that is the join. Every head variable must appear in the body.
 - **Ground values** (`"INGRESS"`, `false`, `22`) match exactly.
+- **Comparisons** in a body argument filter instead of matching exactly:
+  `">0.25"`, `"<=10"`, `"!=80"` compare a number; `"<now-90d"`,
+  `">=now-12h"`, `"<now"` compare a date (an RFC 3339 string) with the
+  evaluation time minus days (`d`), hours (`h`) or minutes (`m`). The
+  evaluation time is the `--as-of` time of a time-travel query, else the
+  current time. A value that is not a date string never matches a date
+  comparison. Comparisons are body-only.
+
+  ```cue
+  // User-managed keys created more than 90 days ago.
+  stale_key: {
+  	head: {rel: "stale_key", args: {name: "$N"}}
+  	body: [{rel: "gcp_service_account_key", args: {name: "$N", valid_after: "<now-90d"}}]
+  }
+  ```
 - **Constant head arguments** become part of every derived row and can be
   filtered on: a head `{id: "$X", severity: "high"}` matches
   `pudl query flagged severity=high`.

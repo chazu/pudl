@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/chazu/pudl/internal/database"
 )
@@ -80,6 +81,13 @@ func CompileWithOptions(rule Rule, scope TemporalScope, opts CompileOptions) (*C
 				} else {
 					varExprs[term.Variable] = expr
 				}
+			} else if term.IsComparison() && term.Ago != nil {
+				// A date against the evaluation time (time-travel's as-of,
+				// else now). Only text compares: julianday reads a number as
+				// a Julian day, and makes a string that is not a date NULL,
+				// which matches nothing.
+				whereParts = append(whereParts, fmt.Sprintf("(typeof(%s) = 'text' AND julianday(%s) %s julianday(?, 'unixepoch'))", expr, expr, term.Cmp))
+				params = append(params, evaluationTime(scope)-*term.Ago)
 			} else if term.IsComparison() {
 				// Numeric comparison constraint, e.g. decayed_worth > 0.25. The
 				// operator is validated by cmpTermPattern, so it is safe to inline.
@@ -224,4 +232,13 @@ func sortedArgKeys(args map[string]Term) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// evaluationTime is the instant "now" means in a rule: the valid-time of a
+// time-travel query, else the current time (Unix seconds).
+func evaluationTime(scope TemporalScope) int64 {
+	if scope.ValidAt != nil {
+		return *scope.ValidAt
+	}
+	return time.Now().Unix()
 }
