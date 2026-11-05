@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,6 +29,9 @@ A compliance section lists each policy applicable to the entry's type with the
 resource's stored status (provisional when the type is a draft), its highest
 violation severity, and its violations (rule, severity, path, kind, declaring
 policy). --json includes it as "compliance".
+
+When records of other schemas describe the same resource (_pudl.same_resource),
+"Same resource as" lists them; --json includes them as "same_resource".
 
 The record follows under RAW DATA: stored JSON indented with its values
 unchanged, YAML re-rendered, other formats verbatim. Sensitive fields were
@@ -88,11 +92,11 @@ func runShowCommand(cmd *cobra.Command, args []string) error {
 	// --raw is the default and stays accepted.
 	includeData := !showMetaOnly
 	if jsonOutput {
-		return writeEntryJSON(*entry, showMetadata, includeData)
+		return writeEntryJSON(cmd.Context(), *entry, showMetadata, includeData)
 	}
 
 	// Display entry information
-	displayDetailedEntry(*entry, showMetadata, includeData)
+	displayDetailedEntry(cmd.Context(), *entry, showMetadata, includeData)
 	return nil
 }
 
@@ -120,7 +124,7 @@ func init() {
 }
 
 // displayDetailedEntry displays detailed information about a single entry
-func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeData bool) {
+func displayDetailedEntry(ctx context.Context, entry lister.ListEntry, includeMetadata, includeData bool) {
 	fmt.Fprintf(outw(), "Entry: %s\n", entry.Proquint)
 	fmt.Fprintf(outw(), "Hash: %s\n", entry.ID)
 	fmt.Fprintf(outw(), "Schema: %s\n", entry.Schema)
@@ -137,6 +141,7 @@ func displayDetailedEntry(entry lister.ListEntry, includeMetadata, includeData b
 		fmt.Fprintf(outw(), "⚠️  Low schema confidence - data may not match assigned schema\n")
 	}
 	printCompliance(entryCompliance(entry))
+	printSameResource(entrySameResource(ctx, entry))
 
 	// Show metadata if requested
 	if includeMetadata {

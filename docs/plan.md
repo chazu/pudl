@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Shared identity in graph export, show and doctor (2026-11-05)
+
+Linked records are one node in `pudl graph export` / pudl ui (with
+`representations`), and references to any member resolve to it. `pudl show`
+lists the other records under "Same resource as" (`same_resource` in
+`--json`). Doctor's "Shared Identity" check reports undeclared kinds and
+conflicts. Docs: schema authoring, datalog, pudl-core skill. See
+`implog/2026_11_05_shared_identity_consumers.md`. Closes `pudl-h7s.2`.
+
 ### Shared identity core (2026-11-05)
 
 Schemas declare cross-schema keys in `_pudl.same_resource`; projection writes

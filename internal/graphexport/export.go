@@ -62,13 +62,21 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		return nil, err
 	}
 	index := newRefIndex()
+	var items []builtResource
 	for _, entry := range entries {
 		if m, ok := in.Metadata(entry.Schema); ok && InternalTypes[m.ResourceType] {
 			continue
 		}
 		r, refs := buildResource(ctx, entry, in.Metadata, in.Load, observations, warn)
-		g.Resources = append(g.Resources, r)
-		index.add(r.ID, refs)
+		items = append(items, builtResource{r: r, refs: refs, origin: entry.Origin})
+	}
+	items, aliases := mergeGroups(items, loadGroups(ctx, in, items, scope, warn))
+	for _, it := range items {
+		g.Resources = append(g.Resources, it.r)
+		index.add(it.r.ID, it.refs)
+	}
+	for member, group := range aliases {
+		index.alias(member, group)
 	}
 	sort.Slice(g.Resources, func(i, j int) bool { return g.Resources[i].ID < g.Resources[j].ID })
 
