@@ -4,6 +4,12 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui: "only" next to each filter checkbox (2026-11-05)
+
+Scope and resource-type checkboxes each have an "only" button that isolates
+that item; clicked again ("all"), it shows everything. See
+`implog/2026_11_05_ui_only_filters.md`.
+
 ### GCP pack: GKE cluster keys and Kubernetes deployments (2026-11-05)
 
 GKE clusters declare `k8s.cluster` keys (public and DNS endpoints; private
