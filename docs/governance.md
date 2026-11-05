@@ -73,7 +73,8 @@ A failing `expect: "empty"` check reports its rows:
 - **witnesses**: up to 20 rows with their `arguments`, `owner` and any
   `waiver`. `count` is the total.
 - **findings**: every failing row (up to 1000), each with a stable `key`, a
-  change `state`, `first_seen` and `owner`.
+  change `state`, `first_seen`, `resource` and `owner`, whether or not it is
+  a witness or waived. Only witnesses also record their `arguments`.
 
 A failing `expect: "nonempty"` check has one finding with no arguments.
 

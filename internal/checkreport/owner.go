@@ -24,19 +24,38 @@ var (
 	entryArgs    = []string{"entry_id", "evidence_id", "observation_id"}
 )
 
-// AttributeOwners sets the owner of each witness, and of each finding whose
-// arguments were recorded, from the resource its arguments reference.
-// Findings without recorded arguments (beyond the witness limit) keep no
-// owner.
+// AttributeOwners sets the owner of each witness and each finding from the
+// resource its arguments reference. A finding MatchFindings made in this
+// evaluation is attributed from all of its arguments, recorded or not (past
+// the witness limit, or waived and so listed last); any other finding from
+// its recorded arguments.
 func AttributeOwners(results []CheckResult, ownerOf OwnerOf) {
 	for i := range results {
 		for j := range results[i].Witnesses {
 			results[i].Witnesses[j].Owner = ownerOfArgs(results[i].Witnesses[j].Arguments, ownerOf)
 		}
 		for j := range results[i].Findings {
-			results[i].Findings[j].Owner = ownerOfArgs(results[i].Findings[j].Arguments, ownerOf)
+			f := &results[i].Findings[j]
+			args := f.Arguments
+			if f.refs != nil {
+				args = f.refs
+			}
+			f.Owner = ownerOfArgs(args, ownerOf)
 		}
 	}
+}
+
+// ownerRefs keeps the arguments an owner is resolved from (see ownerOfArgs).
+func ownerRefs(args map[string]any) map[string]any {
+	refs := map[string]any{}
+	for _, keys := range [][]string{resourceArgs, entryArgs} {
+		for _, key := range keys {
+			if id, ok := args[key].(string); ok && id != "" {
+				refs[key] = id
+			}
+		}
+	}
+	return refs
 }
 
 func ownerOfArgs(args map[string]any, ownerOf OwnerOf) string {
