@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/chazu/pudl/internal/config"
 	"github.com/chazu/pudl/internal/database"
 	"github.com/chazu/pudl/internal/doctor"
 	"github.com/chazu/pudl/internal/repair"
@@ -89,7 +90,7 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 	}
 	report := doctorReport{ReportVersion: doctorReportVersion, Mode: doctorMode(), OK: true, Health: []healthDiagnostic{}, Catalog: []doctor.CatalogDiagnostic{}}
 	if doctorEntry == "" {
-		for _, check := range workspaceHealthChecks(effectivePudlDir()) {
+		for _, check := range workspaceHealthChecks(effectivePudlDir(), effectiveSchemaPath(nil)) {
 			result := check.CheckFunc()
 			report.Health = append(report.Health, healthDiagnostic{Name: check.Name, Status: result.Status, Message: result.Message, Details: result.Details, Fix: result.Fix})
 			if result.Status == "error" {
@@ -145,16 +146,29 @@ func runDoctorCommand(cmd *cobra.Command, args []string) error {
 }
 
 // checkCatalogEntries validates the catalog entries --entry, --schema and
-// --origin select against the workspace's schemas.
+// --origin select against the workspace's schemas. The catalog is the resolved
+// workspace's, the one every other catalog command opens.
 func checkCatalogEntries(ctx context.Context) ([]doctor.CatalogDiagnostic, *doctor.SecretReport, error) {
 	cfg, err := loadEffectiveConfig()
 	if err != nil {
 		return nil, nil, err
 	}
 	return doctor.CheckCatalogEntries(ctx, doctor.CatalogScan{
-		DataPath: cfg.DataPath, SchemaPaths: effectiveSchemaPaths(cfg), EntryID: doctorEntry,
+		PudlDir: effectivePudlDir(), SchemaPaths: effectiveSchemaPaths(cfg), EntryID: doctorEntry,
 		Filter: database.FilterOptions{Schema: doctorSchema, Origin: doctorOrigin},
 	})
+}
+
+// checkEffectiveConfig reports whether the workspace configuration loads (and,
+// in a repository workspace, keeps its paths under .pudl). The schema checks
+// take the resolved schema directory rather than reading config.yaml, so this
+// is where a broken configuration surfaces.
+func checkEffectiveConfig() *doctor.CheckResult {
+	path := config.ConfigPath(effectivePudlDir())
+	if _, err := loadEffectiveConfig(); err != nil {
+		return &doctor.CheckResult{Status: "error", Message: "Failed to load configuration", Details: err.Error(), Fix: "Check config file at " + path}
+	}
+	return &doctor.CheckResult{Status: "ok", Message: "Configuration loads", Details: path}
 }
 
 func printDoctorReport(report doctorReport) {
@@ -184,8 +198,12 @@ func printDoctorReport(report doctorReport) {
 	}
 }
 
-func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
+// workspaceHealthChecks checks the resolved workspace: pudlDir is its root and
+// schemaPath its schema directory, never the paths config.yaml records (they
+// are absolute, so a copied workspace would check the original's).
+func workspaceHealthChecks(pudlDir, schemaPath string) []doctor.HealthCheck {
 	return []doctor.HealthCheck{
+		{Name: "Configuration", CheckFunc: checkEffectiveConfig},
 		{
 			Name:      "Workspace Structure",
 			CheckFunc: func() *doctor.CheckResult { return doctor.CheckWorkspaceStructureAt(pudlDir) },
@@ -200,12 +218,12 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 		},
 		{
 			Name:      "Schema Repository",
-			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(pudlDir) },
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaRepositoryAt(schemaPath) },
 		},
 
 		{
 			Name:      "Git Repository",
-			CheckFunc: func() *doctor.CheckResult { return doctor.CheckGitRepositoryAt(pudlDir) },
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckGitRepositoryAt(pudlDir, schemaPath) },
 		},
 		{
 			Name:      "Directory Structure",
@@ -213,12 +231,12 @@ func workspaceHealthChecks(pudlDir string) []doctor.HealthCheck {
 		},
 		{
 			Name:      "Schema Namespace",
-			CheckFunc: func() *doctor.CheckResult { return doctor.CheckPudlNamespaceSchemasAt(pudlDir) },
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckPudlNamespaceSchemasAt(schemaPath) },
 		},
-		{Name: "Schema Loading", CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaLoadingAt(pudlDir) }},
+		{Name: "Schema Loading", CheckFunc: func() *doctor.CheckResult { return doctor.CheckSchemaLoadingAt(schemaPath) }},
 		{
 			Name:      "Identity Fields",
-			CheckFunc: func() *doctor.CheckResult { return doctor.CheckIdentityFieldConsistencyAt(pudlDir) },
+			CheckFunc: func() *doctor.CheckResult { return doctor.CheckIdentityFieldConsistencyAt(schemaPath) },
 		},
 		{
 			Name:      "Orphaned Files",

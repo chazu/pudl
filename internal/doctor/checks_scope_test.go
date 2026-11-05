@@ -27,14 +27,15 @@ func TestScopedChecksUseRepositoryPudlRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	schemaPath := filepath.Join(pudlDir, "schema")
 	checks := map[string]*doctor.CheckResult{
 		"workspace": doctor.CheckWorkspaceStructureAt(pudlDir),
 		"database":  doctor.CheckDatabaseIntegrityAt(pudlDir),
-		"schema":    doctor.CheckSchemaRepositoryAt(pudlDir),
-		"git":       doctor.CheckGitRepositoryAt(pudlDir),
+		"schema":    doctor.CheckSchemaRepositoryAt(schemaPath),
+		"git":       doctor.CheckGitRepositoryAt(pudlDir, schemaPath),
 		"layout":    doctor.CheckDirectoryStructureAt(pudlDir),
-		"namespace": doctor.CheckPudlNamespaceSchemasAt(pudlDir),
-		"identity":  doctor.CheckIdentityFieldConsistencyAt(pudlDir),
+		"namespace": doctor.CheckPudlNamespaceSchemasAt(schemaPath),
+		"identity":  doctor.CheckIdentityFieldConsistencyAt(schemaPath),
 		"orphans":   doctor.CheckOrphanedFilesAt(pudlDir),
 	}
 	for name, result := range checks {
