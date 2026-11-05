@@ -4,6 +4,22 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP graph: eight more edges on fact rewrites (2026-11-04)
+
+Fact args take `rewrite: [{match, replace}]` (first matching RE2 rule
+reshapes the value; no match, no fact). The GCP pack adds key → key ring,
+GKE node pool → service account, route → next hop, push subscription →
+Cloud Run, bucket/Cloud SQL → CMEK key, IAM policy → resource, SA key →
+account and Cloud Run → image. See
+`implog/2026_11_04_gcp_graph_edges_rewrite.md`. Closes `pudl-q4v.11` to
+`.17` and `.19`.
+
+### doctor checks the resolved workspace (2026-11-04)
+
+`pudl doctor` reads the catalog and schemas of the workspace it runs in, not
+the absolute paths in `config.yaml`. See
+`implog/2026_11_04_doctor_resolved_workspace.md`. Closes `pudl-gvh`.
+
 ### Repository runs pudl globally (2026-11-04)
 
 The repository's own `.pudl/` workspace is removed from Git and ignored;
