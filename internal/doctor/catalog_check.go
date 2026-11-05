@@ -30,11 +30,14 @@ type CatalogDiagnostic struct {
 	InferenceChecked bool   `json:"inference_checked"`
 }
 
-// CatalogScan selects what CheckCatalogEntries checks: the catalog beside
-// DataPath, validated against the schemas in SchemaPaths, either one entry
-// (EntryID, by proquint or full ID) or every entry Filter selects.
+// CatalogScan selects what CheckCatalogEntries checks: the catalog of the
+// resolved workspace rooted at PudlDir, validated against the schemas in
+// SchemaPaths, either one entry (EntryID, by proquint or full ID) or every
+// entry Filter selects. PudlDir is the workspace root the other catalog
+// commands open, not config.yaml's data_path: that path is absolute, so a
+// copied workspace would otherwise scan the original's catalog.
 type CatalogScan struct {
-	DataPath    string
+	PudlDir     string
 	SchemaPaths []string
 	EntryID     string
 	Filter      database.FilterOptions
@@ -49,7 +52,7 @@ func CheckCatalogEntries(ctx context.Context, scan CatalogScan) ([]CatalogDiagno
 		ctx = context.Background()
 	}
 	entryID, filter := scan.EntryID, scan.Filter
-	catalogRoot := filepath.Dir(scan.DataPath)
+	catalogRoot := scan.PudlDir
 	if _, err := os.Stat(filepath.Join(catalogRoot, "data", "sqlite", "catalog.db")); os.IsNotExist(err) && entryID == "" {
 		return []CatalogDiagnostic{}, &SecretReport{FactsScanned: true, Findings: []SecretFinding{}}, nil
 	}

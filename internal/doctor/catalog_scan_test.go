@@ -12,7 +12,7 @@ import (
 
 func TestCheckCatalogEntriesWithoutACatalog(t *testing.T) {
 	dir := t.TempDir()
-	entries, secrets, err := CheckCatalogEntries(context.Background(), CatalogScan{DataPath: filepath.Join(dir, "data")})
+	entries, secrets, err := CheckCatalogEntries(context.Background(), CatalogScan{PudlDir: dir})
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 	require.NotNil(t, secrets)
