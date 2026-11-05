@@ -34,6 +34,7 @@ _gcpAssetTypes: {
 	"gke-clusters":     "container.googleapis.com/Cluster"
 	"run-services":     "run.googleapis.com/Service"
 	"pubsub-topics":    "pubsub.googleapis.com/Topic"
+	"pubsub-subscriptions": "pubsub.googleapis.com/Subscription"
 	"service-accounts": "iam.googleapis.com/ServiceAccount"
 	"dns-zones":        "dns.googleapis.com/ManagedZone"
 	"kms-keyrings":     "cloudkms.googleapis.com/KeyRing"
@@ -208,15 +209,17 @@ _gcpShapes: {
 	}
 }
 
-// Pub/Sub subscriptions (gcloud only for now): the push endpoint is redacted
-// when stored (it can carry a token), so the shape adds its origin, scheme
-// and host without credentials, path or query, which names the Cloud Run
-// service a subscription delivers to.
+// Pub/Sub subscriptions: the push endpoint is redacted when stored (it can
+// carry a token), so the shape adds its origin, scheme and host without
+// credentials, path or query, which names the Cloud Run service a
+// subscription delivers to. CAI omits state (delivery status) and
+// topicMessageRetentionDuration (the topic's setting), which gcloud prints;
+// the shape drops both (live parity, 2026-11-05: otherwise identical).
 _gcpShapes: "pubsub-subscriptions": {
 	in: {...}
 	let r = in
 	out: {
-		for k, v in r if k != "pushConfig" {(k): v}
+		for k, v in r if !list.Contains(["pushConfig", "state", "topicMessageRetentionDuration"], k) {(k): v}
 		if r.pushConfig != _|_ {
 			pushConfig: {
 				for k, v in r.pushConfig {(k): v}
