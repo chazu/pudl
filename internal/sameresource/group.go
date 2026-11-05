@@ -1,6 +1,10 @@
 package sameresource
 
-import "sort"
+import (
+	"maps"
+	"slices"
+	"sort"
+)
 
 // Link is one same_resource row: resources A and B represent one resource of
 // Kind.
@@ -84,7 +88,7 @@ func Build(links []Link, namespaceOf func(resourceID string) string) ([]Group, [
 	var conflicts []Conflict
 	for root, ids := range members {
 		sort.Strings(ids)
-		kindList := sortedKeys(kinds[root])
+		kindList := slices.Sorted(maps.Keys(kinds[root]))
 		if dup := duplicateNamespaces(ids, namespaceOf); len(dup) > 0 {
 			conflicts = append(conflicts, Conflict{Members: ids, Kinds: kindList, Namespaces: dup})
 			continue
@@ -118,13 +122,4 @@ func duplicateNamespaces(ids []string, namespaceOf func(string) string) map[stri
 		return nil
 	}
 	return dup
-}
-
-func sortedKeys(set map[string]bool) []string {
-	out := make([]string, 0, len(set))
-	for k := range set {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
