@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Service account key checks; datalog "now" comparisons (2026-11-04)
+
+Rule bodies can compare a date with the evaluation time (`"<now-90d"`,
+`--as-of` aware). New GCP family `gcp-iam-hygiene-checks`: user-managed keys
+older than 90 days (fail) and keys that never expire (warn). See
+`implog/2026_11_04_sa_key_age_checks.md`. Closes `pudl-q4v.20`.
+
 ### Content packs leave examples/ (2026-11-04)
 
 The AWS and GCP packs moved to `packs/` and install with `pudl pack install

@@ -14,9 +14,9 @@ import (
 //                       searches Cloud Asset Inventory first;
 //   gcp-fixture-<type>  reads the bundled fixtures in .pudl/populators/gcp
 //                       (a CAI search result under cai/ first, likewise).
-// Three checks-only families evaluate the latest collector observations:
-//   gcp[-fixture]-network-hygiene-checks, -data-protection-checks and
-//   -gke-posture-checks.
+// Four checks-only families evaluate the latest collector observations:
+//   gcp[-fixture]-network-hygiene-checks, -data-protection-checks,
+//   -gke-posture-checks and -iam-hygiene-checks.
 // Run a family together with its collectors, which it depends on, e.g.
 //   pudl check gcp-firewalls gcp-addresses gcp-routers gcp-network-hygiene-checks
 

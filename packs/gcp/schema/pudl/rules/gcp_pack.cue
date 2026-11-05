@@ -135,3 +135,25 @@ gcp_depends_on_network_dns: {
 		{rel: "gcp_dns_zone", args: {entry_id: "$E", name: "$R"}},
 	]
 }
+
+// ---- Service account keys (iam-hygiene) ----
+// Enabled user-managed keys created more than 90 days ago: rotate them
+// (CIS GCP 1.7). "now" is the evaluation time, or the --as-of time.
+gcp_sa_key_older_than_90d: {
+	head: {rel: "gcp_sa_key_older_than_90d", args: {key: "$N", account: "$A"}}
+	body: [
+		{rel: "gcp_service_account_key", args: {entry_id: "$E", name: "$N", valid_after: "<now-90d", disabled: false}},
+		{rel: "gcp_service_account_key_account", args: {entry_id: "$E", email: "$A"}},
+	]
+}
+
+// Enabled user-managed keys that never expire (validBeforeTime is GCP's
+// far-future sentinel): set an expiry, e.g. with the organization policy
+// constraints/iam.serviceAccountKeyExpiryHours.
+gcp_sa_key_never_expires: {
+	head: {rel: "gcp_sa_key_never_expires", args: {key: "$N", account: "$A"}}
+	body: [
+		{rel: "gcp_service_account_key", args: {entry_id: "$E", name: "$N", valid_before: "9999-12-31T23:59:59Z", disabled: false}},
+		{rel: "gcp_service_account_key_account", args: {entry_id: "$E", email: "$A"}},
+	]
+}

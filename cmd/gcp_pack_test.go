@@ -19,7 +19,7 @@ var gcpPackTypes = []string{
 	"container-images",
 }
 
-var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture"}
+var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}
 
 // packCheck is the part of a member report's check result the test reads.
 type packCheck struct {
@@ -149,6 +149,16 @@ func TestGCPContentPack(t *testing.T) {
 	key := requireCheck(t, gke, "secrets-key-unusable", "fail", 1)
 	require.Equal(t, []string{"old-etcd-key"}, witnessArgs(key, "key"))
 
+	// The 2022 key that never expires; the ops key is disabled.
+	iam := families["iam-hygiene"]
+	const legacyCI = "legacy-ci@example-project.iam.gserviceaccount.com"
+	old := requireCheck(t, iam, "sa-key-older-than-90d", "fail", 1)
+	require.Equal(t, []string{legacyCI}, witnessArgs(old, "account"))
+	require.Equal(t, "fail", old.Severity)
+	never := requireCheck(t, iam, "sa-key-never-expires", "fail", 1)
+	require.Equal(t, []string{legacyCI}, witnessArgs(never, "account"))
+	require.Equal(t, "warn", never.Severity)
+
 	r = runCLI(t, "policy", "evaluate", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var evaluated struct {
@@ -225,6 +235,8 @@ func TestGCPContentPack(t *testing.T) {
 		"sql-instances": {"legacy-mysql", "reporting-db", "analytics-mysql"},
 		"kms-keys":      {"legacy-key", "old-etcd-key"},
 		"gke-clusters":  {"legacy-public", "batch-private"},
+		// legacy-ci's 2022 key that never expires.
+		"service-account-keys": {"0a1b2c3d4e5f60718293a4b5c6d7e8f901234567"},
 	})
 	families = checkGCPPack(t, 0)
 	for family, checks := range families {
