@@ -18,6 +18,8 @@ var gcpPackTypes = []string{
 	"service-accounts", "iam-policies", "iam-roles", "service-account-keys",
 	"container-images", "k8s-deployments",
 	"organizations", "folders", "org-policies", "firewall-policies", "binauthz-policies", "services",
+	"forwarding-rules", "target-http-proxies", "target-https-proxies", "url-maps", "backend-services", "healthchecks",
+	"http-healthchecks", "network-endpoint-groups", "ssl-certificates", "ssl-policies", "security-policies", "dns-record-sets",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}

@@ -1,0 +1,39 @@
+[
+  {
+    "kind": "compute#sslCertificate",
+    "id": "1000000303738576",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "shop-cert",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/sslCertificates/shop-cert",
+    "type": "MANAGED",
+    "managed": {
+      "domains": [
+        "shop.example.com"
+      ],
+      "status": "ACTIVE",
+      "domainStatus": {
+        "shop.example.com": "ACTIVE"
+      }
+    },
+    "subjectAlternativeNames": [
+      "shop.example.com"
+    ],
+    "expireTime": "2027-01-15T10:00:00.000-08:00"
+  },
+  {
+    "kind": "compute#sslCertificate",
+    "id": "1000001399589048",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "legacy-cert",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/sslCertificates/legacy-cert",
+    "type": "SELF_MANAGED",
+    "subjectAlternativeNames": [
+      "legacy.example.com"
+    ],
+    "expireTime": "2026-02-01T00:00:00.000-08:00",
+    "certificate": "-----BEGIN CERTIFICATE-----\nZXhhbXBsZSBjZXJ0aWZpY2F0ZQ==\n-----END CERTIFICATE-----\n",
+    "selfManaged": {
+      "certificate": "-----BEGIN CERTIFICATE-----\nZXhhbXBsZSBjZXJ0aWZpY2F0ZQ==\n-----END CERTIFICATE-----\n"
+    }
+  }
+]

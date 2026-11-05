@@ -1,0 +1,90 @@
+[
+  {
+    "kind": "compute#backendService",
+    "id": "1000003523437061",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "web-backend",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/web-backend",
+    "loadBalancingScheme": "EXTERNAL_MANAGED",
+    "protocol": "HTTPS",
+    "port": 443,
+    "portName": "https",
+    "timeoutSec": 30,
+    "fingerprint": "R0NMLWZwLTA=",
+    "backends": [
+      {
+        "group": "https://www.googleapis.com/compute/v1/projects/example-project/zones/us-central1-a/networkEndpointGroups/web-neg-a",
+        "balancingMode": "RATE",
+        "maxRatePerEndpoint": 100,
+        "capacityScaler": 1
+      }
+    ],
+    "healthChecks": [
+      "https://www.googleapis.com/compute/v1/projects/example-project/global/healthChecks/web-hc"
+    ],
+    "securityPolicy": "https://www.googleapis.com/compute/v1/projects/example-project/global/securityPolicies/edge-armor",
+    "iap": {
+      "enabled": true,
+      "oauth2ClientId": "000000000000-example.apps.googleusercontent.com",
+      "oauth2ClientSecretSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "customRequestHeaders": [
+      "X-Edge-Token: example-not-a-secret"
+    ],
+    "logConfig": {
+      "enable": true,
+      "sampleRate": 1
+    },
+    "usedBy": [
+      {
+        "reference": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-map"
+      },
+      {
+        "reference": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-redirect"
+      }
+    ]
+  },
+  {
+    "kind": "compute#backendService",
+    "id": "1000003769212519",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "orders-backend",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/backendServices/orders-backend",
+    "loadBalancingScheme": "EXTERNAL_MANAGED",
+    "protocol": "HTTPS",
+    "timeoutSec": 30,
+    "fingerprint": "R0NMLWZwLTA=",
+    "backends": [
+      {
+        "group": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/networkEndpointGroups/orders-neg",
+        "balancingMode": "UTILIZATION",
+        "capacityScaler": 1
+      }
+    ],
+    "usedBy": [
+      {
+        "reference": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-map"
+      }
+    ]
+  },
+  {
+    "kind": "compute#backendService",
+    "id": "1000000292549865",
+    "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+    "name": "internal-api",
+    "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/backendServices/internal-api",
+    "region": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1",
+    "loadBalancingScheme": "INTERNAL",
+    "protocol": "TCP",
+    "fingerprint": "R0NMLWZwLTA=",
+    "healthChecks": [
+      "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/healthChecks/ilb-hc"
+    ],
+    "network": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+    "usedBy": [
+      {
+        "reference": "https://www.googleapis.com/compute/v1/projects/example-project/regions/us-central1/forwardingRules/internal-api-fr"
+      }
+    ]
+  }
+]

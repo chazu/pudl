@@ -428,6 +428,28 @@ alone.
     organization). Their shapes follow the API: `etag` dropped from policy
     and spec; compute `kind` and `fingerprint` as for other compute types.
 
+- **Batch (b), 2026-11-05 (`pudl-q4v.7`).** Load balancing (forwarding
+  rules, target HTTP(S) proxies, URL maps, backend services, health checks
+  and legacy HTTP health checks, network endpoint groups, SSL certificates
+  and policies) and Cloud Armor policies, each on CAI with a gcloud
+  fallback; DNS record sets through gcloud only. The surveyed organization
+  has no VPN, interconnect, target pool or TCP/SSL proxy assets.
+  - Live parity: CAI equals gcloud except `kind`, `fingerprint`, backend
+    services' `usedBy` order, forwarding rules' gcloud-only
+    `attachedExtensions`, a health check region URL CAI spells
+    `compute/v2`, and Cloud Armor rules' gcloud-only `kind`. The shapes
+    normalize these; end to end, gcloud stores no new records for any of
+    the eleven types.
+  - DNS record sets: CAI's `dns.googleapis.com/ResourceRecordSet` holds
+    only records of GKE's cluster-scoped DNS zones (located zones named by
+    number: pod and service records), none of a project's managed zones.
+    The pack collects record sets with gcloud per zone and does not
+    catalog the cluster-scoped ones.
+  - gcloud's aggregated list commands (every compute list that spans
+    regions) exit 0 with a stderr warning when a project refuses the list,
+    so the project reads as empty (`pudl-zbj`). Global-only lists (legacy
+    HTTP health checks, managed zones) fail properly.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:

@@ -1,0 +1,51 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/securityPolicies/edge-armor",
+    "assetType": "compute.googleapis.com/SecurityPolicy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000000490414721",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "edge-armor",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/securityPolicies/edge-armor",
+          "type": "CLOUD_ARMOR",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "description": "Edge rules for the shop",
+          "rules": [
+            {
+              "priority": 1000,
+              "action": "deny(403)",
+              "preview": false,
+              "description": "Block a scanner range",
+              "match": {
+                "versionedExpr": "SRC_IPS_V1",
+                "config": {
+                  "srcIpRanges": [
+                    "198.51.100.0/24"
+                  ]
+                }
+              }
+            },
+            {
+              "priority": 2147483647,
+              "action": "allow",
+              "preview": false,
+              "description": "default rule",
+              "match": {
+                "versionedExpr": "SRC_IPS_V1",
+                "config": {
+                  "srcIpRanges": [
+                    "*"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

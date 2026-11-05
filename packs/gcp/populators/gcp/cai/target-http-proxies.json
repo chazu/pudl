@@ -1,0 +1,20 @@
+[
+  {
+    "name": "//compute.googleapis.com/projects/example-project/global/targetHttpProxies/web-http-proxy",
+    "assetType": "compute.googleapis.com/TargetHttpProxy",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1000000441185390",
+          "creationTimestamp": "2024-04-02T09:00:00.000-07:00",
+          "name": "web-http-proxy",
+          "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/targetHttpProxies/web-http-proxy",
+          "fingerprint": "Q0FJLWZwLTA=",
+          "urlMap": "https://www.googleapis.com/compute/v1/projects/example-project/global/urlMaps/web-redirect"
+        }
+      }
+    ]
+  }
+]
