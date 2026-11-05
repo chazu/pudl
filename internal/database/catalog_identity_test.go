@@ -239,3 +239,45 @@ func TestInsertEntryWithIdentityColumns(t *testing.T) {
 		t.Errorf("version mismatch: expected %d, got %v", version, retrieved.Version)
 	}
 }
+
+// UpdateEntryIdentity versions an entry moving into another resource as that
+// resource's next version, and leaves the version of one that stays put.
+func TestUpdateEntryIdentityVersionsTheMovedEntry(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	add := func(id, resourceID string, version int) {
+		t.Helper()
+		if err := db.AddEntry(CatalogEntry{
+			ID: id, StoredPath: filepath.Join("test", id+".json"), ImportTimestamp: time.Now(),
+			Format: "json", Origin: "test", Schema: "pudl/core.#Item", RecordCount: 1,
+			ResourceID: &resourceID, Version: &version,
+		}); err != nil {
+			t.Fatalf("failed to add entry: %v", err)
+		}
+	}
+	versionOf := func(id string) int {
+		t.Helper()
+		entry, err := db.GetEntry(id)
+		if err != nil {
+			t.Fatalf("GetEntry failed: %v", err)
+		}
+		return *entry.Version
+	}
+	add("held-1", "resource", 1)
+	add("held-2", "resource", 2)
+	add("alone", "content-only", 1)
+
+	if err := db.UpdateEntryIdentity("alone", "resource", `{"name":"x"}`); err != nil {
+		t.Fatalf("UpdateEntryIdentity failed: %v", err)
+	}
+	if got := versionOf("alone"); got != 3 {
+		t.Errorf("moved entry version = %d, want 3", got)
+	}
+	if err := db.UpdateEntryIdentity("held-1", "resource", `{"name":"x"}`); err != nil {
+		t.Fatalf("UpdateEntryIdentity failed: %v", err)
+	}
+	if got := versionOf("held-1"); got != 1 {
+		t.Errorf("entry staying in its resource changed version to %d", got)
+	}
+}

@@ -33,7 +33,7 @@ func newImportSession() (*importSession, error) {
 		return nil, errors.NewConfigError("Failed to load configuration", err)
 	}
 
-	imp, err := importer.NewEnhancedImporterWithSchemaPaths(cfg.DataPath, effectivePudlDir(), effectiveSchemaPaths(cfg)...)
+	imp, err := importer.NewEnhancedImporterWithSchemaPaths(effectiveDataDir(), effectivePudlDir(), effectiveSchemaPaths(cfg)...)
 	if err != nil {
 		if os.Getenv("PUDL_DEBUG") != "" {
 			fmt.Fprintf(errw(), "DEBUG: Enhanced importer error: %+v\n", err)

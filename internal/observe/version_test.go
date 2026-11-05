@@ -98,3 +98,39 @@ func TestIngestObserve_ChangedRecordIsNextVersion(t *testing.T) {
 	}
 	assert.Equal(t, []int{1, 2, 3, 4}, got)
 }
+
+// An unchanged record first stored without an identity, re-observed once its
+// schema identifies it, joins the identified resource as that resource's next
+// version, not with the version it held alone (pudl-xr6: it kept version 1
+// beside the resource's own version 1).
+func TestIngestObserve_IdentifiedRecordIsNextVersionOfItsResource(t *testing.T) {
+	db, dataDir := setupIngestTestDB(t)
+	defer db.Close()
+	identified := identityInferrer(t)
+	ingest := func(snapshotID, input string, inferrer *inference.SchemaInferrer) {
+		in := ObserveIngest{Reader: strings.NewReader(input), DataDir: dataDir, SnapshotID: snapshotID}
+		if inferrer != nil {
+			in.Graph, in.Inferrer = inferrer.GetInheritanceGraph(), inferrer
+		}
+		_, err := IngestObserve(db, in)
+		require.NoError(t, err)
+	}
+
+	ingest("snap_1", thingObservation("a"), identified)
+	// No schemas loaded: "b" is stored without an identity, alone at version 1.
+	ingest("snap_2", thingObservation("b"), nil)
+	// Re-observed with its schema: "b" gains thing-1's identity.
+	ingest("snap_3", thingObservation("b"), identified)
+
+	versions := versionsOf(t, db)
+	require.Len(t, versions, 2)
+	got := map[string]int{}
+	for content, version := range versions {
+		for _, v := range []string{"a", "b"} {
+			if strings.Contains(content, fmt.Sprintf(`"value":%q`, v)) {
+				got[v] = version
+			}
+		}
+	}
+	assert.Equal(t, map[string]int{"a": 1, "b": 2}, got)
+}

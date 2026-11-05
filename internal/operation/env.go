@@ -76,6 +76,11 @@ type Workspace struct {
 	TrackTempDir func(dir string) (release func())
 }
 
+// DataDir is the workspace's raw-payload and metadata directory, beneath
+// PudlDir. config.yaml's data_path is not consulted: the global configuration
+// records absolute paths, which in a copied workspace name the original's data.
+func (w Workspace) DataDir() string { return config.DataDir(w.PudlDir) }
+
 // Projections resolves `_pudl.facts` specs over the workspace's schemas.
 func (w Workspace) Projections() (*projection.Registry, error) {
 	cfg, err := w.LoadConfig()

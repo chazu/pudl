@@ -52,16 +52,9 @@ Examples:
 func runShowCommand(cmd *cobra.Command, args []string) error {
 	entryID := args[0]
 
-	// Load configuration to get data directory
-	cfg, err := loadEffectiveConfig()
+	l, err := openWorkspaceLister()
 	if err != nil {
-		return err // Already a PUDLError from loadEffectiveConfig()
-	}
-
-	// Create lister to find the entry
-	l, err := lister.New(cfg.DataPath)
-	if err != nil {
-		return errors.NewSystemError("Failed to initialize lister", err)
+		return err
 	}
 	defer l.Close()
 
