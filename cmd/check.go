@@ -54,7 +54,8 @@ cannot establish their absence. With --fail-on new, fail-severity check
 failures fail the command (or exit 2) only when one of them is new.
 
 Each finding names its resource's owner, derived from the schema's
-_pudl.owner declaration; human output groups findings by owner. --owner TEAM
+_pudl.owner declaration; human output counts each check's findings by project
+and owner, and lists resources several checks found once. --owner TEAM
 prints only TEAM's findings (a failed check without one is left out); it does
 not narrow the recorded report, its counts or the exit status.
 

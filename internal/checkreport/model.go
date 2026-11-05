@@ -165,6 +165,7 @@ func (r *ModelReport) Markdown() string {
 		fmt.Fprintf(&b, "\n### drift\n")
 		r.Drift.WriteMarkdown(&b)
 	}
+	shared := sharedResources(r.Checks)
 	if len(r.Checks) > 0 {
 		fmt.Fprintf(&b, "\n### checks\n")
 		for _, c := range r.Checks {
@@ -173,7 +174,7 @@ func (r *ModelReport) Markdown() string {
 				for _, d := range c.Diagnostics {
 					fmt.Fprintf(&b, "    - %s: %s\n", d.Code, d.Message)
 				}
-				WriteChanges(&b, c)
+				writeChanges(&b, c, shared)
 				continue
 			}
 			switch {
@@ -187,15 +188,16 @@ func (r *ModelReport) Markdown() string {
 				fmt.Fprintf(&b, "  - ✗ %s [%s] — %d match(es): %s\n", c.Name, c.Severity, c.Count, c.Message)
 			}
 			if c.Changes == nil {
-				WriteFindings(&b, c)
+				writeFindings(&b, c, shared)
 				continue
 			}
 			if !c.Passed && c.Expect == "nonempty" {
 				writeNoEvidence(&b, c)
 			}
-			WriteChanges(&b, c)
+			writeChanges(&b, c, shared)
 		}
 	}
+	writeSharedResources(&b, r.Checks, shared)
 	writeWaivers(&b, r.Waivers)
 	return b.String()
 }

@@ -36,6 +36,12 @@ func AttributeOwners(results []CheckResult, ownerOf OwnerOf) {
 		}
 		for j := range results[i].Findings {
 			f := &results[i].Findings[j]
+			if f.ResourceID != "" {
+				if owner := ownerOf([]string{f.ResourceID}, nil); owner != "" {
+					f.Owner = owner
+					continue
+				}
+			}
 			args := f.Arguments
 			if f.refs != nil {
 				args = f.refs
@@ -45,14 +51,13 @@ func AttributeOwners(results []CheckResult, ownerOf OwnerOf) {
 	}
 }
 
-// ownerRefs keeps the arguments an owner is resolved from (see ownerOfArgs).
-func ownerRefs(args map[string]any) map[string]any {
+// stringArgs keeps a match's non-empty string arguments: the values a
+// resource or owner can be resolved from.
+func stringArgs(args map[string]any) map[string]any {
 	refs := map[string]any{}
-	for _, keys := range [][]string{resourceArgs, entryArgs} {
-		for _, key := range keys {
-			if id, ok := args[key].(string); ok && id != "" {
-				refs[key] = id
-			}
+	for key, value := range args {
+		if s, ok := value.(string); ok && s != "" {
+			refs[key] = s
 		}
 	}
 	return refs

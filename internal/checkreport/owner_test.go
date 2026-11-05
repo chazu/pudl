@@ -108,8 +108,9 @@ func TestFindingsCarryOwners(t *testing.T) {
 
 	var b strings.Builder
 	WriteChanges(&b, c)
-	assert.Contains(t, b.String(), "    - owner orders:\n      - new {\"resource\":\"r-orders\"}")
-	assert.Contains(t, b.String(), "    - owner payments:\n      - new {\"entry_id\":\"e-payments\"}")
+	assert.Contains(t, b.String(), "    - by owner: orders 1, payments 1\n"+
+		"    - new {\"resource\":\"r-orders\"}\n"+
+		"    - new {\"entry_id\":\"e-payments\"}\n", "owners are counted; findings are one flat list")
 
 	report := (&ModelReport{Checks: []CheckResult{c}}).ForOwner("payments")
 	require.Len(t, report.Checks, 1)

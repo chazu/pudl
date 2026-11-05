@@ -123,14 +123,28 @@ func resourceOf(args map[string]any) string {
 	return ""
 }
 
-// WriteFindings writes what a failed or waived check found: its witnesses,
-// each with the waiver it matched, or why a nonempty check has none.
+// WriteFindings writes what a failed or waived check found: how its findings
+// spread over projects and owners and each finding with the waiver it
+// matched, or why a nonempty check has none. A report without findings (an
+// older one) lists its witnesses instead.
 func WriteFindings(w io.Writer, result CheckResult) {
+	writeFindings(w, result, nil)
+}
+
+// writeFindings is WriteFindings leaving out findings whose resource the
+// model's shared section lists.
+func writeFindings(w io.Writer, result CheckResult, shared map[string]bool) {
 	if result.Passed {
 		return
 	}
 	if result.Expect == "nonempty" {
 		writeNoEvidence(w, result)
+		return
+	}
+	if len(result.Findings) > 0 {
+		writeFindingSummary(w, result.Findings)
+		writeFindingList(w, result.Findings, shared, witnessWaivers(result.Witnesses), false)
+		return
 	}
 	writeWitnesses(w, result.Witnesses)
 	if result.WitnessesTruncated {

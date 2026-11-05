@@ -74,9 +74,37 @@ A failing `expect: "empty"` check reports its rows:
   `waiver`. `count` is the total.
 - **findings**: every failing row (up to 1000), each with a stable `key`, a
   change `state`, `first_seen`, `resource` and `owner`, whether or not it is
-  a witness or waived. Only witnesses also record their `arguments`.
+  a witness or waived. Only witnesses also record their `arguments`. When one
+  of the row's values identifies a cataloged resource (its resource ID, or
+  the value of its single identity field, such as a selfLink or a key name),
+  the finding also records that resource's `resource_id`, `account` (GCP
+  project or AWS account, from its schema's `_pudl.graph.account`), `type`
+  and `name`. When several values do, the one that contains the others wins
+  (a key's name contains its service account's email).
 
 A failing `expect: "nonempty"` check has one finding with no arguments.
+
+The human report summarizes instead of listing every row:
+
+```text
+  - ✗ sa-key-older-than-90d [fail] — 12 match(es): Rotate user-managed …
+    - since run_…: 0 new, 12 persisting, 0 resolved, 0 unknown
+    - by project (7): prod-payments 3, prod-api 3, prod-data 2, test-a 1, test-b 1, … 2 more
+    - by owner: payments 3, (none) 9
+    - 12 also fail other checks; see resources failing several checks
+
+### resources failing several checks (12)
+  - prod-payments (3)
+    - key · 7c3e…: sa-key-older-than-90d, sa-key-never-expires
+```
+
+- **by project / by account**: how the check's current findings spread, the
+  five largest first; "(unknown)" counts findings with no resolved resource.
+- **by owner**: the same by owner, when any finding has one.
+- Each finding only this check found is listed by name (or its arguments, when
+  no resource is resolved), at most 10; `--json` lists the rest.
+- **resources failing several checks**: each resource that more than one
+  check found, once, with those checks, grouped by project.
 
 `pudl check` records one report per invocation, however many models it names.
 Read it again with `pudl report [ID]`. In `--json`, the report is
@@ -197,10 +225,10 @@ pudl report check_B --since check_A
 
 A type schema's `_pudl.owner` names each resource's team (see
 [owner](schema-authoring.md#owner)). pudl attributes a finding to the owner of
-the resource its arguments name: a resource ID (`resource_id`, `resource`,
-`target` or `name`), or else a catalog entry ID (`entry_id`, `evidence_id`,
-`observation_id`). A finding that names neither, such as one keyed by a
-selfLink, has no owner (`""` in JSON). A resolved finding keeps the owner its
+the cataloged resource one of its values identifies, else of the resource its
+arguments name: a resource ID (`resource_id`, `resource`, `target` or
+`name`), or else a catalog entry ID (`entry_id`, `evidence_id`,
+`observation_id`). A finding that names none has no owner (`""` in JSON). A resolved finding keeps the owner its
 earlier report recorded.
 
 ```bash
@@ -210,8 +238,10 @@ pudl query resource_unowned                     # resources nobody owns
 ```
 
 `--owner` filters what is printed; the recorded report, its counts and the
-exit status stay complete. Human output groups each check's findings by
-owner. To report unowned resources, add a check:
+exit status stay complete. Human output counts each check's findings by
+owner. A finding whose values identify a cataloged resource (see
+[Read the result](#read-the-result)) takes that resource's owner, so a
+finding keyed by a selfLink or a key name has one too. To report unowned resources, add a check:
 
 ```cue
 {name: "unowned", query: "resource_unowned", expect: "empty", severity: "warn",
