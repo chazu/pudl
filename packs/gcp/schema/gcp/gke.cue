@@ -20,10 +20,21 @@ package gcp
 			"masterAuth.password",
 			"masterAuth.clientKey",
 		]
+		// The cluster's API server, as a kube context names it (the
+		// Kubernetes pack's cluster record, later). Only keys unique to
+		// one cluster: the public IP and the DNS endpoint. Private
+		// endpoints repeat across VPCs (live check,
+		// 2026-11-05), and on a private cluster endpoint is the private
+		// IP, so neither is a key.
+		same_resource: [
+			{kind: "k8s.cluster", key: host: "privateClusterConfig.publicEndpoint"},
+			{kind: "k8s.cluster", key: host: "controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint"},
+		]
 		facts: {
 			gcp_gke_cluster: args: {
 				project:   "project"
 				name:      "name"
+				location:  "location"
 				self_link: "selfLink"
 				// networkConfig.subnetwork is in path form; the top-level
 				// subnetwork is a short name and does not join.

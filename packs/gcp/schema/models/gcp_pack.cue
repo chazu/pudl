@@ -82,6 +82,7 @@ _gcpSchemas: {
 	"iam-roles":            "gcp.#IAMRole"
 	"service-account-keys": "gcp.#ServiceAccountKey"
 	"container-images":     "gcp.#ContainerImage"
+	"k8s-deployments":      "gcp.#K8sDeployment"
 }
 
 // The gcloud list command of each per-project collector. Each prints every
@@ -155,6 +156,8 @@ _gcpRuns: {
 		argv: ["sh", "../../populators/gcp/container-images.sh", "{{item}}", "\(_gcpImageHistory)"]
 		set: project: "{{item}}"
 	}]
+	// CAI-only types (_gcpCAIOnly) have no gcloud runs.
+	for t, _ in _gcpCAIOnly {(t): []}
 }
 
 // Run timeouts of collectors whose runs can outlast the default (10m).
@@ -177,7 +180,7 @@ _gcpEmptyWhen: [
 // A collector's _gcloud source is its gcloud list commands; a type in
 // _gcpAssetTypes, and gcp-iam-policies (gcp_iam.cue), searches CAI first and
 // falls back to them. A gcloud source in _gcpPartialGcloud observes only
-// part of the type, incompletely.
+// part of the type, incompletely. A type in _gcpCAIOnly searches CAI only.
 _#GCPCollector: {
 	_type:   string
 	_prefix: string
@@ -185,7 +188,8 @@ _#GCPCollector: {
 	_gcloud: {...}
 	_cai: {...}
 	_iamPolicies: _type == "iam-policies"
-	_useCAI:      _gcpAssetScope != "off" && (_gcpAssetTypes[_type] != _|_ || _iamPolicies)
+	_caiOnly:     _gcpCAIOnly[_type] != _|_
+	_useCAI:      _caiOnly || (_gcpAssetScope != "off" && (_gcpAssetTypes[_type] != _|_ || _iamPolicies))
 	_partial:     _gcpPartialGcloud[_type] != _|_
 	sm.#SystemModel
 	name: "\(_prefix)\(_type)"
@@ -194,7 +198,10 @@ _#GCPCollector: {
 	if !_useCAI {
 		populate: _gcloud
 	}
-	if _useCAI {
+	if _caiOnly {
+		populate: _cai
+	}
+	if _useCAI && !_caiOnly {
 		populate: _cai & {fallback: {
 			when: [if _iamPolicies {_gcpIAMSearchUnavailable}, _gcpAssetUnavailable][0]
 			if _partial {
@@ -278,6 +285,7 @@ _#GCPFixture: _#GCPCollector & {
 #GCPIAMRoles: _#GCPLive & {_type: "iam-roles"}
 #GCPServiceAccountKeys: _#GCPLive & {_type: "service-account-keys"}
 #GCPContainerImages: _#GCPLive & {_type: "container-images"}
+#GCPK8sDeployments: _#GCPLive & {_type: "k8s-deployments"}
 #GCPFixtureNetworks: _#GCPFixture & {_type: "networks"}
 #GCPFixtureSubnets: _#GCPFixture & {_type: "subnets"}
 #GCPFixtureFirewalls: _#GCPFixture & {_type: "firewalls"}
@@ -299,3 +307,4 @@ _#GCPFixture: _#GCPCollector & {
 #GCPFixtureIAMRoles: _#GCPFixture & {_type: "iam-roles"}
 #GCPFixtureServiceAccountKeys: _#GCPFixture & {_type: "service-account-keys"}
 #GCPFixtureContainerImages: _#GCPFixture & {_type: "container-images"}
+#GCPFixtureK8sDeployments: _#GCPFixture & {_type: "k8s-deployments"}

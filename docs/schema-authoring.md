@@ -173,8 +173,8 @@ facts.
 		resource_type:   "gcp.container.cluster"
 		identity_fields: ["selfLink"]
 		same_resource: [
-			{kind: "k8s.cluster", key: host: "endpoint"},
-			{kind: "k8s.cluster", key: host: "privateClusterConfig.privateEndpoint"},
+			{kind: "k8s.cluster", key: host: "privateClusterConfig.publicEndpoint"},
+			{kind: "k8s.cluster", key: host: "controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint"},
 		]
 	}
 	...
@@ -200,7 +200,11 @@ facts.
 - A part that is missing, empty or not a scalar yields no key, so absent data
   never links.
 - List several keys for one kind when a resource answers to several names
-  (a cluster's public and private endpoints).
+  (a cluster's public and DNS endpoints).
+- A key must be unique to one real resource. Values that repeat across
+  unrelated resources, such as private IPs reused in different VPCs, would
+  link them; leave such fields out. Kubernetes objects key on
+  `metadata.uid` (`{kind: "k8s.object", key: uid: "metadata.uid"}`).
 - The nearest schema in the `base_schema` chain that declares
   `same_resource` wins. It needs `identity_fields`. Unknown fields, a
   malformed kind, an empty key and two `[*]` parts are load errors.

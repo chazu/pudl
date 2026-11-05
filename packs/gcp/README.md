@@ -67,6 +67,7 @@ stays complete.
 | `gcp-kms-keyrings` | `kms keyrings list --location=L` | `gcp.#KMSKeyRing` | `name` | `cloudkms.keyRings.list` (`roles/cloudkms.viewer`) |
 | `gcp-kms-keys` | `kms keys list` per key ring, via `kms-keys.sh` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
 | `gcp-container-images` | `artifacts repositories list`, `packages list`, then `docker images list --include-tags` per image, via `container-images.sh` | `gcp.#ContainerImage` | `name` (image path) | `artifactregistry.repositories.list`, `artifactregistry.packages.list`, `artifactregistry.versions.list`, `artifactregistry.tags.list` (`roles/artifactregistry.reader`) |
+| `gcp-k8s-deployments` | none: Cloud Asset Inventory only (`apps.k8s.io/Deployment`) | `gcp.#K8sDeployment` | `assetName` | `cloudasset.assets.searchAllResources` (`roles/cloudasset.viewer`) |
 
 `roles/viewer` covers every collector. Each service's API must be enabled in
 the project, or its collector fails.
@@ -87,8 +88,10 @@ references are kept), GKE node metadata (startup scripts) and legacy
 `masterAuth` credentials, Compute Engine instance metadata values (startup
 scripts, user-data, and `kube-env` on GKE nodes; the keys are kept, and the
 settings in `_gcpSafeMetadataKeys`, such as `enable-oslogin`, keep their
-values), and
-Pub/Sub push endpoints, which can embed tokens.
+values),
+Pub/Sub push endpoints, which can embed tokens, and Kubernetes deployments'
+container environment values and `kubectl.kubernetes.io/last-applied-configuration`
+annotation, which repeats them.
 
 The schemas are drafts. Compare each with your own gcloud output, then set
 `review: {status: "validated", by: "...", at: "YYYY-MM-DD"}`. Until then
@@ -254,6 +257,16 @@ as `disable-legacy-endpoints`, and lower-cases values), Cloud SQL instances
 `publicAccessPrevention` for some), and Pub/Sub subscriptions (not yet
 compared).
 
+Kubernetes deployments are collected through CAI only: gcloud cannot list
+Kubernetes objects, so `gcp-k8s-deployments` has no fallback and searches
+the organization even with `_gcpAssetScope: "off"`. GKE exports each
+cluster's objects to CAI. The record is the object (`metadata`, `spec`,
+`status`) with the `apiVersion` and `kind` CAI omits, and its project,
+location and cluster read from the asset name. `managedFields` is dropped.
+Objects in system namespaces (`kube-system`, `kube-public`,
+`kube-node-lease`, `gke-*`, `gmp-*`) are built-in defaults and are not
+collected.
+
 Container images are collected through gcloud only. CAI lists every image
 version as its own asset (tens of thousands in a large organization), while
 `gcp-container-images` keeps one record per image with only its newest
@@ -328,6 +341,7 @@ relationships (rules in `schema/pudl/rules/gcp_graph.cue`):
 | `pushes_to` | push subscription → the endpoint it delivers to, a Cloud Run service when its URL matches |
 | `runs_image` | Cloud Run service → the container image it runs (gcr.io references mapped to their Artifact Registry repositories) |
 | `iam_binding` | member → the IAM policy of the project or resource that grants it (role as a property) |
+| `in_cluster` | Kubernetes deployment → its GKE cluster (matched by project, location and name) |
 | `grants_on` | IAM policy → the resource it is attached to (project, bucket, compute resource, service account, topic, KMS key) |
 
 A reference to something the pack did not collect (a forwarding rule, a VPN
@@ -338,6 +352,24 @@ Registry have no edge. A push endpoint is redacted when stored; its origin
 (`pushConfig.pushEndpointOrigin`: scheme and host, no credentials, path or
 query) is kept to match it to a Cloud Run service. A service mapped to a
 custom domain does not match.
+
+### Same resource from other sources
+
+GKE clusters and Kubernetes deployments declare `_pudl.same_resource` keys,
+so their records link to records of the same cluster or object collected
+another way, such as a future Kubernetes pack reading kubectl:
+
+- `gcp.#GKECluster`: kind `k8s.cluster`, keyed by the API server host a
+  kube context names: `privateClusterConfig.publicEndpoint` and the DNS
+  endpoint (`controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint`).
+  Private endpoints are not keys: they repeat across VPCs, and on a private cluster
+  `endpoint` is the private IP. A kube context that reaches a cluster by its
+  private IP does not link.
+- `gcp.#K8sDeployment`: kind `k8s.object`, keyed by `metadata.uid`, the
+  object's Kubernetes UID, which any Kubernetes source reports.
+
+Linked records are one node in `pudl ui`; see
+[schema authoring](../../docs/schema-authoring.md#same_resource).
 
 ## Impact: what depends on this network
 

@@ -27,6 +27,13 @@ func TestSameResourceRelationsAreReserved(t *testing.T) {
 		t.Fatalf("current same_resource_key facts = %v", got)
 	}
 
+	// An evidence view re-projects a snapshot's records under the snapshot's source.
+	evidenceKey := key
+	evidenceKey.Source = SnapshotEvidenceSource("snap1")
+	if _, err := db.AddFact(evidenceKey); err != nil {
+		t.Fatalf("evidence view key rejected: %v", err)
+	}
+
 	link := Fact{Relation: SameResourceRelation, Args: `{"a":"x","b":"y","kind":"k8s.cluster"}`}
 	err := db.WithCatalogTx(func(tx *CatalogTx) error {
 		_, _, err := tx.ReconcileProjection(ProjectionSource("rid1"), []Fact{key, link}, ProjectionObservation)

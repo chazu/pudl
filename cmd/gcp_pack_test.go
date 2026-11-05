@@ -16,7 +16,7 @@ var gcpPackTypes = []string{
 	"gke-clusters", "sql-instances", "buckets", "run-services", "dns-zones",
 	"pubsub-topics", "pubsub-subscriptions", "kms-keyrings", "kms-keys", "instances",
 	"service-accounts", "iam-policies", "iam-roles", "service-account-keys",
-	"container-images",
+	"container-images", "k8s-deployments",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}
