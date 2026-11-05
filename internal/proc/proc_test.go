@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"bufio"
 	"context"
 	"os"
 	"path/filepath"
@@ -22,17 +23,27 @@ func fakeTool(t *testing.T, body string) string {
 
 // A cancelled tool is asked to stop with SIGTERM, so it can finish what it is
 // writing; Stopped reports the caller's cancellation.
+//
+// The tool reports on stdout once its TERM trap is installed, and the test
+// cancels only after reading that. Cancelling after a fixed delay raced the
+// tool's startup: under load the shell had not installed its trap yet, so
+// SIGTERM's default action killed it and no marker was written (pudl-o2u).
 func TestCommandCancelSendsSIGTERM(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "terminated")
-	tool := fakeTool(t, "trap 'echo term > "+marker+"; exit 143' TERM\nwhile :; do sleep 0.05; done\n")
+	tool := fakeTool(t, "trap 'echo term > "+marker+"; exit 143' TERM\necho ready\nwhile :; do sleep 0.05; done\n")
 
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		cancel()
-	}()
+	defer cancel()
+	command := Command(ctx, DefaultGrace, tool)
+	stdout, err := command.StdoutPipe()
+	require.NoError(t, err)
 	start := time.Now()
-	err := Command(ctx, DefaultGrace, tool).Run()
+	require.NoError(t, command.Start())
+	ready, err := bufio.NewReader(stdout).ReadString('\n')
+	require.NoError(t, err, "the tool reports that its trap is installed")
+	require.Equal(t, "ready\n", ready)
+	cancel()
+	err = command.Wait()
 	require.Error(t, err)
 	stopped := Stopped(ctx, ctx)
 	assert.True(t, Cancelled(stopped), "cancellation is reported as context.Canceled: %v", stopped)
