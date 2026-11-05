@@ -97,7 +97,9 @@ the next import/check/install applies it). Verified on the global catalog:
 every affected resource reprojected, the `gcp_sql_key` warning gone.
 
 `gcp_graph_topic_key` and `gcp_graph_subscription_dead_letter` (older rules
-on plain path args) warn the same way on real data; not changed here.
+on plain path args) warned the same way on real data; their args
+(`gcp_topic_key.key`, `gcp_subscription_dead_letter.topic`) are now rewrites
+too, covered by the same fact-count test.
 
 ## Follow-up: service account policies name the account by email
 

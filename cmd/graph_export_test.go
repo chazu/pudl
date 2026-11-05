@@ -292,7 +292,7 @@ func TestGraphExportGCPPack(t *testing.T) {
 	require.Contains(t, l.edges("in_key_ring"), ring+"/cryptoKeys/data-key -> "+ring)
 	// A rewritten arg whose field is absent yields no fact (a plain path arg
 	// would yield one without the arg, and a rule would see a null target).
-	for relation, want := range map[string]int{"gcp_route_next_hop": 1, "gcp_bucket_key": 1, "gcp_sql_key": 1, "gcp_subscription_push": 2} {
+	for relation, want := range map[string]int{"gcp_route_next_hop": 1, "gcp_bucket_key": 1, "gcp_sql_key": 1, "gcp_subscription_push": 2, "gcp_topic_key": 1, "gcp_subscription_dead_letter": 1} {
 		r := runCLI(t, "query", relation)
 		require.NoError(t, r.Err, r.Stdout+r.Stderr)
 		require.Equal(t, want, strings.Count(r.Stdout, `"resource_id":`), "%s: %s", relation, r.Stdout)

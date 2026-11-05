@@ -102,7 +102,8 @@ package gcp
 		graph: _gcpGraph & {name: {path: "name", last_segment: true}}
 		graph: display: {code: "TOPIC", label: "Pub/Sub topic", class: "messaging"}
 		// The customer-managed key messages are encrypted with, if any.
-		facts: gcp_topic_key: args: key: "kmsKeyName"
+		// (A rewrite, so a topic without one yields no fact.)
+		facts: gcp_topic_key: args: key: {path: "kmsKeyName", rewrite: [{match: "^(projects/.+/cryptoKeys/[^/]+)$", replace: "$1"}]}
 	}
 	project: _gcpProjectID
 	name:    =~"^projects/[^/]+/topics/[^/]+$" @pudl(match)
@@ -125,7 +126,8 @@ package gcp
 		graph: display: {code: "SUB", label: "Pub/Sub subscription", class: "messaging"}
 		facts: gcp_subscription_topic: args: topic: "topic"
 		// Where undeliverable messages are forwarded, if anywhere.
-		facts: gcp_subscription_dead_letter: args: topic: "deadLetterPolicy.deadLetterTopic"
+		// (A rewrite, so a subscription without one yields no fact.)
+		facts: gcp_subscription_dead_letter: args: topic: {path: "deadLetterPolicy.deadLetterTopic", rewrite: [{match: "^(projects/[^/]+/topics/[^/]+)$", replace: "$1"}]}
 		// Where a push subscription delivers, by origin; pull subscriptions
 		// yield no fact.
 		facts: gcp_subscription_push: args: endpoint: {path: "pushConfig.pushEndpointOrigin", rewrite: [{match: "^(https?://.+)$", replace: "$1"}]}
