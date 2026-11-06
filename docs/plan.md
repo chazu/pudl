@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Design: Pulumi pack (2026-11-06)
+
+Accepted design for linking live GCP and Kubernetes resources to the Pulumi
+stack, repo directory and commit that manage them. A new core source,
+`#HTTPObserve`, sends GET requests from CUE collectors, with a token guard
+and `reject_keys`. Only a read-only team token is accepted, and allow lists
+keep state secrets out. See `docs/design/2026-11-06-pulumi-pack.md`,
+`implog/2026_11_06_pulumi_pack_design.md`. Delivery is epic `pudl-7g8j`.
+
 ### pudl ui: usable on large inventories (2026-11-05)
 
 Partial mode opens on an overview of organizations, folders, accounts and
