@@ -55,7 +55,7 @@ func failedInputResults(target string, failed []populate.FailedInput) []observe.
 	for _, f := range failed {
 		out = append(out, observe.ObserveResult{
 			Target: fmt.Sprintf("%s[%d]", target, f.Run),
-			Error:  fmt.Sprintf("%s: exit %d: %s", f.Label(), f.ExitStatus, f.Error),
+			Error:  failedInputError(f),
 		})
 	}
 	return out
@@ -83,4 +83,13 @@ func markFailedInputChecks(results []checkreport.CheckResult, pr *checkreport.Po
 		c.Outcome, c.Passed = "unknown", false
 		c.Diagnostics = append(c.Diagnostics, diagnostic)
 	}
+}
+
+// failedInputError describes a failed input: an HTTP run by its error, a
+// command by its exit status and error.
+func failedInputError(f populate.FailedInput) string {
+	if f.Request != "" {
+		return fmt.Sprintf("%s: %s", f.Label(), f.Error)
+	}
+	return fmt.Sprintf("%s: exit %d: %s", f.Label(), f.ExitStatus, f.Error)
 }

@@ -42,7 +42,8 @@ type SystemModel struct {
 	DependsOn []string `json:"depends_on,omitempty"`
 }
 
-// Populate is the #CommandObserve arm. Absent marks a checks-only model.
+// Populate is the #CommandObserve arm, or with HTTP set the #HTTPObserve arm.
+// Absent marks a checks-only model.
 type Populate struct {
 	AllowSchemaFallback bool         `json:"allow_schema_fallback,omitempty"`
 	Runs                []CommandRun `json:"runs,omitempty"`
@@ -66,6 +67,9 @@ type Populate struct {
 	// Fallback observes the same resources another way when these runs
 	// cannot (see Fallback).
 	Fallback *Fallback `json:"fallback,omitempty"`
+	// HTTP is the #HTTPObserve arm; nil for commands. Schema, Timeout,
+	// FailFast and AllowSchemaFallback apply to it too.
+	HTTP *HTTPObserve `json:"-"`
 	// Absent: the model declares no populate arm (checks-only).
 	Absent bool `json:"-"`
 }
@@ -85,13 +89,18 @@ type PopulateKind string
 
 const (
 	KindCommand PopulateKind = "command"
+	KindHTTP    PopulateKind = "http"
 	KindNone    PopulateKind = "none" // no populate arm: checks-only
 )
 
-// Kind reports the populate arm: none for a checks-only model, else command.
+// Kind reports the populate arm: none for a checks-only model, http for
+// #HTTPObserve, else command.
 func (p Populate) Kind() PopulateKind {
-	if p.Absent {
+	switch {
+	case p.Absent:
 		return KindNone
+	case p.HTTP != nil:
+		return KindHTTP
 	}
 	return KindCommand
 }
@@ -100,7 +109,7 @@ func (p Populate) Kind() PopulateKind {
 // omits the field (omitzero). An emitted `populate: {}` would not satisfy
 // #CommandObserve, which requires runs.
 func (p Populate) IsZero() bool {
-	return p.Absent || (len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast && len(p.EmptyWhen) == 0 && len(p.FailWhen) == 0)
+	return p.Absent || (p.HTTP == nil && len(p.Runs) == 0 && p.Schema == "" && p.Timeout == "" && !p.AllowSchemaFallback && p.Each == nil && !p.FailFast && len(p.EmptyWhen) == 0 && len(p.FailWhen) == 0)
 }
 
 // Check is an observe-only flag over a Datalog relation.
@@ -161,6 +170,12 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		if len(m.Desired) > 0 {
 			return nil, fmt.Errorf("model %q has no populate arm, so it is checks-only and cannot declare desired", m.Name)
 		}
+	}
+	if inst.LookupPath(cue.ParsePath("populate.base")).Exists() {
+		if err := decodeHTTP(inst, &m.Populate); err != nil {
+			return nil, fmt.Errorf("model %q: %w", m.Name, err)
+		}
+		return &m, nil
 	}
 	if err := decodeTransforms(inst, &m); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)

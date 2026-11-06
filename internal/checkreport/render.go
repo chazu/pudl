@@ -90,6 +90,12 @@ func populateRef(p systemmodel.Populate) string {
 	if p.Kind() == systemmodel.KindNone {
 		return "checks-only"
 	}
+	if h := p.HTTP; h != nil {
+		if h.Each != nil {
+			return fmt.Sprintf("%s, %d requests per enumerated input", h.Base, len(h.Runs))
+		}
+		return fmt.Sprintf("%s, %d requests", h.Base, len(h.Runs))
+	}
 	if p.Each != nil {
 		return fmt.Sprintf("%d runs per enumerated input", len(p.Runs))
 	}

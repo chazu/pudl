@@ -109,6 +109,16 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
   resources another way when a run or `each` fails with matching stderr, or
   `each` lists nothing; the populate's runs are then discarded and the
   report shows `populate.fallback`.
+- HTTP APIs: `populate: {base: "https://api.example.com", runs: [{get:
+  "/path", records?: "items"}]}` is `#HTTPObserve`. GET only, to `base` only
+  (cross-origin redirects refused); responses stay in memory. `auth: {env,
+  header?, scheme?}` reads the token from that variable (unset fails).
+  `guard: {get, check: {in: _, ok: ..., reason?}}` must pass before any other
+  request. `each: {get, list, item?: {in: _, out: string}, page?: {next,
+  param}}` enumerates inputs (letters, digits, `. _ ~ / -` only).
+  `reject_keys: [...]` fails the populate, ingesting nothing, if a kept
+  record still has such a key. A non-2xx response is a failed input without
+  its body; errors name paths, never values.
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).

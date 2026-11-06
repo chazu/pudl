@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### #HTTPObserve: GET-only HTTP populate source (2026-11-06)
+
+Collectors can read HTTPS APIs from CUE with no shell helpers: GET only, to
+one origin, token from one environment variable, a guard request that must
+pass first, paged enumeration, responses decoded in memory, and
+`reject_keys` to fail closed. Errors name paths, never values. A ratchet
+keeps outbound HTTP inside `internal/populate`. First step of the Pulumi
+pack (`pudl-7g8j`); see `implog/2026_11_06_http_observe.md`. Closes
+`pudl-7g8j.1`.
+
 ### Pre-push scan for operational details (2026-11-06)
 
 A lefthook `pre-push` job (`.lefthook/pre-push/push-scan.sh`) blocks a push whose

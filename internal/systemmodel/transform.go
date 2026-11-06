@@ -83,19 +83,11 @@ func declaresOut(v cue.Value) bool {
 // Apply evaluates the transform for one record. keep is false when out is
 // null. An out that is not concrete, or not an object or null, is an error.
 func (t *Transform) Apply(record map[string]any) (out map[string]any, keep bool, err error) {
-	raw, err := json.Marshal(record)
-	if err != nil {
-		return nil, false, err
-	}
-	expr, err := cuejson.Extract("record", raw)
+	filled, err := fillIn(t.value, record)
 	if err != nil {
 		return nil, false, fmt.Errorf("transform: record: %w", err)
 	}
-	in := t.value.Context().BuildExpr(expr)
-	if err := in.Err(); err != nil {
-		return nil, false, fmt.Errorf("transform: record: %w", err)
-	}
-	res := t.value.FillPath(transformIn, in).LookupPath(transformOut)
+	res := filled.LookupPath(transformOut)
 	if err := res.Validate(cue.Concrete(true)); err != nil {
 		return nil, false, fmt.Errorf("transform: out: %w", err)
 	}
@@ -117,18 +109,23 @@ func (t *Transform) Apply(record map[string]any) (out map[string]any, keep bool,
 	return out, true, nil
 }
 
-// validateConcrete requires the model to be concrete everywhere except in
-// run transforms (any `transform` of an element of a `runs` list), where in
-// is a placeholder and out depends on it. Transforms are still checked for
-// errors.
+// validateConcrete requires the model to be concrete everywhere except where
+// in is a placeholder: run transforms (any `transform` of an element of a
+// `runs` list), an HTTP guard's `check` and an HTTP enumeration's `item`.
+// Those are still checked for errors.
 func validateConcrete(v cue.Value) error {
 	if err := v.Validate(cue.Concrete(false)); err != nil {
 		return err
 	}
-	return concreteExceptTransforms(v, false)
+	return concreteExceptTransforms(v, "")
 }
 
-func concreteExceptTransforms(v cue.Value, isRun bool) error {
+// inPlaceholderField names, per parent label, the child whose in is a
+// placeholder: an HTTP populate's guard check and enumeration item.
+var inPlaceholderField = map[string]string{"guard": "check", "each": "item"}
+
+// concreteExceptTransforms checks v, skipping its field named skip.
+func concreteExceptTransforms(v cue.Value, skip string) error {
 	switch v.IncompleteKind() {
 	case cue.StructKind:
 		iter, err := v.Fields()
@@ -137,7 +134,7 @@ func concreteExceptTransforms(v cue.Value, isRun bool) error {
 		}
 		for iter.Next() {
 			label, child := iter.Selector().String(), iter.Value()
-			if isRun && label == "transform" {
+			if skip != "" && label == skip {
 				continue
 			}
 			if label == "runs" && child.IncompleteKind() == cue.ListKind {
@@ -146,13 +143,13 @@ func concreteExceptTransforms(v cue.Value, isRun bool) error {
 					return err
 				}
 				for list.Next() {
-					if err := concreteExceptTransforms(list.Value(), true); err != nil {
+					if err := concreteExceptTransforms(list.Value(), "transform"); err != nil {
 						return err
 					}
 				}
 				continue
 			}
-			if err := concreteExceptTransforms(child, false); err != nil {
+			if err := concreteExceptTransforms(child, inPlaceholderField[label]); err != nil {
 				return err
 			}
 		}
@@ -163,7 +160,7 @@ func concreteExceptTransforms(v cue.Value, isRun bool) error {
 			return err
 		}
 		for list.Next() {
-			if err := concreteExceptTransforms(list.Value(), false); err != nil {
+			if err := concreteExceptTransforms(list.Value(), ""); err != nil {
 				return err
 			}
 		}
@@ -171,4 +168,35 @@ func concreteExceptTransforms(v cue.Value, isRun bool) error {
 	default:
 		return v.Validate(cue.Concrete(true))
 	}
+}
+
+// fillIn binds in to a JSON value (any shape) and returns the filled value.
+func fillIn(v cue.Value, record any) (cue.Value, error) {
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return cue.Value{}, err
+	}
+	expr, err := cuejson.Extract("record", raw)
+	if err != nil {
+		return cue.Value{}, err
+	}
+	in := v.Context().BuildExpr(expr)
+	if err := in.Err(); err != nil {
+		return cue.Value{}, err
+	}
+	return v.FillPath(transformIn, in), nil
+}
+
+// String evaluates the transform for one value whose out must be a string,
+// as an enumeration's item mapping is.
+func (t *Transform) String(record any) (string, error) {
+	filled, err := fillIn(t.value, record)
+	if err != nil {
+		return "", fmt.Errorf("item: %w", err)
+	}
+	var s string
+	if err := filled.LookupPath(transformOut).Decode(&s); err != nil {
+		return "", fmt.Errorf("item: out: %w", err)
+	}
+	return s, nil
 }

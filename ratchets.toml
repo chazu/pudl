@@ -9,6 +9,7 @@
 # for it here rather than relying on memory or review.
 enabled_ratchets = [
   "no-fmt-println-outside-cmd",
+  "no-outbound-http-outside-populate",
 ]
 disabled_ratchets = []
 
