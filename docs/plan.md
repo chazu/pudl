@@ -4,6 +4,13 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### #HTTPObserve: guard with several named requests (2026-11-06)
+
+`guard.get` can name several paths; pudl sends them in name order and binds
+each response as `check.in.<name>`, so one check can join a token's
+identity, role and permission sets. See
+`implog/2026_11_06_http_guard_named_requests.md`. Closes `pudl-7g8j.9`.
+
 ### #HTTPObserve: GET-only HTTP populate source (2026-11-06)
 
 Collectors can read HTTPS APIs from CUE with no shell helpers: GET only, to

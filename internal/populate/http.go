@@ -44,13 +44,9 @@ func runHTTP(ctx context.Context, p systemmodel.Populate, req Request) (Result, 
 	if err != nil {
 		return Result{}, err
 	}
-	if g := h.Guard; g != nil {
-		body, err := c.get(g.Get)
-		if err != nil {
-			return Result{}, fmt.Errorf("populate guard (GET %s): %w", g.Get, err)
-		}
-		if ok, reason := g.Check.Eval(body); !ok {
-			return Result{}, fmt.Errorf("populate guard (GET %s) refused: %s", g.Get, reason)
+	if h.Guard != nil {
+		if err := c.guard(h.Guard); err != nil {
+			return Result{}, err
 		}
 	}
 	res := Result{Records: make([]any, 0)}
@@ -131,6 +127,35 @@ func newHTTPSource(ctx context.Context, h *systemmodel.HTTPObserve, req Request,
 	}
 	c.client = &client
 	return c, nil
+}
+
+// guard sends the guard's requests in name order and evaluates its check over
+// their responses: the one response itself, or each by name. A failed
+// request or a check that does not pass fails the populate.
+func (c *httpSource) guard(g *systemmodel.HTTPGuard) error {
+	if path, ok := g.Single(); ok {
+		body, err := c.get(path)
+		if err != nil {
+			return fmt.Errorf("populate guard (GET %s): %w", path, err)
+		}
+		if ok, reason := g.Check.Eval(body); !ok {
+			return fmt.Errorf("populate guard (GET %s) refused: %s", path, reason)
+		}
+		return nil
+	}
+	responses := make(map[string]any, len(g.Requests))
+	for _, name := range g.Names() {
+		path := g.Requests[name]
+		body, err := c.get(path)
+		if err != nil {
+			return fmt.Errorf("populate guard request %s (GET %s): %w", name, path, err)
+		}
+		responses[name] = body
+	}
+	if ok, reason := g.Check.Eval(responses); !ok {
+		return fmt.Errorf("populate guard (%d requests) refused: %s", len(responses), reason)
+	}
+	return nil
 }
 
 // statusError is a non-2xx response; its body is not kept.
