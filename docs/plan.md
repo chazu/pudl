@@ -6,7 +6,7 @@ Living document tracking what is built and what comes next.
 
 ### Pre-push scan for operational details (2026-11-06)
 
-A lefthook `pre-push` job (`scripts/push-scan.sh`) blocks a push whose
+A lefthook `pre-push` job (`.lefthook/pre-push/push-scan.sh`) blocks a push whose
 outgoing commits match a term in a local term file outside the repo
 (`~/.config/pudl/push-scan-terms`). `CLAUDE.md` makes a review of every
 outgoing commit a hard rule before each push. See

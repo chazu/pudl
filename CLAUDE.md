@@ -72,7 +72,7 @@ Describe such findings in generic terms.
 - **Before every push, review each outgoing commit** (message, file paths,
   added lines, `.beads/issues.jsonl`) for operational details, including
   ones that no term list names.
-- The lefthook pre-push hook (`scripts/push-scan.sh`) blocks a push whose
+- The lefthook pre-push hook (`.lefthook/pre-push/push-scan.sh`) blocks a push whose
   commits match a term in `~/.config/pudl/push-scan-terms`. That file is
   outside the repo because the terms are themselves operational details.
   When you find a new term, add it there, never to the repo.
