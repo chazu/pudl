@@ -1,5 +1,6 @@
 // Building blocks shared by the inspector panels.
 
+import { useState } from 'react';
 import type { Basis, Evidence, GraphIndex, Relationship, Representation, ResourceId } from '../model/canonical';
 import type { RelationshipCategory } from '../model/vocabulary';
 import type { SemanticView } from '../projection/types';
@@ -155,5 +156,55 @@ export function RepresentationList({ reps }: { reps: Representation[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Copies `text` to the clipboard; confirms briefly. */
+export function CopyButton({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy"
+      title="Copy"
+      onClick={() => {
+        navigator.clipboard?.writeText(text).then(
+          () => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1200);
+          },
+          () => {},
+        );
+      }}
+    >
+      {done ? 'copied' : 'copy'}
+    </button>
+  );
+}
+
+export interface IdentifierRow {
+  label: string;
+  value?: string;
+  title?: string;
+}
+
+/** Long identifiers, folded away by default, each with a copy button. */
+export function Identifiers({ ids }: { ids: IdentifierRow[] }) {
+  const rows = ids.filter((i): i is IdentifierRow & { value: string } => !!i.value);
+  if (rows.length === 0) return null;
+  return (
+    <details className="ids">
+      <summary>Identifiers</summary>
+      <dl className="kv">
+        {rows.map((row) => (
+          <div key={row.label} className="kv-row">
+            <dt>{row.label}</dt>
+            <dd title={row.title}>
+              <code className="wrap">{row.value}</code> <CopyButton text={row.value} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

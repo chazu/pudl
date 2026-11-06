@@ -28,6 +28,12 @@ export interface ViewState {
    * filtering never moves anything. When true, filters reflow the layout.
    */
   reflowOnFilter: boolean;
+  /**
+   * Draw placeholders for resources a relationship names but the inventory
+   * lacks ("Not in inventory"). Off by default: on real catalogs they are
+   * numerous and crowd the view. Unlike filters, this shapes the layout.
+   */
+  showUnresolved: boolean;
 }
 
 /** Views with more resources than this open with every owner (account, project) collapsed. */
@@ -61,6 +67,7 @@ export function initialViewState(view: SemanticView): ViewState {
     bundleParallel: false,
     direction: def.layout.direction,
     reflowOnFilter: false,
+    showUnresolved: false,
   };
 }
 
@@ -91,6 +98,7 @@ export function layoutKey(state: ViewState): string {
     state.focus,
     state.bundleParallel,
     state.direction,
+    state.showUnresolved,
   ]);
 }
 

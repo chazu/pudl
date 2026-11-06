@@ -2,7 +2,7 @@ import { notLoadedOwned, notLoadedRelationships } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
 import type { InspectorProps } from './Inspector';
-import { EvidenceList, PropertyTable, RelationshipList, RepresentationList, disposition } from './inspectorParts';
+import { EvidenceList, Identifiers, PropertyTable, RelationshipList, RepresentationList, disposition } from './inspectorParts';
 import type { ResourceId } from '../model/canonical';
 
 export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
@@ -52,12 +52,6 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
       <dl className="kv">
         <dt>Provider</dt>
         <dd>{r.provider}</dd>
-        {r.nativeId && (
-          <>
-            <dt>Native ID</dt>
-            <dd><code className="wrap">{r.nativeId}</code></dd>
-          </>
-        )}
         {r.account && (
           <>
             <dt>{r.provider === 'gcp' ? 'Project' : 'Account'}</dt>
@@ -70,21 +64,20 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
             <dd>{r.region}{r.zone ? ` / ${r.zone}` : ''}</dd>
           </>
         )}
-        <dt>PUDL ID</dt>
-        <dd><code className="wrap">{r.id}</code></dd>
         {r.schema && (
           <>
             <dt>Schema</dt>
             <dd><code className="wrap">{r.schema}</code></dd>
           </>
         )}
-        {r.entryId && (
-          <>
-            <dt>Entry</dt>
-            <dd title="Inspect the record with pudl show"><code className="wrap">pudl show {r.entryId}</code></dd>
-          </>
-        )}
       </dl>
+      <Identifiers
+        ids={[
+          { label: 'Native ID', value: r.nativeId },
+          { label: 'PUDL ID', value: r.id },
+          { label: 'Inspect', value: r.entryId ? `pudl show ${r.entryId}` : undefined, title: 'Inspect the record with pudl show' },
+        ]}
+      />
 
       {r.representations && r.representations.length > 1 && (
         <>

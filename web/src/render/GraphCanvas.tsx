@@ -13,8 +13,11 @@ import { centerOn, compensate, fitBox, READABLE_ZOOM, zoomAt, type Viewport } fr
 export interface CanvasHandle {
   fit(): void;
   zoomBy(factor: number): void;
-  /** Center a node, zooming in to a legible level if the view is zoomed far out. */
-  centerOnNode(nodeId: string): void;
+  /**
+   * Center a node, zooming in to a legible level if the view is zoomed far
+   * out. False when the current layout has no position for it yet.
+   */
+  centerOnNode(nodeId: string): boolean;
 }
 
 interface Props {
@@ -61,9 +64,10 @@ export const GraphCanvas = forwardRef<CanvasHandle, Props>(function GraphCanvas(
     },
     centerOnNode(nodeId) {
       const box = layout.nodes.get(nodeId);
-      if (!box) return;
+      if (!box) return false;
       const { w, h } = size();
       setVp((v) => centerOn(v, box, w, h, READABLE_ZOOM));
+      return true;
     },
   }));
 

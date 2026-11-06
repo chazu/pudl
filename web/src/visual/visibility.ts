@@ -49,6 +49,10 @@ export function computeVisibility(view: SemanticView, index: GraphIndex, state: 
 
   const members = new Set<ResourceId>();
   for (const m of view.members.values()) {
+    if (m.role === 'unresolved' && !state.showUnresolved) {
+      hiddenReason.set(m.resourceId, 'not in the inventory, and unresolved references are hidden');
+      continue;
+    }
     if (m.role === 'unresolved' && !anchored.has(m.resourceId)) {
       hiddenReason.set(m.resourceId, 'no relationship to it is shown');
       continue;
