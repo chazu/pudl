@@ -155,3 +155,62 @@ func TestErrorPathsNamesPathsNotValues(t *testing.T) {
 	assert.NotContains(t, described, "hunter2")
 	assert.True(t, strings.HasPrefix(described, " at "), described)
 }
+
+const namedGuardModel = `
+m: #SystemModel & {
+	name: "m"
+	populate: {
+		base: "https://api.example.com"
+		guard: {
+			get: {user: "/api/user", roles: "/api/roles?mine=true"}
+			check: {in: _, ok: in.user.org == "acme" && len(in.roles.items) == 1}
+		}
+		runs: [{get: "/x"}]
+	}
+}
+`
+
+func TestLoadModelReadsANamedGuard(t *testing.T) {
+	m, err := loadModel([]byte(namedGuardModel), "m")
+	require.NoError(t, err)
+	g := m.Populate.HTTP.Guard
+	require.NotNil(t, g)
+	_, single := g.Single()
+	assert.False(t, single)
+	assert.Equal(t, []string{"roles", "user"}, g.Names(), "sent in name order")
+	ok, _ := g.Check.Eval(map[string]any{
+		"user":  map[string]any{"org": "acme"},
+		"roles": map[string]any{"items": []any{"reader"}},
+	})
+	assert.True(t, ok)
+	ok, _ = g.Check.Eval(map[string]any{"user": map[string]any{"org": "acme"}})
+	assert.False(t, ok, "a check over a missing response is not passed")
+
+	b, err := json.Marshal(m)
+	require.NoError(t, err)
+	var rec map[string]any
+	require.NoError(t, json.Unmarshal(b, &rec))
+	assert.Equal(t, map[string]any{"get": map[string]any{"user": "/api/user", "roles": "/api/roles?mine=true"}},
+		rec["populate"].(map[string]any)["guard"])
+	ctx := cuecontext.New()
+	recorded := ctx.CompileString(SchemaCUE()).LookupPath(cue.ParsePath("#SystemModel")).Unify(ctx.CompileBytes(b))
+	require.NoError(t, recorded.Validate())
+}
+
+func TestLoadModelRejectsBadNamedGuards(t *testing.T) {
+	model := func(get string) string {
+		return `m: #SystemModel & {name: "m", populate: {base: "https://api.example.com", runs: [{get: "/x"}],
+			guard: {get: ` + get + `, check: {in: _, ok: true}}}}`
+	}
+	for name, tc := range map[string]struct{ get, err string }{
+		"no requests":   {`{}`, "names no request"},
+		"empty name":    {`{"": "/a", b: "/b"}`, "may not be empty"},
+		"absolute path": {`{a: "https://other.example.com/a"}`, "empty disjunction"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := loadModel([]byte(model(tc.get)), "m")
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tc.err)
+		})
+	}
+}

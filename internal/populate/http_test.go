@@ -95,7 +95,7 @@ func TestHTTPRunGuardsEnumeratesAndTransforms(t *testing.T) {
 		"/api/stacks/acme/b/export":        `{"deployment":{"resources":null}}`,
 	})
 	p := httpPopulate(s, systemmodel.HTTPObserve{
-		Guard: &systemmodel.HTTPGuard{Get: "/api/user", Check: cuePredicate(t, `{in: _, ok: in.team == "readers"}`)},
+		Guard: &systemmodel.HTTPGuard{Requests: map[string]string{"": "/api/user"}, Check: cuePredicate(t, `{in: _, ok: in.team == "readers"}`)},
 		Each: &systemmodel.HTTPEnumeration{Get: "/api/stacks", List: "stacks",
 			Page: &systemmodel.HTTPPage{Next: "continuationToken", Param: "continuationToken"},
 			Item: cueTransform(t, `{in: _, out: "\(in.org)/\(in.name)"}`)},
@@ -119,7 +119,7 @@ func TestHTTPRunGuardsEnumeratesAndTransforms(t *testing.T) {
 func TestHTTPRunRefusesWhenTheGuardFails(t *testing.T) {
 	s := newAPIServer(t, map[string]string{"/api/user": `{"team":"admins"}`, "/x": `{}`})
 	p := httpPopulate(s, systemmodel.HTTPObserve{
-		Guard: &systemmodel.HTTPGuard{Get: "/api/user", Check: cuePredicate(t, `{in: _, ok: in.team == "readers", reason: "need a reader token"}`)},
+		Guard: &systemmodel.HTTPGuard{Requests: map[string]string{"": "/api/user"}, Check: cuePredicate(t, `{in: _, ok: in.team == "readers", reason: "need a reader token"}`)},
 		Runs:  []systemmodel.HTTPRun{{Get: "/x"}},
 	})
 	_, err := Run(context.Background(), p, s.request())
@@ -130,7 +130,7 @@ func TestHTTPRunRefusesWhenTheGuardFails(t *testing.T) {
 	// A check that cannot be evaluated (no team at all) is not passed.
 	s = newAPIServer(t, map[string]string{"/api/user": `{}`, "/x": `{}`})
 	p = httpPopulate(s, systemmodel.HTTPObserve{
-		Guard: &systemmodel.HTTPGuard{Get: "/api/user", Check: cuePredicate(t, `{in: _, ok: in.team == "readers"}`)},
+		Guard: &systemmodel.HTTPGuard{Requests: map[string]string{"": "/api/user"}, Check: cuePredicate(t, `{in: _, ok: in.team == "readers"}`)},
 		Runs:  []systemmodel.HTTPRun{{Get: "/x"}},
 	})
 	_, err = Run(context.Background(), p, s.request())
@@ -222,4 +222,47 @@ func TestHTTPRunHonoursTheStagingLimit(t *testing.T) {
 	req.Limits = ingestprep.Limits{StagingBytes: 1024}
 	_, err := Run(context.Background(), p, req)
 	require.ErrorContains(t, err, "staging byte limit")
+}
+
+// A guard with named requests sends them in name order and checks all their
+// responses together, so a check can join them.
+func TestHTTPRunChecksNamedGuardRequestsTogether(t *testing.T) {
+	routes := map[string]string{
+		"/api/user":  `{"tokenInfo":{"organization":"acme","name":"pudl"}}`,
+		"/api/roles": `{"roles":[{"set":"s1"}]}`,
+		"/api/sets":  `{"sets":[{"id":"s1","permissions":["stack:read"]},{"id":"s2","permissions":["stack:write"]}]}`,
+		"/x":         `{}`,
+	}
+	check := `{in: _, ok: in.user.tokenInfo.name == "pudl" &&
+		[for s in in.sets.sets if s.id == in.roles.roles[0].set {s}][0].permissions == ["stack:read"],
+		reason: "need a read-only token"}`
+	guard := func() *systemmodel.HTTPGuard {
+		return &systemmodel.HTTPGuard{
+			Requests: map[string]string{"user": "/api/user", "roles": "/api/roles", "sets": "/api/sets"},
+			Check:    cuePredicate(t, check),
+		}
+	}
+	s := newAPIServer(t, routes)
+	p := httpPopulate(s, systemmodel.HTTPObserve{Guard: guard(), Runs: []systemmodel.HTTPRun{{Get: "/x"}}})
+	_, err := Run(context.Background(), p, s.request())
+	require.NoError(t, err)
+	var order []string
+	for _, r := range s.seen() {
+		order = append(order, strings.Fields(r)[1])
+	}
+	assert.Equal(t, []string{"/api/roles", "/api/sets", "/api/user", "/x"}, order)
+
+	routes["/api/roles"] = `{"roles":[{"set":"s2"}]}`
+	s = newAPIServer(t, routes)
+	p = httpPopulate(s, systemmodel.HTTPObserve{Guard: guard(), Runs: []systemmodel.HTTPRun{{Get: "/x"}}})
+	_, err = Run(context.Background(), p, s.request())
+	require.ErrorContains(t, err, "need a read-only token")
+	assert.Len(t, s.seen(), 3, "nothing is requested after the guard refuses")
+
+	delete(routes, "/api/sets")
+	s = newAPIServer(t, routes)
+	p = httpPopulate(s, systemmodel.HTTPObserve{Guard: guard(), Runs: []systemmodel.HTTPRun{{Get: "/x"}}})
+	_, err = Run(context.Background(), p, s.request())
+	require.ErrorContains(t, err, "guard request sets (GET /api/sets): HTTP 404")
+	assert.Len(t, s.seen(), 2, "a failed guard request stops the populate")
 }

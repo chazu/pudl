@@ -34,13 +34,6 @@ type HTTPAuth struct {
 	Scheme string `json:"scheme"`
 }
 
-// HTTPGuard is the request that must pass Check before any other is sent.
-type HTTPGuard struct {
-	Get string `json:"get"`
-	// Check is read from the CUE value; it is not recorded.
-	Check *Predicate `json:"-"`
-}
-
 // HTTPEnumeration lists the inputs every run is repeated for.
 type HTTPEnumeration struct {
 	Get  string    `json:"get"`
@@ -124,15 +117,11 @@ func decodeHTTP(inst cue.Value, p *Populate) error {
 		return fmt.Errorf("populate: %w", err)
 	}
 	if h.Guard != nil {
-		check := v.LookupPath(cue.ParsePath("guard.check"))
-		if !check.Exists() {
-			return fmt.Errorf("populate.guard.check is required")
-		}
-		pred, err := NewPredicate(check)
+		g, err := decodeGuard(v.LookupPath(cue.ParsePath("guard")))
 		if err != nil {
-			return fmt.Errorf("populate.guard.check: %w", err)
+			return err
 		}
-		h.Guard.Check = pred
+		h.Guard = g
 	}
 	if h.Each != nil {
 		if item := v.LookupPath(cue.ParsePath("each.item")); item.Exists() {
@@ -169,7 +158,9 @@ func decodeHTTP(inst cue.Value, p *Populate) error {
 func (h *HTTPObserve) validate() error {
 	paths := []string{}
 	if h.Guard != nil {
-		paths = append(paths, h.Guard.Get)
+		for _, name := range h.Guard.Names() {
+			paths = append(paths, h.Guard.Requests[name])
+		}
 	}
 	if h.Each != nil {
 		paths = append(paths, h.Each.Get)

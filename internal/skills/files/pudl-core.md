@@ -114,7 +114,8 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
   (cross-origin redirects refused); responses stay in memory. `auth: {env,
   header?, scheme?}` reads the token from that variable (unset fails).
   `guard: {get, check: {in: _, ok: ..., reason?}}` must pass before any other
-  request. `each: {get, list, item?: {in: _, out: string}, page?: {next,
+  request; `get` is one path (in = its response) or `{name: path, ...}` (in.name
+  = each response, so one check can join them). `each: {get, list, item?: {in: _, out: string}, page?: {next,
   param}}` enumerates inputs (letters, digits, `. _ ~ / -` only).
   `reject_keys: [...]` fails the populate, ingesting nothing, if a kept
   record still has such a key. A non-2xx response is a failed input without

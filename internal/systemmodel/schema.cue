@@ -192,6 +192,9 @@ package systemmodel
 //		base: "https://api.example.com"
 //		auth: {env: "EXAMPLE_TOKEN", scheme: "token"}
 //		guard: {get: "/api/user", check: {in: _, ok: in.role == "reader", reason: "need a read-only token"}}
+//		// or several requests, checked together:
+//		// guard: {get: {user: "/api/user", roles: "/api/roles?mine=true"},
+//		//	check: {in: _, ok: in.user.org == "acme" && len(in.roles.items) == 1}}
 //		each: {get: "/api/stacks", list: "stacks", page: {next: "continuationToken", param: "continuationToken"},
 //			item: {in: _, out: "\(in.org)/\(in.name)"}}
 //		runs: [{get: "/api/stacks/{{item}}/export", records: "deployment.resources",
@@ -200,9 +203,11 @@ package systemmodel
 //	}
 //
 // auth reads the token from the environment variable env when the populate
-// starts; an unset or empty variable fails it. guard runs first: its GET
-// response is bound to check.in, and unless check.ok is true the populate
-// fails with check.reason and sends nothing else. each lists the inputs:
+// starts; an unset or empty variable fails it. guard runs first: get is one
+// path, whose response is bound to check.in, or a map of named paths, sent in
+// name order, whose responses are bound to check.in.<name>. Unless check.ok
+// is true the populate fails with check.reason and sends nothing else; a
+// failed guard request fails it too. each lists the inputs:
 // list is the field path of the array in its response, item (optional) maps
 // one element to the input string, and page follows a continuation token
 // (the response's `next` field, sent back as query parameter `param`). An
@@ -224,7 +229,7 @@ package systemmodel
 		scheme: string | *"Bearer"
 	}
 	guard?: {
-		get: #HTTPPath
+		get: #HTTPPath | {[string]: #HTTPPath}
 		// check is required; optional here only because it is not recorded
 		// with the model instance (it depends on in).
 		check?: {in: _, ok?: bool, reason?: string}
