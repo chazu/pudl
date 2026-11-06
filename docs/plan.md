@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pre-push scan for operational details (2026-11-06)
+
+A lefthook `pre-push` job (`scripts/push-scan.sh`) blocks a push whose
+outgoing commits match a term in a local term file outside the repo
+(`~/.config/pudl/push-scan-terms`). `CLAUDE.md` makes a review of every
+outgoing commit a hard rule before each push. See
+`implog/2026_11_06_pre_push_scan.md`.
+
 ### Design: Pulumi pack (2026-11-06)
 
 Accepted design for linking live GCP and Kubernetes resources to the Pulumi

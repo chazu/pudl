@@ -14,3 +14,10 @@ pre-commit:
       # Budgets in ratchet-counts.toml are whole-repo counts, so check the
       # whole repo rather than only staged files.
       run: ratchets check
+pre-push:
+  jobs:
+    - name: push-scan
+      # Block commits that name operational details (orgs, repos, projects,
+      # stacks) from the local term file; see scripts/push-scan.sh.
+      run: sh scripts/push-scan.sh
+      use_stdin: true

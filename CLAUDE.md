@@ -62,6 +62,23 @@ run by the lefthook pre-commit hook (`lefthook.yml`) alongside gitleaks.
   Raise a budget with `ratchets bump` only with a stated justification.
 - Never skip the hook (`--no-verify`) to get past a ratchet or gitleaks failure.
 
+## Operational details: hard rule before every push
+
+This repository is public. No commit may carry operational details of any
+organization: org, repo, project, stack, cluster, account or team names;
+how or where its infrastructure runs; inventories of what it manages.
+Describe such findings in generic terms.
+
+- **Before every push, review each outgoing commit** (message, file paths,
+  added lines, `.beads/issues.jsonl`) for operational details, including
+  ones that no term list names.
+- The lefthook pre-push hook (`scripts/push-scan.sh`) blocks a push whose
+  commits match a term in `~/.config/pudl/push-scan-terms`. That file is
+  outside the repo because the terms are themselves operational details.
+  When you find a new term, add it there, never to the repo.
+- Never skip the pre-push hook. If it blocks, remove the details and rewrite
+  the unpushed commits.
+
 <!-- br-agent-instructions-v1 -->
 
 ---
