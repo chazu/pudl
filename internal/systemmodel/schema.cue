@@ -4,9 +4,9 @@ package systemmodel
 // declaration. pudl owns this schema; `pudl check <model>` loads an *instance*
 // of it (the run unit) and orchestrates its phases.
 //
-// populate is #CommandObserve. A model without populate is checks-only: it
-// evaluates checks over what is already in the catalog. PUDL observes and
-// reports; it never changes the systems it catalogs.
+// populate is #CommandObserve or #HTTPObserve. A model without populate is
+// checks-only: it evaluates checks over what is already in the catalog. PUDL
+// observes and reports; it never changes the systems it catalogs.
 #SystemModel: {
 	// Catalog classification: a #SystemModel instance is itself a catalog
 	// resource (so `pudl schema list` shows the schema and instances can be
@@ -40,7 +40,7 @@ package systemmodel
 	// POPULATE — Accumulate: fetch the external system into the catalog.
 	// Optional: without it the model is checks-only (no desired). The retired
 	// arms are accepted only so the loader can reject them by name.
-	populate?: #CommandObserve | #PluginObserve | #EweTarget
+	populate?: #CommandObserve | #HTTPObserve | #PluginObserve | #EweTarget
 
 	// RELATE — derived relationships (pudl Datalog rule references).
 	relations?: [...string]
@@ -180,6 +180,75 @@ package systemmodel
 	// failed input.
 	//
 	//	transform: {in: _, out: in.versionedResources[0].resource}
+	transform?: {in: _, out?: _}
+}
+
+// #HTTPObserve — read JSON records from an HTTPS API with GET requests only.
+// pudl sends every request, and the token, to base alone; paths are relative
+// to it. Responses are decoded in memory and never written to disk: only what
+// a run's transform keeps goes on to routing and storage.
+//
+//	populate: #HTTPObserve & {
+//		base: "https://api.example.com"
+//		auth: {env: "EXAMPLE_TOKEN", scheme: "token"}
+//		guard: {get: "/api/user", check: {in: _, ok: in.role == "reader", reason: "need a read-only token"}}
+//		each: {get: "/api/stacks", list: "stacks", page: {next: "continuationToken", param: "continuationToken"},
+//			item: {in: _, out: "\(in.org)/\(in.name)"}}
+//		runs: [{get: "/api/stacks/{{item}}/export", records: "deployment.resources",
+//			set: stack: "{{item}}", transform: {in: _, out: {urn: in.urn, type: in.type}}}]
+//		reject_keys: ["ciphertext"]
+//	}
+//
+// auth reads the token from the environment variable env when the populate
+// starts; an unset or empty variable fails it. guard runs first: its GET
+// response is bound to check.in, and unless check.ok is true the populate
+// fails with check.reason and sends nothing else. each lists the inputs:
+// list is the field path of the array in its response, item (optional) maps
+// one element to the input string, and page follows a continuation token
+// (the response's `next` field, sent back as query parameter `param`). An
+// input may hold only letters, digits and . _ ~ / -, and never "..".
+// records is the field path of the record array in a run's response; without
+// it the response is one record, or an array of records. reject_keys fails
+// the populate, ingesting nothing, when a key of that name is still in any
+// record after the transform. A non-2xx response is a failed input, kept
+// without its body. Errors name paths, never values. base, headers and
+// auth.env are recorded with the model instance: keep secrets out of them.
+#HTTPObserve: {
+	schema?:                string
+	allow_schema_fallback?: bool | *false
+	base:                   =~"^https://[^/?#@]+$"
+	headers?: {[string]: string}
+	auth?: {
+		env:    =~"^[A-Z_][A-Z0-9_]*$"
+		header: string & !="" | *"Authorization"
+		scheme: string | *"Bearer"
+	}
+	guard?: {
+		get: #HTTPPath
+		// check is required; optional here only because it is not recorded
+		// with the model instance (it depends on in).
+		check?: {in: _, ok?: bool, reason?: string}
+	}
+	each?: {
+		get:  #HTTPPath
+		list: string & !=""
+		item?: {in: _, out?: _}
+		page?: {next: string & !="", param: string & !=""}
+	}
+	runs: [#HTTPRun, ...#HTTPRun]
+	timeout?:     string
+	fail_fast?:   bool | *false
+	reject_keys?: [...string & !=""]
+}
+
+// #HTTPPath — a request path (and query) relative to base.
+#HTTPPath: =~"^/([^/].*)?$"
+
+// #HTTPRun — one GET request whose response holds JSON records.
+#HTTPRun: {
+	get:      #HTTPPath
+	records?: string & !=""
+	set?: {...}
 	transform?: {in: _, out?: _}
 }
 

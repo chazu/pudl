@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -76,6 +77,9 @@ func validateModel(m *systemmodel.SystemModel) []string {
 
 	if m.Populate.Kind() == systemmodel.KindCommand {
 		problems = append(problems, validateCommandRuns(m.Populate)...)
+	}
+	if h := m.Populate.HTTP; h != nil && h.Auth != nil && os.Getenv(h.Auth.Env) == "" {
+		problems = append(problems, fmt.Sprintf("populate.auth: environment variable %s is not set", h.Auth.Env))
 	}
 
 	// Drift set-diffs desired against catalog records by _schema identity, so

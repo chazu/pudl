@@ -15,6 +15,8 @@ type FailedInput struct {
 	// Item is the enumerated input the run was for; empty without `each`.
 	Item string   `json:"item,omitempty"`
 	Argv []string `json:"argv"`
+	// Request is an HTTP run's request ("GET /path"); empty for commands.
+	Request string `json:"request,omitempty"`
 	// ExitStatus is the command's exit code: 0 when it succeeded but printed
 	// something other than JSON objects, -1 when it did not exit on its own
 	// (a timeout or signal) or could not start.
@@ -27,20 +29,28 @@ type FailedInput struct {
 	exited bool
 }
 
-// Err is the failure as one error: the run, its argv, what went wrong, and
-// the end of its stderr.
+// Err is the failure as one error: the run, its argv or request, what went
+// wrong, and the end of its stderr.
 func (f FailedInput) Err() error {
-	msg := fmt.Sprintf("populate run %d (%s): %s", f.Run, strings.Join(f.Argv, " "), f.Error)
+	msg := fmt.Sprintf("populate run %d (%s): %s", f.Run, f.invocation(), f.Error)
 	if f.Stderr != "" {
 		msg += fmt.Sprintf("\nstderr (last %d bytes):\n%s", stderrTail, f.Stderr)
 	}
 	return errors.New(msg)
 }
 
-// Label names the input for a person: its enumerated item, else its argv.
+// Label names the input for a person: its enumerated item, else its argv or
+// request.
 func (f FailedInput) Label() string {
 	if f.Item != "" {
 		return f.Item
+	}
+	return f.invocation()
+}
+
+func (f FailedInput) invocation() string {
+	if f.Request != "" {
+		return f.Request
 	}
 	return strings.Join(f.Argv, " ")
 }

@@ -1,6 +1,7 @@
-// Package populate runs a model's #CommandObserve populate: plain commands
-// whose stdout is a stream of JSON records. It spools and decodes their
-// output; ingesting the records into the catalog is the caller's.
+// Package populate runs a model's populate: #CommandObserve (plain commands
+// whose stdout is a stream of JSON records, spooled and decoded) or
+// #HTTPObserve (GET requests decoded in memory). Ingesting the records into
+// the catalog is the caller's.
 package populate
 
 import (
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -41,6 +43,11 @@ type Request struct {
 	// TrackTempDir registers the spool directory so an interrupt can remove
 	// it, and returns its release. Nil removes it on return only.
 	TrackTempDir func(dir string) (release func())
+	// HTTPClient sends an HTTP populate's requests; nil uses a default
+	// client. Its CheckRedirect is replaced (redirects stay on base).
+	HTTPClient *http.Client
+	// Getenv reads an HTTP populate's token variable; nil uses os.Getenv.
+	Getenv func(string) string
 }
 
 // Result is what a populate observed.
@@ -61,6 +68,9 @@ type Result struct {
 	Fallback *FallbackUse
 }
 
+// Run executes a populate. An #HTTPObserve populate runs as runHTTP
+// describes; the rest of this comment is about #CommandObserve.
+//
 // Run executes a #CommandObserve populate: the `each` enumeration if any,
 // then each run's argv directly (no shell), its stdout spooled to disk,
 // decoded as JSON records, and `set` applied.
@@ -80,6 +90,9 @@ type Result struct {
 // fallback's, with Fallback recording what triggered it and whether the
 // fallback is partial.
 func Run(ctx context.Context, p systemmodel.Populate, req Request) (Result, error) {
+	if p.HTTP != nil {
+		return runHTTP(ctx, p, req)
+	}
 	var when []*regexp.Regexp
 	if p.Fallback != nil {
 		var err error

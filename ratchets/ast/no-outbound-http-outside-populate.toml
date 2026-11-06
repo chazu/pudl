@@ -1,0 +1,26 @@
+# pudl reads external APIs through one source only: #HTTPObserve
+# (internal/populate), which sends GET alone, to one origin, with the token
+# from one environment variable, and keeps responses off disk. An HTTP client
+# or request built anywhere else would bypass those guarantees. Test files
+# are excluded: they build requests against local test servers.
+[rule]
+id = "no-outbound-http-outside-populate"
+description = "No outbound HTTP client or request outside internal/populate; read APIs through #HTTPObserve"
+severity = "error"
+
+# Two patterns: an alternation ([...]) matched nothing in ratchets.
+[match]
+query = """
+(selector_expression
+  operand: (identifier) @pkg
+  field: (field_identifier) @fn
+  (#eq? @pkg "http")
+  (#match? @fn "^(Get|Post|Head|PostForm|NewRequest|NewRequestWithContext|DefaultClient|DefaultTransport)$")) @violation
+(qualified_type
+  package: (package_identifier) @typepkg
+  name: (type_identifier) @type
+  (#eq? @typepkg "http")
+  (#match? @type "^(Client|Transport)$")) @violation
+"""
+language = "go"
+exclude = ["internal/populate/**", "**/*_test.go"]

@@ -29,6 +29,13 @@ func (p *Populate) writeMarkdown(b *strings.Builder) {
 	}
 	fmt.Fprintf(b, "- failed inputs: %d of %d runs (their resources are unknown; the observation is incomplete)\n", len(p.FailedInputs), p.Runs)
 	for _, f := range p.FailedInputs {
+		if f.Request != "" {
+			fmt.Fprintf(b, "  - %s: %s\n", f.Label(), f.Error)
+			if f.Item != "" {
+				fmt.Fprintf(b, "    request: %s\n", f.Request)
+			}
+			continue
+		}
 		fmt.Fprintf(b, "  - %s: exit %d: %s\n", f.Label(), f.ExitStatus, f.Error)
 		if f.Item != "" {
 			fmt.Fprintf(b, "    argv: %s\n", strings.Join(f.Argv, " "))

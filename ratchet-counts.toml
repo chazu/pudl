@@ -4,3 +4,6 @@
 
 [no-fmt-println-outside-cmd]
 "." = 0
+
+[no-outbound-http-outside-populate]
+"." = 0

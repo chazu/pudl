@@ -19,6 +19,8 @@ func (t *ModelTemplate) Summary() (TemplateSummary, error) {
 	summary.PopulateKind = KindCommand
 	if !t.value.LookupPath(cue.ParsePath("populate")).Exists() {
 		summary.PopulateKind = KindNone
+	} else if t.value.LookupPath(cue.ParsePath("populate.base")).Exists() {
+		summary.PopulateKind = KindHTTP
 	}
 	var err error
 	if summary.DesiredCount, err = listLength(t.value, "desired"); err != nil {

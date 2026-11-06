@@ -61,6 +61,18 @@ func printModel(m *systemmodel.SystemModel, schemas *validator.ChainValidator) {
 		if m.Populate.Schema != "" {
 			fmt.Fprintf(outw(), "    schema: %s\n", m.Populate.Schema)
 		}
+	case systemmodel.KindHTTP:
+		h := m.Populate.HTTP
+		fmt.Fprintf(outw(), "  Populate:  http %s (%d runs)\n", h.Base, len(h.Runs))
+		if h.Each != nil {
+			fmt.Fprintf(outw(), "    each: GET %s\n", h.Each.Get)
+		}
+		for _, run := range h.Runs {
+			fmt.Fprintf(outw(), "    run: GET %s\n", run.Get)
+		}
+		if m.Populate.Schema != "" {
+			fmt.Fprintf(outw(), "    schema: %s\n", m.Populate.Schema)
+		}
 	case systemmodel.KindNone:
 		fmt.Fprintln(outw(), "  Populate:  none (checks-only)")
 	}
