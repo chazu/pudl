@@ -200,6 +200,14 @@ func TestNeighbourhoodSummaryAndSearch(t *testing.T) {
 	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?focus=i1&depth=0&closure=").Body.Bytes(), &emptyClosure))
 	require.Len(t, emptyClosure.Resources, 1, "an explicit empty closure follows nothing")
 
+	var ov graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?overview=1").Body.Bytes(), &ov))
+	require.True(t, ov.Meta.Partial)
+	require.Empty(t, ov.Resources, "no administrative types in this vocabulary")
+	var owned graphexport.Graph
+	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/graph?owner=vpc").Body.Bytes(), &owned))
+	require.Len(t, owned.Resources, 1, "a non-owner loads just itself")
+
 	require.JSONEq(t, `{"resources":4,"relationships":3,"version":""}`, get(t, h, "localhost", "/api/summary").Body.String())
 	var hits []graphexport.SearchHit
 	require.NoError(t, json.Unmarshal(get(t, h, "localhost", "/api/search?q=web&limit=1").Body.Bytes(), &hits))

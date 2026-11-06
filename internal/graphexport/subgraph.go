@@ -14,7 +14,8 @@ import (
 // relationships to unresolved references (ref:...), which are terminal. A
 // client therefore never mistakes "not loaded" for "not in the inventory":
 // Meta.Degree gives each returned resource's total relationship count, and
-// the difference is what is not loaded.
+// the difference is what is not loaded. Meta.Owned does the same for what
+// an owner owns (ownership is an attribute, not a relationship).
 func Subgraph(g *Graph, focus []string, depth int, closure []string) *Graph {
 	known := map[string]bool{}
 	for _, r := range g.Resources {
@@ -88,10 +89,17 @@ func Subgraph(g *Graph, focus []string, depth int, closure []string) *Graph {
 	out.Meta.Partial = true
 	out.Meta.Totals = &Totals{Resources: len(g.Resources), Relationships: len(g.Relationships)}
 	out.Meta.Degree = map[string]int{}
+	owned := ownedCounts(g)
 	for _, r := range g.Resources {
 		if in[r.ID] {
 			out.Resources = append(out.Resources, r)
 			out.Meta.Degree[r.ID] = degree[r.ID]
+			if n := owned[r.ID]; n > 0 {
+				if out.Meta.Owned == nil {
+					out.Meta.Owned = map[string]int{}
+				}
+				out.Meta.Owned[r.ID] = n
+			}
 		}
 	}
 	for _, rel := range g.Relationships {

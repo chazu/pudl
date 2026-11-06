@@ -19,12 +19,15 @@ interface NodeProps {
   onExpand?: (node: VisualNode) => void;
 }
 
-/** "⋯N": relationships to resources not loaded yet (partial graphs). Click loads them. */
 /** Width of the not-loaded badge drawn at a node's right edge (0 when none). */
 function badgeWidth(node: VisualNode): number {
   return node.notLoaded > 0 ? `⋯${node.notLoaded}`.length * 6.2 + 8 : 0;
 }
 
+/**
+ * "⋯N" (partial graphs): relationships to resources not loaded yet, plus for
+ * an owner the resources it owns that are not loaded. Click loads them.
+ */
 function NotLoadedBadge({ node, x, y, onExpand }: { node: VisualNode; x: number; y: number; onExpand?: (n: VisualNode) => void }) {
   if (node.notLoaded <= 0) return null;
   const label = `⋯${node.notLoaded}`;
@@ -39,7 +42,7 @@ function NotLoadedBadge({ node, x, y, onExpand }: { node: VisualNode; x: number;
     >
       <rect x={-label.length * 6.2 - 6} y={-9} width={label.length * 6.2 + 8} height={13} rx={6} />
       <text x={-3} y={1} textAnchor="end">{label}</text>
-      <title>{`${node.notLoaded} relationship(s) to resources not loaded yet. Click to load neighbours.`}</title>
+      <title>{`${node.notLoaded} not loaded yet: related resources, or for an account or project the resources it owns. Click to load them.`}</title>
     </g>
   );
 }

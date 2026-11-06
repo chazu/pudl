@@ -27,4 +27,23 @@ describe('partial graphs', () => {
     expect(notLoaded(full, 'i1')).toBe(0);
     expect(emptyPartial({ origin: 'live', label: 'x' }).meta).toMatchObject({ partial: true, degree: {} });
   });
+
+  it('count what an owner owns that is not loaded, by the account attribute', () => {
+    const vocabulary = {
+      categories: [],
+      edgeTypes: [],
+      providers: [],
+      resourceTypes: [{ type: 'gcp.project', code: 'PROJ', label: 'Project', class: 'admin', schema: 'gcp.#Project', admin: { owner: true, parent: [] } }],
+    };
+    const proj = { id: 'p', type: 'gcp.project', name: 'p', provider: 'gcp', nativeId: 'proj-a', properties: {} };
+    const vm = (id: string) => ({ id, type: 'gcp.compute.instance', name: id, provider: 'gcp', account: 'proj-a', properties: {} });
+    const meta = { origin: 'live' as const, label: 'x', partial: true, degree: { p: 0 }, owned: { p: 3 } };
+    let idx = new GraphIndex({ meta, resources: [proj], relationships: [], vocabulary });
+    expect(notLoaded(idx, 'p')).toBe(3);
+    idx = new GraphIndex({ meta, resources: [proj, vm('a'), vm('b')], relationships: [], vocabulary });
+    expect(notLoaded(idx, 'p')).toBe(1);
+    expect(notLoaded(idx, 'a')).toBe(0);
+    const merged = mergeGraphs({ meta, resources: [], relationships: [] }, { meta: { ...meta, owned: { q: 1 } }, resources: [], relationships: [] });
+    expect(merged.meta.owned).toEqual({ p: 3, q: 1 });
+  });
 });

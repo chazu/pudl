@@ -120,6 +120,12 @@ export interface GraphMeta {
   /** How the graph compares with the catalog it came from (pudl exports). */
   coverage?: Coverage;
   degree?: Record<string, number>;
+  /**
+   * Partial graphs: for each owner present (account, project), how many
+   * resources it owns in the whole graph. Ownership is the `account`
+   * attribute, not a relationship, so degree does not count it.
+   */
+  owned?: Record<string, number>;
   totals?: { resources: number; relationships: number };
 }
 

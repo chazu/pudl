@@ -174,7 +174,15 @@ export function App() {
               onSelectPort={onSelectPort}
               onSelectEdge={(id) => setSelection({ kind: 'edge', id })}
               onToggleGroup={(n) => n.groupId && toggleGroup(n.groupId)}
-              onExpand={gs.partial ? (n) => n.resourceId && gs.expand([n.resourceId]) : undefined}
+              onExpand={
+                gs.partial
+                  ? (n) => {
+                      if (!n.resourceId) return;
+                      setAnchor(n.id); // keep the expanded node where it is while it grows
+                      gs.expand([n.resourceId]);
+                    }
+                  : undefined
+              }
               onClear={() => setSelection(null)}
             />
           ) : (
@@ -193,12 +201,13 @@ export function App() {
               </div>
             </div>
           )}
-          {gs.partial && loaded.graph.resources.length === 0 && (
-            <div className="canvas-hint">
+          {gs.partial && !gs.expanded && (
+            <div className={`canvas-hint${loaded.graph.resources.length > 0 ? ' top' : ''}`}>
               <div>
-                <strong>Large inventory: {loaded.graph.meta.totals?.resources ?? 'many'} resources.</strong> Search the whole
-                inventory on the left to load a resource and its neighbours, then follow ⋯ badges to load more. Open with{' '}
-                <code>?full</code> to load everything at once.
+                <strong>Large inventory: {loaded.graph.meta.totals?.resources ?? 'many'} resources.</strong>{' '}
+                {loaded.graph.resources.length > 0 ? 'Showing accounts and projects only. Click a ⋯ badge to load what one holds, or ' : ''}
+                {loaded.graph.resources.length > 0 ? 'search' : 'Search'} the whole inventory on the left to load a resource and its
+                neighbours. Open with <code>?full</code> to load everything at once.
               </div>
             </div>
           )}
@@ -225,7 +234,14 @@ export function App() {
         onProjection={switchProjection}
         onToggleGroup={toggleGroup}
         onFocus={(id, depth) => updateState((s) => ({ ...s, focus: depth > 0 ? { resourceId: id, depth } : null }))}
-        onExpand={gs.partial ? (id) => gs.expand([id]) : undefined}
+        onExpand={
+          gs.partial
+            ? (id) => {
+                setAnchor(graph?.resourceToNode.get(id));
+                gs.expand([id]);
+              }
+            : undefined
+        }
       />
     </div>
   );

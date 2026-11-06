@@ -53,6 +53,10 @@ export interface GraphSource {
   snapshots?(): Promise<SnapshotInfo[]>;
   /** Size of the whole graph, without loading it (live only). */
   summary?(opts?: LoadOptions): Promise<GraphSummary>;
+  /** The administrative resources (organizations, folders, accounts, projects), following `closure` (live only). */
+  overview?(closure: string[], opts?: LoadOptions): Promise<CanonicalGraph>;
+  /** Owner resources (`ids`) and every resource they own, following `closure` (live only). */
+  owned?(ids: string[], closure: string[], opts?: LoadOptions): Promise<CanonicalGraph>;
   /** A partial graph around `ids`, following `closure` types outward (live only). */
   neighbourhood?(ids: string[], closure: string[], opts?: LoadOptions): Promise<CanonicalGraph>;
   /** Search the whole graph without loading it (live only). */

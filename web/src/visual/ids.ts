@@ -6,6 +6,8 @@ export const SIZES = {
   leaf: { width: 184, height: 44 },
   collapsed: { width: 204, height: 56 },
   unresolved: { width: 184, height: 40 },
+  /** An expanded group's minimum: wide enough for a name beside its code and badge, even when empty. */
+  groupMin: { width: 260, height: 60 },
   port: 8,
   semanticPort: 10,
 };

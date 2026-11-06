@@ -1,4 +1,4 @@
-import { notLoaded } from '../data/merge';
+import { notLoadedOwned, notLoadedRelationships } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
 import type { InspectorProps } from './Inspector';
@@ -96,11 +96,12 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
         </>
       )}
 
-      {props.onExpand && notLoaded(index, id) > 0 && (
+      {props.onExpand && (notLoadedRelationships(index, id) > 0 || notLoadedOwned(index, id) > 0) && (
         <div className="notice">
-          {notLoaded(index, id)} relationship(s) of this resource lead to resources not loaded yet.
+          {notLoadedOwned(index, id) > 0 && <div>{notLoadedOwned(index, id)} resource(s) owned by this {info.label.toLowerCase()} are not loaded yet.</div>}
+          {notLoadedRelationships(index, id) > 0 && <div>{notLoadedRelationships(index, id)} relationship(s) lead to resources not loaded yet.</div>}
           <div className="actions">
-            <button onClick={() => props.onExpand!(id)}>Load neighbours</button>
+            <button onClick={() => props.onExpand!(id)}>{notLoadedOwned(index, id) > 0 ? 'Load contents' : 'Load neighbours'}</button>
           </div>
         </div>
       )}

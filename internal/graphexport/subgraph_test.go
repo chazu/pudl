@@ -72,7 +72,9 @@ func TestSearchRanksNameFirst(t *testing.T) {
 }
 
 func TestSearchRanksExactThenPrefixThenShorter(t *testing.T) {
-	res := func(id, name string) Resource { return Resource{ID: id, Name: name, Type: "t.x", NativeID: "projects/p/" + name} }
+	res := func(id, name string) Resource {
+		return Resource{ID: id, Name: name, Type: "t.x", NativeID: "projects/p/" + name}
+	}
 	g := &Graph{Resources: []Resource{
 		res("a", "gke-core-a1f9-subnet"), res("b", "gke-core-a1f9"), res("c", "core"), res("d", "my-core"), res("e", "core-ingress"),
 	}}

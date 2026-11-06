@@ -4,9 +4,10 @@
 //
 // Partial mode: when a live source reports more resources than the
 // threshold (?partialAbove=N, default PARTIAL_ABOVE; ?full disables it), the
-// UI starts empty and loads neighbourhoods on demand (search, "Load
-// neighbours"). Loaded neighbourhoods are merged; a reload re-fetches every
-// neighbourhood loaded so far.
+// UI starts on the administrative overview (organizations, folders,
+// accounts, projects) and loads more on demand: a resource's neighbourhood
+// (search, "Load neighbours") or what an owner owns (its ⋯ badge). Loaded
+// parts are merged; a reload re-fetches every part loaded so far.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { emptyPartial, mergeGraphs } from '../data/merge';
@@ -30,6 +31,9 @@ export function useGraphSource() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [partial, setPartial] = useState(false);
   const focus = useRef<string[]>([]);
+  const owners = useRef<string[]>([]);
+  // Has anything been loaded beyond the overview?
+  const [expanded, setExpanded] = useState(false);
   // Containment types from the last vocabulary seen: followed when loading a
   // neighbourhood. Empty before the first neighbourhood arrives; the server
   // then follows containment itself.
@@ -41,14 +45,16 @@ export function useGraphSource() {
   const fetchGraph = useCallback(async (s: GraphSource, at: string | null, isPartial: boolean): Promise<LoadedGraph> => {
     const opts: LoadOptions | undefined = at ? { asOf: at } : undefined;
     if (!isPartial) return loadFrom(s, opts);
-    if (focus.current.length === 0) {
+    let graph;
+    if (s.overview) graph = await s.overview(containment.current, opts);
+    else {
       const summary = await s.summary!(opts);
       const version = (summary as { version?: string }).version;
-      return withIssues(
-        emptyPartial({ origin: 'live', label: 'pudl catalog', asOf: at ?? undefined, version, totals: summary }),
-      );
+      graph = emptyPartial({ origin: 'live', label: 'pudl catalog', asOf: at ?? undefined, version, totals: summary });
     }
-    return withIssues(await s.neighbourhood!(focus.current, containment.current, opts));
+    if (focus.current.length > 0) graph = mergeGraphs(graph, await s.neighbourhood!(focus.current, containment.current, opts));
+    if (owners.current.length > 0 && s.owned) graph = mergeGraphs(graph, await s.owned(owners.current, containment.current, opts));
+    return withIssues(graph);
   }, []);
 
   useEffect(() => {
@@ -92,17 +98,32 @@ export function useGraphSource() {
   // The past does not change: no polling while viewing a past time.
   useAutoRefresh(source, loaded?.graph.meta.version, autoRefresh && !asOf, reloading, reload);
 
-  /** Load the neighbourhoods of `ids` and merge them in (partial mode only). */
+  /**
+   * Load the neighbourhoods of `ids`, and for owners among them what they
+   * own, and merge them in (partial mode only).
+   */
   const expand = useCallback(
     async (ids: string[]) => {
       if (!partial || !source?.neighbourhood) return;
       const fresh = ids.filter((id) => !focus.current.includes(id));
-      if (fresh.length === 0) return;
+      const owned = loaded?.graph.meta.owned ?? {};
+      const freshOwners = source.owned ? ids.filter((id) => (owned[id] ?? 0) > 0 && !owners.current.includes(id)) : [];
+      if (fresh.length === 0 && freshOwners.length === 0) return;
       focus.current = [...focus.current, ...fresh];
+      owners.current = [...owners.current, ...freshOwners];
+      setExpanded(true);
       setReloading(true);
       try {
-        const add = await source.neighbourhood(fresh, containment.current, asOf ? { asOf } : undefined);
-        setLoaded((cur) => withIssues(cur && cur.graph.resources.length > 0 ? mergeGraphs(cur.graph, add) : add));
+        const opts = asOf ? { asOf } : undefined;
+        const parts = await Promise.all([
+          fresh.length ? source.neighbourhood(fresh, containment.current, opts) : null,
+          freshOwners.length ? source.owned!(freshOwners, containment.current, opts) : null,
+        ]);
+        setLoaded((cur) => {
+          let graph = cur && cur.graph.resources.length > 0 ? cur.graph : null;
+          for (const add of parts) if (add) graph = graph ? mergeGraphs(graph, add) : add;
+          return graph ? withIssues(graph) : cur;
+        });
         setReloadError(null);
       } catch (e) {
         setReloadError(String(e));
@@ -110,7 +131,7 @@ export function useGraphSource() {
         setReloading(false);
       }
     },
-    [partial, source, asOf],
+    [partial, source, asOf, loaded],
   );
 
   const search = useMemo(
@@ -130,6 +151,7 @@ export function useGraphSource() {
     autoRefresh,
     setAutoRefresh,
     partial,
+    expanded,
     expand,
     search,
   };

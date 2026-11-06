@@ -325,6 +325,7 @@ code, .code { font-family: var(--mono); }
 .canvas-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .canvas-hint div { max-width: 420px; padding: 16px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; color: var(--text-2); line-height: 1.5; }
 .canvas-hint strong { color: var(--text); }
+.canvas-hint.top { align-items: flex-start; padding-top: 12px; }
 .coverage summary { cursor: pointer; font-size: 11.5px; color: var(--text-2); }
 .coverage .warn { color: var(--mock); }
 .hidden-schemas { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; }
