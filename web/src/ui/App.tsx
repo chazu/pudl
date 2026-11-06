@@ -7,6 +7,7 @@ import { GraphCanvas, type CanvasHandle } from '../render/GraphCanvas';
 import { computeHighlight, type Selection } from '../render/highlight';
 import type { VisualNode, VisualPort } from '../visual/types';
 import { initialViewState, revealed, type ViewState } from '../visual/viewState';
+import { EmptyViewHint, inView } from './EmptyViewHint';
 import { Inspector } from './Inspector';
 import { Sidebar } from './Sidebar';
 import { StatusBar } from './StatusBar';
@@ -64,11 +65,10 @@ export function App() {
   // After a layout that may have moved the target, center on it.
   useEffect(() => {
     if (!centerTarget || !graph) return;
+    // Wait for a layout that places it: a new graph is drawn on the
+    // previous layout until its own arrives.
     const nodeId = graph.resourceToNode.get(centerTarget);
-    if (nodeId) {
-      canvas.current?.centerOnNode(nodeId);
-      setCenterTarget(null);
-    }
+    if (nodeId && canvas.current?.centerOnNode(nodeId)) setCenterTarget(null);
   }, [rendered, centerTarget, graph]);
 
   const selectResource = useCallback(
@@ -189,17 +189,16 @@ export function App() {
             <div className="canvas-empty">Laying out…</div>
           )}
           {error && <div className="canvas-error">Layout failed: {error}</div>}
-          {!gs.partial && rendered && rendered.graph.nodes.size === 0 && loaded.graph.resources.length > 0 && (
-            <div className="canvas-hint">
-              <div>
-                <strong>This view shows none of the {loaded.graph.resources.length} resources.</strong>{' '}
-                {view.projection.description} Try{' '}
-                {PROJECTIONS.filter((p) => p.id !== projectionId && (views.get(p.id)?.members.size ?? 0) > 0)
-                  .map((p) => p.label)
-                  .join(' or ') || 'another view'}
-                .
-              </div>
-            </div>
+          {rendered && rendered.graph.nodes.size === 0 && loaded.graph.resources.length > 0 && !(gs.partial && !gs.expanded) && (
+            <EmptyViewHint
+              view={view}
+              views={views}
+              loadedCount={loaded.graph.resources.length}
+              partial={gs.partial}
+              selected={selection?.kind === 'resource' ? index.resource(selection.id)?.name ?? selection.id : undefined}
+              selectedIn={selection?.kind === 'resource' ? PROJECTIONS.filter((p) => inView(views.get(p.id), selection.id)) : []}
+              onProjection={switchProjection}
+            />
           )}
           {gs.partial && !gs.expanded && (
             <div className={`canvas-hint${loaded.graph.resources.length > 0 ? ' top' : ''}`}>

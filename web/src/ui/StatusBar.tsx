@@ -25,6 +25,7 @@ export function StatusBar({ rendered, view, issues, warnings, loadedCount, total
   const noVocabulary = issues.find((i) => i.kind === 'no-vocabulary');
   const undeclared = [...new Set(issues.filter((i) => i.kind === 'unknown-relationship-type').map((i) => i.message))];
   const vocabProblems = view.vocab.problems;
+  // Problems first: they are what needs attention, and the bar may wrap.
   return (
     <div className="statusbar">
       {totals && loadedCount !== undefined && (
@@ -32,15 +33,11 @@ export function StatusBar({ rendered, view, issues, warnings, loadedCount, total
           partial: {loadedCount} of {totals.resources} resources loaded
         </span>
       )}
-      <span>{graph.nodes.size} nodes</span>
-      <span>
-        {graph.edges.length} edges ({counts.drawn ?? 0} relationships, {aggregated} aggregated)
-      </span>
-      <span title="Relationships expressed by nesting rather than an edge">{counts.containment ?? 0} as nesting</span>
-      <span title="Relationships with both ends inside a collapsed group">{counts.internal ?? 0} inside collapsed</span>
-      <span title="Relationships hidden by category or resource filters">{hidden} filtered</span>
-      <span>{view.excluded.length} resources not in this view</span>
-      {dangling > 0 && <span className="warn">{dangling} unresolved reference(s)</span>}
+      {dangling > 0 && (
+        <span className="warn" title="Relationships to resources the inventory lacks. Tick 'Unresolved refs' in the toolbar to draw them.">
+          {dangling} unresolved reference(s)
+        </span>
+      )}
       {noVocabulary && (
         <span className="warn" title={noVocabulary.message}>
           no vocabulary
@@ -61,6 +58,14 @@ export function StatusBar({ rendered, view, issues, warnings, loadedCount, total
           {warnings.length} export warning(s)
         </span>
       )}
+      <span>{graph.nodes.size} nodes</span>
+      <span>
+        {graph.edges.length} edges ({counts.drawn ?? 0} relationships, {aggregated} aggregated)
+      </span>
+      <span title="Relationships expressed by nesting rather than an edge">{counts.containment ?? 0} as nesting</span>
+      <span title="Relationships with both ends inside a collapsed group">{counts.internal ?? 0} inside collapsed</span>
+      <span title="Relationships hidden by category or resource filters">{hidden} filtered</span>
+      <span>{view.excluded.length} resources not in this view</span>
       <span className="right">
         {engineName} · {Math.round(layout.durationMs)} ms
       </span>

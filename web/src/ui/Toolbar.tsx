@@ -50,6 +50,10 @@ export function Toolbar({ view, state, selection, pending, onState, onFit, onZoo
           <input type="checkbox" checked={state.bundleParallel} onChange={(e) => onState((s) => ({ ...s, bundleParallel: e.target.checked }))} />
           Bundle parallel
         </label>
+        <label className="tb-check" title="Draw resources that relationships name but the inventory lacks, in a 'Not in inventory' group">
+          <input type="checkbox" checked={state.showUnresolved} onChange={(e) => onState((s) => ({ ...s, showUnresolved: e.target.checked }))} />
+          Unresolved refs
+        </label>
         <label className="tb-check" title="Off: filters hide things in place and nothing moves. On: filters re-run layout to close gaps.">
           <input type="checkbox" checked={state.reflowOnFilter} onChange={(e) => onState((s) => ({ ...s, reflowOnFilter: e.target.checked }))} />
           Reflow on filter

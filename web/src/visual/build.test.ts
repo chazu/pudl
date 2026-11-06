@@ -144,12 +144,14 @@ describe('visual graph', () => {
     assertEdgesFaithful(g);
   });
 
-  it('shows an unresolved placeholder only when one of its relationships is shown', () => {
+  it('shows an unresolved placeholder only when asked and one of its relationships is shown', () => {
     const view = viewOf('application');
-    const base = initialViewState(view);
+    const base = { ...initialViewState(view), showUnresolved: true };
     expect(buildVisualGraph(view, index, base).nodes.has('n:aws:role:111111111111:bastion-legacy')).toBe(false);
-    const withIam = buildVisualGraph(view, index, { ...base, enabledCategories: new Set([...base.enabledCategories, 'iam']) });
-    expect(withIam.nodes.get('n:aws:role:111111111111:bastion-legacy')?.kind).toBe('unresolved');
+    const withIam = { ...base, enabledCategories: new Set([...base.enabledCategories, 'iam' as const]) };
+    expect(buildVisualGraph(view, index, withIam).nodes.get('n:aws:role:111111111111:bastion-legacy')?.kind).toBe('unresolved');
+    expect(initialViewState(view).showUnresolved).toBe(false);
+    expect(buildVisualGraph(view, index, { ...withIam, showUnresolved: false }).nodes.has('n:aws:role:111111111111:bastion-legacy')).toBe(false);
   });
 
   it('flattens a group whose type is filtered, keeping its members', () => {

@@ -57,15 +57,17 @@ npm run build        # typecheck + bundle into ../internal/webui/static (embedde
 
 - **Views** (left): switch projection. The selection is kept, and the canvas
   centres on it if it is in the new view.
-- **Search**: finds any resource. Clicking a result selects it, expands its
-  collapsed ancestors and centres on it.
+- **Search** (`/` to focus; ↑/↓, Enter, Esc): finds any resource, best
+  match first. Picking a result selects it, expands its collapsed ancestors
+  and centres on it at a readable zoom.
 - **Scope / Resource types**: filters. By default, filtering hides things in
   place and nothing moves. Tick "Reflow on filter" to compact.
 - **Canvas**: drag to pan, wheel to zoom, `f` to fit, `Esc` to clear. Click a
   node, port, group header or edge to inspect it. Double-click a group header
   (or use its −/+ box) to collapse or expand it.
 - **Toolbar**: relayout from scratch, direction, expand or collapse all,
-  bundle parallel edges, focus (1 or 2 hops from the selection). The category
+  bundle parallel edges, show unresolved references (off by default),
+  focus (1 or 2 hops from the selection). The category
   chips are the legend and also toggle each category.
 - **Inspector** (right): identity, placement in this view and why, which views
   the resource appears in, every relationship with its basis and how it is
