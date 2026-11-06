@@ -17,8 +17,8 @@ secret. The collection must keep only what it needs and must fail closed.
 ## Decisions (2026-11-06, with the user)
 
 1. **Read-only token only.** pudl reads the token from `PUDL_PULUMI_TOKEN`
-   and refuses a token that it cannot identify as the configured read-only
-   token. pudl never uses the `pulumi` CLI, `PULUMI_ACCESS_TOKEN` or
+   and refuses a token that it cannot prove to be the configured org token
+   with a read-only role (section 3). pudl never uses the `pulumi` CLI, `PULUMI_ACCESS_TOKEN` or
    `~/.pulumi/credentials.json`, which hold a personal token with write
    access.
 2. **Collectors in CUE.** No shell helpers and no `jq`. A new core populate
@@ -165,30 +165,73 @@ Settings are hidden fields with no defaults. The workspace must set them:
 
 ```cue
 _pulumiOrg:       string & !="" // the Pulumi Cloud organization
-_pulumiTokenTeam: string & !="" // the team whose token pudl accepts
+_pulumiTokenName: string & !="" // the org access token pudl accepts
 ```
 
 ### 3. Token guard
 
+#### Spike findings (2026-11-06, `pudl-7g8j.2`)
+
+- **A read-only role is possible.** Pulumi Cloud custom roles (Pro and
+  Enterprise editions) are built from permission sets of scopes. The stack
+  scopes are separate: `stack:read`, `stack:list`, `stack:export`,
+  `stack:decrypt`, `stack:encrypt`, `stack:write`, `stack:import`,
+  `stack:delete` and others. A set of `stack:read`, `stack:export` and
+  other read scopes, with no `stack:decrypt` and no write scope, is what
+  pudl needs.
+- **The built-in "Stack Read" set is not safe.** It includes `stack:decrypt`
+  and `stack:encrypt`. pudl must not use a token with a role built on it.
+- **Org access tokens take exactly one role.** Team tokens get the union of
+  their team's roles. Personal tokens get all of the user's permissions.
+- **`/api/user` does not return a role.** `tokenInfo` has only `name`,
+  `organization` and `team`.
+- **The role can be read with GET requests.**
+  `GET /api/orgs/O/roles?uxPurpose=role&assignedToMe=true` returns the
+  caller's roles. A role's `details` is a tree of descriptors (`Compose`,
+  `Group`, `Condition`) that refers to a policy by ID;
+  `?uxPurpose=policy` lists policies and `?uxPurpose=set` lists permission
+  sets with their `permissions`. Without `uxPurpose` the list returns HTTP
+  400. `GET /api/orgs/O/roles/{id}` needs more rights than the list.
+- **Not yet verified:** what `assignedToMe` returns for an org token, and
+  which scopes an org token needs to list policies and sets
+  (`role:read` exists). `pudl-7g8j.10` checks this with a live token.
+
+#### Design
+
+pudl accepts only an **org access token** with a **custom read-only role**.
+The guard sends several GET requests and evaluates one check over all of
+their responses (`pudl-7g8j.9` extends `guard.get` to a map of named paths):
+
 ```cue
 _pulumiGuard: {
-	get: "/api/user"
+	get: {
+		user:     "/api/user"
+		roles:    "/api/orgs/\(_pulumiOrg)/roles?uxPurpose=role&assignedToMe=true"
+		policies: "/api/orgs/\(_pulumiOrg)/roles?uxPurpose=policy"
+		sets:     "/api/orgs/\(_pulumiOrg)/roles?uxPurpose=set"
+	}
 	check: {
-		in:     _
-		ok:     in.tokenInfo.team == _pulumiTokenTeam
-		reason: "PUDL_PULUMI_TOKEN must be a token of team \(_pulumiTokenTeam)"
+		in: _
+		ok: <see below>
+		reason: "PUDL_PULUMI_TOKEN must be org token \(_pulumiTokenName) with a read-only role"
 	}
 }
 ```
 
-A personal token has no `tokenInfo`, and an org token has `organization`
-instead of `team`, so pudl refuses both. The guard proves which token pudl
-holds, but not its scopes. The team's role in Pulumi Cloud must be the
-read-only permission set (`stack:read`, no `stack:decrypt`, no write). A
-spike finds out if a GET that this token may call returns the team's
-scopes. If one does, the guard also requires the scopes to be in an allow
-list. A decrypt probe is not possible (it is a POST), and a write probe is
-never acceptable.
+`ok` is true only when all of these hold:
+
+1. `in.user.tokenInfo.organization == _pulumiOrg` and
+   `in.user.tokenInfo.name == _pulumiTokenName`. A personal or team token
+   fails here.
+2. The token has exactly one role.
+3. Every descriptor that the role and its policy refer to has a known
+   `__type`, and every permission set that they reach grants only scopes in
+   the allow list: `stack:read`, `stack:list`, `stack:export`,
+   `stack_access:read`, `stack_deployment:read`, `role:read`, and the
+   org-level read scopes. An unknown shape fails the check.
+
+A decrypt probe is not possible (it is a POST), and a write probe is never
+acceptable.
 
 ### 4. `pulumi.#Stack`: one record per stack
 
@@ -296,15 +339,18 @@ Rules:
   allowed path. Also an update with `config`, `deployment` and
   `pulumi.env.*`. The test ingests them and searches every stored byte
   (payloads, facts, catalog) for each planted value. It must find zero.
-- Guard tests: a personal token, an org token and a token of another team
-  fail, and the server sees no request after `/api/user`.
+- Guard tests: a personal token, a team token, another org token, a role with
+  `stack:decrypt` or a write scope, and an unknown descriptor shape all
+  fail, and the server sees no request after the guard.
 
 ## Delivery
 
 | Issue | Work | Size |
 |---|---|---|
 | `pudl-7g8j.1` | Core `#HTTPObserve`: schema, executor, guard, paging, `reject_keys`, ratchet, tests | about 1 day |
-| `pudl-7g8j.2` | Spike: what a read-only team token can read about its own scopes | about 1 hour |
+| `pudl-7g8j.2` | Spike: whether a read-only role exists and how a token can read it (done) | about 1 hour |
+| `pudl-7g8j.9` | Core: `guard.get` as a map of named requests, one check over all | about 2 hours |
+| `pudl-7g8j.10` | Live check with an org token that has a read-only role (needs an org admin) | about 30 minutes |
 | `pudl-7g8j.3` | Pack skeleton, settings, guard, `pulumi.#Stack`, fixtures, README | about half a day |
 | `pudl-7g8j.4` | `pulumi.#Resource`, allow list, hostile fixture test, facts and rules | about 1 day |
 | `pudl-7g8j.5` | `k8s.object` key, `gcp.resource` kind and the first GCP set | about half a day |
@@ -314,9 +360,8 @@ Rules:
 
 ## Open questions
 
-1. Is the read-only permission set the role of a team, so that a team token
-   exists? If it is a custom role on an org token, the guard must check
-   `tokenInfo.organization` and `tokenInfo.name` instead.
+1. What does `assignedToMe` return for an org token, and does listing
+   policies and sets need `role:read`? (`pudl-7g8j.10`)
 2. The exact Pulumi `id` format of each first-set GCP type. Verify it
    against a live export.
 3. Does the Go SDK record `sourcePosition`?
