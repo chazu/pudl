@@ -8,7 +8,7 @@ noticed. Gitleaks finds secrets, not operational details.
 
 ## What changed
 
-1. **`scripts/push-scan.sh`**, run by a new lefthook `pre-push` job
+1. **`.lefthook/pre-push/push-scan.sh`**, run by a new lefthook `pre-push` job
    (`use_stdin: true`). For each outgoing commit it scans the message and
    every added patch line (`+++` lines carry new file paths) against a term
    file, case-insensitively. Any match blocks the push and lists the commit
@@ -27,6 +27,13 @@ noticed. Gitleaks finds secrets, not operational details.
 - New branch, or a remote sha that is not local (another clone pushed):
   every commit of the local sha that no remote-tracking ref has.
 - Branch deletes are skipped.
+
+## Why a lefthook script, not `run`
+
+Lefthook skips a pre-push `run` job when its own list of push files is
+empty, for example on a new branch (`no matching push files`). Script jobs
+have no such skip. The first version used `run` and a dry-run push of a new
+branch skipped the scan; as a script it blocks.
 
 ## Setup per clone
 

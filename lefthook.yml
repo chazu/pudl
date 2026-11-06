@@ -18,6 +18,9 @@ pre-push:
   jobs:
     - name: push-scan
       # Block commits that name operational details (orgs, repos, projects,
-      # stacks) from the local term file; see scripts/push-scan.sh.
-      run: sh scripts/push-scan.sh
+      # stacks) from the local term file. A script, not `run`: lefthook skips
+      # a pre-push `run` job when it finds no push files (a new branch, say),
+      # and this scan must never be skipped.
+      script: push-scan.sh
+      runner: sh
       use_stdin: true
