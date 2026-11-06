@@ -23,6 +23,7 @@ export function TimeControl({ source, asOf, onAsOf }: Props) {
   const [snapshots, setSnapshots] = useState<SnapshotInfo[]>([]);
   const [custom, setCustom] = useState('');
   const [pickedId, setPickedId] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     source.snapshots?.().then(setSnapshots).catch(() => setSnapshots([]));
@@ -35,44 +36,55 @@ export function TimeControl({ source, asOf, onAsOf }: Props) {
   const picked = snapshots.find((s) => s.id === pickedId);
   const selected = !asOf ? 'now' : picked && atSnapshot(picked) === asOf ? picked.id : 'custom';
 
+  // One compact row; the date-time input appears only for a custom time.
+  const showCustom = picking || selected === 'custom';
   return (
     <section className="timectl">
-      <h3>Time</h3>
-      <select
-        value={selected}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (v === 'now') onAsOf(null);
-          else if (v !== 'custom') {
-            const s = snapshots.find((x) => x.id === v);
-            if (s) {
-              setPickedId(s.id);
-              onAsOf(atSnapshot(s));
+      <label className="time-row">
+        <span className="time-label">Time</span>
+        <select
+          value={picking ? 'pick' : selected}
+          onChange={(e) => {
+            const v = e.target.value;
+            setPicking(v === 'pick');
+            if (v === 'now') onAsOf(null);
+            else if (v !== 'custom' && v !== 'pick') {
+              const s = snapshots.find((x) => x.id === v);
+              if (s) {
+                setPickedId(s.id);
+                onAsOf(atSnapshot(s));
+              }
             }
-          }
-        }}
-      >
-        <option value="now">Now (live)</option>
-        {selected === 'custom' && asOf && <option value="custom">{fmt(asOf)}</option>}
-        {snapshots.map((s) => (
-          <option key={s.id} value={s.id}>
-            {fmt(s.createdAt)} · {s.model || s.scope || s.id}
-            {s.complete ? '' : ' (incomplete)'}
-          </option>
-        ))}
-      </select>
-      <form
-        className="custom-time"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (custom) onAsOf(new Date(custom).toISOString());
-        }}
-      >
-        <input type="datetime-local" step="1" value={custom || (asOf ? toLocalInput(asOf) : '')} onChange={(e) => setCustom(e.target.value)} />
-        <button type="submit" disabled={!custom}>
-          Go
-        </button>
-      </form>
+          }}
+        >
+          <option value="now">Now (live)</option>
+          {selected === 'custom' && asOf && <option value="custom">{fmt(asOf)}</option>}
+          {snapshots.map((s) => (
+            <option key={s.id} value={s.id}>
+              {fmt(s.createdAt)} · {s.model || s.scope || s.id}
+              {s.complete ? '' : ' (incomplete)'}
+            </option>
+          ))}
+          <option value="pick">Custom time…</option>
+        </select>
+      </label>
+      {showCustom && (
+        <form
+          className="custom-time"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (custom) {
+              setPicking(false);
+              onAsOf(new Date(custom).toISOString());
+            }
+          }}
+        >
+          <input type="datetime-local" step="1" value={custom || (asOf ? toLocalInput(asOf) : '')} onChange={(e) => setCustom(e.target.value)} />
+          <button type="submit" disabled={!custom}>
+            Go
+          </button>
+        </form>
+      )}
     </section>
   );
 }

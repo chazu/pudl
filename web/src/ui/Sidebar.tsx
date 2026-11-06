@@ -7,9 +7,10 @@ import type { ProjectionId, SemanticView } from '../projection/types';
 import type { Selection } from '../render/highlight';
 import type { ViewState } from '../visual/viewState';
 import { CoveragePanel } from './CoveragePanel';
-import { isOnlyOwner, isOnlyType, onlyOwner, onlyType } from './filters';
+import { ScopeSection, TypeSection, type OwnerItem } from './FilterLists';
 import { HierarchyTree } from './HierarchyTree';
 import { SearchBox } from './SearchBox';
+import { SidebarSection } from './SidebarSection';
 
 interface Props {
   meta: GraphMeta;
@@ -86,13 +87,13 @@ export function Sidebar(props: Props) {
 
   // Owners (accounts/projects) for the scope selector.
   const owners = useMemo(() => {
-    const out = new Map<string, { provider: string; label: string }>();
+    const out = new Map<string, OwnerItem>();
     for (const r of index.graph.resources) {
       if (!r.account || out.has(r.account)) continue;
       const owner = ownerResource(index, r);
-      out.set(r.account, { provider: r.provider, label: owner && owner.name !== r.account ? `${owner.name} (${r.account})` : r.account });
+      out.set(r.account, { owner: r.account, provider: r.provider, label: owner && owner.name !== r.account ? `${owner.name} (${r.account})` : r.account });
     }
-    return [...out.entries()].sort((a, b) => a[1].provider.localeCompare(b[1].provider) || a[0].localeCompare(b[0]));
+    return [...out.values()].sort((a, b) => a.provider.localeCompare(b.provider) || a.owner.localeCompare(b.owner));
   }, [index]);
 
   // Resource types present in this view, with counts.
@@ -106,27 +107,6 @@ export function Sidebar(props: Props) {
     for (const id of view.groupOf.keys()) add(id);
     return [...counts.entries()].sort((a, b) => index.vocab.resourceType(a[0]).cls.localeCompare(index.vocab.resourceType(b[0]).cls) || a[0].localeCompare(b[0]));
   }, [index, view]);
-
-  const toggleOwner = (owner: string) =>
-    onState((s) => {
-      const all = owners.map(([o]) => o);
-      const scope = new Set(s.scope ?? all);
-      if (scope.has(owner)) scope.delete(owner);
-      else scope.add(owner);
-      return { ...s, scope: scope.size === all.length ? null : scope };
-    });
-  // Every type in the graph, so "only" holds when the view changes.
-  const allTypes = useMemo(() => [...new Set(index.graph.resources.map((r) => r.type))], [index]);
-  const isolateOwner = (owner: string) => onState((s) => ({ ...s, scope: onlyOwner(s.scope, owner) }));
-  const isolateType = (type: string) => onState((s) => ({ ...s, hiddenTypes: onlyType(s.hiddenTypes, type, allTypes) }));
-
-  const toggleType = (type: string) =>
-    onState((s) => {
-      const hiddenTypes = new Set(s.hiddenTypes);
-      if (hiddenTypes.has(type)) hiddenTypes.delete(type);
-      else hiddenTypes.add(type);
-      return { ...s, hiddenTypes };
-    });
 
   return (
     <aside className="sidebar">
@@ -165,50 +145,12 @@ export function Sidebar(props: Props) {
         />
       </section>
 
-      <section>
-        <h3>Scope</h3>
-        <ul className="checks">
-          {owners.map(([owner, info]) => (
-            <li key={owner}>
-              <label>
-                <input type="checkbox" checked={!state.scope || state.scope.has(owner)} onChange={() => toggleOwner(owner)} />
-                <span className="prov">{info.provider.toUpperCase()}</span> {info.label}
-              </label>
-              <OnlyButton only={isOnlyOwner(state.scope, owner)} what={info.label} onClick={() => isolateOwner(owner)} />
-            </li>
-          ))}
-        </ul>
-      </section>
+      <ScopeSection owners={owners} state={state} onState={onState} />
+      <TypeSection index={index} types={types} state={state} onState={onState} />
 
-      <section>
-        <h3>Resource types</h3>
-        <ul className="checks">
-          {types.map(([type, n]) => (
-            <li key={type}>
-              <label title={type}>
-                <input type="checkbox" checked={!state.hiddenTypes.has(type)} onChange={() => toggleType(type)} />
-                <span className={`code cls-${index.vocab.resourceType(type).cls}`}>{index.vocab.resourceType(type).code}</span> {index.vocab.resourceType(type).label}
-                <span className="count">{n}</span>
-              </label>
-              <OnlyButton only={isOnlyType(state.hiddenTypes, type, allTypes)} what={index.vocab.resourceType(type).label} onClick={() => isolateType(type)} />
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="grow">
-        <h3>Hierarchy · {view.projection.label}</h3>
+      <SidebarSection id="hierarchy" title={`Hierarchy · ${view.projection.label}`} grow>
         <HierarchyTree view={view} state={state} selection={props.selection} nameOf={nameOf} onSelectResource={props.onSelectResource} onSelectGroup={props.onSelectGroup} onToggleGroup={props.onToggleGroup} />
-      </section>
+      </SidebarSection>
     </aside>
-  );
-}
-
-/** Isolates one list item; reads "all" (and shows everything) once it is isolated. */
-function OnlyButton({ only, what, onClick }: { only: boolean; what: string; onClick(): void }) {
-  return (
-    <button type="button" className={`only${only ? ' on' : ''}`} onClick={onClick} title={only ? 'Show all again' : `Show only ${what}`}>
-      {only ? 'all' : 'only'}
-    </button>
   );
 }

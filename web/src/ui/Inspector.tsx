@@ -24,10 +24,27 @@ export interface InspectorProps {
   onExpand?(id: ResourceId): void;
 }
 
-export function Inspector(props: InspectorProps) {
+interface Props extends InspectorProps {
+  open: boolean;
+  onToggle(): void;
+}
+
+export function Inspector({ open, onToggle, ...props }: Props) {
   const { selection } = props;
+  if (!open) {
+    return (
+      <aside className="inspector closed">
+        <button type="button" className="insp-toggle" title="Show the inspector (i)" onClick={onToggle}>
+          «
+        </button>
+      </aside>
+    );
+  }
   return (
     <aside className="inspector">
+      <button type="button" className="insp-toggle insp-hide" title="Hide the inspector (i)" onClick={onToggle}>
+        »
+      </button>
       {!selection && <EmptyInspector />}
       {selection?.kind === 'resource' && <ResourcePanel {...props} id={selection.id} />}
       {selection?.kind === 'group' && <GroupPanel {...props} groupId={selection.id} />}
@@ -50,6 +67,10 @@ function EmptyInspector() {
         <dd>collapse / expand</dd>
         <dt>f / Esc</dt>
         <dd>fit / clear selection</dd>
+        <dt>/</dt>
+        <dd>search</dd>
+        <dt>i</dt>
+        <dd>hide / show this panel</dd>
       </dl>
       <p className="muted">
         Edge styles distinguish categories. Nesting is a property of the current view, not a claim of exclusive
