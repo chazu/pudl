@@ -18,6 +18,9 @@ import { usePipeline } from './usePipeline';
 
 type ViewStates = Partial<Record<ProjectionId, ViewState>>;
 
+/** Below this window width the inspector starts hidden. */
+const NARROW_SCREEN = 1200;
+
 export function App() {
   const [projectionId, setProjectionId] = useState<ProjectionId>('network');
   const [viewStates, setViewStates] = useState<ViewStates>({});
@@ -26,6 +29,8 @@ export function App() {
   const [centerTarget, setCenterTarget] = useState<ResourceId | null>(null);
   const [layoutNonce, setLayoutNonce] = useState(0);
   const canvas = useRef<CanvasHandle>(null);
+  // The inspector starts hidden on narrow screens and opens on selection.
+  const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth >= NARROW_SCREEN);
 
   const gs = useGraphSource();
   const { source, loaded, loadError, reloading, reloadError, reload, asOf, autoRefresh } = gs;
@@ -61,6 +66,9 @@ export function App() {
     [graph, selection],
   );
   const selectedNodeId = selection?.kind === 'resource' ? graph?.resourceToNode.get(selection.id) : undefined;
+  useEffect(() => {
+    if (selection) setInspectorOpen(true);
+  }, [selection]);
 
   // After a layout that may have moved the target, center on it.
   useEffect(() => {
@@ -113,6 +121,7 @@ export function App() {
       else if (e.key === 'Escape') setSelection(null);
       else if (e.key === '+' || e.key === '=') canvas.current?.zoomBy(1.25);
       else if (e.key === '-') canvas.current?.zoomBy(0.8);
+      else if (e.key === 'i' && !e.metaKey && !e.ctrlKey && !e.altKey) setInspectorOpen((o) => !o);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -122,7 +131,7 @@ export function App() {
   if (!loaded || !index || !view || !state) return <div className="fatal">Loading…</div>;
 
   return (
-    <div className="app">
+    <div className={`app${inspectorOpen ? '' : ' inspector-closed'}`}>
       <Sidebar
         meta={loaded.graph.meta}
         onReload={loaded.graph.meta.origin === 'mock' ? undefined : reload}
@@ -222,6 +231,8 @@ export function App() {
         />
       </main>
       <Inspector
+        open={inspectorOpen}
+        onToggle={() => setInspectorOpen((o) => !o)}
         index={index}
         views={views}
         projectionId={projectionId}

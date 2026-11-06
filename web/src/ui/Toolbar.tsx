@@ -1,4 +1,5 @@
 import type { RelationshipCategory } from '../model/vocabulary';
+import { OptionsMenu } from './OptionsMenu';
 import type { SemanticView } from '../projection/types';
 import { EDGE_STYLES } from '../render/edgeStyle';
 import type { Selection } from '../render/highlight';
@@ -34,30 +35,10 @@ export function Toolbar({ view, state, selection, pending, onState, onFit, onZoo
         <button title="Zoom out (-)" onClick={() => onZoom(0.8)}>−</button>
         <button title="Zoom in (+)" onClick={() => onZoom(1.25)}>+</button>
         <button title="Discard remembered positions and lay out from scratch" onClick={onRelayout}>Relayout</button>
-        {view.projection.layout.algorithm === 'layered' && (
-          <button
-            title="Layout direction"
-            onClick={() => onState((s) => ({ ...s, direction: s.direction === 'RIGHT' ? 'DOWN' : 'RIGHT' }))}
-          >
-            {state.direction === 'RIGHT' ? 'L→R' : 'T→B'}
-          </button>
-        )}
       </div>
       <div className="tb-group">
         <button onClick={() => onState((s) => ({ ...s, collapsed: new Set() }))}>Expand all</button>
         <button onClick={() => onState((s) => ({ ...s, collapsed: new Set(groupIds) }))}>Collapse all</button>
-        <label className="tb-check" title="Merge parallel edges of the same category between the same endpoints">
-          <input type="checkbox" checked={state.bundleParallel} onChange={(e) => onState((s) => ({ ...s, bundleParallel: e.target.checked }))} />
-          Bundle parallel
-        </label>
-        <label className="tb-check" title="Draw resources that relationships name but the inventory lacks, in a 'Not in inventory' group">
-          <input type="checkbox" checked={state.showUnresolved} onChange={(e) => onState((s) => ({ ...s, showUnresolved: e.target.checked }))} />
-          Unresolved refs
-        </label>
-        <label className="tb-check" title="Off: filters hide things in place and nothing moves. On: filters re-run layout to close gaps.">
-          <input type="checkbox" checked={state.reflowOnFilter} onChange={(e) => onState((s) => ({ ...s, reflowOnFilter: e.target.checked }))} />
-          Reflow on filter
-        </label>
       </div>
       <div className="tb-group" title="Show only the selected resource and its neighbourhood over enabled relationships">
         <span className="tb-label">Focus</span>
@@ -76,6 +57,9 @@ export function Toolbar({ view, state, selection, pending, onState, onFit, onZoo
             {d === 0 ? 'Off' : `${d} hop`}
           </button>
         ))}
+      </div>
+      <div className="tb-group">
+        <OptionsMenu view={view} state={state} onState={onState} />
       </div>
       <div className="tb-group legend">
         {available.map((c) => {
