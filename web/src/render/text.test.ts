@@ -8,7 +8,7 @@ describe('middleEllipsis', () => {
     const a = middleEllipsis('gke-example-cluster-a1f9e2-pe-subnet', 20);
     const b = middleEllipsis('gke-example-cluster-a1f9e2-ingress', 20);
     expect(a).toHaveLength(20);
-    expect(a.startsWith('gke-grou')).toBe(true);
+    expect(a.startsWith('gke-exam')).toBe(true);
     expect(a.endsWith('pe-subnet')).toBe(true);
     expect(a).not.toBe(b);
   });
