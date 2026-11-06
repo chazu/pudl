@@ -116,7 +116,7 @@ type SearchHit struct {
 }
 
 // Search finds resources whose name, native ID, type or ID contains q
-// (case-insensitive). Name matches rank first.
+// (case-insensitive). See searchRank for the order.
 func Search(g *Graph, q string, limit int) []SearchHit {
 	q = strings.ToLower(strings.TrimSpace(q))
 	hits := []SearchHit{}
@@ -129,24 +129,19 @@ func Search(g *Graph, q string, limit int) []SearchHit {
 	}
 	var found []scored
 	for _, r := range g.Resources {
-		rank := -1
-		switch {
-		case strings.Contains(strings.ToLower(r.Name), q):
-			rank = 0
-		case strings.Contains(strings.ToLower(r.NativeID), q):
-			rank = 1
-		case strings.Contains(strings.ToLower(r.Type), q), strings.Contains(strings.ToLower(r.ID), q):
-			rank = 2
-		}
-		if rank >= 0 {
+		if rank := searchRank(r, q); rank >= 0 {
 			found = append(found, scored{SearchHit{r.ID, r.Name, r.Type, r.Provider, r.Account, r.Region, r.NativeID}, rank})
 		}
 	}
 	sort.SliceStable(found, func(i, j int) bool {
-		if found[i].rank != found[j].rank {
-			return found[i].rank < found[j].rank
+		a, b := found[i], found[j]
+		if a.rank != b.rank {
+			return a.rank < b.rank
 		}
-		return found[i].hit.Name < found[j].hit.Name
+		if len(a.hit.Name) != len(b.hit.Name) {
+			return len(a.hit.Name) < len(b.hit.Name)
+		}
+		return a.hit.Name < b.hit.Name
 	})
 	for i, f := range found {
 		if i == limit {
@@ -155,4 +150,27 @@ func Search(g *Graph, q string, limit int) []SearchHit {
 		hits = append(hits, f.hit)
 	}
 	return hits
+}
+
+// searchRank orders matches for a lower-cased query: exact name, name
+// prefix, name substring, exact native ID (or its last path segment),
+// native ID substring, then type or ID. -1: no match. The web UI ranks its
+// local search the same way (web/src/ui/searchRank.ts).
+func searchRank(r Resource, q string) int {
+	name, native := strings.ToLower(r.Name), strings.ToLower(r.NativeID)
+	switch {
+	case name == q:
+		return 0
+	case strings.HasPrefix(name, q):
+		return 1
+	case strings.Contains(name, q):
+		return 2
+	case native == q, strings.HasSuffix(native, "/"+q):
+		return 3
+	case strings.Contains(native, q):
+		return 4
+	case strings.Contains(strings.ToLower(r.Type), q), strings.Contains(strings.ToLower(r.ID), q):
+		return 5
+	}
+	return -1
 }

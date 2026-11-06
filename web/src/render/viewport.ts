@@ -30,10 +30,22 @@ export function fitBox(box: Box, width: number, height: number, padding = 32): V
   };
 }
 
-export function centerOn(vp: Viewport, box: Box, width: number, height: number): Viewport {
+/** Zoom at which node labels are comfortably legible. */
+export const READABLE_ZOOM = 0.8;
+
+/**
+ * Center `box` on screen. With `minZoom`, also zoom in to at least that
+ * level (never out), as far as the box still fits on screen.
+ */
+export function centerOn(vp: Viewport, box: Box, width: number, height: number, minZoom?: number, padding = 32): Viewport {
+  let k = vp.k;
+  if (minZoom !== undefined && k < minZoom) {
+    const fits = Math.min((width - padding * 2) / Math.max(box.width, 1), (height - padding * 2) / Math.max(box.height, 1));
+    k = clamp(Math.max(k, Math.min(minZoom, fits)));
+  }
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
-  return { k: vp.k, x: width / 2 - cx * vp.k, y: height / 2 - cy * vp.k };
+  return { k, x: width / 2 - cx * k, y: height / 2 - cy * k };
 }
 
 /**

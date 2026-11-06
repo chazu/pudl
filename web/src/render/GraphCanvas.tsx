@@ -8,11 +8,12 @@ import type { VisualGraph, VisualNode, VisualPort } from '../visual/types';
 import { EDGE_STYLES, labelPoint, pathFor } from './edgeStyle';
 import type { Highlight } from './highlight';
 import { CollapsedShape, GroupShape, LeafShape, PortShape } from './NodeShapes';
-import { centerOn, compensate, fitBox, zoomAt, type Viewport } from './viewport';
+import { centerOn, compensate, fitBox, READABLE_ZOOM, zoomAt, type Viewport } from './viewport';
 
 export interface CanvasHandle {
   fit(): void;
   zoomBy(factor: number): void;
+  /** Center a node, zooming in to a legible level if the view is zoomed far out. */
   centerOnNode(nodeId: string): void;
 }
 
@@ -62,7 +63,7 @@ export const GraphCanvas = forwardRef<CanvasHandle, Props>(function GraphCanvas(
       const box = layout.nodes.get(nodeId);
       if (!box) return;
       const { w, h } = size();
-      setVp((v) => centerOn(v, box, w, h));
+      setVp((v) => centerOn(v, box, w, h, READABLE_ZOOM));
     },
   }));
 
