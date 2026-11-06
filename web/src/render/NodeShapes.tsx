@@ -19,6 +19,13 @@ interface NodeProps {
   onExpand?: (node: VisualNode) => void;
 }
 
+/** A collapsed group's second line: what it holds, and what is not loaded yet. */
+function collapsedSummary(node: VisualNode, internal: number): string {
+  const n = node.memberCount ?? 0;
+  if (node.notLoaded > 0) return `${n} loaded · ${node.notLoaded} not loaded`;
+  return `${n} resources${internal ? ` · ${internal} internal rel.` : ''}`;
+}
+
 /** Width of the not-loaded badge drawn at a node's right edge (0 when none). */
 function badgeWidth(node: VisualNode): number {
   return node.notLoaded > 0 ? `⋯${node.notLoaded}`.length * 6.2 + 8 : 0;
@@ -83,10 +90,11 @@ export function CollapsedShape({ node, box, dimmed, selected, onSelect, onToggle
         <text x={16} y={20} textAnchor="middle">+</text>
       </g>
       <text className={`code cls-${node.styleType}`} x={30} y={20}>{node.code}</text>
-      <text className="nlabel" x={30 + node.code.length * 7 + 6} y={20}>{truncate(node.label, charsFor(box.width - 60 - node.code.length * 7, 12))}</text>
-      <text className="nsub" x={10} y={42}>{`${node.memberCount ?? 0} resources${internal ? ` · ${internal} internal rel.` : ''}`}</text>
+      <text className="nlabel" x={30 + node.code.length * 7 + 6} y={20}>{truncate(node.label, charsFor(box.width - 60 - node.code.length * 7 - badgeWidth(node), 12))}</text>
+      <text className="nsub" x={10} y={42}>{collapsedSummary(node, internal)}</text>
       <title>{`Collapsed: ${node.label}. Edges to its contents end at its boundary. Double-click to expand.`}</title>
-      <NotLoadedBadge node={node} x={box.width - 4} y={box.height - 8} onExpand={onExpand} />
+      {/* Same place as on the expanded group's header, so collapsing never moves it. */}
+      <NotLoadedBadge node={node} x={box.width - 6} y={19} onExpand={onExpand} />
     </g>
   );
 }
