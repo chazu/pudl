@@ -3,10 +3,10 @@
 // survives relayouts and refreshes.
 
 import type { ResourceId } from '../model/canonical';
-import type { RelationshipCategory } from '../model/vocabulary';
+import type { RelationshipCategory, Vocab } from '../model/vocabulary';
 import type { Direction } from '../layout/types';
 import { groupAncestors } from '../projection/project';
-import type { SemanticView } from '../projection/types';
+import type { SemanticGroup, SemanticView } from '../projection/types';
 
 export interface FocusState {
   resourceId: ResourceId;
@@ -30,11 +30,27 @@ export interface ViewState {
   reflowOnFilter: boolean;
 }
 
+/** Views with more resources than this open with every owner (account, project) collapsed. */
+export const LARGE_VIEW = 400;
+
+/** Group types for resources outside the collected inventory (external ranges, unresolved references). */
+const OUTSIDE_GROUPS = new Set(['external', 'unresolved']);
+
+/** An owner's group: the resource an `account` names (or its stand-in when not collected). */
+export function isOwnerGroup(g: SemanticGroup, vocab: Vocab): boolean {
+  return !!vocab.resourceType(g.groupType).admin?.owner;
+}
+
 export function initialViewState(view: SemanticView): ViewState {
   const def = view.projection;
   const collapsed = new Set<string>();
   if (def.defaultCollapsed) {
     for (const g of view.groups.values()) if (def.defaultCollapsed(g, view.vocab)) collapsed.add(g.id);
+  }
+  // A large view opens as an overview: owners, and the groupings of
+  // resources outside the inventory, collapsed; each one a box to open.
+  if (view.members.size + view.groupOf.size > LARGE_VIEW) {
+    for (const g of view.groups.values()) if (isOwnerGroup(g, view.vocab) || OUTSIDE_GROUPS.has(g.groupType)) collapsed.add(g.id);
   }
   return {
     collapsed,

@@ -37,6 +37,16 @@ export class LiveGraphSource implements GraphSource {
     return parseCanonicalGraph(await getJSON(url), 'pudl catalog', 'live');
   }
 
+  async overview(closure: string[], opts: LoadOptions = {}): Promise<CanonicalGraph> {
+    const url = `/api/graph${query({ overview: '1', closure: closure.join(','), as_of: opts.asOf })}`;
+    return parseCanonicalGraph(await getJSON(url), 'pudl catalog', 'live');
+  }
+
+  async owned(ids: string[], closure: string[], opts: LoadOptions = {}): Promise<CanonicalGraph> {
+    const url = `/api/graph${query({ owner: ids.join(','), closure: closure.join(','), as_of: opts.asOf })}`;
+    return parseCanonicalGraph(await getJSON(url), 'pudl catalog', 'live');
+  }
+
   async search(q: string, opts: LoadOptions = {}): Promise<SearchHit[]> {
     const body = await getJSON(`/api/search${query({ q, limit: '40', as_of: opts.asOf })}`);
     return Array.isArray(body) ? body : [];

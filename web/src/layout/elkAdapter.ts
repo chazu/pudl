@@ -85,7 +85,7 @@ export function toElkGraph(graph: VisualGraph, config: LayoutConfig): ElkNode {
     if (isGroup) {
       options['elk.padding'] = GROUP_PADDING;
       options['elk.nodeSize.constraints'] = 'MINIMUM_SIZE';
-      options['elk.nodeSize.minimum'] = '(180,60)';
+      options['elk.nodeSize.minimum'] = `(${SIZES.groupMin.width},${SIZES.groupMin.height})`;
       if (!layered) {
         options['elk.algorithm'] = 'rectpacking';
         options['elk.spacing.nodeNode'] = '10';

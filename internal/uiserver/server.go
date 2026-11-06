@@ -139,18 +139,26 @@ func Handler(opts Options) http.Handler {
 			return
 		}
 		q := r.URL.Query()
-		if focus := splitList(q.Get("focus")); len(focus) > 0 {
+		// Without a closure (a client that has no vocabulary yet), follow
+		// containment so what is loaded can still be placed.
+		closure := splitList(q.Get("closure"))
+		if !q.Has("closure") && g.Vocabulary != nil {
+			closure = g.Vocabulary.EdgeTypesIn("containment")
+		}
+		switch {
+		case q.Get("overview") != "":
+			// The administrative resources only: the map a large inventory opens on.
+			g = graphexport.Subgraph(g, graphexport.OverviewIDs(g), 0, closure)
+		case q.Get("owner") != "":
+			// Owner resources and everything they own, without neighbours.
+			owners := splitList(q.Get("owner"))
+			g = graphexport.Subgraph(g, append(owners, graphexport.OwnedIDs(g, owners)...), 0, closure)
+		case q.Get("focus") != "":
 			depth := 1
 			if d, err := strconv.Atoi(q.Get("depth")); err == nil && d >= 0 && d <= 3 {
 				depth = d
 			}
-			// Without a closure (a client that has no vocabulary yet), follow
-			// containment so what is loaded can still be placed.
-			closure := splitList(q.Get("closure"))
-			if !q.Has("closure") && g.Vocabulary != nil {
-				closure = g.Vocabulary.EdgeTypesIn("containment")
-			}
-			g = graphexport.Subgraph(g, focus, depth, closure)
+			g = graphexport.Subgraph(g, splitList(q.Get("focus")), depth, closure)
 		}
 		writeJSON(w, http.StatusOK, g)
 	})

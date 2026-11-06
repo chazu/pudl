@@ -8,7 +8,7 @@ export interface Viewport {
   k: number;
 }
 
-export const MIN_ZOOM = 0.1;
+export const MIN_ZOOM = 0.02;
 export const MAX_ZOOM = 3;
 
 const clamp = (k: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));

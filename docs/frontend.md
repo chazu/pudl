@@ -399,10 +399,16 @@ load:
   seconds, so snapshots taken in the same second are indistinguishable.
 - **Large inventories: neighbourhoods on demand.** When `/api/summary`
   reports more than 500 resources (`?partialAbove=N` changes the threshold;
-  `?full` disables partial loading), the UI starts empty and loads
-  neighbourhoods as you go. Search runs on the server (`/api/search`).
+  `?full` disables partial loading), the UI starts on the administrative
+  overview (`/api/graph?overview=1`: organizations, folders, accounts and
+  projects) and loads more as you go. Search runs on the server
+  (`/api/search`, ranked exact name, prefix, substring, then native ID).
   Picking a hit loads it and its neighbours. A `⋯N` badge on a node or group
-  header, or "Load neighbours" in the inspector, loads more.
+  header, or "Load neighbours"/"Load contents" in the inspector, loads more.
+  For an owner (account, project) the badge also counts the resources it
+  owns: ownership is the `account` attribute, not a relationship, so
+  `/api/graph?owner=<ids>` (`graphexport.OwnedIDs`) loads them, and
+  `meta.owned` gives each owner's full count.
   `/api/graph?focus=&depth=&closure=` (`graphexport.Subgraph`) returns the
   focus, its N-hop neighbourhood, and the containment closure. The closure
   types come from the UI's vocabulary (`CONTAINMENT_TYPES`), so loaded
@@ -410,8 +416,12 @@ load:
   loaded are returned, plus real `ref:` references. `meta.degree` gives each
   resource's full relationship count, so the UI shows "not loaded" counts and
   never mistakes an unloaded resource for one that is not in the inventory.
-  Loaded neighbourhoods merge (`mergeGraphs`). Reload and auto-refresh
-  re-fetch every neighbourhood loaded so far; time travel works the same way.
+  Loaded parts merge (`mergeGraphs`). Reload and auto-refresh re-fetch the
+  overview and every part loaded so far; time travel works the same way.
+- **Large views open as an overview.** A view with more than `LARGE_VIEW`
+  (400) resources (for example `?full` on a large catalog) opens with every
+  owner group, and the groupings of external ranges and unresolved
+  references, collapsed.
 - **Auto-refresh.** The change stamp combines the catalog's fact write
   sequence and its entry and snapshot counters (`CatalogDB.ChangeStamp`) with
   fingerprints of the rule and schema `.cue` files. The server builds the

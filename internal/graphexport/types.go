@@ -65,6 +65,10 @@ type Meta struct {
 	// Coverage explains what the graph leaves out of the catalog.
 	Coverage *Coverage      `json:"coverage,omitempty"`
 	Degree   map[string]int `json:"degree,omitempty"`
+	// Owned is, for each owner resource present (account, project), how
+	// many resources it owns in the whole graph (see OwnedIDs). Partial
+	// graphs only.
+	Owned    map[string]int `json:"owned,omitempty"`
 	Totals   *Totals        `json:"totals,omitempty"`
 	Warnings []string       `json:"warnings,omitempty"`
 }

@@ -58,7 +58,7 @@ export function toElkIncremental(graph: VisualGraph, config: LayoutConfig, hints
     });
     const group = n.kind === 'group';
     const options: LayoutOptions = group
-      ? { ...base, 'elk.padding': GROUP_PADDING, 'elk.nodeSize.constraints': 'MINIMUM_SIZE', 'elk.nodeSize.minimum': '(180,60)', 'elk.portConstraints': 'FIXED_SIDE' }
+      ? { ...base, 'elk.padding': GROUP_PADDING, 'elk.nodeSize.constraints': 'MINIMUM_SIZE', 'elk.nodeSize.minimum': `(${SIZES.groupMin.width},${SIZES.groupMin.height})`, 'elk.portConstraints': 'FIXED_SIDE' }
       : { 'elk.portConstraints': 'FIXED_SIDE' };
     elk.set(n.id, { id: n.id, ...(group ? {} : { width: n.width, height: n.height }), ports, children: [], edges: [], layoutOptions: options });
   }
