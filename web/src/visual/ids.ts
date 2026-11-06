@@ -4,7 +4,8 @@ import type { ResourceId } from '../model/canonical';
 
 export const SIZES = {
   leaf: { width: 184, height: 44 },
-  collapsed: { width: 204, height: 56 },
+  /** As wide as an expanded group's minimum, so collapsing does not reflow a grid of them. */
+  collapsed: { width: 260, height: 56 },
   unresolved: { width: 184, height: 40 },
   /** An expanded group's minimum: wide enough for a name beside its code and badge, even when empty. */
   groupMin: { width: 260, height: 60 },
