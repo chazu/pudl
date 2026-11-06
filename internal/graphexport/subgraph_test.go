@@ -71,6 +71,18 @@ func TestSearchRanksNameFirst(t *testing.T) {
 	require.Empty(t, Search(g, "  ", 10))
 }
 
+func TestSearchRanksExactThenPrefixThenShorter(t *testing.T) {
+	res := func(id, name string) Resource { return Resource{ID: id, Name: name, Type: "t.x", NativeID: "projects/p/" + name} }
+	g := &Graph{Resources: []Resource{
+		res("a", "gke-core-a1f9-subnet"), res("b", "gke-core-a1f9"), res("c", "core"), res("d", "my-core"), res("e", "core-ingress"),
+	}}
+	var names []string
+	for _, h := range Search(g, "Core", 10) {
+		names = append(names, h.Name)
+	}
+	require.Equal(t, []string{"core", "core-ingress", "my-core", "gke-core-a1f9", "gke-core-a1f9-subnet"}, names)
+}
+
 func TestSubgraphKeepsVocabulary(t *testing.T) {
 	g := testGraph()
 	g.Vocabulary = &graphvocab.Vocabulary{EdgeTypes: []graphvocab.EdgeType{{Type: "in_vpc", Category: "containment"}}}

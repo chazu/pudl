@@ -3,8 +3,9 @@
 
 import type { Box } from '../layout/types';
 import type { VisualNode, VisualPort } from '../visual/types';
+import { middleEllipsis } from './text';
 
-const truncate = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
+const truncate = middleEllipsis;
 const charsFor = (width: number, px: number) => Math.max(4, Math.floor(width / (px * 0.58)));
 
 interface NodeProps {
@@ -19,6 +20,11 @@ interface NodeProps {
 }
 
 /** "⋯N": relationships to resources not loaded yet (partial graphs). Click loads them. */
+/** Width of the not-loaded badge drawn at a node's right edge (0 when none). */
+function badgeWidth(node: VisualNode): number {
+  return node.notLoaded > 0 ? `⋯${node.notLoaded}`.length * 6.2 + 8 : 0;
+}
+
 function NotLoadedBadge({ node, x, y, onExpand }: { node: VisualNode; x: number; y: number; onExpand?: (n: VisualNode) => void }) {
   if (node.notLoaded <= 0) return null;
   const label = `⋯${node.notLoaded}`;
@@ -40,6 +46,10 @@ function NotLoadedBadge({ node, x, y, onExpand }: { node: VisualNode; x: number;
 
 export function GroupShape({ node, box, selected, depth, onSelect, onToggle, onExpand }: NodeProps) {
   const header = 26;
+  const labelRoom = box.width - 70 - node.code.length * 7 - badgeWidth(node);
+  const label = truncate(node.label, charsFor(labelRoom, 12));
+  // The sublabel takes whatever header width the label leaves, if enough to read.
+  const subChars = Math.floor((labelRoom - label.length * 12 * 0.58 - 12) / (10.5 * 0.58));
   return (
     <g className={`vgroup depth-${depth % 4}${node.synthetic ? ' synthetic' : ''}${selected ? ' selected' : ''}`} transform={`translate(${box.x},${box.y})`}>
       <rect className="vgroup-body" width={box.width} height={box.height} rx={4} onClick={(e) => { e.stopPropagation(); onSelect(node); }} />
@@ -50,8 +60,8 @@ export function GroupShape({ node, box, selected, depth, onSelect, onToggle, onE
       </g>
       <text className={`code cls-${node.styleType}`} x={26} y={17}>{node.code}</text>
       <text className="glabel" x={26 + node.code.length * 7 + 8} y={17}>
-        {truncate(node.label, charsFor(box.width - 70 - node.code.length * 7, 12))}
-        {node.sublabel && box.width > 260 ? <tspan className="gsub">{`  ${node.sublabel}`}</tspan> : null}
+        {label}
+        {node.sublabel && subChars >= 8 ? <tspan className="gsub">{`  ${truncate(node.sublabel, subChars)}`}</tspan> : null}
       </text>
       <title>{`${node.synthetic ? 'Grouping (not a resource)' : 'Resource group'}: ${node.label}. Double-click header to collapse.`}</title>
       <NotLoadedBadge node={node} x={box.width - 4} y={16} onExpand={onExpand} />

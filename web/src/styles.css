@@ -119,8 +119,11 @@ code, .code { font-family: var(--mono); }
 .views button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .search { width: 100%; padding: 5px 7px; border: 1px solid var(--border); border-radius: 3px; background: var(--panel-2); color: var(--text); font: inherit; }
 .results { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow: auto; }
-.results li { padding: 3px 4px; cursor: pointer; border-radius: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.results li:hover { background: var(--accent-soft); }
+.results li { padding: 3px 4px; cursor: pointer; border-radius: 2px; white-space: nowrap; overflow: hidden; }
+.results li.active { background: var(--accent-soft); }
+.results .hit-name { overflow: hidden; text-overflow: ellipsis; }
+.results .hit-where { padding-left: 34px; font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.search-none { margin-top: 6px; }
 .results li.out { color: var(--muted); }
 .results .code, .checks .code { display: inline-block; min-width: 34px; font-size: 10px; font-weight: 600; }
 .checks { list-style: none; margin: 0; padding: 0; max-height: 170px; overflow: auto; }
