@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui: usable on large inventories (2026-11-05)
+
+Partial mode opens on an overview of organizations, folders, accounts and
+projects. An owner's `⋯N` badge loads what it owns (`/api/graph?owner=`),
+and large views open with owners collapsed. Search ranks exact matches
+first, has keyboard navigation, and centres a pick at a readable zoom. Long
+names are cut in the middle. Unresolved references are hidden by default,
+and empty views explain themselves. The sidebar folds, the inspector hides
+(`i`), and the toolbar's less-used options are in a menu. pudl-azvs; see
+`implog/2026_11_05_ui_usability_large_inventories.md`.
+
 ### GCP pack: AlloyDB, Redis, Firestore and Cloud SQL backups (2026-11-05)
 
 Batch (c) of `pudl-q4v.7`: AlloyDB clusters and instances, Redis instances
