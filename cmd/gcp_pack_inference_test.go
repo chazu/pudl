@@ -45,6 +45,12 @@ var gcpPackSchemas = map[string]string{
 	"firestore-databases":     "gcp.#FirestoreDatabase",
 	"sql-backups":             "gcp.#SQLBackup",
 	"sql-backup-runs":         "gcp.#SQLBackupRun",
+	"build-triggers":          "gcp.#BuildTrigger",
+	"appengine-apps":          "gcp.#AppEngineApplication",
+	"appengine-services":      "gcp.#AppEngineService",
+	"appengine-versions":      "gcp.#AppEngineVersion",
+	"functions":               "gcp.#CloudFunction",
+	"run-domain-mappings":     "gcp.#RunDomainMapping",
 }
 
 // gcpPackOrgLevel are the fixtures of types above projects: their records
@@ -55,9 +61,14 @@ var gcpPackOrgLevel = map[string]bool{"organizations": true, "folders": true, "o
 // get-iam-policy names no resource, so its collector's transform and set
 // supply it; the container image helper prints gcloud's version list per
 // image, which the transform turns into the image record. Imported as
-// printed, such a record claims no pack type. Kubernetes deployments are
-// collected from CAI only and have no gcloud fixture.
-var gcpPackReshaped = map[string]bool{"iam-policies": true, "container-images": true, "k8s-deployments": true}
+// printed, such a record claims no pack type; so do App Engine versions,
+// which gcloud wraps, and build triggers, whose location the run sets.
+// Kubernetes deployments and App Engine services are collected from CAI only
+// and have no gcloud fixture.
+var gcpPackReshaped = map[string]bool{
+	"iam-policies": true, "container-images": true, "k8s-deployments": true,
+	"build-triggers": true, "appengine-services": true, "appengine-versions": true,
+}
 
 // TestGCPPackFixturesInferTheirType imports each fixture without --schema.
 // Without a valid project ID every fixture is rejected; with the project

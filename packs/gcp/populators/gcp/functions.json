@@ -1,0 +1,92 @@
+[
+  {
+    "name": "projects/example-project/locations/us-central1/functions/order-events",
+    "environment": "GEN_2",
+    "state": "ACTIVE",
+    "createTime": "2025-05-01T08:00:00Z",
+    "updateTime": "2025-09-01T08:00:00Z",
+    "labels": {
+      "team": "payments"
+    },
+    "url": "https://us-central1-example-project.cloudfunctions.net/order-events",
+    "buildConfig": {
+      "runtime": "python312",
+      "entryPoint": "handle",
+      "build": "projects/123456789012/locations/us-central1/builds/00000000-0000-4000-8000-000000000001",
+      "dockerRegistry": "ARTIFACT_REGISTRY",
+      "source": {
+        "storageSource": {
+          "bucket": "gcf-v2-sources-123456789012-us-central1",
+          "object": "order-events/function-source.zip",
+          "generation": "1700000000000000"
+        }
+      },
+      "environmentVariables": {
+        "PIP_INDEX_URL": "https://user:fixture-fn-build-env-not-a-real-password@pypi.example.com/simple"
+      }
+    },
+    "serviceConfig": {
+      "service": "projects/example-project/locations/us-central1/services/order-events",
+      "serviceAccountEmail": "orders-api@example-project.iam.gserviceaccount.com",
+      "ingressSettings": "ALLOW_INTERNAL_ONLY",
+      "availableMemory": "256M",
+      "timeoutSeconds": 60,
+      "maxInstanceCount": 10,
+      "maxInstanceRequestConcurrency": 1,
+      "revision": "order-events-00003-abc",
+      "uri": "https://order-events-abcdefghij-uc.a.run.app",
+      "allTrafficOnLatestRevision": true,
+      "environmentVariables": {
+        "ORDERS_TOPIC": "orders",
+        "WEBHOOK_SECRET": "fixture-fn-env-not-a-real-secret"
+      },
+      "secretEnvironmentVariables": [
+        {
+          "key": "DB_PASSWORD",
+          "projectId": "example-project",
+          "secret": "orders-db-password",
+          "version": "latest"
+        }
+      ]
+    },
+    "eventTrigger": {
+      "eventType": "google.cloud.pubsub.topic.v1.messagePublished",
+      "pubsubTopic": "projects/example-project/topics/orders",
+      "retryPolicy": "RETRY_POLICY_DO_NOT_RETRY",
+      "trigger": "projects/example-project/locations/us-central1/triggers/order-events-000000",
+      "triggerRegion": "us-central1",
+      "serviceAccountEmail": "orders-api@example-project.iam.gserviceaccount.com"
+    },
+    "satisfiesPzi": true
+  },
+  {
+    "name": "projects/example-project/locations/europe-west1/functions/legacy-thumbnailer",
+    "environment": "GEN_1",
+    "state": "ACTIVE",
+    "updateTime": "2023-01-10T08:00:00Z",
+    "url": "https://europe-west1-example-project.cloudfunctions.net/legacy-thumbnailer",
+    "buildConfig": {
+      "runtime": "nodejs18",
+      "entryPoint": "thumbnail",
+      "build": "projects/123456789012/locations/europe-west1/builds/00000000-0000-4000-8000-000000000002",
+      "dockerRegistry": "ARTIFACT_REGISTRY",
+      "source": {
+        "storageSource": {
+          "bucket": "gcf-sources-123456789012-europe-west1",
+          "object": "legacy-thumbnailer.zip",
+          "sourceUploadUrl": "https://storage.googleapis.com/uploads/legacy-thumbnailer.zip?GoogleAccessId=fixture&Signature=fixture-signed-url-not-a-real-signature"
+        }
+      }
+    },
+    "serviceConfig": {
+      "serviceAccountEmail": "example-project@appspot.gserviceaccount.com",
+      "ingressSettings": "ALLOW_ALL",
+      "availableMemory": "256M",
+      "timeoutSeconds": 60,
+      "maxInstanceRequestConcurrency": 1,
+      "revision": "1",
+      "uri": "https://europe-west1-example-project.cloudfunctions.net/legacy-thumbnailer"
+    },
+    "satisfiesPzi": true
+  }
+]

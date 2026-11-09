@@ -469,6 +469,54 @@ alone.
   - CAI's copy of a backup run lags: a run gcloud already reports
     `SUCCESSFUL` can still be `RUNNING` in CAI.
 
+- **Batch (d), 2026-11-09 (`pudl-q4v.7`).** Cloud Build triggers, App
+  Engine applications, services and versions, Cloud Functions and Cloud Run
+  domain mappings, on CAI with gcloud fallbacks, except App Engine services
+  (CAI only).
+  - Live parity (values compared, then end to end both ways with no new
+    records): identical except gcloud's `satisfiesPzi` on functions;
+    `gcloud app versions list` wraps the API object in its own fields
+    (`version` holds it), so the gcloud transform unwraps it first
+    (`_gcpGcloudRecord`).
+  - `gcloud app services list` prints only a service's ID and versions (no
+    `split`, no `networkSettings`, whatever `--format`); `app services
+    describe S` prints the API object but needs each service's ID, a second
+    level of enumeration a command source lacks. App Engine services stay
+    on CAI only.
+  - `gcloud builds triggers list` and `gcloud beta run domain-mappings
+    list` (beta for fully managed Cloud Run) take one location each and
+    refuse `--region=-`. Their fallbacks run over a location setting
+    (`_gcpBuildLocations`, default `global`; `_gcpRunDomainMappingRegions`,
+    default `us-central1`) and are partial, since CAI finds every location.
+  - Neither source always prints a trigger's `resourceName`, so a trigger's
+    identity is its project and UUID; CAI's location comes from the asset
+    name, gcloud's from the run.
+  - A project without an App Engine application answers "does not contain
+    an App Engine application" (`app describe`) or "Apps instance [P] not
+    found" (`app versions list`), now empty inputs; a caller without App
+    Engine rights gets "... (or it may not exist)", a failed input. A
+    disabled Cloud Build API says "Cloud Build has not been used in project
+    P before or it is disabled", without "API", so `_gcpEmptyWhen` now
+    matches "has not been used in project ... before or it is disabled".
+  - With a terminal on stdin, gcloud offers to enable a disabled API and
+    waits for an answer; pudl's runs have no stdin, so it answers no.
+  - `cloudfunctions.googleapis.com/Function` is the v2 API and lists 1st and
+    2nd gen functions.
+  - CAI exports App Engine applications, services and versions twice: under
+    `//appengine.googleapis.com/projects/P/locations/L/applications/P/...`
+    and under the legacy `//appengine.googleapis.com/apps/P/...`. The copies
+    differ: the legacy application lacks `databaseType`, and some
+    applications have no legacy copy; the legacy version carries
+    `envVariables` and a flexible version's `deployment.container`, which
+    the other lacks, and an older `versionUrl` form (no region code). The
+    legacy copy is dropped (`_gcpSkip` now also sees the asset), since only
+    the other covers every resource; env values would be redacted anyway.
+    gcloud's records match the copy kept.
+  - Environment variable and substitution maps can hold credentials, and
+    the path grammar has no map wildcard, so each map is redacted whole and
+    the shape adds its sorted names (`envVariableNames`,
+    `environmentVariableNames`, `substitutionNames`) before redaction.
+
 ## Decisions (2026-11-03)
 
 Made with the user during the access research:

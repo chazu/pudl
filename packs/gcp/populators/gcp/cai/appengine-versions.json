@@ -1,0 +1,80 @@
+[
+  {
+    "name": "//appengine.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/default/versions/v1",
+    "assetType": "appengine.googleapis.com/Version",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/default",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/default/versions/v1",
+          "id": "v1",
+          "env": "standard",
+          "runtime": "python312",
+          "servingStatus": "SERVING",
+          "createTime": "2025-03-01T10:00:00Z",
+          "instanceClass": "F1",
+          "versionUrl": "https://v1-dot-example-project.uc.r.appspot.com",
+          "envVariables": {
+            "DATABASE_URL": "postgres://app:fixture-ae-env-not-a-real-password@10.0.0.5/app",
+            "LOG_LEVEL": "info"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//appengine.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/api/versions/v2",
+    "assetType": "appengine.googleapis.com/Version",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/api",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/api/versions/v2",
+          "id": "v2",
+          "env": "flexible",
+          "runtime": "nodejs",
+          "servingStatus": "STOPPED",
+          "createTime": "2024-08-15T10:00:00Z",
+          "versionUrl": "https://v2-dot-api-dot-example-project.uc.r.appspot.com",
+          "manualScaling": {
+            "instances": 1
+          },
+          "resources": {
+            "cpu": 1,
+            "diskGb": 10,
+            "memoryGb": 0.6
+          },
+          "buildEnvVariables": {
+            "NPM_TOKEN": "fixture-ae-build-env-not-a-real-token"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//appengine.googleapis.com/apps/example-project/services/default/versions/v1",
+    "assetType": "appengine.googleapis.com/Version",
+    "parentFullResourceName": "//appengine.googleapis.com/apps/example-project/services/default",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/default/versions/v1",
+          "id": "v1",
+          "env": "standard",
+          "runtime": "python312",
+          "servingStatus": "SERVING",
+          "createTime": "2025-03-01T10:00:00Z",
+          "instanceClass": "F1",
+          "versionUrl": "https://v1-dot-example-project.uc.r.appspot.com",
+          "envVariables": {
+            "DATABASE_URL": "postgres://app:fixture-ae-env-not-a-real-password@10.0.0.5/app",
+            "LOG_LEVEL": "info"
+          }
+        }
+      }
+    ]
+  }
+]

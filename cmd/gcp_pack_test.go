@@ -21,6 +21,7 @@ var gcpPackTypes = []string{
 	"forwarding-rules", "target-http-proxies", "target-https-proxies", "url-maps", "backend-services", "healthchecks",
 	"http-healthchecks", "network-endpoint-groups", "ssl-certificates", "ssl-policies", "security-policies", "dns-record-sets",
 	"alloydb-clusters", "alloydb-instances", "redis-instances", "firestore-databases", "sql-backups", "sql-backup-runs",
+	"build-triggers", "appengine-apps", "appengine-services", "appengine-versions", "functions", "run-domain-mappings",
 }
 
 var gcpPackFamilies = []string{"network-hygiene", "data-protection", "gke-posture", "iam-hygiene"}

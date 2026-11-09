@@ -44,9 +44,9 @@ _gcpAssetTypes: {
 	"k8s-deployments":      "apps.k8s.io/Deployment"
 }
 
-// Types only CAI lists: gcloud has no command for them, so their collectors
-// search CAI whatever _gcpAssetScope says ("off" acts as "organization") and
-// have no fallback.
+// Types collected only through CAI: gcloud has no command for them, or no
+// fallback was built (gcp_deploy.cue). Their collectors search CAI whatever
+// _gcpAssetScope says ("off" acts as "organization") and have no fallback.
 _gcpCAIOnly: {
 	"k8s-deployments": true
 }
@@ -134,7 +134,9 @@ _gcpAssetTransform: {
 		if _locations == null {false},
 		!list.Contains(_locations, regexp.FindSubmatch("/locations/([^/]+)/", in.name)[1]),
 	][0]
-	_skip: [if _gcpSkip[_t] != _|_ {(_gcpSkip[_t] & {in: _resource}).skip}, false][0]
+	// A skip may read the asset too (_asset), e.g. a duplicate under a legacy
+	// asset name.
+	_skip: [if _gcpSkip[_t] != _|_ {(_gcpSkip[_t] & {in: _resource, _asset: asset}).skip}, false][0]
 	// The first elements exist only for a record to drop, so they select
 	// null; otherwise the shaped resource. (out must be declared outright:
 	// a transform's in is unknown until a record arrives.)
@@ -150,12 +152,17 @@ _gcpAssetTransform: {
 	][0]
 }
 
+// The API object inside a gcloud record, for types whose gcloud command
+// wraps it in its own fields.
+_gcpGcloudRecord: [string]: {in: _, out: _}
+
 // Puts a gcloud list record into the type's shape, or drops what _gcpSkip
-// names.
+// names. A type in _gcpGcloudRecord unwraps the API object first.
 _gcpGcloudTransform: {
 	_t:      string
 	in:      _
-	_record: in
+	let printed = in
+	_record: [if _gcpGcloudRecord[_t] != _|_ {(_gcpGcloudRecord[_t] & {in: printed}).out}, in][0]
 	_skip: [if _gcpSkip[_t] != _|_ {(_gcpSkip[_t] & {in: _record}).skip}, false][0]
 	out: [
 		if _skip {null},

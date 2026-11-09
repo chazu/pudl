@@ -220,7 +220,7 @@ func TestGCPPackLiveCollectorsTreatADisabledAPIAsEmpty(t *testing.T) {
 		require.Empty(t, pr.FailedInputs, model)
 		require.Len(t, pr.EmptyInputs, 1, model)
 		require.Equal(t, "proj-nocompute", pr.EmptyInputs[0].Item, model)
-		require.Equal(t, "API has not been used in project [^ ]+ before or it is disabled", pr.EmptyInputs[0].Pattern, model)
+		require.Equal(t, "has not been used in project [^ ]+ before or it is disabled", pr.EmptyInputs[0].Pattern, model)
 	}
 }
 

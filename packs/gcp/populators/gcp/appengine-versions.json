@@ -1,0 +1,64 @@
+[
+  {
+    "environment": {
+      "name": "STANDARD",
+      "value": 1
+    },
+    "id": "v1",
+    "last_deployed_time": {
+      "datetime": "2025-03-01 10:00:00+00:00"
+    },
+    "project": "example-project",
+    "service": "default",
+    "service_account": null,
+    "traffic_split": 1.0,
+    "version": {
+      "name": "apps/example-project/services/default/versions/v1",
+      "id": "v1",
+      "env": "standard",
+      "runtime": "python312",
+      "servingStatus": "SERVING",
+      "createTime": "2025-03-01T10:00:00Z",
+      "instanceClass": "F1",
+      "versionUrl": "https://v1-dot-example-project.uc.r.appspot.com",
+      "envVariables": {
+        "DATABASE_URL": "postgres://app:fixture-ae-env-not-a-real-password@10.0.0.5/app",
+        "LOG_LEVEL": "info"
+      }
+    }
+  },
+  {
+    "environment": {
+      "name": "FLEXIBLE",
+      "value": 2
+    },
+    "id": "v2",
+    "last_deployed_time": {
+      "datetime": "2024-08-15 10:00:00+00:00"
+    },
+    "project": "example-project",
+    "service": "api",
+    "service_account": null,
+    "traffic_split": 1.0,
+    "version": {
+      "name": "apps/example-project/services/api/versions/v2",
+      "id": "v2",
+      "env": "flexible",
+      "runtime": "nodejs",
+      "servingStatus": "STOPPED",
+      "createTime": "2024-08-15T10:00:00Z",
+      "versionUrl": "https://v2-dot-api-dot-example-project.uc.r.appspot.com",
+      "manualScaling": {
+        "instances": 1
+      },
+      "resources": {
+        "cpu": 1,
+        "diskGb": 10,
+        "memoryGb": 0.6
+      },
+      "buildEnvVariables": {
+        "NPM_TOKEN": "fixture-ae-build-env-not-a-real-token"
+      }
+    }
+  }
+]

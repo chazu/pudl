@@ -1,0 +1,55 @@
+[
+  {
+    "name": "//run.googleapis.com/projects/example-project/locations/us-central1/domainmappings/orders.example.com",
+    "assetType": "run.googleapis.com/DomainMapping",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "apiVersion": "domains.cloudrun.com/v1",
+          "kind": "DomainMapping",
+          "metadata": {
+            "name": "orders.example.com",
+            "namespace": "123456789012",
+            "generation": 1,
+            "creationTimestamp": "2024-04-01T10:00:00.000000Z",
+            "resourceVersion": "AAX0000000000",
+            "selfLink": "/apis/domains.cloudrun.com/v1/namespaces/123456789012/domainmappings/orders.example.com",
+            "uid": "6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e0f",
+            "labels": {
+              "cloud.googleapis.com/location": "us-central1",
+              "team": "payments"
+            },
+            "annotations": {
+              "serving.knative.dev/creator": "fixture-creator@example.com",
+              "serving.knative.dev/lastModifier": "fixture-modifier@example.com"
+            }
+          },
+          "spec": {
+            "routeName": "orders-api",
+            "certificateMode": "AUTOMATIC"
+          },
+          "status": {
+            "conditions": [
+              {
+                "type": "Ready",
+                "status": "True",
+                "lastTransitionTime": "2024-04-01T10:20:00.000000Z"
+              }
+            ],
+            "mappedRouteName": "orders-api",
+            "observedGeneration": 1,
+            "resourceRecords": [
+              {
+                "name": "orders",
+                "type": "CNAME",
+                "rrdata": "ghs.googlehosted.com."
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
+]

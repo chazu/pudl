@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: build and deploy types (2026-11-09)
+
+Batch (d) of `pudl-q4v.7`: Cloud Build triggers, App Engine applications,
+services and versions, Cloud Functions and Cloud Run domain mappings, on
+Cloud Asset Inventory with gcloud fallbacks (live parity verified end to
+end both ways), except App Engine services (CAI only). Environment and
+substitution maps are redacted whole, with their names kept. See
+`implog/2026_11_09_gcp_batch_d_build_deploy.md`. Batches (e)–(f) remain.
+
 ### #HTTPObserve: guard with several named requests (2026-11-06)
 
 `guard.get` can name several paths; pudl sends them in name order and binds

@@ -61,6 +61,14 @@ _gcpImageHistory: int & >0 | *10
 // instance, newest first.
 _gcpBackupHistory: int & >0 | *10
 
+// Locations gcp-build-triggers lists triggers in when it falls back to
+// gcloud, per project. CAI finds triggers in every location.
+_gcpBuildLocations: [string, ...string] | *["global"]
+
+// Regions gcp-run-domain-mappings lists domain mappings in when it falls
+// back to gcloud, per project. CAI finds them in every region.
+_gcpRunDomainMappingRegions: [string, ...string] | *["us-central1"]
+
 // ---- End of live settings. ----
 
 // The schema each collector routes its records to.
@@ -173,12 +181,17 @@ _gcpRunTimeout: [string]: string
 // the project has none of the type, so the observation stays complete and the
 // report lists the project under empty_inputs. gcloud words this per API:
 // most print the reason SERVICE_DISABLED; some (container, kms) print only
-// "... API has not been used in project P before or it is disabled". Any
+// "... API has not been used in project P before or it is disabled", and
+// Cloud Build "Cloud Build has not been used in project P before or it is
+// disabled". A project without an App Engine application says so (app
+// describe) or that its apps instance was not found (app versions list). Any
 // other failure, including a project with billing disabled, is still a
 // failed input unless _gcpExtraEmptyWhen names it.
 _gcpEmptyWhen: [
 	"SERVICE_DISABLED",
-	"API has not been used in project [^ ]+ before or it is disabled",
+	"has not been used in project [^ ]+ before or it is disabled",
+	"does not contain an App Engine application",
+	"Apps instance \\[[^]]+\\] not found",
 ]
 
 // gcloud's aggregated list commands (compute lists that span regions or

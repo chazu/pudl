@@ -1,0 +1,39 @@
+[
+  {
+    "id": "0f6b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
+    "name": "deploy-orders-api",
+    "resourceName": "projects/example-project/locations/global/triggers/0f6b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
+    "description": "Build and deploy orders-api on push to main",
+    "createTime": "2025-02-10T09:00:00Z",
+    "github": {
+      "owner": "example-org",
+      "name": "orders",
+      "push": {
+        "branch": "^main$"
+      }
+    },
+    "filename": "cloudbuild.yaml",
+    "serviceAccount": "projects/example-project/serviceAccounts/deployer@example-project.iam.gserviceaccount.com",
+    "substitutions": {
+      "_APP_NAME": "orders-api",
+      "_NOTIFY_WEBHOOK": "https://hooks.example.com/services/fixture-slack-webhook-not-a-real-url"
+    }
+  },
+  {
+    "id": "1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+    "name": "rotate-certs-manual",
+    "createTime": "2023-06-01T12:00:00Z",
+    "disabled": true,
+    "gitFileSource": {
+      "path": "ops/rotate.yaml",
+      "repoType": "GITHUB",
+      "revision": "refs/heads/main",
+      "uri": "https://github.com/example-org/ops"
+    },
+    "sourceToBuild": {
+      "ref": "refs/heads/main",
+      "repoType": "GITHUB",
+      "uri": "https://github.com/example-org/ops"
+    }
+  }
+]

@@ -17,6 +17,7 @@ var gcpAssetTypes = []string{
 	"forwarding-rules", "target-http-proxies", "target-https-proxies", "url-maps", "backend-services", "healthchecks",
 	"http-healthchecks", "network-endpoint-groups", "ssl-certificates", "ssl-policies", "security-policies",
 	"alloydb-clusters", "alloydb-instances", "redis-instances", "firestore-databases",
+	"appengine-apps", "appengine-versions", "functions", "run-domain-mappings",
 }
 
 type assetPopulate struct {

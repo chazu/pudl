@@ -1,0 +1,71 @@
+[
+  {
+    "name": "//appengine.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/default",
+    "assetType": "appengine.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project/locations/us-central1/applications/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/default",
+          "id": "default",
+          "networkSettings": {
+            "ingressTrafficAllowed": "INGRESS_TRAFFIC_ALLOWED_ALL"
+          },
+          "split": {
+            "allocations": {
+              "v1": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//appengine.googleapis.com/projects/example-project/locations/us-central1/applications/example-project/services/api",
+    "assetType": "appengine.googleapis.com/Service",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project/locations/us-central1/applications/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/api",
+          "id": "api",
+          "labels": {
+            "team": "payments"
+          },
+          "networkSettings": {
+            "ingressTrafficAllowed": "INGRESS_TRAFFIC_ALLOWED_INTERNAL_AND_LB"
+          },
+          "split": {
+            "allocations": {
+              "v2": 1
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//appengine.googleapis.com/apps/example-project/services/default",
+    "assetType": "appengine.googleapis.com/Service",
+    "parentFullResourceName": "//appengine.googleapis.com/apps/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project/services/default",
+          "id": "default",
+          "networkSettings": {
+            "ingressTrafficAllowed": "INGRESS_TRAFFIC_ALLOWED_ALL"
+          },
+          "split": {
+            "allocations": {
+              "v1": 1
+            }
+          }
+        }
+      }
+    ]
+  }
+]

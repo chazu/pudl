@@ -1,0 +1,70 @@
+[
+  {
+    "name": "//appengine.googleapis.com/projects/example-project/locations/us-central1/applications/example-project",
+    "assetType": "appengine.googleapis.com/Application",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project",
+          "id": "example-project",
+          "locationId": "us-central",
+          "servingStatus": "SERVING",
+          "authDomain": "gmail.com",
+          "codeBucket": "staging.example-project.appspot.com",
+          "defaultBucket": "example-project.appspot.com",
+          "defaultHostname": "example-project.uc.r.appspot.com",
+          "gcrDomain": "us.gcr.io",
+          "databaseType": "CLOUD_FIRESTORE",
+          "featureSettings": {
+            "splitHealthChecks": true,
+            "useContainerOptimizedOs": true
+          },
+          "serviceAccount": "example-project@appspot.gserviceaccount.com",
+          "sslPolicy": "MODERN",
+          "iap": {
+            "enabled": true,
+            "oauth2ClientId": "000000000000-fixture.apps.googleusercontent.com",
+            "oauth2ClientSecret": "fixture-iap-secret-not-a-real-secret",
+            "oauth2ClientSecretSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//appengine.googleapis.com/apps/example-project",
+    "assetType": "appengine.googleapis.com/Application",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "name": "apps/example-project",
+          "id": "example-project",
+          "locationId": "us-central",
+          "servingStatus": "SERVING",
+          "authDomain": "gmail.com",
+          "codeBucket": "staging.example-project.appspot.com",
+          "defaultBucket": "example-project.appspot.com",
+          "defaultHostname": "example-project.uc.r.appspot.com",
+          "gcrDomain": "us.gcr.io",
+          "databaseType": "CLOUD_FIRESTORE",
+          "featureSettings": {
+            "splitHealthChecks": true,
+            "useContainerOptimizedOs": true
+          },
+          "serviceAccount": "example-project@appspot.gserviceaccount.com",
+          "sslPolicy": "MODERN",
+          "iap": {
+            "enabled": true,
+            "oauth2ClientId": "000000000000-fixture.apps.googleusercontent.com",
+            "oauth2ClientSecret": "fixture-iap-secret-not-a-real-secret",
+            "oauth2ClientSecretSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        }
+      }
+    ]
+  }
+]

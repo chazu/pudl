@@ -14,12 +14,12 @@ Installed files, under `.pudl/`:
 
 | Path | Contents |
 | --- | --- |
-| `schema/gcp/{network,loadbalancing,compute,gke,data,services,iam,artifacts,k8s,hierarchy,project}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
+| `schema/gcp/{network,loadbalancing,compute,gke,data,services,iam,artifacts,k8s,hierarchy,project,deploy}.cue` | Type schemas (package `gcp`), all `review: status: "draft"` |
 | `schema/gcp/owners.cue` | Ownership: the project-to-team table the types share |
 | `schema/gcp/policies.cue` | Best-practice policies |
 | `schema/pudl/rules/gcp_pack.cue` | Datalog rules for the checks |
 | `schema/models/gcp_pack.cue` | Collectors, and the optional live settings |
-| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue`, `gcp_loadbalancing.cue`, `gcp_dns_records.cue`, `gcp_datastores.cue`, `gcp_sql_backups.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
+| `schema/models/gcp_assets.cue`, `gcp_iam.cue`, `gcp_images.cue`, `gcp_hierarchy.cue`, `gcp_project_settings.cue`, `gcp_loadbalancing.cue`, `gcp_dns_records.cue`, `gcp_datastores.cue`, `gcp_sql_backups.cue`, `gcp_deploy.cue` | Cloud Asset Inventory sources and the shape each type is stored in |
 | `schema/models/gcp_pack_checks.cue` | The four check families |
 | `populators/gcp/*.json` | Fixtures: gcloud-shaped output for `example-project` |
 | `populators/gcp/kms-keys.sh` | Helper `gcp-kms-keys` runs: every key ring's keys in one project |
@@ -97,6 +97,12 @@ project is a failed input too, not a project with none of the type.
 | `gcp-kms-keys` | `kms keys list` per key ring, via `kms-keys.sh` | `gcp.#KMSKey` | `name` | `cloudkms.cryptoKeys.list` (same) |
 | `gcp-container-images` | `artifacts repositories list`, `packages list`, then `docker images list --include-tags` per image, via `container-images.sh` | `gcp.#ContainerImage` | `name` (image path) | `artifactregistry.repositories.list`, `artifactregistry.packages.list`, `artifactregistry.versions.list`, `artifactregistry.tags.list` (`roles/artifactregistry.reader`) |
 | `gcp-k8s-deployments` | none: Cloud Asset Inventory only (`apps.k8s.io/Deployment`) | `gcp.#K8sDeployment` | `assetName` | `cloudasset.assets.searchAllResources` (`roles/cloudasset.viewer`) |
+| `gcp-build-triggers` | `builds triggers list --region=L` per location in `_gcpBuildLocations` | `gcp.#BuildTrigger` | `project`, `id` | `cloudbuild.builds.list` (`roles/cloudbuild.builds.viewer`) |
+| `gcp-appengine-apps` | `app describe` | `gcp.#AppEngineApplication` | `name` | `appengine.applications.get` (`roles/appengine.appViewer`) |
+| `gcp-appengine-services` | none: Cloud Asset Inventory only (`appengine.googleapis.com/Service`) | `gcp.#AppEngineService` | `name` | `cloudasset.assets.searchAllResources` (`roles/cloudasset.viewer`) |
+| `gcp-appengine-versions` | `app versions list` | `gcp.#AppEngineVersion` | `name` | `appengine.versions.list` (`roles/appengine.appViewer`) |
+| `gcp-functions` | `functions list` | `gcp.#CloudFunction` | `name` | `cloudfunctions.functions.list` (`roles/cloudfunctions.viewer`) |
+| `gcp-run-domain-mappings` | `beta run domain-mappings list --region=R` per region in `_gcpRunDomainMappingRegions` | `gcp.#RunDomainMapping` | project number, location, domain | `run.domainmappings.list` (`roles/run.viewer`) |
 | `gcp-organizations` | `organizations describe O` per organization | `gcp.#Organization` | `name` | `resourcemanager.organizations.get` (`roles/browser`) |
 | `gcp-folders` | `resource-manager folders list` per parent, via `folders.sh` | `gcp.#Folder` | `name` | `resourcemanager.folders.list` (`roles/browser`) |
 | `gcp-org-policies` | `org-policies list` then `describe` on the organization, folders and projects, via `org-policies.sh` | `gcp.#OrgPolicy` | `name` | `orgpolicy.policies.list` (`roles/orgpolicy.policyViewer`) |
@@ -128,7 +134,13 @@ Pub/Sub push endpoints, which can embed tokens, request header values a
 load balancer adds (backend services' custom request headers, URL map and
 Cloud Armor header actions) and an IAP OAuth client secret, and Kubernetes deployments'
 container environment values and `kubectl.kubernetes.io/last-applied-configuration`
-annotation, which repeats them.
+annotation, which repeats them. Build and deploy types redact environment
+variable and build substitution maps whole (App Engine versions, Cloud
+Functions, Cloud Build triggers) and keep their names in a sibling list
+(`envVariableNames`, `environmentVariableNames`, `substitutionNames`), plus
+an inline build's step arguments, environment and encrypted secrets, a Cloud
+Function's signed upload URL, App Engine's IAP client secret and Cloud Run
+domain mappings' creator/modifier e-mail annotations.
 
 The schemas are drafts. Compare each with your own gcloud output, then set
 `review: {status: "validated", by: "...", at: "YYYY-MM-DD"}`. Until then
@@ -310,6 +322,28 @@ Objects in system namespaces (`kube-system`, `kube-public`,
 `kube-node-lease`, `gke-*`, `gmp-*`) are built-in defaults and are not
 collected.
 
+Build and deploy types (Cloud Build triggers, App Engine applications and
+versions, Cloud Functions, Cloud Run domain mappings) are collected through
+CAI with gcloud fallbacks. Both sources store identical records: gcloud's
+`satisfiesPzi` on functions is dropped, and the API object inside gcloud's
+App Engine version wrapper is stored. App Engine services are collected
+through CAI only: `gcloud app services list` omits a service's traffic
+split and ingress setting. A Cloud Build trigger is identified by its
+project and UUID, because neither source always prints `resourceName`; the
+record adds its `location`. gcloud lists triggers and domain mappings one
+location at a time (`--region=-` is refused), over `_gcpBuildLocations`
+(default `global`) and `_gcpRunDomainMappingRegions` (default
+`us-central1`); CAI finds every location, so those two fallbacks are
+partial and mark nothing gone. A project without an App Engine application
+is an empty input when gcloud says so; when gcloud reports that the caller
+may not read the application ("or it may not exist"), it is a failed input.
+CAI exports App Engine resources twice, under
+`//appengine.googleapis.com/projects/P/locations/L/applications/P/...` and
+under the legacy `//appengine.googleapis.com/apps/P/...`; the legacy copy is
+dropped (it is missing for some applications). Cloud Functions are the v2
+API's (`environment` says `GEN_1` or `GEN_2`), with the location their name
+holds.
+
 Organizations, folders, organization policies and hierarchical firewall
 policies live above projects. Their collectors search each organization the
 credentials can see, whatever `_gcpAssetScope` says (a project search never
@@ -365,6 +399,8 @@ instead of 10.
    _gcpBillingProject: "my-billing-project" // --billing-project for CAI; default "" uses gcloud's billing/quota_project
    _gcpImageHistory: 5 // tagged versions kept per container image, newest first; default 10
    _gcpBackupHistory: 5 // backups kept per Cloud SQL instance, newest first; default 10
+   _gcpBuildLocations: ["global", "us-central1"] // Cloud Build trigger locations gcloud lists (fallback); default ["global"]
+   _gcpRunDomainMappingRegions: ["us-central1", "europe-west1"] // domain mapping regions gcloud lists (fallback); default ["us-central1"]
    ```
 
    Key rings are listed per project and location; `gcp-kms-keys` lists the

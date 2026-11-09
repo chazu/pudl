@@ -1,0 +1,94 @@
+[
+  {
+    "name": "//cloudbuild.googleapis.com/projects/123456789012/locations/global/triggers/0f6b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
+    "assetType": "cloudbuild.googleapis.com/BuildTrigger",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "0f6b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
+          "name": "deploy-orders-api",
+          "resourceName": "projects/example-project/locations/global/triggers/0f6b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d",
+          "description": "Build and deploy orders-api on push to main",
+          "createTime": "2025-02-10T09:00:00Z",
+          "github": {
+            "owner": "example-org",
+            "name": "orders",
+            "push": {
+              "branch": "^main$"
+            }
+          },
+          "filename": "cloudbuild.yaml",
+          "serviceAccount": "projects/example-project/serviceAccounts/deployer@example-project.iam.gserviceaccount.com",
+          "substitutions": {
+            "_APP_NAME": "orders-api",
+            "_NOTIFY_WEBHOOK": "https://hooks.example.com/services/fixture-slack-webhook-not-a-real-url"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//cloudbuild.googleapis.com/projects/123456789012/locations/global/triggers/1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+    "assetType": "cloudbuild.googleapis.com/BuildTrigger",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "1a2b3c4d-5e6f-4a7b-9c8d-0e1f2a3b4c5d",
+          "name": "rotate-certs-manual",
+          "createTime": "2023-06-01T12:00:00Z",
+          "disabled": true,
+          "gitFileSource": {
+            "path": "ops/rotate.yaml",
+            "repoType": "GITHUB",
+            "revision": "refs/heads/main",
+            "uri": "https://github.com/example-org/ops"
+          },
+          "sourceToBuild": {
+            "ref": "refs/heads/main",
+            "repoType": "GITHUB",
+            "uri": "https://github.com/example-org/ops"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "name": "//cloudbuild.googleapis.com/projects/123456789012/locations/us-central1/triggers/2b3c4d5e-6f70-4b8c-9d0e-1f2a3b4c5d6e",
+    "assetType": "cloudbuild.googleapis.com/BuildTrigger",
+    "parentFullResourceName": "//cloudresourcemanager.googleapis.com/projects/example-project",
+    "versionedResources": [
+      {
+        "version": "v1",
+        "resource": {
+          "id": "2b3c4d5e-6f70-4b8c-9d0e-1f2a3b4c5d6e",
+          "name": "nightly-export",
+          "resourceName": "projects/example-project/locations/us-central1/triggers/2b3c4d5e-6f70-4b8c-9d0e-1f2a3b4c5d6e",
+          "createTime": "2024-11-20T03:00:00Z",
+          "serviceAccount": "projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com",
+          "build": {
+            "steps": [
+              {
+                "name": "gcr.io/cloud-builders/gcloud",
+                "args": [
+                  "sql",
+                  "export",
+                  "sql",
+                  "orders-db",
+                  "--token=fixture-build-arg-not-a-real-token"
+                ],
+                "env": [
+                  "EXPORT_TOKEN=fixture-build-env-not-a-real-token"
+                ]
+              }
+            ],
+            "timeout": "600s"
+          }
+        }
+      }
+    ]
+  }
+]
