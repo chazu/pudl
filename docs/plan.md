@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pulumi pack: settings, token guard, pulumi.#Stack (2026-11-10)
+
+`pudl pack install pulumi` installs `pulumi-stacks`. It reads each Pulumi
+Cloud stack and its latest update (repo, directory, commit, dirty) with GET
+requests only. It runs only after a guard accepts the named org access token
+with a read-only role. `pulumi-fixture-stacks` runs offline. See
+`implog/2026_11_10_pulumi_pack_skeleton.md`. Closes `pudl-7g8j.3`.
+
 ### Live check: Pulumi org token with a read-only role (2026-11-10)
 
 An org token with a custom read-only role can read its own role, list

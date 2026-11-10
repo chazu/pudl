@@ -1,0 +1,23 @@
+[
+  {
+    "kind": "refresh",
+    "startTime": 1767311900,
+    "endTime": 1767312000,
+    "version": 7,
+    "result": "failed",
+    "message": "PLANTED-message-7f3a",
+    "environment": {
+      "vcs.kind": "github.com",
+      "vcs.owner": "example-owner",
+      "vcs.repo": "example-infra",
+      "vcs.root": "stacks/network",
+      "git.head": "89abcdef0123456789abcdef0123456789abcdef",
+      "git.headName": "refs/heads/feature",
+      "git.dirty": "true",
+      "pulumi.version": "v3.199.0",
+      "pulumi.env.PULUMI_CONFIG_PASSPHRASE": "PLANTED-env-7f3a"
+    },
+    "config": {},
+    "resourceChanges": {}
+  }
+]

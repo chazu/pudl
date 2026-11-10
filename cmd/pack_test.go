@@ -26,13 +26,13 @@ func packStates(t *testing.T) map[string]string {
 
 func TestPackListShowsInstallState(t *testing.T) {
 	ws := cliWorkspace(t)
-	require.Equal(t, map[string]string{"gcp": "not-installed", "aws": "not-installed"}, packStates(t))
+	require.Equal(t, map[string]string{"gcp": "not-installed", "aws": "not-installed", "pulumi": "not-installed"}, packStates(t))
 
 	r := runCLI(t, "pack", "install", "gcp")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	require.Contains(t, r.Stdout, "Next: pudl check gcp-fixture-firewalls")
 	require.FileExists(t, filepath.Join(ws, ".packs", "gcp.json"))
-	require.Equal(t, map[string]string{"gcp": "installed", "aws": "not-installed"}, packStates(t))
+	require.Equal(t, map[string]string{"gcp": "installed", "aws": "not-installed", "pulumi": "not-installed"}, packStates(t))
 
 	r = runCLI(t, "pack", "list")
 	require.NoError(t, r.Err)

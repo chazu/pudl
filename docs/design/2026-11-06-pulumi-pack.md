@@ -168,6 +168,9 @@ _pulumiOrg:       string & !="" // the Pulumi Cloud organization
 _pulumiTokenName: string & !="" // the org access token pudl accepts
 ```
 
+As built (`pudl-7g8j.3`), `_pulumiAPI` (default `https://api.pulumi.com`)
+sets the API origin, for a self-hosted Pulumi Cloud and for tests.
+
 ### 3. Token guard
 
 #### Spike findings (2026-11-06, `pudl-7g8j.2`)
@@ -197,7 +200,7 @@ _pulumiTokenName: string & !="" // the org access token pudl accepts
 
 An org token with a custom read-only role, GET requests only. Fixtures with
 placeholder values: `packs/pulumi/populators/pulumi/guard-*.json`,
-`stacks.json` and `export.json`.
+`stacks-page-*.json`, `updates-*.json` and `export.json`.
 
 - **`/api/user`.** For an org token, `tokenInfo` is `{name, organization,
   team: null}`. The key `team` is present with the value `null`. The
@@ -268,6 +271,13 @@ _pulumiGuard: {
 A decrypt probe is not possible (it is a POST), and a write probe is never
 acceptable.
 
+As built (`pudl-7g8j.3`, `packs/pulumi/schema/models/pulumi_guard.cue`):
+the walk is not recursive, because CUE 0.16 reports a cycle in a recursive
+walk. Each tree is read four levels deep, and IDs are followed for three
+rounds (role, policy, set). A deeper tree, or an ID cycle, fails the check.
+`reason` names the condition that failed and, for condition 3, the scopes
+outside the allow list.
+
 ### 4. `pulumi.#Stack`: one record per stack
 
 Collector `pulumi-stacks`:
@@ -290,6 +300,11 @@ It drops `message`, `config`, `deployment`, `resourceChanges`, and all other
 `environment` keys (`git.author*`, `git.committer*`, `pulumi.env.*`,
 `pulumi.flag.*`, `pulumi.os`, `pulumi.arch`). Identity: `stack`. A new update
 gives a new version of the record. A stack with no updates gives no record.
+
+As built (`pudl-7g8j.3`): the observation scope is `pulumi/<org>/stacks`,
+so a run for one organization marks nothing of another one gone. The live
+check of 2026-11-10 confirmed the update shape: the newest update comes
+first, and `resourceCount` can be absent.
 
 ### 5. `pulumi.#Resource`: one record per state resource
 
@@ -366,7 +381,8 @@ Rules:
 - `populators/pulumi/`: fixtures for `/api/user` (team, org and personal
   tokens), a stack list in two pages, updates and exports.
 - Fixture collectors (`pulumi-fixture-*`) use `#CommandObserve` with `cat`
-  and the same CUE transforms. Go tests on `httptest.NewTLSServer` cover
+  and the same CUE transforms. `#CommandObserve` has no `records` path, so
+  an update fixture is the `updates` array of the response. Go tests on `httptest.NewTLSServer` cover
   the HTTP behaviour.
 - **Hostile fixture.** An export with a kubeconfig provider, a Secret with a
   last-applied annotation, a `command:local:Command` with env values, a
@@ -386,7 +402,7 @@ Rules:
 | `pudl-7g8j.2` | Spike: whether a read-only role exists and how a token can read it (done) | about 1 hour |
 | `pudl-7g8j.9` | Core: `guard.get` as a map of named requests, one check over all | about 2 hours |
 | `pudl-7g8j.10` | Live check with an org token that has a read-only role (done) | about 30 minutes |
-| `pudl-7g8j.3` | Pack skeleton, settings, guard, `pulumi.#Stack`, fixtures, README | about half a day |
+| `pudl-7g8j.3` | Pack skeleton, settings, guard, `pulumi.#Stack`, fixtures, README (done) | about half a day |
 | `pudl-7g8j.4` | `pulumi.#Resource`, allow list, hostile fixture test, facts and rules | about 1 day |
 | `pudl-7g8j.5` | `k8s.object` key, `gcp.resource` kind and the first GCP set | about half a day |
 | `pudl-7g8j.6` | `member_only` graph flag and the inspector section | about half a day |

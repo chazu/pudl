@@ -1,0 +1,48 @@
+[
+  {
+    "kind": "update",
+    "startTime": 1767225500,
+    "endTime": 1767225600,
+    "version": 42,
+    "result": "succeeded",
+    "message": "PLANTED-message-7f3a",
+    "environment": {
+      "vcs.kind": "github.com",
+      "vcs.owner": "example-owner",
+      "vcs.repo": "example-infra",
+      "vcs.root": "stacks/app",
+      "git.head": "0123456789abcdef0123456789abcdef01234567",
+      "git.headName": "refs/heads/main",
+      "git.dirty": "false",
+      "git.author": "PLANTED-author-7f3a",
+      "git.author.email": "planted-7f3a@example.com",
+      "git.committer": "PLANTED-committer-7f3a",
+      "git.committer.email": "planted-committer-7f3a@example.com",
+      "pulumi.version": "v3.200.0",
+      "pulumi.os": "PLANTED-os-7f3a",
+      "pulumi.arch": "PLANTED-arch-7f3a",
+      "pulumi.flag.yes": "PLANTED-flag-7f3a",
+      "pulumi.env.APP_MODE": "PLANTED-env-7f3a"
+    },
+    "config": {
+      "app:dbPassword": {
+        "string": "PLANTED-config-7f3a",
+        "secret": false
+      }
+    },
+    "deployment": {
+      "resources": [
+        {
+          "urn": "urn:pulumi:dev::example-project::command:local:Command::PLANTED-urn-7f3a",
+          "inputs": {
+            "create": "PLANTED-deployment-7f3a"
+          }
+        }
+      ]
+    },
+    "resourceChanges": {
+      "same": 3
+    },
+    "resourceCount": 3
+  }
+]

@@ -53,5 +53,5 @@ func TestExampleInstallRecordIsNotMigrated(t *testing.T) {
 
 func TestUnknownPack(t *testing.T) {
 	_, err := Install(t.TempDir(), "git-inventory", fileset.Options{})
-	require.ErrorContains(t, err, `unknown pack "git-inventory" (available: gcp, aws)`)
+	require.ErrorContains(t, err, `unknown pack "git-inventory" (available: gcp, aws, pulumi)`)
 }

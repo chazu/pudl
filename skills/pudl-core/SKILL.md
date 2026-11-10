@@ -20,7 +20,7 @@ agents), `pudl help [CMD] --json` (commands and flags).
 
 ```bash
 pudl init                                   # idempotent; repairs .pudl/
-pudl pack install gcp                       # or aws; or write a collector
+pudl pack install gcp                       # or aws, pulumi; or write a collector
 pudl model list --json
 pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers \
   gcp-fixture-network-hygiene-checks --json --detailed-exitcode

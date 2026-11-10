@@ -11,6 +11,7 @@ import (
 	"github.com/chazu/pudl/internal/fileset"
 	awspack "github.com/chazu/pudl/packs/aws"
 	gcppack "github.com/chazu/pudl/packs/gcp"
+	pulumipack "github.com/chazu/pudl/packs/pulumi"
 )
 
 // Kind is the content-pack family of file sets.
@@ -27,6 +28,7 @@ type Pack struct {
 var all = []Pack{
 	{Name: "gcp", Summary: "Google Cloud inventory schemas, policies, gcloud and fixture collectors; network, data and GKE checks", files: gcppack.Files},
 	{Name: "aws", Summary: "AWS inventory schemas, policies, aws CLI and fixture collectors; network, data and identity checks", files: awspack.Files},
+	{Name: "pulumi", Summary: "Pulumi Cloud stacks and their latest update, read with GET requests behind a read-only token guard; fixture collectors", files: pulumipack.Files},
 }
 
 // List returns every pack in display order.

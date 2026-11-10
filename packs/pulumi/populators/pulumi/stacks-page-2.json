@@ -1,0 +1,25 @@
+{
+  "stacks": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000c2",
+      "orgName": "example-org",
+      "projectName": "example-network",
+      "stackName": "prod",
+      "lastUpdate": 1767312000,
+      "resourceCount": 12,
+      "links": {
+        "self": "https://app.pulumi.com/example-org/example-network/prod"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-0000000000c3",
+      "orgName": "example-org",
+      "projectName": "example-network",
+      "stackName": "scratch",
+      "resourceCount": 0,
+      "links": {
+        "self": "https://app.pulumi.com/example-org/example-network/scratch"
+      }
+    }
+  ]
+}

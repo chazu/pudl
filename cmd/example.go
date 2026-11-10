@@ -20,7 +20,7 @@ var exampleInstallCmd = &cobra.Command{
 	Args:      cobra.ExactArgs(1),
 	Long: `Install a bundled tutorial in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
-No source checkout or download is needed. Content packs (gcp, aws) install
+No source checkout or download is needed. Content packs (gcp, aws, pulumi) install
 with pudl pack install.
 
 Installing again upgrades the example: files you have not edited since pudl

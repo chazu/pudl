@@ -11,7 +11,7 @@ import (
 
 var packCmd = &cobra.Command{
 	Use:   "pack",
-	Short: "Install bundled content packs (gcp, aws) into this workspace",
+	Short: "Install bundled content packs (gcp, aws, pulumi) into this workspace",
 }
 
 var packInstallCmd = &cobra.Command{
@@ -40,6 +40,10 @@ The aws pack does the same for AWS, with aws CLI and fixture collectors and
 three check families: network exposure, data protection and identity
 posture.
 
+The pulumi pack reads Pulumi Cloud stacks and their latest update with GET
+requests only, after a guard that accepts only a named org access token
+with a read-only role, and has fixture collectors.
+
 Example:
     pudl init
     pudl pack install gcp`,
@@ -53,6 +57,8 @@ Example:
 			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
 		case "gcp":
 			fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
+		case "pulumi":
+			fmt.Fprintln(outw(), "Next: pudl check pulumi-fixture-stacks (fixture; no Pulumi Cloud access)")
 		}
 		return nil
 	},

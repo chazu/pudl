@@ -11,5 +11,6 @@
         "self": "https://app.pulumi.com/example-org/example-project/dev"
       }
     }
-  ]
+  ],
+  "continuationToken": "page-2"
 }

@@ -60,7 +60,7 @@ These flags apply to every command.
   - [pudl model new](#pudl-model-new) — Scaffold a #SystemModel observer
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
-- [pudl pack](#pudl-pack) — Install bundled content packs (gcp, aws) into this workspace
+- [pudl pack](#pudl-pack) — Install bundled content packs (gcp, aws, pulumi) into this workspace
   - [pudl pack install](#pudl-pack-install) — Install a content pack: schemas, policies, collectors, checks and fixtures
   - [pudl pack list](#pudl-pack-list) — List the bundled content packs and whether this workspace has them
 - [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
@@ -603,7 +603,7 @@ pudl example install <name> [flags]
 ```text
 Install a bundled tutorial in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
-No source checkout or download is needed. Content packs (gcp, aws) install
+No source checkout or download is needed. Content packs (gcp, aws, pulumi) install
 with pudl pack install.
 
 Installing again upgrades the example: files you have not edited since pudl
@@ -1459,7 +1459,7 @@ and its schema contracts. A model that still declares a retired field (such as
 
 ## pudl pack
 
-Install bundled content packs (gcp, aws) into this workspace
+Install bundled content packs (gcp, aws, pulumi) into this workspace
 
 Subcommands:
 
@@ -1495,6 +1495,10 @@ families: network hygiene, data protection and GKE posture.
 The aws pack does the same for AWS, with aws CLI and fixture collectors and
 three check families: network exposure, data protection and identity
 posture.
+
+The pulumi pack reads Pulumi Cloud stacks and their latest update with GET
+requests only, after a guard that accepts only a named org access token
+with a read-only role, and has fixture collectors.
 
 Example:
     pudl init

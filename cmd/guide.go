@@ -27,7 +27,7 @@ var guideTopics = []guideTopic{
 	{"checks", "Checks, findings, waivers, exit codes and CI"},
 	{"query", "Facts, Datalog rules and pudl query"},
 	{"doctor", "Diagnose and repair the workspace"},
-	{"packs", "The bundled GCP, AWS and tutorial packs"},
+	{"packs", "The bundled GCP, AWS, Pulumi and tutorial packs"},
 	{"agents", "JSON contracts and conventions for agents"},
 }
 
