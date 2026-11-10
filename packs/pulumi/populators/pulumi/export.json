@@ -1,0 +1,65 @@
+{
+  "version": 3,
+  "deployment": {
+    "manifest": {
+      "time": "2026-01-01T00:00:00.000Z",
+      "magic": "",
+      "version": "v3.0.0"
+    },
+    "secrets_providers": {
+      "type": "service",
+      "state": {
+        "url": "https://api.pulumi.com",
+        "owner": "example-org",
+        "project": "example-project",
+        "stack": "dev"
+      }
+    },
+    "resources": [
+      {
+        "urn": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+        "custom": false,
+        "type": "pulumi:pulumi:Stack",
+        "created": "2026-01-01T00:00:00.000Z",
+        "modified": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "urn": "urn:pulumi:dev::example-project::pulumi:providers:random::default",
+        "custom": true,
+        "id": "00000000-0000-4000-8000-0000000000d1",
+        "type": "pulumi:providers:random",
+        "inputs": {},
+        "outputs": {},
+        "created": "2026-01-01T00:00:00.000Z",
+        "modified": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "urn": "urn:pulumi:dev::example-project::random:index/randomPassword:RandomPassword::db",
+        "custom": true,
+        "id": "none",
+        "type": "random:index/randomPassword:RandomPassword",
+        "inputs": {
+          "length": 24
+        },
+        "outputs": {
+          "length": 24,
+          "result": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "ciphertext": "ZmFrZS1jaXBoZXJ0ZXh0"
+          }
+        },
+        "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+        "provider": "urn:pulumi:dev::example-project::pulumi:providers:random::default::00000000-0000-4000-8000-0000000000d1",
+        "dependencies": [],
+        "propertyDependencies": {
+          "length": []
+        },
+        "additionalSecretOutputs": [
+          "result"
+        ],
+        "created": "2026-01-01T00:00:00.000Z",
+        "modified": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+}

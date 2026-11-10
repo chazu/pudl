@@ -192,9 +192,42 @@ _pulumiTokenName: string & !="" // the org access token pudl accepts
   `?uxPurpose=policy` lists policies and `?uxPurpose=set` lists permission
   sets with their `permissions`. Without `uxPurpose` the list returns HTTP
   400. `GET /api/orgs/O/roles/{id}` needs more rights than the list.
-- **Not yet verified:** what `assignedToMe` returns for an org token, and
-  which scopes an org token needs to list policies and sets
-  (`role:read` exists). `pudl-7g8j.10` checks this with a live token.
+
+#### Live check (2026-11-10, `pudl-7g8j.10`)
+
+An org token with a custom read-only role, GET requests only. Fixtures with
+placeholder values: `packs/pulumi/populators/pulumi/guard-*.json`,
+`stacks.json` and `export.json`.
+
+- **`/api/user`.** For an org token, `tokenInfo` is `{name, organization,
+  team: null}`. The key `team` is present with the value `null`. The
+  response also has user fields (`id`, `githubLogin`, `organizations`, ...).
+- **Assigned role.** `?uxPurpose=role&assignedToMe=true` returns exactly one
+  role. Its `details` can be a `PermissionDescriptorAllow` with the scopes
+  inline. It then refers to no policy and no set.
+- **Policies and sets.** The token lists both with no `role:read` scope.
+  A policy is a `PermissionDescriptorGroup` of `entries`: a
+  `PermissionDescriptorCompose` refers to sets by ID in
+  `permissionDescriptors`, and a `PermissionDescriptorCondition` has a
+  `condition` (for example `PermissionExpressionEqual` of
+  `PermissionExpressionStack` and `PermissionLiteralExpressionStack`
+  with a stack `identity`) and a `subNode`. A set has `resourceType`
+  (`stack`, `environment`, `global`, ...) and a `PermissionDescriptorAllow`.
+  The lists also hold the policies and sets of other roles.
+- **Read scopes.** A read-only custom role holds read scopes of other areas
+  too (environments, deployments, insights, policy packs, org metadata).
+  Some reads do not end in `:read`, for example `environment:list_deleted`,
+  `resources:search` and `resources:dashboard`. The guard must use an
+  explicit list, not a name pattern. `environment:open` decrypts ESC values
+  and must not be in the list.
+- **Stacks.** `GET /api/user/stacks?organization=O` works with no
+  `stack:list` scope. An item is `{id, orgName, projectName, stackName,
+  lastUpdate, resourceCount, links{self}}`.
+- **Export.** `stack:export` is sufficient. The secrets provider type is
+  `service`. Each secret is an envelope with only the signature key and
+  `ciphertext`, and no `plaintext` key is present. Resources can also have
+  `additionalSecretOutputs`. A stack with no resources exports
+  `deployment{manifest, metadata, secrets_providers}` with no `resources`.
 
 #### Design
 
@@ -221,14 +254,16 @@ _pulumiGuard: {
 `ok` is true only when all of these hold:
 
 1. `in.user.tokenInfo.organization == _pulumiOrg` and
-   `in.user.tokenInfo.name == _pulumiTokenName`. A personal or team token
-   fails here.
+   `in.user.tokenInfo.name == _pulumiTokenName`, and `tokenInfo.team` is
+   `null`. A personal or team token fails here.
 2. The token has exactly one role.
-3. Every descriptor that the role and its policy refer to has a known
-   `__type`, and every permission set that they reach grants only scopes in
-   the allow list: `stack:read`, `stack:list`, `stack:export`,
-   `stack_access:read`, `stack_deployment:read`, `role:read`, and the
-   org-level read scopes. An unknown shape fails the check.
+3. Every descriptor that the role reaches has a known `__type`. The role's
+   `details` is a `PermissionDescriptorAllow`, or refers to policies and
+   sets by ID. Every scope that it reaches is in the explicit allow list:
+   `stack:read`, `stack:list`, `stack:export`, `stack_access:read`,
+   `stack_deployment:read`, `role:read`, and the other read scopes in
+   Pulumi's scope reference (see "Read scopes" above). An unknown shape or
+   an ID that is in no list fails the check.
 
 A decrypt probe is not possible (it is a POST), and a write probe is never
 acceptable.
@@ -350,7 +385,7 @@ Rules:
 | `pudl-7g8j.1` | Core `#HTTPObserve`: schema, executor, guard, paging, `reject_keys`, ratchet, tests | about 1 day |
 | `pudl-7g8j.2` | Spike: whether a read-only role exists and how a token can read it (done) | about 1 hour |
 | `pudl-7g8j.9` | Core: `guard.get` as a map of named requests, one check over all | about 2 hours |
-| `pudl-7g8j.10` | Live check with an org token that has a read-only role (needs an org admin) | about 30 minutes |
+| `pudl-7g8j.10` | Live check with an org token that has a read-only role (done) | about 30 minutes |
 | `pudl-7g8j.3` | Pack skeleton, settings, guard, `pulumi.#Stack`, fixtures, README | about half a day |
 | `pudl-7g8j.4` | `pulumi.#Resource`, allow list, hostile fixture test, facts and rules | about 1 day |
 | `pudl-7g8j.5` | `k8s.object` key, `gcp.resource` kind and the first GCP set | about half a day |
@@ -360,8 +395,8 @@ Rules:
 
 ## Open questions
 
-1. What does `assignedToMe` return for an org token, and does listing
-   policies and sets need `role:read`? (`pudl-7g8j.10`)
+1. Answered (`pudl-7g8j.10`): `assignedToMe` returns the org token's one
+   role, and listing policies and sets does not need `role:read`.
 2. The exact Pulumi `id` format of each first-set GCP type. Verify it
    against a live export.
 3. Does the Go SDK record `sourcePosition`?

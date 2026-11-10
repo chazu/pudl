@@ -1,0 +1,27 @@
+{
+  "roles": [
+    {
+      "name": "pudl-read-only",
+      "description": "Stack read and export, no decrypt, no write",
+      "uxPurpose": "role",
+      "details": {
+        "__type": "PermissionDescriptorAllow",
+        "permissions": [
+          "stack:read",
+          "stack:export",
+          "stack_access:read",
+          "stack_deployment:read",
+          "environment:list_deleted",
+          "resources:search"
+        ]
+      },
+      "created": "2026-01-01T00:00:00.000Z",
+      "modified": "2026-01-01T00:00:00.000Z",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "orgId": "00000000-0000-4000-8000-0000000000f0",
+      "defaultIdentifier": "pudl-read-only",
+      "version": 1,
+      "isOrgDefault": false
+    }
+  ]
+}

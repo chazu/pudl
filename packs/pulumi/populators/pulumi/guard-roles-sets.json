@@ -1,0 +1,45 @@
+{
+  "roles": [
+    {
+      "name": "stack-export-only",
+      "description": "",
+      "resourceType": "stack",
+      "uxPurpose": "set",
+      "details": {
+        "__type": "PermissionDescriptorAllow",
+        "permissions": [
+          "stack:read",
+          "stack:export"
+        ]
+      },
+      "created": "2026-01-01T00:00:00.000Z",
+      "modified": "2026-01-01T00:00:00.000Z",
+      "id": "00000000-0000-4000-8000-000000000011",
+      "orgId": "00000000-0000-4000-8000-0000000000f0",
+      "version": 1,
+      "isOrgDefault": false
+    },
+    {
+      "name": "stack-read-with-decrypt",
+      "description": "Like the built-in Stack Read set: not safe for pudl",
+      "resourceType": "stack",
+      "uxPurpose": "set",
+      "details": {
+        "__type": "PermissionDescriptorAllow",
+        "permissions": [
+          "stack:read",
+          "stack:export",
+          "stack:decrypt",
+          "stack:encrypt"
+        ]
+      },
+      "created": "2026-01-01T00:00:00.000Z",
+      "modified": "2026-01-01T00:00:00.000Z",
+      "id": "00000000-0000-4000-8000-000000000012",
+      "orgId": "00000000-0000-4000-8000-0000000000f0",
+      "defaultIdentifier": "stack-read-with-decrypt",
+      "version": 1,
+      "isOrgDefault": false
+    }
+  ]
+}

@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Live check: Pulumi org token with a read-only role (2026-11-10)
+
+An org token with a custom read-only role can read its own role, list
+policies, sets and stacks, and export state with ciphertext only, all with
+GET requests. Response shapes are fixtures with placeholder values in
+`packs/pulumi/populators/pulumi/`. See
+`implog/2026_11_10_pulumi_live_token_check.md`. Closes `pudl-7g8j.10`.
+
 ### GCP pack: build and deploy types (2026-11-09)
 
 Batch (d) of `pudl-q4v.7`: Cloud Build triggers, App Engine applications,

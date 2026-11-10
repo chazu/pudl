@@ -1,0 +1,15 @@
+{
+  "stacks": [
+    {
+      "id": "00000000-0000-4000-8000-0000000000c1",
+      "orgName": "example-org",
+      "projectName": "example-project",
+      "stackName": "dev",
+      "lastUpdate": 1767225600,
+      "resourceCount": 3,
+      "links": {
+        "self": "https://app.pulumi.com/example-org/example-project/dev"
+      }
+    }
+  ]
+}
