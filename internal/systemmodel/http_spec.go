@@ -54,9 +54,12 @@ type HTTPPage struct {
 // HTTPRun is one GET request; Records is the field path of the record array
 // in its response.
 type HTTPRun struct {
-	Get     string         `json:"get"`
-	Records string         `json:"records,omitempty"`
-	Set     map[string]any `json:"set,omitempty"`
+	Get     string `json:"get"`
+	Records string `json:"records,omitempty"`
+	// RecordsOptional reads a response without the Records path as no
+	// records instead of a failed input.
+	RecordsOptional bool           `json:"records_optional,omitempty"`
+	Set             map[string]any `json:"set,omitempty"`
 	// Transform is read from the CUE value; it is not recorded.
 	Transform *Transform `json:"-"`
 }
@@ -64,7 +67,7 @@ type HTTPRun struct {
 // ForItem returns the run for one enumerated input: the placeholder replaced
 // in get and in set's string values. The receiver is not modified.
 func (r HTTPRun) ForItem(item string) HTTPRun {
-	out := HTTPRun{Get: strings.ReplaceAll(r.Get, ItemPlaceholder, item), Records: r.Records, Transform: r.Transform}
+	out := HTTPRun{Get: strings.ReplaceAll(r.Get, ItemPlaceholder, item), Records: r.Records, RecordsOptional: r.RecordsOptional, Transform: r.Transform}
 	if r.Set != nil {
 		out.Set, _ = substituteItem(r.Set, item).(map[string]any)
 	}

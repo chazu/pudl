@@ -171,6 +171,22 @@ func TestHTTPRunFailedInputsKeepNoBody(t *testing.T) {
 	require.ErrorContains(t, err, "GET /missing")
 }
 
+// records_optional reads a response without the records path as no records;
+// a records path that is not an array still fails.
+func TestHTTPRunRecordsOptional(t *testing.T) {
+	s := newAPIServer(t, map[string]string{"/empty": `{"other":[]}`, "/ok": `{"items":[{"n":1}]}`, "/odd": `{"items":"x"}`})
+	p := httpPopulate(s, systemmodel.HTTPObserve{Runs: []systemmodel.HTTPRun{
+		{Get: "/empty", Records: "items", RecordsOptional: true},
+		{Get: "/ok", Records: "items", RecordsOptional: true},
+		{Get: "/odd", Records: "items", RecordsOptional: true},
+	}})
+	res, err := Run(context.Background(), p, s.request())
+	require.NoError(t, err)
+	require.Len(t, res.Failed, 1)
+	assert.Equal(t, "GET /odd", res.Failed[0].Request)
+	assert.Len(t, res.Records, 1)
+}
+
 // A record that still has a rejected key fails the whole populate, and a
 // transform error names paths, never the values involved.
 func TestHTTPRunFailsClosedOnSecrets(t *testing.T) {

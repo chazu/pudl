@@ -1,0 +1,138 @@
+[
+  {
+    "urn": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+    "custom": false,
+    "type": "pulumi:pulumi:Stack",
+    "outputs": {
+      "kubeconfigOut": "PLANTED-stack-output-7f3a"
+    },
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster",
+    "custom": true,
+    "id": "00000000-0000-4000-8000-0000000000d2",
+    "type": "pulumi:providers:kubernetes",
+    "inputs": {
+      "kubeconfig": "PLANTED-kubeconfig-input-7f3a"
+    },
+    "outputs": {
+      "kubeconfig": "PLANTED-kubeconfig-output-7f3a"
+    },
+    "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::example:index:App::app",
+    "custom": false,
+    "type": "example:index:App",
+    "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:Secret::app-db",
+    "custom": true,
+    "id": "apps/app-db",
+    "type": "kubernetes:core/v1:Secret",
+    "inputs": {
+      "stringData": {
+        "password": "PLANTED-secret-input-7f3a"
+      }
+    },
+    "outputs": {
+      "metadata": {
+        "uid": "11111111-1111-4111-8111-111111111111",
+        "name": "app-db",
+        "namespace": "apps",
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"kind\":\"Secret\",\"stringData\":{\"password\":\"PLANTED-last-applied-7f3a\"}}"
+        }
+      },
+      "data": {
+        "dsn": "UExBTlRFRC1zZWNyZXQtZGF0YQ=="
+      },
+      "stringData": {
+        "password": "PLANTED-secret-output-7f3a"
+      }
+    },
+    "parent": "urn:pulumi:dev::example-project::example:index:App::app",
+    "provider": "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster::00000000-0000-4000-8000-0000000000d2",
+    "dependencies": [
+      "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster"
+    ],
+    "propertyDependencies": {
+      "stringData": []
+    },
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:ConfigMap::app-config",
+    "custom": true,
+    "id": "apps/app-config",
+    "type": "kubernetes:core/v1:ConfigMap",
+    "outputs": {
+      "metadata": {
+        "uid": "22222222-2222-4222-8222-222222222222",
+        "name": {
+          "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+          "ciphertext": "PLANTED-ciphertext-7f3a"
+        },
+        "namespace": "apps"
+      },
+      "data": {
+        "DATABASE_URL": "PLANTED-configmap-7f3a"
+      }
+    },
+    "parent": "urn:pulumi:dev::example-project::example:index:App::app",
+    "provider": "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster::00000000-0000-4000-8000-0000000000d2",
+    "additionalSecretOutputs": [
+      "metadata"
+    ],
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::command:local:Command::migrate",
+    "custom": true,
+    "id": "migrate-20260101",
+    "type": "command:local:Command",
+    "inputs": {
+      "create": "PLANTED-command-7f3a",
+      "environment": {
+        "API_TOKEN": "PLANTED-command-env-7f3a"
+      }
+    },
+    "outputs": {
+      "stdout": "PLANTED-command-stdout-7f3a"
+    },
+    "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+    "initErrors": [
+      "PLANTED-init-error-7f3a"
+    ],
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::gcp:sql/user:User::app",
+    "custom": true,
+    "id": "app//example-db",
+    "type": "gcp:sql/user:User",
+    "protect": true,
+    "inputs": {
+      "name": "app",
+      "password": "PLANTED-sql-password-7f3a"
+    },
+    "outputs": {
+      "name": "app",
+      "password": "PLANTED-sql-password-7f3a"
+    },
+    "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
+    "sourcePosition": "project:///main.go#42",
+    "created": "2026-01-01T00:00:00.000Z",
+    "modified": "2026-01-01T00:00:00.000Z"
+  }
+]

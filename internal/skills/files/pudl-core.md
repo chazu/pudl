@@ -119,7 +119,8 @@ import sm "pudl.schemas/pudl/systemmodel@v0"
   param}}` enumerates inputs (letters, digits, `. _ ~ / -` only).
   `reject_keys: [...]` fails the populate, ingesting nothing, if a kept
   record still has such a key. A non-2xx response is a failed input without
-  its body; errors name paths, never values.
+  its body; so is a missing `records` path, unless the run sets
+  `records_optional: true` (no records). Errors name paths, never values.
 - A model without `populate` is checks-only. `desired: [...]` reports
   inventory drift; nothing is changed.
 - One-off: `pudl check --populate 'command:<cmdline>'` (writes no model).

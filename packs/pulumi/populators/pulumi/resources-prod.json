@@ -1,0 +1,34 @@
+[
+  {
+    "urn": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod",
+    "custom": false,
+    "type": "pulumi:pulumi:Stack"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::example:index:Network::core",
+    "custom": false,
+    "type": "example:index:Network",
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::example:index:Network$example:index:Subnets::core-subnets",
+    "custom": false,
+    "type": "example:index:Subnets",
+    "parent": "urn:pulumi:prod::example-network::example:index:Network::core"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::example:index:Network$example:index:Subnets$gcp:compute/subnetwork:Subnetwork::core-a",
+    "custom": true,
+    "id": "projects/example-project/regions/us-central1/subnetworks/core-a",
+    "type": "gcp:compute/subnetwork:Subnetwork",
+    "parent": "urn:pulumi:prod::example-network::example:index:Network$example:index:Subnets::core-subnets"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:compute/network:Network::shared",
+    "custom": true,
+    "external": true,
+    "id": "projects/example-project/global/networks/shared",
+    "type": "gcp:compute/network:Network",
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  }
+]

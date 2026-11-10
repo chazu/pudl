@@ -109,7 +109,7 @@ func (c *httpSource) observe(run systemmodel.HTTPRun) ([]any, *FailedInput, erro
 	if err != nil {
 		return fail(err)
 	}
-	listed, err := runRecords(body, run.Records)
+	listed, err := runRecords(body, run.Records, run.RecordsOptional)
 	if err != nil {
 		return fail(err)
 	}
@@ -147,8 +147,9 @@ func (c *httpSource) observe(run systemmodel.HTTPRun) ([]any, *FailedInput, erro
 // runRecords selects a response's records: the array at path, or without a
 // path the response itself (one object, or an array). null at path is no
 // records; a missing path is an error, so an API that changes its shape is
-// not read as "nothing here".
-func runRecords(body any, path string) ([]any, error) {
+// not read as "nothing here", unless optional says the API omits it when
+// empty.
+func runRecords(body any, path string, optional bool) ([]any, error) {
 	if path == "" {
 		if list, ok := body.([]any); ok {
 			return list, nil
@@ -162,6 +163,9 @@ func runRecords(body any, path string) ([]any, error) {
 	obj, ok := body.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("response is %s, not a JSON object", jsonKind(body))
+	}
+	if _, found := p.Lookup(obj); !found && optional {
+		return nil, nil
 	}
 	return lookupArray(obj, p)
 }

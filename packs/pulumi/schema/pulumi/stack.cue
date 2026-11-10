@@ -13,6 +13,14 @@ package pulumi
 		resource_type: "pulumi.stack"
 		identity_fields: ["stack"]
 		review: status: "draft"
+		// Arguments the update did not record are left out of the fact.
+		facts: pulumi_stack_source: args: {
+			stack:  "stack"
+			repo:   "source.repo"
+			root:   "source.root"
+			commit: "source.commit"
+			dirty:  "source.dirty"
+		}
 	}
 	// <org>/<project>/<stack>
 	stack: =~"^[^/]+/[^/]+/[^/]+$"

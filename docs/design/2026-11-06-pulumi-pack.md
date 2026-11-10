@@ -329,6 +329,13 @@ It drops `inputs`, all other `outputs`, `propertyDependencies` and
 `initErrors`. `reject_keys: ["4dabf18193072939515e22adb298388d",
 "ciphertext"]`. Identity: `urn` (it contains the stack and project).
 
+As built (`pudl-7g8j.4`): `live` holds only the `kubernetes:*` metadata
+values. The per-type GCP table that builds `live.name` is part of
+`pudl-7g8j.5`. A stack with no resources exports no `resources` array, so
+the run sets `records_optional: true`, a new `#HTTPRun` field: a missing
+records path is no records instead of a failed input. The transform also
+drops `additionalSecretOutputs`.
+
 ### 6. Links to live records
 
 `pulumi.#Resource` declares `_pudl.same_resource` keys (shared identity
@@ -365,6 +372,12 @@ Rules:
   and `external: false`.
 - `pulumi_ancestor(urn, ancestor)`, recursive over `parent`, for the
   component path label.
+
+As built (`pudl-7g8j.4`): `pulumi_resource` also has `has_parent` (`{exists:
+"parent"}`). A missing argument reads as `null` in a rule join, so the
+`pulumi_ancestor` rules match `has_parent: true`. `pulumi_managed` includes
+provider resources, which are `custom` too. The rules are in
+`schema/pudl/rules/pulumi_pack.cue`, named like the other packs' rules.
 
 ### 8. UI
 
@@ -403,7 +416,7 @@ Rules:
 | `pudl-7g8j.9` | Core: `guard.get` as a map of named requests, one check over all | about 2 hours |
 | `pudl-7g8j.10` | Live check with an org token that has a read-only role (done) | about 30 minutes |
 | `pudl-7g8j.3` | Pack skeleton, settings, guard, `pulumi.#Stack`, fixtures, README (done) | about half a day |
-| `pudl-7g8j.4` | `pulumi.#Resource`, allow list, hostile fixture test, facts and rules | about 1 day |
+| `pudl-7g8j.4` | `pulumi.#Resource`, allow list, hostile fixture test, facts and rules (done) | about 1 day |
 | `pudl-7g8j.5` | `k8s.object` key, `gcp.resource` kind and the first GCP set | about half a day |
 | `pudl-7g8j.6` | `member_only` graph flag and the inspector section | about half a day |
 | `pudl-7g8j.7` | Check: live GCP resources that no Pulumi stack manages | about 2 hours |
@@ -415,7 +428,8 @@ Rules:
    role, and listing policies and sets does not need `role:read`.
 2. The exact Pulumi `id` format of each first-set GCP type. Verify it
    against a live export.
-3. Does the Go SDK record `sourcePosition`?
+3. Answered (`pudl-7g8j.4`): live state has `sourcePosition`, and pudl keeps
+   it.
 
 ## Out of scope
 

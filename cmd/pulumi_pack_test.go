@@ -113,6 +113,9 @@ func newPulumiAPI(t *testing.T, fixtures string) *pulumiAPI {
 		return string(raw)
 	}
 	updates := func(name string) string { return `{"updates": ` + read("updates-"+name+".json") + `}` }
+	export := func(name string) string {
+		return `{"version": 3, "deployment": {"manifest": {}, "resources": ` + read("resources-"+name+".json") + `}}`
+	}
 	a := &pulumiAPI{routes: map[string]string{
 		"/api/user": read("guard-user-org-token.json"),
 		"/api/orgs/example-org/roles?uxPurpose=role&assignedToMe=true":              read("guard-roles-assigned.json"),
@@ -123,6 +126,9 @@ func newPulumiAPI(t *testing.T, fixtures string) *pulumiAPI {
 		"/api/stacks/example-org/example-project/dev/updates?pageSize=1&page=1":     updates("dev"),
 		"/api/stacks/example-org/example-network/prod/updates?pageSize=1&page=1":    updates("prod"),
 		"/api/stacks/example-org/example-network/scratch/updates?pageSize=1&page=1": updates("scratch"),
+		"/api/stacks/example-org/example-project/dev/export":                        export("dev"),
+		"/api/stacks/example-org/example-network/prod/export":                       export("prod"),
+		"/api/stacks/example-org/example-network/scratch/export":                    `{"version": 3, "deployment": {"manifest": {}, "metadata": {}}}`,
 	}}
 	a.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
@@ -153,23 +159,28 @@ func (a *pulumiAPI) seen() []string {
 	return append([]string(nil), a.requests...)
 }
 
-// TestPulumiPackGuard runs pulumi-stacks against a fake Pulumi Cloud. Only
-// the configured org token with a read-only role passes the guard; any
-// other token or role is refused after the four guard requests.
-func TestPulumiPackGuard(t *testing.T) {
+// pulumiLiveWorkspace installs the pack and points its live settings, in a
+// top-level schema/settings.cue, at a fake Pulumi Cloud.
+func pulumiLiveWorkspace(t *testing.T) (string, *pulumiAPI) {
+	t.Helper()
 	pudlDir := cliWorkspace(t)
 	r := runCLI(t, "pack", "install", "pulumi", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	api := newPulumiAPI(t, filepath.Join(pudlDir, "populators", "pulumi"))
-	schemaDir := filepath.Join(pudlDir, "schema")
-	require.NoError(t, os.WriteFile(filepath.Join(schemaDir, "models", "pulumi_settings.cue"), []byte(
+	require.NoError(t, os.WriteFile(filepath.Join(pudlDir, "schema", "settings.cue"), []byte(
 		"package models\n\n_pulumiOrg: \"example-org\"\n_pulumiTokenName: \"pudl-reader\"\n_pulumiAPI: \""+api.URL+"\"\n"), 0o600))
+	return pudlDir, api
+}
 
-	tmpl, err := systemmodel.ResolveTemplate([]string{schemaDir}, "pulumi-stacks")
+// pulumiLiveRun resolves a live model and returns a function that runs its
+// populate against api with a test token.
+func pulumiLiveRun(t *testing.T, pudlDir string, api *pulumiAPI, name string) func() (populate.Result, error) {
+	t.Helper()
+	tmpl, err := systemmodel.ResolveTemplate([]string{filepath.Join(pudlDir, "schema")}, name)
 	require.NoError(t, err)
 	model, err := tmpl.Model()
 	require.NoError(t, err)
-	run := func() (populate.Result, error) {
+	return func() (populate.Result, error) {
 		return populate.Run(context.Background(), model.Populate, populate.Request{
 			HTTPClient: api.Client(),
 			Getenv: func(name string) string {
@@ -180,6 +191,14 @@ func TestPulumiPackGuard(t *testing.T) {
 			},
 		})
 	}
+}
+
+// TestPulumiPackGuard runs pulumi-stacks against a fake Pulumi Cloud. Only
+// the configured org token with a read-only role passes the guard; any
+// other token or role is refused after the four guard requests.
+func TestPulumiPackGuard(t *testing.T) {
+	pudlDir, api := pulumiLiveWorkspace(t)
+	run := pulumiLiveRun(t, pudlDir, api, "pulumi-stacks")
 	guardRequests := []string{
 		"GET /api/orgs/example-org/roles?uxPurpose=policy token tok-pulumi-test",
 		"GET /api/orgs/example-org/roles?uxPurpose=role&assignedToMe=true token tok-pulumi-test",

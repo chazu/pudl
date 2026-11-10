@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pulumi pack: pulumi.#Resource, facts and rules (2026-11-10)
+
+`pulumi-resources` reads every stack's state with GET requests and keeps
+one record per resource: URN, type, ID, parent chain and provider, plus the
+Kubernetes UID, name and namespace. It keeps no inputs or other outputs. A
+hostile fixture proves that no planted secret reaches any stored byte. The
+facts `pulumi_resource` and `pulumi_stack_source` feed the rules
+`pulumi_managed` and `pulumi_ancestor`. `#HTTPRun` gains
+`records_optional`. See `implog/2026_11_10_pulumi_resources.md`. Closes
+`pudl-7g8j.4`.
+
 ### Pulumi pack: settings, token guard, pulumi.#Stack (2026-11-10)
 
 `pudl pack install pulumi` installs `pulumi-stacks`. It reads each Pulumi

@@ -1,14 +1,23 @@
 package models
 
-import sm "pudl.schemas/pudl/systemmodel@v0"
+import (
+	"list"
+	"strings"
+
+	sm "pudl.schemas/pudl/systemmodel@v0"
+)
 
 // Pulumi content pack models (README: packs/pulumi/README.md in the PUDL
 // source).
 //
-//   pulumi-stacks          reads every stack of _pulumiOrg and its latest
-//                          update from Pulumi Cloud with GET requests, after
-//                          the token guard (pulumi_guard.cue) passes;
-//   pulumi-fixture-stacks  reads the bundled fixtures in .pudl/populators/pulumi.
+//   pulumi-stacks             reads every stack of _pulumiOrg and its latest
+//                             update from Pulumi Cloud with GET requests,
+//                             after the token guard (pulumi_guard.cue) passes;
+//   pulumi-resources          reads the resources of every stack's state, the
+//                             same way;
+//   pulumi-fixture-stacks,
+//   pulumi-fixture-resources  read the bundled fixtures in
+//                             .pudl/populators/pulumi.
 
 // ---- Live settings. The first two have no default: pulumi-stacks refuses
 // to run until you set them in another file of package models, e.g.
@@ -62,6 +71,14 @@ _pulumiStackTransform: {
 	}
 }
 
+// Every stack of the organization, as <org>/<project>/<stack>.
+_pulumiStacksEach: {
+	get:  "/api/user/stacks?organization=\(_pulumiOrg)"
+	list: "stacks"
+	item: {in: _, out: "\(in.orgName)/\(in.projectName)/\(in.stackName)"}
+	page: {next: "continuationToken", param: "continuationToken"}
+}
+
 #PulumiStacks: sm.#SystemModel & {
 	name: "pulumi-stacks"
 	// Per organization, so reading another one marks nothing of this one gone.
@@ -71,12 +88,7 @@ _pulumiStackTransform: {
 		base:   _pulumiAPI
 		auth: {env: "PUDL_PULUMI_TOKEN", scheme: "token"}
 		guard: _pulumiGuard
-		each: {
-			get:  "/api/user/stacks?organization=\(_pulumiOrg)"
-			list: "stacks"
-			item: {in: _, out: "\(in.orgName)/\(in.projectName)/\(in.stackName)"}
-			page: {next: "continuationToken", param: "continuationToken"}
-		}
+		each:  _pulumiStacksEach
 		runs: [{
 			get:       "/api/stacks/{{item}}/updates?pageSize=1&page=1"
 			records:   "updates"
@@ -104,6 +116,83 @@ _pulumiFixtureStacks: {
 			argv: ["cat", "../../populators/pulumi/updates-\(file).json"]
 			set: stack: id
 			transform: _pulumiStackTransform
+		}]
+	}
+}
+
+// _pulumiResourceTransform keeps the fields of pulumi.#Resource from one
+// state resource. It drops inputs, every output except the identity values
+// in live, propertyDependencies, additionalSecretOutputs and initErrors.
+// live keeps a value only when it is a plain string, so a secret envelope at
+// an identity path is dropped too.
+_pulumiResourceTransform: {
+	in: _
+	let outputs = *in.outputs | {}
+	let meta = *outputs.metadata | {}
+	out: {
+		urn:      in.urn
+		type:     in.type
+		custom:   *in.custom | false
+		external: *in.external | false
+		if (in.id & string) != _|_ {id: in.id}
+		if (in.protect & bool) != _|_ {protect: in.protect}
+		if (in.parent & string) != _|_ {parent: in.parent}
+		if (in.dependencies & [...string]) != _|_ {dependencies: in.dependencies}
+		if (in.created & string) != _|_ {created: in.created}
+		if (in.modified & string) != _|_ {modified: in.modified}
+		if (in.sourcePosition & string) != _|_ {sourcePosition: in.sourcePosition}
+		if (in.provider & string) != _|_ {
+			// <provider URN>::<provider ID>: keep the URN.
+			let parts = strings.Split(in.provider, "::")
+			if len(parts) > 1 {provider: strings.Join(list.Slice(parts, 0, len(parts)-1), "::")}
+		}
+		if strings.HasPrefix(in.type, "kubernetes:") {
+			live: metadata: {
+				if (meta.uid & string) != _|_ {uid: meta.uid}
+				if (meta.name & string) != _|_ {name: meta.name}
+				if (meta.namespace & string) != _|_ {namespace: meta.namespace}
+			}
+		}
+	}
+}
+
+#PulumiResources: sm.#SystemModel & {
+	name: "pulumi-resources"
+	observation: {scope: "pulumi/\(_pulumiOrg)/resources", complete: true}
+	populate: sm.#HTTPObserve & {
+		schema: "pulumi.#Resource"
+		base:   _pulumiAPI
+		auth: {env: "PUDL_PULUMI_TOKEN", scheme: "token"}
+		guard: _pulumiGuard
+		each:  _pulumiStacksEach
+		runs: [{
+			get: "/api/stacks/{{item}}/export"
+			// A stack with no resources exports no resources array.
+			records:          "deployment.resources"
+			records_optional: true
+			set: stack: "{{item}}"
+			transform: _pulumiResourceTransform
+		}]
+		reject_keys: _pulumiRejectKeys
+	}
+}
+
+// The fixture states: each file is the deployment.resources array of one
+// stack's export. dev is hostile: it plants values that must not be kept.
+_pulumiFixtureStates: {
+	dev:  "example-org/example-project/dev"
+	prod: "example-org/example-network/prod"
+}
+
+#PulumiFixtureResources: sm.#SystemModel & {
+	name: "pulumi-fixture-resources"
+	observation: {scope: "fixture/pulumi/resources", complete: true}
+	populate: sm.#CommandObserve & {
+		schema: "pulumi.#Resource"
+		runs: [for file, id in _pulumiFixtureStates {
+			argv: ["cat", "../../populators/pulumi/resources-\(file).json"]
+			set: stack: id
+			transform: _pulumiResourceTransform
 		}]
 	}
 }

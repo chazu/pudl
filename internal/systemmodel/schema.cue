@@ -213,7 +213,8 @@ package systemmodel
 // (the response's `next` field, sent back as query parameter `param`). An
 // input may hold only letters, digits and . _ ~ / -, and never "..".
 // records is the field path of the record array in a run's response; without
-// it the response is one record, or an array of records. reject_keys fails
+// it the response is one record, or an array of records. A missing records
+// path is a failed input, unless the run sets records_optional. reject_keys fails
 // the populate, ingesting nothing, when a key of that name is still in any
 // record after the transform. A non-2xx response is a failed input, kept
 // without its body. Errors name paths, never values. base, headers and
@@ -253,6 +254,9 @@ package systemmodel
 #HTTPRun: {
 	get:      #HTTPPath
 	records?: string & !=""
+	// records_optional reads a response without the records path as no
+	// records (an API that omits an empty array) instead of a failed input.
+	records_optional?: bool
 	set?: {...}
 	transform?: {in: _, out?: _}
 }
