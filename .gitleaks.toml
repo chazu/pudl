@@ -9,3 +9,9 @@ regexes = ['''^KEY_ALG_[A-Z0-9_]+$''']
 [[allowlists]]
 description = "Fake JWT used to test secret detection"
 paths = ['''^internal/secretscan/secretscan_test\.go$''']
+
+[[allowlists]]
+description = "Pack and example install records: SHA-256 digests of installed files keyed by file name (e.g. kms-keys.json), not secrets"
+paths = ['''^\.pudl/\.(examples|packs)/[^/]+\.json$''']
+regexes = ['''^(sha256:)?[0-9a-f]{64}$''']
+condition = "AND"
