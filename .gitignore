@@ -98,3 +98,6 @@ Thumbs.db
 
 # Claude Code local state
 .claude/
+
+# Agent session transcripts (agent-shell); they can quote secrets.
+/.agent-shell/
