@@ -57,8 +57,9 @@ In a scratch workspace outside the repo, with the read-only org token:
   the 5 service accounts and 2 buckets only, in the expected form.
 - Leak check: every string value of the raw export outside the kept
   fields (1166 values from `inputs`, `outputs` and the like, including the
-  key's `privateKey`) was searched for in every stored byte of the
-  workspace. None was present except as a substring of a kept value (a
+  key's `privateKey`, which the export carries only as a ciphertext
+  envelope because the token cannot decrypt) was searched for in every
+  stored byte of the workspace. None was present except as a substring of a kept value (a
   short account id inside its own URN). No private key block, password,
   base64 blob or secret envelope was stored; the only occurrences of the
   envelope key words were the model's own `reject_keys` list in the
