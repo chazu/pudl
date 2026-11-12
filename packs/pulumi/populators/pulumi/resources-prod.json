@@ -30,5 +30,95 @@
     "id": "projects/example-project/global/networks/shared",
     "type": "gcp:compute/network:Network",
     "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::example:index:Network$gcp:compute/network:Network::prod-vpc",
+    "custom": true,
+    "id": "projects/example-project/global/networks/prod-vpc",
+    "type": "gcp:compute/network:Network",
+    "outputs": {
+      "name": "prod-vpc",
+      "selfLink": "https://www.googleapis.com/compute/v1/projects/example-project/global/networks/prod-vpc",
+      "autoCreateSubnetworks": false
+    },
+    "parent": "urn:pulumi:prod::example-network::example:index:Network::core"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:compute/address:Address::nat-ip-1",
+    "custom": true,
+    "id": "projects/example-project/regions/us-central1/addresses/nat-ip-1",
+    "type": "gcp:compute/address:Address",
+    "outputs": {
+      "address": "203.0.113.10",
+      "name": "nat-ip-1"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:compute/router:Router::prod-nat",
+    "custom": true,
+    "id": "projects/example-project/regions/us-central1/routers/prod-nat-router",
+    "type": "gcp:compute/router:Router",
+    "outputs": {
+      "name": "prod-nat-router"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:compute/globalForwardingRule:GlobalForwardingRule::web-https",
+    "custom": true,
+    "id": "projects/example-project/global/forwardingRules/web-https",
+    "type": "gcp:compute/globalForwardingRule:GlobalForwardingRule",
+    "outputs": {
+      "name": "web-https",
+      "ipAddress": "203.0.113.20"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:container/cluster:Cluster::legacy-public",
+    "custom": true,
+    "id": "projects/example-project/locations/us-east1-b/clusters/legacy-public",
+    "type": "gcp:container/cluster:Cluster",
+    "outputs": {
+      "name": "legacy-public",
+      "location": "us-east1-b",
+      "masterAuth": {
+        "clusterCaCertificate": "PLANTED-ca-cert-9b2c"
+      }
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:storage/bucket:Bucket::audit-logs",
+    "custom": true,
+    "id": "example-project-audit-logs",
+    "type": "gcp:storage/bucket:Bucket",
+    "outputs": {
+      "name": "example-project-audit-logs",
+      "url": "gs://example-project-audit-logs"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:serviceaccount/account:Account::ops",
+    "custom": true,
+    "id": "projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com",
+    "type": "gcp:serviceaccount/account:Account",
+    "outputs": {
+      "email": "ops@example-project.iam.gserviceaccount.com",
+      "uniqueId": "100000000000000000001"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
+  },
+  {
+    "urn": "urn:pulumi:prod::example-network::gcp:compute/firewall:Firewall::allow-internal",
+    "custom": true,
+    "id": "projects/example-project/global/firewalls/allow-internal",
+    "type": "gcp:compute/firewall:Firewall",
+    "outputs": {
+      "name": "allow-internal"
+    },
+    "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"
   }
 ]

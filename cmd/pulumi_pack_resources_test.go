@@ -7,10 +7,13 @@ import (
 )
 
 const (
-	pulumiDevSecret    = "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:Secret::app-db"
-	pulumiDevConfigMap = "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:ConfigMap::app-config"
-	pulumiDevSQLUser   = "urn:pulumi:dev::example-project::gcp:sql/user:User::app"
-	pulumiProdSubnet   = "urn:pulumi:prod::example-network::example:index:Network$example:index:Subnets$gcp:compute/subnetwork:Subnetwork::core-a"
+	pulumiDevSecret     = "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:Secret::app-db"
+	pulumiDevConfigMap  = "urn:pulumi:dev::example-project::example:index:App$kubernetes:core/v1:ConfigMap::app-config"
+	pulumiDevSQLUser    = "urn:pulumi:dev::example-project::gcp:sql/user:User::app"
+	pulumiProdSubnet    = "urn:pulumi:prod::example-network::example:index:Network$example:index:Subnets$gcp:compute/subnetwork:Subnetwork::core-a"
+	pulumiProdGKE       = "urn:pulumi:prod::example-network::gcp:container/cluster:Cluster::legacy-public"
+	pulumiProdBucket    = "urn:pulumi:prod::example-network::gcp:storage/bucket:Bucket::audit-logs"
+	pulumiDevDeployment = "urn:pulumi:dev::example-project::example:index:App$kubernetes:apps/v1:Deployment::checkout"
 )
 
 // TestPulumiPackFixtureResources runs the fixture resource collector over a
@@ -25,13 +28,13 @@ func TestPulumiPackFixtureResources(t *testing.T) {
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	report := checkedModel(t, r.Stdout)
 	require.NotNil(t, report.Populate)
-	require.Equal(t, 12, report.Populate.Records)
+	require.Equal(t, 21, report.Populate.Records)
 
 	byURN := map[string]map[string]any{}
 	for _, rec := range storedRecords(t, "pulumi.#Resource") {
 		byURN[rec["urn"].(string)] = rec
 	}
-	require.Len(t, byURN, 12)
+	require.Len(t, byURN, 21)
 	require.Equal(t, map[string]any{
 		"urn": pulumiDevSecret, "stack": "example-org/example-project/dev",
 		"type": "kubernetes:core/v1:Secret", "id": "apps/app-db", "custom": true, "external": false,
@@ -48,12 +51,29 @@ func TestPulumiPackFixtureResources(t *testing.T) {
 	sqlUser := byURN[pulumiDevSQLUser]
 	require.Equal(t, true, sqlUser["protect"])
 	require.Equal(t, "project:///main.go#42", sqlUser["sourcePosition"])
-	require.NotContains(t, sqlUser, "live", "only kubernetes types keep live values so far")
+	require.NotContains(t, sqlUser, "live", "a SQL user is not a named GCP resource")
+
+	// live.name: the relative resource name of the GCP types the pack
+	// knows, from id. A zonal GKE cluster says zones/Z, a bucket b/<name>;
+	// an unlisted type (a firewall) gets none.
+	liveName := func(urn string) any {
+		live, _ := byURN[urn]["live"].(map[string]any)
+		return live["name"]
+	}
+	require.Equal(t, "projects/example-project/regions/us-central1/subnetworks/core-a", liveName(pulumiProdSubnet))
+	require.Equal(t, "projects/example-project/zones/us-east1-b/clusters/legacy-public", liveName(pulumiProdGKE))
+	require.Equal(t, "b/example-project-audit-logs", liveName(pulumiProdBucket))
+	require.Equal(t, "projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com",
+		liveName("urn:pulumi:prod::example-network::gcp:serviceaccount/account:Account::ops"))
+	require.Nil(t, liveName("urn:pulumi:prod::example-network::gcp:compute/firewall:Firewall::allow-internal"))
+	require.Equal(t, map[string]any{"uid": "3f2b9c1e-7a4d-4c2e-9b1a-0d5e6f7a8b9c", "name": "checkout", "namespace": "shop"},
+		byURN[pulumiDevDeployment]["live"].(map[string]any)["metadata"])
+	require.NotContains(t, byURN[pulumiDevDeployment], "outputs")
 
 	requireNoPlanted(t, pudlDir, "PLANTED-", "planted-", "UExBTlRFRC1zZWNyZXQtZGF0YQ==")
 
 	// Providers count as managed; components and external resources do not.
-	requireQuery(t, 6, "pulumi_managed", `"urn":"`+pulumiProdSubnet+`"`)
+	requireQuery(t, 15, "pulumi_managed", `"urn":"`+pulumiProdSubnet+`"`)
 	requireQuery(t, 0, "pulumi_managed", "", "urn=urn:pulumi:prod::example-network::gcp:compute/network:Network::shared")
 	requireQuery(t, 3, "pulumi_ancestor", `"ancestor":"urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"`, "urn="+pulumiProdSubnet)
 	requireQuery(t, 0, "pulumi_ancestor", "", "urn=urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod")
@@ -79,7 +99,7 @@ func TestPulumiPackLiveResources(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Inputs, 3)
 	require.Empty(t, res.Failed)
-	require.Len(t, res.Records, 12)
+	require.Len(t, res.Records, 21)
 	for _, rec := range res.Records {
 		obj := rec.(map[string]any)
 		require.NotContains(t, obj, "inputs")

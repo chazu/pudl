@@ -8,6 +8,9 @@ package gcp
 		schema_type:   "base"
 		resource_type: "gcp.iam.service_account"
 		identity_fields: ["email"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: "name"}]
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpGraph & {

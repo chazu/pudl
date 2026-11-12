@@ -117,6 +117,7 @@ One record per resource in a stack's state, components included. Identity:
 | `urn`, `type`, `id`, `custom`, `external`, `protect`, `parent`, `dependencies`, `created`, `modified`, `sourcePosition` | The same fields (`external` is `false` when absent) |
 | `provider` | The provider reference without its `::<id>` suffix |
 | `live.metadata.uid`, `.name`, `.namespace` | `outputs.metadata` of `kubernetes:*` types, plain strings only |
+| `live.name` | The relative resource name of a GCP resource, built from `id` for the types below |
 
 Pulumi state holds secrets that Pulumi does not mark as secret: shell
 commands and their environment, Secret and ConfigMap data, the
@@ -127,6 +128,33 @@ output except the `live` values, `propertyDependencies`,
 path is dropped, and `reject_keys` stops the populate if an envelope is
 still in a record. An export with no `resources` array is a stack with no
 records, not a failed input.
+
+### Links to live records
+
+A state resource is not a node of its own. It declares `_pudl.same_resource`
+keys, so it groups with the record of the real resource that another pack
+collected (one node in `pudl ui`, "Same resource as" in `pudl show`):
+
+- Kind `k8s.object`, key `live.metadata.uid`: every `kubernetes:*` resource
+  links to the same object from any Kubernetes source, such as the GCP
+  pack's `gcp.#K8sDeployment`.
+- Kind `gcp.resource`, key `live.name`: the relative resource name
+  (`projects/P/global/networks/N`). The GCP pack's schemas for networks,
+  subnetworks, addresses, forwarding rules, routers, GKE clusters, buckets
+  and service accounts declare the same key from their `selfLink` or
+  `name`.
+
+`live.name` comes from the state resource's `id`:
+
+| Pulumi type | `live.name` |
+| --- | --- |
+| `gcp:compute/network:Network`, `subnetwork:Subnetwork`, `address:Address`, `globalAddress:GlobalAddress`, `forwardingRule:ForwardingRule`, `globalForwardingRule:GlobalForwardingRule`, `router:Router`, `gcp:serviceaccount/account:Account` | `id` as is |
+| `gcp:container/cluster:Cluster` | `id`, with `locations/Z` rewritten to `zones/Z` for a zonal cluster, as the cluster's `selfLink` names it |
+| `gcp:storage/bucket:Bucket` | `b/<id>`, the Storage API's relative name |
+
+Any other type gets no `live.name` and no link. The `id` formats come from
+the provider's import documentation, not yet from a live export; a type
+whose `id` has another shape links nothing until its row is fixed.
 
 ## Facts and rules
 
@@ -152,7 +180,10 @@ is the `updates` array of one stack's `/updates` response, and each
 `resources-<name>.json` file is the `deployment.resources` array of one
 export. `resources-dev.json` is hostile: it holds a kubeconfig provider, a
 Secret with a last-applied annotation, a ConfigMap with a secret envelope
-as its name, a `command:local:Command` with env values and a SQL user with
-a plaintext password. Planted values (`PLANTED-*`) must never reach the
+as its name, a `command:local:Command` with env values, a SQL user with
+a plaintext password and a Deployment with an env value in its outputs.
+`resources-prod.json` holds GCP resources whose ids match the GCP pack's
+fixtures, so `cmd/pulumi_pack_links_test.go` can check the links with both
+packs installed. Planted values (`PLANTED-*`) must never reach the
 catalog. `cmd/pulumi_pack_test.go` and `cmd/pulumi_pack_resources_test.go`
 search every stored file for them.

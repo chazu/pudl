@@ -2,6 +2,7 @@ package models
 
 import (
 	"list"
+	"regexp"
 	"strings"
 
 	sm "pudl.schemas/pudl/systemmodel@v0"
@@ -120,6 +121,44 @@ _pulumiFixtureStacks: {
 	}
 }
 
+// _pulumiGCPNamed lists the GCP types whose Pulumi id is the relative
+// resource name of the real resource (projects/P/...), which the GCP pack's
+// schemas declare as their gcp.resource key. Both spellings of the service
+// account type occur across provider versions.
+_pulumiGCPNamed: [
+	"gcp:compute/network:Network",
+	"gcp:compute/subnetwork:Subnetwork",
+	"gcp:compute/address:Address",
+	"gcp:compute/globalAddress:GlobalAddress",
+	"gcp:compute/forwardingRule:ForwardingRule",
+	"gcp:compute/globalForwardingRule:GlobalForwardingRule",
+	"gcp:compute/router:Router",
+	"gcp:serviceaccount/account:Account",
+	"gcp:serviceAccount/account:Account",
+]
+
+// _pulumiGCPName builds live.name, the gcp.resource key, from a GCP
+// resource's id. Types not listed yield no name, so they never link.
+//
+//   - Listed types: the id as is.
+//   - GKE clusters: Pulumi names every location locations/L, but a zonal
+//     cluster's selfLink (the GCP pack's key) says zones/Z. A zone is a
+//     region with a letter suffix.
+//   - Buckets: the id is the bare bucket name; the key is b/<name>, the
+//     Storage API's relative name.
+_pulumiGCPName: {
+	type: string
+	id:   string
+	out: [
+		if list.Contains(_pulumiGCPNamed, type) {id},
+		if type == "gcp:container/cluster:Cluster" {
+			regexp.ReplaceAll("^(projects/[^/]+/)locations/([a-z]+-[a-z]+[0-9]+-[a-z])/", id, "${1}zones/${2}/")
+		},
+		if type == "gcp:storage/bucket:Bucket" {"b/\(id)"},
+		_|_,
+	][0]
+}
+
 // _pulumiResourceTransform keeps the fields of pulumi.#Resource from one
 // state resource. It drops inputs, every output except the identity values
 // in live, propertyDependencies, additionalSecretOutputs and initErrors.
@@ -129,6 +168,7 @@ _pulumiResourceTransform: {
 	in: _
 	let outputs = *in.outputs | {}
 	let meta = *outputs.metadata | {}
+	let gcpName = (_pulumiGCPName & {type: in.type, id: *in.id | ""}).out
 	out: {
 		urn:      in.urn
 		type:     in.type
@@ -152,6 +192,9 @@ _pulumiResourceTransform: {
 				if (meta.name & string) != _|_ {name: meta.name}
 				if (meta.namespace & string) != _|_ {namespace: meta.namespace}
 			}
+		}
+		if (in.id & string) != _|_ && (gcpName & string) != _|_ {
+			live: name: gcpName
 		}
 	}
 }

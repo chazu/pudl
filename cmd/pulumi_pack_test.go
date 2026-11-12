@@ -57,7 +57,7 @@ func TestPulumiPackFixtureStacks(t *testing.T) {
 // storedRecords returns the stored records of one schema.
 func storedRecords(t *testing.T, schema string) []map[string]any {
 	t.Helper()
-	r := runCLI(t, "list", "--schema", schema, "--json")
+	r := runCLI(t, "list", "--all", "--schema", schema, "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	var listed struct {
 		Entries []struct {

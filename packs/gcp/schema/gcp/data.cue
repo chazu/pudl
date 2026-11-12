@@ -56,6 +56,9 @@ package gcp
 		schema_type:   "base"
 		resource_type: "gcp.storage.bucket"
 		identity_fields: ["name"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "name", prepend: "b/"}}]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpGraph & {region: "location"}

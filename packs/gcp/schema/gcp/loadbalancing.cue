@@ -32,6 +32,9 @@ _gcpLBGraph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
 		schema_type:   "base"
 		resource_type: "gcp.compute.forwarding_rule"
 		identity_fields: ["selfLink"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: _gcpComputeAPI}}]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpLBGraph

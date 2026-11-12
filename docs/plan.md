@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Pulumi pack: links to live GCP and Kubernetes records (2026-11-12)
+
+`pulumi.#Resource` declares `_pudl.same_resource` keys: `k8s.object` by
+`live.metadata.uid`, and the new kind `gcp.resource` by `live.name`, the
+relative resource name the collector builds from a GCP resource's `id`
+(networks, subnetworks, addresses, forwarding rules, routers, GKE clusters,
+buckets, service accounts). The GCP pack's schemas for those types declare
+the same key from `selfLink` or `name`, and both packs declare the kind.
+With both packs installed, a state resource and the live record are one
+node. See `implog/2026_11_12_pulumi_same_resource_links.md`. Closes
+`pudl-7g8j.5`.
+
 ### Pulumi pack: pulumi.#Resource, facts and rules (2026-11-10)
 
 `pulumi-resources` reads every stack's state with GET requests and keeps

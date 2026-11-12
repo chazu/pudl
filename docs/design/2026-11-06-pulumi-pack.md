@@ -359,6 +359,20 @@ IAM member resources (`gcp:projects/iAMMember:IAMMember` and the like) are
 bindings inside the IAM policy records, not resources. They get no link in
 the first version.
 
+As built (`pudl-7g8j.5`): the first set is network, subnetwork, address
+(regional and global), forwarding rule (regional and global), router, GKE
+cluster, bucket and service account. Projects and Artifact Registry
+repositories are not collected by the GCP pack, so they wait. DNS managed
+zones and record sets wait too: their GCP records hold the project and the
+zone as separate fields, so no `trim_prefix`/`prepend` key forms the
+relative name, and a record change or a multi-part key is a decision for
+later. Two quirks: a zonal GKE cluster's `selfLink` says `zones/Z` where
+Pulumi says `locations/Z`, so the Pulumi side rewrites zone-shaped
+locations; a bucket's Pulumi `id` is the bare name, so both sides use
+`b/<name>`. The `id` formats come from the provider's import docs; the
+live verification (open question 2) is still to do. Both packs declare the
+`gcp.resource` kind with the same rule, so either passes doctor alone.
+
 ### 7. Facts and rules
 
 Projected facts:
@@ -426,8 +440,8 @@ provider resources, which are `custom` too. The rules are in
 
 1. Answered (`pudl-7g8j.10`): `assignedToMe` returns the org token's one
    role, and listing policies and sets does not need `role:read`.
-2. The exact Pulumi `id` format of each first-set GCP type. Verify it
-   against a live export.
+2. The exact Pulumi `id` format of each first-set GCP type. Built from the
+   provider's import docs (`pudl-7g8j.5`); verify against a live export.
 3. Answered (`pudl-7g8j.4`): live state has `sourcePosition`, and pudl keeps
    it.
 

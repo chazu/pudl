@@ -12,6 +12,13 @@ package pulumi
 		resource_type: "pulumi.resource"
 		identity_fields: ["urn"]
 		review: status: "draft"
+		// The real resource this state resource stands for: a Kubernetes
+		// object by its UID, or a GCP resource by its relative name
+		// (live.name, built from id for the types the collector knows).
+		same_resource: [
+			{kind: "k8s.object", key: uid: "live.metadata.uid"},
+			{kind: "gcp.resource", key: name: "live.name"},
+		]
 		// A root resource has no parent: rules match has_parent: true
 		// before they join on parent, which reads as null otherwise.
 		facts: pulumi_resource: args: {
@@ -51,5 +58,7 @@ package pulumi
 			name?:      string
 			namespace?: string
 		}
+		// gcp:* types: the relative resource name, projects/P/....
+		name?: =~"^(projects|b)/"
 	}
 }

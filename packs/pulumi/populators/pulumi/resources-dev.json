@@ -134,5 +134,54 @@
     "sourcePosition": "project:///main.go#42",
     "created": "2026-01-01T00:00:00.000Z",
     "modified": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "urn": "urn:pulumi:dev::example-project::example:index:App$kubernetes:apps/v1:Deployment::checkout",
+    "custom": true,
+    "id": "shop/checkout",
+    "type": "kubernetes:apps/v1:Deployment",
+    "inputs": {
+      "spec": {
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "API_KEY",
+                    "value": "PLANTED-deploy-env-5c1d"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "outputs": {
+      "metadata": {
+        "uid": "3f2b9c1e-7a4d-4c2e-9b1a-0d5e6f7a8b9c",
+        "name": "checkout",
+        "namespace": "shop"
+      },
+      "spec": {
+        "template": {
+          "spec": {
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "API_KEY",
+                    "value": "PLANTED-deploy-env-5c1d"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "parent": "urn:pulumi:dev::example-project::example:index:App::app",
+    "provider": "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster::00000000-0000-4000-8000-0000000000d2"
   }
 ]

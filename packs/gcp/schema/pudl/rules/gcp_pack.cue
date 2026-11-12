@@ -157,3 +157,11 @@ gcp_sa_key_never_expires: {
 		{rel: "gcp_service_account_key_account", args: {entry_id: "$E", email: "$A"}},
 	]
 }
+
+// gcp.resource — a GCP resource by its relative resource name
+// (projects/P/global/networks/N, projects/P/serviceAccounts/E, b/<bucket>).
+// The Pulumi pack declares the same fact, so either pack alone passes doctor.
+same_resource_kind_gcp_resource: {
+	head: {rel: "same_resource_kind", args: {kind: "gcp.resource", label: "GCP resource",
+		meaning: "A Google Cloud resource, keyed by its relative resource name."}}
+}

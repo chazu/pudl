@@ -475,6 +475,13 @@ another way, such as a future Kubernetes pack reading kubectl:
   private IP does not link.
 - `gcp.#K8sDeployment`: kind `k8s.object`, keyed by `metadata.uid`, the
   object's Kubernetes UID, which any Kubernetes source reports.
+- Kind `gcp.resource`, keyed by the relative resource name, which the
+  Pulumi pack builds from a state resource's `id`: `gcp.#Network`,
+  `gcp.#Subnetwork`, `gcp.#Address`, `gcp.#ForwardingRule`, `gcp.#Router`
+  and `gcp.#GKECluster` from `selfLink` without the API prefix (a zonal
+  cluster says `zones/Z`), `gcp.#ServiceAccount` from `name`, and
+  `gcp.#Bucket` as `b/<name>`. The pack declares the kind in
+  `schema/pudl/rules/gcp_pack.cue`.
 
 Linked records are one node in `pudl ui`; see
 [schema authoring](../../docs/schema-authoring.md#same_resource).

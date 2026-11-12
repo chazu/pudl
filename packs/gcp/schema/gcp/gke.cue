@@ -26,9 +26,12 @@ package gcp
 		// endpoints repeat across VPCs (live check,
 		// 2026-11-05), and on a private cluster endpoint is the private
 		// IP, so neither is a key.
+		// The relative resource name (zonal clusters say zones/Z) is the
+		// gcp.resource key a Pulumi state resource carries (packs/pulumi).
 		same_resource: [
 			{kind: "k8s.cluster", key: host: "privateClusterConfig.publicEndpoint"},
 			{kind: "k8s.cluster", key: host: "controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint"},
+			{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: "https://container.googleapis.com/v1/"}},
 		]
 		facts: {
 			gcp_gke_cluster: args: {

@@ -21,6 +21,9 @@ _gcpComputePathRewrite: [{match: "^https://www\\.googleapis\\.com/compute/v1/(pr
 		schema_type:   "base"
 		resource_type: "gcp.compute.network"
 		identity_fields: ["selfLink"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: _gcpComputeAPI}}]
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph
@@ -57,6 +60,9 @@ _gcpComputePathRewrite: [{match: "^https://www\\.googleapis\\.com/compute/v1/(pr
 		schema_type:   "base"
 		resource_type: "gcp.compute.subnetwork"
 		identity_fields: ["selfLink"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: _gcpComputeAPI}}]
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
@@ -171,6 +177,9 @@ _gcpComputePathRewrite: [{match: "^https://www\\.googleapis\\.com/compute/v1/(pr
 		schema_type:   "base"
 		resource_type: "gcp.compute.router"
 		identity_fields: ["selfLink"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: _gcpComputeAPI}}]
 		review: status: "draft"
 		owner: _#GCPOwner
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}
@@ -202,6 +211,9 @@ _gcpComputePathRewrite: [{match: "^https://www\\.googleapis\\.com/compute/v1/(pr
 		schema_type:   "base"
 		resource_type: "gcp.compute.address"
 		identity_fields: ["selfLink"]
+		// The relative resource name, the gcp.resource key a Pulumi state
+		// resource of this type carries (packs/pulumi).
+		same_resource: [{kind: "gcp.resource", key: name: {path: "selfLink", trim_prefix: _gcpComputeAPI}}]
 		review: status: "draft"
 		owner: _#GCPOwner & {paths: ["labels.team"]}
 		graph: _gcpComputeGraph & {region: {path: "region", last_segment: true}}

@@ -3,6 +3,14 @@ package rules
 // Pulumi content pack rules. Relations come from the pack's fact projection:
 // pulumi_resource (pulumi.#Resource) and pulumi_stack_source (pulumi.#Stack).
 
+// gcp.resource — a GCP resource by its relative resource name
+// (projects/P/global/networks/N, projects/P/serviceAccounts/E, b/<bucket>).
+// The GCP pack declares the same fact, so either pack alone passes doctor.
+same_resource_kind_gcp_resource: {
+	head: {rel: "same_resource_kind", args: {kind: "gcp.resource", label: "GCP resource",
+		meaning: "A Google Cloud resource, keyed by its relative resource name."}}
+}
+
 // pulumi_managed — a real resource that a stack creates and manages: not a
 // component (custom: false) and not one it only reads (external: true).
 pulumi_managed: {
