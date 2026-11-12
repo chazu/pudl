@@ -152,9 +152,13 @@ collected (one node in `pudl ui`, "Same resource as" in `pudl show`):
 | `gcp:container/cluster:Cluster` | `id`, with `locations/Z` rewritten to `zones/Z` for a zonal cluster, as the cluster's `selfLink` names it |
 | `gcp:storage/bucket:Bucket` | `b/<id>`, the Storage API's relative name |
 
-Any other type gets no `live.name` and no link. The `id` formats come from
-the provider's import documentation, not yet from a live export; a type
-whose `id` has another shape links nothing until its row is fixed.
+Any other type gets no `live.name` and no link. The `id` formats were
+checked against live exports (2026-11-12) for every type in the table
+except a zonal GKE cluster, which no stack held. Not yet linked, with
+their live `id` formats: projects (`projects/P`), Artifact Registry
+repositories (`projects/P/locations/L/repositories/R`), DNS zones
+(`projects/P/managedZones/Z`) and record sets
+(`projects/P/managedZones/Z/rrsets/NAME/TYPE`).
 
 ## Facts and rules
 

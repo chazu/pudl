@@ -369,8 +369,8 @@ relative name, and a record change or a multi-part key is a decision for
 later. Two quirks: a zonal GKE cluster's `selfLink` says `zones/Z` where
 Pulumi says `locations/Z`, so the Pulumi side rewrites zone-shaped
 locations; a bucket's Pulumi `id` is the bare name, so both sides use
-`b/<name>`. The `id` formats come from the provider's import docs; the
-live verification (open question 2) is still to do. Both packs declare the
+`b/<name>`. The `id` formats were verified against live exports (open
+question 2). Both packs declare the
 `gcp.resource` kind with the same rule, so either passes doctor alone.
 
 ### 7. Facts and rules
@@ -440,8 +440,14 @@ provider resources, which are `custom` too. The rules are in
 
 1. Answered (`pudl-7g8j.10`): `assignedToMe` returns the org token's one
    role, and listing policies and sets does not need `role:read`.
-2. The exact Pulumi `id` format of each first-set GCP type. Built from the
-   provider's import docs (`pudl-7g8j.5`); verify against a live export.
+2. Answered (2026-11-12, live exports of every stack, in memory): every
+   first-set type's `id` is the relative resource name (`projects/P/...`),
+   except buckets (the bare name). No stack held a zonal GKE cluster, so
+   the `zones/Z` rewrite rests on the `selfLink` format alone. Also seen:
+   projects `projects/P`, Artifact Registry repositories
+   `projects/P/locations/L/repositories/R`, DNS zones
+   `projects/P/managedZones/Z`, record sets
+   `projects/P/managedZones/Z/rrsets/NAME/TYPE`.
 3. Answered (`pudl-7g8j.4`): live state has `sourcePosition`, and pudl keeps
    it.
 

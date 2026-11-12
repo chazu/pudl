@@ -44,9 +44,31 @@ Issue: `pudl-7g8j.5` (closed). Design: `docs/design/2026-11-06-pulumi-pack.md`
 - DNS managed zones and record sets: their GCP records hold project and
   zone as separate fields, so no single-field key forms the relative name.
   Needs a multi-part key or a record change; decide with the user.
-- Live verification of the Pulumi `id` formats (design open question 2)
-  is still open: no `PUDL_PULUMI_TOKEN` was available in this session. The
-  formats follow the provider's import documentation.
+
+## Live verification (2026-11-12)
+
+In a scratch workspace outside the repo, with the read-only org token:
+
+- `pulumi-stacks` listed every stack. A scratch one-stack model exported
+  one stack (89 resources, 19 types, among them service accounts, buckets,
+  projects, Artifact Registry repositories, a DNS zone, a service account
+  key and the GCP provider) through `_pulumiResourceTransform`.
+- Stored records held only the allow-listed keys. `live.name` was set on
+  the 5 service accounts and 2 buckets only, in the expected form.
+- Leak check: every string value of the raw export outside the kept
+  fields (1166 values from `inputs`, `outputs` and the like, including the
+  key's `privateKey`) was searched for in every stored byte of the
+  workspace. None was present except as a substring of a kept value (a
+  short account id inside its own URN). No private key block, password,
+  base64 blob or secret envelope was stored; the only occurrences of the
+  envelope key words were the model's own `reject_keys` list in the
+  observation report. `pudl doctor`'s sensitive scrub was clean.
+- Id formats: all stacks' exports were scanned in memory for the first-set
+  types. Every `id` is the relative resource name; buckets are the bare
+  name. No zonal GKE cluster exists, so the `zones/Z` rewrite is untested
+  live. Projects, Artifact Registry repositories, DNS zones and record
+  sets have the formats noted in the design (open question 2 answered).
+- The scratch workspace and the raw export were deleted.
 
 ## Tests
 
