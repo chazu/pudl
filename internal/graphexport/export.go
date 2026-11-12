@@ -71,6 +71,7 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		items = append(items, builtResource{r: r, refs: refs, origin: entry.Origin})
 	}
 	items, aliases := mergeGroups(items, loadGroups(ctx, in, items, scope, warn))
+	items, memberOnlyHidden := dropMemberOnly(items, in.Metadata)
 	for _, it := range items {
 		g.Resources = append(g.Resources, it.r)
 		index.add(it.r.ID, it.refs)
@@ -93,7 +94,12 @@ func Build(ctx context.Context, in Input) (*Graph, error) {
 		return nil, err
 	}
 	applyProperties(g.Relationships, props, index, warn)
-	g.Meta.Coverage = coverage(in, len(g.Resources), warn)
+	details, err := evaluateRelation(ctx, in.DB, in.Rules, DetailRelation, scope, warn)
+	if err != nil {
+		return nil, err
+	}
+	applyDetails(g.Resources, details, index, warn)
+	g.Meta.Coverage = coverage(in, len(g.Resources), memberOnlyHidden, warn)
 	g.Vocabulary = Vocabulary(in.Schemas, in.Metadata, in.Rules)
 	g.Vocabulary.NoteMissingDisplay(resourceTypes(g.Resources))
 	g.Resources = append(g.Resources, index.externalResources()...)
@@ -178,8 +184,11 @@ func observationsUntil(list ObservationsFunc, t time.Time) ObservationsFunc {
 
 // coverage compares the graph with the catalog. Counts are for the catalog
 // as it is now, also for an as-of graph.
-func coverage(in Input, resources int, warn func(string)) *Coverage {
+func coverage(in Input, resources int, memberOnly map[string]int, warn func(string)) *Coverage {
 	c := &Coverage{Resources: resources}
+	for schema, n := range memberOnly {
+		c.Hidden = append(c.Hidden, HiddenSchema{Schema: schema, Entries: n, Reason: "member-only"})
+	}
 	for _, r := range in.Rules {
 		if r.Head.Rel == EdgeRelation && r.Valid() {
 			c.EdgeRules++

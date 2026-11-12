@@ -301,6 +301,7 @@ account). Wildcards are not allowed.
 | `refs` | Values other records use to refer to this resource, in addition to a single identity field's value |
 | `display` | `{code, label, class}`: how pudl ui draws the type |
 | `admin`, `network`, `port_of`, `security`, `inventory`, `application` | The type's roles in pudl ui's views |
+| `member_only` | `true`: a record draws no node of its own. It appears only as a representation of a [`same_resource`](#same_resource) group with a record of another schema; alone it is left out of the graph (counted under coverage as `member-only`) but stays in `pudl list`, `show` and `query`. For records that describe a resource another source owns, such as a Pulumi state resource |
 
 `display` and the roles are covered in
 [Make a type appear in pudl ui](#make-a-type-appear-in-pudl-ui).

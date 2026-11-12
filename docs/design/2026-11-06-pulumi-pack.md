@@ -403,6 +403,17 @@ provider resources, which are `custom` too. The rules are in
   `repo` and `root`, the commit (marked "approximate" when `dirty`), and the
   component path.
 
+As built (`pudl-7g8j.6`): the flag is `_pudl.graph.member_only: true` on
+both `pulumi.#Resource` and `pulumi.#Stack`; the graph export drops such
+records when no group joins them and counts them under coverage as
+`member-only`. The inspector section is not Pulumi code in the UI: a new
+core relation, `graph_detail(resource_id, section, key, value, rank?)`,
+attaches rows to a resource (a grouped member's ID resolves to its group),
+and the pack's rules derive the Pulumi rows. The component path comes from
+`pulumi_ancestor` joined with a new `depth` fact argument (the URN's type
+chain length, 0 for the stack's root) as the rank. The UI renders every
+section generically.
+
 ### 9. Fixtures and tests
 
 - `populators/pulumi/`: fixtures for `/api/user` (team, org and personal

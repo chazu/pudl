@@ -2,7 +2,7 @@ import { notLoadedOwned, notLoadedRelationships } from '../data/merge';
 import { groupAncestors } from '../projection/project';
 import { PROJECTIONS } from '../projection/registry';
 import type { InspectorProps } from './Inspector';
-import { EvidenceList, Identifiers, PropertyTable, RelationshipList, RepresentationList, disposition } from './inspectorParts';
+import { DetailSections, EvidenceList, Identifiers, PropertyTable, RelationshipList, RepresentationList, disposition } from './inspectorParts';
 import type { ResourceId } from '../model/canonical';
 
 export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
@@ -88,6 +88,7 @@ export function ResourcePanel(props: InspectorProps & { id: ResourceId }) {
           <RepresentationList reps={r.representations} />
         </>
       )}
+      <DetailSections details={r.details} />
 
       {props.onExpand && (notLoadedRelationships(index, id) > 0 || notLoadedOwned(index, id) > 0) && (
         <div className="notice">

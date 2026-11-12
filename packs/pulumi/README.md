@@ -115,6 +115,7 @@ One record per resource in a stack's state, components included. Identity:
 | Field | From the state resource |
 | --- | --- |
 | `urn`, `type`, `id`, `custom`, `external`, `protect`, `parent`, `dependencies`, `created`, `modified`, `sourcePosition` | The same fields (`external` is `false` when absent) |
+| `name`, `depth` | From the URN: its last segment, and the length of its type chain (0 for the stack's root resource) |
 | `provider` | The provider reference without its `::<id>` suffix |
 | `live.metadata.uid`, `.name`, `.namespace` | `outputs.metadata` of `kubernetes:*` types, plain strings only |
 | `live.name` | The relative resource name of a GCP resource, built from `id` for the types below |
@@ -160,14 +161,31 @@ repositories (`projects/P/locations/L/repositories/R`), DNS zones
 (`projects/P/managedZones/Z`) and record sets
 (`projects/P/managedZones/Z/rrsets/NAME/TYPE`).
 
+### In pudl ui
+
+`pulumi.#Resource` and `pulumi.#Stack` set `_pudl.graph.member_only`, so
+no Pulumi record is a node of its own. A state resource with a live partner
+is one node with it; the node's inspector gets a "Pulumi" section from the
+pack's `graph_detail` rules: `stack`, `type`, `repo`, `root` and `commit`
+of the stack's latest update (with a `commit note` when the update ran
+from a dirty working tree), and `component`, the path of components from
+the stack's root resource. A state resource with no partner, and every
+stack, is left out of the graph and counted under coverage as
+`member-only`; `pudl list`, `pudl show` and `pudl query` still have them.
+
 ## Facts and rules
 
 | Relation | Arguments |
 | --- | --- |
-| `pulumi_resource` (fact) | `urn`, `stack`, `type`, `custom`, `external`, `parent`, `has_parent` |
+| `pulumi_resource` (fact) | `urn`, `stack`, `type`, `name`, `depth`, `custom`, `external`, `parent`, `has_parent` |
 | `pulumi_stack_source` (fact) | `stack`, `repo`, `root`, `commit`, `dirty` |
 | `pulumi_managed` (rule) | `urn`, `stack`: `custom` and not `external`, providers included |
 | `pulumi_ancestor` (rule) | `urn`, `ancestor`: every resource above `urn` in its parent chain |
+| `graph_detail` (rules) | `resource_id`, `section: "Pulumi"`, `key`, `value`, `rank`: the inspector rows above |
+
+`name` is the URN's last segment. `depth` counts the URN's type chain: the
+stack's root resource is 0, a resource directly under it 1, one inside a
+component 2.
 
 A root resource has no `parent` argument. Rules that join on `parent` match
 `has_parent: true` first, because a missing argument reads as `null`.

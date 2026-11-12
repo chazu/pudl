@@ -4,6 +4,17 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### pudl ui: member_only records and inspector details (2026-11-12)
+
+`_pudl.graph.member_only` makes a schema's records draw only as a
+representation of a `same_resource` group; alone they are left out of the
+graph and counted as `member-only`. A new core relation, `graph_detail
+(resource_id, section, key, value, rank?)`, lets rule files add inspector
+sections to a node; a grouped member's ID resolves to its group. The Pulumi
+pack uses both: no Pulumi node, and a "Pulumi" section with stack, type,
+repo, root, commit (with a dirty note) and the component path. See
+`implog/2026_11_12_pulumi_ui_member_only_details.md`. Closes `pudl-7g8j.6`.
+
 ### Pulumi pack: links to live GCP and Kubernetes records (2026-11-12)
 
 `pulumi.#Resource` declares `_pudl.same_resource` keys: `k8s.object` by

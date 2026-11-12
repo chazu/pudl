@@ -13,9 +13,11 @@
 //		refs: [{path: "selfLink", trim_prefix: "https://www.googleapis.com/compute/v1/"}]
 //		display: {code: "VPC", label: "VPC network", class: "network"}
 //		network: {group: true, via: ["in_project"]}
+//		member_only: false
 //	}
 //
-// display and the view roles (admin, network, port_of, security, inventory,
+// member_only hides a type's records from the graph unless they are grouped
+// with a record of another schema (see Spec). display and the view roles (admin, network, port_of, security, inventory,
 // application) tell pudl ui how to draw and place the type; see roles.go.
 //
 // Pure: no database or importer dependencies.
@@ -52,15 +54,20 @@ type Spec struct {
 	Display *Display
 	// Roles are the type's parts in pudl ui's views.
 	Roles Roles
+	// MemberOnly: a record draws no node of its own. It appears only as a
+	// representation of a group (same_resource) with another member, and
+	// stays in pudl list, show and query.
+	MemberOnly bool
 }
 
 type rawSpec struct {
-	Name    json.RawMessage   `json:"name"`
-	Account json.RawMessage   `json:"account"`
-	Region  json.RawMessage   `json:"region"`
-	Zone    json.RawMessage   `json:"zone"`
-	Refs    []json.RawMessage `json:"refs"`
-	Display json.RawMessage   `json:"display"`
+	Name       json.RawMessage   `json:"name"`
+	Account    json.RawMessage   `json:"account"`
+	Region     json.RawMessage   `json:"region"`
+	Zone       json.RawMessage   `json:"zone"`
+	Refs       []json.RawMessage `json:"refs"`
+	Display    json.RawMessage   `json:"display"`
+	MemberOnly bool              `json:"member_only"`
 	rawRoles
 }
 
@@ -112,6 +119,7 @@ func Parse(raw json.RawMessage) (*Spec, error) {
 		return nil, err
 	}
 	spec.Roles = roles
+	spec.MemberOnly = r.MemberOnly
 	return spec, nil
 }
 

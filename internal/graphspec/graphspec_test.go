@@ -75,6 +75,13 @@ func TestParseDisplayAndRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, bare.Display)
 	require.Equal(t, Roles{}, bare.Roles)
+	require.False(t, bare.MemberOnly)
+
+	member, err := Parse(json.RawMessage(`{"member_only": true}`))
+	require.NoError(t, err)
+	require.True(t, member.MemberOnly)
+	_, err = Parse(json.RawMessage(`{"member_only": "yes"}`))
+	require.Error(t, err)
 }
 
 func TestParseRejectsBadDisplayAndRoles(t *testing.T) {

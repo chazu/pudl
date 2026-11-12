@@ -61,6 +61,20 @@ export interface Resource {
    * resource has one record; the fields above then come from the first.
    */
   representations?: Representation[];
+  /**
+   * Inspector rows that graph_detail rules derived for the resource or any
+   * of its representations, sorted by section, key, rank and value.
+   */
+  details?: Detail[];
+}
+
+/** One inspector row a graph_detail rule derived. */
+export interface Detail {
+  section: string;
+  key: string;
+  value: unknown;
+  /** Orders several values of one key (a path from its root); absent is 0. */
+  rank?: number;
 }
 
 /** One cataloged record of a resource that several schemas describe. */

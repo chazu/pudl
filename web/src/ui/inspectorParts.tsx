@@ -1,7 +1,8 @@
 // Building blocks shared by the inspector panels.
 
 import { useState } from 'react';
-import type { Basis, Evidence, GraphIndex, Relationship, Representation, ResourceId } from '../model/canonical';
+import type { Basis, Detail, Evidence, GraphIndex, Relationship, Representation, ResourceId } from '../model/canonical';
+import { groupDetails } from '../model/details';
 import type { RelationshipCategory } from '../model/vocabulary';
 import type { SemanticView } from '../projection/types';
 import { EDGE_STYLES } from '../render/edgeStyle';
@@ -156,6 +157,31 @@ export function RepresentationList({ reps }: { reps: Representation[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Sections of graph_detail rows: one heading per section, a table of keys. */
+export function DetailSections({ details }: { details: Detail[] | undefined }) {
+  const sections = groupDetails(details);
+  if (sections.length === 0) return null;
+  return (
+    <>
+      {sections.map((s) => (
+        <div key={s.section}>
+          <h3>{s.section}</h3>
+          <table className="props">
+            <tbody>
+              {s.rows.map((r) => (
+                <tr key={r.key}>
+                  <th>{r.key}</th>
+                  <td>{r.values.join(r.ranked ? ' › ' : ', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </>
   );
 }
 

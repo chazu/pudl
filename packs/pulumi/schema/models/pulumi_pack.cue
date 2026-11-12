@@ -169,9 +169,14 @@ _pulumiResourceTransform: {
 	let outputs = *in.outputs | {}
 	let meta = *outputs.metadata | {}
 	let gcpName = (_pulumiGCPName & {type: in.type, id: *in.id | ""}).out
+	// urn:pulumi:<stack>::<project>::<type chain>::<name>
+	let urnParts = strings.SplitN(in.urn, "::", 4)
 	out: {
 		urn:      in.urn
 		type:     in.type
+		name:     urnParts[3]
+		// The stack's root resource is in no chain: depth 0.
+		depth: [if in.type == "pulumi:pulumi:Stack" {0}, len(strings.Split(urnParts[2], "$"))][0]
 		custom:   *in.custom | false
 		external: *in.external | false
 		if (in.id & string) != _|_ {id: in.id}

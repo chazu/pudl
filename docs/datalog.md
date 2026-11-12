@@ -216,6 +216,23 @@ aws_graph_sg_cidr_port: {
 }
 ```
 
+### Resource inspector details (`graph_detail`)
+
+`graph_detail(resource_id, section, key, value, rank?)` adds rows to a
+resource's inspector in pudl ui, under a heading named by `section`. A
+`resource_id` that is a grouped member ([`same_resource`](#shared-identity-same_resource))
+resolves to its group, so a record that draws no node of its own
+(`_pudl.graph.member_only`) can still describe the node it belongs to.
+Rows sort by section, key, `rank` and value; several values of one key with
+ranks are shown as a path. A row naming no resource in the graph is reported.
+
+```cue
+pulumi_detail_stack: {
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "stack", value: "$S"}}
+	body: [{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}}]
+}
+```
+
 ### Resource graph vocabulary
 
 pudl ui knows what a type or edge type means only from these relations,

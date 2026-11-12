@@ -12,6 +12,9 @@ package pulumi
 		resource_type: "pulumi.resource"
 		identity_fields: ["urn"]
 		review: status: "draft"
+		// No node of its own: a state resource draws only as a
+		// representation of the live resource it links to (below).
+		graph: member_only: true
 		// The real resource this state resource stands for: a Kubernetes
 		// object by its UID, or a GCP resource by its relative name
 		// (live.name, built from id for the types the collector knows).
@@ -25,6 +28,8 @@ package pulumi
 			urn:        "urn"
 			stack:      "stack"
 			type:       "type"
+			name:       "name"
+			depth:      "depth"
 			custom:     "custom"
 			external:   "external"
 			parent:     "parent"
@@ -36,6 +41,11 @@ package pulumi
 	// <org>/<project>/<stack>
 	stack: =~"^[^/]+/[^/]+/[^/]+$"
 	type:  string
+	// The URN's last segment, and how many types its type chain holds: the
+	// stack's root resource is 0, a resource directly under it 1, one
+	// inside a component 2.
+	name:  string
+	depth: int & >=0
 	// The provider's ID of the real resource; components have none.
 	id?: string
 	// false for a component, which only groups other resources.

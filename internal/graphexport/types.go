@@ -24,6 +24,13 @@ const EdgeRelation = graphvocab.EdgeRelation
 // same range is one edge with port [80, 443]).
 const PropertyRelation = "graph_edge_property"
 
+// DetailRelation optionally attaches details to resources for pudl ui's
+// inspector: graph_detail(resource_id, section, key, value, rank?). Rows
+// for one resource group by section; values for one key are listed in
+// rank order, then value order. A resource_id that is a grouped member
+// resolves to its group.
+const DetailRelation = "graph_detail"
+
 // RefPrefix marks a relationship endpoint that names no cataloged resource.
 const RefPrefix = "ref:"
 
@@ -91,8 +98,9 @@ type HiddenSchema struct {
 	Schema  string `json:"schema"`
 	Entries int    `json:"entries"`
 	// Reason is "no-identity" (the schema has no identity fields, or they did
-	// not resolve, as with generic catch-all types) or "internal" (pudl's own
-	// records).
+	// not resolve, as with generic catch-all types), "internal" (pudl's own
+	// records) or "member-only" (the schema's _pudl.graph.member_only records
+	// that no record of another schema groups with).
 	Reason string `json:"reason"`
 }
 
@@ -121,6 +129,18 @@ type Resource struct {
 	// the labels come from the first representation. Absent for a resource
 	// with one record.
 	Representations []Representation `json:"representations,omitempty"`
+	// Details are inspector rows that graph_detail rules derived for the
+	// resource (or any of its representations), sorted by section, key,
+	// rank and value.
+	Details []Detail `json:"details,omitempty"`
+}
+
+// Detail is one inspector row a graph_detail rule derived.
+type Detail struct {
+	Section string `json:"section"`
+	Key     string `json:"key"`
+	Value   any    `json:"value"`
+	Rank    int    `json:"rank,omitempty"`
 }
 
 // Representation is one cataloged record of a grouped resource.

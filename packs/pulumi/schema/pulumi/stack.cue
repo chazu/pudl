@@ -13,6 +13,8 @@ package pulumi
 		resource_type: "pulumi.stack"
 		identity_fields: ["stack"]
 		review: status: "draft"
+		// No node: a stack shows through its resources' inspector details.
+		graph: member_only: true
 		// Arguments the update did not record are left out of the fact.
 		facts: pulumi_stack_source: args: {
 			stack:  "stack"

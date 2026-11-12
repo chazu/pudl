@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/chazu/pudl/internal/doctor"
+	"github.com/chazu/pudl/internal/graphexport"
 )
 
 // pulumiLinkedGCP maps a fixture state resource to the GCP pack schema of
@@ -42,7 +43,8 @@ func TestPulumiPackLinksToGCP(t *testing.T) {
 	require.NoError(t, runCLI(t, "pack", "install", "pulumi").Err)
 	r := runCLI(t, "check", "gcp-fixture-networks", "gcp-fixture-subnets", "gcp-fixture-addresses",
 		"gcp-fixture-routers", "gcp-fixture-forwarding-rules", "gcp-fixture-gke-clusters", "gcp-fixture-buckets",
-		"gcp-fixture-service-accounts", "gcp-fixture-k8s-deployments", "pulumi-fixture-resources", "--json")
+		"gcp-fixture-service-accounts", "gcp-fixture-k8s-deployments", "pulumi-fixture-resources",
+		"pulumi-fixture-stacks", "--json")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 
 	r = runCLI(t, "list", "--json", "--all", "--schema", "pulumi.#Resource")
@@ -75,6 +77,48 @@ func TestPulumiPackLinksToGCP(t *testing.T) {
 	for _, urn := range pulumiUnlinked {
 		require.Nil(t, showSameResource(t, entryByURN[urn]), urn)
 	}
+
+	// Graph export: Pulumi records draw only as representations. The
+	// unlinked ones and the stacks are hidden, counted as member-only, and
+	// a linked node carries the Pulumi inspector details.
+	g := exportGraph(t)
+	hidden := map[string]int{}
+	for _, h := range g.Meta.Coverage.Hidden {
+		if h.Reason == "member-only" {
+			hidden[h.Schema] = h.Entries
+		}
+	}
+	require.Equal(t, map[string]int{"pulumi.#Resource": 13, "pulumi.#Stack": 2}, hidden)
+	var network, deployment *graphexport.Resource
+	for i, res := range g.Resources {
+		require.NotContains(t, []string{"pulumi.#Resource", "pulumi.#Stack"}, res.Schema, "a Pulumi record is never a node of its own")
+		for _, rep := range res.Representations {
+			switch rep.EntryID {
+			case entryByURN["urn:pulumi:prod::example-network::example:index:Network$gcp:compute/network:Network::prod-vpc"]:
+				network = &g.Resources[i]
+			case entryByURN[pulumiDevDeployment]:
+				deployment = &g.Resources[i]
+			}
+		}
+	}
+	require.NotNil(t, network)
+	require.Equal(t, "gcp.#Network", network.Schema)
+	require.Equal(t, []graphexport.Detail{
+		{Section: "Pulumi", Key: "commit", Value: "89abcdef0123456789abcdef0123456789abcdef"},
+		{Section: "Pulumi", Key: "commit note", Value: "approximate: the update ran with uncommitted changes"},
+		{Section: "Pulumi", Key: "component", Value: "example-network-prod", Rank: 0},
+		{Section: "Pulumi", Key: "component", Value: "core", Rank: 1},
+		{Section: "Pulumi", Key: "repo", Value: "example-owner/example-infra"},
+		{Section: "Pulumi", Key: "root", Value: "stacks/network"},
+		{Section: "Pulumi", Key: "stack", Value: "example-org/example-network/prod"},
+		{Section: "Pulumi", Key: "type", Value: "gcp:compute/network:Network"},
+	}, network.Details)
+	require.NotNil(t, deployment)
+	var keys []string
+	for _, d := range deployment.Details {
+		keys = append(keys, d.Key)
+	}
+	require.Equal(t, []string{"commit", "component", "component", "repo", "root", "stack", "type"}, keys, "a clean update has no commit note")
 
 	// doctor: both packs declare gcp.resource; every group has two members.
 	check := doctor.CheckSameResource(workspaceSameResource(context.Background(), pudlDir))

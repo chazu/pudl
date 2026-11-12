@@ -38,6 +38,7 @@ func TestPulumiPackFixtureResources(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"urn": pulumiDevSecret, "stack": "example-org/example-project/dev",
 		"type": "kubernetes:core/v1:Secret", "id": "apps/app-db", "custom": true, "external": false,
+		"name": "app-db", "depth": float64(2),
 		"parent":       "urn:pulumi:dev::example-project::example:index:App::app",
 		"provider":     "urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster",
 		"dependencies": []any{"urn:pulumi:dev::example-project::pulumi:providers:kubernetes::cluster"},
