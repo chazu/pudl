@@ -4,7 +4,7 @@
     "custom": false,
     "type": "pulumi:pulumi:Stack",
     "outputs": {
-      "kubeconfigOut": "PLANTED-stack-output-7f3a"
+      "kubeconfigOut": "FAKE-NOT-A-SECRET-stack-output"
     },
     "created": "2026-01-01T00:00:00.000Z",
     "modified": "2026-01-01T00:00:00.000Z"
@@ -15,10 +15,10 @@
     "id": "00000000-0000-4000-8000-0000000000d2",
     "type": "pulumi:providers:kubernetes",
     "inputs": {
-      "kubeconfig": "PLANTED-kubeconfig-input-7f3a"
+      "kubeconfig": "FAKE-NOT-A-SECRET-kubeconfig-input"
     },
     "outputs": {
-      "kubeconfig": "PLANTED-kubeconfig-output-7f3a"
+      "kubeconfig": "FAKE-NOT-A-SECRET-kubeconfig-output"
     },
     "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
     "created": "2026-01-01T00:00:00.000Z",
@@ -39,7 +39,7 @@
     "type": "kubernetes:core/v1:Secret",
     "inputs": {
       "stringData": {
-        "password": "PLANTED-secret-input-7f3a"
+        "password": "FAKE-NOT-A-SECRET-secret-input"
       }
     },
     "outputs": {
@@ -48,14 +48,14 @@
         "name": "app-db",
         "namespace": "apps",
         "annotations": {
-          "kubectl.kubernetes.io/last-applied-configuration": "{\"kind\":\"Secret\",\"stringData\":{\"password\":\"PLANTED-last-applied-7f3a\"}}"
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"kind\":\"Secret\",\"stringData\":{\"password\":\"FAKE-NOT-A-SECRET-last-applied\"}}"
         }
       },
       "data": {
-        "dsn": "UExBTlRFRC1zZWNyZXQtZGF0YQ=="
+        "dsn": "RkFLRS1OT1QtQS1TRUNSRVQtZGF0YQ=="
       },
       "stringData": {
-        "password": "PLANTED-secret-output-7f3a"
+        "password": "FAKE-NOT-A-SECRET-secret-output"
       }
     },
     "parent": "urn:pulumi:dev::example-project::example:index:App::app",
@@ -79,12 +79,12 @@
         "uid": "22222222-2222-4222-8222-222222222222",
         "name": {
           "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
-          "ciphertext": "PLANTED-ciphertext-7f3a"
+          "ciphertext": "FAKE-NOT-A-SECRET-ciphertext"
         },
         "namespace": "apps"
       },
       "data": {
-        "DATABASE_URL": "PLANTED-configmap-7f3a"
+        "DATABASE_URL": "FAKE-NOT-A-SECRET-configmap"
       }
     },
     "parent": "urn:pulumi:dev::example-project::example:index:App::app",
@@ -101,17 +101,17 @@
     "id": "migrate-20260101",
     "type": "command:local:Command",
     "inputs": {
-      "create": "PLANTED-command-7f3a",
+      "create": "FAKE-NOT-A-SECRET-command",
       "environment": {
-        "API_TOKEN": "PLANTED-command-env-7f3a"
+        "API_TOKEN": "FAKE-NOT-A-SECRET-command-env"
       }
     },
     "outputs": {
-      "stdout": "PLANTED-command-stdout-7f3a"
+      "stdout": "FAKE-NOT-A-SECRET-command-stdout"
     },
     "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
     "initErrors": [
-      "PLANTED-init-error-7f3a"
+      "FAKE-NOT-A-SECRET-init-error"
     ],
     "created": "2026-01-01T00:00:00.000Z",
     "modified": "2026-01-01T00:00:00.000Z"
@@ -124,11 +124,11 @@
     "protect": true,
     "inputs": {
       "name": "app",
-      "password": "PLANTED-sql-password-7f3a"
+      "password": "FAKE-NOT-A-SECRET-sql-password"
     },
     "outputs": {
       "name": "app",
-      "password": "PLANTED-sql-password-7f3a"
+      "password": "FAKE-NOT-A-SECRET-sql-password"
     },
     "parent": "urn:pulumi:dev::example-project::pulumi:pulumi:Stack::example-project-dev",
     "sourcePosition": "project:///main.go#42",
@@ -149,7 +149,7 @@
                 "env": [
                   {
                     "name": "API_KEY",
-                    "value": "PLANTED-deploy-env-5c1d"
+                    "value": "FAKE-NOT-A-SECRET-deploy-env"
                   }
                 ]
               }
@@ -172,7 +172,7 @@
                 "env": [
                   {
                     "name": "API_KEY",
-                    "value": "PLANTED-deploy-env-5c1d"
+                    "value": "FAKE-NOT-A-SECRET-deploy-env"
                   }
                 ]
               }

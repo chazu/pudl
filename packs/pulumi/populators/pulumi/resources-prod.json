@@ -84,7 +84,7 @@
       "name": "legacy-public",
       "location": "us-east1-b",
       "masterAuth": {
-        "clusterCaCertificate": "PLANTED-ca-cert-9b2c"
+        "clusterCaCertificate": "FAKE-NOT-A-SECRET-ca-cert"
       }
     },
     "parent": "urn:pulumi:prod::example-network::pulumi:pulumi:Stack::example-network-prod"

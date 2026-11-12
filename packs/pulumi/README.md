@@ -188,6 +188,6 @@ as its name, a `command:local:Command` with env values, a SQL user with
 a plaintext password and a Deployment with an env value in its outputs.
 `resources-prod.json` holds GCP resources whose ids match the GCP pack's
 fixtures, so `cmd/pulumi_pack_links_test.go` can check the links with both
-packs installed. Planted values (`PLANTED-*`) must never reach the
+packs installed. Planted values (`FAKE-NOT-A-SECRET-*`) must never reach the
 catalog. `cmd/pulumi_pack_test.go` and `cmd/pulumi_pack_resources_test.go`
 search every stored file for them.

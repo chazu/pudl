@@ -51,7 +51,7 @@ func TestPulumiPackFixtureStacks(t *testing.T) {
 
 	// The update's message, config, deployment and other environment keys
 	// are not kept anywhere pudl stores data.
-	requireNoPlanted(t, pudlDir, "PLANTED-", "planted-")
+	requireNoPlanted(t, pudlDir, "FAKE-NOT-A-SECRET", "fake-not-a-secret")
 }
 
 // storedRecords returns the stored records of one schema.

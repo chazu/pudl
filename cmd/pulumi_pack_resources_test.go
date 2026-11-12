@@ -70,7 +70,7 @@ func TestPulumiPackFixtureResources(t *testing.T) {
 		byURN[pulumiDevDeployment]["live"].(map[string]any)["metadata"])
 	require.NotContains(t, byURN[pulumiDevDeployment], "outputs")
 
-	requireNoPlanted(t, pudlDir, "PLANTED-", "planted-", "UExBTlRFRC1zZWNyZXQtZGF0YQ==")
+	requireNoPlanted(t, pudlDir, "FAKE-NOT-A-SECRET", "fake-not-a-secret", "RkFLRS1OT1QtQS1TRUNSRVQtZGF0YQ==")
 
 	// Providers count as managed; components and external resources do not.
 	requireQuery(t, 15, "pulumi_managed", `"urn":"`+pulumiProdSubnet+`"`)

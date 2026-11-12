@@ -5,7 +5,7 @@
     "endTime": 1767225600,
     "version": 42,
     "result": "succeeded",
-    "message": "PLANTED-message-7f3a",
+    "message": "FAKE-NOT-A-SECRET-message",
     "environment": {
       "vcs.kind": "github.com",
       "vcs.owner": "example-owner",
@@ -14,28 +14,28 @@
       "git.head": "0123456789abcdef0123456789abcdef01234567",
       "git.headName": "refs/heads/main",
       "git.dirty": "false",
-      "git.author": "PLANTED-author-7f3a",
-      "git.author.email": "planted-7f3a@example.com",
-      "git.committer": "PLANTED-committer-7f3a",
-      "git.committer.email": "planted-committer-7f3a@example.com",
+      "git.author": "FAKE-NOT-A-SECRET-author",
+      "git.author.email": "fake-not-a-secret-author@example.com",
+      "git.committer": "FAKE-NOT-A-SECRET-committer",
+      "git.committer.email": "fake-not-a-secret-committer@example.com",
       "pulumi.version": "v3.200.0",
-      "pulumi.os": "PLANTED-os-7f3a",
-      "pulumi.arch": "PLANTED-arch-7f3a",
-      "pulumi.flag.yes": "PLANTED-flag-7f3a",
-      "pulumi.env.APP_MODE": "PLANTED-env-7f3a"
+      "pulumi.os": "FAKE-NOT-A-SECRET-os",
+      "pulumi.arch": "FAKE-NOT-A-SECRET-arch",
+      "pulumi.flag.yes": "FAKE-NOT-A-SECRET-flag",
+      "pulumi.env.APP_MODE": "FAKE-NOT-A-SECRET-env"
     },
     "config": {
       "app:dbPassword": {
-        "string": "PLANTED-config-7f3a",
+        "string": "FAKE-NOT-A-SECRET-config",
         "secret": false
       }
     },
     "deployment": {
       "resources": [
         {
-          "urn": "urn:pulumi:dev::example-project::command:local:Command::PLANTED-urn-7f3a",
+          "urn": "urn:pulumi:dev::example-project::command:local:Command::FAKE-NOT-A-SECRET-urn",
           "inputs": {
-            "create": "PLANTED-deployment-7f3a"
+            "create": "FAKE-NOT-A-SECRET-deployment"
           }
         }
       ]
