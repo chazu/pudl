@@ -4,6 +4,19 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: design (2026-11-13)
+
+Accepted design for collecting Argo CD Applications and ApplicationSets
+with kubectl from the cluster that runs Argo CD: allow-list record shapes,
+a normalized `sources` list, Helm value and parameter redaction with an
+image-parameter allow list for Image Updater write-back, the
+`argocd_app_target_host` rule for the in-cluster destination, and the
+`deployed_by`, `deploys_to` and `generated_by` edges. kubectl was chosen
+over the Argo CD API; the comparison is recorded. See
+`docs/design/2026-11-13-argocd-pack.md` and
+`implog/2026_11_13_argocd_pack_design.md`. Closes `pudl-avqx.3`; the build
+is `pudl-avqx.4`.
+
 ### pudl ui: member_only records and inspector details (2026-11-12)
 
 `_pudl.graph.member_only` makes a schema's records draw only as a
