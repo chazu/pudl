@@ -333,7 +333,8 @@ pudl's external nodes (`external.cidr`, `external.principal`) are fixed in
 backs. The repository node is one decision for this pack and for
 `built_from` in `pudl-avqx.5`: either a core relation that lets rules
 declare a node (`graph_node(id, type, name)`), or a `git.repo` identity kind
-with a record per repository. That decision is filed as its own issue and
+with a record per repository. That decision needs its own issue, still to
+be filed (the "new: Repository node" row in the Delivery table), and it
 blocks both edges.
 
 Display: `_pudl.graph.display` codes `APP` ("Argo CD application") and
