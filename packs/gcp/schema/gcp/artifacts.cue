@@ -11,6 +11,18 @@ package gcp
 //
 // Nothing here is secret: the fields are names, digests, tags, times and
 // sizes, so no field is redacted.
+// An image reference as a fact rewrite: the image path gcp.#ContainerImage is
+// named by, tag and digest dropped, gcr.io hosts mapped to the Artifact
+// Registry repositories that serve them. Images from elsewhere (Docker Hub
+// and so on) yield no fact.
+_gcpArtifactImageRewrite: [
+	{match: "^([a-z0-9-]+-docker\\.pkg\\.dev/[^:@]+)", replace: "$1"},
+	{match: "^gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/gcr.io/${2}"},
+	{match: "^us\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/us.gcr.io/${2}"},
+	{match: "^eu\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "europe-docker.pkg.dev/${1}/eu.gcr.io/${2}"},
+	{match: "^asia\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "asia-docker.pkg.dev/${1}/asia.gcr.io/${2}"},
+]
+
 #ContainerImage: {
 	_pudl: {
 		schema_type:   "base"
