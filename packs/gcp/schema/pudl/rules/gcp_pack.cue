@@ -165,3 +165,16 @@ same_resource_kind_gcp_resource: {
 	head: {rel: "same_resource_kind", args: {kind: "gcp.resource", label: "GCP resource",
 		meaning: "A Google Cloud resource, keyed by its relative resource name."}}
 }
+
+// gcp_k8s_deployment_argo_app — the Argo CD Application that manages a
+// deployment, named by either instance label the pack projects (the label
+// is the via argument). An object carrying both labels yields two tuples;
+// an Argo CD pack joins on application to reach the Application record.
+gcp_k8s_deployment_argo_app_label: {
+	head: {rel: "gcp_k8s_deployment_argo_app", args: {resource_id: "$R", application: "$A", via: "argocd.argoproj.io/instance"}}
+	body: [{rel: "gcp_k8s_deployment_argo_instance", args: {resource_id: "$R", instance: "$A"}}]
+}
+gcp_k8s_deployment_argo_app_recommended_label: {
+	head: {rel: "gcp_k8s_deployment_argo_app", args: {resource_id: "$R", application: "$A", via: "app.kubernetes.io/instance"}}
+	body: [{rel: "gcp_k8s_deployment_app_instance", args: {resource_id: "$R", instance: "$A"}}]
+}

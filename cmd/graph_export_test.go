@@ -210,6 +210,17 @@ func TestGraphExportGCPPack(t *testing.T) {
 	prodPrivate := "https://container.googleapis.com/v1/projects/example-project/locations/us-central1/clusters/prod-private"
 	require.ElementsMatch(t, []string{deployments + "catalog -> " + prodPrivate, deployments + "checkout -> " + prodPrivate}, l.edges("in_cluster"))
 	require.Equal(t, "checkout", l.byNative[deployments+"checkout"].Name)
+	// Each container and init container runs its Artifact Registry image
+	// (gcr.io mapped to the repository that serves it; the Docker Hub
+	// sidecar has no edge). The checkout image is not in the inventory.
+	require.ElementsMatch(t, []string{
+		"us-central1/orders-api/123456789012 -> us-docker.pkg.dev/example-project/apps/orders-api",
+		"europe-west1/orders-api/123456789012 -> us-docker.pkg.dev/example-project/apps/orders-api",
+		deployments + "checkout -> ref:us-docker.pkg.dev/example-project/apps/checkout",
+		deployments + "checkout -> us-docker.pkg.dev/example-project/gcr.io/api",
+		deployments + "checkout -> ref:us-docker.pkg.dev/example-project/apps/checkout-migrate",
+		deployments + "catalog -> ref:us-docker.pkg.dev/example-project/apps/catalog",
+	}, l.edges("runs_image"))
 
 	// Compute instances: placed by subnet, the service account they run as,
 	// and the firewall rules GCP applies to them.
@@ -324,7 +335,6 @@ func TestGraphExportGCPPack(t *testing.T) {
 		sub + "orders-run-push -> us-central1/orders-api/123456789012",
 		sub + "orders-webhook -> ref:https://hooks.example.com",
 	}, l.edges("pushes_to"), "delivery by endpoint origin; the token never leaves the redacted endpoint")
-	require.Contains(t, l.edges("runs_image"), "us-central1/orders-api/123456789012 -> us-docker.pkg.dev/example-project/apps/orders-api")
 	require.Contains(t, l.edges("key_of"), "projects/example-project/serviceAccounts/ops@example-project.iam.gserviceaccount.com/keys/1b2c3d4e5f60718293a4b5c6d7e8f9012345678a -> ops@example-project.iam.gserviceaccount.com")
 	require.ElementsMatch(t, []string{
 		project + " -> ref:projects/example-project",
