@@ -320,7 +320,18 @@ cluster's objects to CAI. The record is the object (`metadata`, `spec`,
 location and cluster read from the asset name. `managedFields` is dropped.
 Objects in system namespaces (`kube-system`, `kube-public`,
 `kube-node-lease`, `gke-*`, `gmp-*`) are built-in defaults and are not
-collected.
+collected. A deployment projects one fact per container
+(`gcp_k8s_deployment_container`) and per init container
+(`gcp_k8s_deployment_init_container`): the container name, the image
+reference, and its registry host (`docker.io` when the reference names
+none), tag and digest (`""` when absent). `gcp_k8s_deployment_image` and
+`gcp_k8s_deployment_init_image` name the Artifact Registry image a
+container runs, as `gcp.#ContainerImage` does; images from elsewhere yield
+none. The Argo CD Application that manages a deployment is read from its
+`argocd.argoproj.io/instance` or `app.kubernetes.io/instance` label into
+`gcp_k8s_deployment_argo_instance` or `gcp_k8s_deployment_app_instance`;
+the rule `gcp_k8s_deployment_argo_app(resource_id, application, via)`
+reads both.
 
 Build and deploy types (Cloud Build triggers, App Engine applications and
 versions, Cloud Functions, Cloud Run domain mappings) are collected through
@@ -447,7 +458,7 @@ relationships (rules in `schema/pudl/rules/gcp_graph.cue`):
 | `routes_via` | route → its next hop: instance, VPN tunnel or internal load balancer |
 | `subscribed_to`, `publishes_to` | subscription → its topic, and its dead-letter topic |
 | `pushes_to` | push subscription → the endpoint it delivers to, a Cloud Run service when its URL matches |
-| `runs_image` | Cloud Run service → the container image it runs (gcr.io references mapped to their Artifact Registry repositories) |
+| `runs_image` | Cloud Run service, Kubernetes deployment (each container and init container) → the container image it runs (gcr.io references mapped to their Artifact Registry repositories) |
 | `iam_binding` | member → the IAM policy of the project or resource that grants it (role as a property) |
 | `in_cluster` | Kubernetes deployment → its GKE cluster (matched by project, location and name) |
 | `grants_on` | IAM policy → the resource it is attached to (project, bucket, compute resource, service account, topic, KMS key) |

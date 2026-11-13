@@ -30,18 +30,11 @@ package gcp
 		// Engine default account.
 		facts: gcp_run_service_sa: args: email: "spec.template.spec.serviceAccountName"
 		// The Artifact Registry image each container runs, as the image path
-		// gcp.#ContainerImage is named by: tag and digest dropped, gcr.io
-		// hosts mapped to the Artifact Registry repositories that serve
-		// them. Images from elsewhere (Docker Hub and so on) yield no fact.
+		// gcp.#ContainerImage is named by (artifacts.cue). Images from
+		// elsewhere (Docker Hub and so on) yield no fact.
 		facts: gcp_run_service_image: args: image: {
-			path: "spec.template.spec.containers[*].image"
-			rewrite: [
-				{match: "^([a-z0-9-]+-docker\\.pkg\\.dev/[^:@]+)", replace: "$1"},
-				{match: "^gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/gcr.io/${2}"},
-				{match: "^us\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "us-docker.pkg.dev/${1}/us.gcr.io/${2}"},
-				{match: "^eu\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "europe-docker.pkg.dev/${1}/eu.gcr.io/${2}"},
-				{match: "^asia\\.gcr\\.io/([^/]+)/([^:@]+)", replace: "asia-docker.pkg.dev/${1}/asia.gcr.io/${2}"},
-			]
+			path:    "spec.template.spec.containers[*].image"
+			rewrite: _gcpArtifactImageRewrite
 		}
 	}
 	apiVersion: "serving.knative.dev/v1" @pudl(match)

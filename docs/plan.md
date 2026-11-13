@@ -4,6 +4,16 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### GCP pack: deployment images and Argo instance labels (2026-11-13)
+
+`gcp.#K8sDeployment` projects one fact per container and init container
+(name, image reference, registry host, tag, digest), the Artifact Registry
+image each runs with `runs_image` edges to `gcp.#ContainerImage` (the name
+rewrite now shared with Cloud Run), and the Argo CD instance labels
+(`argocd.argoproj.io/instance`, `app.kubernetes.io/instance`) joined by
+the rule `gcp_k8s_deployment_argo_app`. See
+`implog/2026_11_13_gcp_k8s_deployment_images.md`. Closes `pudl-avqx.2`.
+
 ### pudl ui: member_only records and inspector details (2026-11-12)
 
 `_pudl.graph.member_only` makes a schema's records draw only as a

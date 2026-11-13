@@ -14,7 +14,8 @@
             "creationTimestamp": "2026-09-14T10:12:00Z",
             "labels": {
               "app": "checkout",
-              "team": "payments"
+              "team": "payments",
+              "argocd.argoproj.io/instance": "shop-checkout"
             },
             "annotations": {
               "deployment.kubernetes.io/revision": "7",
@@ -62,6 +63,25 @@
                         "protocol": "TCP"
                       }
                     ]
+                  },
+                  {
+                    "name": "proxy",
+                    "image": "gcr.io/example-project/api:3f2a9c1@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                    "ports": [
+                      {
+                        "containerPort": 8443,
+                        "protocol": "TCP"
+                      }
+                    ]
+                  }
+                ],
+                "initContainers": [
+                  {
+                    "name": "migrate",
+                    "image": "us-docker.pkg.dev/example-project/apps/checkout-migrate@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+                    "command": [
+                      "/app/migrate"
+                    ]
                   }
                 ]
               }
@@ -91,7 +111,8 @@
             "creationTimestamp": "2026-09-14T10:12:00Z",
             "labels": {
               "app": "catalog",
-              "team": "payments"
+              "team": "payments",
+              "app.kubernetes.io/instance": "shop-catalog"
             },
             "annotations": {
               "deployment.kubernetes.io/revision": "7"
@@ -129,6 +150,10 @@
                         "protocol": "TCP"
                       }
                     ]
+                  },
+                  {
+                    "name": "cache",
+                    "image": "redis:7.2"
                   }
                 ]
               }

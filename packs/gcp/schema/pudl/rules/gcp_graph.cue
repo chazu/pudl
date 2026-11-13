@@ -297,6 +297,16 @@ gcp_graph_run_service_image: {
 	head: {rel: "graph_edge", args: {type: "runs_image", source: "$R", target: "$I", basis: "observed"}}
 	body: [{rel: "gcp_run_service_image", args: {resource_id: "$R", image: "$I"}}]
 }
+// A deployment runs the Artifact Registry images of its containers and init
+// containers; images from elsewhere have no edge, as for Cloud Run.
+gcp_graph_k8s_deployment_image: {
+	head: {rel: "graph_edge", args: {type: "runs_image", source: "$R", target: "$I", basis: "observed"}}
+	body: [{rel: "gcp_k8s_deployment_image", args: {resource_id: "$R", image: "$I"}}]
+}
+gcp_graph_k8s_deployment_init_image: {
+	head: {rel: "graph_edge", args: {type: "runs_image", source: "$R", target: "$I", basis: "observed"}}
+	body: [{rel: "gcp_k8s_deployment_init_image", args: {resource_id: "$R", image: "$I"}}]
+}
 gcp_graph_service_account_key: {
 	head: {rel: "graph_edge", args: {type: "key_of", source: "$R", target: "$A", basis: "observed"}}
 	body: [{rel: "gcp_service_account_key_account", args: {resource_id: "$R", email: "$A"}}]
