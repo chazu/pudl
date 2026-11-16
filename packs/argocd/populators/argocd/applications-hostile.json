@@ -1,0 +1,79 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {"resourceVersion": ""},
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "hostile-app",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-0000000000ff",
+        "resourceVersion": "100299",
+        "creationTimestamp": "2026-11-01T10:00:00Z",
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"spec\":{\"source\":{\"helm\":{\"values\":\"password: FAKE-ARGO-LAST-APPLIED\"}}}}"
+        },
+        "managedFields": [{"manager": "kubectl", "operation": "Apply", "fieldsV1": {"f:spec": {"f:source": {"f:helm": {"f:values": "FAKE-ARGO-MANAGED-FIELDS"}}}}}]
+      },
+      "spec": {
+        "project": "default",
+        "sources": [
+          {
+            "repoURL": "https://charts.example.com/stable",
+            "chart": "web-service",
+            "targetRevision": "2.1.0",
+            "helm": {
+              "releaseName": "hostile",
+              "passCredentials": true,
+              "values": "db:\n  password: FAKE-ARGO-HELM-VALUES\n",
+              "valuesObject": {"db": {"password": "FAKE-ARGO-VALUES-OBJECT"}},
+              "parameters": [
+                {"name": "db.password", "value": "FAKE-ARGO-HELM-PARAMETER", "forceString": true},
+                {"name": "image.tag", "value": "9.9.9"}
+              ],
+              "fileParameters": [{"name": "tls.key", "path": "FAKE-ARGO-FILE-PARAMETER"}]
+            }
+          },
+          {
+            "repoURL": "https://git.example.com/example-org/example-deploy.git",
+            "path": "hostile/plugin",
+            "targetRevision": "main",
+            "plugin": {
+              "name": "example-plugin",
+              "env": [{"name": "TOKEN", "value": "FAKE-ARGO-PLUGIN-ENV"}],
+              "parameters": [{"name": "token", "string": "FAKE-ARGO-PLUGIN-PARAMETER"}]
+            }
+          },
+          {
+            "repoURL": "https://git.example.com/example-org/example-deploy.git",
+            "path": "hostile/jsonnet",
+            "targetRevision": "main",
+            "directory": {"jsonnet": {"extVars": [{"name": "token", "value": "FAKE-ARGO-JSONNET-EXTVAR"}]}}
+          }
+        ],
+        "destination": {"server": "https://kubernetes.default.svc", "namespace": "hostile"},
+        "info": [{"name": "note", "value": "FAKE-ARGO-SPEC-INFO"}]
+      },
+      "status": {
+        "sync": {"status": "Synced", "revisions": ["2.1.0", "0123456789abcdef0123456789abcdef01234567", "0123456789abcdef0123456789abcdef01234567"]},
+        "health": {"status": "Healthy"},
+        "history": [
+          {
+            "id": 1,
+            "revisions": ["2.0.0", "0123456789abcdef0123456789abcdef01234567", "0123456789abcdef0123456789abcdef01234567"],
+            "deployedAt": "2026-11-01T10:00:00Z",
+            "sources": [{"repoURL": "https://charts.example.com/stable", "chart": "web-service", "helm": {"parameters": [{"name": "db.password", "value": "FAKE-ARGO-HISTORY-PARAMETER"}]}}]
+          }
+        ],
+        "operationState": {
+          "phase": "Succeeded",
+          "message": "FAKE-ARGO-OPERATION-MESSAGE",
+          "operation": {"sync": {"revisions": ["2.1.0"], "sources": [{"helm": {"values": "FAKE-ARGO-OPERATION-SOURCE"}}]}},
+          "syncResult": {"sources": [{"helm": {"values": "FAKE-ARGO-SYNC-RESULT"}}]}
+        }
+      }
+    }
+  ]
+}

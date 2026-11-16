@@ -1,0 +1,89 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {"resourceVersion": ""},
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "ApplicationSet",
+      "metadata": {
+        "name": "shop",
+        "namespace": "argocd",
+        "uid": "a2000000-0000-4000-8000-000000000001",
+        "resourceVersion": "100301",
+        "creationTimestamp": "2026-09-14T09:00:00Z",
+        "labels": {"team": "payments"}
+      },
+      "spec": {
+        "goTemplate": true,
+        "goTemplateOptions": ["missingkey=error"],
+        "generators": [
+          {
+            "git": {
+              "repoURL": "https://git.example.com/example-org/example-deploy.git",
+              "revision": "main",
+              "directories": [{"path": "shop/*"}, {"path": "shop/legacy", "exclude": true}]
+            }
+          }
+        ],
+        "template": {
+          "metadata": {"name": "shop-{{.path.basename}}", "labels": {"team": "payments"}},
+          "spec": {
+            "project": "shop",
+            "source": {
+              "repoURL": "https://git.example.com/example-org/example-deploy.git",
+              "targetRevision": "main",
+              "path": "{{.path.path}}",
+              "directory": {"recurse": true}
+            },
+            "destination": {"server": "https://198.51.100.30", "namespace": "shop"},
+            "syncPolicy": {"automated": {"prune": true}}
+          }
+        }
+      },
+      "status": {
+        "conditions": [
+          {"type": "ResourcesUpToDate", "status": "True", "reason": "ApplicationSetUpToDate", "message": "All applications have been generated successfully", "lastTransitionTime": "2026-11-15T12:00:00Z"}
+        ],
+        "resources": [{"group": "argoproj.io", "version": "v1alpha1", "kind": "Application", "namespace": "argocd", "name": "shop-catalog", "status": "Synced"}]
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "ApplicationSet",
+      "metadata": {
+        "name": "platform",
+        "namespace": "argocd",
+        "uid": "a2000000-0000-4000-8000-000000000002",
+        "resourceVersion": "100302",
+        "creationTimestamp": "2026-08-01T09:00:00Z"
+      },
+      "spec": {
+        "goTemplate": true,
+        "generators": [
+          {
+            "matrix": {
+              "generators": [
+                {"clusters": {"selector": {"matchLabels": {"env": "prod"}}}},
+                {"list": {"elements": [{"component": "metrics-agent"}, {"component": "log-agent"}]}}
+              ]
+            }
+          }
+        ],
+        "template": {
+          "metadata": {"name": "{{.name}}-{{.component}}"},
+          "spec": {
+            "project": "platform",
+            "source": {
+              "repoURL": "https://charts.example.com/stable",
+              "chart": "{{.component}}",
+              "targetRevision": "4.2.0",
+              "helm": {"releaseName": "{{.component}}", "parameters": [{"name": "image.tag", "value": "4.2.0"}]}
+            },
+            "destination": {"server": "{{.server}}", "namespace": "addons"}
+          }
+        }
+      }
+    }
+  ]
+}

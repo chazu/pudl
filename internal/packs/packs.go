@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/chazu/pudl/internal/fileset"
+	argocdpack "github.com/chazu/pudl/packs/argocd"
 	awspack "github.com/chazu/pudl/packs/aws"
 	gcppack "github.com/chazu/pudl/packs/gcp"
 	k8spack "github.com/chazu/pudl/packs/k8s"
@@ -31,6 +32,7 @@ var all = []Pack{
 	{Name: "aws", Summary: "AWS inventory schemas, policies, aws CLI and fixture collectors; network, data and identity checks", files: awspack.Files},
 	{Name: "pulumi", Summary: "Pulumi Cloud stacks and their latest update, read with GET requests behind a read-only token guard; fixture collectors", files: pulumipack.Files},
 	{Name: "k8s", Summary: "Kubernetes cluster record of kubectl's current context, linked to the GKE cluster the GCP pack sees; fixture collector", files: k8spack.Files},
+	{Name: "argocd", Summary: "Argo CD Applications and ApplicationSets read with kubectl, with Helm values redacted; deploy edges to clusters and workloads; fixture collectors", files: argocdpack.Files},
 }
 
 // List returns every pack in display order.
