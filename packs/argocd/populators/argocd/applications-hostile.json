@@ -37,7 +37,7 @@
             }
           },
           {
-            "repoURL": "https://git.example.com/example-org/example-deploy.git",
+            "repoURL": "https://FAKE-ARGO-REPO-USER:FAKE-ARGO-REPO-TOKEN@git.example.com/example-org/example-deploy.git",
             "path": "hostile/plugin",
             "targetRevision": "main",
             "plugin": {
@@ -73,6 +73,26 @@
           "operation": {"sync": {"revisions": ["2.1.0"], "sources": [{"helm": {"values": "FAKE-ARGO-OPERATION-SOURCE"}}]}},
           "syncResult": {"sources": [{"helm": {"values": "FAKE-ARGO-SYNC-RESULT"}}]}
         }
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "hostile-single",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-0000000000fe",
+        "resourceVersion": "100298",
+        "creationTimestamp": "2026-11-01T10:00:00Z"
+      },
+      "spec": {
+        "project": "default",
+        "source": {
+          "repoURL": "https://FAKE-ARGO-REPO-TOKEN@git.example.com/example-org/example-deploy.git",
+          "path": "hostile/single",
+          "targetRevision": "main"
+        },
+        "destination": {"name": "example-cluster", "namespace": "hostile"}
       }
     }
   ]

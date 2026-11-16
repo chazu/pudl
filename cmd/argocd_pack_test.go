@@ -21,7 +21,7 @@ var argocdPlanted = []string{
 	"FAKE-ARGO-SET-LAST-APPLIED", "FAKE-ARGO-LIST-ELEMENT", "FAKE-ARGO-GENERATOR-TEMPLATE",
 	"FAKE-ARGO-PLUGIN-INPUT", "FAKE-ARGO-CLUSTERS-VALUES", "FAKE-ARGO-TEMPLATE-PATCH",
 	"FAKE-ARGO-TEMPLATE-VALUES", "FAKE-ARGO-TEMPLATE-VALUES-OBJECT", "FAKE-ARGO-TEMPLATE-PARAMETER",
-	"FAKE-ARGO-TEMPLATE-FILE-PARAMETER",
+	"FAKE-ARGO-TEMPLATE-FILE-PARAMETER", "FAKE-ARGO-REPO-TOKEN", "FAKE-ARGO-REPO-USER",
 	// Any planted value at all.
 	"FAKE-ARGO",
 }
@@ -66,7 +66,7 @@ func TestArgoCDPackFixtureApplications(t *testing.T) {
 	argocdWorkspace(t, "argocd-fixture-applications")
 
 	apps := byName(storedRecords(t, "argocd.#Application"))
-	require.Len(t, apps, 5, "four apps and the hostile one; sandbox-demo is outside _argocdNamespaces")
+	require.Len(t, apps, 6, "four apps and the two hostile ones; sandbox-demo is outside _argocdNamespaces")
 	require.NotContains(t, apps, "sandbox-demo")
 
 	checkout := apps["shop-checkout"]
@@ -175,22 +175,23 @@ func TestArgoCDPackFixtureApplicationSets(t *testing.T) {
 		types[args["name"].(string)] = args["generator_types"].(string)
 	}
 	require.Equal(t, map[string]string{
-		"shop": "git", "platform": "matrix(clusters,list)", "regional": "merge(git,clusters)", "hostile-set": "list,plugin,clusters",
+		"shop": "git", "platform": "matrix(clusters,list)", "regional": "merge(git,clusters)", "hostile-set": "list,plugin,clusters,matrix(git,list)",
 	}, types)
 	git := queryArgs(t, "argocd_appset_git_generator")
 	require.Len(t, git, 1)
 	require.Equal(t, "main", git[0]["revision"])
 	child := queryArgs(t, "argocd_appset_child_git_generator")
-	require.Len(t, child, 1, "a git generator inside a merge")
-	require.Equal(t, "release", child[0]["revision"])
+	require.Len(t, child, 2, "git generators inside a merge and the hostile matrix")
+	require.Len(t, argsWhere(child, "revision", "release"), 1)
 }
 
 // TestArgoCDPackHostileFixturesPlantNothing ingests the hostile fixtures:
 // Helm values, valuesObject, non-image parameters, file parameter paths and
 // the last-applied annotation are redacted; plugin env and parameters,
 // jsonnet variables, history sources, the sync result, generator template
-// overrides, list elements and templatePatch are dropped. No planted byte
-// is stored anywhere under the workspace.
+// overrides, list elements and templatePatch are dropped; every repoURL
+// loses its userinfo. No planted byte is stored anywhere under the
+// workspace.
 func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
 	pudlDir := argocdWorkspace(t, "argocd-fixture-applications", "argocd-fixture-applicationsets")
 
@@ -204,6 +205,30 @@ func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
 	helm := sources[0].(map[string]any)["helm"].(map[string]any)
 	require.NotContains(t, helm, "passCredentials")
 	require.Equal(t, []any{map[string]any{"name": "tls.key", "path": "[REDACTED]"}}, helm["fileParameters"])
+
+	// Repository credentials in userinfo: the URL is kept without them.
+	const deployRepo = "https://git.example.com/example-org/example-deploy.git"
+	require.Equal(t, deployRepo, sources[1].(map[string]any)["repoURL"], "user:token in a multi-source app")
+	single := apps["hostile-single"]["sources"].([]any)
+	require.Len(t, single, 1)
+	require.Equal(t, deployRepo, single[0].(map[string]any)["repoURL"], "a token as the user in a single source")
+	names := appNames(t)
+	repos := map[string]bool{}
+	for _, args := range queryArgs(t, "argocd_app_source") {
+		if n := names[args["resource_id"].(string)]; n == "hostile-app" || n == "hostile-single" {
+			repos[args["repo_url"].(string)] = true
+		}
+	}
+	require.Equal(t, map[string]bool{deployRepo: true, "https://charts.example.com/stable": true}, repos)
+
+	set := byName(storedRecords(t, "argocd.#ApplicationSet"))["hostile-set"]
+	require.Equal(t, "https://charts.example.com/stable",
+		set["template"].(map[string]any)["spec"].(map[string]any)["sources"].([]any)[0].(map[string]any)["repoURL"])
+	matrix := set["generators"].([]any)[3].(map[string]any)
+	require.Equal(t, map[string]any{"type": "git", "git": map[string]any{
+		"repoURL": deployRepo, "revision": "hostile", "directories": []any{map[string]any{"path": "hostile/*"}},
+	}}, matrix["generators"].([]any)[0], "a git generator inside a matrix")
+	require.Len(t, argsWhere(queryArgs(t, "argocd_appset_child_git_generator"), "repo_url", deployRepo), 2)
 
 	requireNoPlanted(t, pudlDir, argocdPlanted...)
 }
