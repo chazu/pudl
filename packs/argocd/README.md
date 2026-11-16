@@ -71,6 +71,20 @@ a clusters generator's selector, and the children of a matrix or merge
 generator, one level deep. List elements, generator template overrides
 and `templatePatch` are dropped.
 
+Every `repoURL` the transforms keep (a source's, in an Application and in
+an ApplicationSet template, and a git generator's at the top level and in
+a matrix or merge) loses the credentials it can carry as userinfo, so the
+facts keep a usable URL:
+
+| Stored `repoURL` | From |
+| --- | --- |
+| `https://git.example.com/org/repo.git` | `https://user:TOKEN@git.example.com/org/repo.git` or `https://TOKEN@git.example.com/org/repo.git`; the same for any scheme other than `ssh` |
+| `ssh://git@git.example.com/org/repo.git` | `ssh://git:PASSWORD@git.example.com/org/repo.git`: an `ssh` URL keeps the user name and drops a password |
+| `git@git.example.com:org/repo.git` | the same: the scp form has a user name only and is kept |
+
+A URL without userinfo is kept as it is. Status keeps no `repoURL`: the
+history entries' and the operation's sources are dropped.
+
 Then `sensitive_fields` redacts these values before anything is stored:
 
 - Helm `values` and `valuesObject`
@@ -80,7 +94,7 @@ Then `sensitive_fields` redacts these values before anything is stored:
 
 A parameter's name stays, so an override is visible. The ApplicationSet
 template's Helm paths are redacted the same way. The hostile fixtures plant
-values at each of these places; the pack's tests find none of them stored.
+values at each of these places, and repository credentials in `repoURL`; the pack's tests find none of them stored.
 
 ## Facts
 

@@ -25,7 +25,21 @@
             }
           },
           {"plugin": {"configMapRef": {"name": "example-plugin"}, "input": {"parameters": {"token": "FAKE-ARGO-PLUGIN-INPUT"}}}},
-          {"clusters": {"selector": {"matchLabels": {"env": "prod"}}, "values": {"token": "FAKE-ARGO-CLUSTERS-VALUES"}}}
+          {"clusters": {"selector": {"matchLabels": {"env": "prod"}}, "values": {"token": "FAKE-ARGO-CLUSTERS-VALUES"}}},
+          {
+            "matrix": {
+              "generators": [
+                {
+                  "git": {
+                    "repoURL": "https://FAKE-ARGO-REPO-USER:FAKE-ARGO-REPO-TOKEN@git.example.com/example-org/example-deploy.git",
+                    "revision": "hostile",
+                    "directories": [{"path": "hostile/*"}]
+                  }
+                },
+                {"list": {"elements": [{"env": "prod"}]}}
+              ]
+            }
+          }
         ],
         "templatePatch": "spec:\n  source:\n    helm:\n      values: FAKE-ARGO-TEMPLATE-PATCH\n",
         "template": {
@@ -33,7 +47,7 @@
           "spec": {
             "project": "default",
             "source": {
-              "repoURL": "https://charts.example.com/stable",
+              "repoURL": "https://FAKE-ARGO-REPO-USER:FAKE-ARGO-REPO-TOKEN@charts.example.com/stable",
               "chart": "web-service",
               "targetRevision": "2.1.0",
               "helm": {

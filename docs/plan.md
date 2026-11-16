@@ -4,6 +4,23 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: credentials in repoURL redacted (2026-11-16)
+
+The Argo CD transforms remove the userinfo of every `repoURL` they keep
+(`_argocdRepoURL`): sources of Applications and ApplicationSet templates,
+and git generators at the top level and inside a matrix or merge. An
+`ssh://` URL keeps its user name; the scp form is kept. The hostile
+fixtures plant repository credentials, and the tests find none stored. See
+`implog/2026_11_16_argocd_repo_url_userinfo.md`. Closes `pudl-nap8`.
+
+### Pulumi pack: rank on every graph_detail row (2026-11-16)
+
+The Pulumi pack's one-value `graph_detail` rows carry `rank: 0`, so every
+`graph_detail` rule has the same head keys as the Argo CD pack's rules, and
+`pudl doctor` reports no rule error with the `pulumi`, `gcp`, `k8s` and
+`argocd` packs installed. See `implog/2026_11_16_pulumi_graph_detail_rank.md`.
+Closes `pudl-a7aa`.
+
 ### Argo CD pack: Applications, ApplicationSets and deploy edges (2026-11-16)
 
 The `argocd` pack (`packs/argocd`): `argocd.#Application` and
