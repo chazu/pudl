@@ -61,7 +61,7 @@ These flags apply to every command.
   - [pudl model show](#pudl-model-show) — Show a registered #SystemModel definition
   - [pudl model validate](#pudl-model-validate) — Validate a registered #SystemModel without running it
 - [pudl pack](#pudl-pack) — Install bundled content packs (gcp, aws, pulumi) into this workspace
-  - [pudl pack install](#pudl-pack-install) — Install a content pack: schemas, policies, collectors, checks and fixtures
+  - [pudl pack install](#pudl-pack-install) — Install content packs: schemas, policies, collectors, checks and fixtures
   - [pudl pack list](#pudl-pack-list) — List the bundled content packs and whether this workspace has them
 - [pudl policy](#pudl-policy) — Evaluate compliance policies against cataloged resources
   - [pudl policy evaluate](#pudl-policy-evaluate) — Re-evaluate policies against stored current resources
@@ -1463,15 +1463,15 @@ Install bundled content packs (gcp, aws, pulumi) into this workspace
 
 Subcommands:
 
-- [pudl pack install](#pudl-pack-install) — Install a content pack: schemas, policies, collectors, checks and fixtures
+- [pudl pack install](#pudl-pack-install) — Install content packs: schemas, policies, collectors, checks and fixtures
 - [pudl pack list](#pudl-pack-list) — List the bundled content packs and whether this workspace has them
 
 ## pudl pack install
 
-Install a content pack: schemas, policies, collectors, checks and fixtures
+Install content packs: schemas, policies, collectors, checks and fixtures
 
 ```text
-pudl pack install <name> [flags]
+pudl pack install <name>... [flags]
 ```
 
 ```text
@@ -1500,9 +1500,15 @@ The pulumi pack reads Pulumi Cloud stacks and their latest update with GET
 requests only, after a guard that accepts only a named org access token
 with a read-only role, and has fixture collectors.
 
+The argocd pack reads Argo CD Applications and ApplicationSets with kubectl
+and needs the k8s pack.
+
+Several names install the packs in the order given; --json takes one.
+
 Example:
     pudl init
     pudl pack install gcp
+    pudl pack install k8s argocd gcp
 ```
 
 Flags:
