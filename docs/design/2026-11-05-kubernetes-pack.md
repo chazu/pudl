@@ -39,10 +39,12 @@ fixtures). Registered in `internal/packs/packs.go`. The built-in
 ### Cluster record: `k8s.#Cluster`
 
 One record per run, printed by a helper (`populators/k8s/cluster.sh`) from
-`kubectl config view --minify -o json` and `kubectl version -o json`:
-`context`, `cluster` (kubeconfig cluster name), `server` (URL), `host` (the
-server URL's host, scheme and `:443` removed, in the transform), and
-`serverVersion`. Identity: `host`. `same_resource: [{kind: "k8s.cluster",
+`kubectl config view --minify` and `kubectl version -o json`: `context`,
+`cluster` (kubeconfig cluster name), `server` (URL), `host` (the server
+URL's host, scheme, `:443` and a trailing slash removed, computed by the
+helper so an `each` can select it), and `serverVersion`. The helper prints
+no credentials: `config view` omits certificate data and tokens, and the
+user entry is not printed. Identity: `host`. `same_resource: [{kind: "k8s.cluster",
 key: host: "host"}]` links it to `gcp.#GKECluster` (public or DNS endpoint).
 A context that reaches a cluster by private IP does not link (private
 endpoints repeat across VPCs).
@@ -50,10 +52,11 @@ endpoints repeat across VPCs).
 ### Objects
 
 One collector per kind. Each enumerates the current cluster's host with
-`each` (a one-element list from the cluster helper), sets it on every record
-(`set: cluster: "{{item}}"`), and runs a helper that prints the `items` of
-`kubectl get <resource> -A -o json` as a JSON array (runs decode an array as
-one record per element; they cannot unwrap a List object).
+`each` (`_k8sClusterEach`: the cluster helper's `host`, one input), sets it
+on every record (`set: cluster: "{{item}}"`), and runs `kubectl get
+<resource> -A -o json` with the transform `{in: _, out: in.items}`: a run's
+transform may return a list, and each element is stored as a record
+(`_k8sGet`, `_k8sListTransform` in `k8s_pack.cue`; open question 1).
 
 - **Identity:** `[cluster, metadata.namespace, metadata.name]`, or
   `[cluster, metadata.name]` for Namespaces and Nodes. Stable when an object
@@ -109,5 +112,14 @@ both fixture collectors, and expects linked groups in `pudl graph export`.
 ## Open questions
 
 1. The helper's unwrap: `kubectl -o jsonpath='{.items}'` or a JSON tool.
-   Verify against a reachable cluster in the skeleton issue (the current
-   context timed out on 2026-11-05).
+   **Decided 2026-11-16 (`pudl-3q5.1`): neither.** A run's transform may
+   now return a list, one record per element, so a collector runs
+   `kubectl get <resource> -A -o json` and unwraps with `out: in.items`.
+   `-o json` printing a `v1` `List` with `items` is documented kubectl
+   behaviour on every version; `jsonpath` printing a list as JSON is not,
+   and a JSON tool is a host dependency. No helper is needed for objects.
+   No cluster was reachable on 2026-11-16 (every context timed out or had
+   expired credentials), so the List shape was taken from the kubectl
+   documentation and the unwrap is covered by a List-shaped fixture test
+   (`internal/populate/testdata/kubectl_list.json`); the first live run of
+   an object collector (`pudl-3q5.2`) confirms it.

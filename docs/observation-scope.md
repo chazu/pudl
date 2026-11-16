@@ -109,10 +109,13 @@ runs: [{
 ```
 
 - `out: null` drops the record.
+- A list `out` stores one record per element: `out: in.items` unwraps a
+  kubectl `List` object. Every element must be an object.
 - Hidden helper fields are allowed inside the transform, e.g.
   `_r: in.versionedResources[0].resource`.
 - An `out` that fails to evaluate (a field the record lacks, a conflict), is
-  not concrete, or is not an object or null makes the run a failed input,
+  not concrete, or is not an object, a list of objects or null makes the
+  run a failed input,
   like any other malformed output.
 - The transform is not recorded with the model instance.
 - Cost: about 0.2 ms per record of a few kilobytes.

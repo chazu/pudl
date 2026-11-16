@@ -284,8 +284,8 @@ func (x *executor) execute(run systemmodel.CommandRun, out string) (string, erro
 
 // decodeCommandRecords reads a run's stdout: a stream of JSON values, where an
 // array contributes its elements and an object is one record. Numbers stay
-// exact. The run's transform, if any, reshapes or drops each record; set is
-// then applied to every record kept.
+// exact. The run's transform, if any, reshapes or drops each record, or
+// unwraps it into several; set is then applied to every record kept.
 func decodeCommandRecords(path string, run systemmodel.CommandRun) ([]any, error) {
 	assignments := flattenSet(nil, run.Set)
 	var records []any
@@ -296,22 +296,22 @@ func decodeCommandRecords(path string, run systemmodel.CommandRun) ([]any, error
 			return fmt.Errorf("stdout record %d is %T, not a JSON object", n, v)
 		}
 		n++
+		kept := []map[string]any{obj}
 		if run.Transform != nil {
-			out, keep, err := run.Transform.Apply(obj)
+			outs, err := run.Transform.Records(obj)
 			if err != nil {
 				return fmt.Errorf("stdout record %d: %w", n-1, err)
 			}
-			if !keep {
-				return nil
-			}
-			obj = out
+			kept = outs
 		}
-		for _, a := range assignments {
-			if err := a.path.Set(obj, a.value); err != nil {
-				return fmt.Errorf("set: %w", err)
+		for _, obj := range kept {
+			for _, a := range assignments {
+				if err := a.path.Set(obj, a.value); err != nil {
+					return fmt.Errorf("set: %w", err)
+				}
 			}
+			records = append(records, obj)
 		}
-		records = append(records, obj)
 		return nil
 	})
 	return records, err

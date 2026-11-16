@@ -176,10 +176,11 @@ package systemmodel
 	dir?: string
 	// transform reshapes each record before set applies and before routing:
 	// out is evaluated with in bound to the record, and out is stored.
-	// out: null drops the record; an out that is not an object or null is a
-	// failed input.
+	// out: null drops the record; a list out stores one record per element
+	// (the items of a kubectl List, say); any other out is a failed input.
 	//
 	//	transform: {in: _, out: in.versionedResources[0].resource}
+	//	transform: {in: _, out: in.items}
 	transform?: {in: _, out?: _}
 }
 

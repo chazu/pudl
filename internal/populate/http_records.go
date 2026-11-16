@@ -120,26 +120,26 @@ func (c *httpSource) observe(run systemmodel.HTTPRun) ([]any, *FailedInput, erro
 		if !ok {
 			return fail(fmt.Errorf("record %d is %s, not a JSON object", i, jsonKind(v)))
 		}
+		kept := []map[string]any{obj}
 		if run.Transform != nil {
-			out, keep, err := run.Transform.Apply(obj)
+			outs, err := run.Transform.Records(obj)
 			if err != nil {
 				// CUE messages quote values, which may be secrets: name paths.
 				return fail(fmt.Errorf("record %d: transform failed%s", i, systemmodel.ErrorPaths(err)))
 			}
-			if !keep {
-				continue
+			kept = outs
+		}
+		for _, obj := range kept {
+			for _, a := range assignments {
+				if err := a.path.Set(obj, a.value); err != nil {
+					return fail(fmt.Errorf("set: %w", err))
+				}
 			}
-			obj = out
-		}
-		for _, a := range assignments {
-			if err := a.path.Set(obj, a.value); err != nil {
-				return fail(fmt.Errorf("set: %w", err))
+			if key, found := rejectedKey(obj, c.spec.RejectKeys); found {
+				return nil, nil, fmt.Errorf("record %d still has rejected key %q after the transform; nothing is ingested", i, key)
 			}
+			records = append(records, obj)
 		}
-		if key, found := rejectedKey(obj, c.spec.RejectKeys); found {
-			return nil, nil, fmt.Errorf("record %d still has rejected key %q after the transform; nothing is ingested", i, key)
-		}
-		records = append(records, obj)
 	}
 	return records, nil, nil
 }

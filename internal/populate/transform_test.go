@@ -3,6 +3,7 @@ package populate
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
@@ -56,4 +57,35 @@ func TestRunTransformSurvivesEach(t *testing.T) {
 	require.NoError(t, err)
 	encoded, _ := json.Marshal(res.Records)
 	assert.JSONEq(t, `[{"name":"x"},{"name":"x"}]`, string(encoded))
+}
+
+// A kubectl get -o json prints one List object; `out: in.items` stores one
+// record per item, and set applies to each of them.
+func TestRunTransformUnwrapsListItems(t *testing.T) {
+	// Runs execute in the model directory, so the fixture's path is absolute.
+	fixture, err := filepath.Abs(filepath.Join("testdata", "kubectl_list.json"))
+	require.NoError(t, err)
+	run := shellRun(`cat "$0"`, map[string]any{"cluster": "198.51.100.30"})
+	run.Argv = append(run.Argv, fixture)
+	run.Transform = transform(t, `{in: _, out: in.items}`)
+	res, err := Run(context.Background(), systemmodel.Populate{Runs: []systemmodel.CommandRun{run}}, Request{ModelDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Empty(t, res.Failed)
+	encoded, err := json.Marshal(res.Records)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[
+		{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"payments","uid":"5c1d2d3e-0000-4000-8000-000000000001"},"cluster":"198.51.100.30"},
+		{"apiVersion":"v1","kind":"Namespace","metadata":{"name":"catalog","uid":"5c1d2d3e-0000-4000-8000-000000000002"},"cluster":"198.51.100.30"}
+	]`, string(encoded))
+}
+
+// An item that is not an object fails the run, as any malformed output does.
+func TestRunTransformListElementMustBeAnObject(t *testing.T) {
+	run := shellRun(`echo '{"kind":"List","items":[{"name":"a"},"b"]}'`, nil)
+	run.Transform = transform(t, `{in: _, out: in.items}`)
+	res, err := Run(context.Background(), systemmodel.Populate{Runs: []systemmodel.CommandRun{run}}, Request{ModelDir: t.TempDir()})
+	require.NoError(t, err)
+	require.Empty(t, res.Records)
+	require.Len(t, res.Failed, 1)
+	assert.Contains(t, res.Failed[0].Error, "out[1] is string, not an object")
 }
