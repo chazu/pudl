@@ -37,19 +37,21 @@ pulumi_ancestor_rec: {
 // representation of its live resource; these rows give that node a Pulumi
 // section: the stack and type, the repo, directory and commit of the
 // stack's latest update, and the component path (rank is the depth).
+// Every rule of a relation has the same head keys, also across packs, so
+// the rows with one value per resource carry rank 0.
 
 pulumi_detail_stack: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "stack", value: "$S"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "stack", value: "$S", rank: 0}}
 	body: [{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}}]
 }
 
 pulumi_detail_type: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "type", value: "$T"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "type", value: "$T", rank: 0}}
 	body: [{rel: "pulumi_resource", args: {resource_id: "$R", type: "$T"}}]
 }
 
 pulumi_detail_repo: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "repo", value: "$V"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "repo", value: "$V", rank: 0}}
 	body: [
 		{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}},
 		{rel: "pulumi_stack_source", args: {stack: "$S", repo: "$V"}},
@@ -57,7 +59,7 @@ pulumi_detail_repo: {
 }
 
 pulumi_detail_root: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "root", value: "$V"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "root", value: "$V", rank: 0}}
 	body: [
 		{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}},
 		{rel: "pulumi_stack_source", args: {stack: "$S", root: "$V"}},
@@ -65,7 +67,7 @@ pulumi_detail_root: {
 }
 
 pulumi_detail_commit: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "commit", value: "$V"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "commit", value: "$V", rank: 0}}
 	body: [
 		{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}},
 		{rel: "pulumi_stack_source", args: {stack: "$S", commit: "$V"}},
@@ -75,7 +77,7 @@ pulumi_detail_commit: {
 // The update ran from a working tree with uncommitted changes: the commit
 // is approximate.
 pulumi_detail_commit_dirty: {
-	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "commit note", value: "approximate: the update ran with uncommitted changes"}}
+	head: {rel: "graph_detail", args: {resource_id: "$R", section: "Pulumi", key: "commit note", value: "approximate: the update ran with uncommitted changes", rank: 0}}
 	body: [
 		{rel: "pulumi_resource", args: {resource_id: "$R", stack: "$S"}},
 		{rel: "pulumi_stack_source", args: {stack: "$S", dirty: true}},
