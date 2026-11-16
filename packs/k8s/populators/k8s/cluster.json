@@ -1,0 +1,42 @@
+{
+  "context": {
+    "name": "gke_example-project_us-central1_prod-private",
+    "context": {
+      "cluster": "gke_example-project_us-central1_prod-private",
+      "user": "gke_example-project_us-central1_prod-private"
+    }
+  },
+  "cluster": {
+    "name": "gke_example-project_us-central1_prod-private",
+    "cluster": {
+      "certificate-authority-data": "DATA+OMITTED",
+      "server": "https://198.51.100.30"
+    }
+  },
+  "version": {
+    "clientVersion": {
+      "major": "1",
+      "minor": "31",
+      "gitVersion": "v1.31.2",
+      "gitCommit": "0000000000000000000000000000000000000000",
+      "gitTreeState": "clean",
+      "buildDate": "2024-10-22T20:35:15Z",
+      "goVersion": "go1.22.8",
+      "compiler": "gc",
+      "platform": "darwin/arm64"
+    },
+    "kustomizeVersion": "v5.4.2",
+    "serverVersion": {
+      "major": "1",
+      "minor": "30",
+      "gitVersion": "v1.30.5-gke.1014001",
+      "gitCommit": "0000000000000000000000000000000000000000",
+      "gitTreeState": "clean",
+      "buildDate": "2024-09-17T09:03:44Z",
+      "goVersion": "go1.22.6 X:boringcrypto",
+      "compiler": "gc",
+      "platform": "linux/amd64"
+    }
+  },
+  "host": "198.51.100.30"
+}

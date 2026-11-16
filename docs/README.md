@@ -42,6 +42,7 @@ and a tutorial with `pudl example install NAME`.
 | --- | --- |
 | [gcp](../packs/gcp/README.md) | GCP types, policies, collectors, rules and check families |
 | [aws](../packs/aws/README.md) | AWS types, policies, collectors, relationship rules and check families |
+| [k8s](../packs/k8s/README.md) | Kubernetes cluster record from kubectl's current context, linked to its GKE record; the run shapes kubectl collectors share |
 
 | Tutorial | What it covers |
 | --- | --- |
