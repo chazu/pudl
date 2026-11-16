@@ -13,7 +13,9 @@
         "resourceVersion": "100399",
         "creationTimestamp": "2026-11-01T10:00:00Z",
         "annotations": {
-          "kubectl.kubernetes.io/last-applied-configuration": "{\"spec\":{\"template\":{\"spec\":{\"source\":{\"helm\":{\"values\":\"FAKE-ARGO-SET-LAST-APPLIED\"}}}}}}"
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"spec\":{\"template\":{\"spec\":{\"source\":{\"helm\":{\"values\":\"FAKE-ARGO-SET-LAST-APPLIED\"}}}}}}",
+          "example.com/note": "FAKE-ARGO-ANNOTATION-OTHER",
+          "notifications.argoproj.io/subscribe.on-sync-succeeded.slack": "FAKE-ARGO-ANNOTATION-NOTIFY"
         }
       },
       "spec": {
@@ -43,7 +45,14 @@
         ],
         "templatePatch": "spec:\n  source:\n    helm:\n      values: FAKE-ARGO-TEMPLATE-PATCH\n",
         "template": {
-          "metadata": {"name": "hostile-{{cluster}}"},
+          "metadata": {
+            "name": "hostile-{{cluster}}",
+            "annotations": {
+              "example.com/note": "FAKE-ARGO-ANNOTATION-OTHER",
+              "notifications.argoproj.io/subscribe.on-sync-succeeded.slack": "FAKE-ARGO-ANNOTATION-NOTIFY",
+              "argocd-image-updater.argoproj.io/git-repository": "https://FAKE-ARGO-UPDATER-USER:FAKE-ARGO-UPDATER-TOKEN@git.example.com/example-org/example-deploy.git"
+            }
+          },
           "spec": {
             "project": "default",
             "source": {

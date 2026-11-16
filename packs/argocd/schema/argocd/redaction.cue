@@ -33,10 +33,6 @@ _argocdSourceSensitive: {
 	]
 }
 
-// kubectl apply records the whole object, Helm values included, in this
-// annotation.
-_argocdLastApplied: #"metadata.annotations."kubectl.kubernetes.io/last-applied-configuration""#
-
 // A rewrite that accepts any non-empty string, so an absent field yields
 // no fact rather than a fact without the arg.
 _argocdPresent: [{match: "^(.+)$", replace: "$1"}]

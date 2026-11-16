@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: annotation allow list (2026-11-16)
+
+The Argo CD transforms keep only the annotations whose key starts with
+`argocd.argoproj.io/` or `argocd-image-updater.argoproj.io/`, on
+Application and ApplicationSet metadata and on the ApplicationSet
+template, and drop every other one, last-applied configuration included.
+A kept value that is a URL with a scheme loses its userinfo
+(`_argocdRepoURL`). The last-applied redaction is removed. The hostile
+fixtures plant values in annotations off the list and credentials in
+Image Updater's git-repository; the tests find none stored. See
+`implog/2026_11_16_argocd_annotation_allow_list.md`. Closes `pudl-4a4l`.
+
 ### Argo CD pack: credentials in repoURL redacted (2026-11-16)
 
 The Argo CD transforms remove the userinfo of every `repoURL` they keep

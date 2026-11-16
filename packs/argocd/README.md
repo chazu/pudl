@@ -63,6 +63,9 @@ list. Each source has its `index` and the revision it was last synced to
 - `ignoreDifferences` and `info`
 - the history entries' sources
 - the operation's sources and its sync result
+- every annotation whose key does not start with `argocd.argoproj.io/` or
+  `argocd-image-updater.argoproj.io/`: `kubectl.kubernetes.io/last-applied-configuration`,
+  notification subscriptions and a team's own annotations included
 
 An ApplicationSet keeps its template, through the same allow list, and a
 summary of each generator. The summary holds the type, a git generator's
@@ -85,16 +88,26 @@ facts keep a usable URL:
 A URL without userinfo is kept as it is. Status keeps no `repoURL`: the
 history entries' and the operation's sources are dropped.
 
+The annotations kept, on an Application, an ApplicationSet and an
+ApplicationSet template, lose userinfo the same way: every value that is a
+URL with a scheme, such as Image Updater's
+`argocd-image-updater.argoproj.io/git-repository`, is stored as the table
+above shows. Labels are kept as they are.
+
 Then `sensitive_fields` redacts these values before anything is stored:
 
 - Helm `values` and `valuesObject`
 - file parameter paths
 - every parameter value whose name is not on `_argocdImageParameters`
-- the `kubectl.kubernetes.io/last-applied-configuration` annotation
+
+The last-applied annotation is not redacted: the annotation allow list
+drops it before redaction runs, so `sensitive_fields` has no entry for it.
 
 A parameter's name stays, so an override is visible. The ApplicationSet
 template's Helm paths are redacted the same way. The hostile fixtures plant
-values at each of these places, and repository credentials in `repoURL`; the pack's tests find none of them stored.
+values at each of these places, repository credentials in `repoURL` and in
+an Image Updater annotation, and values in annotations off the allow list;
+the pack's tests find none of them stored.
 
 ## Facts
 

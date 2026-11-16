@@ -1,14 +1,13 @@
 package argocd
 
-import "list"
-
 // An Argo CD Application (applications.argoproj.io), as the collector's
 // allow-list transform (schema/models/argocd_pack.cue) shapes it from
 // `kubectl get -o json`: metadata, the spec's project, sources, destination
 // and sync policy at the top level, and the status fields facts need.
 // spec.source and spec.sources become one sources list; plugin env and
-// parameters, ignoreDifferences, the history entries' sources and the
-// sync result are dropped. Helm values and every parameter value except
+// parameters, ignoreDifferences, the history entries' sources, the
+// sync result and every annotation but Argo CD's and Image Updater's are
+// dropped. Helm values and every parameter value except
 // the image parameters are redacted before anything is stored.
 //
 // cluster is the host of the cluster the record was collected from (the
@@ -22,7 +21,7 @@ import "list"
 		review: status: "draft"
 		graph: name: "metadata.name"
 		graph: display: {code: "APP", label: "Argo CD application", class: "compute"}
-		sensitive_fields: list.Concat([(_argocdSourceSensitive & {_prefix: ""}).out, [_argocdLastApplied]])
+		sensitive_fields: (_argocdSourceSensitive & {_prefix: ""}).out
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: {
 			argocd_app: args: {

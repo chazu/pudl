@@ -1,15 +1,13 @@
 package argocd
 
-import "list"
-
 // An Argo CD ApplicationSet (applicationsets.argoproj.io), as the
 // collector's allow-list transform shapes it: metadata, goTemplate and the
 // sync policy; the template, whose spec goes through the Application allow
 // list and sources normalization (template strings such as
 // {{path.basename}} are kept as text); a summary of each generator instead
 // of the generator; and the status conditions. Generator template
-// overrides, list elements, templatePatch and every other field are
-// dropped. The template's Helm values and non-image parameter values are
+// overrides, list elements, templatePatch, every annotation but Argo CD's
+// and Image Updater's and every other field are dropped. The template's Helm values and non-image parameter values are
 // redacted, as an Application's are.
 #ApplicationSet: {
 	_pudl: {
@@ -19,7 +17,7 @@ import "list"
 		review: status: "draft"
 		graph: name: "metadata.name"
 		graph: display: {code: "APSET", label: "Argo CD application set", class: "compute"}
-		sensitive_fields: list.Concat([(_argocdSourceSensitive & {_prefix: "template.spec."}).out, [_argocdLastApplied]])
+		sensitive_fields: (_argocdSourceSensitive & {_prefix: "template.spec."}).out
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: {
 			// uid joins an Application's owner reference (generated_by).
