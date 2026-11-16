@@ -115,7 +115,8 @@
               "app.kubernetes.io/instance": "shop-catalog"
             },
             "annotations": {
-              "deployment.kubernetes.io/revision": "7"
+              "deployment.kubernetes.io/revision": "7",
+              "argocd.argoproj.io/tracking-id": "shop-catalog:apps/Deployment:shop/catalog"
             },
             "managedFields": [
               {

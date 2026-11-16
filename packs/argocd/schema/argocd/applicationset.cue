@@ -18,7 +18,7 @@ import "list"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
 		graph: name: "metadata.name"
-		graph: display: {code: "APPSET", label: "Argo CD application set", class: "compute"}
+		graph: display: {code: "APSET", label: "Argo CD application set", class: "compute"}
 		sensitive_fields: list.Concat([(_argocdSourceSensitive & {_prefix: "template.spec."}).out, [_argocdLastApplied]])
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: {

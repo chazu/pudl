@@ -45,6 +45,12 @@ package gcp
 				network:    "networkConfig.network"
 				private_nodes: {path: "privateClusterConfig.enablePrivateNodes", default: false}
 			}
+			// The cluster's API server hosts that name one cluster, the
+			// paths of its k8s.cluster keys. The rule
+			// gcp_gke_cluster_endpoint (pudl/rules/gcp_pack.cue) unions
+			// them; the Argo CD pack joins a destination server on it.
+			gcp_gke_cluster_public_endpoint: args: host: {path: "privateClusterConfig.publicEndpoint", rewrite: [{match: "^(.+)$", replace: "$1"}]}
+			gcp_gke_cluster_dns_endpoint: args: host: {path: "controlPlaneEndpointsConfig.dnsEndpointConfig.endpoint", rewrite: [{match: "^(.+)$", replace: "$1"}]}
 			gcp_gke_secrets_key: args: {
 				key: "databaseEncryption.keyName"
 				state: {path: "databaseEncryption.state", default: "DECRYPTED"}

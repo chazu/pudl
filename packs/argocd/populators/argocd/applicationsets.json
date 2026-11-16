@@ -84,6 +84,39 @@
           }
         }
       }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "ApplicationSet",
+      "metadata": {
+        "name": "regional",
+        "namespace": "argocd",
+        "uid": "a2000000-0000-4000-8000-000000000003",
+        "resourceVersion": "100303",
+        "creationTimestamp": "2026-10-01T09:00:00Z"
+      },
+      "spec": {
+        "goTemplate": true,
+        "generators": [
+          {
+            "merge": {
+              "mergeKeys": ["server"],
+              "generators": [
+                {"git": {"repoURL": "https://git.example.com/example-org/example-deploy.git", "revision": "release", "files": [{"path": "regions/*/config.json"}]}},
+                {"clusters": {"selector": {"matchLabels": {"tier": "edge"}}}}
+              ]
+            }
+          }
+        ],
+        "template": {
+          "metadata": {"name": "regional-{{.region}}"},
+          "spec": {
+            "project": "edge",
+            "source": {"repoURL": "https://git.example.com/example-org/example-deploy.git", "path": "regional", "targetRevision": "release"},
+            "destination": {"server": "{{.server}}", "namespace": "regional"}
+          }
+        }
+      }
     }
   ]
 }
