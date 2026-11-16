@@ -4,6 +4,23 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: Applications, ApplicationSets and deploy edges (2026-11-16)
+
+The `argocd` pack (`packs/argocd`): `argocd.#Application` and
+`argocd.#ApplicationSet` shaped by allow-list transforms, with
+`spec.source` and `spec.sources` as one `sources` list and Helm values,
+`valuesObject`, file parameter paths and non-image parameter values
+redacted; kubectl collectors on the Kubernetes pack's run shapes
+(`argocd-applications`, `argocd-applicationsets`) and fixture collectors
+with hostile fixtures that plant nothing in the store. Rules derive
+`argocd_app_target_host` for in-cluster and server-URL destinations and the
+`in_cluster`, `generated_by`, `deploys_to` and `deployed_by` edges;
+`sourced_from` is declared. The GCP pack gains
+`gcp_gke_cluster_endpoint(resource_id, host)` and the Argo CD
+tracking-id annotation fact, which checks the `deployed_by` join with the
+instance labels. `pudl pack install` takes several names. See
+`implog/2026_11_16_argocd_pack.md`. This is `pudl-avqx.4`.
+
 ### Kubernetes pack skeleton: `k8s.#Cluster` and the List unwrap (2026-11-16)
 
 The `k8s` pack (`packs/k8s`): `k8s.#Cluster`, the cluster of kubectl's
@@ -20,7 +37,7 @@ the workloads (`pudl-3q5.2`).
 
 ### Argo CD pack: design (2026-11-13)
 
-Proposed design for collecting Argo CD Applications and ApplicationSets
+Accepted (built 2026-11-16, see above) design for collecting Argo CD Applications and ApplicationSets
 with kubectl from the cluster that runs Argo CD: allow-list record shapes,
 a normalized `sources` list, Helm value and parameter redaction with an
 image-parameter allow list for Image Updater write-back, the

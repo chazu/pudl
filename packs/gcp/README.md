@@ -329,9 +329,18 @@ none), tag and digest (`""` when absent). `gcp_k8s_deployment_image` and
 container runs, as `gcp.#ContainerImage` does; images from elsewhere yield
 none. The Argo CD Application that manages a deployment is read from its
 `argocd.argoproj.io/instance` or `app.kubernetes.io/instance` label into
-`gcp_k8s_deployment_argo_instance` or `gcp_k8s_deployment_app_instance`;
-the rule `gcp_k8s_deployment_argo_app(resource_id, application, via)`
-reads both.
+`gcp_k8s_deployment_argo_instance` or `gcp_k8s_deployment_app_instance`,
+and from its `argocd.argoproj.io/tracking-id` annotation (set when Argo CD
+tracks resources by annotation, `<app>:<group>/<kind>:<namespace>/<name>`)
+into `gcp_k8s_deployment_argo_tracking_id(application, tracking_id)`; the
+rule `gcp_k8s_deployment_argo_app(resource_id, application, via)` reads
+all three. The Argo CD pack checks its `deployed_by` join against them.
+
+A GKE cluster projects its public endpoint and its DNS endpoint
+(`gcp_gke_cluster_public_endpoint`, `gcp_gke_cluster_dns_endpoint`, the
+paths of its `k8s.cluster` keys); the rule
+`gcp_gke_cluster_endpoint(resource_id, host)` unions them, so a server URL
+in a kubeconfig or an Argo CD destination finds its cluster.
 
 Build and deploy types (Cloud Build triggers, App Engine applications and
 versions, Cloud Functions, Cloud Run domain mappings) are collected through
