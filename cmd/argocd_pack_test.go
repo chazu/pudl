@@ -22,6 +22,8 @@ var argocdPlanted = []string{
 	"FAKE-ARGO-PLUGIN-INPUT", "FAKE-ARGO-CLUSTERS-VALUES", "FAKE-ARGO-TEMPLATE-PATCH",
 	"FAKE-ARGO-TEMPLATE-VALUES", "FAKE-ARGO-TEMPLATE-VALUES-OBJECT", "FAKE-ARGO-TEMPLATE-PARAMETER",
 	"FAKE-ARGO-TEMPLATE-FILE-PARAMETER", "FAKE-ARGO-REPO-TOKEN", "FAKE-ARGO-REPO-USER",
+	"FAKE-ARGO-ANNOTATION-OTHER", "FAKE-ARGO-ANNOTATION-NOTIFY",
+	"FAKE-ARGO-UPDATER-TOKEN", "FAKE-ARGO-UPDATER-USER",
 	// Any planted value at all.
 	"FAKE-ARGO",
 }
@@ -126,7 +128,13 @@ func TestArgoCDPackFixtureApplications(t *testing.T) {
 		"image.tag=4.2.0": 0.0, "replicaCount=[REDACTED]": 0.0, "image.tag=1.4.2": 1.0,
 		"db.password=[REDACTED]": 0.0, "image.tag=9.9.9": 0.0,
 	}, params)
-	updater := queryArgs(t, "argocd_app_image_updater")
+	names := appNames(t)
+	var updater []map[string]any
+	for _, args := range queryArgs(t, "argocd_app_image_updater") {
+		if names[args["resource_id"].(string)] != "hostile-app" {
+			updater = append(updater, args)
+		}
+	}
 	require.Len(t, updater, 1)
 	require.Equal(t, "proxy=us-docker.pkg.dev/example-project/apps/edge-proxy", updater[0]["image_list"])
 	require.Equal(t, "argocd", updater[0]["write_back_method"])
@@ -186,18 +194,18 @@ func TestArgoCDPackFixtureApplicationSets(t *testing.T) {
 }
 
 // TestArgoCDPackHostileFixturesPlantNothing ingests the hostile fixtures:
-// Helm values, valuesObject, non-image parameters, file parameter paths and
-// the last-applied annotation are redacted; plugin env and parameters,
-// jsonnet variables, history sources, the sync result, generator template
-// overrides, list elements and templatePatch are dropped; every repoURL
-// loses its userinfo. No planted byte is stored anywhere under the
+// Helm values, valuesObject, non-image parameters and file parameter paths
+// are redacted; plugin env and parameters, jsonnet
+// variables, history sources, the sync result, generator template
+// overrides, list elements, templatePatch and every annotation but Argo
+// CD's and Image Updater's are dropped; every repoURL and kept annotation
+// URL loses its userinfo. No planted byte is stored anywhere under the
 // workspace.
 func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
 	pudlDir := argocdWorkspace(t, "argocd-fixture-applications", "argocd-fixture-applicationsets")
 
 	apps := byName(storedRecords(t, "argocd.#Application"))
 	hostile := apps["hostile-app"]
-	require.Equal(t, "[REDACTED]", hostile["metadata"].(map[string]any)["annotations"].(map[string]any)["kubectl.kubernetes.io/last-applied-configuration"])
 	sources := hostile["sources"].([]any)
 	require.Len(t, sources, 3)
 	require.Equal(t, map[string]any{"name": "example-plugin"}, sources[1].(map[string]any)["plugin"])
@@ -221,7 +229,29 @@ func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
 	}
 	require.Equal(t, map[string]bool{deployRepo: true, "https://charts.example.com/stable": true}, repos)
 
+	// Annotations: Argo CD's and Image Updater's only, URLs without userinfo.
+	require.Equal(t, map[string]any{
+		"argocd-image-updater.argoproj.io/image-list":        "web=registry.example.com/apps/web",
+		"argocd-image-updater.argoproj.io/git-repository":    deployRepo,
+		"argocd-image-updater.argoproj.io/write-back-method": "git",
+		"argocd-image-updater.argoproj.io/write-back-target": "kustomization:../../overlays/hostile",
+	}, hostile["metadata"].(map[string]any)["annotations"], "last-applied, notification and other annotations are dropped")
+	var hostileUpdater []map[string]any
+	for _, args := range queryArgs(t, "argocd_app_image_updater") {
+		if names[args["resource_id"].(string)] == "hostile-app" {
+			hostileUpdater = append(hostileUpdater, args)
+		}
+	}
+	require.Len(t, hostileUpdater, 1)
+	require.Equal(t, "git", hostileUpdater[0]["write_back_method"])
+	require.Equal(t, "kustomization:../../overlays/hostile", hostileUpdater[0]["write_back_target"])
+
 	set := byName(storedRecords(t, "argocd.#ApplicationSet"))["hostile-set"]
+	require.NotContains(t, set["metadata"], "annotations", "no annotation of the set is on the allow list")
+	require.Equal(t, map[string]any{
+		"name":        "hostile-{{cluster}}",
+		"annotations": map[string]any{"argocd-image-updater.argoproj.io/git-repository": deployRepo},
+	}, set["template"].(map[string]any)["metadata"], "the template keeps only the Image Updater annotation")
 	require.Equal(t, "https://charts.example.com/stable",
 		set["template"].(map[string]any)["spec"].(map[string]any)["sources"].([]any)[0].(map[string]any)["repoURL"])
 	matrix := set["generators"].([]any)[3].(map[string]any)

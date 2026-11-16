@@ -8,7 +8,8 @@ import (
 
 // Allow-list transforms for Argo CD objects (packs/argocd/README.md in the
 // PUDL source). Each keeps the named fields and drops the rest, and every
-// repoURL kept loses its userinfo (_argocdRepoURL). Redaction
+// repoURL kept loses its userinfo (_argocdRepoURL), as does every URL
+// value of the annotations kept (_argocdAnnotations). Redaction
 // of Helm values and parameter values is the schemas' sensitive_fields,
 // after these run.
 
@@ -24,8 +25,9 @@ _argocdPick: {
 }
 
 // _argocdRepoURLPattern splits a URL with a scheme into the scheme, the
-// userinfo before the last "@" of the authority, if any, and the rest.
-_argocdRepoURLPattern: "^([A-Za-z][A-Za-z0-9+.-]*)://(?:([^/?#]*)@)?(.*)$"
+// userinfo before the last "@" of the authority, if any, and the rest. (?s)
+// lets the rest hold a newline, so a value with one still matches.
+_argocdRepoURLPattern: "(?s)^([A-Za-z][A-Za-z0-9+.-]*)://(?:([^/?#]*)@)?(.*)$"
 
 // _argocdRepoURL is a repository URL without the credentials it can carry
 // as userinfo: https://user:TOKEN@host/path becomes https://host/path. An
@@ -45,14 +47,44 @@ _argocdRepoURL: {
 	}
 }
 
-// _argocdMetadata keeps an object's metadata without managedFields.
+// The annotation key prefixes kept: Argo CD's own and Image Updater's.
+_argocdAnnotationPrefixes: ["argocd.argoproj.io/", "argocd-image-updater.argoproj.io/"]
+
+// _argocdAnnotations keeps the annotations whose key starts with one of
+// _argocdAnnotationPrefixes and drops every other one, last-applied
+// configuration, notification subscriptions and a team's own included. A
+// kept value that is a URL with a scheme loses its userinfo, as a repoURL
+// does: Image Updater's git-repository can carry a token there.
+_argocdAnnotations: {
+	_src: _
+	out: {
+		for k, v in _src if list.Contains([for p in _argocdAnnotationPrefixes {strings.HasPrefix(k, p)}], true) {
+			(k): (_argocdRepoURL & {_url: v}).out
+		}
+	}
+}
+
+// _argocdMetadataAnnotations sets annotations to the annotations of
+// metadata _src that _argocdAnnotations keeps, if there are any.
+_argocdMetadataAnnotations: {
+	_src: _
+	let s = _src
+	let kept = (_argocdAnnotations & {_src: *s.annotations | {}}).out
+	out: {if len(kept) > 0 {annotations: kept}}
+}
+
+// _argocdMetadata keeps an object's metadata without managedFields and
+// with the annotations _argocdAnnotations keeps.
 _argocdMetadata: {
 	_src: _
 	let s = _src
-	out: (_argocdPick & {_src: s, _keys: [
-		"name", "namespace", "uid", "resourceVersion", "creationTimestamp",
-		"labels", "annotations", "ownerReferences", "finalizers",
-	]}).out
+	out: {
+		(_argocdPick & {_src: s, _keys: [
+			"name", "namespace", "uid", "resourceVersion", "creationTimestamp",
+			"labels", "ownerReferences", "finalizers",
+		]}).out
+		(_argocdMetadataAnnotations & {_src: s}).out
+	}
 }
 
 // _argocdHelm keeps a source's Helm block. values, valuesObject, file
@@ -275,7 +307,10 @@ _argocdApplicationSet: {
 	if appSpec.syncPolicy != _|_ {syncPolicy: appSpec.syncPolicy}
 	template: {
 		if tmpl.metadata != _|_ {
-			metadata: (_argocdPick & {_src: tmpl.metadata, _keys: ["name", "labels", "annotations"]}).out
+			metadata: {
+				(_argocdPick & {_src: tmpl.metadata, _keys: ["name", "labels"]}).out
+				(_argocdMetadataAnnotations & {_src: tmpl.metadata}).out
+			}
 		}
 		spec: (_argocdSpec & {_src: *tmpl.spec | {}, _sync: {}, _app: false}).out
 	}
