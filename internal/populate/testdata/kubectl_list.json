@@ -1,0 +1,9 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {"resourceVersion": ""},
+  "items": [
+    {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "payments", "uid": "5c1d2d3e-0000-4000-8000-000000000001"}},
+    {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "catalog", "uid": "5c1d2d3e-0000-4000-8000-000000000002"}}
+  ]
+}

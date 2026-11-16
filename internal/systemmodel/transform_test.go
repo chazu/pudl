@@ -143,3 +143,47 @@ m: #SystemModel & {
 		t.Fatal("transform is closed: an unknown field must be rejected")
 	}
 }
+
+// A list out stores one record per element: the items of a kubectl List.
+func TestTransformRecordsUnwrapsList(t *testing.T) {
+	tr := compileTransform(t, `{in: _, out: in.items}`)
+	list := decodeRecord(t, `{"apiVersion":"v1","kind":"List","metadata":{"resourceVersion":""},"items":[{"kind":"Namespace","metadata":{"name":"a","uid":"u1"}},{"kind":"Namespace","metadata":{"name":"b","uid":"u2"}}]}`)
+	outs, err := tr.Records(list)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 2 {
+		t.Fatalf("got %d records, want 2: %v", len(outs), outs)
+	}
+	for i, name := range []string{"a", "b"} {
+		if got := outs[i]["metadata"].(map[string]any)["name"]; got != name {
+			t.Fatalf("record %d name=%v, want %s", i, got, name)
+		}
+	}
+	if outs, err := tr.Records(decodeRecord(t, `{"items":[]}`)); err != nil || len(outs) != 0 {
+		t.Fatalf("empty items: outs=%v err=%v", outs, err)
+	}
+	// Records keeps Apply's object and null cases.
+	if outs, err := compileTransform(t, `{in: _, out: null}`).Records(list); err != nil || len(outs) != 0 {
+		t.Fatalf("null: outs=%v err=%v", outs, err)
+	}
+	if outs, err := compileTransform(t, `{in: _, out: in.metadata}`).Records(list); err != nil || len(outs) != 1 {
+		t.Fatalf("object: outs=%v err=%v", outs, err)
+	}
+}
+
+// An element that is not an object, and an out that is a scalar, are errors
+// for Records; Apply still rejects a list out.
+func TestTransformRecordsRejectsNonObjectElements(t *testing.T) {
+	list := decodeRecord(t, `{"items":[{"name":"a"},"b"]}`)
+	_, err := compileTransform(t, `{in: _, out: in.items}`).Records(list)
+	if err == nil || !strings.Contains(err.Error(), "out[1] is string, not an object") {
+		t.Fatalf("err=%v, want the element named", err)
+	}
+	if _, err := compileTransform(t, `{in: _, out: in.items[0].name}`).Records(list); err == nil {
+		t.Fatal("a string out must be an error")
+	}
+	if _, _, err := compileTransform(t, `{in: _, out: in.items}`).Apply(list); err == nil {
+		t.Fatal("Apply must reject a list out")
+	}
+}
