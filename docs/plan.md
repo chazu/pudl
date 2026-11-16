@@ -4,6 +4,15 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: credentials in repoURL redacted (2026-11-16)
+
+The Argo CD transforms remove the userinfo of every `repoURL` they keep
+(`_argocdRepoURL`): sources of Applications and ApplicationSet templates,
+and git generators at the top level and inside a matrix or merge. An
+`ssh://` URL keeps its user name; the scp form is kept. The hostile
+fixtures plant repository credentials, and the tests find none stored. See
+`implog/2026_11_16_argocd_repo_url_userinfo.md`. Closes `pudl-nap8`.
+
 ### Pulumi pack: rank on every graph_detail row (2026-11-16)
 
 The Pulumi pack's one-value `graph_detail` rows carry `rank: 0`, so every

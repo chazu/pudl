@@ -2,11 +2,13 @@ package models
 
 import (
 	"list"
+	"regexp"
 	"strings"
 )
 
 // Allow-list transforms for Argo CD objects (packs/argocd/README.md in the
-// PUDL source). Each keeps the named fields and drops the rest. Redaction
+// PUDL source). Each keeps the named fields and drops the rest, and every
+// repoURL kept loses its userinfo (_argocdRepoURL). Redaction
 // of Helm values and parameter values is the schemas' sensitive_fields,
 // after these run.
 
@@ -19,6 +21,28 @@ _argocdPick: {
 	_src: _
 	_keys: [...string]
 	out: {for k in _keys if _src[k] != _|_ {(k): _src[k]}}
+}
+
+// _argocdRepoURLPattern splits a URL with a scheme into the scheme, the
+// userinfo before the last "@" of the authority, if any, and the rest.
+_argocdRepoURLPattern: "^([A-Za-z][A-Za-z0-9+.-]*)://(?:([^/?#]*)@)?(.*)$"
+
+// _argocdRepoURL is a repository URL without the credentials it can carry
+// as userinfo: https://user:TOKEN@host/path becomes https://host/path. An
+// ssh:// URL keeps the user name (ssh://git@host/path) and drops a
+// password. A URL without a scheme, such as the scp form git@host:org/repo,
+// holds no secret and is kept as it is, as is a URL without userinfo.
+_argocdRepoURL: {
+	_url: string
+	let u = _url
+	out: string
+	if u !~ _argocdRepoURLPattern {out: u}
+	if u =~ _argocdRepoURLPattern {
+		let m = regexp.FindSubmatch(_argocdRepoURLPattern, u)
+		let user = strings.Split(m[2], ":")[0]
+		let keep = [if strings.ToLower(m[1]) == "ssh" && user != "" {user + "@"}, ""][0]
+		out: m[1] + "://" + keep + m[3]
+	}
 }
 
 // _argocdMetadata keeps an object's metadata without managedFields.
@@ -69,7 +93,8 @@ _argocdSource: {
 	let i = _index
 	out: {
 		index: i
-		(_argocdPick & {_src: s, _keys: ["repoURL", "path", "chart", "targetRevision", "ref", "name"]}).out
+		(_argocdPick & {_src: s, _keys: ["path", "chart", "targetRevision", "ref", "name"]}).out
+		if s.repoURL != _|_ {repoURL: (_argocdRepoURL & {_url: s.repoURL}).out}
 		if s.helm != _|_ {helm: (_argocdHelm & {_src: s.helm, _index: i}).out}
 		if s.kustomize != _|_ {
 			kustomize: (_argocdPick & {_src: s.kustomize, _keys: ["images", "namePrefix", "nameSuffix", "namespace", "commonLabels"]}).out
@@ -188,7 +213,8 @@ _argocdGeneratorTypes: ["git", "list", "clusters", "pullRequest", "scmProvider",
 
 // _argocdGeneratorLeaf summarizes one generator without its children.
 // list elements, generator template overrides, clusters values, SCM and
-// pull request credentials and plugin input are dropped.
+// pull request credentials and plugin input are dropped; a git
+// generator's repoURL loses its userinfo.
 _argocdGeneratorLeaf: {
 	_src: _
 	let g = _src
@@ -197,7 +223,8 @@ _argocdGeneratorLeaf: {
 		type: [if len(types) > 0 {types[0]}, "unknown"][0]
 		if g.git != _|_ {
 			git: {
-				(_argocdPick & {_src: g.git, _keys: ["repoURL", "revision"]}).out
+				(_argocdPick & {_src: g.git, _keys: ["revision"]}).out
+				if g.git.repoURL != _|_ {repoURL: (_argocdRepoURL & {_url: g.git.repoURL}).out}
 				if g.git.directories != _|_ {
 					directories: [for d in g.git.directories {(_argocdPick & {_src: d, _keys: ["path", "exclude"]}).out}]
 				}
