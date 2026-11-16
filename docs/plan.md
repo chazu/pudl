@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Kubernetes pack skeleton: `k8s.#Cluster` and the List unwrap (2026-11-16)
+
+The `k8s` pack (`packs/k8s`): `k8s.#Cluster`, the cluster of kubectl's
+current context, keyed `k8s.cluster` by API server host so it is one group
+with the GKE cluster the GCP pack sees; the live collector `k8s-cluster`
+(helper `populators/k8s/cluster.sh`, read-only `config view` and
+`version`) and `k8s-fixture-cluster`; and the run shapes the object
+collectors and the Argo CD pack share (`_k8sClusterEach`, `_k8sGet`,
+`_k8sListTransform`). A run's `transform` may now return a list, one record
+per element, so `out: in.items` unwraps the List `kubectl get -o json`
+prints without a helper or `jsonpath`. See
+`implog/2026_11_13_k8s_pack_skeleton.md`. Closes `pudl-3q5.1`; next are
+the workloads (`pudl-3q5.2`).
+
 ### Argo CD pack: design (2026-11-13)
 
 Proposed design for collecting Argo CD Applications and ApplicationSets
