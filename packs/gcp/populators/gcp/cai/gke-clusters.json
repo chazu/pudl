@@ -206,6 +206,7 @@
             "masterIpv4CidrBlock": "172.16.0.16/28",
             "privateEndpoint": "172.16.0.18"
           },
+          "controlPlaneEndpointsConfig": {"dnsEndpointConfig": {"endpoint": "gke-00000000000000000000000000000000-000000000000.us-central1.gke.goog", "allowExternalTraffic": true}},
           "workloadIdentityConfig": {
             "workloadPool": "example-project.svc.id.goog"
           },

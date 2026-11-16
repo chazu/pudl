@@ -167,9 +167,10 @@ same_resource_kind_gcp_resource: {
 }
 
 // gcp_k8s_deployment_argo_app — the Argo CD Application that manages a
-// deployment, named by either instance label the pack projects (the label
-// is the via argument). An object carrying both labels yields two tuples;
-// an Argo CD pack joins on application to reach the Application record.
+// deployment, named by either instance label the pack projects or by the
+// tracking-id annotation (the label or annotation is the via argument). An
+// object carrying several yields a tuple for each; the Argo CD pack checks
+// its deployed_by join against them.
 gcp_k8s_deployment_argo_app_label: {
 	head: {rel: "gcp_k8s_deployment_argo_app", args: {resource_id: "$R", application: "$A", via: "argocd.argoproj.io/instance"}}
 	body: [{rel: "gcp_k8s_deployment_argo_instance", args: {resource_id: "$R", instance: "$A"}}]
@@ -177,4 +178,21 @@ gcp_k8s_deployment_argo_app_label: {
 gcp_k8s_deployment_argo_app_recommended_label: {
 	head: {rel: "gcp_k8s_deployment_argo_app", args: {resource_id: "$R", application: "$A", via: "app.kubernetes.io/instance"}}
 	body: [{rel: "gcp_k8s_deployment_app_instance", args: {resource_id: "$R", instance: "$A"}}]
+}
+gcp_k8s_deployment_argo_app_tracking_id: {
+	head: {rel: "gcp_k8s_deployment_argo_app", args: {resource_id: "$R", application: "$A", via: "argocd.argoproj.io/tracking-id"}}
+	body: [{rel: "gcp_k8s_deployment_argo_tracking_id", args: {resource_id: "$R", application: "$A"}}]
+}
+
+// gcp_gke_cluster_endpoint — a host that names one GKE cluster's API
+// server: its public endpoint or its DNS endpoint, as a kube context's
+// server URL holds it. Private endpoints repeat across VPCs and are left
+// out, as they are from the cluster's k8s.cluster keys.
+gcp_gke_cluster_endpoint_public: {
+	head: {rel: "gcp_gke_cluster_endpoint", args: {resource_id: "$R", host: "$H"}}
+	body: [{rel: "gcp_gke_cluster_public_endpoint", args: {resource_id: "$R", host: "$H"}}]
+}
+gcp_gke_cluster_endpoint_dns: {
+	head: {rel: "gcp_gke_cluster_endpoint", args: {resource_id: "$R", host: "$H"}}
+	body: [{rel: "gcp_gke_cluster_dns_endpoint", args: {resource_id: "$R", host: "$H"}}]
 }

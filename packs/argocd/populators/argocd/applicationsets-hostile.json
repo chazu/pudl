@@ -1,0 +1,55 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {"resourceVersion": ""},
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "ApplicationSet",
+      "metadata": {
+        "name": "hostile-set",
+        "namespace": "argocd",
+        "uid": "a2000000-0000-4000-8000-0000000000ff",
+        "resourceVersion": "100399",
+        "creationTimestamp": "2026-11-01T10:00:00Z",
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"spec\":{\"template\":{\"spec\":{\"source\":{\"helm\":{\"values\":\"FAKE-ARGO-SET-LAST-APPLIED\"}}}}}}"
+        }
+      },
+      "spec": {
+        "generators": [
+          {
+            "list": {
+              "elements": [{"cluster": "example-cluster", "token": "FAKE-ARGO-LIST-ELEMENT"}],
+              "template": {"metadata": {}, "spec": {"source": {"helm": {"values": "FAKE-ARGO-GENERATOR-TEMPLATE"}}}}
+            }
+          },
+          {"plugin": {"configMapRef": {"name": "example-plugin"}, "input": {"parameters": {"token": "FAKE-ARGO-PLUGIN-INPUT"}}}},
+          {"clusters": {"selector": {"matchLabels": {"env": "prod"}}, "values": {"token": "FAKE-ARGO-CLUSTERS-VALUES"}}}
+        ],
+        "templatePatch": "spec:\n  source:\n    helm:\n      values: FAKE-ARGO-TEMPLATE-PATCH\n",
+        "template": {
+          "metadata": {"name": "hostile-{{cluster}}"},
+          "spec": {
+            "project": "default",
+            "source": {
+              "repoURL": "https://charts.example.com/stable",
+              "chart": "web-service",
+              "targetRevision": "2.1.0",
+              "helm": {
+                "values": "db:\n  password: FAKE-ARGO-TEMPLATE-VALUES\n",
+                "valuesObject": {"db": {"password": "FAKE-ARGO-TEMPLATE-VALUES-OBJECT"}},
+                "parameters": [
+                  {"name": "db.password", "value": "FAKE-ARGO-TEMPLATE-PARAMETER"},
+                  {"name": "image.tag", "value": "9.9.9"}
+                ],
+                "fileParameters": [{"name": "tls.key", "path": "FAKE-ARGO-TEMPLATE-FILE-PARAMETER"}]
+              }
+            },
+            "destination": {"server": "https://kubernetes.default.svc", "namespace": "hostile"}
+          }
+        }
+      }
+    }
+  ]
+}

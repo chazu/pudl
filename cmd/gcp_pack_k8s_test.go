@@ -91,17 +91,26 @@ func TestGCPPackK8sDeploymentFixture(t *testing.T) {
 	require.Len(t, initImages, 1)
 	require.Equal(t, "us-docker.pkg.dev/example-project/apps/checkout-migrate", initImages["checkout/migrate"]["image"])
 
-	// The Argo CD Application, from either instance label.
-	argo := map[string]string{}
+	// The Argo CD Application, from either instance label or the
+	// tracking-id annotation.
+	argo := map[string][]string{}
 	for _, args := range queryArgs(t, "gcp_k8s_deployment_argo_app") {
-		argo[names[args["resource_id"].(string)]] = args["application"].(string) + " via " + args["via"].(string)
+		name := names[args["resource_id"].(string)]
+		argo[name] = append(argo[name], args["application"].(string)+" via "+args["via"].(string))
 	}
-	require.Equal(t, map[string]string{
-		"checkout": "shop-checkout via argocd.argoproj.io/instance",
-		"catalog":  "shop-catalog via app.kubernetes.io/instance",
-	}, argo)
+	require.ElementsMatch(t, []string{"shop-checkout via argocd.argoproj.io/instance"}, argo["checkout"])
+	require.ElementsMatch(t, []string{
+		"shop-catalog via app.kubernetes.io/instance",
+		"shop-catalog via argocd.argoproj.io/tracking-id",
+	}, argo["catalog"])
+	require.Len(t, argo, 2)
 	require.Len(t, queryArgs(t, "gcp_k8s_deployment_argo_instance"), 1, "a deployment without the label yields no fact")
 	require.Len(t, queryArgs(t, "gcp_k8s_deployment_app_instance"), 1)
+	tracking := queryArgs(t, "gcp_k8s_deployment_argo_tracking_id")
+	require.Len(t, tracking, 1, "a deployment without the annotation yields no fact")
+	require.Equal(t, "catalog", names[tracking[0]["resource_id"].(string)])
+	require.Equal(t, "shop-catalog", tracking[0]["application"])
+	require.Equal(t, "shop-catalog:apps/Deployment:shop/catalog", tracking[0]["tracking_id"])
 }
 
 // imageParts picks the image reference parts of a container fact.

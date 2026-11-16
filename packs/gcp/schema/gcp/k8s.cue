@@ -56,6 +56,13 @@ _gcpK8sInstanceLabel: {
 	out: {path: "metadata.labels.\"\(in)\"", rewrite: [{match: "^(.+)$", replace: "$1"}]}
 }
 
+// The annotation Argo CD sets when it tracks resources by annotation
+// (application.resourceTrackingMethod: annotation or annotation+label):
+// <app>:<group>/<kind>:<namespace>/<name>. Its application is the text
+// before the first colon; an Application outside Argo CD's own namespace
+// is named <namespace>_<app> there. A value of another form yields no fact.
+_gcpK8sTrackingID: #"metadata.annotations."argocd.argoproj.io/tracking-id""#
+
 #K8sDeployment: {
 	_pudl: {
 		schema_type:   "base"
@@ -84,9 +91,15 @@ _gcpK8sInstanceLabel: {
 			gcp_k8s_deployment_init_image: {each: "spec.template.spec.initContainers[*]", args: _gcpK8sImageArgs}
 			// The Argo CD Application that manages the deployment, by name.
 			// The rule gcp_k8s_deployment_argo_app (pudl/rules/gcp_pack.cue)
-			// reads both labels.
+			// reads both labels and the tracking-id annotation.
 			gcp_k8s_deployment_argo_instance: args: instance: (_gcpK8sInstanceLabel & {in: "argocd.argoproj.io/instance"}).out
 			gcp_k8s_deployment_app_instance: args: instance:  (_gcpK8sInstanceLabel & {in: "app.kubernetes.io/instance"}).out
+			// The Argo CD Application named by the tracking-id annotation,
+			// and the annotation's value.
+			gcp_k8s_deployment_argo_tracking_id: args: {
+				application: {path: _gcpK8sTrackingID, rewrite: [{match: "^([^:]+):[^:]*/[^:/]+:[^/]*/.+$", replace: "$1"}]}
+				tracking_id: _gcpK8sTrackingID
+			}
 		}
 	}
 	project:   _gcpProjectID

@@ -1,0 +1,216 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {"resourceVersion": ""},
+  "items": [
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "cluster-addons",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-000000000001",
+        "resourceVersion": "100201",
+        "generation": 12,
+        "creationTimestamp": "2026-08-01T09:00:00Z",
+        "labels": {"team": "platform"},
+        "finalizers": ["resources-finalizer.argocd.argoproj.io"],
+        "managedFields": [{"manager": "argocd-server", "operation": "Update", "apiVersion": "argoproj.io/v1alpha1"}]
+      },
+      "spec": {
+        "project": "platform",
+        "source": {
+          "repoURL": "https://charts.example.com/stable",
+          "chart": "metrics-agent",
+          "targetRevision": "4.2.0",
+          "helm": {
+            "releaseName": "metrics-agent",
+            "parameters": [
+              {"name": "image.tag", "value": "4.2.0"},
+              {"name": "replicaCount", "value": "2"}
+            ],
+            "values": "replicaCount: 2\n"
+          }
+        },
+        "destination": {"server": "https://kubernetes.default.svc", "namespace": "addons"},
+        "syncPolicy": {
+          "automated": {"prune": true, "selfHeal": true},
+          "syncOptions": ["CreateNamespace=true"]
+        },
+        "revisionHistoryLimit": 10
+      },
+      "status": {
+        "sync": {
+          "status": "Synced",
+          "revision": "4.2.0",
+          "comparedTo": {"source": {"repoURL": "https://charts.example.com/stable", "chart": "metrics-agent", "targetRevision": "4.2.0"}}
+        },
+        "health": {"status": "Healthy"},
+        "reconciledAt": "2026-11-15T12:00:00Z",
+        "sourceType": "Helm",
+        "resources": [
+          {"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "addons", "name": "metrics-agent", "status": "Synced", "health": {"status": "Healthy"}},
+          {"version": "v1", "kind": "Service", "namespace": "addons", "name": "metrics-agent", "status": "Synced", "health": {"status": "Healthy"}}
+        ],
+        "summary": {"images": ["us-docker.pkg.dev/example-project/apps/metrics-agent:4.2.0"]},
+        "history": [
+          {"id": 3, "revision": "4.1.0", "deployStartedAt": "2026-10-01T09:59:30Z", "deployedAt": "2026-10-01T10:00:00Z", "initiatedBy": {"automated": true}, "source": {"repoURL": "https://charts.example.com/stable", "chart": "metrics-agent", "targetRevision": "4.1.0"}},
+          {"id": 4, "revision": "4.2.0", "deployStartedAt": "2026-11-02T08:59:30Z", "deployedAt": "2026-11-02T09:00:00Z", "initiatedBy": {"automated": true}, "source": {"repoURL": "https://charts.example.com/stable", "chart": "metrics-agent", "targetRevision": "4.2.0"}}
+        ],
+        "operationState": {
+          "phase": "Succeeded",
+          "message": "successfully synced (all tasks run)",
+          "startedAt": "2026-11-02T08:59:30Z",
+          "finishedAt": "2026-11-02T09:00:00Z",
+          "operation": {"sync": {"revision": "4.2.0"}, "initiatedBy": {"automated": true}},
+          "syncResult": {"revision": "4.2.0", "resources": [{"kind": "Deployment", "namespace": "addons", "name": "metrics-agent", "status": "Synced"}]}
+        }
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "shop-checkout",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-000000000002",
+        "resourceVersion": "100202",
+        "creationTimestamp": "2026-09-14T10:00:00Z",
+        "labels": {"team": "payments"}
+      },
+      "spec": {
+        "project": "shop",
+        "sources": [
+          {"repoURL": "https://git.example.com/example-org/example-deploy.git", "targetRevision": "main", "ref": "values"},
+          {
+            "repoURL": "https://charts.example.com/stable",
+            "chart": "web-service",
+            "targetRevision": "2.1.0",
+            "helm": {
+              "releaseName": "checkout",
+              "valueFiles": ["$values/shop/checkout/values.yaml"],
+              "parameters": [{"name": "image.tag", "value": "1.4.2"}]
+            }
+          }
+        ],
+        "destination": {"server": "https://198.51.100.30", "namespace": "shop"},
+        "syncPolicy": {"automated": {}}
+      },
+      "status": {
+        "sync": {
+          "status": "Synced",
+          "revisions": ["0123456789abcdef0123456789abcdef01234567", "2.1.0"]
+        },
+        "health": {"status": "Healthy"},
+        "reconciledAt": "2026-11-15T12:00:00Z",
+        "sourceTypes": ["Directory", "Helm"],
+        "resources": [
+          {"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "shop", "name": "checkout", "status": "Synced", "health": {"status": "Healthy"}},
+          {"version": "v1", "kind": "Service", "namespace": "shop", "name": "checkout", "status": "Synced", "health": {"status": "Healthy"}}
+        ],
+        "summary": {"images": ["us-docker.pkg.dev/example-project/apps/checkout:1.4.2"]},
+        "history": [
+          {"id": 7, "revisions": ["0123456789abcdef0123456789abcdef01234567", "2.1.0"], "deployStartedAt": "2026-11-10T14:59:00Z", "deployedAt": "2026-11-10T15:00:00Z", "initiatedBy": {"username": "example-user"}}
+        ]
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "shop-catalog",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-000000000003",
+        "resourceVersion": "100203",
+        "creationTimestamp": "2026-09-14T10:00:00Z",
+        "labels": {"team": "payments"},
+        "ownerReferences": [
+          {"apiVersion": "argoproj.io/v1alpha1", "kind": "ApplicationSet", "name": "shop", "uid": "a2000000-0000-4000-8000-000000000001", "controller": true, "blockOwnerDeletion": true}
+        ]
+      },
+      "spec": {
+        "project": "shop",
+        "source": {
+          "repoURL": "https://git.example.com/example-org/example-deploy.git",
+          "path": "shop/catalog",
+          "targetRevision": "main",
+          "directory": {"recurse": true, "jsonnet": {}}
+        },
+        "destination": {"server": "https://198.51.100.30:443/", "namespace": "shop"},
+        "syncPolicy": {"automated": {"prune": true}}
+      },
+      "status": {
+        "sync": {"status": "OutOfSync", "revision": "89abcdef0123456789abcdef0123456789abcdef"},
+        "health": {"status": "Healthy"},
+        "reconciledAt": "2026-11-15T12:00:00Z",
+        "sourceType": "Directory",
+        "resources": [
+          {"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "shop", "name": "catalog", "status": "OutOfSync", "health": {"status": "Healthy"}}
+        ],
+        "summary": {"images": ["us-docker.pkg.dev/example-project/apps/catalog:1.4.2", "redis:7.2"]},
+        "history": [
+          {"id": 11, "revision": "fedcba9876543210fedcba9876543210fedcba98", "deployStartedAt": "2026-11-12T09:59:00Z", "deployedAt": "2026-11-12T10:00:00Z", "initiatedBy": {"automated": true}},
+          {"id": 12, "revision": "89abcdef0123456789abcdef0123456789abcdef", "deployStartedAt": "2026-11-14T16:29:00Z", "deployedAt": "2026-11-14T16:30:00Z", "initiatedBy": {"automated": true}}
+        ]
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "edge-proxy",
+        "namespace": "argocd",
+        "uid": "a1000000-0000-4000-8000-000000000004",
+        "resourceVersion": "100204",
+        "creationTimestamp": "2026-10-20T10:00:00Z",
+        "annotations": {
+          "argocd-image-updater.argoproj.io/image-list": "proxy=us-docker.pkg.dev/example-project/apps/edge-proxy",
+          "argocd-image-updater.argoproj.io/proxy.update-strategy": "semver",
+          "argocd-image-updater.argoproj.io/write-back-method": "argocd"
+        }
+      },
+      "spec": {
+        "project": "edge",
+        "source": {
+          "repoURL": "https://git.example.com/example-org/example-deploy.git",
+          "path": "edge/proxy",
+          "targetRevision": "main",
+          "kustomize": {
+            "images": ["us-docker.pkg.dev/example-project/apps/edge-proxy:2.0.1"],
+            "namePrefix": "edge-",
+            "patches": [{"target": {"kind": "Deployment"}, "patch": "- op: add\n  path: /spec/replicas\n  value: 3\n"}]
+          }
+        },
+        "destination": {"name": "prod-private", "namespace": "edge"},
+        "ignoreDifferences": [{"group": "apps", "kind": "Deployment", "jsonPointers": ["/spec/replicas"]}]
+      },
+      "status": {
+        "sync": {"status": "Synced", "revision": "76543210fedcba9876543210fedcba9876543210"},
+        "health": {"status": "Progressing"},
+        "reconciledAt": "2026-11-15T12:00:00Z",
+        "sourceType": "Kustomize",
+        "resources": [
+          {"group": "apps", "version": "v1", "kind": "Deployment", "namespace": "edge", "name": "edge-proxy", "status": "Synced", "health": {"status": "Progressing"}}
+        ],
+        "summary": {"images": ["us-docker.pkg.dev/example-project/apps/edge-proxy:2.0.1"]}
+      }
+    },
+    {
+      "apiVersion": "argoproj.io/v1alpha1",
+      "kind": "Application",
+      "metadata": {
+        "name": "sandbox-demo",
+        "namespace": "sandbox",
+        "uid": "a1000000-0000-4000-8000-000000000005",
+        "resourceVersion": "100205",
+        "creationTimestamp": "2026-11-01T10:00:00Z"
+      },
+      "spec": {
+        "project": "sandbox",
+        "source": {"repoURL": "https://git.example.com/example-org/example-deploy.git", "path": "sandbox/demo", "targetRevision": "main"},
+        "destination": {"server": "https://kubernetes.default.svc", "namespace": "sandbox"}
+      },
+      "status": {"sync": {"status": "Unknown"}, "health": {"status": "Missing"}}
+    }
+  ]
+}

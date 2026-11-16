@@ -1,6 +1,13 @@
 # Argo CD pack: Applications, ApplicationSets and what they deploy
 
-Status: proposed 2026-11-13. Issue: `pudl-avqx.3` (epic `pudl-avqx`).
+Status: accepted 2026-11-13; built 2026-11-16 (`pudl-avqx.4`). The owner
+added three requirements when accepting it: the ApplicationSet half is
+mandatory, with an end-to-end test of an Application it generates; a fact
+for the `argocd.argoproj.io/tracking-id` annotation on
+`gcp.#K8sDeployment` checks the `deployed_by` join, since the owner's
+Argo CD tracks resources by annotation; and `deploys_to` must work for a
+server-URL destination on another cluster, since Argo CD runs in a cluster
+other than the ones it deploys to. Issue: `pudl-avqx.3` (epic `pudl-avqx`).
 Builds on the [Kubernetes pack](2026-11-05-kubernetes-pack.md),
 [shared identity across schemas](2026-11-05-shared-identity-across-schemas.md)
 and the [Pulumi pack](2026-11-06-pulumi-pack.md) (allow-list transforms,

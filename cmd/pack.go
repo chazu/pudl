@@ -15,10 +15,10 @@ var packCmd = &cobra.Command{
 }
 
 var packInstallCmd = &cobra.Command{
-	Use:       "install <name>",
-	Short:     "Install a content pack: schemas, policies, collectors, checks and fixtures",
+	Use:       "install <name>...",
+	Short:     "Install content packs: schemas, policies, collectors, checks and fixtures",
 	ValidArgs: packs.Names(),
-	Args:      cobra.ExactArgs(1),
+	Args:      cobra.MinimumNArgs(1),
 	Long: `Install a bundled content pack in the current initialized PUDL workspace,
 or with --global in the personal ~/.pudl workspace (after pudl init --global).
 No source checkout or download is needed. pudl records what it wrote in
@@ -44,24 +44,45 @@ The pulumi pack reads Pulumi Cloud stacks and their latest update with GET
 requests only, after a guard that accepts only a named org access token
 with a read-only role, and has fixture collectors.
 
+The argocd pack reads Argo CD Applications and ApplicationSets with kubectl
+and needs the k8s pack.
+
+Several names install the packs in the order given; --json takes one.
+
 Example:
     pudl init
-    pudl pack install gcp`,
+    pudl pack install gcp
+    pudl pack install k8s argocd gcp`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		wroteJSON, err := installFileset(cmd, packs.Kind, args[0], packs.Install)
-		if err != nil || wroteJSON {
-			return err
+		if len(args) > 1 && jsonOutput {
+			return fmt.Errorf("--json installs one pack at a time")
 		}
-		switch args[0] {
-		case "aws":
-			fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
-		case "gcp":
-			fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
-		case "pulumi":
-			fmt.Fprintln(outw(), "Next: pudl check pulumi-fixture-stacks (fixture; no Pulumi Cloud access)")
+		for _, name := range args {
+			if err := installPack(cmd, name); err != nil {
+				return err
+			}
 		}
 		return nil
 	},
+}
+
+// installPack installs one pack and prints what to run next.
+func installPack(cmd *cobra.Command, name string) error {
+	wroteJSON, err := installFileset(cmd, packs.Kind, name, packs.Install)
+	if err != nil || wroteJSON {
+		return err
+	}
+	switch name {
+	case "aws":
+		fmt.Fprintln(outw(), "Next: pudl check aws-fixture-vpcs aws-fixture-subnets aws-fixture-security-groups aws-fixture-instances aws-fixture-network-exposure-checks (fixture; no cloud access)")
+	case "gcp":
+		fmt.Fprintln(outw(), "Next: pudl check gcp-fixture-firewalls gcp-fixture-addresses gcp-fixture-routers gcp-fixture-network-hygiene-checks (fixture; no cloud access)")
+	case "pulumi":
+		fmt.Fprintln(outw(), "Next: pudl check pulumi-fixture-stacks (fixture; no Pulumi Cloud access)")
+	case "argocd":
+		fmt.Fprintln(outw(), "Next: pudl check argocd-fixture-applications argocd-fixture-applicationsets (fixture; no cluster access)")
+	}
+	return nil
 }
 
 var packListCmd = &cobra.Command{
