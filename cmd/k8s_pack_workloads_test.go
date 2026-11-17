@@ -152,7 +152,7 @@ func TestK8sPackHostileWorkloadsPlantNothing(t *testing.T) {
 
 // fakeKubectl answers the read-only commands the live collectors run from
 // the pack's fixtures: the cluster helper's config view and version, and
-// `get <resource> -A -o json`. Every call is logged.
+// `get <resource> [-A] -o json`. Every call is logged.
 const fakeKubectl = `#!/bin/sh
 echo "$*" >> "$KUBECTL_LOG"
 case "$1 $2" in
@@ -166,6 +166,10 @@ case "$1 $2" in
 "get deployments.apps") cat "$K8S_FIXTURES/deployments.json" ;;
 "get statefulsets.apps") cat "$K8S_FIXTURES/statefulsets.json" ;;
 "get daemonsets.apps") cat "$K8S_FIXTURES/daemonsets.json" ;;
+"get services") cat "$K8S_FIXTURES/services.json" ;;
+"get ingresses.networking.k8s.io") cat "$K8S_FIXTURES/ingresses.json" ;;
+"get namespaces") cat "$K8S_FIXTURES/namespaces.json" ;;
+"get nodes") cat "$K8S_FIXTURES/nodes.json" ;;
 *) echo "unexpected kubectl $*" >&2; exit 1 ;;
 esac
 `

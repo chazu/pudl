@@ -2,7 +2,8 @@
 
 An installable set of CUE files for cataloging Kubernetes clusters with PUDL
 through `kubectl`, for any distribution: draft schemas for the cluster and
-its workloads (Deployments, StatefulSets, DaemonSets), live collectors that
+its workloads (Deployments, StatefulSets, DaemonSets), Services, Ingresses,
+Namespaces and Nodes, live collectors that
 read kubectl's current context, offline fixture collectors, and the run
 shapes other kubectl collectors build on. It contains no
 vendor-specific Go. The design is
@@ -16,6 +17,8 @@ pudl check k8s-fixture-cluster   # fixture; no cluster access
 pudl check k8s-cluster           # the cluster of kubectl's current context
 pudl check k8s-deployments k8s-statefulsets k8s-daemonsets
 pudl query k8s_statefulset       # every StatefulSet, with its cluster
+pudl check k8s-services k8s-ingresses k8s-namespaces k8s-nodes
+pudl query k8s_ingress_backend   # the service and port of every Ingress host and path
 ```
 
 Installed files, under `.pudl/`:
@@ -24,11 +27,15 @@ Installed files, under `.pudl/`:
 | --- | --- |
 | `schema/k8s/cluster.cue` | `k8s.#Cluster`: the cluster a kube context reaches (draft) |
 | `schema/k8s/workloads.cue` | `k8s.#Deployment`, `k8s.#StatefulSet`, `k8s.#DaemonSet` (draft) |
+| `schema/k8s/network.cue` | `k8s.#Service`, `k8s.#Ingress` (draft) |
+| `schema/k8s/nodes.cue` | `k8s.#Namespace`, `k8s.#Node` (draft) |
 | `schema/models/k8s_pack.cue` | The cluster collectors, and the shared run shapes below |
-| `schema/models/k8s_workloads.cue` | The workload collectors and their shape |
+| `schema/models/k8s_workloads.cue` | The workload collectors and their shape; `_k8sLive`, `_k8sFixture` |
+| `schema/models/k8s_objects.cue` | The Service, Ingress, Namespace and Node collectors and their shapes |
+| `schema/pudl/rules/k8s_pack.cue` | The rule `k8s_ingress_backend` |
 | `populators/k8s/cluster.sh` | Helper `k8s-cluster` runs: the current context's cluster as one object |
 | `populators/k8s/cluster.json` | Fixture: what the helper prints for a context on the GCP pack's fixture cluster `prod-private` |
-| `populators/k8s/<kind>.json` | Fixtures: `kubectl get <kind> -A -o json` on that cluster (`deployments`, `statefulsets`, `daemonsets`) |
+| `populators/k8s/<kind>.json` | Fixtures: `kubectl get <kind> -o json` on that cluster (`deployments`, `statefulsets`, `daemonsets`, `services`, `ingresses`, `namespaces`, `nodes`) |
 | `populators/k8s/<kind>-hostile.json` | Fixtures that plant values the shape and redaction must drop |
 
 ## The live collectors
@@ -110,6 +117,37 @@ cluster record.
   Secret or ConfigMap name and key) and is kept, as are `image`, `name`,
   `ports`, `resources` and `volumeMounts`.
 
+## Services, Ingresses, Namespaces and Nodes
+
+One collector per kind (`k8s-services`, `k8s-ingresses`, `k8s-namespaces`,
+`k8s-nodes`), as for workloads. Services and Ingresses
+(`ingresses.networking.k8s.io`) are listed with `-A`; Namespaces and Nodes
+are cluster-scoped and listed without it.
+
+- **Identity:** `cluster`, `metadata.namespace`, `metadata.name` for
+  Services and Ingresses; `cluster`, `metadata.name` for Namespaces and
+  Nodes.
+- **Shared identity:** `k8s.object`, key `metadata.uid`.
+- **Skipped:** Services and Ingresses in the system namespaces, and the
+  system namespaces themselves (no Namespace record for `kube-system`,
+  `gke-*` and the rest).
+- **Shape** (`k8s_objects.cue`): the object without
+  `metadata.managedFields`. A Node keeps only `addresses`, `nodeInfo`,
+  `conditions`, `capacity` and `allocatable` of its `status`; `images` (every
+  image the node pulled), volumes, daemon endpoints and config are
+  dropped. Every path of an Ingress rule gets `host` (the rule's host, `""`
+  for none) and `port` (its service backend's port number, else its name),
+  for the `k8s_ingress_path` fact.
+- **Annotations** of Services and Ingresses keep every key. The value of
+  one whose key matches `(?i)(auth|secret|token|password|passwd|credential|key)`
+  (nginx's `auth-url` and `auth-secret`, for example) becomes `[REDACTED]`;
+  any other value that is a URL with a scheme loses its userinfo
+  (`https://user:TOKEN@host/x` becomes `https://host/x`). Namespace and Node
+  annotations are kept.
+- **Redacted** by the schemas: the
+  `kubectl.kubernetes.io/last-applied-configuration` annotation on every
+  kind.
+
 ## Facts
 
 | Relation | Arguments |
@@ -118,8 +156,16 @@ cluster record.
 | `k8s_deployment` (fact) | `cluster`, `namespace`, `name`, `replicas` (default 1) |
 | `k8s_statefulset` (fact) | `cluster`, `namespace`, `name`, `replicas` (default 1) |
 | `k8s_daemonset` (fact) | `cluster`, `namespace`, `name` |
+| `k8s_service` (fact) | `cluster`, `namespace`, `name`, `type` (default `ClusterIP`), `cluster_ip` (default `""`) |
+| `k8s_service_port` (fact) | one per port: `name`, `port`, `protocol` (default `TCP`), `target_port`; join `k8s_service` on `resource_id` |
+| `k8s_ingress` (fact) | `cluster`, `namespace`, `name`, `class` (`spec.ingressClassName`, default `""`) |
+| `k8s_ingress_host` (fact) | `cluster`, `namespace`, `name`, `host`: one per rule host |
+| `k8s_ingress_path` (fact) | one per path of a rule: `host`, `path`, `service`, `port`; join on `resource_id` |
+| `k8s_ingress_backend` (rule) | `cluster`, `namespace`, `name`, `host`, `path`, `service`, `port`: `k8s_ingress_path` with its Ingress |
+| `k8s_namespace` (fact) | `cluster`, `name` |
+| `k8s_node` (fact) | `cluster`, `name`, `provider_id` (`spec.providerID`, e.g. `gce://project/zone/name`; default `""`) |
 
-`cluster` on a workload fact is the `host` of a `k8s_cluster` fact.
+`cluster` on an object fact is the `host` of a `k8s_cluster` fact.
 
 ```bash
 pudl query k8s_cluster
@@ -143,7 +189,7 @@ Argo CD pack), reuse these:
   `out: [for item in in.items {_shape & {_in: item}}]`.
 - `_k8sGet & {_resource: "deployments.apps"}`: a run that lists one resource
   type across all namespaces (`kubectl get <resource> -A -o json`) with the
-  unwrap.
+  unwrap. `_namespaced: false` leaves out `-A`, for a cluster-scoped type.
 
 A fixture collector reads a saved `kubectl get -o json` List with `cat` and
 the same transform.
@@ -164,3 +210,11 @@ values, the last-applied annotation, pod template annotations,
 `managedFields` and a system namespace; `cmd/k8s_pack_workloads_test.go`
 finds none of them stored. It also runs the live collectors against a fake
 `kubectl`.
+
+The Service, Ingress, Namespace and Node fixtures are on the same cluster.
+The nodes' provider IDs are `gce://example-project/<zone>/<name>`. Their
+hostile fixtures plant `FAKE-K8S-*` values in the last-applied annotation
+of every kind, credential-named Service and Ingress annotations, URL
+userinfo in annotation values, Node `status.images` and other Node status,
+`managedFields` and system namespace objects;
+`cmd/k8s_pack_objects_test.go` finds none of them stored.

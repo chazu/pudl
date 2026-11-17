@@ -4,6 +4,23 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Kubernetes pack: Services, Ingresses, Namespaces, Nodes (2026-11-16)
+
+`k8s.#Service` and `k8s.#Ingress` (keyed by cluster, namespace and name),
+`k8s.#Namespace` and `k8s.#Node` (keyed by cluster and name), all linked by
+UID (`k8s.object`). Live collectors `k8s-services`, `k8s-ingresses`,
+`k8s-namespaces`, `k8s-nodes` (current context, `complete: false`;
+`_k8sGet` leaves out `-A` for the cluster-scoped kinds) and fixture
+collectors. System namespaces and their objects are skipped,
+`managedFields` dropped, the last-applied annotation redacted; Service and
+Ingress annotation values whose key names a credential are redacted and
+URL values lose their userinfo; a Node keeps only addresses, nodeInfo,
+conditions, capacity and allocatable of its status. Facts `k8s_service`,
+`k8s_service_port`, `k8s_ingress`, `k8s_ingress_host`, `k8s_ingress_path`,
+`k8s_namespace`, `k8s_node` (with `provider_id`) and the pack's first rule,
+`k8s_ingress_backend`. See `implog/2026_11_16_k8s_pack_objects.md`. This is
+`pudl-3q5.3`; next are graph display and `in_cluster` edges (`pudl-3q5.4`).
+
 ### Argo CD pack: repository records and sourced_from (2026-11-16)
 
 A repository is a record: `argocd.#Repository`, one per repository the
