@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Kubernetes pack: container posture check family (2026-11-16)
+
+`k8s-posture-checks` and `k8s-fixture-posture-checks` check every
+container and init container of the Deployments, StatefulSets and
+DaemonSets: `privileged-container` (fail), `unpinned-image` (`:latest` or
+no tag and no digest; warn), `no-resource-limits` (states the missing
+limits; warn) and `may-run-as-root` (container `securityContext` over the
+pod's; warn). New facts `k8s_container`, `k8s_init_container`,
+`k8s_pod_security` and rules in
+`packs/k8s/schema/pudl/rules/k8s_posture.cue`; the workload fixtures pass
+and fail each check. The live family is `unknown` until `pudl-u29`
+(collectors are `complete: false`). See
+`implog/2026_11_16_k8s_pack_posture_checks.md`. This is `pudl-5zh`.
+
 ### Kubernetes pack: graph display, in_cluster edges, cross-pack link test (2026-11-16)
 
 Every Kubernetes type has a graph name and display info (`K8S`, `DEP`,

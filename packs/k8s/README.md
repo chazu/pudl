@@ -4,8 +4,8 @@ An installable set of CUE files for cataloging Kubernetes clusters with PUDL
 through `kubectl`, for any distribution: draft schemas for the cluster and
 its workloads (Deployments, StatefulSets, DaemonSets), Services, Ingresses,
 Namespaces and Nodes, live collectors that
-read kubectl's current context, offline fixture collectors, and the run
-shapes other kubectl collectors build on. It contains no
+read kubectl's current context, offline fixture collectors, a container
+posture check family, and the run shapes other kubectl collectors build on. It contains no
 vendor-specific Go. The design is
 `docs/design/2026-11-05-kubernetes-pack.md` in the PUDL source.
 
@@ -20,6 +20,8 @@ pudl query k8s_statefulset       # every StatefulSet, with its cluster
 pudl check k8s-services k8s-ingresses k8s-namespaces k8s-nodes
 pudl query k8s_ingress_backend   # the service and port of every Ingress host and path
 pudl graph export                # every object in its cluster
+pudl check k8s-fixture-deployments k8s-fixture-statefulsets k8s-fixture-daemonsets \
+  k8s-fixture-posture-checks --json   # container posture findings
 ```
 
 Installed files, under `.pudl/`:
@@ -33,8 +35,10 @@ Installed files, under `.pudl/`:
 | `schema/models/k8s_pack.cue` | The cluster collectors, and the shared run shapes below |
 | `schema/models/k8s_workloads.cue` | The workload collectors and their shape; `_k8sLive`, `_k8sFixture` |
 | `schema/models/k8s_objects.cue` | The Service, Ingress, Namespace and Node collectors and their shapes |
+| `schema/models/k8s_pack_checks.cue` | The check families `k8s-posture-checks` and `k8s-fixture-posture-checks` |
 | `schema/pudl/rules/k8s_pack.cue` | The rule `k8s_ingress_backend` |
 | `schema/pudl/rules/k8s_graph.cue` | Graph edges: `in_cluster`, `routes_to` |
+| `schema/pudl/rules/k8s_posture.cue` | The rules the posture checks query |
 | `populators/k8s/cluster.sh` | Helper `k8s-cluster` runs: the current context's cluster as one object |
 | `populators/k8s/cluster.json` | Fixture: what the helper prints for a context on the GCP pack's fixture cluster `prod-private` |
 | `populators/k8s/<kind>.json` | Fixtures: `kubectl get <kind> -o json` on that cluster (`deployments`, `statefulsets`, `daemonsets`, `services`, `ingresses`, `namespaces`, `nodes`) |
@@ -187,6 +191,53 @@ Not drawn: a Namespace does not contain its objects (pudl has no built-in
 `in_namespace` edge type), and Nodes do not link to their VMs yet
 (`pudl-0qh`).
 
+## Checks
+
+`k8s-posture-checks` (over `k8s-deployments`, `k8s-statefulsets`,
+`k8s-daemonsets`) and `k8s-fixture-posture-checks` (over their fixture
+collectors) are checks-only families, built like the GCP pack's: each
+check reads the latest observation of every workload collector (evidence
+`model:<collector>`, at most an hour old) and expects no rows. Each row is
+one container or init container of a workload, with its `resource_id`,
+`cluster`, `namespace`, `kind`, `name`, `container` and `list`
+(`containers` or `initContainers`).
+
+| Check | Fails for a container that | Severity |
+| --- | --- | --- |
+| `privileged-container` | sets `securityContext.privileged: true` | fail |
+| `unpinned-image` | runs an image tagged `latest`, or with no tag and no digest (a registry port is not a tag); an image with a digest passes, whatever its tag | warn |
+| `no-resource-limits` | has no `resources.limits.cpu`, no `resources.limits.memory`, or neither; `missing` is `cpu`, `memory` or `cpu and memory` | warn |
+| `may-run-as-root` | has an effective `runAsUser` of 0, or no effective `runAsUser` and an effective `runAsNonRoot` that is not `true` | warn |
+
+A container's `securityContext` overrides its pod's, field by field, as in
+Kubernetes: `runAsNonRoot: false` on a container fails under a pod with
+`runAsNonRoot: true`, and `runAsUser: 0` on a container fails whatever the
+pod sets. The checks read only `image`, `securityContext` and
+`resources.limits`, never env, command or args, which are redacted.
+
+Name a family together with its collectors; they run first. Without an
+observation of each collector, every check is `unknown`
+(`missing_snapshot`). The live collectors declare `complete: false`, so the
+live family's checks are `unknown` (`incomplete_observation`) until
+observations are scoped per cluster (`pudl-u29`). `pudl query
+k8s_privileged_container` (and the other check relations) shows the rows
+meanwhile.
+
+Waivers go on the family, in a file of your own under
+`.pudl/schema/models/` (package `models`), which a pack upgrade does not
+replace. A witness is matched by the values it carries:
+
+```cue
+package models
+
+#K8sPostureChecks: waivers: [{
+	check:   "privileged-container"
+	witness: {namespace: "logging", name: "log-agent", container: "agent"}
+	owner:   "platform", reason: "the log agent reads host logs"
+	created: "2026-11-01", expires: "2027-03-31"
+}]
+```
+
 ## Facts
 
 | Relation | Arguments |
@@ -195,6 +246,11 @@ Not drawn: a Namespace does not contain its objects (pudl has no built-in
 | `k8s_deployment` (fact) | `cluster`, `namespace`, `name`, `replicas` (default 1) |
 | `k8s_statefulset` (fact) | `cluster`, `namespace`, `name`, `replicas` (default 1) |
 | `k8s_daemonset` (fact) | `cluster`, `namespace`, `name` |
+| `k8s_container`, `k8s_init_container` (fact) | one per container of a workload's pod template: `container`, `image_pin` (`digest`, `latest`, `tag` or `untagged`), `privileged` (default false), `sets_run_as_non_root`, `run_as_non_root` (default false), `sets_run_as_user`, `run_as_user` (default 0), `has_cpu_limit`, `has_memory_limit`; join on `resource_id` |
+| `k8s_pod_security` (fact) | the pod's `securityContext`: `sets_run_as_user`, `run_as_user` (default 0), `run_as_non_root` (default false); join on `resource_id` |
+| `k8s_workload` (rule) | `resource_id`, `cluster`, `namespace`, `kind`, `name` of every workload |
+| `k8s_pod_container` (rule) | a container with its workload and `list`, and the `k8s_container` arguments |
+| `k8s_privileged_container`, `k8s_unpinned_image`, `k8s_container_without_limits`, `k8s_container_may_run_as_root` (rule) | the posture checks' rows (see Checks) |
 | `k8s_service` (fact) | `cluster`, `namespace`, `name`, `type` (default `ClusterIP`), `cluster_ip` (default `""`) |
 | `k8s_service_port` (fact) | one per port: `name`, `port`, `protocol` (default `TCP`), `target_port`; join `k8s_service` on `resource_id` |
 | `k8s_ingress` (fact) | `cluster`, `namespace`, `name`, `class` (`spec.ingressClassName`, default `""`) |
@@ -249,6 +305,14 @@ values, the last-applied annotation, pod template annotations,
 `managedFields` and a system namespace; `cmd/k8s_pack_workloads_test.go`
 finds none of them stored. It also runs the live collectors against a fake
 `kubectl`.
+
+The workload fixtures give each posture check passing and failing
+containers: a privileged log agent, images tagged `latest`, untagged, with
+a registry port, pinned by digest alone and by `latest` with a digest,
+limits on both, one or neither resource, and `securityContext` set on the
+pod, on the container, or on both with the container's overriding. Init
+containers fail and pass too. `cmd/k8s_pack_checks_test.go` checks each
+check's findings, `unknown` without the collectors, and a waiver.
 
 The Service, Ingress, Namespace and Node fixtures are on the same cluster.
 The nodes' provider IDs are `gce://example-project/<zone>/<name>`. Their
