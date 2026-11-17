@@ -56,6 +56,10 @@
                   "requests": {
                     "cpu": "100m",
                     "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "1Gi"
                   }
                 },
                 "env": [
@@ -63,11 +67,34 @@
                     "name": "REDIS_PORT",
                     "value": "6379"
                   }
-                ]
+                ],
+                "securityContext": {
+                  "runAsNonRoot": false
+                }
               }
             ],
             "restartPolicy": "Always",
-            "terminationGracePeriodSeconds": 30
+            "terminationGracePeriodSeconds": 30,
+            "securityContext": {
+              "runAsNonRoot": true
+            },
+            "initContainers": [
+              {
+                "name": "init-config",
+                "image": "registry.example.com:5000/tools/redis-init",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "50m",
+                    "memory": "32Mi"
+                  },
+                  "limits": {
+                    "cpu": "100m",
+                    "memory": "64Mi"
+                  }
+                }
+              }
+            ]
           }
         },
         "volumeClaimTemplates": [
@@ -142,7 +169,7 @@
             "containers": [
               {
                 "name": "store",
-                "image": "quay.io/example/metrics-store:0.9.1",
+                "image": "quay.io/example/metrics-store",
                 "imagePullPolicy": "IfNotPresent",
                 "resources": {
                   "requests": {
@@ -153,7 +180,10 @@
               }
             ],
             "restartPolicy": "Always",
-            "terminationGracePeriodSeconds": 30
+            "terminationGracePeriodSeconds": 30,
+            "securityContext": {
+              "runAsUser": 65534
+            }
           }
         },
         "volumeClaimTemplates": [

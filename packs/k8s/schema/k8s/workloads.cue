@@ -44,6 +44,41 @@ _k8sWorkloadArgs: {
 	name:      "metadata.name"
 }
 
+// What the posture checks (schema/pudl/rules/k8s_posture.cue) read from
+// one container or init container. image_pin is "digest" (the image is
+// pinned by digest, tagged or not), "latest", "tag" or "untagged"; a
+// registry port is not a tag. sets_* is whether the container sets the
+// field; the value then overrides the pod's.
+_k8sContainerArgs: {
+	container: "name"
+	image_pin: {path: "image", default: "", rewrite: [
+		{match: "@", replace: "digest"},
+		{match: ":latest$", replace: "latest"},
+		{match: ":[^/:]+$", replace: "tag"},
+		{match: ".*", replace: "untagged"},
+	]}
+	privileged: {path: "securityContext.privileged", default: false}
+	sets_run_as_non_root: {exists: "securityContext.runAsNonRoot"}
+	run_as_non_root: {path: "securityContext.runAsNonRoot", default: false}
+	sets_run_as_user: {exists: "securityContext.runAsUser"}
+	run_as_user: {path: "securityContext.runAsUser", default: 0}
+	has_cpu_limit: {exists: "resources.limits.cpu"}
+	has_memory_limit: {exists: "resources.limits.memory"}
+}
+
+// The pod template facts every workload kind projects under shared
+// relations, keyed by the record's resource_id: one tuple per container
+// and per init container, and one for the pod's securityContext.
+_k8sPodFacts: {
+	k8s_container: {each: "spec.template.spec.containers[*]", args: _k8sContainerArgs}
+	k8s_init_container: {each: "spec.template.spec.initContainers[*]", args: _k8sContainerArgs}
+	k8s_pod_security: args: {
+		sets_run_as_user: {exists: "spec.template.spec.securityContext.runAsUser"}
+		run_as_user: {path: "spec.template.spec.securityContext.runAsUser", default: 0}
+		run_as_non_root: {path: "spec.template.spec.securityContext.runAsNonRoot", default: false}
+	}
+}
+
 #Deployment: {
 	_pudl: {
 		schema_type:     "base"
@@ -54,8 +89,11 @@ _k8sWorkloadArgs: {
 		graph: display: {code: "DEP", label: "Kubernetes deployment", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
-		facts: k8s_deployment: args: _k8sWorkloadArgs & {
-			replicas: {path: "spec.replicas", default: 1}
+		facts: {
+			_k8sPodFacts
+			k8s_deployment: args: _k8sWorkloadArgs & {
+				replicas: {path: "spec.replicas", default: 1}
+			}
 		}
 	}
 	_#K8sWorkload
@@ -72,8 +110,11 @@ _k8sWorkloadArgs: {
 		graph: display: {code: "STS", label: "Kubernetes stateful set", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
-		facts: k8s_statefulset: args: _k8sWorkloadArgs & {
-			replicas: {path: "spec.replicas", default: 1}
+		facts: {
+			_k8sPodFacts
+			k8s_statefulset: args: _k8sWorkloadArgs & {
+				replicas: {path: "spec.replicas", default: 1}
+			}
 		}
 	}
 	_#K8sWorkload
@@ -90,7 +131,10 @@ _k8sWorkloadArgs: {
 		graph: display: {code: "DS", label: "Kubernetes daemon set", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
-		facts: k8s_daemonset: args: _k8sWorkloadArgs
+		facts: {
+			_k8sPodFacts
+			k8s_daemonset: args: _k8sWorkloadArgs
+		}
 	}
 	_#K8sWorkload
 	kind: "DaemonSet" @pudl(match)

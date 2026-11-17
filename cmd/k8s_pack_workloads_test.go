@@ -174,10 +174,10 @@ case "$1 $2" in
 esac
 `
 
-// TestK8sPackLiveWorkloads runs the live collectors against a fake kubectl:
-// each lists its kind across all namespaces in the current context's
-// cluster, and `pudl query` shows the StatefulSets and DaemonSets there.
-func TestK8sPackLiveWorkloads(t *testing.T) {
+// useFakeKubectl puts fakeKubectl first on PATH for the test, answering
+// from the pack's fixtures, and returns the path of its call log.
+func useFakeKubectl(t *testing.T) string {
+	t.Helper()
 	fixtures, err := filepath.Abs("../packs/k8s/populators/k8s")
 	require.NoError(t, err)
 	bin := t.TempDir()
@@ -186,7 +186,14 @@ func TestK8sPackLiveWorkloads(t *testing.T) {
 	t.Setenv("KUBECTL_LOG", log)
 	t.Setenv("K8S_FIXTURES", fixtures)
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return log
+}
 
+// TestK8sPackLiveWorkloads runs the live collectors against a fake kubectl:
+// each lists its kind across all namespaces in the current context's
+// cluster, and `pudl query` shows the StatefulSets and DaemonSets there.
+func TestK8sPackLiveWorkloads(t *testing.T) {
+	log := useFakeKubectl(t)
 	cliWorkspace(t)
 	r := runCLI(t, "pack", "install", "k8s")
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)

@@ -62,6 +62,10 @@
                   "requests": {
                     "cpu": "100m",
                     "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "256Mi"
                   }
                 },
                 "env": [
@@ -89,6 +93,10 @@
                     "cpu": "100m",
                     "memory": "128Mi"
                   }
+                },
+                "securityContext": {
+                  "privileged": false,
+                  "runAsUser": 0
                 }
               }
             ],
@@ -103,13 +111,19 @@
                   "requests": {
                     "cpu": "100m",
                     "memory": "128Mi"
+                  },
+                  "limits": {
+                    "memory": "128Mi"
                   }
                 },
                 "command": [
                   "/app/migrate"
                 ]
               }
-            ]
+            ],
+            "securityContext": {
+              "runAsNonRoot": true
+            }
           }
         }
       },
@@ -172,15 +186,21 @@
             "containers": [
               {
                 "name": "catalog",
-                "image": "us-docker.pkg.dev/example-project/apps/catalog:1.4.2",
+                "image": "us-docker.pkg.dev/example-project/apps/catalog:latest",
                 "imagePullPolicy": "IfNotPresent",
                 "resources": {
                   "requests": {
                     "cpu": "100m",
                     "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m"
                   }
                 },
-                "env": []
+                "env": [],
+                "securityContext": {
+                  "runAsUser": 10001
+                }
               }
             ],
             "restartPolicy": "Always",
@@ -245,18 +265,25 @@
             "containers": [
               {
                 "name": "proxy",
-                "image": "us-docker.pkg.dev/example-project/apps/edge-proxy:2.0.1",
+                "image": "us-docker.pkg.dev/example-project/apps/edge-proxy:latest@sha256:2222222222222222222222222222222222222222222222222222222222222222",
                 "imagePullPolicy": "IfNotPresent",
                 "resources": {
                   "requests": {
                     "cpu": "100m",
                     "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "512Mi"
                   }
                 }
               }
             ],
             "restartPolicy": "Always",
-            "terminationGracePeriodSeconds": 30
+            "terminationGracePeriodSeconds": 30,
+            "securityContext": {
+              "runAsUser": 0
+            }
           }
         }
       },
