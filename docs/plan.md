@@ -4,6 +4,19 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Kubernetes pack: graph display, in_cluster edges, cross-pack link test (2026-11-16)
+
+Every Kubernetes type has a graph name and display info (`K8S`, `DEP`,
+`STS`, `DS`, `SVC`, `ING`, `NS`, `NODE`). Pack rules
+(`packs/k8s/schema/pudl/rules/k8s_graph.cue`) derive `in_cluster` from every
+object to its `k8s.#Cluster` record by host, and `routes_to` from an
+Ingress to the Services its paths name. `cmd/k8s_pack_graph_test.go` installs
+the GCP and Kubernetes packs and checks that the GKE cluster and the kube
+context's cluster are one node, the shared deployments are one node each,
+every object has one `in_cluster` edge to that node, and doctor's rule check
+passes. Namespace containment is not drawn (no built-in `in_namespace`).
+See `implog/2026_11_16_k8s_pack_graph.md`. This is `pudl-3q5.4`.
+
 ### Kubernetes pack: Services, Ingresses, Namespaces, Nodes (2026-11-16)
 
 `k8s.#Service` and `k8s.#Ingress` (keyed by cluster, namespace and name),

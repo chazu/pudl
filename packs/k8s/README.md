@@ -19,6 +19,7 @@ pudl check k8s-deployments k8s-statefulsets k8s-daemonsets
 pudl query k8s_statefulset       # every StatefulSet, with its cluster
 pudl check k8s-services k8s-ingresses k8s-namespaces k8s-nodes
 pudl query k8s_ingress_backend   # the service and port of every Ingress host and path
+pudl graph export                # every object in its cluster
 ```
 
 Installed files, under `.pudl/`:
@@ -33,6 +34,7 @@ Installed files, under `.pudl/`:
 | `schema/models/k8s_workloads.cue` | The workload collectors and their shape; `_k8sLive`, `_k8sFixture` |
 | `schema/models/k8s_objects.cue` | The Service, Ingress, Namespace and Node collectors and their shapes |
 | `schema/pudl/rules/k8s_pack.cue` | The rule `k8s_ingress_backend` |
+| `schema/pudl/rules/k8s_graph.cue` | Graph edges: `in_cluster`, `routes_to` |
 | `populators/k8s/cluster.sh` | Helper `k8s-cluster` runs: the current context's cluster as one object |
 | `populators/k8s/cluster.json` | Fixture: what the helper prints for a context on the GCP pack's fixture cluster `prod-private` |
 | `populators/k8s/<kind>.json` | Fixtures: `kubectl get <kind> -o json` on that cluster (`deployments`, `statefulsets`, `daemonsets`, `services`, `ingresses`, `namespaces`, `nodes`) |
@@ -147,6 +149,43 @@ are cluster-scoped and listed without it.
 - **Redacted** by the schemas: the
   `kubectl.kubernetes.io/last-applied-configuration` annotation on every
   kind.
+
+## Graph
+
+`pudl graph export` and `pudl ui` draw every type with a code and a class
+(`_pudl.graph.display`), named by `metadata.name` (the cluster by `host`):
+
+| Type | Code | Label | Class |
+| --- | --- | --- | --- |
+| `k8s.cluster` | `K8S` | Kubernetes cluster | compute |
+| `k8s.deployment` | `DEP` | Kubernetes deployment | compute |
+| `k8s.statefulset` | `STS` | Kubernetes stateful set | compute |
+| `k8s.daemonset` | `DS` | Kubernetes daemon set | compute |
+| `k8s.service` | `SVC` | Kubernetes service | edge |
+| `k8s.ingress` | `ING` | Kubernetes ingress | edge |
+| `k8s.namespace` | `NS` | Kubernetes namespace | admin |
+| `k8s.node` | `NODE` | Kubernetes node | compute |
+
+Edges (`schema/pudl/rules/k8s_graph.cue`), basis `observed`, both built-in
+edge types:
+
+- `in_cluster`, from every Deployment, StatefulSet, DaemonSet, Service,
+  Ingress, Namespace and Node to the `k8s.#Cluster` record whose `host` is
+  the object's `cluster`. An object whose cluster has no record has no edge.
+- `routes_to`, from an Ingress to each Service in its namespace that one of
+  its paths names (`k8s_ingress_backend`). A Service with no record, and a
+  path with a resource backend, give no edge.
+
+Linked records are one node. With the GCP pack, the GKE cluster whose public
+or DNS endpoint is the context's host and the `k8s.#Cluster` record are one
+node (`k8s.cluster`); a Deployment that GCP and kubectl both see is one node
+(`k8s.object`). The GCP pack's `in_cluster` edge from its deployment record
+to the GKE record and this pack's edge then are the same edge.
+`cmd/k8s_pack_graph_test.go` checks this with both packs' fixtures.
+
+Not drawn: a Namespace does not contain its objects (pudl has no built-in
+`in_namespace` edge type), and Nodes do not link to their VMs yet
+(`pudl-0qh`).
 
 ## Facts
 

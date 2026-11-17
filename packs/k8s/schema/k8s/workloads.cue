@@ -50,6 +50,8 @@ _k8sWorkloadArgs: {
 		resource_type:   "k8s.deployment"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "DEP", label: "Kubernetes deployment", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: k8s_deployment: args: _k8sWorkloadArgs & {
@@ -66,6 +68,8 @@ _k8sWorkloadArgs: {
 		resource_type:   "k8s.statefulset"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "STS", label: "Kubernetes stateful set", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: k8s_statefulset: args: _k8sWorkloadArgs & {
@@ -82,6 +86,8 @@ _k8sWorkloadArgs: {
 		resource_type:   "k8s.daemonset"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "DS", label: "Kubernetes daemon set", class: "compute"}
 		sensitive_fields: _k8sWorkloadSensitive
 		same_resource:    [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: k8s_daemonset: args: _k8sWorkloadArgs

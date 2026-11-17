@@ -18,6 +18,7 @@ package k8s
 		resource_type: "k8s.cluster"
 		identity_fields: ["host"]
 		review: status: "draft"
+		graph: name: "host"
 		graph: display: {code: "K8S", label: "Kubernetes cluster", class: "compute"}
 		same_resource: [{kind: "k8s.cluster", key: host: "host"}]
 		facts: k8s_cluster: args: {
