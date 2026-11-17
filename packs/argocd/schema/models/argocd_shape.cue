@@ -126,7 +126,7 @@ _argocdSource: {
 	out: {
 		index: i
 		(_argocdPick & {_src: s, _keys: ["path", "chart", "targetRevision", "ref", "name"]}).out
-		if s.repoURL != _|_ {repoURL: (_argocdRepoURL & {_url: s.repoURL}).out}
+		if s.repoURL != _|_ {(_argocdRepoFields & {_url: s.repoURL}).out}
 		if s.helm != _|_ {helm: (_argocdHelm & {_src: s.helm, _index: i}).out}
 		if s.kustomize != _|_ {
 			kustomize: (_argocdPick & {_src: s.kustomize, _keys: ["images", "namePrefix", "nameSuffix", "namespace", "commonLabels"]}).out
@@ -256,7 +256,7 @@ _argocdGeneratorLeaf: {
 		if g.git != _|_ {
 			git: {
 				(_argocdPick & {_src: g.git, _keys: ["revision"]}).out
-				if g.git.repoURL != _|_ {repoURL: (_argocdRepoURL & {_url: g.git.repoURL}).out}
+				if g.git.repoURL != _|_ {(_argocdRepoFields & {_url: g.git.repoURL}).out}
 				if g.git.directories != _|_ {
 					directories: [for d in g.git.directories {(_argocdPick & {_src: d, _keys: ["path", "exclude"]}).out}]
 				}

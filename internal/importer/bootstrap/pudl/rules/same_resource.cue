@@ -24,6 +24,14 @@ same_resource_kind_k8s_object: {
 		meaning: "A Kubernetes object, keyed by its linked cluster, namespace, group, kind and name."}}
 }
 
+// A git repository's key is its normalized URL, so records of one
+// repository from different packs (an Argo CD source, an image's source
+// label) are one node. See docs/design/2026-11-13-argocd-pack.md, decision 7.
+same_resource_kind_git_repo: {
+	head: {rel: "same_resource_kind", args: {kind: "git.repo", label: "Git repository",
+		meaning: "A git repository, keyed by its normalized URL: no userinfo; ssh and scp forms as https without a port; lower-case host without a default port; no query, fragment, trailing slash or .git."}}
+}
+
 // Resources holding an equal key of one kind are the same resource.
 same_resource_by_key: {
 	head: {rel: "same_resource", args: {a: "$A", b: "$B", kind: "$K"}}

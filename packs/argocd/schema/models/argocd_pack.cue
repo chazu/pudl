@@ -13,8 +13,12 @@ import (
 //   argocd-applications           records every Application in the cluster
 //                                 of kubectl's current context;
 //   argocd-applicationsets        records every ApplicationSet there;
+//   argocd-repositories           records every repository their sources
+//                                 and git generators name, one record per
+//                                 repository (argocd_repository.cue);
 //   argocd-fixture-applications,
-//   argocd-fixture-applicationsets read the bundled fixtures in
+//   argocd-fixture-applicationsets,
+//   argocd-fixture-repositories   read the bundled fixtures in
 //                                 .pudl/populators/argocd.
 //
 // The live collectors read the current context only, run kubectl get and
@@ -98,4 +102,37 @@ _argocdFixture: {
 	name: "argocd-fixture-applicationsets"
 	observation: {scope: "fixture/argocd/applicationsets", complete: true}
 	_argocdFixture & {_file: "applicationsets", _schema: "argocd.#ApplicationSet", _shape: _argocdApplicationSet}
+}
+
+// The repositories read both resource types, one run each: a run routes
+// every record it prints to one schema, so the repository records cannot
+// come from the other two collectors. They carry no cluster: one
+// repository is one record whatever cluster names it.
+_argocdRepoSources: [
+	{resource: "applications.argoproj.io", file: "applications", shape: _argocdApplication},
+	{resource: "applicationsets.argoproj.io", file: "applicationsets", shape: _argocdApplicationSet},
+]
+
+#ArgoCDRepositories: sm.#SystemModel & {
+	name: "argocd-repositories"
+	observation: {scope: "argocd/repositories", complete: false}
+	populate: sm.#CommandObserve & {
+		schema: "argocd.#Repository"
+		runs: [for src in _argocdRepoSources {
+			argv:      (_k8sGet & {_resource: src.resource}).argv
+			transform: _argocdRepoListTransform & {_shape: src.shape}
+		}]
+	}
+}
+
+#ArgoCDFixtureRepositories: sm.#SystemModel & {
+	name: "argocd-fixture-repositories"
+	observation: {scope: "fixture/argocd/repositories", complete: true}
+	populate: sm.#CommandObserve & {
+		schema: "argocd.#Repository"
+		runs: [for src in _argocdRepoSources for f in [src.file, "\(src.file)-hostile"] {
+			argv:      ["cat", "../../populators/argocd/\(f).json"]
+			transform: _argocdRepoListTransform & {_shape: src.shape}
+		}]
+	}
 }

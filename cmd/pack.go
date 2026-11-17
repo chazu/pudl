@@ -80,7 +80,7 @@ func installPack(cmd *cobra.Command, name string) error {
 	case "pulumi":
 		fmt.Fprintln(outw(), "Next: pudl check pulumi-fixture-stacks (fixture; no Pulumi Cloud access)")
 	case "argocd":
-		fmt.Fprintln(outw(), "Next: pudl check argocd-fixture-applications argocd-fixture-applicationsets (fixture; no cluster access)")
+		fmt.Fprintln(outw(), "Next: pudl check argocd-fixture-applications argocd-fixture-applicationsets argocd-fixture-repositories (fixture; no cluster access)")
 	}
 	return nil
 }

@@ -172,7 +172,7 @@
       "spec": {
         "project": "edge",
         "source": {
-          "repoURL": "https://git.example.com/example-org/example-deploy.git",
+          "repoURL": "git@git.example.com:example-org/example-deploy.git",
           "path": "edge/proxy",
           "targetRevision": "main",
           "kustomize": {

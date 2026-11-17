@@ -138,7 +138,7 @@ func TestSameResourceByKeyLinksProjectedRecords(t *testing.T) {
 
 	kinds, err := datalog.Evaluate(db, rules, sameresource.KindRelation, nil, datalog.TemporalScope{})
 	require.NoError(t, err)
-	assert.Len(t, kinds, 2, "the built-in k8s.cluster and k8s.object kinds")
+	assert.Len(t, kinds, 3, "the built-in k8s.cluster, k8s.object and git.repo kinds")
 }
 
 // The database package reserves the relation names sameresource uses.

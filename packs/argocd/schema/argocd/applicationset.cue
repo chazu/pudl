@@ -28,6 +28,20 @@ package argocd
 				uid:             "metadata.uid"
 				generator_types: "generatorTypes"
 			}
+			// The template's sources, as argocd_app_source holds an
+			// Application's. repo is absent when repoURL is a template.
+			argocd_appset_source: {
+				each: "template.spec.sources[*]"
+				args: {
+					index:           "index"
+					repo_url:        "repoURL"
+					repo:            "repo"
+					path:            "path"
+					chart:           "chart"
+					target_revision: "targetRevision"
+					ref:             "ref"
+				}
+			}
 			// Git generators at the top level, and one level down in a
 			// matrix or merge generator.
 			argocd_appset_git_generator: {
@@ -58,13 +72,15 @@ package argocd
 }
 
 // _#ArgoGenerator is a generator's summary: its type (the one key the
-// generator has), the git generator's repository, revision and path
-// patterns, a list generator's element count, a clusters generator's
-// selector, and a matrix or merge generator's children, one level deep.
+// generator has), the git generator's repository (repo is the normalized
+// repoURL), revision and path patterns, a list generator's element count, a
+// clusters generator's selector, and a matrix or merge generator's
+// children, one level deep.
 _#ArgoGenerator: {
 	type: string
 	git?: {
 		repoURL?:  string
+		repo?:     string
 		revision?: string
 		directories?: [...{path: string, exclude?: bool}]
 		files?: [...{path: string}]
@@ -76,5 +92,6 @@ _#ArgoGenerator: {
 
 _argocdGitGeneratorArgs: {
 	repo_url: {path: "git.repoURL", rewrite: _argocdPresent}
+	repo:     "git.repo"
 	revision: {path: "git.revision", default: ""}
 }
