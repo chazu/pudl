@@ -93,3 +93,27 @@ func TestRunFailsWhenTheEnumerationFails(t *testing.T) {
 		})
 	}
 }
+
+// InputRecords keeps each input's records apart, in input order: a
+// per-input observation scope ingests them as separate snapshots. A failed
+// input has none.
+func TestRunKeepsEachInputsRecords(t *testing.T) {
+	dir := writeFixtures(t, map[string]string{
+		"projects.json": `["p1", "p2", "p3"]`,
+		"p1.json":       `[{"name":"fw-a"}]`,
+		"p3.json":       `[{"name":"fw-c"},{"name":"fw-d"}]`,
+	})
+	p := systemmodel.Populate{
+		Each: &systemmodel.Enumeration{Argv: []string{"cat", "projects.json"}},
+		Runs: []systemmodel.CommandRun{{Argv: []string{"cat", "{{item}}.json"}}},
+	}
+	res, err := Run(context.Background(), p, Request{ModelDir: dir})
+	require.NoError(t, err)
+	require.Len(t, res.InputRecords, 3)
+	assert.Len(t, res.InputRecords[0], 1)
+	assert.Empty(t, res.InputRecords[1], "the failed input has no records")
+	assert.Len(t, res.InputRecords[2], 2)
+	assert.Len(t, res.Records, 3)
+	require.Len(t, res.Failed, 1)
+	assert.Equal(t, "p2", res.Failed[0].Item)
+}

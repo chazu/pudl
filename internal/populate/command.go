@@ -63,6 +63,9 @@ type Result struct {
 	Empty []EmptyInput
 	// Inputs are the enumerated inputs, in order; nil without `each`.
 	Inputs []string
+	// InputRecords are the records of each input's runs that succeeded,
+	// parallel to Inputs; nil without `each`. Records holds them all.
+	InputRecords [][]any
 	// Fallback is set when the populate's fallback was used: the Result is
 	// the fallback's, and this says why.
 	Fallback *FallbackUse
@@ -170,6 +173,7 @@ func (x *executor) observe(p systemmodel.Populate, dir string, when []*regexp.Re
 			return Result{}, &FallbackUse{Reason: FallbackNoInputs}, nil
 		}
 		res.Inputs = items
+		res.InputRecords = make([][]any, len(items))
 		runs = expandRuns(p.Runs, items)
 	}
 	res.Runs = len(runs)
@@ -205,6 +209,9 @@ func (x *executor) observe(p systemmodel.Populate, dir string, when []*regexp.Re
 			continue
 		}
 		res.Records = append(res.Records, got...)
+		if items != nil {
+			res.InputRecords[i/len(p.Runs)] = append(res.InputRecords[i/len(p.Runs)], got...)
+		}
 	}
 	return res, nil, nil
 }

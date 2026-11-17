@@ -175,6 +175,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		if err := decodeHTTP(inst, &m.Populate); err != nil {
 			return nil, fmt.Errorf("model %q: %w", m.Name, err)
 		}
+		if err := m.validateObservation(); err != nil {
+			return nil, fmt.Errorf("model %q: %w", m.Name, err)
+		}
 		return &m, nil
 	}
 	if err := decodeTransforms(inst, &m); err != nil {
@@ -190,6 +193,9 @@ func DecodeValue(inst cue.Value) (*SystemModel, error) {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	if err := m.Populate.validateFallback(); err != nil {
+		return nil, fmt.Errorf("model %q: %w", m.Name, err)
+	}
+	if err := m.validateObservation(); err != nil {
 		return nil, fmt.Errorf("model %q: %w", m.Name, err)
 	}
 	return &m, nil
@@ -251,9 +257,3 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 	return out, nil
 }
 
-// Observation declares the population a successful collection covers.
-type Observation struct {
-	Scope    string   `json:"scope,omitempty"`
-	Complete bool     `json:"complete,omitempty"`
-	Schemas  []string `json:"schemas,omitempty"`
-}
