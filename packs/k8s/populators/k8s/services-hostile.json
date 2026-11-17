@@ -1,0 +1,116 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "hostile-service",
+        "namespace": "hostile",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000008",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-service"
+        },
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\": \"v1\", \"kind\": \"Service\", \"metadata\": {\"annotations\": {\"example.com/api-token\": \"FAKE-K8S-LAST-APPLIED-SERVICE\"}}}",
+          "example.com/api-token": "FAKE-K8S-SERVICE-TOKEN",
+          "example.com/upstream": "redis://:FAKE-K8S-SERVICE-USERINFO@cache.hostile.svc:6379/0",
+          "example.com/owner": "platform"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  "FAKE-K8S-MANAGED-FIELDS-SERVICE": {}
+                }
+              }
+            }
+          }
+        ]
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.20.1",
+        "clusterIPs": [
+          "10.8.20.1"
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "targetPort": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "hostile-service"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "hostile-service-system",
+        "namespace": "kube-system",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000009",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-service-system"
+        },
+        "annotations": {
+          "example.com/owner": "FAKE-K8S-SYSTEM-SERVICE"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.20.2",
+        "clusterIPs": [
+          "10.8.20.2"
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "targetPort": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "hostile-service-system"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    }
+  ]
+}

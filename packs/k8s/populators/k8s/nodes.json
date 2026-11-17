@@ -1,0 +1,181 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "metadata": {
+        "name": "gke-prod-private-default-pool-1a2b3c4d-0001",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000028",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/hostname": "gke-prod-private-default-pool-1a2b3c4d-0001",
+          "topology.kubernetes.io/zone": "us-central1-a",
+          "cloud.google.com/gke-nodepool": "default-pool",
+          "node.kubernetes.io/instance-type": "e2-standard-4"
+        },
+        "annotations": {
+          "container.googleapis.com/instance_id": "1000000000000000001",
+          "node.alpha.kubernetes.io/ttl": "0"
+        }
+      },
+      "spec": {
+        "podCIDR": "10.4.0.0/24",
+        "podCIDRs": [
+          "10.4.0.0/24"
+        ],
+        "providerID": "gce://example-project/us-central1-a/gke-prod-private-default-pool-1a2b3c4d-0001"
+      },
+      "status": {
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "10.128.0.11"
+          },
+          {
+            "type": "Hostname",
+            "address": "gke-prod-private-default-pool-1a2b3c4d-0001"
+          }
+        ],
+        "allocatable": {
+          "cpu": "3920m",
+          "memory": "13219500Ki",
+          "pods": "110",
+          "ephemeral-storage": "47060071478"
+        },
+        "capacity": {
+          "cpu": "4",
+          "memory": "16374956Ki",
+          "pods": "110",
+          "ephemeral-storage": "98831908Ki"
+        },
+        "conditions": [
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady",
+            "message": "kubelet is posting ready status",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          }
+        ],
+        "daemonEndpoints": {
+          "kubeletEndpoint": {
+            "Port": 10250
+          }
+        },
+        "images": [
+          {
+            "names": [
+              "registry.example.com/apps/checkout:2.4.1"
+            ],
+            "sizeBytes": 123456789
+          }
+        ],
+        "nodeInfo": {
+          "architecture": "amd64",
+          "containerRuntimeVersion": "containerd://1.7.22",
+          "kernelVersion": "6.1.100+",
+          "kubeProxyVersion": "v1.30.5-gke.1014001",
+          "kubeletVersion": "v1.30.5-gke.1014001",
+          "machineID": "00000000000000000000000000000000",
+          "systemUUID": "00000000-0000-0000-0000-000000000000",
+          "bootID": "00000000-0000-0000-0000-000000000000",
+          "operatingSystem": "linux",
+          "osImage": "Container-Optimized OS from Google"
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "metadata": {
+        "name": "gke-prod-private-default-pool-1a2b3c4d-0002",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000029",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/hostname": "gke-prod-private-default-pool-1a2b3c4d-0002",
+          "topology.kubernetes.io/zone": "us-central1-b",
+          "cloud.google.com/gke-nodepool": "default-pool",
+          "node.kubernetes.io/instance-type": "e2-standard-4"
+        },
+        "annotations": {
+          "container.googleapis.com/instance_id": "1000000000000000001",
+          "node.alpha.kubernetes.io/ttl": "0"
+        }
+      },
+      "spec": {
+        "podCIDR": "10.4.0.0/24",
+        "podCIDRs": [
+          "10.4.0.0/24"
+        ],
+        "providerID": "gce://example-project/us-central1-b/gke-prod-private-default-pool-1a2b3c4d-0002"
+      },
+      "status": {
+        "addresses": [
+          {
+            "type": "InternalIP",
+            "address": "10.128.0.12"
+          },
+          {
+            "type": "Hostname",
+            "address": "gke-prod-private-default-pool-1a2b3c4d-0002"
+          }
+        ],
+        "allocatable": {
+          "cpu": "3920m",
+          "memory": "13219500Ki",
+          "pods": "110",
+          "ephemeral-storage": "47060071478"
+        },
+        "capacity": {
+          "cpu": "4",
+          "memory": "16374956Ki",
+          "pods": "110",
+          "ephemeral-storage": "98831908Ki"
+        },
+        "conditions": [
+          {
+            "type": "Ready",
+            "status": "True",
+            "reason": "KubeletReady",
+            "message": "kubelet is posting ready status",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          }
+        ],
+        "daemonEndpoints": {
+          "kubeletEndpoint": {
+            "Port": 10250
+          }
+        },
+        "images": [
+          {
+            "names": [
+              "registry.example.com/apps/catalog:1.9.0"
+            ],
+            "sizeBytes": 123456789
+          }
+        ],
+        "nodeInfo": {
+          "architecture": "amd64",
+          "containerRuntimeVersion": "containerd://1.7.22",
+          "kernelVersion": "6.1.100+",
+          "kubeProxyVersion": "v1.30.5-gke.1014001",
+          "kubeletVersion": "v1.30.5-gke.1014001",
+          "machineID": "00000000000000000000000000000000",
+          "systemUUID": "00000000-0000-0000-0000-000000000000",
+          "bootID": "00000000-0000-0000-0000-000000000000",
+          "operatingSystem": "linux",
+          "osImage": "Container-Optimized OS from Google"
+        }
+      }
+    }
+  ]
+}

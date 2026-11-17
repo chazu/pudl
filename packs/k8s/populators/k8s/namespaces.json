@@ -1,0 +1,240 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "default",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000015",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "default"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "shop",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000016",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "shop"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "edge",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000017",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "edge"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "monitoring",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000018",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "monitoring"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "logging",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000019",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "logging"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "kube-system",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000020",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "kube-system"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "kube-public",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000021",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "kube-public"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "kube-node-lease",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000022",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "kube-node-lease"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "gke-managed-cim",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000023",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "gke-managed-cim"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "gmp-public",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000024",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "gmp-public"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "gmp-system",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000025",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "kubernetes.io/metadata.name": "gmp-system"
+        }
+      },
+      "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+      },
+      "status": {
+        "phase": "Active"
+      }
+    }
+  ]
+}

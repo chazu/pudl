@@ -1,0 +1,322 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "kubernetes",
+        "namespace": "default",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000001",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "kubernetes"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.0.1",
+        "clusterIPs": [
+          "10.8.0.1"
+        ],
+        "ports": [
+          {
+            "name": "https",
+            "port": 443,
+            "targetPort": 443,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "checkout",
+        "namespace": "shop",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000002",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "checkout"
+        },
+        "annotations": {
+          "cloud.google.com/neg": "{\"ingress\":true}"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.12.40",
+        "clusterIPs": [
+          "10.8.12.40"
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "targetPort": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "checkout"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "catalog",
+        "namespace": "shop",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000003",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "catalog"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.12.41",
+        "clusterIPs": [
+          "10.8.12.41"
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "targetPort": "http",
+            "protocol": "TCP"
+          },
+          {
+            "name": "grpc",
+            "port": 9090,
+            "targetPort": 9090,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "catalog"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "cart-redis",
+        "namespace": "shop",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000004",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "cart-redis"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "None",
+        "clusterIPs": [
+          "None"
+        ],
+        "ports": [
+          {
+            "name": "redis",
+            "port": 6379,
+            "targetPort": 6379,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "cart-redis"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "edge-proxy",
+        "namespace": "edge",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000005",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "edge-proxy"
+        }
+      },
+      "spec": {
+        "type": "LoadBalancer",
+        "clusterIP": "10.8.14.7",
+        "clusterIPs": [
+          "10.8.14.7"
+        ],
+        "ports": [
+          {
+            "name": "https",
+            "port": 443,
+            "targetPort": 8443,
+            "protocol": "TCP"
+          },
+          {
+            "name": "quic",
+            "port": 443,
+            "targetPort": 8443,
+            "protocol": "UDP",
+            "nodePort": 31443
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "edge-proxy"
+        }
+      },
+      "status": {
+        "loadBalancer": {
+          "ingress": [
+            {
+              "ip": "203.0.113.20",
+              "ipMode": "VIP"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "kube-dns",
+        "namespace": "kube-system",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000006",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "kube-dns"
+        }
+      },
+      "spec": {
+        "type": "ClusterIP",
+        "clusterIP": "10.8.0.10",
+        "clusterIPs": [
+          "10.8.0.10"
+        ],
+        "ports": [
+          {
+            "name": "dns",
+            "port": 53,
+            "targetPort": 53,
+            "protocol": "UDP"
+          },
+          {
+            "name": "dns-tcp",
+            "port": 53,
+            "targetPort": 53,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "kube-dns"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "default-http-backend",
+        "namespace": "gke-managed-cim",
+        "uid": "b2b2b2b2-0000-4000-8000-000000000007",
+        "resourceVersion": "100100",
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "default-http-backend"
+        }
+      },
+      "spec": {
+        "type": "NodePort",
+        "clusterIP": "10.8.3.3",
+        "clusterIPs": [
+          "10.8.3.3"
+        ],
+        "ports": [
+          {
+            "name": "http",
+            "port": 80,
+            "targetPort": 8080,
+            "protocol": "TCP"
+          }
+        ],
+        "sessionAffinity": "None",
+        "ipFamilies": [
+          "IPv4"
+        ],
+        "ipFamilyPolicy": "SingleStack",
+        "internalTrafficPolicy": "Cluster",
+        "selector": {
+          "app": "default-http-backend"
+        }
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    }
+  ]
+}

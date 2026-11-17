@@ -79,39 +79,61 @@ _k8sWorkloadTransform: {
 	out: [for item in in.items if !regexp.Match(_k8sSystemNamespace, item.metadata.namespace) {_k8sWorkload & {_in: item}}]
 }
 
-// _k8sWorkloadLive is a live collector of one workload kind.
-_k8sWorkloadLive: {
-	_resource: string
-	_schema:   string
+// _k8sLive is a live collector of one kind: _k8sGet on the current
+// context's cluster, each item through _transform, cluster set on every
+// record.
+_k8sLive: {
+	_resource:   string
+	_namespaced: *true | bool
+	_schema:     string
+	_transform:  _
 	let resource = _resource
+	let namespaced = _namespaced
+	let xf = _transform
 	populate: sm.#CommandObserve & {
 		schema: _schema
 		each:   _k8sClusterEach
 		runs: [{
-			argv: (_k8sGet & {_resource: resource}).argv
+			argv: (_k8sGet & {_resource: resource, _namespaced: namespaced}).argv
 			set: cluster: "{{item}}"
-			transform: _k8sWorkloadTransform
+			transform: xf
 		}]
 	}
+}
+
+// _k8sWorkloadLive is a live collector of one workload kind.
+_k8sWorkloadLive: {
+	_resource: string
+	_schema:   string
+	_k8sLive & {_transform: _k8sWorkloadTransform}
 }
 
 // The fixture cluster's host, as populators/k8s/cluster.json gives it: the
 // public endpoint of the GCP fixture GKE cluster prod-private.
 _k8sFixtureHost: "198.51.100.30"
 
-// _k8sWorkloadFixture reads a saved kubectl List of one kind, and the
-// hostile List that plants values the shape and redaction must drop.
-_k8sWorkloadFixture: {
-	_file:   string
-	_schema: string
+// _k8sFixture reads a saved kubectl List of one kind, and the hostile List
+// that plants values the shape and redaction must drop.
+_k8sFixture: {
+	_file:      string
+	_schema:    string
+	_transform: _
+	let xf = _transform
 	populate: sm.#CommandObserve & {
 		schema: _schema
 		runs: [for f in [_file, "\(_file)-hostile"] {
 			argv: ["cat", "../../populators/k8s/\(f).json"]
 			set: cluster: _k8sFixtureHost
-			transform: _k8sWorkloadTransform
+			transform: xf
 		}]
 	}
+}
+
+// _k8sWorkloadFixture is the fixture collector of one workload kind.
+_k8sWorkloadFixture: {
+	_file:   string
+	_schema: string
+	_k8sFixture & {_transform: _k8sWorkloadTransform}
 }
 
 #K8sDeployments: sm.#SystemModel & {

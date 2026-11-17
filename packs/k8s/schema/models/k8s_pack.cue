@@ -36,12 +36,15 @@ _k8sClusterEach: {argv: _k8sClusterHelper, select: "host"}
 _k8sListTransform: {in: _, out: in.items}
 
 // _k8sGet is a run that lists one resource type across all namespaces and
-// unwraps the List. kubectl prints apiVersion and kind on every item.
+// unwraps the List. kubectl prints apiVersion and kind on every item. For a
+// cluster-scoped type (namespaces, nodes), set _namespaced: false to leave
+// out -A.
 //
 //	runs: [_k8sGet & {_resource: "deployments.apps"}]
 _k8sGet: {
-	_resource: string & !=""
-	argv: ["kubectl", "get", _resource, "-A", "-o", "json"]
+	_resource:   string & !=""
+	_namespaced: *true | bool
+	argv: ["kubectl", "get", _resource, if _namespaced {"-A"}, "-o", "json"]
 	transform: _k8sListTransform
 }
 
