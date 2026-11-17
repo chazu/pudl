@@ -62,6 +62,12 @@ func TestK8sPackFixtureObjects(t *testing.T) {
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
 	r = runCLI(t, append(append([]string{"check", "k8s-fixture-cluster"}, k8sObjectFixtures...), "--json")...)
 	require.NoError(t, r.Err, r.Stdout+r.Stderr)
+	// The fixture Nodes carry GKE's node-problem-detector conditions and a
+	// condition whose type and reason the entropy heuristic flags; the
+	// #Node schema's secret_scan_ignore keeps them out of the warnings.
+	for _, out := range []string{r.Stdout, r.Stderr} {
+		require.NotContains(t, out, "status.conditions[*]", "condition types and reasons are not secrets")
+	}
 
 	h := k8sFixtureHost
 	require.Equal(t, map[string]string{
@@ -103,6 +109,7 @@ func TestK8sPackFixtureObjects(t *testing.T) {
 	status := node["status"].(map[string]any)
 	require.ElementsMatch(t, []string{"addresses", "nodeInfo", "conditions", "capacity", "allocatable"}, mapKeys(status),
 		"images and daemonEndpoints are dropped")
+	require.Len(t, status["conditions"], 13, "every condition is kept as is")
 	checkout := byName(storedRecords(t, "k8s.#Service"))["checkout"]
 	require.Equal(t, `{"ingress":true}`, checkout["metadata"].(map[string]any)["annotations"].(map[string]any)["cloud.google.com/neg"])
 }
