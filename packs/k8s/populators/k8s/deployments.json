@@ -1,0 +1,342 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "checkout",
+        "namespace": "shop",
+        "uid": "3f2b9c1e-7a4d-4c2e-9b1a-0d5e6f7a8b9c",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "checkout",
+          "team": "payments",
+          "argocd.argoproj.io/instance": "shop-checkout"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "7"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "checkout"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "checkout"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "checkout",
+                "image": "us-docker.pkg.dev/example-project/apps/checkout:1.4.2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "LOG_LEVEL",
+                    "value": "info"
+                  },
+                  {
+                    "name": "PAYMENT_API_TOKEN",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "name": "checkout-secrets",
+                        "key": "payment-api-token"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "proxy",
+                "image": "gcr.io/example-project/api:3f2a9c1@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "initContainers": [
+              {
+                "name": "migrate",
+                "image": "us-docker.pkg.dev/example-project/apps/checkout-migrate@sha256:3333333333333333333333333333333333333333333333333333333333333333",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "command": [
+                  "/app/migrate"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "replicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "catalog",
+        "namespace": "shop",
+        "uid": "8c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "catalog",
+          "team": "payments",
+          "app.kubernetes.io/instance": "shop-catalog"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "7",
+          "argocd.argoproj.io/tracking-id": "shop-catalog:apps/Deployment:shop/catalog"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 3,
+        "selector": {
+          "matchLabels": {
+            "app": "catalog"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "catalog"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "catalog",
+                "image": "us-docker.pkg.dev/example-project/apps/catalog:1.4.2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": []
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        }
+      },
+      "status": {
+        "replicas": 3,
+        "readyReplicas": 3,
+        "availableReplicas": 3,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "edge-proxy",
+        "namespace": "edge",
+        "uid": "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "edge-proxy",
+          "argocd.argoproj.io/instance": "edge-proxy"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "7"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "edge-proxy"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "edge-proxy"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "proxy",
+                "image": "us-docker.pkg.dev/example-project/apps/edge-proxy:2.0.1",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        }
+      },
+      "status": {
+        "replicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "kube-dns",
+        "namespace": "kube-system",
+        "uid": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "kube-dns"
+        },
+        "annotations": {
+          "deployment.kubernetes.io/revision": "7"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 2,
+        "selector": {
+          "matchLabels": {
+            "app": "kube-dns"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "kube-dns"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "kubedns",
+                "image": "gke.gcr.io/k8s-dns-kube-dns:1.23.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        }
+      },
+      "status": {
+        "replicas": 2,
+        "readyReplicas": 2,
+        "availableReplicas": 2,
+        "observedGeneration": 3
+      }
+    }
+  ]
+}

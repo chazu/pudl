@@ -1,0 +1,273 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "name": "cart-redis",
+        "namespace": "shop",
+        "uid": "6a7b8c9d-0e1f-4a2b-9c3d-4e5f6a7b8c9d",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "cart-redis"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 3,
+        "serviceName": "cart-redis",
+        "selector": {
+          "matchLabels": {
+            "app": "cart-redis"
+          }
+        },
+        "podManagementPolicy": "OrderedReady",
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "cart-redis"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "redis",
+                "image": "docker.io/library/redis:7.2",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "REDIS_PORT",
+                    "value": "6379"
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        },
+        "volumeClaimTemplates": [
+          {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "data"
+            },
+            "spec": {
+              "accessModes": [
+                "ReadWriteOnce"
+              ],
+              "resources": {
+                "requests": {
+                  "storage": "10Gi"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "status": {
+        "replicas": 3,
+        "readyReplicas": 3,
+        "currentReplicas": 3,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "name": "metrics-store",
+        "namespace": "monitoring",
+        "uid": "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "metrics-store"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "serviceName": "metrics-store",
+        "selector": {
+          "matchLabels": {
+            "app": "metrics-store"
+          }
+        },
+        "podManagementPolicy": "OrderedReady",
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "metrics-store"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "store",
+                "image": "quay.io/example/metrics-store:0.9.1",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        },
+        "volumeClaimTemplates": [
+          {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "data"
+            },
+            "spec": {
+              "accessModes": [
+                "ReadWriteOnce"
+              ],
+              "resources": {
+                "requests": {
+                  "storage": "10Gi"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "currentReplicas": 1,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "name": "alertmanager",
+        "namespace": "gmp-system",
+        "uid": "9d0e1f2a-3b4c-4d5e-8f6a-7b8c9d0e1f2a",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "alertmanager"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "serviceName": "alertmanager",
+        "selector": {
+          "matchLabels": {
+            "app": "alertmanager"
+          }
+        },
+        "podManagementPolicy": "OrderedReady",
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "alertmanager"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "alertmanager",
+                "image": "gke.gcr.io/prometheus-engine/alertmanager:v0.27.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                }
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        },
+        "volumeClaimTemplates": [
+          {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "data"
+            },
+            "spec": {
+              "accessModes": [
+                "ReadWriteOnce"
+              ],
+              "resources": {
+                "requests": {
+                  "storage": "10Gi"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "currentReplicas": 1,
+        "observedGeneration": 3
+      }
+    }
+  ]
+}
