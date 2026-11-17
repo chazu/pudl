@@ -20,6 +20,9 @@ type ObserveSnapshot struct {
 	Scope    string   `json:"scope,omitempty"`
 	Complete bool     `json:"complete"`
 	Schemas  []string `json:"schemas,omitempty"`
+	// Input is the enumerated input a per-input observation covers; empty
+	// for an observation of a fixed scope.
+	Input string `json:"input,omitempty"`
 	// SnapshotID is both this row's key and the id of the catalog collection
 	// entry holding the observed records. One identifier, allocated by the run
 	// before it observes, so a failed ingest can still be named.
@@ -98,7 +101,7 @@ func (c *CatalogDB) ensureObserveSnapshotsTable() error {
 }
 
 const observeSnapshotColumns = `snapshot_id, run_id, model, workspace, origin, source,
-	targets, record_count, created_at, retained, scope, complete, schemas`
+	targets, record_count, created_at, retained, scope, complete, schemas, input`
 
 // RecordObserveSnapshot writes the snapshot contract row.
 func (c *CatalogDB) RecordObserveSnapshot(snapshot ObserveSnapshot) error {
@@ -123,10 +126,10 @@ func recordObserveSnapshotIn(q dbtx, snapshot ObserveSnapshot) error {
 	}
 	_, err = q.Exec(
 		`INSERT INTO observe_snapshots (`+observeSnapshotColumns+`)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		snapshot.SnapshotID, snapshot.RunID, snapshot.Model, snapshot.Workspace,
 		snapshot.Origin, snapshot.Source, string(targets), snapshot.RecordCount,
-		formatCatalogTime(createdAt), boolToInt(snapshot.Retained), snapshot.Scope, boolToInt(snapshot.Complete), snapshotSchemasJSON(snapshot.Schemas),
+		formatCatalogTime(createdAt), boolToInt(snapshot.Retained), snapshot.Scope, boolToInt(snapshot.Complete), snapshotSchemasJSON(snapshot.Schemas), snapshot.Input,
 	)
 	if err != nil {
 		return fmt.Errorf("record observe snapshot %q: %w", snapshot.SnapshotID, err)
@@ -198,6 +201,9 @@ func (c *CatalogDB) snapshotSelectColumns(alias string) string {
 		columns = strings.Replace(columns, alias+".complete", "0", 1)
 		columns = strings.Replace(columns, alias+".schemas", "'[]'", 1)
 	}
+	if exists, _ := c.columnExists("observe_snapshots", "input"); !exists {
+		columns = strings.Replace(columns, alias+".input", "''", 1)
+	}
 	if !c.hasSnapshotPins() {
 		return columns
 	}
@@ -252,7 +258,7 @@ func scanObserveSnapshot(row rowScanner) (ObserveSnapshot, error) {
 	err := row.Scan(
 		&snapshot.SnapshotID, &snapshot.RunID, &snapshot.Model, &snapshot.Workspace,
 		&snapshot.Origin, &snapshot.Source, &targets, &snapshot.RecordCount,
-		&snapshot.CreatedAt, &retained, &snapshot.Scope, &complete, &schemas,
+		&snapshot.CreatedAt, &retained, &snapshot.Scope, &complete, &schemas, &snapshot.Input,
 	)
 	if err != nil {
 		return ObserveSnapshot{}, err
