@@ -14,6 +14,12 @@ func (p *Populate) writeMarkdown(b *strings.Builder) {
 	if p.SnapshotID != "" {
 		fmt.Fprintf(b, "- snapshot_id: %s\n", p.SnapshotID)
 	}
+	if len(p.Observations) > 0 {
+		fmt.Fprintf(b, "- observations (%d, one per input):\n", len(p.Observations))
+		for _, o := range p.Observations {
+			fmt.Fprintf(b, "  - %s: scope %s, snapshot %s, %d records, complete: %t\n", o.Input, o.Scope, o.SnapshotID, o.Records, o.Complete)
+		}
+	}
 	if p.Fallback != nil {
 		fmt.Fprintf(b, "- source: fallback (%s)\n", p.Fallback.Summary())
 		if p.Fallback.Partial {

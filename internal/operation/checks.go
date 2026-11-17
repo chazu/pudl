@@ -17,8 +17,8 @@ import (
 // checkContext is what a run knows that scopes its checks: the run's own ID,
 // and whether it observed anything under that ID.
 type checkContext struct {
-	currentSnapshot string
-	runID           string
+	currentSnapshots []string
+	runID            string
 	// fromCatalog marks a replay. A replay observes nothing, so no catalog row
 	// carries its run ID; binding the constraint would make every `expect: empty`
 	// check pass trivially.
@@ -44,7 +44,7 @@ func runChecks(evalCtx context.Context, cat *runCatalog, ws Workspace, out Outpu
 	if err != nil {
 		return nil, err
 	}
-	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: ws.ModelRulePaths(modelDir), Load: importer.DecodeEntry, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshot: ctx.currentSnapshot, FromCatalog: ctx.fromCatalog, OnProgress: func(event checks.Progress) { out.progress(event.Phase, event.Check, event.State) }})
+	evaluated, err := checks.Evaluate(evalCtx, checks.Request{Catalog: db, Registry: reg, RulePaths: ws.ModelRulePaths(modelDir), Load: importer.DecodeEntry, Checks: m.Checks, RunID: ctx.runID, CurrentSnapshots: ctx.currentSnapshots, FromCatalog: ctx.fromCatalog, OnProgress: func(event checks.Progress) { out.progress(event.Phase, event.Check, event.State) }})
 	if err != nil {
 		return nil, err
 	}

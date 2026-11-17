@@ -256,4 +256,3 @@ func decodeDesired(inst cue.Value) ([]map[string]any, error) {
 	}
 	return out, nil
 }
-

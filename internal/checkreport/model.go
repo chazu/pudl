@@ -7,6 +7,7 @@ package checkreport
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/chazu/pudl/internal/acute"
@@ -71,6 +72,49 @@ type Populate struct {
 	// populate's own runs; Inputs, Runs and the input lists are then the
 	// fallback's.
 	Fallback *populate.FallbackUse `json:"fallback,omitempty"`
+	// Observations are the per-input observations of a populate whose scope
+	// is per input, one snapshot each, in input order. SnapshotID is then
+	// empty: no single snapshot holds the populate.
+	Observations []InputObservation `json:"observations,omitempty"`
+}
+
+// InputObservation is one input's observation of a per-input populate.
+type InputObservation struct {
+	Input      string `json:"input"`
+	Scope      string `json:"scope"`
+	SnapshotID string `json:"snapshot_id"`
+	Records    int    `json:"records"`
+	Complete   bool   `json:"complete"`
+}
+
+// recorded reports whether the populate recorded snapshot id.
+func (p *Populate) recorded(id string) bool {
+	if p == nil {
+		return false
+	}
+	if len(p.Observations) == 0 {
+		return id == p.SnapshotID
+	}
+	return slices.Contains(p.SnapshotIDs(), id)
+}
+
+// SnapshotIDs are the snapshots the populate recorded: its snapshot, or
+// every input's.
+func (p *Populate) SnapshotIDs() []string {
+	if p == nil {
+		return nil
+	}
+	if len(p.Observations) == 0 {
+		if p.SnapshotID == "" {
+			return nil
+		}
+		return []string{p.SnapshotID}
+	}
+	ids := make([]string, len(p.Observations))
+	for i, o := range p.Observations {
+		ids[i] = o.SnapshotID
+	}
+	return ids
 }
 
 // CheckResult is the outcome of one model check (a Datalog relation evaluated

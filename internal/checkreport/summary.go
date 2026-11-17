@@ -65,7 +65,7 @@ func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 			s.Verification = "recorded"
 		}
 		for _, e := range c.Evidence {
-			if r.Populate == nil || e.SnapshotID != r.Populate.SnapshotID {
+			if !r.Populate.recorded(e.SnapshotID) {
 				allLiveChecks = false
 			}
 			add(e)
@@ -84,10 +84,7 @@ func Summarize(r *ModelReport, db *database.CatalogDB) *acute.VerdictSummary {
 		s.Checks = "unknown"
 		s.Verification = "not-verified"
 	}
-	var snapshotIDs []string
-	if r.Populate != nil {
-		snapshotIDs = append(snapshotIDs, r.Populate.SnapshotID)
-	}
+	snapshotIDs := r.Populate.SnapshotIDs()
 	if r.Drift != nil {
 		snapshotIDs = append(snapshotIDs, r.Drift.SnapshotID)
 	}

@@ -28,14 +28,16 @@ type Progress struct {
 	State string `json:"state"`
 }
 type Request struct {
-	Catalog                *database.CatalogDB
-	Registry               *projection.Registry
-	RulePaths              []string
-	Load                   projection.LoadFunc
-	Checks                 []systemmodel.Check
-	RunID, CurrentSnapshot string
-	FromCatalog            bool
-	OnProgress             func(Progress)
+	Catalog   *database.CatalogDB
+	Registry  *projection.Registry
+	RulePaths []string
+	Load      projection.LoadFunc
+	Checks    []systemmodel.Check
+	RunID     string
+	// CurrentSnapshots are what the `current` evidence selector names.
+	CurrentSnapshots []string
+	FromCatalog      bool
+	OnProgress       func(Progress)
 }
 type Result struct {
 	Name, Query, Expect, Severity, Message, Scope, Outcome string
@@ -87,7 +89,7 @@ func Evaluate(evalCtx context.Context, req Request) ([]Result, error) {
 			constraints = nil // snapshot membership scopes catalog joins as well
 			maxAge, err := parseEvidenceAge(c.MaxAge)
 			if err == nil {
-				view, err = evidence.Open(evalCtx, db, reg, evidence.Request{Selectors: c.Evidence, Current: req.CurrentSnapshot, MaxAge: maxAge})
+				view, err = evidence.Open(evalCtx, db, reg, evidence.Request{Selectors: c.Evidence, Current: req.CurrentSnapshots, MaxAge: maxAge})
 			}
 			if err != nil {
 				result.Diagnostics = []projection.Diagnostic{{Code: "evidence_unavailable", Message: err.Error()}}

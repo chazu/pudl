@@ -91,7 +91,7 @@ func PrepareObservation(in ObserveIngest) (_ *PreparedObservation, resultErr err
 	}
 	now := time.Now()
 	p.rawDir = filepath.Join(in.DataDir, "raw", now.Format("2006/01/02"))
-	p.snapshot = database.ObserveSnapshot{Scope: in.Scope, Complete: in.Complete, Schemas: append([]string(nil), in.Schemas...), SnapshotID: in.SnapshotID, RunID: in.RunID, Model: in.Model, Workspace: in.Workspace, Origin: in.Origin, Source: in.Source, CreatedAt: now}
+	p.snapshot = database.ObserveSnapshot{Scope: in.Scope, Complete: in.Complete, Schemas: append([]string(nil), in.Schemas...), Input: in.Input, SnapshotID: in.SnapshotID, RunID: in.RunID, Model: in.Model, Workspace: in.Workspace, Origin: in.Origin, Source: in.Source, CreatedAt: now}
 	if in.ManualSchema != "" {
 		p.snapshot.Schemas = append(p.snapshot.Schemas, in.ManualSchema)
 	}

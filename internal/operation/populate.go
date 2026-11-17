@@ -54,6 +54,15 @@ func (r *modelRun) runPopulate() (*checkreport.Populate, error) {
 			summary.SchemaPolicy = "permissive"
 		}
 	}
+	if m.Observation.PerInput() {
+		return summary, r.ingestPerInput(summary, res, populateIngest{
+			ctx:                 r.ctx,
+			model:               m.Name,
+			source:              database.SnapshotSourceCommand,
+			manualSchema:        p.Schema,
+			allowSchemaFallback: p.AllowSchemaFallback,
+		})
+	}
 	observation := m.Observation
 	if observation != nil && res.Fallback != nil && res.Fallback.Partial {
 		// A partial fallback cannot see every resource of the scope, so its
@@ -153,7 +162,7 @@ func (r *modelRun) ingest(observeJSON []byte, in populateIngest) (int, string, e
 		observation = *in.observation
 	}
 	result, err := observe.IngestObserve(db, observe.ObserveIngest{
-		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas,
+		Scope: observation.Scope, Complete: observation.Complete, Schemas: observation.Schemas, Input: in.input,
 		Reader:              bytes.NewReader(observeJSON),
 		Context:             in.ctx,
 		DataDir:             r.ws.DataDir(),
@@ -176,9 +185,11 @@ func (r *modelRun) ingest(observeJSON []byte, in populateIngest) (int, string, e
 		fmt.Fprintf(r.out.Err, "%s\n", note)
 	}
 	if in.summary != nil {
-		in.summary.SchemaMismatches = result.SchemaMismatches
-		in.summary.NewRecords = result.NewRecords
-		in.summary.SecretWarnings, in.summary.SecretWarningsTotal = result.SecretWarnings, result.SecretWarningsTotal
+		// Added, not set: a per-input populate ingests once per input.
+		in.summary.SchemaMismatches += result.SchemaMismatches
+		in.summary.NewRecords += result.NewRecords
+		in.summary.SecretWarnings = append(in.summary.SecretWarnings, result.SecretWarnings...)
+		in.summary.SecretWarningsTotal += result.SecretWarningsTotal
 	}
 	return result.Records, result.SnapshotID, err
 }
@@ -194,4 +205,6 @@ type populateIngest struct {
 	source              string
 	// manualSchema routes every record like `import --schema` (command arm).
 	manualSchema string
+	// input is the enumerated input of a per-input observation.
+	input string
 }
