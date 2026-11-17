@@ -13,8 +13,8 @@ destinations and managed Deployments link to GKE clusters and to
 ```bash
 pudl init
 pudl pack install k8s argocd gcp
-pudl check argocd-fixture-applications argocd-fixture-applicationsets   # fixtures; no cluster access
-pudl check argocd-applications argocd-applicationsets                   # the cluster of kubectl's current context
+pudl check argocd-fixture-applications argocd-fixture-applicationsets argocd-fixture-repositories   # fixtures; no cluster access
+pudl check argocd-applications argocd-applicationsets argocd-repositories                           # the cluster of kubectl's current context
 ```
 
 Installed files, under `.pudl/`:
@@ -23,9 +23,11 @@ Installed files, under `.pudl/`:
 | --- | --- |
 | `schema/argocd/application.cue` | `argocd.#Application` (draft) |
 | `schema/argocd/applicationset.cue` | `argocd.#ApplicationSet` (draft) |
+| `schema/argocd/repository.cue` | `argocd.#Repository` (draft) |
 | `schema/argocd/redaction.cue` | The Helm redaction paths and `_argocdImageParameters` |
 | `schema/models/argocd_pack.cue` | The collectors |
 | `schema/models/argocd_shape.cue` | The allow-list transforms |
+| `schema/models/argocd_repository.cue` | The repository URL normalization and the repository records |
 | `schema/models/argocd_settings.cue` | `_argocdNamespaces` |
 | `schema/pudl/rules/argocd_pack.cue` | Target host, cluster and workload joins, inspector rows |
 | `schema/pudl/rules/argocd_graph.cue` | Edges and edge types |
@@ -40,6 +42,11 @@ the Kubernetes pack's read-only cluster helper. They run no other command.
 Every record's `cluster` is the current context's API server host, which
 is the Kubernetes pack's cluster record. As in the Kubernetes pack, the
 collectors declare `complete: false`: a context switch marks nothing gone.
+
+`argocd-repositories` reads the same two lists and writes one
+`argocd.#Repository` record per repository their sources and git
+generators name. A repository record has no `cluster`: one repository is
+one record whatever cluster names it.
 
 ## Settings
 
@@ -88,6 +95,26 @@ facts keep a usable URL:
 A URL without userinfo is kept as it is. Status keeps no `repoURL`: the
 history entries' and the operation's sources are dropped.
 
+Next to each `repoURL`, `repo` is the repository it names, normalized: no
+userinfo; the `ssh`, `git`, `git+ssh` schemes and the scp form become
+`https` without a port; the host is lower-cased and loses a default port;
+the path keeps its case and loses the query, fragment, trailing slash and
+`.git`. `git@git.example.com:org/repo.git`,
+`ssh://git@Git.Example.com/org/repo.git` and
+`https://git.example.com/org/repo/` are all
+`https://git.example.com/org/repo`. A `repoURL` that holds a template
+(`{{.repoURL}}`) has no `repo`.
+
+## Repositories
+
+`argocd.#Repository` is one repository: `url` (the normalized URL, its
+identity), `name` (the URL without its scheme, drawn on the node) and
+`type`: `helm` for a source that names a chart, `oci` for an `oci://` URL
+without a chart, `git` otherwise and for every git generator. A git
+repository also has `gitURL`, its `git.repo` key (a built-in identity
+kind): another pack's record of the same git repository, keyed by the same
+normalized URL, is the same graph node.
+
 The annotations kept, on an Application, an ApplicationSet and an
 ApplicationSet template, lose userinfo the same way: every value that is a
 URL with a scheme, such as Image Updater's
@@ -114,7 +141,7 @@ the pack's tests find none of them stored.
 | Relation | Arguments |
 | --- | --- |
 | `argocd_app` | `cluster`, `namespace`, `name`, `project`, `sync_status`, `health_status`, `sync_revision`, `reconciled_at`, `automated`, `self_heal`, `prune` |
-| `argocd_app_source` | One per source: `index`, `repo_url`, `path`, `chart`, `target_revision`, `ref`, `sync_revision` |
+| `argocd_app_source` | One per source: `index`, `repo_url`, `repo`, `path`, `chart`, `target_revision`, `ref`, `sync_revision` |
 | `argocd_app_destination` | `server`, `name`, `namespace` (`""` when unset) |
 | `argocd_app_destination_host` | `host`: the server URL's host, unless the server is the in-cluster one |
 | `argocd_app_resource` | One per managed resource: `group`, `version`, `kind`, `namespace`, `name`, `status`, `health` |
@@ -125,7 +152,9 @@ the pack's tests find none of them stored.
 | `argocd_app_image_updater` | `image_list`, `write_back_method` (default `argocd`), `write_back_target` |
 | `argocd_app_owner` | One per owner reference: `kind`, `name`, `uid` |
 | `argocd_appset` | `cluster`, `namespace`, `name`, `uid`, `generator_types` (e.g. `matrix(clusters,list)`) |
-| `argocd_appset_git_generator`, `argocd_appset_child_git_generator` | `repo_url`, `revision`: git generators at the top level and inside a matrix or merge |
+| `argocd_appset_source` | One per template source: `index`, `repo_url`, `repo`, `path`, `chart`, `target_revision`, `ref` |
+| `argocd_appset_git_generator`, `argocd_appset_child_git_generator` | `repo_url`, `repo`, `revision`: git generators at the top level and inside a matrix or merge |
+| `argocd_repo` | `url`, `name`, `type`: one per repository record |
 
 Rules (`pudl query <relation>`):
 
@@ -150,10 +179,14 @@ annotation names an Application outside Argo CD's own namespace as
 | `generated_by` | Application | The ApplicationSet whose UID its owner reference names |
 | `deploys_to` | Application | The cluster its destination names, by server URL or in-cluster |
 | `deployed_by` | `gcp.#K8sDeployment` | The Application that manages it |
-| `sourced_from` | Application | A repository path: declared, not derived yet (pudl has no repository node) |
+| `sourced_from` | Application, ApplicationSet | Each repository its sources name, and for an ApplicationSet its template sources and git generators (also inside a matrix or merge). Properties: `path`, `chart`, `target_revision`, and a git generator's `revision` |
 
-Display codes: `APP` (Argo CD application) and `APSET` (Argo CD
-application set). pudl ui allows codes of 5 characters or fewer. The
+`sourced_from` joins a source's `repo` with the `url` of a repository
+record. A repository no record backs has no edge and no node: run
+`argocd-repositories` (or its fixture twin) to draw them.
+
+Display codes: `APP` (Argo CD application), `APSET` (Argo CD
+application set) and `REPO` (repository). pudl ui allows codes of 5 characters or fewer. The
 inspector's "Argo CD" section is on each Application and on each workload
 it deploys. It shows the application, sync status, health, last deploy and
 Image Updater write-back method. It also shows the repo, path, chart,
@@ -170,9 +203,11 @@ its server URL, as a central Argo CD does. The fixture Applications are:
 - `shop-checkout`: multi-source, `ref: values` plus a chart
 - `shop-catalog`: generated by the ApplicationSet `shop`
 - `edge-proxy`: kustomize with Image Updater annotations and a written-back
-  image, with a named destination
+  image, with a named destination, and the manifests repository in the scp
+  form
 - `sandbox-demo`: in a namespace the default `_argocdNamespaces` drops
 
 The ApplicationSets are `shop` (git directories), `platform` (matrix of
-clusters and list) and `regional` (merge of git files and clusters). The
+clusters and list) and `regional` (merge of git files and clusters, with
+its template's repository in the ssh form). The
 `*-hostile.json` Lists plant fake secrets. All values are placeholders.

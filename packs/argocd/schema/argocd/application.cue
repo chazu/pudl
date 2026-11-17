@@ -44,6 +44,9 @@ package argocd
 				args: {
 					index:           "index"
 					repo_url:        "repoURL"
+					// The repository's normalized URL: the url of its
+					// argocd.#Repository record (sourced_from).
+					repo:            "repo"
 					path:            "path"
 					chart:           "chart"
 					target_revision: "targetRevision"
@@ -128,10 +131,13 @@ _#ArgoSpec: {
 }
 
 // _#ArgoSource is one element of the sources list. index is its position;
-// syncRevision is the revision Argo CD last synced it to.
+// repo is the normalized repoURL, the url of the source's argocd.#Repository
+// record, absent when repoURL holds a template; syncRevision is the
+// revision Argo CD last synced it to.
 _#ArgoSource: {
 	index:           int
 	repoURL?:        string
+	repo?:           string
 	path?:           string
 	chart?:          string
 	targetRevision?: string

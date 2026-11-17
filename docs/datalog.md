@@ -285,8 +285,9 @@ A relation with no facts matches nothing, so such a rule is harmless until
 both packs are installed. Prefer a key in `_pudl.same_resource` when one
 exists: Kubernetes objects key on `metadata.uid`.
 
-Kinds are `same_resource_kind` facts. pudl ships `k8s.cluster` and
-`k8s.object`; a pack declares its own the same way:
+Kinds are `same_resource_kind` facts. pudl ships `k8s.cluster`,
+`k8s.object` and `git.repo` (a git repository by its normalized URL); a
+pack declares its own the same way:
 
 ```cue
 same_resource_kind_aws_account: {

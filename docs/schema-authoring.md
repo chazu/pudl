@@ -190,7 +190,9 @@ facts.
 ```
 
 - `kind` names a space of real resources, independent of provider, as dotted
-  lower-case words. pudl declares `k8s.cluster` and `k8s.object`; declare
+  lower-case words. pudl declares `k8s.cluster`, `k8s.object` and
+  `git.repo` (a git repository, keyed by its normalized URL as the Argo CD
+  pack's `_argocdRepoID` computes it); declare
   others with `same_resource_kind` facts in a rule file
   ([datalog](datalog.md#shared-identity-same_resource)).
 - `key` maps part names to a field path or `{path, trim_prefix?,

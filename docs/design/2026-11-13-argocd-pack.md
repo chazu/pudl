@@ -56,10 +56,10 @@ it needs and must fail closed.
    the allow-listed Helm image parameters are kept and projected, because
    with the `argocd` write-back method they hold the running tag and git
    does not.
-7. **No repository node in the first slice.** `sourced_from` needs a node
-   for a repo path, and pudl has no record or external node for one. The
-   facts and the inspector rows carry the repo, path and revision now. The
-   edge follows a small core change shared with `pudl-avqx.5` (section 7).
+7. **A repository is a record, linked across packs by a `git.repo`
+   identity kind** (`pudl-avqx.8`, decided 2026-11-16). The first slice had
+   no repository node; section 7 records the decision and the option that
+   was rejected.
 
 ## 1. kubectl or the Argo CD API
 
@@ -226,8 +226,8 @@ With the `git` method, the updater commits `.argocd-source-<app>.yaml` to
 ```
 argocd_app(resource_id, cluster, namespace, name, project, sync_status,
            health_status, sync_revision, reconciled_at, automated, self_heal, prune)
-argocd_app_source(resource_id, index, repo_url, path, chart, target_revision,
-                  ref, sync_revision)                        -- each: sources[*]
+argocd_app_source(resource_id, index, repo_url, repo, path, chart,
+                  target_revision, ref, sync_revision)       -- each: sources[*]
 argocd_app_destination(resource_id, server, name, namespace) -- "" defaults
 argocd_app_resource(resource_id, group, version, kind, namespace, name,
                     status, health)                          -- each: status.resources[*]
@@ -270,8 +270,15 @@ Facts:
 
 ```
 argocd_appset(resource_id, cluster, namespace, name, generator_types)
-argocd_appset_git_generator(resource_id, repo_url, revision)
+argocd_appset_source(resource_id, index, repo_url, repo, path, chart,
+                     target_revision, ref)                   -- each: template.spec.sources[*]
+argocd_appset_git_generator(resource_id, repo_url, repo, revision)
+argocd_appset_child_git_generator(resource_id, repo_url, repo, revision)
+argocd_repo(resource_id, url, name, type)                    -- argocd.#Repository
 ```
+
+`repo` is the normalized repository URL (section 7, decision 7);
+`argocd_appset_source` and `argocd_repo` came with `pudl-avqx.8`.
 
 The `generated_by` edge from an Application to its ApplicationSet comes
 from `argocd_app_owner` with `kind: "ApplicationSet"` and the owner `uid`,
@@ -319,7 +326,7 @@ Edge types, declared in `argocd_graph.cue`:
 | `generated_by` | containment | Application | ApplicationSet | Generated from this ApplicationSet's template. |
 | `deploys_to` | dependency | Application | destination cluster | Sync creates this application's objects in this cluster. |
 | `deployed_by` | dependency | workload | Application | Argo CD lists this object among the application's managed resources. |
-| `sourced_from` | dependency | Application | repository path | Manifests come from this repository path at the target revision. |
+| `sourced_from` | dependency | Application, ApplicationSet | repository (`argocd.#Repository`) | Manifests come from this repository path at the target revision. |
 
 `deployed_by`, one rule per workload source:
 
@@ -334,15 +341,86 @@ Edge types, declared in `argocd_graph.cue`:
   `k8s.cluster` keys). The Argo instance label fact of `pudl-avqx.2` is a
   check on this join, not its basis: a label can be set by hand.
 
-`sourced_from` is declared but not derived in the first slice (decision 7).
+### The repository node (decision 7, `pudl-avqx.8`)
+
 pudl's external nodes (`external.cidr`, `external.principal`) are fixed in
 `internal/graphexport/external.go`; rules cannot name a node that no record
-backs. The repository node is one decision for this pack and for
-`built_from` in `pudl-avqx.5`: either a core relation that lets rules
-declare a node (`graph_node(id, type, name)`), or a `git.repo` identity kind
-with a record per repository. That decision needs its own issue, still to
-be filed (the "new: Repository node" row in the Delivery table), and it
-blocks both edges.
+backs. `sourced_from` here and `built_from` in `pudl-avqx.5` both need a
+node for a repository. There were two options:
+
+- (a) A core relation that lets rules declare a node,
+  `graph_node(id, type, name)`.
+- (b) A `git.repo` identity kind, with a record per repository.
+
+**Choice: (b).** A repository is a record, `argocd.#Repository`, which the
+`argocd-repositories` collector writes for each repository URL the
+Applications and ApplicationSets name. Its identity is the normalized URL
+(below). A git repository's record declares the key
+`{kind: "git.repo", key: url: "gitURL"}`, and the core declares the kind
+next to `k8s.cluster` and `k8s.object`. `pudl-avqx.5` writes its own
+repository record from an image's `org.opencontainers.image.source` label,
+with the same key and the same normalization; the two records are then one
+node through `same_resource`, and `built_from` joins on that pack's own
+record. Neither pack needs the other.
+
+Why (b):
+
+- **Least new core surface.** (b) adds one ground fact
+  (`same_resource_kind` for `git.repo`) and no Go code. Records, identity,
+  `same_resource` groups, `refIndex` resolution, display, inspector rows,
+  time travel and coverage already work for it.
+- **Records back nodes.** A node stays a stored, versioned record with
+  evidence: a collector saw it, at a time, from a source. A rule only
+  derives edges between such records. A rule that names a repository no
+  record backs derives no edge, because the edge rules join on the
+  repository fact; it never draws a `ref:` placeholder.
+
+Why not (a): a rule-declared node has no record, so it has no evidence, no
+version history and no `pudl show`; it is gone when its rule is. Graph
+export, the subgraph cut, the vocabulary, time travel (`--as-of`) and
+`pudl doctor` would each need a code path for nodes that come from rules,
+and every consumer of the catalog that is not the graph would not see them.
+It also makes "rules derive, records back nodes" false for every future
+pack, not only for repositories.
+
+**Normalized repository URL.** The identity of a repository and its
+`git.repo` key. Every Argo CD value goes through `_argocdRepoURL` first
+(userinfo removed), then `_argocdRepoID` (argocd_shape.cue):
+
+- The scheme is kept, lower-cased, except that `ssh`, `git`, `git+ssh`,
+  `ssh+git` and the scp form (`git@host:org/repo`) become `https`, and
+  their port is dropped: they name the same repository as its https form.
+- No userinfo. The host is lower-cased; a default port (`:443` for https,
+  `:80` for http) is dropped.
+- The path keeps its case. The query, the fragment, a trailing `/` and a
+  trailing `.git` are removed.
+- A value without a scheme that is not the scp form (an OCI registry path
+  such as `registry.example.com/charts`) keeps no scheme.
+
+So `git@github.com:org/repo.git`, `ssh://git@github.com/org/repo.git` and
+`https://GitHub.com/org/repo/` are all `https://github.com/org/repo`. A
+value that holds a template (`{{`) has no repository.
+
+The record keeps `url`, `name` (the host and path, drawn on the node) and
+`type`: `helm` for a source that names a `chart`, `oci` for an `oci://` URL
+without a chart, `git` otherwise (and for every git generator). Only a
+`git` repository has `gitURL`, and so the `git.repo` key: a Helm chart
+repository is not a git repository. A URL that some source uses as git and
+another as a chart is `git`.
+
+The record holds no cluster: one repository is one record whatever cluster
+names it. The collector reads Applications and ApplicationSets again (two
+runs) rather than taking its records from the other two collectors,
+because a run routes every record it prints to one schema.
+
+**Edges.** `sourced_from` goes from an Application to each repository its
+sources name, and from an ApplicationSet to each repository its template
+sources and its git generators name (at the top level, and inside a matrix
+or merge). The edge joins the source's `repo` arg (the normalized URL, in
+the source and generator facts) with the repository fact
+`argocd_repo(resource_id, url)`. Edge properties: `path`, `chart` and
+`target_revision` of each source, and the git generator's `revision`; an
+edge for several sources of one repository carries each value.
 
 Display: `_pudl.graph.display` codes `APP` ("Argo CD application") and
 `APPSET` ("Argo CD application set"), class `compute`. Both draw as nodes
@@ -375,7 +453,7 @@ write-back method when the annotation is set.
 | `pudl-avqx.3` | This design (done) | 2 hours |
 | `pudl-3q5.1` | Kubernetes pack skeleton: cluster record, command source, `items` unwrap | existing |
 | `pudl-avqx.4` | Pack: schemas, transforms, redaction, collectors, fixtures, facts, rules, edges, inspector rows; `gcp_gke_cluster_endpoint` in the GCP pack | about 1.5 days |
-| new | Repository node: core relation or `git.repo` kind; then `sourced_from` here and `built_from` in `pudl-avqx.5` | about half a day |
+| `pudl-avqx.8` | Repository node: `git.repo` kind and `argocd.#Repository` records; `sourced_from` here; `built_from` in `pudl-avqx.5` follows | about half a day |
 | new | Destination by name: allow-list collector for Argo CD cluster Secrets (`data.name`, `data.server`) | about 2 hours |
 | new | Argo CD API collectors on the same schemas, `#HTTPObserve` with the `can-i` guard | about half a day |
 

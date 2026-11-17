@@ -4,6 +4,20 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Argo CD pack: repository records and sourced_from (2026-11-16)
+
+A repository is a record: `argocd.#Repository`, one per repository the
+Applications and ApplicationSets name (`argocd-repositories` and its
+fixture twin), identified by the normalized repository URL, so the https,
+ssh and scp forms of one repository are one node. A new built-in identity
+kind, `git.repo`, keys git repositories, so another pack's record of the
+same repository (`built_from` in `pudl-avqx.5`) is the same node. Rules
+derive `sourced_from` from Applications and ApplicationSets (template
+sources and git generators) to the repository records, with path, chart and
+revision properties; no rule draws a node. The rejected option, a
+rule-declared `graph_node`, is recorded in the design (decision 7). See
+`implog/2026_11_16_argocd_repository_node.md`. This is `pudl-avqx.8`.
+
 ### Kubernetes pack: Deployments, StatefulSets, DaemonSets (2026-11-16)
 
 `k8s.#Deployment`, `k8s.#StatefulSet` and `k8s.#DaemonSet`, keyed by

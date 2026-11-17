@@ -112,7 +112,7 @@
           "metadata": {"name": "regional-{{.region}}"},
           "spec": {
             "project": "edge",
-            "source": {"repoURL": "https://git.example.com/example-org/example-deploy.git", "path": "regional", "targetRevision": "release"},
+            "source": {"repoURL": "ssh://git@Git.Example.com/example-org/example-deploy.git", "path": "regional", "targetRevision": "release"},
             "destination": {"server": "{{.server}}", "namespace": "regional"}
           }
         }

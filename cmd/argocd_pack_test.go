@@ -10,6 +10,10 @@ import (
 // from: the DNS endpoint of the GCP fixture GKE cluster batch-private.
 const argocdFixtureCluster = "gke-00000000000000000000000000000000-000000000000.us-central1.gke.goog"
 
+// deployRepoID is the fixtures' manifests repository, normalized: the url
+// of its argocd.#Repository record.
+const deployRepoID = "https://git.example.com/example-org/example-deploy"
+
 // argocdPlanted is every value the hostile fixtures plant where the
 // collectors must not keep it.
 var argocdPlanted = []string{
@@ -77,11 +81,11 @@ func TestArgoCDPackFixtureApplications(t *testing.T) {
 	require.Equal(t, []any{
 		map[string]any{
 			"index": 0.0, "repoURL": "https://git.example.com/example-org/example-deploy.git", "targetRevision": "main",
-			"ref": "values", "syncRevision": "0123456789abcdef0123456789abcdef01234567",
+			"repo": deployRepoID, "ref": "values", "syncRevision": "0123456789abcdef0123456789abcdef01234567",
 		},
 		map[string]any{
 			"index": 1.0, "repoURL": "https://charts.example.com/stable", "chart": "web-service", "targetRevision": "2.1.0",
-			"syncRevision": "2.1.0",
+			"repo": "https://charts.example.com/stable", "syncRevision": "2.1.0",
 			"helm": map[string]any{
 				"releaseName": "checkout", "valueFiles": []any{"$values/shop/checkout/values.yaml"},
 				"parameters": []any{map[string]any{"name": "image.tag", "value": "1.4.2", "sourceIndex": 1.0}},
@@ -158,7 +162,7 @@ func TestArgoCDPackFixtureApplicationSets(t *testing.T) {
 	require.Len(t, sets, 4)
 	shop := sets["shop"]
 	require.Equal(t, []any{map[string]any{"type": "git", "git": map[string]any{
-		"repoURL": "https://git.example.com/example-org/example-deploy.git", "revision": "main",
+		"repoURL": "https://git.example.com/example-org/example-deploy.git", "repo": deployRepoID, "revision": "main",
 		"directories": []any{map[string]any{"path": "shop/*"}, map[string]any{"path": "shop/legacy", "exclude": true}},
 	}}}, shop["generators"])
 	tmpl := shop["template"].(map[string]any)
@@ -202,7 +206,7 @@ func TestArgoCDPackFixtureApplicationSets(t *testing.T) {
 // URL loses its userinfo. No planted byte is stored anywhere under the
 // workspace.
 func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
-	pudlDir := argocdWorkspace(t, "argocd-fixture-applications", "argocd-fixture-applicationsets")
+	pudlDir := argocdWorkspace(t, "argocd-fixture-applications", "argocd-fixture-applicationsets", "argocd-fixture-repositories")
 
 	apps := byName(storedRecords(t, "argocd.#Application"))
 	hostile := apps["hostile-app"]
@@ -256,7 +260,7 @@ func TestArgoCDPackHostileFixturesPlantNothing(t *testing.T) {
 		set["template"].(map[string]any)["spec"].(map[string]any)["sources"].([]any)[0].(map[string]any)["repoURL"])
 	matrix := set["generators"].([]any)[3].(map[string]any)
 	require.Equal(t, map[string]any{"type": "git", "git": map[string]any{
-		"repoURL": deployRepo, "revision": "hostile", "directories": []any{map[string]any{"path": "hostile/*"}},
+		"repoURL": deployRepo, "repo": deployRepoID, "revision": "hostile", "directories": []any{map[string]any{"path": "hostile/*"}},
 	}}, matrix["generators"].([]any)[0], "a git generator inside a matrix")
 	require.Len(t, argsWhere(queryArgs(t, "argocd_appset_child_git_generator"), "repo_url", deployRepo), 2)
 
