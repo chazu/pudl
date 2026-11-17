@@ -72,7 +72,7 @@ func (c *CatalogDB) DeleteEntriesAtomicContext(ctx context.Context, id string, c
 		if _, err := tx.q.Exec(`DELETE FROM catalog_entries WHERE id = ?`, id); err != nil {
 			return err
 		}
-		if _, err := tx.q.Exec(`INSERT OR IGNORE INTO observe_snapshot_tombstones(snapshot_id,model,workspace,created_at,run_id,source,snapshot_order) SELECT snapshot_id,model,workspace,created_at,run_id,source,rowid FROM observe_snapshots WHERE snapshot_id=?`, id); err != nil {
+		if _, err := tx.q.Exec(`INSERT OR IGNORE INTO observe_snapshot_tombstones(snapshot_id,model,workspace,created_at,run_id,source,snapshot_order,scope) SELECT snapshot_id,model,workspace,created_at,run_id,source,rowid,scope FROM observe_snapshots WHERE snapshot_id=?`, id); err != nil {
 			return err
 		}
 		if _, err := tx.q.Exec(`DELETE FROM snapshot_pins WHERE snapshot_id=?`, id); err != nil {

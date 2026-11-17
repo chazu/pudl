@@ -185,7 +185,16 @@ func selectPruneVictimsIn(q dbtx, opts PruneOptions) ([]string, error) {
 				break
 			}
 		}
+		// A per-input observation protects the newest of its scope, so every
+		// input keeps its latest; it also supersedes the model's older
+		// fixed-scope observations.
 		scope := snapshot.Model + "\x00" + snapshot.Workspace
+		if snapshot.Input != "" {
+			if eligible {
+				latestSuccessful[scope] = true
+			}
+			scope += "\x00" + snapshot.Scope
+		}
 		protectsLatest := eligible && !latestSuccessful[scope]
 		if eligible {
 			latestSuccessful[scope] = true
@@ -262,7 +271,7 @@ func (c *CatalogDB) itemCitedOutside(itemID string, doomed map[string]bool) (boo
 func deleteSnapshotIn(q dbtx, snapshotID string) ([]string, error) {
 	// Preserve just enough history to distinguish a pruned earlier observation
 	// from a model that never had a baseline.
-	if _, err := q.Exec(`INSERT OR IGNORE INTO observe_snapshot_tombstones(snapshot_id,model,workspace,created_at,run_id,source,snapshot_order) SELECT snapshot_id,model,workspace,created_at,run_id,source,rowid FROM observe_snapshots WHERE snapshot_id=?`, snapshotID); err != nil {
+	if _, err := q.Exec(`INSERT OR IGNORE INTO observe_snapshot_tombstones(snapshot_id,model,workspace,created_at,run_id,source,snapshot_order,scope) SELECT snapshot_id,model,workspace,created_at,run_id,source,rowid,scope FROM observe_snapshots WHERE snapshot_id=?`, snapshotID); err != nil {
 		return nil, err
 	}
 	// Read the members before the memberships go, and decide each one's fate by

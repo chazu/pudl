@@ -57,6 +57,7 @@ func runHTTP(ctx context.Context, p systemmodel.Populate, req Request) (Result, 
 			return Result{}, fmt.Errorf("populate each (GET %s): %w", h.Each.Get, err)
 		}
 		res.Inputs = items
+		res.InputRecords = make([][]any, len(items))
 		runs = make([]systemmodel.HTTPRun, 0, len(items)*len(h.Runs))
 		for _, item := range items {
 			for _, run := range h.Runs {
@@ -82,6 +83,9 @@ func runHTTP(ctx context.Context, p systemmodel.Populate, req Request) (Result, 
 			continue
 		}
 		res.Records = append(res.Records, records...)
+		if items != nil {
+			res.InputRecords[i/len(h.Runs)] = append(res.InputRecords[i/len(h.Runs)], records...)
+		}
 	}
 	return res, nil
 }

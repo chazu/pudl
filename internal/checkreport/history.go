@@ -98,6 +98,14 @@ func findCheck(r *ModelReport, name string) (CheckResult, bool) {
 // populateComplete reports whether a model report's own observation was
 // complete: as its summary recorded it, else as the catalog holds it.
 func populateComplete(db *database.CatalogDB, r *ModelReport) bool {
+	if r.Populate != nil && len(r.Populate.Observations) > 0 {
+		for _, o := range r.Populate.Observations {
+			if !o.Complete {
+				return false
+			}
+		}
+		return true
+	}
 	if r.Populate == nil || r.Populate.SnapshotID == "" {
 		return false
 	}

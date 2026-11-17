@@ -50,11 +50,14 @@ type ObserveIngest struct {
 	Scope    string
 	Complete bool
 	Schemas  []string
-	Context  context.Context
-	Limits   ingestprep.Limits
-	Reader   io.Reader
-	DataDir  string
-	Graph    *inference.InheritanceGraph
+	// Input is the enumerated input of a per-input observation; empty for a
+	// fixed scope.
+	Input   string
+	Context context.Context
+	Limits  ingestprep.Limits
+	Reader  io.Reader
+	DataDir string
+	Graph   *inference.InheritanceGraph
 	// Inferrer is used when a record's declared _schema resource type cannot be
 	// mapped to a loaded schema name. The declared resource type remains a
 	// strong hint, but inference is the safe fallback instead of persisting a

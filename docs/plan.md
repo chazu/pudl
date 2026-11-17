@@ -4,6 +4,18 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Per-input observation scope; complete Kubernetes collectors (2026-11-16)
+
+An observation scope may contain `{{item}}`: with `each`, every enumerated
+input is its own snapshot of its own scope, so completeness, gone marking,
+retention and the previous-snapshot lookup are per input. `current` and
+`model:` evidence select every input snapshot of the latest run. The
+Kubernetes pack's 8 live collectors declare `k8s/{{item}}/<kind>`,
+`complete: true`, so a context switch no longer risks marking another
+cluster's objects gone and the live posture family reaches a verdict.
+Design `docs/design/2026-11-16-per-input-scope.md`; see
+`implog/2026_11_16_per_input_observation_scope.md`. This is `pudl-u29`.
+
 ### Kubernetes pack: container posture check family (2026-11-16)
 
 `k8s-posture-checks` and `k8s-fixture-posture-checks` check every
@@ -14,8 +26,8 @@ limits; warn) and `may-run-as-root` (container `securityContext` over the
 pod's; warn). New facts `k8s_container`, `k8s_init_container`,
 `k8s_pod_security` and rules in
 `packs/k8s/schema/pudl/rules/k8s_posture.cue`; the workload fixtures pass
-and fail each check. The live family is `unknown` until `pudl-u29`
-(collectors are `complete: false`). See
+and fail each check. The live family was `unknown` until `pudl-u29`
+made the collectors complete. See
 `implog/2026_11_16_k8s_pack_posture_checks.md`. This is `pudl-5zh`.
 
 ### Kubernetes pack: graph display, in_cluster edges, cross-pack link test (2026-11-16)

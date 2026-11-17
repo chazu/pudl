@@ -74,12 +74,17 @@ transform may return a list, and each element is stored as a record
 
 ### Observation scope
 
-A collector's scope is a fixed string, but the current context changes. A
-complete observation scoped `k8s/deployments` would mark the previous
-cluster's objects gone after a context switch. Until observations can be
-scoped per enumerated input, the collectors declare `complete: false`:
-nothing is marked gone, and deleted objects stay current until re-observed
-or deleted by hand. Follow-up: per-input scope (`k8s/<host>/<kind>`).
+A collector reads the current context, and the context changes. A
+complete observation with the fixed scope `k8s/deployments` would mark
+the previous cluster's objects gone after a context switch. So the
+scope is per enumerated input (`pudl-u29`,
+[per-input scope](2026-11-16-per-input-scope.md)): every live collector
+enumerates the current cluster's host with `each` and declares
+`observation: {scope: "k8s/{{item}}/<kind>", complete: true}`. Each
+cluster is its own scope. A run on cluster B marks gone only B's
+objects that B no longer has; cluster A's records stay current until A
+is observed again. `k8s-cluster` is per host too
+(`k8s/{{item}}/cluster`).
 
 ### Graph
 

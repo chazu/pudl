@@ -79,21 +79,24 @@ var errCheckEvidence = fmt.Errorf("one or more checks could not establish a verd
 // a failure to evaluate the checks at all; nothing is recorded then.
 func (r *modelRun) finalize(report *checkreport.ModelReport, state *runFinishState, runErr error) (runFinalization, error) {
 	if len(r.model.Checks) > 0 {
-		currentSnapshot := r.opts.CatalogScope
+		currentSnapshots := []string{r.opts.CatalogScope}
 		if !r.opts.FromCatalog {
 			if report.Populate != nil {
-				currentSnapshot = report.Populate.SnapshotID
+				currentSnapshots = []string{report.Populate.SnapshotID}
+				if len(report.Populate.Observations) > 0 {
+					currentSnapshots = report.Populate.SnapshotIDs()
+				}
 			}
 			if report.Drift != nil && report.Drift.SnapshotID != "" {
-				currentSnapshot = report.Drift.SnapshotID
+				currentSnapshots = []string{report.Drift.SnapshotID}
 			}
 		}
 		waivers := newWaiverMatcher(r.cat, r.model, time.Now())
 		results, err := runChecks(r.ctx, r.cat, r.ws, r.out, r.model, r.modelDir, checkContext{
-			currentSnapshot: currentSnapshot,
-			runID:           r.session.RunID,
-			fromCatalog:     r.opts.FromCatalog,
-			waivers:         waivers,
+			currentSnapshots: currentSnapshots,
+			runID:            r.session.RunID,
+			fromCatalog:      r.opts.FromCatalog,
+			waivers:          waivers,
 		})
 		if err != nil {
 			return runFinalization{runErr: runErr}, err

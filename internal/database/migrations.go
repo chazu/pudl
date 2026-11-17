@@ -73,6 +73,7 @@ var migrations = []migration{
 	{25, "observation_completeness", (*CatalogDB).ensureObservationCompleteness},
 	{26, "policy_state", (*CatalogDB).ensurePolicyState},
 	{27, "sensitive_scrub_audit", (*CatalogDB).ensureSensitiveScrubTables},
+	{28, "observation_input", (*CatalogDB).ensureObservationInput},
 }
 
 // ensureMigrationsTable creates the version ledger itself. It is the one step

@@ -60,6 +60,11 @@ SCOPE AND COMPLETENESS
   Checks select snapshots with evidence: ["model:fw"], ["scope:gcp/firewalls"],
   ["current"] or a snapshot ID, optionally with max_age: "1h".
 
+  A scope with {{item}} is per input: scope: "gcp/{{item}}/firewalls" with
+  each makes every input its own snapshot of its own scope, so a failed or
+  missing input never marks another input's resources gone. "current" and
+  "model:fw" then select every input's snapshot of the latest run.
+
 IMPORT A FILE
 
   pudl import fw.json --dry-run --explain       check first; writes nothing

@@ -24,9 +24,11 @@ type Reference = acute.ObservationEvidence
 
 type Request struct {
 	Selectors []string
-	Current   string
-	MaxAge    time.Duration
-	Now       time.Time
+	// Current are the snapshots the `current` selector names: the run's
+	// snapshot, or every input's snapshot of a per-input populate.
+	Current []string
+	MaxAge  time.Duration
+	Now     time.Time
 }
 
 type View struct {
@@ -68,41 +70,32 @@ func Open(ctx context.Context, source *database.CatalogDB, reg *projection.Regis
 	seen := map[string]bool{}
 	var snapshots []*database.ObserveSnapshot
 	for _, selector := range request.Selectors {
-		var snapshot *database.ObserveSnapshot
-		var err error
-		switch {
-		case selector == "current":
-			snapshot, err = source.GetObserveSnapshot(request.Current)
-		case strings.HasPrefix(selector, "model:"):
-			snapshot, err = source.CurrentObserveSnapshot(strings.TrimPrefix(selector, "model:"))
-		case strings.HasPrefix(selector, "scope:"):
-			snapshot, err = source.CurrentScopeSnapshot(strings.TrimPrefix(selector, "scope:"))
-		default:
-			snapshot, err = source.GetObserveSnapshot(selector)
-		}
+		selected, err := resolve(source, selector, request.Current)
 		if err != nil {
 			return nil, err
 		}
-		if snapshot == nil {
+		if len(selected) == 0 {
 			v.issue("missing_snapshot", fmt.Sprintf("no observation for %q", selector), "")
 			continue
 		}
-		if seen[snapshot.SnapshotID] {
-			continue
+		for _, snapshot := range selected {
+			if seen[snapshot.SnapshotID] {
+				continue
+			}
+			seen[snapshot.SnapshotID] = true
+			age := request.Now.Sub(snapshot.CreatedAt)
+			v.References = append(v.References, Reference{SnapshotID: snapshot.SnapshotID, Scope: snapshot.Scope, Source: snapshot.Source, ObservedAt: snapshot.CreatedAt, Age: age.String(), Complete: snapshot.Complete})
+			if !snapshot.Complete || snapshot.Scope == "" {
+				v.issue("incomplete_observation", "snapshot "+snapshot.SnapshotID+" does not establish a complete population", "")
+			}
+			if age < 0 || (request.MaxAge > 0 && age > request.MaxAge) {
+				v.issue("stale_observation", "snapshot "+snapshot.SnapshotID+" is outside the requested freshness policy", "")
+			}
+			for _, schema := range snapshot.Schemas {
+				v.Schemas[schemaname.Normalize(schema)] = true
+			}
+			snapshots = append(snapshots, snapshot)
 		}
-		seen[snapshot.SnapshotID] = true
-		age := request.Now.Sub(snapshot.CreatedAt)
-		v.References = append(v.References, Reference{SnapshotID: snapshot.SnapshotID, Scope: snapshot.Scope, Source: snapshot.Source, ObservedAt: snapshot.CreatedAt, Age: age.String(), Complete: snapshot.Complete})
-		if !snapshot.Complete || snapshot.Scope == "" {
-			v.issue("incomplete_observation", "snapshot "+snapshot.SnapshotID+" does not establish a complete population", "")
-		}
-		if age < 0 || (request.MaxAge > 0 && age > request.MaxAge) {
-			v.issue("stale_observation", "snapshot "+snapshot.SnapshotID+" is outside the requested freshness policy", "")
-		}
-		for _, schema := range snapshot.Schemas {
-			v.Schemas[schemaname.Normalize(schema)] = true
-		}
-		snapshots = append(snapshots, snapshot)
 	}
 	if len(v.Diagnostics) > 0 {
 		return v, nil
@@ -163,6 +156,43 @@ func Open(ctx context.Context, source *database.CatalogDB, reg *projection.Regis
 		return nil, err
 	}
 	return v, nil
+}
+
+// resolve returns the snapshots one selector names, none when it names no
+// observation. `current` and `model:` name every input's snapshot of a
+// per-input observation.
+func resolve(source *database.CatalogDB, selector string, current []string) ([]*database.ObserveSnapshot, error) {
+	ids := []string{selector}
+	switch {
+	case selector == "current":
+		ids = current
+	case strings.HasPrefix(selector, "model:"):
+		observed, err := source.ModelObservations(strings.TrimPrefix(selector, "model:"))
+		out := make([]*database.ObserveSnapshot, len(observed))
+		for i := range observed {
+			out[i] = &observed[i]
+		}
+		return out, err
+	case strings.HasPrefix(selector, "scope:"):
+		snapshot, err := source.CurrentScopeSnapshot(strings.TrimPrefix(selector, "scope:"))
+		if err != nil || snapshot == nil {
+			return nil, err
+		}
+		return []*database.ObserveSnapshot{snapshot}, nil
+	}
+	var out []*database.ObserveSnapshot
+	for _, id := range ids {
+		snapshot, err := source.GetObserveSnapshot(id)
+		if err != nil {
+			return nil, err
+		}
+		if snapshot == nil {
+			// One missing snapshot of several is a missing selection.
+			return nil, nil
+		}
+		out = append(out, snapshot)
+	}
+	return out, nil
 }
 
 // materialize adds one selected record's projected facts and policy results to
