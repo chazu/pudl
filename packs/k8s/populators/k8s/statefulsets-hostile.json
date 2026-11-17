@@ -1,0 +1,266 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "name": "hostile-statefulset",
+        "namespace": "hostile",
+        "uid": "a1a1a1a1-0000-4000-8000-000000000003",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-statefulset"
+        },
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\": \"apps/v1\", \"kind\": \"StatefulSet\", \"spec\": {\"template\": {\"spec\": {\"containers\": [{\"name\": \"app\", \"env\": [{\"name\": \"DB_PASSWORD\", \"value\": \"FAKE-K8S-LAST-APPLIED-STATEFULSET\"}]}]}}}}",
+          "example.com/owner": "platform"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  "FAKE-K8S-MANAGED-FIELDS-STATEFULSET": {}
+                }
+              }
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "serviceName": "hostile-statefulset",
+        "selector": {
+          "matchLabels": {
+            "app": "hostile-statefulset"
+          }
+        },
+        "podManagementPolicy": "OrderedReady",
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "hostile-statefulset"
+            },
+            "annotations": {
+              "vault.hashicorp.com/agent-inject-secret-db": "FAKE-K8S-TEMPLATE-ANNOTATION-STATEFULSET",
+              "checksum/config": "FAKE-K8S-TEMPLATE-CHECKSUM-STATEFULSET"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "app",
+                "image": "registry.example.com/apps/hostile:1.0.0",
+                "command": [
+                  "/bin/app",
+                  "--token=FAKE-K8S-COMMAND-STATEFULSET"
+                ],
+                "args": [
+                  "--db-password=FAKE-K8S-ARGS-STATEFULSET",
+                  "postgres://app:FAKE-K8S-ARGS-STATEFULSET@db:5432/app"
+                ],
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "DB_PASSWORD",
+                    "value": "FAKE-K8S-ENV-VALUE-STATEFULSET"
+                  },
+                  {
+                    "name": "API_TOKEN",
+                    "value": "FAKE-K8S-ENV-TOKEN-STATEFULSET"
+                  },
+                  {
+                    "name": "DB_HOST",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "hostile-config",
+                        "key": "db-host",
+                        "optional": true
+                      }
+                    }
+                  },
+                  {
+                    "name": "DB_USER",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "name": "hostile-db",
+                        "key": "user"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "initContainers": [
+              {
+                "name": "init",
+                "image": "registry.example.com/apps/hostile-init:1.0.0",
+                "command": [
+                  "/bin/init",
+                  "-Dsecret=FAKE-K8S-COMMAND-STATEFULSET"
+                ],
+                "args": [
+                  "--token",
+                  "FAKE-K8S-ARGS-STATEFULSET"
+                ],
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "BOOTSTRAP_TOKEN",
+                    "value": "FAKE-K8S-INIT-ENV-VALUE-STATEFULSET"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "volumeClaimTemplates": [
+          {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "data"
+            },
+            "spec": {
+              "accessModes": [
+                "ReadWriteOnce"
+              ],
+              "resources": {
+                "requests": {
+                  "storage": "10Gi"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "currentReplicas": 1,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "name": "hostile-statefulset-system",
+        "namespace": "kube-system",
+        "uid": "a1a1a1a1-0000-4000-8000-000000000004",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-statefulset-system"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "serviceName": "hostile-statefulset-system",
+        "selector": {
+          "matchLabels": {
+            "app": "hostile-statefulset-system"
+          }
+        },
+        "podManagementPolicy": "OrderedReady",
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "hostile-statefulset-system"
+            },
+            "annotations": {
+              "x": "FAKE-K8S-SYSTEM-ANNOTATION-STATEFULSET"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "app",
+                "image": "registry.example.com/apps/hostile:1.0.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "T",
+                    "value": "FAKE-K8S-SYSTEM-STATEFULSET"
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        },
+        "volumeClaimTemplates": [
+          {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {
+              "name": "data"
+            },
+            "spec": {
+              "accessModes": [
+                "ReadWriteOnce"
+              ],
+              "resources": {
+                "requests": {
+                  "storage": "10Gi"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "currentReplicas": 1,
+        "observedGeneration": 3
+      }
+    }
+  ]
+}
