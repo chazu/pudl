@@ -56,6 +56,102 @@
         },
         "conditions": [
           {
+            "type": "FrequentNTPv4ClockJump",
+            "status": "False",
+            "reason": "NoFrequentNTPv4ClockJump",
+            "message": "chronyd has no frequent NTPv4 clock jumps",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentUnregisterNetDevice",
+            "status": "False",
+            "reason": "NoFrequentUnregisterNetDevice",
+            "message": "node is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentKubeletRestart",
+            "status": "False",
+            "reason": "NoFrequentKubeletRestart",
+            "message": "kubelet is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentDockerRestart",
+            "status": "False",
+            "reason": "NoFrequentDockerRestart",
+            "message": "docker is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentContainerdRestart",
+            "status": "False",
+            "reason": "NoFrequentContainerdRestart",
+            "message": "containerd is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "CorruptDockerOverlay2",
+            "status": "False",
+            "reason": "NoCorruptDockerOverlay2",
+            "message": "docker overlay2 is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "KernelDeadlock",
+            "status": "False",
+            "reason": "KernelHasNoDeadlock",
+            "message": "kernel has no deadlock",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "ReadonlyFilesystem",
+            "status": "False",
+            "reason": "FilesystemIsNotReadOnly",
+            "message": "Filesystem is not read-only",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "NetworkUnavailable",
+            "status": "False",
+            "reason": "RouteCreated",
+            "message": "RouteController created a route",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "MemoryPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientMemory",
+            "message": "kubelet has sufficient memory available",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "False",
+            "reason": "KubeletHasNoDiskPressure",
+            "message": "kubelet has no disk pressure",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientPID",
+            "message": "kubelet has sufficient PID available",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
             "type": "Ready",
             "status": "True",
             "reason": "KubeletReady",
@@ -141,6 +237,94 @@
           "ephemeral-storage": "98831908Ki"
         },
         "conditions": [
+          {
+            "type": "FrequentUnregisterNetDevice",
+            "status": "False",
+            "reason": "NoFrequentUnregisterNetDevice",
+            "message": "node is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentKubeletRestart",
+            "status": "False",
+            "reason": "NoFrequentKubeletRestart",
+            "message": "kubelet is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentDockerRestart",
+            "status": "False",
+            "reason": "NoFrequentDockerRestart",
+            "message": "docker is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "FrequentContainerdRestart",
+            "status": "False",
+            "reason": "NoFrequentContainerdRestart",
+            "message": "containerd is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "CorruptDockerOverlay2",
+            "status": "False",
+            "reason": "NoCorruptDockerOverlay2",
+            "message": "docker overlay2 is functioning properly",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "KernelDeadlock",
+            "status": "False",
+            "reason": "KernelHasNoDeadlock",
+            "message": "kernel has no deadlock",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "ReadonlyFilesystem",
+            "status": "False",
+            "reason": "FilesystemIsNotReadOnly",
+            "message": "Filesystem is not read-only",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "NetworkUnavailable",
+            "status": "False",
+            "reason": "RouteCreated",
+            "message": "RouteController created a route",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "MemoryPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientMemory",
+            "message": "kubelet has sufficient memory available",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "DiskPressure",
+            "status": "False",
+            "reason": "KubeletHasNoDiskPressure",
+            "message": "kubelet has no disk pressure",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
+          {
+            "type": "PIDPressure",
+            "status": "False",
+            "reason": "KubeletHasSufficientPID",
+            "message": "kubelet has sufficient PID available",
+            "lastHeartbeatTime": "2026-09-14T10:12:00Z",
+            "lastTransitionTime": "2026-09-14T10:12:00Z"
+          },
           {
             "type": "Ready",
             "status": "True",

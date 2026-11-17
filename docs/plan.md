@@ -4,6 +4,14 @@ Living document tracking what is built and what comes next.
 
 ## What's Built
 
+### Kubernetes pack: Node conditions skip the secret scan (2026-11-17)
+
+`k8s.#Node` lists `status.conditions[*].type` and `.reason` in
+`_pudl.secret_scan_ignore`: condition names such as node-problem-detector's
+are CamelCase constants, not secrets, and no longer raise a likely-secret
+warning on every live `k8s-nodes` run. Messages stay scanned. See
+`implog/2026_11_17_k8s_node_condition_secret_scan.md`.
+
 ### Per-input observation scope; complete Kubernetes collectors (2026-11-16)
 
 An observation scope may contain `{{item}}`: with `each`, every enumerated

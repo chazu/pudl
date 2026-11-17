@@ -44,6 +44,10 @@ _k8sClusterScopedArgs: {
 		graph: name: "metadata.name"
 		graph: display: {code: "NODE", label: "Kubernetes node", class: "compute"}
 		sensitive_fields: [_k8sLastApplied]
+		// Condition types and reasons are CamelCase constants (node-problem-
+		// detector names such as FrequentContainerdRestart), not secrets.
+		// Messages are free text and stay scanned.
+		secret_scan_ignore: ["status.conditions[*].type", "status.conditions[*].reason"]
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		// provider_id names the node's VM (gce://project/zone/name,
 		// aws:///zone/i-...); "" when the cloud provider sets none.
