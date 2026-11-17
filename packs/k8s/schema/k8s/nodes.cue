@@ -21,6 +21,8 @@ _k8sClusterScopedArgs: {
 		resource_type:   "k8s.namespace"
 		identity_fields: ["cluster", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "NS", label: "Kubernetes namespace", class: "admin"}
 		sensitive_fields: [_k8sLastApplied]
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: k8s_namespace: args: _k8sClusterScopedArgs
@@ -39,6 +41,8 @@ _k8sClusterScopedArgs: {
 		resource_type:   "k8s.node"
 		identity_fields: ["cluster", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "NODE", label: "Kubernetes node", class: "compute"}
 		sensitive_fields: [_k8sLastApplied]
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		// provider_id names the node's VM (gce://project/zone/name,

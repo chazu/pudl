@@ -28,6 +28,8 @@ _k8sNamespacedArgs: {
 		resource_type:   "k8s.service"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "SVC", label: "Kubernetes service", class: "edge"}
 		sensitive_fields: [_k8sLastApplied]
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: {
@@ -61,6 +63,8 @@ _k8sNamespacedArgs: {
 		resource_type:   "k8s.ingress"
 		identity_fields: ["cluster", "metadata.namespace", "metadata.name"]
 		review: status: "draft"
+		graph: name: "metadata.name"
+		graph: display: {code: "ING", label: "Kubernetes ingress", class: "edge"}
 		sensitive_fields: [_k8sLastApplied]
 		same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]
 		facts: {
