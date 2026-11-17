@@ -148,6 +148,6 @@ stay as they are:
 | `internal/systemmodel` | `Observation.ScopeFor(item)`, `PerInput()`; load-time validation above |
 | `internal/populate` | `Result.InputRecords`: the records of each input, in input order |
 | `internal/operation` | `runPopulate` ingests one snapshot per input when the scope is per-input |
-| `internal/database` | `input` column; `ModelRunObservations`; scope-aware previous lookup and pruning |
+| `internal/database` | `input` column; `ModelObservations`; scope-aware previous lookup and pruning |
 | `internal/evidence`, `internal/checks` | `current` and `model:` resolve to several snapshots |
 | `internal/checkreport` | `Populate.Observations`; completeness and evidence read them |
