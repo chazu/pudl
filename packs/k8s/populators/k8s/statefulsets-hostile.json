@@ -63,6 +63,14 @@
               {
                 "name": "app",
                 "image": "registry.example.com/apps/hostile:1.0.0",
+                "command": [
+                  "/bin/app",
+                  "--token=FAKE-K8S-COMMAND-STATEFULSET"
+                ],
+                "args": [
+                  "--db-password=FAKE-K8S-ARGS-STATEFULSET",
+                  "postgres://app:FAKE-K8S-ARGS-STATEFULSET@db:5432/app"
+                ],
                 "imagePullPolicy": "IfNotPresent",
                 "resources": {
                   "requests": {
@@ -107,6 +115,14 @@
               {
                 "name": "init",
                 "image": "registry.example.com/apps/hostile-init:1.0.0",
+                "command": [
+                  "/bin/init",
+                  "-Dsecret=FAKE-K8S-COMMAND-STATEFULSET"
+                ],
+                "args": [
+                  "--token",
+                  "FAKE-K8S-ARGS-STATEFULSET"
+                ],
                 "imagePullPolicy": "IfNotPresent",
                 "resources": {
                   "requests": {

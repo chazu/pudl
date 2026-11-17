@@ -102,12 +102,13 @@ cluster record.
   injectors read their configuration, credentials included, from these
   annotations.
 - **Redacted** by the schemas before anything is stored: the `value` of
-  every container and init container `env` entry, and the
+  every container and init container `env` entry, every element of their
+  `command` and `args` (each becomes `[REDACTED]`, so the count stays;
+  flags and connection strings there often carry credentials), and the
   `kubectl.kubernetes.io/last-applied-configuration` annotation, which
   repeats the object as applied. `valueFrom` holds references only (a
-  Secret or ConfigMap name and key) and is kept.
-
-Container `command` and `args` are kept as kubectl prints them.
+  Secret or ConfigMap name and key) and is kept, as are `image`, `name`,
+  `ports`, `resources` and `volumeMounts`.
 
 ## Facts
 

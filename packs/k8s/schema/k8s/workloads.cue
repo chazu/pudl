@@ -14,11 +14,17 @@ package k8s
 // (gcp.#K8sDeployment) or another pack.
 
 // Paths of a workload that can hold credentials: container and init
-// container env values (valueFrom holds references only and is kept), and
-// the last-applied annotation, which repeats the whole object as applied.
+// container env values (valueFrom holds references only and is kept),
+// every element of their command and args (flags such as --password=...,
+// connection strings), and the last-applied annotation, which repeats the
+// whole object as applied.
 _k8sWorkloadSensitive: [
 	"spec.template.spec.containers[*].env[*].value",
 	"spec.template.spec.initContainers[*].env[*].value",
+	"spec.template.spec.containers[*].command[*]",
+	"spec.template.spec.containers[*].args[*]",
+	"spec.template.spec.initContainers[*].command[*]",
+	"spec.template.spec.initContainers[*].args[*]",
 	#"metadata.annotations."kubectl.kubernetes.io/last-applied-configuration""#,
 ]
 

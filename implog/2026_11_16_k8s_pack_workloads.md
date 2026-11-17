@@ -17,8 +17,13 @@ namespace and uid, `spec`, `status`) and `kind` as the match field.
 - `same_resource: [{kind: "k8s.object", key: uid: "metadata.uid"}]`, as
   `gcp.#K8sDeployment` declares.
 - `sensitive_fields` (`_k8sWorkloadSensitive`): container and init container
-  `env[*].value`, and the
-  `kubectl.kubernetes.io/last-applied-configuration` annotation.
+  `env[*].value`, `command[*]` and `args[*]`, and the
+  `kubectl.kubernetes.io/last-applied-configuration` annotation. Command
+  and args are redacted through `sensitive_fields`, not in the shape: a
+  path that ends in `[*]` replaces each list element (as the GCP pack's
+  `customRequestHeaders[*]`), so every element becomes `[REDACTED]` and the
+  count stays. `image`, `name`, `ports`, `resources` and `volumeMounts` are
+  kept.
 - Facts: `k8s_deployment(cluster, namespace, name, replicas)`,
   `k8s_statefulset(cluster, namespace, name, replicas)` (replicas default
   1), `k8s_daemonset(cluster, namespace, name)`.
@@ -51,7 +56,9 @@ On the fixture cluster `198.51.100.30` (GCP `prod-private`). Deployments
 `shop/checkout` and `shop/catalog` carry the UIDs of the GCP fixture
 deployments; every kind has objects in system namespaces, which are
 skipped. The hostile fixtures plant `FAKE-K8S-*` in env values, init
-container env values, the last-applied annotation, pod template
+container env values, container and init container `command` and `args`
+(`FAKE-K8S-COMMAND-<KIND>`, `FAKE-K8S-ARGS-<KIND>`), the last-applied
+annotation, pod template
 annotations, `managedFields` and a system namespace object, next to
 `valueFrom` references, which are kept.
 
@@ -62,7 +69,7 @@ annotations, `managedFields` and a system namespace object, next to
   shared deployments one `k8s.object` group with `gcp.#K8sDeployment`, and
   `pudl doctor`'s same-resource check at 3 groups.
 - `TestK8sPackHostileWorkloadsPlantNothing`: each hostile record stored and
-  redacted; no `FAKE-K8S` byte under the workspace (`requireNoPlanted`).
+  redacted, every `command` and `args` element `[REDACTED]`; no `FAKE-K8S` byte under the workspace (`requireNoPlanted`).
 - `TestK8sPackLiveWorkloads`: the live collectors against a fake `kubectl`
   on `PATH`; each runs `get <kind>.apps -A -o json`.
 

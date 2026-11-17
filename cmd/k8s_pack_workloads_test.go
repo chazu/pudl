@@ -16,12 +16,15 @@ import (
 var k8sWorkloadFixtures = []string{"k8s-fixture-deployments", "k8s-fixture-statefulsets", "k8s-fixture-daemonsets"}
 
 // k8sPlanted is every value the hostile workload fixtures plant where the
-// collectors must not keep it: env values, init container env values, the
-// last-applied annotation, pod template annotation values, managedFields
-// and objects in a system namespace.
+// collectors must not keep it: env values, init container env values,
+// container and init container command and args, the last-applied
+// annotation, pod template annotation values, managedFields and objects in
+// a system namespace.
 var k8sPlanted = []string{
 	"FAKE-K8S-ENV-VALUE", "FAKE-K8S-ENV-TOKEN", "FAKE-K8S-INIT-ENV-VALUE", "FAKE-K8S-LAST-APPLIED",
 	"FAKE-K8S-TEMPLATE-ANNOTATION", "FAKE-K8S-TEMPLATE-CHECKSUM", "FAKE-K8S-MANAGED-FIELDS", "FAKE-K8S-SYSTEM",
+	"FAKE-K8S-ARGS-DEPLOYMENT", "FAKE-K8S-COMMAND-DEPLOYMENT", "FAKE-K8S-ARGS-STATEFULSET", "FAKE-K8S-COMMAND-STATEFULSET",
+	"FAKE-K8S-ARGS-DAEMONSET", "FAKE-K8S-COMMAND-DAEMONSET",
 	// Any planted value at all.
 	"FAKE-K8S",
 }
@@ -99,8 +102,8 @@ func TestK8sPackFixtureWorkloads(t *testing.T) {
 }
 
 // TestK8sPackHostileWorkloadsPlantNothing ingests the hostile fixtures: env
-// values, the last-applied annotation and pod template annotation values
-// are redacted, managedFields and objects in system namespaces are
+// values, every command and args element, the last-applied annotation and
+// pod template annotation values are redacted, managedFields and objects in system namespaces are
 // dropped. No planted byte is stored anywhere under the workspace.
 func TestK8sPackHostileWorkloadsPlantNothing(t *testing.T) {
 	pudlDir := cliWorkspace(t)
@@ -135,6 +138,13 @@ func TestK8sPackHostileWorkloadsPlantNothing(t *testing.T) {
 		}, pod["containers"].([]any)[0].(map[string]any)["env"])
 		require.Equal(t, []any{map[string]any{"name": "BOOTSTRAP_TOKEN", "value": "[REDACTED]"}},
 			pod["initContainers"].([]any)[0].(map[string]any)["env"])
+		redacted := []any{"[REDACTED]", "[REDACTED]"}
+		for _, list := range []string{"containers", "initContainers"} {
+			c := pod[list].([]any)[0].(map[string]any)
+			require.Equal(t, redacted, c["command"], "%s: %s command elements are redacted", schema, list)
+			require.Equal(t, redacted, c["args"], "%s: %s args elements are redacted", schema, list)
+			require.Contains(t, c["image"], "registry.example.com/apps/hostile", "%s: the image stays", schema)
+		}
 	}
 
 	requireNoPlanted(t, pudlDir, k8sPlanted...)

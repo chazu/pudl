@@ -11,8 +11,9 @@ cluster, namespace and name and linked by UID (`k8s.object`) to the same
 object another pack sees. Live collectors `k8s-deployments`,
 `k8s-statefulsets`, `k8s-daemonsets` (current context, `complete: false`)
 and fixture collectors, on the skeleton's run shapes. System namespaces are
-skipped, `managedFields` dropped, env values, the last-applied annotation
-and pod template annotation values redacted; hostile fixtures plant
+skipped, `managedFields` dropped, env values, container `command` and
+`args` elements, the last-applied annotation and pod template annotation
+values redacted; hostile fixtures plant
 nothing in the store. Facts `k8s_deployment`, `k8s_statefulset`,
 `k8s_daemonset` give each object's cluster. See
 `implog/2026_11_16_k8s_pack_workloads.md`. This is `pudl-3q5.2`; next are
