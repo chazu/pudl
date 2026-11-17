@@ -1,0 +1,214 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  },
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "hostile-deployment",
+        "namespace": "hostile",
+        "uid": "a1a1a1a1-0000-4000-8000-000000000001",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-deployment"
+        },
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\": \"apps/v1\", \"kind\": \"Deployment\", \"spec\": {\"template\": {\"spec\": {\"containers\": [{\"name\": \"app\", \"env\": [{\"name\": \"DB_PASSWORD\", \"value\": \"FAKE-K8S-LAST-APPLIED-DEPLOYMENT\"}]}]}}}}",
+          "example.com/owner": "platform"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:annotations": {
+                  "FAKE-K8S-MANAGED-FIELDS-DEPLOYMENT": {}
+                }
+              }
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "hostile-deployment"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "hostile-deployment"
+            },
+            "annotations": {
+              "vault.hashicorp.com/agent-inject-secret-db": "FAKE-K8S-TEMPLATE-ANNOTATION-DEPLOYMENT",
+              "checksum/config": "FAKE-K8S-TEMPLATE-CHECKSUM-DEPLOYMENT"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "app",
+                "image": "registry.example.com/apps/hostile:1.0.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "DB_PASSWORD",
+                    "value": "FAKE-K8S-ENV-VALUE-DEPLOYMENT"
+                  },
+                  {
+                    "name": "API_TOKEN",
+                    "value": "FAKE-K8S-ENV-TOKEN-DEPLOYMENT"
+                  },
+                  {
+                    "name": "DB_HOST",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "hostile-config",
+                        "key": "db-host",
+                        "optional": true
+                      }
+                    }
+                  },
+                  {
+                    "name": "DB_USER",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "name": "hostile-db",
+                        "key": "user"
+                      }
+                    }
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "initContainers": [
+              {
+                "name": "init",
+                "image": "registry.example.com/apps/hostile-init:1.0.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "BOOTSTRAP_TOKEN",
+                    "value": "FAKE-K8S-INIT-ENV-VALUE-DEPLOYMENT"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "availableReplicas": 1,
+        "observedGeneration": 3
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "hostile-deployment-system",
+        "namespace": "kube-system",
+        "uid": "a1a1a1a1-0000-4000-8000-000000000002",
+        "resourceVersion": "100234",
+        "generation": 3,
+        "creationTimestamp": "2026-09-14T10:12:00Z",
+        "labels": {
+          "app": "hostile-deployment-system"
+        },
+        "managedFields": [
+          {
+            "manager": "kubectl-client-side-apply",
+            "operation": "Update",
+            "apiVersion": "apps/v1",
+            "time": "2026-09-14T10:12:00Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {}
+            }
+          }
+        ]
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "hostile-deployment-system"
+          }
+        },
+        "strategy": {
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "hostile-deployment-system"
+            },
+            "annotations": {
+              "x": "FAKE-K8S-SYSTEM-ANNOTATION-DEPLOYMENT"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "app",
+                "image": "registry.example.com/apps/hostile:1.0.0",
+                "imagePullPolicy": "IfNotPresent",
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "env": [
+                  {
+                    "name": "T",
+                    "value": "FAKE-K8S-SYSTEM-DEPLOYMENT"
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30
+          }
+        }
+      },
+      "status": {
+        "replicas": 1,
+        "readyReplicas": 1,
+        "availableReplicas": 1,
+        "observedGeneration": 3
+      }
+    }
+  ]
+}
