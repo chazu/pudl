@@ -128,8 +128,7 @@ func TestK8sPackPostureChecks(t *testing.T) {
 }
 
 // TestK8sPackPostureChecksUnknown runs the posture families without their
-// collectors: no observation, so every check is unknown. The live family
-// after the live collectors is unknown too: they declare complete: false.
+// collectors: no observation, so every check is unknown.
 func TestK8sPackPostureChecksUnknown(t *testing.T) {
 	useFakeKubectl(t)
 	cliWorkspace(t)
@@ -172,5 +171,4 @@ func TestK8sPackPostureChecksUnknown(t *testing.T) {
 	}
 	requireUnknown("missing_snapshot", "k8s-fixture-posture-checks")
 	requireUnknown("missing_snapshot", "k8s-posture-checks")
-	requireUnknown("incomplete_observation", "k8s-deployments", "k8s-statefulsets", "k8s-daemonsets", "k8s-posture-checks")
 }

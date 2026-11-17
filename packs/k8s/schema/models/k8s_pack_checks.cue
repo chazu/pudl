@@ -14,9 +14,9 @@ import (
 //                               k8s-daemonsets;
 //   k8s-fixture-posture-checks  over their fixture collectors.
 //
-// The live collectors declare complete: false, so the live family's checks
-// are unknown (incomplete_observation) until observations are scoped per
-// cluster (pudl-u29).
+// A live collector observes one scope per cluster host, so "model:<name>"
+// selects the scopes its latest run observed: the live family's verdict
+// covers the cluster (or clusters) those runs read, and no other.
 
 // The collectors the posture checks read: every workload kind.
 _k8sPostureCollectors: ["deployments", "statefulsets", "daemonsets"]

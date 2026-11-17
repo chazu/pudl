@@ -17,7 +17,8 @@ import (
 //   k8s-fixture-nodes
 //       read the bundled fixtures in .pudl/populators/k8s.
 //
-// Like k8s-cluster, the live collectors declare complete: false.
+// Like k8s-cluster, each live collector observes one scope per cluster
+// host (k8s/<host>/<kind>), complete.
 
 // ---- Shapes.
 
@@ -178,7 +179,7 @@ _k8sNodeTransform: {
 
 #K8sServices: sm.#SystemModel & {
 	name:        "k8s-services"
-	observation: {scope: "k8s/services", complete: false}
+	observation: {scope: "k8s/{{item}}/services", complete: true}
 	_k8sLive & {
 		_resource:  "services"
 		_schema:    "k8s.#Service"
@@ -188,7 +189,7 @@ _k8sNodeTransform: {
 
 #K8sIngresses: sm.#SystemModel & {
 	name:        "k8s-ingresses"
-	observation: {scope: "k8s/ingresses", complete: false}
+	observation: {scope: "k8s/{{item}}/ingresses", complete: true}
 	_k8sLive & {
 		_resource:  "ingresses.networking.k8s.io"
 		_schema:    "k8s.#Ingress"
@@ -198,7 +199,7 @@ _k8sNodeTransform: {
 
 #K8sNamespaces: sm.#SystemModel & {
 	name:        "k8s-namespaces"
-	observation: {scope: "k8s/namespaces", complete: false}
+	observation: {scope: "k8s/{{item}}/namespaces", complete: true}
 	_k8sLive & {
 		_resource:   "namespaces"
 		_namespaced: false
@@ -209,7 +210,7 @@ _k8sNodeTransform: {
 
 #K8sNodes: sm.#SystemModel & {
 	name:        "k8s-nodes"
-	observation: {scope: "k8s/nodes", complete: false}
+	observation: {scope: "k8s/{{item}}/nodes", complete: true}
 	_k8sLive & {
 		_resource:   "nodes"
 		_namespaced: false

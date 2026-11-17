@@ -11,9 +11,11 @@ import (
 //   k8s-fixture-cluster  reads the bundled fixture in .pudl/populators/k8s.
 //
 // The live collectors read the current context only. To collect another
-// cluster, switch context and run again. The context changes while a
-// collector's observation scope does not, so the live collectors declare
-// complete: false: nothing is marked gone after a context switch.
+// cluster, switch context and run again. Each enumerates the current
+// cluster's host with `each` and observes the scope k8s/<host>/<kind>
+// (observation scope "k8s/{{item}}/<kind>"), complete: a run marks gone
+// only objects that its own cluster no longer has, and a context switch
+// leaves the other clusters' records as they are.
 
 // ---- Shared by the pack's other collectors, and by packs that collect
 // through kubectl (the Argo CD pack). All are in package models, which every
@@ -26,7 +28,7 @@ _k8sClusterHelper: ["sh", "../../populators/k8s/cluster.sh"]
 
 // _k8sClusterEach enumerates the current cluster's host, one input, so a
 // collector can set it on every object it collects (set: cluster: "{{item}}")
-// to point at the cluster record.
+// to point at the cluster record, and scope its observation by it.
 _k8sClusterEach: {argv: _k8sClusterHelper, select: "host"}
 
 // _k8sListTransform stores the items of the List object `kubectl get -o
@@ -66,10 +68,11 @@ _k8sClusterTransform: {
 
 #K8sCluster: sm.#SystemModel & {
 	name: "k8s-cluster"
-	observation: {scope: "k8s/cluster", complete: false}
+	observation: {scope: "k8s/{{item}}/cluster", complete: true}
 	populate: sm.#CommandObserve & {
 		schema: "k8s.#Cluster"
-		runs: [{argv: _k8sClusterHelper, transform: _k8sClusterTransform}]
+		each:   _k8sClusterEach
+		runs: [{argv: _k8sClusterHelper, set: host: "{{item}}", transform: _k8sClusterTransform}]
 	}
 }
 

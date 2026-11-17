@@ -152,15 +152,17 @@ func TestK8sPackHostileWorkloadsPlantNothing(t *testing.T) {
 
 // fakeKubectl answers the read-only commands the live collectors run from
 // the pack's fixtures: the cluster helper's config view and version, and
-// `get <resource> [-A] -o json`. Every call is logged.
+// `get <resource> [-A] -o json`. Every call is logged. K8S_SERVER switches
+// the current context's API server (by default the fixture host's).
 const fakeKubectl = `#!/bin/sh
 echo "$*" >> "$KUBECTL_LOG"
+server=${K8S_SERVER:-https://198.51.100.30}
 case "$1 $2" in
 "config view")
 	case "$5" in
 	'jsonpath={.contexts[0]}') echo '{"name":"live","context":{"cluster":"live","user":"live"}}' ;;
-	'jsonpath={.clusters[0]}') echo '{"name":"live","cluster":{"server":"https://198.51.100.30"}}' ;;
-	'jsonpath={.clusters[0].cluster.server}') printf 'https://198.51.100.30' ;;
+	'jsonpath={.clusters[0]}') echo '{"name":"live","cluster":{"server":"'"$server"'"}}' ;;
+	'jsonpath={.clusters[0].cluster.server}') printf '%s' "$server" ;;
 	esac ;;
 "version -o") echo '{"serverVersion":{"gitVersion":"v1.30.5-gke.1014001"}}' ;;
 "get deployments.apps") cat "$K8S_FIXTURES/deployments.json" ;;

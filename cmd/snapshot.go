@@ -136,6 +136,9 @@ var snapshotShowCmd = &cobra.Command{
 			fmt.Fprintf(outw(), "  workspace: %s\n", orDash(snapshot.Workspace))
 			fmt.Fprintf(outw(), "  source:    %s\n", orDash(snapshot.Source))
 			fmt.Fprintf(outw(), "  scope:     %s\n  complete:  %t\n", orDash(snapshot.Scope), snapshot.Complete)
+			if snapshot.Input != "" {
+				fmt.Fprintf(outw(), "  input:     %s\n", snapshot.Input)
+			}
 			fmt.Fprintf(outw(), "  origin:    %s\n", orDash(snapshot.Origin))
 			fmt.Fprintf(outw(), "  targets:   %v\n", snapshot.Targets)
 			fmt.Fprintf(outw(), "  created:   %s\n", snapshot.CreatedAt.Format(time.RFC3339))

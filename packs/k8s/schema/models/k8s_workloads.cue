@@ -16,7 +16,8 @@ import (
 //   k8s-fixture-deployments, k8s-fixture-statefulsets, k8s-fixture-daemonsets
 //       read the bundled fixtures in .pudl/populators/k8s.
 //
-// Like k8s-cluster, the live collectors declare complete: false.
+// Like k8s-cluster, each live collector observes one scope per cluster
+// host (k8s/<host>/<kind>), complete.
 
 // Kubernetes and cloud provider system namespaces hold built-in defaults,
 // which the pack does not catalog (the GCP pack skips the same ones).
@@ -138,19 +139,19 @@ _k8sWorkloadFixture: {
 
 #K8sDeployments: sm.#SystemModel & {
 	name:        "k8s-deployments"
-	observation: {scope: "k8s/deployments", complete: false}
+	observation: {scope: "k8s/{{item}}/deployments", complete: true}
 	_k8sWorkloadLive & {_resource: "deployments.apps", _schema: "k8s.#Deployment"}
 }
 
 #K8sStatefulSets: sm.#SystemModel & {
 	name:        "k8s-statefulsets"
-	observation: {scope: "k8s/statefulsets", complete: false}
+	observation: {scope: "k8s/{{item}}/statefulsets", complete: true}
 	_k8sWorkloadLive & {_resource: "statefulsets.apps", _schema: "k8s.#StatefulSet"}
 }
 
 #K8sDaemonSets: sm.#SystemModel & {
 	name:        "k8s-daemonsets"
-	observation: {scope: "k8s/daemonsets", complete: false}
+	observation: {scope: "k8s/{{item}}/daemonsets", complete: true}
 	_k8sWorkloadLive & {_resource: "daemonsets.apps", _schema: "k8s.#DaemonSet"}
 }
 
