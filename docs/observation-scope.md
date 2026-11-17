@@ -216,6 +216,38 @@ A snapshot is recorded incomplete, whatever the declaration, when:
 - an input failed;
 - `allow_schema_fallback` let a record fall back to another schema.
 
+### One scope per input
+
+A collector that reads a different target on each run (the current kube
+context, say) cannot be complete under one fixed scope: observing target B
+would mark target A's resources gone. Put `{{item}}` in the scope, and each
+input `each` enumerates is its own observation:
+
+```cue
+observation: {scope: "k8s/{{item}}/deployments", complete: true}
+populate: {
+	each: {argv: ["sh", "cluster.sh"], select: "host"}
+	runs: [{argv: ["kubectl", "get", "deployments.apps", "-A", "-o", "json"], set: cluster: "{{item}}"}]
+}
+```
+
+- Every input is one snapshot, scoped by the input (`k8s/198.51.100.30/deployments`)
+  and holding only its records. `pudl snapshot show` prints its `input`.
+- Completeness and absence are per input. A failed input makes only its own
+  snapshot incomplete. A complete snapshot marks gone only what an earlier
+  complete snapshot of the same scope held. Scopes this run did not observe
+  stay as they are.
+- The report lists each input's snapshot under `populate.observations`
+  (`input`, `scope`, `snapshot_id`, `records`, `complete`);
+  `populate.snapshot_id` is empty.
+- `current` and `model:<name>` select every input's snapshot of the latest
+  run. A check's verdict covers those scopes only, and is `unknown` when one
+  of them is incomplete.
+- A per-input scope needs `each`, and cannot be used with `fallback` or
+  `desired`.
+
+See the [design](design/2026-11-16-per-input-scope.md).
+
 `populate.schema` identifies the population's type even when it has no
 records; an empty JSON array is a valid zero-record snapshot. Other observers
 can declare coverage with `observation.schemas: ["package.#Definition"]`.
@@ -236,8 +268,8 @@ A check with `evidence` reads only the snapshots its selectors name:
 
 | Selector | Selects |
 |----------|---------|
-| `current` | This model's own observation from this check |
-| `model:<name>` | That model's latest recorded observation |
+| `current` | This model's own observation from this check (every input's, for a per-input scope) |
+| `model:<name>` | That model's latest recorded observation (every input's snapshot of its latest run, for a per-input scope) |
 | `scope:<name>` | The latest observation of that scope (an error if two sources own it) |
 | a snapshot ID | Exactly that snapshot |
 

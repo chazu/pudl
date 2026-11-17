@@ -47,11 +47,18 @@ Installed files, under `.pudl/`:
 ## The live collectors
 
 Every live collector reads kubectl's **current context** only. To collect
-another cluster, switch context and run again. A collector's observation
-scope is fixed while the context is not, so the live collectors declare
-`complete: false`: a run never marks the previous cluster's records gone.
-Records of a cluster you no longer collect stay current until you delete
-them by hand.
+another cluster, switch context and run again. Each collector observes one
+scope per cluster host, `k8s/<host>/<kind>` (for example
+`k8s/198.51.100.30/deployments`), and declares it complete. A run marks
+gone only the objects that its own cluster no longer has. A context switch
+leaves the other clusters' records as they are: they stay current until
+their cluster is observed again. Records of a cluster you no longer
+collect stay current until you delete them by hand.
+
+Snapshots taken before this change have the scope `k8s/<kind>` and are
+incomplete. They are left as they are: they never mark anything gone, and
+the checks stop reading them after the first run with the new scope. An
+object deleted before that run is not marked gone; delete it by hand.
 
 The collectors run only read-only kubectl commands: `config view`, `version`
 and `get`.
@@ -217,11 +224,11 @@ pod sets. The checks read only `image`, `securityContext` and
 
 Name a family together with its collectors; they run first. Without an
 observation of each collector, every check is `unknown`
-(`missing_snapshot`). The live collectors declare `complete: false`, so the
-live family's checks are `unknown` (`incomplete_observation`) until
-observations are scoped per cluster (`pudl-u29`). `pudl query
-k8s_privileged_container` (and the other check relations) shows the rows
-meanwhile.
+(`missing_snapshot`). A family reads the scopes each collector's latest run
+observed: the live family's verdict covers the cluster of the current
+context when its collectors ran, and no other cluster. The report's
+evidence lists each scope. To check another cluster, switch context and
+run the family with its collectors again.
 
 Waivers go on the family, in a file of your own under
 `.pudl/schema/models/` (package `models`), which a pack upgrade does not
